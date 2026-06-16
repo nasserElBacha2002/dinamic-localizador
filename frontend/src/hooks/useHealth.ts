@@ -1,16 +1,18 @@
 import { useQuery } from "@tanstack/react-query";
-import { getApiHealth, getDatabaseHealth } from "../services/health-service";
+import { getApiHealth, getDatabaseHealth } from "../api/health.api";
 
-export const useApiHealth = () =>
-  useQuery({
+export function useApiHealth() {
+  return useQuery({
     queryKey: ["api-health"],
     queryFn: getApiHealth,
     refetchInterval: 15000,
   });
+}
 
-export const useDatabaseHealth = () =>
-  useQuery({
+export function useDatabaseHealth() {
+  return useQuery({
     queryKey: ["database-health"],
     queryFn: getDatabaseHealth,
     refetchInterval: 15000,
   });
+}

@@ -1,0 +1,78 @@
+export type BotSessionState =
+  | "WAITING_LOCATION"
+  | "WAITING_INVENTORY_SELECTION"
+  | "COMPLETED"
+  | "CANCELLED"
+  | "EXPIRED";
+
+export type WhatsAppMessageDirection = "INBOUND" | "OUTBOUND";
+export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN";
+
+export interface BotSession {
+  id: string;
+  employeeId: string;
+  inventoryId: string | null;
+  phoneNumber: string;
+  state: BotSessionState;
+  contextJson: string | null;
+  expiresAt: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface InventorySelectionOption {
+  inventoryId: string;
+  storeName: string;
+  scheduledStart: string;
+}
+
+export interface BotSessionContext {
+  inventoryOptions?: InventorySelectionOption[];
+}
+
+export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED" | "DUPLICATE";
+
+export interface WhatsAppMessage {
+  id: string;
+  messageSid: string | null;
+  direction: WhatsAppMessageDirection;
+  employeeId: string | null;
+  phoneFrom: string;
+  phoneTo: string;
+  messageType: WhatsAppMessageType;
+  body: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: string | null;
+  rawPayload: string | null;
+  processingStatus: WhatsAppMessageProcessingStatus | null;
+  processingErrorCode: string | null;
+  processedAt: string | null;
+  createdAt: string;
+}
+
+export interface TwilioWebhookPayload {
+  MessageSid: string;
+  From: string;
+  To: string;
+  Body?: string;
+  Latitude?: string;
+  Longitude?: string;
+  Address?: string;
+  Label?: string;
+  NumMedia?: string;
+}
+
+export interface CompatibleInventory {
+  id: string;
+  storeId: string;
+  storeName: string;
+  storeLatitude: number;
+  storeLongitude: number;
+  allowedRadiusMeters: number;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  earlyToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  status: string;
+}

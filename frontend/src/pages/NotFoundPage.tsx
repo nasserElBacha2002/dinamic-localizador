@@ -1,17 +1,21 @@
 import { Button, Stack, Typography } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
-import { MainLayout } from "../layouts/MainLayout";
+import { AdminLayout } from "../layouts/AdminLayout";
 
 export function NotFoundPage() {
   return (
-    <MainLayout>
-      <Stack spacing={2}>
-        <Typography variant="h4">404</Typography>
-        <Typography>La pagina solicitada no existe.</Typography>
-        <Button component={RouterLink} to="/" variant="outlined">
+    <AdminLayout>
+      <Stack spacing={2} alignItems="flex-start">
+        <Typography variant="h4" component="h1">
+          Página no encontrada
+        </Typography>
+        <Typography color="text.secondary">
+          La ruta solicitada no existe en el panel administrativo.
+        </Typography>
+        <Button component={RouterLink} to="/" variant="contained">
           Volver al inicio
         </Button>
       </Stack>
-    </MainLayout>
+    </AdminLayout>
   );
 }

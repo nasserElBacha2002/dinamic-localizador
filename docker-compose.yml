@@ -1,10 +1,12 @@
+name: dinamic-attendance
+
 services:
   sqlserver:
     image: mcr.microsoft.com/mssql/server:2022-latest
     container_name: dinamic-attendance-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${DB_PASSWORD:-YourStrongPassword123!}
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:-Libano2002}
       TZ: ${TZ:-America/Argentina/Buenos_Aires}
     ports:
       - "${DB_PORT_EXTERNAL:-1433}:1433"
@@ -31,8 +33,37 @@ services:
       - ./database/init/init.sql:/init/init.sql:ro
     command: >
       /bin/bash -c "
-      /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P '${DB_PASSWORD:-YourStrongPassword123!}' -C -i /init/init.sql
+      /opt/mssql-tools/bin/sqlcmd -S sqlserver -U sa -P '${DB_PASSWORD:-Libano2002}' -C -i /init/init.sql
       "
+    restart: "no"
+
+  migrations:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: dinamic-attendance-migrations
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      db-init:
+        condition: service_completed_successfully
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      TZ: ${TZ:-America/Argentina/Buenos_Aires}
+      DB_HOST: sqlserver
+      DB_PORT: 1433
+      DB_NAME: ${DB_NAME:-dinamic_attendance}
+      DB_USER: ${DB_USER:-sa}
+      DB_PASSWORD: ${DB_PASSWORD:-Libano2002}
+      DB_ENCRYPT: ${DB_ENCRYPT:-false}
+      DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE:-true}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-16-chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
+      MIGRATIONS_DIR: /database/migrations
+    volumes:
+      - ./database:/database:ro
+    command: ["npm", "run", "migrate"]
     restart: "no"
 
   backend:
@@ -45,18 +76,30 @@ services:
         condition: service_healthy
       db-init:
         condition: service_completed_successfully
+      migrations:
+        condition: service_completed_successfully
     environment:
       NODE_ENV: ${NODE_ENV:-development}
       PORT: 3000
       FRONTEND_URL: ${FRONTEND_URL:-http://localhost:5173}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://localhost:5174}
       TZ: ${TZ:-America/Argentina/Buenos_Aires}
       DB_HOST: sqlserver
       DB_PORT: 1433
       DB_NAME: ${DB_NAME:-dinamic_attendance}
       DB_USER: ${DB_USER:-sa}
-      DB_PASSWORD: ${DB_PASSWORD:-YourStrongPassword123!}
+      DB_PASSWORD: ${DB_PASSWORD:-Libano2002}
       DB_ENCRYPT: ${DB_ENCRYPT:-false}
       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE:-true}
+      TWILIO_VALIDATE_SIGNATURE: ${TWILIO_VALIDATE_SIGNATURE:-false}
+      TWILIO_WHATSAPP_NUMBER: ${TWILIO_WHATSAPP_NUMBER:-whatsapp:+14155238886}
+      BOT_SESSION_TTL_MINUTES: ${BOT_SESSION_TTL_MINUTES:-15}
+      BOT_OPERATION_TIMEZONE: ${BOT_OPERATION_TIMEZONE:-America/Argentina/Buenos_Aires}
+      BOT_DEFAULT_RADIUS_METERS: ${BOT_DEFAULT_RADIUS_METERS:-150}
+      BOT_GEOFENCE_REVIEW_MARGIN_METERS: ${BOT_GEOFENCE_REVIEW_MARGIN_METERS:-30}
+      BOT_ON_TIME_GRACE_MINUTES: ${BOT_ON_TIME_GRACE_MINUTES:-15}
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production-min-16-chars}
+      JWT_EXPIRES_IN: ${JWT_EXPIRES_IN:-8h}
     ports:
       - "3000:3000"
     volumes:
@@ -69,9 +112,12 @@ services:
       dockerfile: Dockerfile
     container_name: dinamic-attendance-frontend
     depends_on:
-      - backend
+      backend:
+        condition: service_started
     environment:
       VITE_API_URL: ${VITE_API_URL:-http://localhost:3000/api}
+      VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY:-}
+      VITE_GOOGLE_MAPS_MAP_ID: ${VITE_GOOGLE_MAPS_MAP_ID:-}
     ports:
       - "5173:5173"
     volumes:
@@ -80,3 +126,5 @@ services:
 
 volumes:
   sqlserver_data:
+    external: true
+    name: dinamic-localizador_sqlserver_data

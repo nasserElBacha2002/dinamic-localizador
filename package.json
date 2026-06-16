@@ -9,7 +9,12 @@
     "dev:frontend": "npm --prefix frontend run dev",
     "build": "npm run build:backend && npm run build:frontend",
     "build:backend": "npm --prefix backend run build",
-    "build:frontend": "npm --prefix frontend run build"
+    "build:frontend": "npm --prefix frontend run build",
+    "migrate": "npm run migrate --prefix backend",
+    "migrate:status": "npm run migrate:status --prefix backend",
+    "admin:create": "npm run admin:create --prefix backend",
+    "lint": "npm run lint --prefix frontend",
+    "test": "npm run test --prefix backend && npm run test --prefix frontend"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"

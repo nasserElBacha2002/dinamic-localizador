@@ -8,20 +8,29 @@
   "scripts": {
     "dev": "tsx watch src/server.ts",
     "build": "tsc -p tsconfig.json",
-    "start": "node dist/server.js"
+    "start": "node dist/server.js",
+    "migrate": "tsx src/database/run-migrations.ts",
+    "migrate:status": "tsx src/database/run-migrations.ts --status",
+    "admin:create": "tsx src/scripts/create-admin.ts",
+    "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {
+    "bcrypt": "^6.0.0",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
     "express": "^5.1.0",
     "helmet": "^8.1.0",
+    "jsonwebtoken": "^9.0.3",
     "morgan": "^1.10.0",
     "mssql": "^12.1.0",
+    "twilio": "^6.0.2",
     "zod": "^4.1.11"
   },
   "devDependencies": {
+    "@types/bcrypt": "^6.0.0",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
+    "@types/jsonwebtoken": "^9.0.10",
     "@types/morgan": "^1.9.10",
     "@types/mssql": "^12.3.0",
     "@types/node": "^24.6.0",

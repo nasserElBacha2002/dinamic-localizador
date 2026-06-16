@@ -442,30 +442,37 @@ Variables utilizadas en la base funcional actual:
 # Servidor
 NODE_ENV=development
 PORT=3000
-APP_BASE_URL=http://localhost:3000
 FRONTEND_URL=http://localhost:5173
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
 TZ=America/Argentina/Buenos_Aires
 
-# Base de datos
-DB_HOST=sqlserver
-DB_PORT=1433
+# Base de datos (host local con Docker: DB_PORT=14330)
+DB_HOST=localhost
+DB_PORT=14330
 DB_NAME=dinamic_attendance
 DB_USER=sa
 DB_PASSWORD=
-
-# JWT
-JWT_SECRET=
-JWT_EXPIRES_IN=8h
-
-# Twilio
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
-TWILIO_WEBHOOK_URL=https://tu-dominio.com/api/webhooks/twilio
+DB_ENCRYPT=false
+DB_TRUST_SERVER_CERTIFICATE=true
 
 # Frontend (Vite)
 VITE_API_URL=http://localhost:3000/api
+VITE_GOOGLE_MAPS_API_KEY=
+
+# Autenticación del panel
+JWT_SECRET=change-this-secret-in-production-min-16-chars
+JWT_EXPIRES_IN=8h
 ```
+
+`APP_BASE_URL` se documenta en `.env.example` raíz para uso futuro; el backend actual no la consume.
+
+### CORS
+
+En desarrollo y producción, el backend acepta solo orígenes listados en `CORS_ALLOWED_ORIGINS` (siempre incluye `FRONTEND_URL`). No se usa `origin: "*"`.
+
+### Arranque del backend
+
+Si la conexión inicial a SQL Server falla, el proceso termina con código `1` (fail-fast). Docker reinicia el contenedor según su política.
 
 Copiar los ejemplos antes de ejecutar:
 
@@ -497,6 +504,15 @@ Luego iniciar frontend y backend en paralelo:
 npm run dev
 ```
 
+Comandos útiles adicionales:
+
+```bash
+npm run build
+npm run lint
+npm run migrate
+npm run migrate:status
+```
+
 También se puede iniciar por separado:
 
 ```bash
@@ -512,20 +528,117 @@ npm run dev:frontend
 
 ---
 
+## Migraciones de base de datos
+
+Las migraciones SQL viven en `database/migrations/` y se aplican en orden alfabético:
+
+```text
+001_initial_schema.sql
+002_core_domain.sql
+003_whatsapp_bot_flow.sql
+004_mvp_completion.sql
+```
+
+### Primer administrador
+
+Tras aplicar migraciones, crear el usuario inicial:
+
+```bash
+ADMIN_NAME="Administrador" \
+ADMIN_EMAIL="admin@dinamicsystems.com" \
+ADMIN_PASSWORD="cambiar-esta-clave" \
+npm run admin:create
+```
+
+Luego iniciar sesión en `/login` con esas credenciales. Cambiá la contraseña inicial en entornos reales.
+
+### Google Maps (tiendas)
+
+Configurá `VITE_GOOGLE_MAPS_API_KEY` en `frontend/.env`. En Google Cloud habilitá **Maps JavaScript API** y **Places API**, restringí la clave por HTTP referrer y limitá las APIs habilitadas. Si la clave no está disponible, el formulario de tiendas permite ingreso manual de dirección y coordenadas.
+
+El control de versiones usa la tabla `system_migrations`, que registra cada archivo aplicado con su nombre y `executed_at` en UTC.
+
+### Runner
+
+El único responsable de registrar migraciones es:
+
+```text
+backend/src/database/run-migrations.ts
+```
+
+Flujo del runner:
+
+1. Verifica si la migración ya está en `system_migrations`.
+2. Ejecuta el archivo SQL por lotes (`GO`).
+3. Inserta el registro en `system_migrations`.
+
+Los archivos `.sql` no deben insertar su propio registro en `system_migrations`.
+
+### Ejecución manual
+
+Desde la raíz:
+
+```bash
+npm run migrate
+npm run migrate:status
+```
+
+Desde `backend/`:
+
+```bash
+npm run migrate
+npm run migrate:status
+```
+
+La segunda ejecución de `npm run migrate` debe finalizar sin errores (idempotente).
+
+### Docker
+
+Al ejecutar:
+
+```bash
+docker compose up -d --build
+```
+
+el flujo es:
+
+1. `sqlserver` inicia y pasa healthcheck.
+2. `db-init` crea la base `dinamic_attendance` y tablas técnicas.
+3. `migrations` ejecuta `npm run migrate` y termina con código `0`.
+4. `backend` inicia solo si `migrations` finalizó correctamente.
+
+Variable opcional para el runner en contenedor:
+
+```env
+MIGRATIONS_DIR=/database/migrations
+```
+
+### Verificación
+
+```bash
+npm run migrate:status
+curl http://localhost:3000/api/health/database
+```
+
+---
+
 ## Ejecución con Docker
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
+
+El proyecto Compose se llama `dinamic-attendance` (definido en `docker-compose.yml`).
 
 Servicios definidos en `docker-compose.yml`:
 
 | Servicio | Descripción |
 |----------|-------------|
 | `sqlserver` | SQL Server 2022 para desarrollo |
-| `db-init` | Inicializacion de base `dinamic_attendance` y tablas tecnicas |
+| `db-init` | Inicialización de base `dinamic_attendance` y tablas técnicas |
+| `migrations` | Aplica migraciones con el runner de Node.js |
 | `backend` | API Node.js + Express + TypeScript |
-| `frontend` | Aplicacion React + Vite + TypeScript |
+| `frontend` | Aplicación React + Vite + TypeScript |
 
 ### URLs de desarrollo
 
@@ -538,30 +651,210 @@ Database health: http://localhost:3000/api/health/database
 
 ---
 
+## Panel administrativo (frontend)
+
+### Rutas disponibles
+
+| Ruta | Descripción |
+|------|-------------|
+| `/` | Inicio con estado del sistema y accesos rápidos |
+| `/employees` | Listado de empleados |
+| `/employees/new` | Alta de empleado |
+| `/employees/:id` | Edición de empleado |
+| `/stores` | Listado de tiendas |
+| `/stores/new` | Alta de tienda |
+| `/stores/:id` | Edición de tienda |
+| `/inventories` | Listado de inventarios |
+| `/inventories/new` | Alta de inventario |
+| `/inventories/:id` | Detalle, asignaciones y edición |
+| `/attendance` | Listado de asistencias |
+| `/attendance/new` | Registro manual temporal de prueba |
+| `/attendance/:id` | Detalle de asistencia |
+
+### Funcionalidades implementadas
+
+- CRUD administrativo de empleados, tiendas e inventarios
+- Asignación y desasignación de empleados en inventarios
+- Listado y detalle de asistencias con filtros
+- Formularios con React Hook Form + Zod
+- Paginación y filtros alineados con la API REST
+- Layout administrativo responsive con Material UI
+- Estado de salud del backend y base de datos en la página de inicio
+
+### Variables de entorno del frontend
+
+Archivo `frontend/.env`:
+
+```env
+VITE_API_URL=http://localhost:3000/api
+```
+
+### Comandos del frontend
+
+```bash
+npm --prefix frontend install
+npm --prefix frontend run dev
+npm --prefix frontend run build
+npm run lint
+```
+
+### Ejemplos HTTP
+
+Ver `docs/api-examples.http` para probar la API con REST Client (VS Code / Cursor).
+
+### Registro manual de asistencia (temporal)
+
+La ruta `/attendance/new` expone un formulario interno que consume `POST /api/attendance`. Está pensado únicamente para validar el modelo de datos antes de integrar WhatsApp y Twilio. **No es funcionalidad productiva.**
+
+### Pendiente en frontend
+
+- Autenticación JWT real y rutas protegidas
+- Integración Twilio / WhatsApp
+- Mapas (Leaflet) y visualización geográfica
+- Revisión manual avanzada de asistencias
+- Roles, notificaciones y dashboard analítico
+
+### Diferencias detectadas con la API real
+
+| Aspecto | Diseño original | API real |
+|---------|-----------------|----------|
+| Conteo de asistencias en inventario | `attendanceCount` | `attendanceRecordsCount` en detalle |
+| Conteo de asignados en listado | `assignedEmployeesCount` | No expuesto en `GET /inventories` |
+| Resumen de tienda en listados | `Store` completo | `store` con `id`, `name`, `address`, `active` |
+| Resumen de empleado en asistencias | `Employee` completo | `employee` con `id`, `name`, `phoneNumber` |
+| Cancelar inventario | DELETE semántico | `DELETE /inventories/:id` cambia estado a `CANCELLED` |
+| Desactivar empleado/tienda | DELETE | Baja lógica (`active = false`) |
+
+---
+
 ## Integración con Twilio
 
 ### Configuración general
 
 1. Crear cuenta en [Twilio](https://www.twilio.com/)
-2. Habilitar **WhatsApp** (sandbox para desarrollo o número aprobado para producción)
-3. Registrar empleados con el mismo formato de teléfono que Twilio envía en webhooks (E.164)
-4. Configurar el webhook de mensajes entrantes apuntando a:
+2. Habilitar **WhatsApp Sandbox** (desarrollo) o número aprobado (producción)
+3. Asociar tu número personal al sandbox siguiendo las instrucciones de Twilio
+4. Registrar empleados con el mismo teléfono E.164 que Twilio envía en `From` (ej. `+5491112345678`)
+5. Configurar el webhook de mensajes entrantes:
 
    ```text
-   POST https://<tu-dominio>/api/webhooks/twilio
+   POST https://<tu-dominio-publico>/api/webhooks/twilio/whatsapp
    ```
 
-5. Exponer la URL con **HTTPS** (ngrok en desarrollo, Let's Encrypt en producción)
+6. Exponer la URL con HTTPS (ngrok, Cloudflare Tunnel, etc. en desarrollo)
+7. Completar variables de entorno en `backend/.env`:
+
+   ```env
+   TWILIO_ACCOUNT_SID=
+   TWILIO_AUTH_TOKEN=
+   TWILIO_WHATSAPP_NUMBER=whatsapp:+14155238886
+   TWILIO_WEBHOOK_URL=https://<tu-dominio-publico>/api/webhooks/twilio/whatsapp
+   TWILIO_VALIDATE_SIGNATURE=true
+   ```
+
+   En desarrollo local puede desactivarse la firma:
+
+   ```env
+   TWILIO_VALIDATE_SIGNATURE=false
+   ```
+
+   **No desactivar la firma en producción.**
+
+### Flujo conversacional implementado
+
+```text
+Empleado envía "Llegué"
+→ Twilio llama al webhook
+→ el backend identifica al empleado
+→ busca inventarios compatibles
+→ solicita ubicación
+→ el empleado comparte ubicación
+→ valida asignación, horario y distancia (Haversine)
+→ registra asistencia
+→ responde con TwiML
+```
 
 ### Webhook entrante
 
-El backend debe:
+Endpoint: `POST /api/webhooks/twilio/whatsapp`
 
-1. Validar `X-Twilio-Signature`
-2. Parsear tipo de mensaje (texto vs. ubicación)
-3. Resolver empleado por `From` (número WhatsApp)
-4. Gestionar sesión conversacional del bot (ej.: esperando ubicación)
-5. Responder con TwiML o API de mensajes salientes
+El backend:
+
+1. Valida `X-Twilio-Signature` (salvo `TWILIO_VALIDATE_SIGNATURE=false` en desarrollo)
+2. Parsea `application/x-www-form-urlencoded`
+3. Garantiza idempotencia por `MessageSid`
+4. Persiste mensajes en `whatsapp_messages`
+5. Gestiona sesiones en `bot_sessions`
+6. Responde con `Content-Type: text/xml` (TwiML)
+
+### Prueba local con REST Client
+
+Ver ejemplos en `docs/api-examples.http` (sección WhatsApp). Requieren:
+
+```env
+TWILIO_VALIDATE_SIGNATURE=false
+```
+
+### Sesiones conversacionales
+
+Duración configurable con:
+
+```env
+BOT_SESSION_TTL_MINUTES=15
+```
+
+Reglas actuales:
+
+- `expires_at` se calcula en UTC al crear la sesión: `now UTC + BOT_SESSION_TTL_MINUTES`.
+- Una sesión es activa solo si `state` es `WAITING_LOCATION` o `WAITING_INVENTORY_SELECTION` y `expires_at > SYSUTCDATETIME()`.
+- No existe cron en esta fase: la expiración es **perezosa** al consultar la sesión.
+- Si la sesión ya venció, se marca `EXPIRED`, no se devuelve como activa y no se reactiva.
+- Al seleccionar un inventario válido (`WAITING_INVENTORY_SELECTION` → `WAITING_LOCATION`) se renueva `expires_at`.
+- Mensajes inválidos, saludos o texto durante `WAITING_LOCATION` **no** renuevan el TTL.
+- Al iniciar un nuevo "Llegué", las sesiones vigentes previas pasan a `CANCELLED` y las vencidas pero aún activas por estado pasan a `EXPIRED`.
+- Solo puede existir una sesión activa por empleado (índice único filtrado en SQL Server).
+
+Mensaje al usuario cuando la sesión venció:
+
+```text
+La solicitud anterior venció.
+Escribí "Llegué" para comenzar nuevamente.
+```
+
+#### Probar vencimiento en desarrollo
+
+1. Enviar "Llegué" por webhook.
+2. Forzar vencimiento en SQL Server:
+
+```sql
+UPDATE bot_sessions
+SET expires_at = DATEADD(MINUTE, -1, SYSUTCDATETIME())
+WHERE phone_number = '+5491112345678'
+  AND state IN ('WAITING_LOCATION', 'WAITING_INVENTORY_SELECTION');
+```
+
+3. Enviar ubicación o selección: debe responder con el mensaje de vencimiento.
+4. Enviar "Llegué" nuevamente: debe crear una sesión nueva.
+
+`BOT_OPERATION_TIMEZONE` se usa solo para mostrar horarios al usuario, no para expirar sesiones.
+
+### Reglas horarias del bot
+
+Ventana compatible para inventario:
+
+```text
+scheduled_start - early_tolerance_minutes
+hasta scheduled_start + late_tolerance_minutes
+```
+
+Clasificación de puntualidad al recibir ubicación:
+
+| Estado | Regla |
+|--------|-------|
+| `EARLY` | Antes de `scheduled_start`, dentro de tolerancia previa |
+| `ON_TIME` | Desde `scheduled_start` hasta `scheduled_start + BOT_ON_TIME_GRACE_MINUTES` (default 15 min) |
+| `LATE` | Después del margen de puntualidad, dentro de tolerancia tardía |
+| `OUTSIDE_TIME_WINDOW` | Fuera de la ventana total |
 
 ### Tipos de mensaje relevantes
 

@@ -1,0 +1,164 @@
+import sql from "mssql";
+import { getPool } from "../database/connection";
+import type { Store } from "../types/domain";
+import { mapStoreRow } from "../utils/row-mappers";
+import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import type { CreateStoreInput, ListStoresQuery, UpdateStoreInput } from "../schemas/store.schema";
+
+export const storeRepository = {
+  async create(input: CreateStoreInput): Promise<Store> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("name", sql.NVarChar(150), input.name)
+      .input("address", sql.NVarChar(300), input.address ?? null)
+      .input("latitude", sql.Decimal(10, 7), input.latitude)
+      .input("longitude", sql.Decimal(10, 7), input.longitude)
+      .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
+      .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
+      .query(`
+        INSERT INTO stores (name, address, latitude, longitude, allowed_radius_meters, google_place_id)
+        OUTPUT INSERTED.*
+        VALUES (@name, @address, @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId)
+      `);
+
+    return mapStoreRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findById(id: string): Promise<Store | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, id)
+      .query("SELECT * FROM stores WHERE id = @id");
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapStoreRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async list(query: ListStoresQuery): Promise<{ items: Store[]; total: number }> {
+    const pool = getPool();
+    const filters: SqlFilter[] = [];
+
+    if (query.active !== undefined) {
+      filters.push({
+        clause: "active = @active",
+        apply: (request) => request.input("active", sql.Bit, query.active),
+      });
+    }
+
+    if (query.search) {
+      filters.push({
+        clause: "(name LIKE @search OR address LIKE @search)",
+        apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
+      });
+    }
+
+    const whereClause = buildWhereClause(filters);
+
+    const countRequest = pool.request();
+    applySqlFilters(countRequest, filters);
+    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM stores ${whereClause}`);
+    const total = Number(countResult.recordset[0].total);
+
+    const dataRequest = pool.request();
+    applySqlFilters(dataRequest, filters);
+    dataRequest.input("offset", sql.Int, (query.page - 1) * query.limit);
+    dataRequest.input("limit", sql.Int, query.limit);
+
+    const dataResult = await dataRequest.query(`
+      SELECT *
+      FROM stores
+      ${whereClause}
+      ORDER BY created_at DESC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+    return {
+      items: dataResult.recordset.map((row) => mapStoreRow(row as Record<string, unknown>)),
+      total,
+    };
+  },
+
+  async update(id: string, input: UpdateStoreInput): Promise<Store | null> {
+    const pool = getPool();
+    const fields: string[] = [];
+    const request = pool.request().input("id", sql.UniqueIdentifier, id);
+
+    if (input.name !== undefined) {
+      request.input("name", sql.NVarChar(150), input.name);
+      fields.push("name = @name");
+    }
+
+    if (input.address !== undefined) {
+      request.input("address", sql.NVarChar(300), input.address);
+      fields.push("address = @address");
+    }
+
+    if (input.latitude !== undefined) {
+      request.input("latitude", sql.Decimal(10, 7), input.latitude);
+      fields.push("latitude = @latitude");
+    }
+
+    if (input.longitude !== undefined) {
+      request.input("longitude", sql.Decimal(10, 7), input.longitude);
+      fields.push("longitude = @longitude");
+    }
+
+    if (input.allowedRadiusMeters !== undefined) {
+      request.input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters);
+      fields.push("allowed_radius_meters = @allowedRadiusMeters");
+    }
+
+    if (input.googlePlaceId !== undefined) {
+      request.input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId);
+      fields.push("google_place_id = @googlePlaceId");
+    }
+
+    if (input.active !== undefined) {
+      request.input("active", sql.Bit, input.active);
+      fields.push("active = @active");
+    }
+
+    if (fields.length === 0) {
+      return this.findById(id);
+    }
+
+    fields.push("updated_at = SYSUTCDATETIME()");
+
+    const result = await request.query(`
+      UPDATE stores
+      SET ${fields.join(", ")}
+      OUTPUT INSERTED.*
+      WHERE id = @id
+    `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapStoreRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async deactivate(id: string): Promise<Store | null> {
+    return this.update(id, { active: false });
+  },
+
+  async hasActiveOrScheduledInventories(storeId: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("storeId", sql.UniqueIdentifier, storeId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM inventories
+        WHERE store_id = @storeId
+          AND status IN ('SCHEDULED', 'IN_PROGRESS')
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+};

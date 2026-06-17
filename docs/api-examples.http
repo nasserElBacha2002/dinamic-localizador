@@ -331,10 +331,21 @@ Authorization: Bearer {{authToken}}
 #   "receivedAt": "2026-07-01T10:06:00.000Z"
 # }
 
-### WhatsApp / Twilio webhook (solo desarrollo)
+### WhatsApp / Twilio webhook
 
-# Requiere TWILIO_VALIDATE_SIGNATURE=false en backend/.env
-# Simula mensaje de texto "Llegué"
+# Producción: TWILIO_VALIDATE_SIGNATURE=true
+# La URL en Twilio Console debe coincidir exactamente con TWILIO_WEBHOOK_URL.
+# Twilio envía application/x-www-form-urlencoded.
+# La firma depende de URL pública + parámetros + TWILIO_AUTH_TOKEN (no API Key Secret).
+# Tras cambiar .env en Docker, recrear el backend.
+#
+# Desarrollo local sin firma:
+# TWILIO_VALIDATE_SIGNATURE=false en backend/.env
+#
+# Diagnóstico de firma (no imprime el token):
+# TWILIO_AUTH_TOKEN=*** npm run twilio:signature:verify -- --url=URL --signature=SIG --params='k=v'
+
+# Simula mensaje de texto "Llegué" (solo con TWILIO_VALIDATE_SIGNATURE=false)
 
 POST {{baseUrl}}/webhooks/twilio/whatsapp
 Content-Type: application/x-www-form-urlencoded

@@ -780,12 +780,49 @@ Endpoint: `POST /api/webhooks/twilio/whatsapp`
 
 El backend:
 
-1. Valida `X-Twilio-Signature` (salvo `TWILIO_VALIDATE_SIGNATURE=false` en desarrollo)
-2. Parsea `application/x-www-form-urlencoded`
+1. Valida `X-Twilio-Signature` con `twilio.validateRequest(...)` usando **exactamente** `TWILIO_WEBHOOK_URL`
+2. Parsea `application/x-www-form-urlencoded` con `express.urlencoded({ extended: false })`
 3. Garantiza idempotencia por `MessageSid`
 4. Persiste mensajes en `whatsapp_messages`
 5. Gestiona sesiones en `bot_sessions`
 6. Responde con `Content-Type: text/xml` (TwiML)
+
+### Validación de firma Twilio
+
+Requisitos:
+
+- `TWILIO_WEBHOOK_URL` debe coincidir **carácter por carácter** con la URL configurada en Twilio Console (sin slash final adicional).
+- Twilio envía `Content-Type: application/x-www-form-urlencoded`.
+- La firma depende de **URL pública + parámetros POST + Auth Token** de la misma subcuenta.
+- Usar `TWILIO_AUTH_TOKEN` (Auth Token de la cuenta/subcuenta). **No** usar API Key Secret.
+- En producción: `TWILIO_VALIDATE_SIGNATURE=true`, URL HTTPS y sin `localhost`.
+- Tras cambiar `.env`, recrear el contenedor backend en producción.
+
+Diagnóstico local (sin imprimir secretos):
+
+```bash
+TWILIO_AUTH_TOKEN=*** \
+npm run twilio:signature:verify -- \
+  --url=https://<tu-dominio-publico>/api/webhooks/twilio/whatsapp \
+  --signature=<X-Twilio-Signature> \
+  --params='MessageSid=...&From=...&To=...&Body=...'
+```
+
+Si el webhook responde `403`:
+
+| Código | Significado probable |
+|--------|-------------------|
+| `TWILIO_SIGNATURE_CONFIG_MISSING` | Falta header, token o URL en el entorno |
+| `TWILIO_SIGNATURE_INVALID` | URL distinta a Twilio, body alterado, token incorrecto o parser incorrecto |
+
+Revisar en Twilio Console → Monitor → Logs → Request Inspector:
+
+- URL solicitada por Twilio
+- Headers (`X-Twilio-Signature`)
+- Body form-urlencoded recibido
+- Respuesta HTTP del servidor
+
+No configurar el fallback de Twilio apuntando al mismo webhook principal.
 
 ### Prueba local con REST Client
 

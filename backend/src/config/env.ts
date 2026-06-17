@@ -58,6 +58,34 @@ const envSchema = z
       });
     }
 
+    if (data.TWILIO_WEBHOOK_URL) {
+      if (data.TWILIO_WEBHOOK_URL.endsWith("/")) {
+        ctx.addIssue({
+          code: "custom",
+          message: "TWILIO_WEBHOOK_URL must not end with a trailing slash",
+          path: ["TWILIO_WEBHOOK_URL"],
+        });
+      }
+
+      if (data.NODE_ENV === "production") {
+        if (!data.TWILIO_WEBHOOK_URL.startsWith("https://")) {
+          ctx.addIssue({
+            code: "custom",
+            message: "TWILIO_WEBHOOK_URL must use HTTPS in production",
+            path: ["TWILIO_WEBHOOK_URL"],
+          });
+        }
+
+        if (/localhost|127\.0\.0\.1/i.test(data.TWILIO_WEBHOOK_URL)) {
+          ctx.addIssue({
+            code: "custom",
+            message: "TWILIO_WEBHOOK_URL cannot use localhost in production",
+            path: ["TWILIO_WEBHOOK_URL"],
+          });
+        }
+      }
+    }
+
     if (data.NODE_ENV === "production" && !data.TWILIO_WHATSAPP_NUMBER) {
       ctx.addIssue({
         code: "custom",

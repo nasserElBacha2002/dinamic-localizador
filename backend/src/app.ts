@@ -8,6 +8,10 @@ import { apiRouter } from "./routes";
 
 export const app = express();
 
+// Behind Nginx in production. Twilio signature validation uses TWILIO_WEBHOOK_URL from env,
+// not the URL reconstructed by Express (protocol/host/port).
+app.set("trust proxy", 1);
+
 app.use(helmet());
 app.use(
   cors({
@@ -28,8 +32,8 @@ app.use(
   }),
 );
 app.use(morgan("dev"));
+app.use(express.urlencoded({ extended: false }));
 app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
 
 app.use("/api", apiRouter);
 app.use(notFoundHandler);

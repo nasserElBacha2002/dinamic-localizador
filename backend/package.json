@@ -12,6 +12,7 @@
     "migrate": "tsx src/database/run-migrations.ts",
     "migrate:status": "tsx src/database/run-migrations.ts --status",
     "admin:create": "tsx src/scripts/create-admin.ts",
+    "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
   "dependencies": {

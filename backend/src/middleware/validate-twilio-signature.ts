@@ -1,46 +1,73 @@
 import type { NextFunction, Request, Response } from "express";
-import twilio from "twilio";
-import { env } from "../config/env";
+import {
+  getTwilioBodyKeyMetadata,
+  runTwilioSignatureValidation,
+  type TwilioSignatureFailureCode,
+  type TwilioSignatureValidationConfig,
+} from "../utils/twilio-webhook-signature";
 
-export const validateTwilioSignature = (
-  req: Request,
+const signatureErrorMessages: Record<TwilioSignatureFailureCode, string> = {
+  TWILIO_SIGNATURE_CONFIG_MISSING: "No fue posible validar la solicitud de Twilio",
+  TWILIO_SIGNATURE_INVALID: "Firma de Twilio inválida",
+};
+
+const respondWithSignatureError = (
   res: Response,
-  next: NextFunction,
+  code: TwilioSignatureFailureCode,
 ): void => {
-  if (!env.TWILIO_VALIDATE_SIGNATURE) {
+  res.status(403).json({
+    error: {
+      code,
+      message: signatureErrorMessages[code],
+    },
+  });
+};
+
+export const createValidateTwilioSignature = (
+  config: TwilioSignatureValidationConfig,
+) => {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const signature = req.get("X-Twilio-Signature");
+    const bodyMetadata = getTwilioBodyKeyMetadata(req.body);
+
+    console.info("[twilio-webhook] signature-validation-start", {
+      signaturePresent: Boolean(signature),
+      webhookUrl: config.webhookUrl,
+      contentType: req.get("content-type"),
+      bodyKeys: bodyMetadata.bodyKeys,
+      bodyKeyCount: bodyMetadata.bodyKeyCount,
+    });
+
+    const result = runTwilioSignatureValidation(config, {
+      signature,
+      body: req.body,
+    });
+
+    if (!result.success) {
+      const logPayload = {
+        signaturePresent: Boolean(signature),
+        webhookUrl: config.webhookUrl,
+        contentType: req.get("content-type"),
+        bodyKeys: bodyMetadata.bodyKeys,
+        reason: result.reason,
+      };
+
+      if (config.nodeEnv !== "production") {
+        console.warn("[twilio-webhook] signature-validation-failed", logPayload);
+      } else {
+        console.warn("[twilio-webhook] signature-validation-failed", {
+          signaturePresent: logPayload.signaturePresent,
+          webhookUrl: logPayload.webhookUrl,
+          contentType: logPayload.contentType,
+          bodyKeys: logPayload.bodyKeys,
+        });
+      }
+
+      respondWithSignatureError(res, result.code);
+      return;
+    }
+
+    req.body = result.params;
     next();
-    return;
-  }
-
-  const signature = req.get("X-Twilio-Signature");
-  if (!signature || !env.TWILIO_AUTH_TOKEN || !env.TWILIO_WEBHOOK_URL) {
-    console.warn("[twilio-webhook] missing signature validation configuration");
-    res.status(403).json({
-      error: {
-        code: "TWILIO_SIGNATURE_INVALID",
-        message: "Firma de Twilio inválida",
-      },
-    });
-    return;
-  }
-
-  const isValid = twilio.validateRequest(
-    env.TWILIO_AUTH_TOKEN,
-    signature,
-    env.TWILIO_WEBHOOK_URL,
-    req.body as Record<string, string>,
-  );
-
-  if (!isValid) {
-    console.warn("[twilio-webhook] invalid signature");
-    res.status(403).json({
-      error: {
-        code: "TWILIO_SIGNATURE_INVALID",
-        message: "Firma de Twilio inválida",
-      },
-    });
-    return;
-  }
-
-  next();
+  };
 };

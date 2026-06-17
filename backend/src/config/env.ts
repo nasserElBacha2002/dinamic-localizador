@@ -8,6 +8,7 @@ const envSchema = z
     NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
     PORT: z.coerce.number().int().positive().default(3000),
     FRONTEND_URL: z.string().url(),
+    APP_BASE_URL: z.string().url().optional(),
     CORS_ALLOWED_ORIGINS: z.string().optional(),
     TZ: z.string().min(1),
     DB_HOST: z.string().min(1),
@@ -19,7 +20,7 @@ const envSchema = z
     DB_TRUST_SERVER_CERTIFICATE: z.stringbool().default(true),
     TWILIO_ACCOUNT_SID: z.string().optional(),
     TWILIO_AUTH_TOKEN: z.string().optional(),
-    TWILIO_WHATSAPP_NUMBER: z.string().default("whatsapp:+14155238886"),
+    TWILIO_WHATSAPP_NUMBER: z.string().optional(),
     TWILIO_WEBHOOK_URL: z.string().url().optional(),
     TWILIO_VALIDATE_SIGNATURE: z.stringbool().optional(),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
@@ -56,6 +57,14 @@ const envSchema = z
         path: ["TWILIO_WEBHOOK_URL"],
       });
     }
+
+    if (data.NODE_ENV === "production" && !data.TWILIO_WHATSAPP_NUMBER) {
+      ctx.addIssue({
+        code: "custom",
+        message: "TWILIO_WHATSAPP_NUMBER is required in production",
+        path: ["TWILIO_WHATSAPP_NUMBER"],
+      });
+    }
   });
 
 const parsed = envSchema.safeParse(process.env);
@@ -66,14 +75,33 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const parseCorsOrigins = (frontendUrl: string, corsAllowedOrigins?: string): string[] => {
-  const origins = new Set<string>([frontendUrl]);
+const parseCorsOrigins = (
+  nodeEnv: "development" | "test" | "production",
+  frontendUrl: string,
+  corsAllowedOrigins?: string,
+): string[] => {
+  const origins = new Set<string>();
 
-  if (corsAllowedOrigins) {
-    for (const origin of corsAllowedOrigins.split(",")) {
-      const trimmed = origin.trim();
-      if (trimmed.length > 0) {
-        origins.add(trimmed);
+  if (nodeEnv === "production") {
+    if (corsAllowedOrigins) {
+      for (const origin of corsAllowedOrigins.split(",")) {
+        const trimmed = origin.trim();
+        if (trimmed.length > 0) {
+          origins.add(trimmed);
+        }
+      }
+    } else {
+      origins.add(frontendUrl);
+    }
+  } else {
+    origins.add(frontendUrl);
+
+    if (corsAllowedOrigins) {
+      for (const origin of corsAllowedOrigins.split(",")) {
+        const trimmed = origin.trim();
+        if (trimmed.length > 0) {
+          origins.add(trimmed);
+        }
       }
     }
   }
@@ -83,7 +111,11 @@ const parseCorsOrigins = (frontendUrl: string, corsAllowedOrigins?: string): str
 
 export const env = {
   ...parsed.data,
-  corsOrigins: parseCorsOrigins(parsed.data.FRONTEND_URL, parsed.data.CORS_ALLOWED_ORIGINS),
+  corsOrigins: parseCorsOrigins(
+    parsed.data.NODE_ENV,
+    parsed.data.FRONTEND_URL,
+    parsed.data.CORS_ALLOWED_ORIGINS,
+  ),
   TWILIO_VALIDATE_SIGNATURE:
     parsed.data.TWILIO_VALIDATE_SIGNATURE ?? parsed.data.NODE_ENV === "production",
 };

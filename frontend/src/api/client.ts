@@ -2,7 +2,11 @@ import axios from "axios";
 import { getStoredToken } from "./auth.api";
 import { parseApiError } from "../utils/errors";
 
-const baseURL = import.meta.env.VITE_API_URL ?? "http://localhost:3000/api";
+const baseURL = import.meta.env.VITE_API_URL;
+
+if (!baseURL) {
+  throw new Error("VITE_API_URL no está configurada");
+}
 
 export const apiClient = axios.create({
   baseURL,

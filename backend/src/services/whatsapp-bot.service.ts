@@ -1,6 +1,7 @@
 import sql from "mssql";
 import twilio from "twilio";
 import { env } from "../config/env";
+import { AppError } from "../errors/app-error";
 import { getPool } from "../database/connection";
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
@@ -144,6 +145,13 @@ export const whatsappBotService = {
     const phoneFrom = normalizeWhatsAppPhone(payload.From);
     const phoneTo = tryNormalizeWhatsAppPhone(payload.To) ?? payload.To;
     const botNumber = env.TWILIO_WHATSAPP_NUMBER;
+    if (!botNumber) {
+      throw new AppError(
+        503,
+        "TWILIO_NOT_CONFIGURED",
+        "El número de WhatsApp de Twilio no está configurado.",
+      );
+    }
 
     console.info("[whatsapp-bot] webhook received", {
       messageSid: payload.MessageSid,

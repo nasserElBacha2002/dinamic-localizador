@@ -1,7 +1,7 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import sql from "mssql";
-import { env } from "../config/env";
+import { migrationEnv as env } from "../config/env-migrations";
 
 const migrationDir =
   process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");

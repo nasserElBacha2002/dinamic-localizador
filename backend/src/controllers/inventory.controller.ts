@@ -28,7 +28,12 @@ export const inventoryController = {
   },
 
   async getAttendanceSummary(req: Request, res: Response) {
-    const summary = await inventoryService.getAttendanceSummary(String(req.params.id));
+    const query = req.validatedQuery as { page: number; limit: number };
+    const summary = await inventoryService.getAttendanceSummary(
+      String(req.params.id),
+      query.page,
+      query.limit,
+    );
     res.status(200).json({ data: summary });
   },
 };

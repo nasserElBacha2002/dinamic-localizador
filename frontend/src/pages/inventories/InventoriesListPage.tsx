@@ -23,6 +23,7 @@ import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHe
 import { PaginationControls } from "../../components/common/PaginationControls";
 import { StatusChip } from "../../components/common/StatusChip";
 import { useInventories } from "../../hooks/useInventories";
+import { usePaginationState } from "../../hooks/usePaginationState";
 import { useStores } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryStatus } from "../../types/inventory";
@@ -31,7 +32,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 import { inventoryStatusLabels } from "../../utils/labels";
 
 export function InventoriesListPage() {
-  const [page, setPage] = useState(1);
+  const pagination = usePaginationState(10);
   const [status, setStatus] = useState<InventoryStatus | "">("");
   const [storeId, setStoreId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
@@ -39,8 +40,8 @@ export function InventoriesListPage() {
 
   const storesQuery = useStores({ page: 1, limit: 100, active: true });
   const { data, isPending, isError, error } = useInventories({
-    page,
-    limit: 10,
+    page: pagination.page,
+    limit: pagination.pageSize,
     status: status || undefined,
     storeId: storeId || undefined,
     dateFrom: dateFrom ? dateInputToIsoStart(dateFrom) : undefined,
@@ -64,7 +65,7 @@ export function InventoriesListPage() {
               label="Estado"
               value={status}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setStatus(event.target.value as InventoryStatus | "");
               }}
             >
@@ -86,7 +87,7 @@ export function InventoriesListPage() {
               label="Tienda"
               value={storeId}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setStoreId(event.target.value);
               }}
             >
@@ -106,7 +107,7 @@ export function InventoriesListPage() {
             type="date"
             value={dateFrom}
             onChange={(event) => {
-              setPage(1);
+              pagination.resetPage();
               setDateFrom(event.target.value);
             }}
             InputLabelProps={{ shrink: true }}
@@ -119,7 +120,7 @@ export function InventoriesListPage() {
             type="date"
             value={dateTo}
             onChange={(event) => {
-              setPage(1);
+              pagination.resetPage();
               setDateTo(event.target.value);
             }}
             InputLabelProps={{ shrink: true }}
@@ -168,7 +169,13 @@ export function InventoriesListPage() {
               </TableBody>
             </Table>
           </TableContainer>
-          <PaginationControls meta={data.meta} onPageChange={setPage} />
+          <PaginationControls
+            meta={data.meta}
+            onPageChange={pagination.onPageChange}
+            pageSize={pagination.pageSize}
+            onPageSizeChange={pagination.onPageSizeChange}
+            showPageSizeSelector
+          />
         </>
       ) : null}
     </AdminLayout>

@@ -25,12 +25,14 @@ const main = async (): Promise<void> => {
   try {
     const normalizedEmail = normalizeEmail(email);
     const existing = await userRepository.findByEmail(normalizedEmail);
+    const passwordHash = await hashPassword(password);
+
     if (existing) {
-      console.error(`Admin user already exists for email: ${normalizedEmail}`);
-      process.exit(1);
+      await userRepository.updatePasswordHash(existing.id, passwordHash);
+      console.log(`Admin password updated: ${normalizedEmail} (${existing.id})`);
+      return;
     }
 
-    const passwordHash = await hashPassword(password);
     const user = await userRepository.create({
       name,
       email: normalizedEmail,

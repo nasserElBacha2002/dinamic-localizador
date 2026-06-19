@@ -10,17 +10,26 @@ import {
   DialogContent,
   DialogTitle,
   Stack,
+  TableCell,
+  TableHead,
+  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { DataTable } from "../../components/common/DataTable";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader } from "../../components/common/PageHeader";
 import { StatusChip } from "../../components/common/StatusChip";
-import { useAttendanceRecord, useReviewAttendanceRecord } from "../../hooks/useAttendance";
+import {
+  useAttendanceRecord,
+  useAttendanceReviews,
+  useReviewAttendanceRecord,
+} from "../../hooks/useAttendance";
+import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -32,7 +41,9 @@ import {
 
 export function AttendanceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const pagination = usePaginationState(10);
   const attendanceQuery = useAttendanceRecord(id);
+  const reviewsQuery = useAttendanceReviews(id, pagination.page, pagination.pageSize);
   const reviewMutation = useReviewAttendanceRecord(id ?? "");
 
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
@@ -91,6 +102,9 @@ export function AttendanceDetailPage() {
       setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
     }
   };
+
+  const reviews = reviewsQuery.data?.data ?? [];
+  const reviewsMeta = reviewsQuery.data?.meta;
 
   return (
     <AdminLayout>
@@ -154,27 +168,46 @@ export function AttendanceDetailPage() {
           </CardContent>
         </Card>
 
-        {record.reviews.length > 0 ? (
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                Historial de revisión
-              </Typography>
-              <Stack spacing={1.5}>
-                {record.reviews.map((review) => (
-                  <Stack key={review.id} spacing={0.5}>
-                    <Typography>
-                      {review.decision === "APPROVE" ? "Aprobada" : "Rechazada"} por{" "}
-                      {review.reviewer?.name ?? review.reviewedBy}
-                    </Typography>
-                    <Typography color="text.secondary">{formatDateTime(review.createdAt)}</Typography>
-                    <Typography>{review.reason}</Typography>
-                  </Stack>
-                ))}
-              </Stack>
-            </CardContent>
-          </Card>
-        ) : null}
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Historial de revisión
+            </Typography>
+
+            <DataTable
+              isLoading={reviewsQuery.isLoading}
+              isError={reviewsQuery.isError}
+              errorMessage={getApiErrorMessage(reviewsQuery.error, "No se pudo cargar el historial.")}
+              isEmpty={!reviewsQuery.isLoading && reviews.length === 0}
+              emptyTitle="Sin revisiones"
+              emptyDescription="Todavía no hay revisiones registradas para esta asistencia."
+              meta={reviewsMeta}
+              pageSize={pagination.pageSize}
+              onPageChange={pagination.onPageChange}
+              onPageSizeChange={pagination.onPageSizeChange}
+              showPageSizeSelector
+              head={
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Decisión</TableCell>
+                    <TableCell>Revisor</TableCell>
+                    <TableCell>Fecha</TableCell>
+                    <TableCell>Motivo</TableCell>
+                  </TableRow>
+                </TableHead>
+              }
+            >
+              {reviews.map((review) => (
+                <TableRow key={review.id}>
+                  <TableCell>{review.decision === "APPROVE" ? "Aprobada" : "Rechazada"}</TableCell>
+                  <TableCell>{review.reviewer?.name ?? review.reviewedBy}</TableCell>
+                  <TableCell>{formatDateTime(review.createdAt)}</TableCell>
+                  <TableCell>{review.reason}</TableCell>
+                </TableRow>
+              ))}
+            </DataTable>
+          </CardContent>
+        </Card>
 
         <Accordion>
           <AccordionSummary expandIcon={<Typography>▼</Typography>}>

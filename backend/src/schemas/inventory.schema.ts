@@ -49,6 +49,8 @@ export const inventoryIdParamSchema = z.object({
   id: z.string().uuid("UUID inválido"),
 });
 
+export const inventoryAttendanceSummaryQuerySchema = paginationQuerySchema;
+
 export const listInventoriesQuerySchema = paginationQuerySchema.merge(dateRangeSchema).extend({
   status: inventoryStatusSchema.optional(),
   storeId: z.string().uuid().optional(),

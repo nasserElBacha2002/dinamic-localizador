@@ -4,6 +4,7 @@ import type {
   AttendanceFilters,
   AttendanceRecord,
   AttendanceRecordWithRelations,
+  AttendanceReview,
   CreateAttendanceInput,
   ReviewAttendanceInput,
 } from "../types/attendance";
@@ -26,6 +27,17 @@ export async function getAttendanceById(id: string): Promise<AttendanceDetail> {
 export async function createAttendanceRecord(input: CreateAttendanceInput): Promise<AttendanceRecord> {
   const { data } = await apiClient.post<SingleResponse<AttendanceRecord>>("/attendance", input);
   return data.data;
+}
+
+export async function getAttendanceReviews(
+  id: string,
+  page = 1,
+  limit = 10,
+): Promise<PaginatedResponse<AttendanceReview>> {
+  const { data } = await apiClient.get<PaginatedResponse<AttendanceReview>>(`/attendance/${id}/reviews`, {
+    params: { page, limit },
+  });
+  return data;
 }
 
 export async function reviewAttendanceRecord(

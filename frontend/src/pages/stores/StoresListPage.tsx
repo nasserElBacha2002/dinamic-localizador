@@ -25,6 +25,7 @@ import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHe
 import { PaginationControls } from "../../components/common/PaginationControls";
 import { SearchField } from "../../components/common/SearchField";
 import { StatusChip } from "../../components/common/StatusChip";
+import { usePaginationState } from "../../hooks/usePaginationState";
 import { useDeactivateStore, useStores } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { Store } from "../../types/store";
@@ -32,7 +33,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
 
 export function StoresListPage() {
-  const [page, setPage] = useState(1);
+  const pagination = usePaginationState(10);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
   const [selectedStore, setSelectedStore] = useState<Store | null>(null);
@@ -43,17 +44,17 @@ export function StoresListPage() {
   });
 
   const { data, isPending, isError, error } = useStores({
-    page,
-    limit: 10,
+    page: pagination.page,
+    limit: pagination.pageSize,
     search: search || undefined,
     active: activeFilter === "all" ? undefined : activeFilter === "true",
   });
   const deactivateMutation = useDeactivateStore();
 
   const handleSearch = useCallback((value: string) => {
-    setPage(1);
+    pagination.resetPage();
     setSearch(value);
-  }, []);
+  }, [pagination]);
 
   const handleDeactivate = async () => {
     if (!selectedStore) {
@@ -97,7 +98,7 @@ export function StoresListPage() {
               label="Estado"
               value={activeFilter}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setActiveFilter(event.target.value as "all" | "true" | "false");
               }}
             >
@@ -162,7 +163,13 @@ export function StoresListPage() {
               </TableBody>
             </Table>
           </TableContainer>
-          <PaginationControls meta={data.meta} onPageChange={setPage} />
+          <PaginationControls
+            meta={data.meta}
+            onPageChange={pagination.onPageChange}
+            pageSize={pagination.pageSize}
+            onPageSizeChange={pagination.onPageSizeChange}
+            showPageSizeSelector
+          />
         </>
       ) : null}
 

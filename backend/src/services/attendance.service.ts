@@ -94,13 +94,29 @@ export const attendanceService = {
       throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Registro de asistencia no encontrado");
     }
 
-    const reviews = await attendanceReviewRepository.listByAttendanceId(id);
     const technical = await this.getTechnicalDetails(record);
 
     return {
       ...record,
-      reviews,
       technical,
+    };
+  },
+
+  async listReviews(attendanceId: string, page: number, limit: number) {
+    const record = await attendanceRepository.findById(attendanceId);
+    if (!record) {
+      throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Registro de asistencia no encontrado");
+    }
+
+    const result = await attendanceReviewRepository.listByAttendanceIdPaginated(
+      attendanceId,
+      page,
+      limit,
+    );
+
+    return {
+      data: result.items,
+      meta: buildPaginationMeta(page, limit, result.total),
     };
   },
 

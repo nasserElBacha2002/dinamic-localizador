@@ -24,6 +24,16 @@ export const attendanceController = {
     res.status(200).json({ data: record });
   },
 
+  async listReviews(req: Request, res: Response) {
+    const query = req.validatedQuery as { page: number; limit: number };
+    const result = await attendanceService.listReviews(
+      String(req.params.id),
+      query.page,
+      query.limit,
+    );
+    res.status(200).json(result);
+  },
+
   async review(req: Request, res: Response) {
     const record = await attendanceService.review(
       String(req.params.id),

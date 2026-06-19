@@ -4,6 +4,7 @@ import {
   exportAttendanceCsv,
   getAttendanceById,
   getAttendanceRecords,
+  getAttendanceReviews,
   reviewAttendanceRecord,
 } from "../api/attendance.api";
 import type { AttendanceFilters, ReviewAttendanceInput } from "../types/attendance";
@@ -46,8 +47,37 @@ export function useReviewAttendanceRecord(attendanceId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
       queryClient.invalidateQueries({ queryKey: ["attendance-record", attendanceId] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-reviews", attendanceId] });
       queryClient.invalidateQueries({ queryKey: ["inventory-attendance-summary"] });
     },
+  });
+}
+
+export function useReviewAttendance() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: ({
+      attendanceId,
+      input,
+    }: {
+      attendanceId: string;
+      input: ReviewAttendanceInput;
+    }) => reviewAttendanceRecord(attendanceId, input),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["attendance"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-record", variables.attendanceId] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-reviews", variables.attendanceId] });
+      queryClient.invalidateQueries({ queryKey: ["inventory-attendance-summary"] });
+    },
+  });
+}
+
+export function useAttendanceReviews(attendanceId?: string, page = 1, limit = 10) {
+  return useQuery({
+    queryKey: ["attendance-reviews", attendanceId, page, limit],
+    queryFn: () => getAttendanceReviews(attendanceId!, page, limit),
+    enabled: Boolean(attendanceId),
   });
 }
 

@@ -2,7 +2,7 @@ import { Router } from "express";
 import { attendanceController } from "../controllers/attendance.controller";
 import { asyncHandler } from "../middleware/async-handler";
 import { validate } from "../middleware/validate";
-import { reviewAttendanceSchema } from "../schemas/attendance-review.schema";
+import { reviewAttendanceSchema, attendanceReviewsQuerySchema } from "../schemas/attendance-review.schema";
 import {
   attendanceIdParamSchema,
   createAttendanceSchema,
@@ -23,5 +23,11 @@ attendanceRouter.patch(
   validate(attendanceIdParamSchema, "params"),
   validate(reviewAttendanceSchema),
   asyncHandler(attendanceController.review),
+);
+attendanceRouter.get(
+  "/:id/reviews",
+  validate(attendanceIdParamSchema, "params"),
+  validate(attendanceReviewsQuerySchema, "query"),
+  asyncHandler(attendanceController.listReviews),
 );
 attendanceRouter.get("/:id", validate(attendanceIdParamSchema, "params"), asyncHandler(attendanceController.getById));

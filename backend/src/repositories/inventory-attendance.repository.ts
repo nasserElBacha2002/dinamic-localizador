@@ -2,12 +2,22 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { OperationalStatus } from "../types/auth";
 import type { AttendanceRecord, Employee, Inventory, Store } from "../types/domain";
+import { getPagination } from "../utils/pagination";
 import { mapAttendanceRow, mapEmployeeRow, mapInventoryRow, mapStoreRow } from "../utils/row-mappers";
 
 export interface InventoryAttendanceSummaryRow {
   employee: Employee;
   attendance: AttendanceRecord | null;
   operationalStatus: OperationalStatus;
+}
+
+export interface InventoryAttendanceSummaryCounts {
+  assigned: number;
+  checkedIn: number;
+  valid: number;
+  pendingReview: number;
+  rejected: number;
+  withoutCheckIn: number;
 }
 
 const resolveOperationalStatus = (attendance: AttendanceRecord | null): OperationalStatus => {
@@ -26,13 +36,59 @@ const resolveOperationalStatus = (attendance: AttendanceRecord | null): Operatio
   return "REJECTED";
 };
 
+const mapSummaryRow = (row: Record<string, unknown>): InventoryAttendanceSummaryRow => {
+  const employee = mapEmployeeRow(row);
+  const attendance = row.attendance_id
+    ? mapAttendanceRow({
+        id: row.attendance_id,
+        inventory_id: row.attendance_inventory_id,
+        employee_id: row.attendance_employee_id,
+        received_latitude: row.received_latitude,
+        received_longitude: row.received_longitude,
+        distance_meters: row.distance_meters,
+        validation_status: row.validation_status,
+        location_status: row.location_status,
+        punctuality_status: row.punctuality_status,
+        source_message_sid: row.source_message_sid,
+        validation_reason: row.validation_reason,
+        reviewed_by: row.reviewed_by,
+        reviewed_at: row.reviewed_at,
+        review_reason: row.review_reason,
+        received_at: row.received_at,
+        created_at: row.attendance_created_at,
+      } as Record<string, unknown>)
+    : null;
+
+  return {
+    employee,
+    attendance,
+    operationalStatus: resolveOperationalStatus(attendance),
+  };
+};
+
+const employeesBaseQuery = `
+  FROM inventory_employees ie
+  INNER JOIN employees e ON e.id = ie.employee_id
+  LEFT JOIN attendance_records ar
+    ON ar.inventory_id = ie.inventory_id
+   AND ar.employee_id = ie.employee_id
+  WHERE ie.inventory_id = @inventoryId
+`;
+
 export const inventoryAttendanceRepository = {
-  async getAttendanceSummary(inventoryId: string): Promise<{
+  async getAttendanceSummary(
+    inventoryId: string,
+    page = 1,
+    limit = 10,
+  ): Promise<{
     inventory: Inventory;
     store: Store;
+    summary: InventoryAttendanceSummaryCounts;
     employees: InventoryAttendanceSummaryRow[];
+    total: number;
   } | null> {
     const pool = getPool();
+    const { offset } = getPagination(page, limit);
 
     const inventoryResult = await pool
       .request()
@@ -74,9 +130,35 @@ export const inventoryAttendanceRepository = {
       updated_at: inventoryRow.store_updated_at,
     });
 
+    const summaryResult = await pool
+      .request()
+      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .query(`
+        SELECT
+          COUNT(*) AS assigned,
+          SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS checked_in,
+          SUM(CASE WHEN ar.validation_status = 'VALID' THEN 1 ELSE 0 END) AS valid_count,
+          SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
+          SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
+          SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS without_check_in
+        ${employeesBaseQuery}
+      `);
+
+    const summaryRow = summaryResult.recordset[0] as Record<string, unknown>;
+    const summary: InventoryAttendanceSummaryCounts = {
+      assigned: Number(summaryRow.assigned ?? 0),
+      checkedIn: Number(summaryRow.checked_in ?? 0),
+      valid: Number(summaryRow.valid_count ?? 0),
+      pendingReview: Number(summaryRow.pending_review ?? 0),
+      rejected: Number(summaryRow.rejected ?? 0),
+      withoutCheckIn: Number(summaryRow.without_check_in ?? 0),
+    };
+
     const employeesResult = await pool
       .request()
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("offset", sql.Int, offset)
+      .input("limit", sql.Int, limit)
       .query(`
         SELECT
           e.*,
@@ -96,45 +178,21 @@ export const inventoryAttendanceRepository = {
           ar.review_reason,
           ar.received_at,
           ar.created_at AS attendance_created_at
-        FROM inventory_employees ie
-        INNER JOIN employees e ON e.id = ie.employee_id
-        LEFT JOIN attendance_records ar
-          ON ar.inventory_id = ie.inventory_id
-         AND ar.employee_id = ie.employee_id
-        WHERE ie.inventory_id = @inventoryId
+        ${employeesBaseQuery}
         ORDER BY e.name ASC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
-    const employees = employeesResult.recordset.map((row) => {
-      const employee = mapEmployeeRow(row as Record<string, unknown>);
-      const attendance = row.attendance_id
-        ? mapAttendanceRow({
-            id: row.attendance_id,
-            inventory_id: row.attendance_inventory_id,
-            employee_id: row.attendance_employee_id,
-            received_latitude: row.received_latitude,
-            received_longitude: row.received_longitude,
-            distance_meters: row.distance_meters,
-            validation_status: row.validation_status,
-            location_status: row.location_status,
-            punctuality_status: row.punctuality_status,
-            source_message_sid: row.source_message_sid,
-            validation_reason: row.validation_reason,
-            reviewed_by: row.reviewed_by,
-            reviewed_at: row.reviewed_at,
-            review_reason: row.review_reason,
-            received_at: row.received_at,
-            created_at: row.attendance_created_at,
-          } as Record<string, unknown>)
-        : null;
+    const employees = employeesResult.recordset.map((row) =>
+      mapSummaryRow(row as Record<string, unknown>),
+    );
 
-      return {
-        employee,
-        attendance,
-        operationalStatus: resolveOperationalStatus(attendance),
-      };
-    });
-
-    return { inventory, store, employees };
+    return {
+      inventory,
+      store,
+      summary,
+      employees,
+      total: summary.assigned,
+    };
   },
 };

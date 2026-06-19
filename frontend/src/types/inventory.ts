@@ -61,6 +61,12 @@ export interface UpdateInventoryInput {
   status?: InventoryStatus;
 }
 
+export interface InventoryAttendanceSummaryEmployee {
+  employee: Employee;
+  attendance: import("./attendance").AttendanceRecord | null;
+  operationalStatus: import("./attendance").OperationalStatus;
+}
+
 export interface InventoryAttendanceSummaryResponse {
   inventory: Inventory & { store: Store };
   summary: {
@@ -71,9 +77,11 @@ export interface InventoryAttendanceSummaryResponse {
     rejected: number;
     withoutCheckIn: number;
   };
-  employees: Array<{
-    employee: Employee;
-    attendance: import("./attendance").AttendanceRecord | null;
-    operationalStatus: import("./attendance").OperationalStatus;
-  }>;
+  employees: InventoryAttendanceSummaryEmployee[];
+  meta: import("./api").PaginationMeta;
+}
+
+export interface InventoryAttendanceSummaryFilters {
+  page?: number;
+  limit?: number;
 }

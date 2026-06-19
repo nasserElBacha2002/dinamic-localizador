@@ -26,6 +26,7 @@ import { StatusChip } from "../../components/common/StatusChip";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
 import { useEmployees } from "../../hooks/useEmployees";
 import { useInventories } from "../../hooks/useInventories";
+import { usePaginationState } from "../../hooks/usePaginationState";
 import { useStores } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
@@ -38,7 +39,7 @@ import {
 } from "../../utils/labels";
 
 export function AttendanceListPage() {
-  const [page, setPage] = useState(1);
+  const pagination = usePaginationState(10);
   const [inventoryId, setInventoryId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [storeId, setStoreId] = useState("");
@@ -50,8 +51,8 @@ export function AttendanceListPage() {
 
   const exportMutation = useExportAttendanceCsv();
   const filters = {
-    page,
-    limit: 10,
+    page: pagination.page,
+    limit: pagination.pageSize,
     inventoryId: inventoryId || undefined,
     employeeId: employeeId || undefined,
     storeId: storeId || undefined,
@@ -105,7 +106,7 @@ export function AttendanceListPage() {
               label="Inventario"
               value={inventoryId}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setInventoryId(event.target.value);
               }}
             >
@@ -127,7 +128,7 @@ export function AttendanceListPage() {
               label="Empleado"
               value={employeeId}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setEmployeeId(event.target.value);
               }}
             >
@@ -149,7 +150,7 @@ export function AttendanceListPage() {
               label="Tienda"
               value={storeId}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setStoreId(event.target.value);
               }}
             >
@@ -171,7 +172,7 @@ export function AttendanceListPage() {
               label="Validación"
               value={validationStatus}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setValidationStatus(event.target.value as ValidationStatus | "");
               }}
             >
@@ -193,7 +194,7 @@ export function AttendanceListPage() {
               label="Ubicación"
               value={locationStatus}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setLocationStatus(event.target.value as LocationStatus | "");
               }}
             >
@@ -215,7 +216,7 @@ export function AttendanceListPage() {
               label="Puntualidad"
               value={punctualityStatus}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setPunctualityStatus(event.target.value as PunctualityStatus | "");
               }}
             >
@@ -235,7 +236,7 @@ export function AttendanceListPage() {
             type="date"
             value={dateFrom}
             onChange={(event) => {
-              setPage(1);
+              pagination.resetPage();
               setDateFrom(event.target.value);
             }}
             InputLabelProps={{ shrink: true }}
@@ -248,7 +249,7 @@ export function AttendanceListPage() {
             type="date"
             value={dateTo}
             onChange={(event) => {
-              setPage(1);
+              pagination.resetPage();
               setDateTo(event.target.value);
             }}
             InputLabelProps={{ shrink: true }}
@@ -305,7 +306,13 @@ export function AttendanceListPage() {
               </TableBody>
             </Table>
           </TableContainer>
-          <PaginationControls meta={data.meta} onPageChange={setPage} />
+          <PaginationControls
+            meta={data.meta}
+            onPageChange={pagination.onPageChange}
+            pageSize={pagination.pageSize}
+            onPageSizeChange={pagination.onPageSizeChange}
+            showPageSizeSelector
+          />
         </>
       ) : null}
     </AdminLayout>

@@ -94,7 +94,6 @@ export interface AttendanceTechnicalDetails {
 }
 
 export interface AttendanceDetail extends AttendanceRecordWithRelations {
-  reviews: AttendanceReview[];
   technical: AttendanceTechnicalDetails;
 }
 

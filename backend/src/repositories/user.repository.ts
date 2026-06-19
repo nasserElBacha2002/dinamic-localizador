@@ -65,6 +65,19 @@ export const userRepository = {
         WHERE id = @id
       `);
   },
+
+  async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
+    const pool = getPool();
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, id)
+      .input("passwordHash", sql.NVarChar(255), passwordHash)
+      .query(`
+        UPDATE users
+        SET password_hash = @passwordHash, updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+      `);
+  },
 };
 
 export const toPublicUser = (user: User): PublicUser => ({

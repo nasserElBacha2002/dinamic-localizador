@@ -143,29 +143,24 @@ export const inventoryService = {
     return cancelled;
   },
 
-  async getAttendanceSummary(inventoryId: string) {
-    const summary = await inventoryAttendanceRepository.getAttendanceSummary(inventoryId);
+  async getAttendanceSummary(inventoryId: string, page = 1, limit = 10) {
+    const summary = await inventoryAttendanceRepository.getAttendanceSummary(
+      inventoryId,
+      page,
+      limit,
+    );
     if (!summary) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
-
-    const employees = summary.employees;
-    const summaryCounts = {
-      assigned: employees.length,
-      checkedIn: employees.filter((row) => row.attendance !== null).length,
-      valid: employees.filter((row) => row.operationalStatus === "VALID").length,
-      pendingReview: employees.filter((row) => row.operationalStatus === "PENDING_REVIEW").length,
-      rejected: employees.filter((row) => row.operationalStatus === "REJECTED").length,
-      withoutCheckIn: employees.filter((row) => row.operationalStatus === "NO_CHECK_IN").length,
-    };
 
     return {
       inventory: {
         ...summary.inventory,
         store: summary.store,
       },
-      summary: summaryCounts,
-      employees,
+      summary: summary.summary,
+      employees: summary.employees,
+      meta: buildPaginationMeta(page, limit, summary.total),
     };
   },
 };

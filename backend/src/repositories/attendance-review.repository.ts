@@ -1,6 +1,7 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { AttendanceReview } from "../types/auth";
+import { getPagination } from "../utils/pagination";
 import { mapAttendanceReviewRow } from "../utils/row-mappers";
 
 export const attendanceReviewRepository = {
@@ -54,6 +55,47 @@ export const attendanceReviewRepository = {
     return result.recordset.map((row) =>
       mapAttendanceReviewRow(row as Record<string, unknown>),
     );
+  },
+
+  async listByAttendanceIdPaginated(
+    attendanceId: string,
+    page: number,
+    limit: number,
+  ): Promise<{ items: AttendanceReview[]; total: number }> {
+    const pool = getPool();
+    const { offset } = getPagination(page, limit);
+
+    const countResult = await pool
+      .request()
+      .input("attendanceId", sql.UniqueIdentifier, attendanceId)
+      .query(`
+        SELECT COUNT(*) AS total
+        FROM attendance_reviews
+        WHERE attendance_id = @attendanceId
+      `);
+
+    const total = Number((countResult.recordset[0] as { total: number }).total ?? 0);
+
+    const result = await pool
+      .request()
+      .input("attendanceId", sql.UniqueIdentifier, attendanceId)
+      .input("offset", sql.Int, offset)
+      .input("limit", sql.Int, limit)
+      .query(`
+        SELECT ar.*, u.name AS reviewer_name, u.email AS reviewer_email
+        FROM attendance_reviews ar
+        INNER JOIN users u ON u.id = ar.reviewed_by
+        WHERE ar.attendance_id = @attendanceId
+        ORDER BY ar.created_at ASC
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `);
+
+    return {
+      items: result.recordset.map((row) =>
+        mapAttendanceReviewRow(row as Record<string, unknown>),
+      ),
+      total,
+    };
   },
 
   async hasReview(attendanceId: string): Promise<boolean> {

@@ -10,7 +10,11 @@ import {
   unassignEmployeeFromInventory,
   updateInventory,
 } from "../api/inventories.api";
-import type { InventoryFilters, UpdateInventoryInput } from "../types/inventory";
+import type {
+  InventoryAttendanceSummaryFilters,
+  InventoryFilters,
+  UpdateInventoryInput,
+} from "../types/inventory";
 
 export function useInventories(filters: InventoryFilters) {
   return useQuery({
@@ -97,10 +101,13 @@ export function useUnassignInventoryEmployee(inventoryId: string) {
   });
 }
 
-export function useInventoryAttendanceSummary(inventoryId?: string) {
+export function useInventoryAttendanceSummary(
+  inventoryId?: string,
+  filters: InventoryAttendanceSummaryFilters = {},
+) {
   return useQuery({
-    queryKey: ["inventory-attendance-summary", inventoryId],
-    queryFn: () => getInventoryAttendanceSummary(inventoryId!),
+    queryKey: ["inventory-attendance-summary", inventoryId, filters],
+    queryFn: () => getInventoryAttendanceSummary(inventoryId!, filters),
     enabled: Boolean(inventoryId),
     refetchInterval: 30000,
   });

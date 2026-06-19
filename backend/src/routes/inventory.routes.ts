@@ -4,6 +4,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { validate } from "../middleware/validate";
 import {
   createInventorySchema,
+  inventoryAttendanceSummaryQuerySchema,
   inventoryIdParamSchema,
   listInventoriesQuerySchema,
   updateInventorySchema,
@@ -20,6 +21,7 @@ inventoryRouter.get(
 inventoryRouter.get(
   "/:id/attendance-summary",
   validate(inventoryIdParamSchema, "params"),
+  validate(inventoryAttendanceSummaryQuerySchema, "query"),
   asyncHandler(inventoryController.getAttendanceSummary),
 );
 inventoryRouter.get(

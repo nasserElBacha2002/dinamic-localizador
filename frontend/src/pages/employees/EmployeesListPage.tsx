@@ -26,13 +26,14 @@ import { PaginationControls } from "../../components/common/PaginationControls";
 import { SearchField } from "../../components/common/SearchField";
 import { StatusChip } from "../../components/common/StatusChip";
 import { useDeactivateEmployee, useEmployees } from "../../hooks/useEmployees";
+import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { Employee } from "../../types/employee";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
 
 export function EmployeesListPage() {
-  const [page, setPage] = useState(1);
+  const pagination = usePaginationState(10);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
   const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
@@ -43,8 +44,8 @@ export function EmployeesListPage() {
   });
 
   const filters = {
-    page,
-    limit: 10,
+    page: pagination.page,
+    limit: pagination.pageSize,
     search: search || undefined,
     active: activeFilter === "all" ? undefined : activeFilter === "true",
   };
@@ -53,9 +54,9 @@ export function EmployeesListPage() {
   const deactivateMutation = useDeactivateEmployee();
 
   const handleSearch = useCallback((value: string) => {
-    setPage(1);
+    pagination.resetPage();
     setSearch(value);
-  }, []);
+  }, [pagination]);
 
   const handleDeactivate = async () => {
     if (!selectedEmployee) {
@@ -99,7 +100,7 @@ export function EmployeesListPage() {
               label="Estado"
               value={activeFilter}
               onChange={(event) => {
-                setPage(1);
+                pagination.resetPage();
                 setActiveFilter(event.target.value as "all" | "true" | "false");
               }}
             >
@@ -163,7 +164,13 @@ export function EmployeesListPage() {
               </TableBody>
             </Table>
           </TableContainer>
-          <PaginationControls meta={data.meta} onPageChange={setPage} />
+          <PaginationControls
+            meta={data.meta}
+            onPageChange={pagination.onPageChange}
+            pageSize={pagination.pageSize}
+            onPageSizeChange={pagination.onPageSizeChange}
+            showPageSizeSelector
+          />
         </>
       ) : null}
 

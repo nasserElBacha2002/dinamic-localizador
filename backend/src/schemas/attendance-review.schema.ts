@@ -1,4 +1,7 @@
 import { z } from "zod";
+import { paginationQuerySchema } from "./common.schema";
+
+export const attendanceReviewsQuerySchema = paginationQuerySchema;
 
 export const reviewAttendanceSchema = z.object({
   decision: z.enum(["APPROVE", "REJECT"]),

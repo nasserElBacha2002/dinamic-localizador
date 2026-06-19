@@ -65,9 +65,15 @@ export async function unassignEmployeeFromInventory(
   await apiClient.delete(`/inventories/${inventoryId}/employees/${employeeId}`);
 }
 
-export async function getInventoryAttendanceSummary(inventoryId: string) {
+export async function getInventoryAttendanceSummary(
+  inventoryId: string,
+  filters: import("../types/inventory").InventoryAttendanceSummaryFilters = {},
+) {
   const { data } = await apiClient.get<SingleResponse<InventoryAttendanceSummaryResponse>>(
     `/inventories/${inventoryId}/attendance-summary`,
+    {
+      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+    },
   );
   return data.data;
 }

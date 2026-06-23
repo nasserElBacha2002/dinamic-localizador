@@ -11,7 +11,7 @@ services:
     expose:
       - "${DB_PORT}"
     ports:
-      - "${DB_PORT_EXTERNAL}:${DB_PORT}"
+      - "1435:1433"
     volumes:
       - sqlserver_data:/var/opt/mssql
     healthcheck:
@@ -78,7 +78,7 @@ services:
     build:
       context: ./backend
       dockerfile: Dockerfile
-      target: development
+      target: production
     container_name: dinamic-attendance-backend
     depends_on:
       sqlserver:
@@ -115,15 +115,19 @@ services:
       BOT_ON_TIME_GRACE_MINUTES: ${BOT_ON_TIME_GRACE_MINUTES}
     ports:
       - "${BACKEND_HOST_PORT}:${BACKEND_INTERNAL_PORT}"
-    volumes:
-      - ./backend:/app
-      - /app/node_modules
+   # volumes:
+     # - ./backend:/app
+     # - /app/node_modules
 
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      target: development
+      target: production
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+        VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
+        VITE_GOOGLE_MAPS_MAP_ID: ${VITE_GOOGLE_MAPS_MAP_ID}
     container_name: dinamic-attendance-frontend
     depends_on:
       backend:
@@ -133,12 +137,10 @@ services:
       VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
       VITE_GOOGLE_MAPS_MAP_ID: ${VITE_GOOGLE_MAPS_MAP_ID}
     ports:
-      - "${FRONTEND_HOST_PORT}:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: sh -c "npm install && npm run dev"
-
+      - "${FRONTEND_HOST_PORT}:80"
+    #volumes:
+     # - ./frontend:/app
+      #- /app/node_modules6
 volumes:
   sqlserver_data:
     name: dinamic-attendance_sqlserver_data

@@ -15,3 +15,7 @@ frontend/.env
 .DS_Store
 .vscode/
 .idea/
+
+# Local env backups / secrets
+*.env.save
+backend/.env.save

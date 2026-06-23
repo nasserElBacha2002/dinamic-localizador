@@ -42,6 +42,7 @@ export const inventoryEmployeeRepository = {
         e.name AS employee_name,
         e.document_number AS employee_document_number,
         e.phone_number AS employee_phone_number,
+        e.employee_type AS employee_type,
         e.active AS employee_active,
         e.created_at AS employee_created_at,
         e.updated_at AS employee_updated_at

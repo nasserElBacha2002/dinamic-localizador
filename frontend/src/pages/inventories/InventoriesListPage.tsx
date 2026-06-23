@@ -5,59 +5,106 @@ import {
   MenuItem,
   Paper,
   Select,
+  Stack,
   Table,
   TableBody,
   TableCell,
   TableContainer,
-  TableHead,
-  TableRow,
   TextField,
 } from "@mui/material";
 import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
+import { ClickableTableRow } from "../../components/common/ClickableTableRow";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FilterItem, ListFilters } from "../../components/common/ListFilters";
 import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHeader";
 import { PaginationControls } from "../../components/common/PaginationControls";
+import type { SortableColumn } from "../../components/common/SortableTableHead";
+import { SortableTableHead } from "../../components/common/SortableTableHead";
 import { StatusChip } from "../../components/common/StatusChip";
+import { StoreSearchAutocomplete } from "../../components/stores/StoreSearchAutocomplete";
 import { useInventories } from "../../hooks/useInventories";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { useStores } from "../../hooks/useStores";
+import { useTableSort } from "../../hooks/useTableSort";
 import { AdminLayout } from "../../layouts/AdminLayout";
-import type { InventoryStatus } from "../../types/inventory";
-import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
+import type { InventoryListSortField, InventoryStatus } from "../../types/inventory";
+import {
+  dateInputToIsoEnd,
+  dateInputToIsoStart,
+  formatDateTime,
+  getTodayDateInput,
+} from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { inventoryStatusLabels } from "../../utils/labels";
 
+const INVENTORY_TABLE_COLUMNS: SortableColumn<InventoryListSortField>[] = [
+  { id: "storeName", label: "Tienda" },
+  { id: "storeAddress", label: "Dirección" },
+  { id: "scheduledStart", label: "Inicio" },
+  { id: "scheduledEnd", label: "Fin" },
+  { id: "status", label: "Estado" },
+  { id: "earlyToleranceMinutes", label: "Tolerancia temprana" },
+  { id: "lateToleranceMinutes", label: "Tolerancia tardía" },
+];
+
 export function InventoriesListPage() {
   const pagination = usePaginationState(10);
+  const { sortBy, sortDirection, onSortChange } = useTableSort<InventoryListSortField>(
+    "scheduledStart",
+    "asc",
+  );
   const [status, setStatus] = useState<InventoryStatus | "">("");
   const [storeId, setStoreId] = useState("");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
+  const [todayOnly, setTodayOnly] = useState(true);
 
-  const storesQuery = useStores({ page: 1, limit: 100, active: true });
+  const todayDate = getTodayDateInput();
+  const effectiveDateFrom = todayOnly ? todayDate : dateFrom;
+  const effectiveDateTo = todayOnly ? todayDate : dateTo;
+
   const { data, isPending, isError, error } = useInventories({
     page: pagination.page,
     limit: pagination.pageSize,
     status: status || undefined,
     storeId: storeId || undefined,
-    dateFrom: dateFrom ? dateInputToIsoStart(dateFrom) : undefined,
-    dateTo: dateTo ? dateInputToIsoEnd(dateTo) : undefined,
+    dateFrom: effectiveDateFrom ? dateInputToIsoStart(effectiveDateFrom) : undefined,
+    dateTo: effectiveDateTo ? dateInputToIsoEnd(effectiveDateTo) : undefined,
+    sortBy,
+    sortDirection,
   });
+
+  const handleSortChange = (field: InventoryListSortField) => {
+    pagination.resetPage();
+    onSortChange(field);
+  };
+
+  const handleTodayToggle = () => {
+    pagination.resetPage();
+    setTodayOnly((current) => !current);
+    setDateFrom("");
+    setDateTo("");
+  };
 
   return (
     <AdminLayout>
       <PageHeader
         title="Inventarios"
         description="Planificá jornadas de inventario y asigná empleados."
-        action={<PageHeaderLinkAction to="/inventories/new" label="Nuevo inventario" />}
+        action={
+          <Stack direction="row" spacing={1}>
+            <Button component={RouterLink} to="/inventories/import" variant="outlined">
+              Importar inventarios
+            </Button>
+            <PageHeaderLinkAction to="/inventories/new" label="Nuevo inventario" />
+          </Stack>
+        }
       />
 
       <ListFilters>
-        <FilterItem size={{ xs: 12, sm: 6, md: 4 }}>
+        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
           <FormControl fullWidth>
             <InputLabel id="inventory-status-filter">Estado</InputLabel>
             <Select
@@ -79,50 +126,54 @@ export function InventoriesListPage() {
           </FormControl>
         </FilterItem>
 
-        <FilterItem size={{ xs: 12, sm: 6, md: 4 }}>
-          <FormControl fullWidth>
-            <InputLabel id="inventory-store-filter">Tienda</InputLabel>
-            <Select
-              labelId="inventory-store-filter"
-              label="Tienda"
-              value={storeId}
-              onChange={(event) => {
-                pagination.resetPage();
-                setStoreId(event.target.value);
-              }}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {storesQuery.data?.data.map((store) => (
-                <MenuItem key={store.id} value={store.id}>
-                  {store.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
+          <StoreSearchAutocomplete
+            value={storeId || null}
+            onChange={(id) => {
+              pagination.resetPage();
+              setStoreId(id ?? "");
+            }}
+            allowCreate={false}
+          />
         </FilterItem>
 
-        <FilterItem size={{ xs: 12, sm: 6, md: 4 }}>
+        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
+          <Button
+            variant={todayOnly ? "contained" : "outlined"}
+            onClick={handleTodayToggle}
+            fullWidth
+            sx={{ height: "100%" }}
+          >
+            Solo hoy
+          </Button>
+        </FilterItem>
+
+        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
           <TextField
             label="Fecha desde"
             type="date"
-            value={dateFrom}
+            value={todayOnly ? todayDate : dateFrom}
             onChange={(event) => {
               pagination.resetPage();
+              setTodayOnly(false);
               setDateFrom(event.target.value);
             }}
+            disabled={todayOnly}
             InputLabelProps={{ shrink: true }}
             fullWidth
           />
         </FilterItem>
-        <FilterItem size={{ xs: 12, sm: 6, md: 4 }}>
+        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
           <TextField
             label="Fecha hasta"
             type="date"
-            value={dateTo}
+            value={todayOnly ? todayDate : dateTo}
             onChange={(event) => {
               pagination.resetPage();
+              setTodayOnly(false);
               setDateTo(event.target.value);
             }}
+            disabled={todayOnly}
             InputLabelProps={{ shrink: true }}
             fullWidth
           />
@@ -137,21 +188,21 @@ export function InventoriesListPage() {
         <>
           <TableContainer component={Paper} variant="outlined">
             <Table size="small" aria-label="Listado de inventarios">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Tienda</TableCell>
-                  <TableCell>Inicio</TableCell>
-                  <TableCell>Fin</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Tolerancia temprana</TableCell>
-                  <TableCell>Tolerancia tardía</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
-                </TableRow>
-              </TableHead>
+              <SortableTableHead
+                columns={INVENTORY_TABLE_COLUMNS}
+                sortBy={sortBy}
+                sortDirection={sortDirection}
+                onSortChange={handleSortChange}
+              />
               <TableBody>
                 {data.data.map((inventory) => (
-                  <TableRow key={inventory.id} hover>
+                  <ClickableTableRow
+                    key={inventory.id}
+                    to={`/inventories/${inventory.id}`}
+                    ariaLabel={`Ver inventario de ${inventory.store.name}`}
+                  >
                     <TableCell>{inventory.store.name}</TableCell>
+                    <TableCell>{inventory.store.address ?? "—"}</TableCell>
                     <TableCell>{formatDateTime(inventory.scheduledStart)}</TableCell>
                     <TableCell>{formatDateTime(inventory.scheduledEnd)}</TableCell>
                     <TableCell>
@@ -159,12 +210,7 @@ export function InventoriesListPage() {
                     </TableCell>
                     <TableCell>{inventory.earlyToleranceMinutes} min</TableCell>
                     <TableCell>{inventory.lateToleranceMinutes} min</TableCell>
-                    <TableCell align="right">
-                      <Button component={RouterLink} to={`/inventories/${inventory.id}`} size="small">
-                        Ver detalle
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 ))}
               </TableBody>
             </Table>

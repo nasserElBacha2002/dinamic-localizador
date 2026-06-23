@@ -3,23 +3,19 @@ import {
   Button,
   Card,
   CardContent,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
   Stack,
   TableCell,
   TableHead,
   TableRow,
   Typography,
 } from "@mui/material";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
 import { DataTable } from "../common/DataTable";
 import { StatusChip } from "../common/StatusChip";
+import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import { useReviewAttendance } from "../../hooks/useAttendance";
-import { useEmployees } from "../../hooks/useEmployees";
 import {
   useAssignInventoryEmployee,
   useInventoryAttendanceSummary,
@@ -73,20 +69,9 @@ export function InventoryOperationalSection({
     page: pagination.page,
     limit: pagination.pageSize,
   });
-  const employeesQuery = useEmployees({ page: 1, limit: 100, active: true });
   const assignMutation = useAssignInventoryEmployee(inventoryId);
   const unassignMutation = useUnassignInventoryEmployee(inventoryId);
   const reviewMutation = useReviewAttendance();
-
-  const availableEmployees = useMemo(() => {
-    if (!employeesQuery.data) {
-      return [];
-    }
-
-    const currentAssigned = new Set(assignedEmployeeIds);
-
-    return employeesQuery.data.data.filter((employee) => !currentAssigned.has(employee.id));
-  }, [assignedEmployeeIds, employeesQuery.data]);
 
   const handleAssign = async () => {
     if (!selectedEmployeeId) {
@@ -156,21 +141,13 @@ export function InventoryOperationalSection({
 
         {canAssign ? (
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
-            <FormControl fullWidth>
-              <InputLabel id="assign-employee-label">Empleado activo</InputLabel>
-              <Select
-                labelId="assign-employee-label"
-                label="Empleado activo"
-                value={selectedEmployeeId}
-                onChange={(event) => setSelectedEmployeeId(event.target.value)}
-              >
-                {availableEmployees.map((employee) => (
-                  <MenuItem key={employee.id} value={employee.id}>
-                    {employee.name} ({employee.phoneNumber})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <EmployeeSearchAutocomplete
+              label="Empleado activo"
+              value={selectedEmployeeId || null}
+              onChange={(id) => setSelectedEmployeeId(id ?? "")}
+              excludeIds={assignedEmployeeIds}
+              helperText="Buscá por nombre o teléfono"
+            />
             <Button
               variant="contained"
               onClick={handleAssign}

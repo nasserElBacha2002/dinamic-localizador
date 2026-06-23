@@ -8,6 +8,7 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { useStore, useUpdateStore } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
+import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreEditPage() {
@@ -50,7 +51,10 @@ export function StoreEditPage() {
     try {
       await updateMutation.mutateAsync({
         name: values.name,
-        address: values.address?.trim() ? values.address.trim() : null,
+        address: toNullableStoreText(values.address),
+        barrio: toNullableStoreText(values.barrio),
+        localidad: toNullableStoreText(values.localidad),
+        formato: toNullableStoreFormat(values.formato),
         latitude: values.latitude,
         longitude: values.longitude,
         allowedRadiusMeters: values.allowedRadiusMeters,
@@ -71,6 +75,9 @@ export function StoreEditPage() {
         defaultValues={{
           name: store.name,
           address: store.address ?? "",
+          barrio: store.barrio ?? "",
+          localidad: store.localidad ?? "",
+          formato: store.formato ?? "",
           latitude: store.latitude,
           longitude: store.longitude,
           allowedRadiusMeters: store.allowedRadiusMeters,

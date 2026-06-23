@@ -4,7 +4,7 @@ import type { InventoryStatus } from "../types/inventory";
 export const inventoryStatusLabels: Record<InventoryStatus, string> = {
   SCHEDULED: "Programado",
   IN_PROGRESS: "En curso",
-  COMPLETED: "Completado",
+  COMPLETED: "Finalizado",
   CANCELLED: "Cancelado",
 };
 
@@ -28,6 +28,11 @@ export const punctualityStatusLabels: Record<PunctualityStatus, string> = {
 };
 
 export const activeStatusLabel = (active: boolean): string => (active ? "Activo" : "Inactivo");
+
+export const employeeTypeLabels: Record<import("../constants/employee-types").EmployeeType, string> = {
+  fijo: "Fijo",
+  eventual: "Eventual",
+};
 
 export const operationalStatusLabels: Record<
   import("../types/attendance").OperationalStatus,

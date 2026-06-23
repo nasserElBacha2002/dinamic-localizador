@@ -1,16 +1,19 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { StoreForm } from "../../components/stores/StoreForm";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useCreateStore } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
+import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const createMutation = useCreateStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const defaultName = useMemo(() => searchParams.get("name")?.trim() ?? "", [searchParams]);
 
   const handleSubmit = async (values: StoreFormValues) => {
     setErrorMessage(null);
@@ -18,7 +21,10 @@ export function StoreCreatePage() {
     try {
       const store = await createMutation.mutateAsync({
         name: values.name,
-        address: values.address?.trim() ? values.address.trim() : null,
+        address: toNullableStoreText(values.address),
+        barrio: toNullableStoreText(values.barrio),
+        localidad: toNullableStoreText(values.localidad),
+        formato: toNullableStoreFormat(values.formato),
         latitude: values.latitude,
         longitude: values.longitude,
         allowedRadiusMeters: values.allowedRadiusMeters,
@@ -35,8 +41,11 @@ export function StoreCreatePage() {
       <PageHeader title="Nueva tienda" description="Definí la ubicación y el radio permitido." />
       <StoreForm
         defaultValues={{
-          name: "",
+          name: defaultName,
           address: "",
+          barrio: "",
+          localidad: "",
+          formato: "",
           latitude: -34.6037,
           longitude: -58.3816,
           allowedRadiusMeters: 150,

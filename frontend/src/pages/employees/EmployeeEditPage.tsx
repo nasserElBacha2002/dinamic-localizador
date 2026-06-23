@@ -52,6 +52,7 @@ export function EmployeeEditPage() {
         name: values.name,
         documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
         phoneNumber: values.phoneNumber,
+        employeeType: values.employeeType,
         active: values.active,
       });
       setSuccessOpen(true);
@@ -69,6 +70,7 @@ export function EmployeeEditPage() {
           name: employee.name,
           documentNumber: employee.documentNumber ?? "",
           phoneNumber: employee.phoneNumber,
+          employeeType: employee.employeeType,
           active: employee.active,
         }}
         submitLabel="Guardar cambios"

@@ -24,6 +24,7 @@ const navItems = [
   { label: "Tiendas", path: "/stores" },
   { label: "Inventarios", path: "/inventories" },
   { label: "Asistencias", path: "/attendance" },
+  { label: "Estadísticas", path: "/statistics" },
 ];
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {

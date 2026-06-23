@@ -10,6 +10,7 @@ export const employeeRepository = {
     name: string;
     documentNumber: string | null;
     phoneNumber: string;
+    employeeType: Employee["employeeType"];
   }): Promise<Employee> {
     const pool = getPool();
     const result = await pool
@@ -17,10 +18,11 @@ export const employeeRepository = {
       .input("name", sql.NVarChar(150), input.name)
       .input("documentNumber", sql.NVarChar(50), input.documentNumber)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
+      .input("employeeType", sql.NVarChar(20), input.employeeType)
       .query(`
-        INSERT INTO employees (name, document_number, phone_number)
+        INSERT INTO employees (name, document_number, phone_number, employee_type)
         OUTPUT INSERTED.*
-        VALUES (@name, @documentNumber, @phoneNumber)
+        VALUES (@name, @documentNumber, @phoneNumber, @employeeType)
       `);
 
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
@@ -116,6 +118,11 @@ export const employeeRepository = {
     if (input.phoneNumber !== undefined) {
       request.input("phoneNumber", sql.NVarChar(30), input.phoneNumber);
       fields.push("phone_number = @phoneNumber");
+    }
+
+    if (input.employeeType !== undefined) {
+      request.input("employeeType", sql.NVarChar(20), input.employeeType);
+      fields.push("employee_type = @employeeType");
     }
 
     if (input.active !== undefined) {

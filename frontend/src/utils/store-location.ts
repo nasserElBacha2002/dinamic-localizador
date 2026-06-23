@@ -13,19 +13,76 @@ export type GoogleMapsErrorCode =
 export interface PlaceSelectionResult {
   googlePlaceId: string;
   address: string;
+  barrio?: string;
+  localidad?: string;
   displayName: string | null;
   latitude: number;
   longitude: number;
 }
 
+export interface GoogleAddressComponent {
+  types: string[];
+  longText?: string;
+  shortText?: string;
+}
+
 export interface StoreLocationFields {
   address?: string;
+  barrio?: string;
+  localidad?: string;
   latitude: number;
   longitude: number;
   googlePlaceId?: string | null;
   allowedRadiusMeters: number;
   name?: string;
 }
+
+const BARRIO_COMPONENT_TYPES = [
+  "neighborhood",
+  "sublocality",
+  "sublocality_level_1",
+  "administrative_area_level_3",
+] as const;
+
+const LOCALIDAD_COMPONENT_TYPES = [
+  "locality",
+  "administrative_area_level_2",
+  "postal_town",
+] as const;
+
+const readAddressComponentText = (component: GoogleAddressComponent): string =>
+  component.longText?.trim() || component.shortText?.trim() || "";
+
+export const parseGoogleAddressComponents = (
+  formattedAddress: string,
+  components?: GoogleAddressComponent[] | null,
+): { address: string; barrio: string; localidad: string } => {
+  const findByTypes = (types: readonly string[]): string => {
+    if (!components?.length) {
+      return "";
+    }
+
+    for (const type of types) {
+      const match = components.find((component) => component.types.includes(type));
+      const text = match ? readAddressComponentText(match) : "";
+      if (text) {
+        return text;
+      }
+    }
+
+    return "";
+  };
+
+  const route = findByTypes(["route"]);
+  const streetNumber = findByTypes(["street_number"]);
+  const streetAddress = [route, streetNumber].filter(Boolean).join(" ").trim();
+
+  return {
+    address: streetAddress || formattedAddress.trim(),
+    barrio: findByTypes(BARRIO_COMPONENT_TYPES),
+    localidad: findByTypes(LOCALIDAD_COMPONENT_TYPES),
+  };
+};
 
 export const isValidLatitude = (value: number): boolean =>
   Number.isFinite(value) && value >= -90 && value <= 90;
@@ -64,6 +121,8 @@ export const applyPlaceSelection = (
   const fields: StoreLocationFields = {
     ...current,
     address: place.address,
+    barrio: place.barrio ?? "",
+    localidad: place.localidad ?? "",
     latitude: place.latitude,
     longitude: place.longitude,
     googlePlaceId: place.googlePlaceId,

@@ -1,10 +1,16 @@
 import { z } from "zod";
+import { EMPLOYEE_TYPES } from "../constants/employee-types";
 import { activeFilterSchema, paginationQuerySchema, searchFilterSchema } from "./common.schema";
+
+const employeeTypeSchema = z.enum(EMPLOYEE_TYPES, {
+  message: "Seleccioná un tipo de empleado válido",
+});
 
 export const createEmployeeSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(150),
   documentNumber: z.string().trim().max(50).optional().nullable(),
   phoneNumber: z.string().trim().min(8, "El teléfono es obligatorio").max(30),
+  employeeType: employeeTypeSchema,
 });
 
 export const updateEmployeeSchema = z
@@ -12,6 +18,7 @@ export const updateEmployeeSchema = z
     name: z.string().trim().min(1).max(150).optional(),
     documentNumber: z.string().trim().max(50).nullable().optional(),
     phoneNumber: z.string().trim().min(8).max(30).optional(),
+    employeeType: employeeTypeSchema.optional(),
     active: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {

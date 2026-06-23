@@ -1,11 +1,24 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Alert, FormControlLabel, Stack, Switch, TextField } from "@mui/material";
+import {
+  Alert,
+  FormControl,
+  FormControlLabel,
+  FormHelperText,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  TextField,
+} from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
-import { employeeFormSchema, type EmployeeFormValues } from "../../schemas/employee.schema";
+import { EMPLOYEE_TYPES } from "../../constants/employee-types";
+import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
+import { employeeTypeLabels } from "../../utils/labels";
 import { FormActions } from "../common/FormActions";
 
 interface EmployeeFormProps {
-  defaultValues: EmployeeFormValues;
+  defaultValues: EmployeeFormInputValues;
   submitLabel: string;
   cancelTo: string;
   loading?: boolean;
@@ -26,7 +39,7 @@ export function EmployeeForm({
     control,
     handleSubmit,
     formState: { errors },
-  } = useForm<EmployeeFormValues>({
+  } = useForm<EmployeeFormInputValues, unknown, EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues,
   });
@@ -61,6 +74,35 @@ export function EmployeeForm({
           error={Boolean(errors.phoneNumber)}
           helperText={errors.phoneNumber?.message ?? "Formato internacional E.164"}
           {...register("phoneNumber")}
+        />
+
+        <Controller
+          name="employeeType"
+          control={control}
+          render={({ field }) => (
+            <FormControl fullWidth required error={Boolean(errors.employeeType)}>
+              <InputLabel id="employee-type-label">Tipo de empleado</InputLabel>
+              <Select
+                labelId="employee-type-label"
+                label="Tipo de empleado"
+                value={field.value ?? ""}
+                onChange={field.onChange}
+                inputRef={field.ref}
+              >
+                <MenuItem value="" disabled>
+                  <em>Seleccionar tipo</em>
+                </MenuItem>
+                {EMPLOYEE_TYPES.map((employeeType) => (
+                  <MenuItem key={employeeType} value={employeeType}>
+                    {employeeTypeLabels[employeeType]}
+                  </MenuItem>
+                ))}
+              </Select>
+              {errors.employeeType?.message ? (
+                <FormHelperText>{errors.employeeType.message}</FormHelperText>
+              ) : null}
+            </FormControl>
+          )}
         />
 
         <Controller

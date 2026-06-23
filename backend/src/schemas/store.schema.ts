@@ -1,9 +1,15 @@
 import { z } from "zod";
+import { STORE_FORMATS } from "../constants/store-formats";
 import { activeFilterSchema, paginationQuerySchema, searchFilterSchema } from "./common.schema";
+
+const storeFormatSchema = z.enum(STORE_FORMATS);
 
 export const createStoreSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(150),
   address: z.string().trim().max(300).optional().nullable(),
+  barrio: z.string().trim().max(150).optional().nullable(),
+  localidad: z.string().trim().max(150).optional().nullable(),
+  formato: storeFormatSchema.optional().nullable(),
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
   allowedRadiusMeters: z.number().int().positive().default(150),
@@ -14,6 +20,9 @@ export const updateStoreSchema = z
   .object({
     name: z.string().trim().min(1).max(150).optional(),
     address: z.string().trim().max(300).nullable().optional(),
+    barrio: z.string().trim().max(150).nullable().optional(),
+    localidad: z.string().trim().max(150).nullable().optional(),
+    formato: storeFormatSchema.nullable().optional(),
     latitude: z.number().min(-90).max(90).optional(),
     longitude: z.number().min(-180).max(180).optional(),
     allowedRadiusMeters: z.number().int().positive().optional(),

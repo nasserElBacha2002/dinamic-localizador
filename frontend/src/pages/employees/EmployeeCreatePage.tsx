@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useCreateEmployee } from "../../hooks/useEmployees";
@@ -9,8 +9,10 @@ import { getApiErrorMessage } from "../../utils/errors";
 
 export function EmployeeCreatePage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const createMutation = useCreateEmployee();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const defaultName = useMemo(() => searchParams.get("name")?.trim() ?? "", [searchParams]);
 
   const handleSubmit = async (values: EmployeeFormValues) => {
     setErrorMessage(null);
@@ -20,6 +22,7 @@ export function EmployeeCreatePage() {
         name: values.name,
         documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
         phoneNumber: values.phoneNumber,
+        employeeType: values.employeeType,
       });
       navigate(`/employees/${employee.id}`);
     } catch (error) {
@@ -31,7 +34,7 @@ export function EmployeeCreatePage() {
     <AdminLayout>
       <PageHeader title="Nuevo empleado" description="Registrá un empleado habilitado para inventarios." />
       <EmployeeForm
-        defaultValues={{ name: "", documentNumber: "", phoneNumber: "", active: true }}
+        defaultValues={{ name: defaultName, documentNumber: "", phoneNumber: "", employeeType: "", active: true }}
         submitLabel="Crear empleado"
         cancelTo="/employees"
         loading={createMutation.isPending}

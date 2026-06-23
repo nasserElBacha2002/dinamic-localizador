@@ -1,5 +1,5 @@
 import { Button, Card, CardActions, CardContent, Grid, Stack, Typography } from "@mui/material";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink, useNavigate } from "react-router-dom";
 import { StatusCard } from "../components/StatusCard";
 import { ErrorState } from "../components/common/ErrorState";
 import { LoadingState } from "../components/common/LoadingState";
@@ -8,6 +8,7 @@ import { getEmployees } from "../api/employees.api";
 import { getInventories } from "../api/inventories.api";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
 import { AdminLayout } from "../layouts/AdminLayout";
+import type { InventoryWithStore } from "../types/inventory";
 import { formatDateTime } from "../utils/dates";
 import { useQuery } from "@tanstack/react-query";
 
@@ -138,21 +139,45 @@ export function HomePage() {
       {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
         <Stack spacing={1}>
           {upcomingInventoriesQuery.data.data.map((inventory) => (
-            <Card key={inventory.id} variant="outlined">
-              <CardContent sx={{ display: "flex", justifyContent: "space-between", gap: 2, flexWrap: "wrap" }}>
-                <BoxInfo
-                  title={inventory.store.name}
-                  subtitle={formatDateTime(inventory.scheduledStart)}
-                />
-                <Button component={RouterLink} to={`/inventories/${inventory.id}`} size="small">
-                  Ver detalle
-                </Button>
-              </CardContent>
-            </Card>
+            <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
           ))}
         </Stack>
       ) : null}
     </AdminLayout>
+  );
+}
+
+function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore }) {
+  const navigate = useNavigate();
+
+  return (
+    <Card
+      variant="outlined"
+      role="link"
+      tabIndex={0}
+      aria-label={`Ver inventario de ${inventory.store.name}`}
+      onClick={() => navigate(`/inventories/${inventory.id}`)}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          navigate(`/inventories/${inventory.id}`);
+        }
+      }}
+      sx={{
+        cursor: "pointer",
+        transition: (theme) => theme.transitions.create("background-color"),
+        "&:hover": {
+          backgroundColor: "action.hover",
+        },
+      }}
+    >
+      <CardContent>
+        <BoxInfo
+          title={inventory.store.name}
+          subtitle={`${inventory.store.address ?? "—"} · ${formatDateTime(inventory.scheduledStart)}`}
+        />
+      </CardContent>
+    </Card>
   );
 }
 

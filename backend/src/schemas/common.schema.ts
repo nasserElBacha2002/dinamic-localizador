@@ -22,3 +22,8 @@ export const dateRangeSchema = z.object({
   dateFrom: z.string().datetime({ offset: true }).optional(),
   dateTo: z.string().datetime({ offset: true }).optional(),
 });
+
+export const tableSortSchema = z.object({
+  sortBy: z.string().trim().optional(),
+  sortDirection: z.enum(["asc", "desc"]).default("asc"),
+});

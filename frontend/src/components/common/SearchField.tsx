@@ -1,5 +1,5 @@
 import { TextField, type SxProps, type Theme } from "@mui/material";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 
 interface SearchFieldProps {
@@ -21,10 +21,15 @@ export function SearchField({
 }: SearchFieldProps) {
   const [value, setValue] = useState("");
   const debouncedValue = useDebouncedValue(value, debounceMs);
+  const onSearchRef = useRef(onSearch);
 
   useEffect(() => {
-    onSearch(debouncedValue.trim());
-  }, [debouncedValue, onSearch]);
+    onSearchRef.current = onSearch;
+  }, [onSearch]);
+
+  useEffect(() => {
+    onSearchRef.current(debouncedValue.trim());
+  }, [debouncedValue]);
 
   return (
     <TextField

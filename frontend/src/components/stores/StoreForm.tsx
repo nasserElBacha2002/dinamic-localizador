@@ -1,6 +1,18 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Alert, FormControlLabel, Stack, Switch, TextField } from "@mui/material";
+import {
+  Alert,
+  Box,
+  FormControl,
+  FormControlLabel,
+  InputLabel,
+  MenuItem,
+  Select,
+  Stack,
+  Switch,
+  TextField,
+} from "@mui/material";
 import { Controller, useForm, useWatch } from "react-hook-form";
+import { STORE_FORMATS } from "../../constants/store-formats";
 import { storeFormSchema, type StoreFormValues } from "../../schemas/store.schema";
 import { FormActions } from "../common/FormActions";
 import { StoreLocationPicker } from "./StoreLocationPicker";
@@ -25,7 +37,6 @@ export function StoreForm({
   onSubmit,
 }: StoreFormProps) {
   const {
-    register,
     control,
     handleSubmit,
     setValue,
@@ -40,17 +51,60 @@ export function StoreForm({
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Stack spacing={2} maxWidth={720}>
+      <Stack spacing={3} sx={{ width: "100%" }}>
         {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
 
-        <TextField
-          label="Nombre"
-          required
-          fullWidth
-          error={Boolean(errors.name)}
-          helperText={errors.name?.message}
-          {...register("name")}
-        />
+        <Box
+          sx={{
+            display: "grid",
+            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
+            gap: 2,
+            alignItems: "start",
+          }}
+        >
+          <Controller
+            name="name"
+            control={control}
+            render={({ field }) => (
+              <TextField
+                {...field}
+                label="Nombre"
+                required
+                fullWidth
+                value={field.value ?? ""}
+                error={Boolean(errors.name)}
+                helperText={errors.name?.message}
+                InputLabelProps={{ shrink: Boolean(field.value) }}
+              />
+            )}
+          />
+
+          <Controller
+            name="formato"
+            control={control}
+            render={({ field }) => (
+              <FormControl fullWidth error={Boolean(errors.formato)}>
+                <InputLabel id="store-formato-label">Formato</InputLabel>
+                <Select
+                  labelId="store-formato-label"
+                  label="Formato"
+                  value={field.value ?? ""}
+                  onChange={field.onChange}
+                  inputRef={field.ref}
+                >
+                  <MenuItem value="">
+                    <em>Sin formato</em>
+                  </MenuItem>
+                  {STORE_FORMATS.map((formato) => (
+                    <MenuItem key={formato} value={formato}>
+                      {formato}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
+            )}
+          />
+        </Box>
 
         <Controller
           name="active"
@@ -69,6 +123,8 @@ export function StoreForm({
           latitude={watchedValues.latitude ?? defaultValues.latitude}
           longitude={watchedValues.longitude ?? defaultValues.longitude}
           address={watchedValues.address ?? ""}
+          barrio={watchedValues.barrio ?? ""}
+          localidad={watchedValues.localidad ?? ""}
           googlePlaceId={watchedValues.googlePlaceId ?? null}
           allowedRadiusMeters={watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters}
           setValue={setValue}

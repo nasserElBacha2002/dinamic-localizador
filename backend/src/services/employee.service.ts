@@ -20,6 +20,7 @@ export const employeeService = {
       name: input.name.trim(),
       documentNumber: input.documentNumber?.trim() ?? null,
       phoneNumber,
+      employeeType: input.employeeType,
     });
   },
 

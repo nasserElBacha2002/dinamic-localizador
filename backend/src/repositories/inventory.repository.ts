@@ -10,11 +10,22 @@ import {
   mapStoreRow,
 } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { resolveSqlSort } from "../utils/sql-sort";
 import type {
   CreateInventoryInput,
   ListInventoriesQuery,
   UpdateInventoryInput,
 } from "../schemas/inventory.schema";
+
+const INVENTORY_LIST_SORT_FIELDS: Record<string, string> = {
+  storeName: "s.name",
+  storeAddress: "s.address",
+  scheduledStart: "i.scheduled_start",
+  scheduledEnd: "i.scheduled_end",
+  status: "i.status",
+  earlyToleranceMinutes: "i.early_tolerance_minutes",
+  lateToleranceMinutes: "i.late_tolerance_minutes",
+};
 
 export const inventoryRepository = {
   async create(input: CreateInventoryInput): Promise<Inventory> {
@@ -40,6 +51,128 @@ export const inventoryRepository = {
       `);
 
     return mapInventoryRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async createInTransaction(
+    transaction: sql.Transaction,
+    input: CreateInventoryInput,
+  ): Promise<Inventory> {
+    const request = new sql.Request(transaction);
+    const result = await request
+      .input("storeId", sql.UniqueIdentifier, input.storeId)
+      .input("scheduledStart", sql.DateTime2, new Date(input.scheduledStart))
+      .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("notes", sql.NVarChar(1000), input.notes ?? null)
+      .query(`
+        INSERT INTO inventories (
+          store_id, scheduled_start, scheduled_end,
+          early_tolerance_minutes, late_tolerance_minutes, notes
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @storeId, @scheduledStart, @scheduledEnd,
+          @earlyToleranceMinutes, @lateToleranceMinutes, @notes
+        )
+      `);
+
+    return mapInventoryRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async existsActiveForStoreAtStart(storeId: string, scheduledStart: string): Promise<boolean> {
+    const existing = await this.findExistingActiveKeys([{ storeId, scheduledStart }]);
+    return existing.size > 0;
+  },
+
+  async findExistingActiveKeys(
+    pairs: Array<{ storeId: string; scheduledStart: string }>,
+  ): Promise<Set<string>> {
+    if (pairs.length === 0) {
+      return new Set();
+    }
+
+    const pool = getPool();
+    const existing = new Set<string>();
+    const chunkSize = 100;
+
+    for (let offset = 0; offset < pairs.length; offset += chunkSize) {
+      const chunk = pairs.slice(offset, offset + chunkSize);
+      const request = pool.request();
+      const valueClauses: string[] = [];
+
+      chunk.forEach((pair, index) => {
+        request.input(`storeId${index}`, sql.UniqueIdentifier, pair.storeId);
+        request.input(`scheduledStart${index}`, sql.DateTime2, new Date(pair.scheduledStart));
+        valueClauses.push(`(@storeId${index}, @scheduledStart${index})`);
+      });
+
+      const result = await request.query(`
+        SELECT i.store_id, i.scheduled_start
+        FROM inventories i
+        INNER JOIN (VALUES ${valueClauses.join(", ")}) AS p(store_id, scheduled_start)
+          ON i.store_id = p.store_id
+         AND i.scheduled_start = p.scheduled_start
+        WHERE i.status <> 'CANCELLED'
+      `);
+
+      for (const row of result.recordset) {
+        const storeId = String(row.store_id);
+        const scheduledStart = new Date(row.scheduled_start as Date | string).toISOString();
+        existing.add(`${storeId}|${scheduledStart}`);
+      }
+    }
+
+    return existing;
+  },
+
+  async createManyInTransaction(
+    transaction: sql.Transaction,
+    inputs: CreateInventoryInput[],
+  ): Promise<Inventory[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const created: Inventory[] = [];
+    const chunkSize = 100;
+
+    for (let offset = 0; offset < inputs.length; offset += chunkSize) {
+      const chunk = inputs.slice(offset, offset + chunkSize);
+      const request = new sql.Request(transaction);
+      const valueRows: string[] = [];
+
+      chunk.forEach((input, index) => {
+        request.input(`storeId${index}`, sql.UniqueIdentifier, input.storeId);
+        request.input(`scheduledStart${index}`, sql.DateTime2, new Date(input.scheduledStart));
+        request.input(
+          `scheduledEnd${index}`,
+          sql.DateTime2,
+          input.scheduledEnd ? new Date(input.scheduledEnd) : null,
+        );
+        request.input(`earlyToleranceMinutes${index}`, sql.Int, input.earlyToleranceMinutes);
+        request.input(`lateToleranceMinutes${index}`, sql.Int, input.lateToleranceMinutes);
+        request.input(`notes${index}`, sql.NVarChar(1000), input.notes ?? null);
+        valueRows.push(
+          `(@storeId${index}, @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
+        );
+      });
+
+      const result = await request.query(`
+        INSERT INTO inventories (
+          store_id, scheduled_start, scheduled_end,
+          early_tolerance_minutes, late_tolerance_minutes, notes
+        )
+        OUTPUT INSERTED.*
+        VALUES ${valueRows.join(", ")}
+      `);
+
+      created.push(
+        ...result.recordset.map((row) => mapInventoryRow(row as Record<string, unknown>)),
+      );
+    }
+
+    return created;
   },
 
   async findById(id: string): Promise<Inventory | null> {
@@ -116,6 +249,13 @@ export const inventoryRepository = {
       });
     }
 
+    if (query.search) {
+      filters.push({
+        clause: "(s.name LIKE @search OR s.address LIKE @search)",
+        apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
+      });
+    }
+
     if (query.dateFrom) {
       const dateFrom = query.dateFrom;
       filters.push({
@@ -139,6 +279,7 @@ export const inventoryRepository = {
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
       FROM inventories i
+      INNER JOIN stores s ON s.id = i.store_id
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -147,6 +288,13 @@ export const inventoryRepository = {
     applySqlFilters(dataRequest, filters);
     dataRequest.input("offset", sql.Int, (query.page - 1) * query.limit);
     dataRequest.input("limit", sql.Int, query.limit);
+
+    const orderBy = resolveSqlSort(
+      query.sortBy,
+      INVENTORY_LIST_SORT_FIELDS,
+      "i.scheduled_start",
+      query.sortDirection ?? "asc",
+    );
 
     const dataResult = await dataRequest.query(`
       SELECT
@@ -157,7 +305,7 @@ export const inventoryRepository = {
       FROM inventories i
       INNER JOIN stores s ON s.id = i.store_id
       ${whereClause}
-      ORDER BY i.scheduled_start DESC
+      ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 

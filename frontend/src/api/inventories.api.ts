@@ -9,6 +9,11 @@ import type {
   InventoryWithStore,
   UpdateInventoryInput,
 } from "../types/inventory";
+import type {
+  InventoryImportConfirmRow,
+  InventoryImportPreviewPayload,
+  InventoryImportPreviewResult,
+} from "../types/inventory-import";
 import { apiClient, buildParams } from "./client";
 
 export async function getInventories(
@@ -76,4 +81,27 @@ export async function getInventoryAttendanceSummary(
     },
   );
   return data.data;
+}
+
+const IMPORT_PREVIEW_TIMEOUT_MS = 60_000;
+const IMPORT_CONFIRM_TIMEOUT_MS = 120_000;
+
+export async function previewInventoryImport(
+  payload: InventoryImportPreviewPayload,
+): Promise<InventoryImportPreviewResult> {
+  const { data } = await apiClient.post<{ data: InventoryImportPreviewResult }>(
+    "/inventories/import/preview",
+    payload,
+    { timeout: IMPORT_PREVIEW_TIMEOUT_MS },
+  );
+  return data.data;
+}
+
+export async function confirmInventoryImport(rows: InventoryImportConfirmRow[]) {
+  const { data } = await apiClient.post<{ data: Inventory[]; count: number }>(
+    "/inventories/import/confirm",
+    { rows },
+    { timeout: IMPORT_CONFIRM_TIMEOUT_MS },
+  );
+  return data;
 }

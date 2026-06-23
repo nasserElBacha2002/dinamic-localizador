@@ -33,13 +33,25 @@ export interface InventoryEmployeeAssignment {
   employee?: Employee;
 }
 
+export type InventoryListSortField =
+  | "storeName"
+  | "storeAddress"
+  | "scheduledStart"
+  | "scheduledEnd"
+  | "status"
+  | "earlyToleranceMinutes"
+  | "lateToleranceMinutes";
+
 export interface InventoryFilters {
   page?: number;
   limit?: number;
   status?: InventoryStatus;
   storeId?: string;
+  search?: string;
   dateFrom?: string;
   dateTo?: string;
+  sortBy?: InventoryListSortField;
+  sortDirection?: "asc" | "desc";
 }
 
 export interface CreateInventoryInput {

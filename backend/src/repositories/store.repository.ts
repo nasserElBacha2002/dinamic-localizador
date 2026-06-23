@@ -12,14 +12,17 @@ export const storeRepository = {
       .request()
       .input("name", sql.NVarChar(150), input.name)
       .input("address", sql.NVarChar(300), input.address ?? null)
+      .input("barrio", sql.NVarChar(150), input.barrio ?? null)
+      .input("localidad", sql.NVarChar(150), input.localidad ?? null)
+      .input("formato", sql.NVarChar(50), input.formato ?? null)
       .input("latitude", sql.Decimal(10, 7), input.latitude)
       .input("longitude", sql.Decimal(10, 7), input.longitude)
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
       .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
       .query(`
-        INSERT INTO stores (name, address, latitude, longitude, allowed_radius_meters, google_place_id)
+        INSERT INTO stores (name, address, barrio, localidad, formato, latitude, longitude, allowed_radius_meters, google_place_id)
         OUTPUT INSERTED.*
-        VALUES (@name, @address, @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId)
+        VALUES (@name, @address, @barrio, @localidad, @formato, @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId)
       `);
 
     return mapStoreRow(result.recordset[0] as Record<string, unknown>);
@@ -52,7 +55,7 @@ export const storeRepository = {
 
     if (query.search) {
       filters.push({
-        clause: "(name LIKE @search OR address LIKE @search)",
+        clause: "(name LIKE @search OR address LIKE @search OR barrio LIKE @search OR localidad LIKE @search)",
         apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
       });
     }
@@ -83,6 +86,12 @@ export const storeRepository = {
     };
   },
 
+  async listAllActive(): Promise<Store[]> {
+    const pool = getPool();
+    const result = await pool.request().query("SELECT * FROM stores WHERE active = 1");
+    return result.recordset.map((row) => mapStoreRow(row as Record<string, unknown>));
+  },
+
   async update(id: string, input: UpdateStoreInput): Promise<Store | null> {
     const pool = getPool();
     const fields: string[] = [];
@@ -96,6 +105,21 @@ export const storeRepository = {
     if (input.address !== undefined) {
       request.input("address", sql.NVarChar(300), input.address);
       fields.push("address = @address");
+    }
+
+    if (input.barrio !== undefined) {
+      request.input("barrio", sql.NVarChar(150), input.barrio);
+      fields.push("barrio = @barrio");
+    }
+
+    if (input.localidad !== undefined) {
+      request.input("localidad", sql.NVarChar(150), input.localidad);
+      fields.push("localidad = @localidad");
+    }
+
+    if (input.formato !== undefined) {
+      request.input("formato", sql.NVarChar(50), input.formato);
+      fields.push("formato = @formato");
     }
 
     if (input.latitude !== undefined) {

@@ -15,7 +15,7 @@ import {
   TextField,
 } from "@mui/material";
 import { useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { ClickableTableRow } from "../../components/common/ClickableTableRow";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FilterItem, ListFilters } from "../../components/common/ListFilters";
@@ -23,11 +23,11 @@ import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHeader";
 import { PaginationControls } from "../../components/common/PaginationControls";
 import { StatusChip } from "../../components/common/StatusChip";
+import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
+import { InventorySearchAutocomplete } from "../../components/inventories/InventorySearchAutocomplete";
+import { StoreSearchAutocomplete } from "../../components/stores/StoreSearchAutocomplete";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
-import { useEmployees } from "../../hooks/useEmployees";
-import { useInventories } from "../../hooks/useInventories";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { useStores } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
@@ -63,9 +63,6 @@ export function AttendanceListPage() {
     dateTo: dateTo ? dateInputToIsoEnd(dateTo) : undefined,
   };
 
-  const storesQuery = useStores({ page: 1, limit: 100 });
-  const employeesQuery = useEmployees({ page: 1, limit: 100 });
-  const inventoriesQuery = useInventories({ page: 1, limit: 100 });
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
 
   const handleExport = async () => {
@@ -99,69 +96,38 @@ export function AttendanceListPage() {
 
       <ListFilters>
         <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-inventory-filter">Inventario</InputLabel>
-            <Select
-              labelId="attendance-inventory-filter"
-              label="Inventario"
-              value={inventoryId}
-              onChange={(event) => {
-                pagination.resetPage();
-                setInventoryId(event.target.value);
-              }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {inventoriesQuery.data?.data.map((inventory) => (
-                <MenuItem key={inventory.id} value={inventory.id}>
-                  {inventory.store.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <InventorySearchAutocomplete
+            value={inventoryId || null}
+            onChange={(id) => {
+              pagination.resetPage();
+              setInventoryId(id ?? "");
+            }}
+            allowCreate={false}
+          />
         </FilterItem>
 
         <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-employee-filter">Empleado</InputLabel>
-            <Select
-              labelId="attendance-employee-filter"
-              label="Empleado"
-              value={employeeId}
-              onChange={(event) => {
-                pagination.resetPage();
-                setEmployeeId(event.target.value);
-              }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {employeesQuery.data?.data.map((employee) => (
-                <MenuItem key={employee.id} value={employee.id}>
-                  {employee.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <EmployeeSearchAutocomplete
+            value={employeeId || null}
+            onChange={(id) => {
+              pagination.resetPage();
+              setEmployeeId(id ?? "");
+            }}
+            activeOnly={false}
+            allowCreate={false}
+          />
         </FilterItem>
 
         <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-store-filter">Tienda</InputLabel>
-            <Select
-              labelId="attendance-store-filter"
-              label="Tienda"
-              value={storeId}
-              onChange={(event) => {
-                pagination.resetPage();
-                setStoreId(event.target.value);
-              }}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {storesQuery.data?.data.map((store) => (
-                <MenuItem key={store.id} value={store.id}>
-                  {store.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <StoreSearchAutocomplete
+            value={storeId || null}
+            onChange={(id) => {
+              pagination.resetPage();
+              setStoreId(id ?? "");
+            }}
+            activeOnly={false}
+            allowCreate={false}
+          />
         </FilterItem>
 
         <FilterItem>
@@ -276,12 +242,15 @@ export function AttendanceListPage() {
                   <TableCell>Validación</TableCell>
                   <TableCell>Ubicación</TableCell>
                   <TableCell>Puntualidad</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.data.map((record) => (
-                  <TableRow key={record.id} hover>
+                  <ClickableTableRow
+                    key={record.id}
+                    to={`/attendance/${record.id}`}
+                    ariaLabel={`Ver asistencia de ${record.employee.name}`}
+                  >
                     <TableCell>{record.employee.name}</TableCell>
                     <TableCell>{record.store.name}</TableCell>
                     <TableCell>{formatDateTime(record.inventory.scheduledStart)}</TableCell>
@@ -296,12 +265,7 @@ export function AttendanceListPage() {
                     <TableCell>
                       <StatusChip label={punctualityStatusLabels[record.punctualityStatus]} />
                     </TableCell>
-                    <TableCell align="right">
-                      <Button component={RouterLink} to={`/attendance/${record.id}`} size="small">
-                        Ver detalle
-                      </Button>
-                    </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 ))}
               </TableBody>
             </Table>

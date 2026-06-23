@@ -19,6 +19,7 @@ import {
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { DataTable } from "../../components/common/DataTable";
+import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
@@ -146,25 +147,44 @@ export function AttendanceDetailPage() {
       <Stack spacing={3}>
         <Card variant="outlined">
           <CardContent>
-            <Stack spacing={1.5}>
-              <Typography variant="h6">Información general</Typography>
-              <Typography>Empleado: {record.employee.name} ({record.employee.phoneNumber})</Typography>
-              <Typography>Tienda: {record.store.name}</Typography>
-              <Typography>Inventario: {formatDateTime(record.inventory.scheduledStart)}</Typography>
-              <Typography>Coordenadas: {record.receivedLatitude}, {record.receivedLongitude}</Typography>
-              <Typography>Distancia: {record.distanceMeters.toFixed(1)} m</Typography>
-              <Typography>
-                Radio permitido: {record.store.allowedRadiusMeters ?? "—"} m
-              </Typography>
-              <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap>
-                <StatusChip label={validationStatusLabels[record.validationStatus]} />
-                <StatusChip label={locationStatusLabels[record.locationStatus]} />
-                <StatusChip label={punctualityStatusLabels[record.punctualityStatus]} />
-              </Stack>
-              <Typography>Motivo original: {record.validationReason ?? "—"}</Typography>
-              <Typography>Revisado: {record.reviewedAt ? formatDateTime(record.reviewedAt) : "—"}</Typography>
-              <Typography>Motivo de revisión: {record.reviewReason ?? "—"}</Typography>
-            </Stack>
+            <Typography variant="h6" gutterBottom>
+              Información general
+            </Typography>
+            <DetailFieldGrid
+              fields={[
+                {
+                  label: "Empleado",
+                  value: `${record.employee.name} (${record.employee.phoneNumber})`,
+                },
+                { label: "Tienda", value: record.store.name },
+                { label: "Inventario", value: formatDateTime(record.inventory.scheduledStart) },
+                {
+                  label: "Coordenadas",
+                  value: `${record.receivedLatitude}, ${record.receivedLongitude}`,
+                },
+                { label: "Distancia", value: `${record.distanceMeters.toFixed(1)} m` },
+                {
+                  label: "Radio permitido",
+                  value: record.store.allowedRadiusMeters != null ? `${record.store.allowedRadiusMeters} m` : "—",
+                },
+                {
+                  label: "Estado",
+                  value: (
+                    <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
+                      <StatusChip label={validationStatusLabels[record.validationStatus]} />
+                      <StatusChip label={locationStatusLabels[record.locationStatus]} />
+                      <StatusChip label={punctualityStatusLabels[record.punctualityStatus]} />
+                    </Stack>
+                  ),
+                },
+                { label: "Motivo original", value: record.validationReason ?? "—" },
+                {
+                  label: "Revisado",
+                  value: record.reviewedAt ? formatDateTime(record.reviewedAt) : "—",
+                },
+                { label: "Motivo de revisión", value: record.reviewReason ?? "—" },
+              ]}
+            />
           </CardContent>
         </Card>
 

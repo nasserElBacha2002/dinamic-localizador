@@ -1,3 +1,5 @@
+import { EMPLOYEE_TYPES, type EmployeeType } from "../constants/employee-types";
+import { STORE_FORMATS, type StoreFormat } from "../constants/store-formats";
 import type {
   AttendanceRecord,
   AttendanceRecordWithRelations,
@@ -13,20 +15,40 @@ import type { AttendanceReview, User } from "../types/auth";
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+const parseEmployeeType = (value: unknown): EmployeeType => {
+  const employeeType = String(value);
+  return (EMPLOYEE_TYPES as readonly string[]).includes(employeeType)
+    ? (employeeType as EmployeeType)
+    : "fijo";
+};
+
 export const mapEmployeeRow = (row: Record<string, unknown>): Employee => ({
   id: String(row.id),
   name: String(row.name),
   documentNumber: row.document_number ? String(row.document_number) : null,
   phoneNumber: String(row.phone_number),
+  employeeType: parseEmployeeType(row.employee_type),
   active: Boolean(row.active),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
 
+const parseStoreFormat = (value: unknown): StoreFormat | null => {
+  if (!value) {
+    return null;
+  }
+
+  const formato = String(value);
+  return (STORE_FORMATS as readonly string[]).includes(formato) ? (formato as StoreFormat) : null;
+};
+
 export const mapStoreRow = (row: Record<string, unknown>): Store => ({
   id: String(row.id),
   name: String(row.name),
   address: row.address ? String(row.address) : null,
+  barrio: row.barrio ? String(row.barrio) : null,
+  localidad: row.localidad ? String(row.localidad) : null,
+  formato: parseStoreFormat(row.formato),
   latitude: Number(row.latitude),
   longitude: Number(row.longitude),
   allowedRadiusMeters: Number(row.allowed_radius_meters),
@@ -89,6 +111,7 @@ export const mapAssignmentRow = (row: Record<string, unknown>): InventoryEmploye
           ? String(row.employee_document_number)
           : null,
         phoneNumber: String(row.employee_phone_number),
+        employeeType: parseEmployeeType(row.employee_type),
         active: Boolean(row.employee_active),
         createdAt: toIsoString(row.employee_created_at as Date | string),
         updatedAt: toIsoString(row.employee_updated_at as Date | string),

@@ -12,6 +12,8 @@
     "migrate": "tsx src/database/run-migrations.ts",
     "migrate:status": "tsx src/database/run-migrations.ts --status",
     "admin:create": "tsx src/scripts/create-admin.ts",
+    "seed:stores": "tsx src/scripts/seed-stores.ts",
+    "seed:employees": "tsx src/scripts/seed-employees.ts",
     "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",
     "test": "tsx --test src/**/*.test.ts"
   },
@@ -25,6 +27,7 @@
     "morgan": "^1.10.0",
     "mssql": "^12.1.0",
     "twilio": "^6.0.2",
+    "xlsx": "^0.18.5",
     "zod": "^4.1.11"
   },
   "devDependencies": {

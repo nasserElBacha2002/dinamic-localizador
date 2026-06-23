@@ -82,3 +82,25 @@ export function dateInputToIsoStart(dateValue: string): string {
 export function dateInputToIsoEnd(dateValue: string): string {
   return datetimeLocalToIso(`${dateValue}T23:59`);
 }
+
+export function getCurrentDatetimeLocal(): string {
+  return isoToDatetimeLocal(new Date().toISOString());
+}
+
+function toDateInputValue(date: Date): string {
+  const parts = dateFormatter.formatToParts(date);
+  return `${getPart(parts, "year")}-${getPart(parts, "month")}-${getPart(parts, "day")}`;
+}
+
+export function getTodayDateInput(): string {
+  return toDateInputValue(new Date());
+}
+
+export function getDefaultStatisticsDateFrom(): string {
+  const date = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  return toDateInputValue(date);
+}
+
+export function getDefaultStatisticsDateTo(): string {
+  return toDateInputValue(new Date());
+}

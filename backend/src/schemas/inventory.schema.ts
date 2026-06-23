@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateRangeSchema, paginationQuerySchema } from "./common.schema";
+import { dateRangeSchema, paginationQuerySchema, searchFilterSchema, tableSortSchema } from "./common.schema";
 
 const inventoryStatusSchema = z.enum([
   "SCHEDULED",
@@ -51,10 +51,14 @@ export const inventoryIdParamSchema = z.object({
 
 export const inventoryAttendanceSummaryQuerySchema = paginationQuerySchema;
 
-export const listInventoriesQuerySchema = paginationQuerySchema.merge(dateRangeSchema).extend({
-  status: inventoryStatusSchema.optional(),
-  storeId: z.string().uuid().optional(),
-});
+export const listInventoriesQuerySchema = paginationQuerySchema
+  .merge(dateRangeSchema)
+  .merge(searchFilterSchema)
+  .merge(tableSortSchema)
+  .extend({
+    status: inventoryStatusSchema.optional(),
+    storeId: z.string().uuid().optional(),
+  });
 
 export type CreateInventoryInput = z.infer<typeof createInventorySchema>;
 export type UpdateInventoryInput = z.infer<typeof updateInventorySchema>;

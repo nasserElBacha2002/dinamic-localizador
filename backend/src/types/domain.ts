@@ -1,3 +1,6 @@
+import type { StoreFormat } from "../constants/store-formats";
+import type { EmployeeType } from "../constants/employee-types";
+
 export type InventoryStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
@@ -8,6 +11,7 @@ export interface Employee {
   name: string;
   documentNumber: string | null;
   phoneNumber: string;
+  employeeType: EmployeeType;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -17,6 +21,9 @@ export interface Store {
   id: string;
   name: string;
   address: string | null;
+  barrio: string | null;
+  localidad: string | null;
+  formato: StoreFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters: number;

@@ -1,12 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AttendanceTestForm } from "../../components/attendance/AttendanceTestForm";
-import { ErrorState } from "../../components/common/ErrorState";
-import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useCreateAttendanceRecord } from "../../hooks/useAttendance";
-import { useEmployees } from "../../hooks/useEmployees";
-import { useInventories } from "../../hooks/useInventories";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { AttendanceTestFormValues } from "../../schemas/attendance.schema";
 import { datetimeLocalToIso } from "../../utils/dates";
@@ -15,30 +11,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 export function AttendanceCreatePage() {
   const navigate = useNavigate();
   const createMutation = useCreateAttendanceRecord();
-  const inventoriesQuery = useInventories({ page: 1, limit: 100 });
-  const employeesQuery = useEmployees({ page: 1, limit: 100, active: true });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-
-  if (inventoriesQuery.isLoading || employeesQuery.isLoading) {
-    return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
-    );
-  }
-
-  if (inventoriesQuery.isError || employeesQuery.isError) {
-    return (
-      <AdminLayout>
-        <ErrorState
-          message={getApiErrorMessage(
-            inventoriesQuery.error ?? employeesQuery.error,
-            "No se pudieron cargar los datos del formulario.",
-          )}
-        />
-      </AdminLayout>
-    );
-  }
 
   const handleSubmit = async (values: AttendanceTestFormValues) => {
     setErrorMessage(null);
@@ -70,11 +43,9 @@ export function AttendanceCreatePage() {
         description="Herramienta temporal para validar el modelo de asistencia."
       />
       <AttendanceTestForm
-        inventories={inventoriesQuery.data?.data ?? []}
-        employees={employeesQuery.data?.data ?? []}
         defaultValues={{
-          inventoryId: inventoriesQuery.data?.data[0]?.id ?? "",
-          employeeId: employeesQuery.data?.data[0]?.id ?? "",
+          inventoryId: "",
+          employeeId: "",
           receivedLatitude: 0,
           receivedLongitude: 0,
           distanceMeters: 0,

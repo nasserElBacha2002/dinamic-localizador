@@ -10,18 +10,16 @@ import {
 } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { attendanceTestFormSchema, type AttendanceTestFormValues } from "../../schemas/attendance.schema";
-import type { Employee } from "../../types/employee";
-import type { InventoryWithStore } from "../../types/inventory";
 import {
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
+import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import { FormActions } from "../common/FormActions";
+import { InventorySearchAutocomplete } from "../inventories/InventorySearchAutocomplete";
 
 interface AttendanceTestFormProps {
-  inventories: InventoryWithStore[];
-  employees: Employee[];
   defaultValues: AttendanceTestFormValues;
   submitLabel: string;
   cancelTo: string;
@@ -31,8 +29,6 @@ interface AttendanceTestFormProps {
 }
 
 export function AttendanceTestForm({
-  inventories,
-  employees,
   defaultValues,
   submitLabel,
   cancelTo,
@@ -50,8 +46,6 @@ export function AttendanceTestForm({
     defaultValues,
   });
 
-  const activeEmployees = employees.filter((employee) => employee.active);
-
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
       <Stack spacing={2} maxWidth={640}>
@@ -65,16 +59,13 @@ export function AttendanceTestForm({
           name="inventoryId"
           control={control}
           render={({ field }) => (
-            <FormControl fullWidth required error={Boolean(errors.inventoryId)}>
-              <InputLabel id="inventory-select-label">Inventario</InputLabel>
-              <Select {...field} labelId="inventory-select-label" label="Inventario">
-                {inventories.map((inventory) => (
-                  <MenuItem key={inventory.id} value={inventory.id}>
-                    {inventory.store.name} · {inventory.scheduledStart}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <InventorySearchAutocomplete
+              value={field.value || null}
+              onChange={(inventoryId) => field.onChange(inventoryId ?? "")}
+              error={Boolean(errors.inventoryId)}
+              helperText={errors.inventoryId?.message}
+              required
+            />
           )}
         />
 
@@ -82,16 +73,13 @@ export function AttendanceTestForm({
           name="employeeId"
           control={control}
           render={({ field }) => (
-            <FormControl fullWidth required error={Boolean(errors.employeeId)}>
-              <InputLabel id="employee-select-label">Empleado</InputLabel>
-              <Select {...field} labelId="employee-select-label" label="Empleado">
-                {activeEmployees.map((employee) => (
-                  <MenuItem key={employee.id} value={employee.id}>
-                    {employee.name} ({employee.phoneNumber})
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
+            <EmployeeSearchAutocomplete
+              value={field.value || null}
+              onChange={(employeeId) => field.onChange(employeeId ?? "")}
+              error={Boolean(errors.employeeId)}
+              helperText={errors.employeeId?.message ?? "Buscá por nombre o teléfono"}
+              required
+            />
           )}
         />
 

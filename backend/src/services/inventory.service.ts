@@ -9,6 +9,10 @@ import type {
 } from "../schemas/inventory.schema";
 import { auditRepository } from "../repositories/audit.repository";
 import { canTransitionInventoryStatus, isInventoryEditable } from "../utils/inventory-status";
+import {
+  isInventoryStartInPast,
+  resolveLifecycleInventoryStatus,
+} from "../utils/inventory-lifecycle";
 import { buildPaginationMeta } from "../utils/pagination";
 
 const validateInventoryDates = (
@@ -27,6 +31,28 @@ const validateInventoryDates = (
   }
 };
 
+const validateInventoryStartNotInPast = (scheduledStart: string): void => {
+  if (isInventoryStartInPast(scheduledStart)) {
+    throw new AppError(
+      400,
+      "INVENTORY_START_IN_PAST",
+      "No se puede programar un inventario con fecha de inicio en el pasado",
+    );
+  }
+};
+
+type InventoryRecord = NonNullable<Awaited<ReturnType<typeof inventoryRepository.findById>>>;
+
+const syncLifecycleStatus = async (inventory: InventoryRecord): Promise<InventoryRecord> => {
+  const resolvedStatus = resolveLifecycleInventoryStatus(inventory);
+  if (resolvedStatus === inventory.status || !canTransitionInventoryStatus(inventory.status, resolvedStatus)) {
+    return inventory;
+  }
+
+  const updated = await inventoryRepository.update(inventory.id, { status: resolvedStatus });
+  return updated ?? inventory;
+};
+
 export const inventoryService = {
   async create(input: CreateInventoryInput) {
     const store = await storeRepository.findById(input.storeId);
@@ -38,13 +64,15 @@ export const inventoryService = {
     }
 
     validateInventoryDates(input.scheduledStart, input.scheduledEnd);
+    validateInventoryStartNotInPast(input.scheduledStart);
     return inventoryRepository.create(input);
   },
 
   async list(query: ListInventoriesQuery) {
     const result = await inventoryRepository.list(query);
+    const data = await Promise.all(result.items.map((item) => syncLifecycleStatus(item)));
     return {
-      data: result.items,
+      data,
       meta: buildPaginationMeta(query.page, query.limit, result.total),
     };
   },
@@ -54,7 +82,7 @@ export const inventoryService = {
     if (!inventory) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
-    return inventory;
+    return syncLifecycleStatus(inventory);
   },
 
   async getDetailById(id: string) {
@@ -62,7 +90,12 @@ export const inventoryService = {
     if (!detail) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
-    return detail;
+
+    const synced = await syncLifecycleStatus(detail);
+    return {
+      ...detail,
+      ...synced,
+    };
   },
 
   async update(id: string, input: UpdateInventoryInput) {
@@ -98,6 +131,10 @@ export const inventoryService = {
       input.scheduledStart ?? current.scheduledStart,
       input.scheduledEnd === undefined ? current.scheduledEnd : input.scheduledEnd,
     );
+
+    if (input.scheduledStart && input.scheduledStart !== current.scheduledStart) {
+      validateInventoryStartNotInPast(input.scheduledStart);
+    }
 
     const updated = await inventoryRepository.update(id, input);
     if (!updated) {
@@ -153,9 +190,12 @@ export const inventoryService = {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
+    const syncedInventory = await syncLifecycleStatus(summary.inventory);
+
     return {
       inventory: {
         ...summary.inventory,
+        ...syncedInventory,
         store: summary.store,
       },
       summary: summary.summary,

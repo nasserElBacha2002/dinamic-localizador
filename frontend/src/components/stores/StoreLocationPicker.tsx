@@ -3,7 +3,7 @@ import {
   Box,
   Card,
   CardContent,
-  Chip,
+  Grid,
   Stack,
   TextField,
   Typography,
@@ -17,10 +17,10 @@ import {
   applyManualCoordinates,
   applyMarkerDrag,
   applyPlaceSelection,
-  hasConfirmedLocation,
-  locationStateLabel,
   mapGoogleMapsError,
+  parseGoogleAddressComponents,
   resolveInitialLocationState,
+  type GoogleAddressComponent,
   type LocationPickerState,
   type StoreLocationFields,
 } from "../../utils/store-location";
@@ -31,6 +31,8 @@ interface StoreLocationPickerProps {
   latitude: number;
   longitude: number;
   address?: string;
+  barrio?: string;
+  localidad?: string;
   googlePlaceId?: string | null;
   allowedRadiusMeters: number;
   setValue: UseFormSetValue<StoreFormValues>;
@@ -92,12 +94,38 @@ const readDisplayName = (value: unknown): string | null => {
   return null;
 };
 
+const readAddressComponents = (place: google.maps.places.Place): GoogleAddressComponent[] => {
+  const raw = (place as { addressComponents?: unknown[] }).addressComponents;
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+
+  return raw.map((component) => {
+    const typed = component as { types?: string[]; longText?: string; shortText?: string };
+    return {
+      types: typed.types ?? [],
+      longText: typed.longText,
+      shortText: typed.shortText,
+    };
+  });
+};
+
+const resolveManualState = (current: LocationPickerState): LocationPickerState => {
+  if (current === "SELECTED" || current === "MANUAL") {
+    return current;
+  }
+
+  return "EMPTY";
+};
+
 export function StoreLocationPicker({
   isEditMode = false,
   currentName,
   latitude,
   longitude,
   address = "",
+  barrio = "",
+  localidad = "",
   googlePlaceId = null,
   allowedRadiusMeters,
   setValue,
@@ -135,13 +163,15 @@ export function StoreLocationPicker({
   const currentFields = useCallback(
     (): StoreLocationFields => ({
       address,
+      barrio,
+      localidad,
       latitude,
       longitude,
       googlePlaceId,
       allowedRadiusMeters,
       name: currentName,
     }),
-    [address, allowedRadiusMeters, currentName, googlePlaceId, latitude, longitude],
+    [address, allowedRadiusMeters, barrio, currentName, googlePlaceId, latitude, localidad, longitude],
   );
 
   const fieldsRef = useRef(currentFields());
@@ -163,6 +193,8 @@ export function StoreLocationPicker({
     (fields: StoreLocationFields, nextState: LocationPickerState) => {
       internalUpdateRef.current = true;
       setValue("address", fields.address ?? "", setValueOptions);
+      setValue("barrio", fields.barrio ?? "", setValueOptions);
+      setValue("localidad", fields.localidad ?? "", setValueOptions);
       setValue("latitude", fields.latitude, setValueOptions);
       setValue("longitude", fields.longitude, setValueOptions);
       setValue("googlePlaceId", fields.googlePlaceId ?? "", setValueOptions);
@@ -174,7 +206,15 @@ export function StoreLocationPicker({
 
       setLocationState(nextState);
       setErrorMessage(null);
-      void trigger(["address", "latitude", "longitude", "allowedRadiusMeters", "googlePlaceId"]);
+      void trigger([
+        "address",
+        "barrio",
+        "localidad",
+        "latitude",
+        "longitude",
+        "allowedRadiusMeters",
+        "googlePlaceId",
+      ]);
 
       queueMicrotask(() => {
         internalUpdateRef.current = false;
@@ -284,7 +324,7 @@ export function StoreLocationPicker({
 
           try {
             await place.fetchFields({
-              fields: ["id", "displayName", "formattedAddress", "location"],
+              fields: ["id", "displayName", "formattedAddress", "location", "addressComponents"],
             });
           } catch {
             setLocationState("ERROR");
@@ -299,11 +339,18 @@ export function StoreLocationPicker({
             return;
           }
 
+          const parsedAddress = parseGoogleAddressComponents(
+            place.formattedAddress ?? "",
+            readAddressComponents(place),
+          );
+
           const selection = applyPlaceSelection(
             fieldsRef.current,
             {
               googlePlaceId: place.id ?? "",
-              address: place.formattedAddress ?? "",
+              address: parsedAddress.address,
+              barrio: parsedAddress.barrio,
+              localidad: parsedAddress.localidad,
               displayName: readDisplayName(place.displayName),
               latitude: coords.latitude,
               longitude: coords.longitude,
@@ -374,13 +421,15 @@ export function StoreLocationPicker({
     updateMapVisuals(latitude, longitude, allowedRadiusMeters);
   }, [allowedRadiusMeters, latitude, longitude, mapsLoadState, updateMapVisuals]);
 
-  const handleManualAddressChange = (nextAddress: string) => {
+  const handleManualFieldChange = (
+    patch: Partial<Pick<StoreLocationFields, "address" | "barrio" | "localidad">>,
+  ) => {
     applyFieldsToForm(
       {
         ...currentFields(),
-        address: nextAddress,
+        ...patch,
       },
-      locationState === "SELECTED" ? "SELECTED" : locationState === "MANUAL" ? "MANUAL" : "EMPTY",
+      resolveManualState(locationState),
     );
   };
 
@@ -425,104 +474,132 @@ export function StoreLocationPicker({
     }
   };
 
-  const confirmed = hasConfirmedLocation(locationState, latitude, longitude);
   const showGoogleMapsUi = mapsLoadState === "loading" || mapsLoadState === "ready";
 
   return (
-    <Stack spacing={2}>
+    <Stack spacing={2} sx={{ width: "100%" }}>
       {errorMessage ? <Alert severity="warning">{errorMessage}</Alert> : null}
 
-      {showGoogleMapsUi ? (
-        <>
-          <Box
-            ref={autocompleteContainerRef}
-            sx={{
-              width: "100%",
-              minHeight: 56,
-              "& gmp-place-autocomplete": {
-                width: "100%",
-                colorScheme: "light",
-              },
-            }}
-          />
-          {mapsLoadState === "loading" ? (
-            <Typography variant="body2" color="text.secondary">
-              Cargando Google Maps…
-            </Typography>
-          ) : null}
-          <Box
-            ref={mapContainerRef}
-            sx={{
-              width: "100%",
-              height: 280,
-              borderRadius: 1,
-              border: "1px solid",
-              borderColor: "divider",
-              visibility: mapsLoadState === "ready" ? "visible" : "hidden",
-            }}
-          />
-        </>
-      ) : null}
-
-      {locationState === "SEARCHING" ? (
-        <Alert severity="info">
-          Seleccioná una sugerencia de la lista para confirmar la ubicación. Escribir texto no alcanza.
-        </Alert>
-      ) : null}
-
-      {confirmed ? (
-        <Card variant="outlined">
-          <CardContent>
-            <Stack spacing={1}>
-              <Stack direction="row" spacing={1} alignItems="center" flexWrap="wrap" useFlexGap>
-                <Chip color="success" label="Ubicación confirmada" size="small" />
+      <Box
+        sx={{
+          display: "grid",
+          gridTemplateColumns: { xs: "1fr", lg: "1.15fr 1fr" },
+          gap: 2,
+          alignItems: "stretch",
+        }}
+      >
+        <Stack spacing={2} sx={{ minWidth: 0, height: "100%" }}>
+          {showGoogleMapsUi ? (
+            <>
+              <Box
+                ref={autocompleteContainerRef}
+                sx={{
+                  width: "100%",
+                  minHeight: 56,
+                  "& gmp-place-autocomplete": {
+                    width: "100%",
+                    colorScheme: "light",
+                  },
+                }}
+              />
+              {mapsLoadState === "loading" ? (
                 <Typography variant="body2" color="text.secondary">
-                  {locationStateLabel[locationState]}
+                  Cargando Google Maps…
                 </Typography>
-              </Stack>
-              <Typography>Dirección: {address || "—"}</Typography>
-              <Typography>
-                Coordenadas: {latitude.toFixed(6)}, {longitude.toFixed(6)}
-              </Typography>
-              <Typography>Radio permitido: {allowedRadiusMeters} m</Typography>
-              {googlePlaceId ? <Typography variant="body2">Place ID: {googlePlaceId}</Typography> : null}
-            </Stack>
+              ) : null}
+              <Box
+                ref={mapContainerRef}
+                sx={{
+                  width: "100%",
+                  flex: 1,
+                  minHeight: { xs: 260, lg: 380 },
+                  borderRadius: 1,
+                  border: "1px solid",
+                  borderColor: "divider",
+                  visibility: mapsLoadState === "ready" ? "visible" : "hidden",
+                }}
+              />
+            </>
+          ) : null}
+
+          {locationState === "SEARCHING" ? (
+            <Alert severity="info">
+              Seleccioná una sugerencia de la lista para confirmar la ubicación. Escribir texto no alcanza.
+            </Alert>
+          ) : null}
+        </Stack>
+
+        <Card
+          variant="outlined"
+          sx={{
+            minWidth: 0,
+            height: "100%",
+            display: "flex",
+            flexDirection: "column",
+          }}
+        >
+          <CardContent sx={{ flex: 1 }}>
+            <Typography variant="subtitle2" gutterBottom>
+              Ubicación manual
+            </Typography>
+            <Grid container spacing={2}>
+              <Grid size={12}>
+                <TextField
+                  label="Dirección"
+                  fullWidth
+                  value={address}
+                  onChange={(event) => handleManualFieldChange({ address: event.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Barrio"
+                  fullWidth
+                  value={barrio}
+                  onChange={(event) => handleManualFieldChange({ barrio: event.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Localidad"
+                  fullWidth
+                  value={localidad}
+                  onChange={(event) => handleManualFieldChange({ localidad: event.target.value })}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Latitud"
+                  type="number"
+                  fullWidth
+                  inputProps={{ step: "any" }}
+                  value={latitude}
+                  onChange={(event) => handleManualLatitudeChange(Number(event.target.value))}
+                />
+              </Grid>
+              <Grid size={{ xs: 12, sm: 6 }}>
+                <TextField
+                  label="Longitud"
+                  type="number"
+                  fullWidth
+                  inputProps={{ step: "any" }}
+                  value={longitude}
+                  onChange={(event) => handleManualLongitudeChange(Number(event.target.value))}
+                />
+              </Grid>
+              <Grid size={12}>
+                <TextField
+                  label="Radio permitido (metros)"
+                  type="number"
+                  fullWidth
+                  value={allowedRadiusMeters}
+                  onChange={(event) => handleRadiusChange(Number(event.target.value))}
+                />
+              </Grid>
+            </Grid>
           </CardContent>
         </Card>
-      ) : null}
-
-      <Typography variant="subtitle2">Ubicación manual</Typography>
-      <TextField
-        label="Dirección"
-        fullWidth
-        value={address}
-        onChange={(event) => handleManualAddressChange(event.target.value)}
-      />
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={2}>
-        <TextField
-          label="Latitud"
-          type="number"
-          fullWidth
-          inputProps={{ step: "any" }}
-          value={latitude}
-          onChange={(event) => handleManualLatitudeChange(Number(event.target.value))}
-        />
-        <TextField
-          label="Longitud"
-          type="number"
-          fullWidth
-          inputProps={{ step: "any" }}
-          value={longitude}
-          onChange={(event) => handleManualLongitudeChange(Number(event.target.value))}
-        />
-      </Stack>
-      <TextField
-        label="Radio permitido (metros)"
-        type="number"
-        fullWidth
-        value={allowedRadiusMeters}
-        onChange={(event) => handleRadiusChange(Number(event.target.value))}
-      />
+      </Box>
     </Stack>
   );
 }

@@ -1,11 +1,9 @@
 import {
-  Button,
   FormControl,
   InputLabel,
   MenuItem,
   Paper,
   Select,
-  Stack,
   Table,
   TableBody,
   TableCell,
@@ -14,34 +12,25 @@ import {
   TableRow,
 } from "@mui/material";
 import { useCallback, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
-import { ConfirmDialog } from "../../components/common/ConfirmDialog";
+import { ClickableTableRow } from "../../components/common/ClickableTableRow";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { FilterItem, ListFilters } from "../../components/common/ListFilters";
 import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHeader";
 import { PaginationControls } from "../../components/common/PaginationControls";
 import { SearchField } from "../../components/common/SearchField";
 import { StatusChip } from "../../components/common/StatusChip";
-import { useDeactivateEmployee, useEmployees } from "../../hooks/useEmployees";
+import { useEmployees } from "../../hooks/useEmployees";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
-import type { Employee } from "../../types/employee";
 import { getApiErrorMessage } from "../../utils/errors";
-import { activeStatusLabel } from "../../utils/labels";
+import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
 
 export function EmployeesListPage() {
   const pagination = usePaginationState(10);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
-  const [selectedEmployee, setSelectedEmployee] = useState<Employee | null>(null);
-  const [feedback, setFeedback] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
 
   const filters = {
     page: pagination.page,
@@ -51,30 +40,11 @@ export function EmployeesListPage() {
   };
 
   const { data, isPending, isError, error } = useEmployees(filters);
-  const deactivateMutation = useDeactivateEmployee();
 
   const handleSearch = useCallback((value: string) => {
     pagination.resetPage();
     setSearch(value);
-  }, [pagination]);
-
-  const handleDeactivate = async () => {
-    if (!selectedEmployee) {
-      return;
-    }
-
-    try {
-      await deactivateMutation.mutateAsync(selectedEmployee.id);
-      setFeedback({ open: true, message: "Empleado desactivado correctamente.", severity: "success" });
-      setSelectedEmployee(null);
-    } catch (mutationError) {
-      setFeedback({
-        open: true,
-        message: getApiErrorMessage(mutationError, "No se pudo desactivar el empleado."),
-        severity: "error",
-      });
-    }
-  };
+  }, [pagination.resetPage]);
 
   return (
     <AdminLayout>
@@ -128,38 +98,28 @@ export function EmployeesListPage() {
                   <TableCell>Nombre</TableCell>
                   <TableCell>Documento</TableCell>
                   <TableCell>Teléfono</TableCell>
+                  <TableCell>Tipo</TableCell>
                   <TableCell>Estado</TableCell>
-                  <TableCell align="right">Acciones</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
                 {data.data.map((employee) => (
-                  <TableRow key={employee.id} hover>
+                  <ClickableTableRow
+                    key={employee.id}
+                    to={`/employees/${employee.id}`}
+                    ariaLabel={`Ver empleado ${employee.name}`}
+                  >
                     <TableCell>{employee.name}</TableCell>
                     <TableCell>{employee.documentNumber ?? "—"}</TableCell>
                     <TableCell>{employee.phoneNumber}</TableCell>
+                    <TableCell>{employeeTypeLabels[employee.employeeType]}</TableCell>
                     <TableCell>
                       <StatusChip
                         label={activeStatusLabel(employee.active)}
                         color={employee.active ? "success" : "default"}
                       />
                     </TableCell>
-                    <TableCell align="right">
-                      <Stack direction="row" spacing={1} justifyContent="flex-end">
-                        <Button component={RouterLink} to={`/employees/${employee.id}`} size="small">
-                          Editar
-                        </Button>
-                        <Button
-                          size="small"
-                          color="error"
-                          disabled={!employee.active}
-                          onClick={() => setSelectedEmployee(employee)}
-                        >
-                          Desactivar
-                        </Button>
-                      </Stack>
-                    </TableCell>
-                  </TableRow>
+                  </ClickableTableRow>
                 ))}
               </TableBody>
             </Table>
@@ -173,23 +133,6 @@ export function EmployeesListPage() {
           />
         </>
       ) : null}
-
-      <ConfirmDialog
-        open={Boolean(selectedEmployee)}
-        title="Desactivar empleado"
-        description={`¿Confirmás desactivar a ${selectedEmployee?.name ?? "este empleado"}?`}
-        confirmLabel="Desactivar"
-        loading={deactivateMutation.isPending}
-        onCancel={() => setSelectedEmployee(null)}
-        onConfirm={handleDeactivate}
-      />
-
-      <FeedbackSnackbar
-        open={feedback.open}
-        message={feedback.message}
-        severity={feedback.severity}
-        onClose={() => setFeedback((current) => ({ ...current, open: false }))}
-      />
     </AdminLayout>
   );
 }

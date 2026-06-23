@@ -8,6 +8,7 @@ import {
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { ConfirmDialog } from "../../components/common/ConfirmDialog";
+import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
@@ -20,7 +21,6 @@ import {
   useInventory,
   useUpdateInventory,
 } from "../../hooks/useInventories";
-import { useStores } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from "../../utils/dates";
@@ -31,7 +31,6 @@ import { inventoryStatusLabels } from "../../utils/labels";
 export function InventoryDetailPage() {
   const { id } = useParams<{ id: string }>();
   const inventoryQuery = useInventory(id);
-  const storesQuery = useStores({ page: 1, limit: 100 });
   const updateMutation = useUpdateInventory(id ?? "");
   const cancelMutation = useCancelInventory();
 
@@ -59,7 +58,7 @@ export function InventoryDetailPage() {
     );
   }
 
-  if (inventoryQuery.isLoading || storesQuery.isLoading) {
+  if (inventoryQuery.isLoading) {
     return (
       <AdminLayout>
         <LoadingState />
@@ -135,17 +134,25 @@ export function InventoryDetailPage() {
       <Stack spacing={3}>
         <Card variant="outlined">
           <CardContent>
-            <Stack spacing={1}>
-              <Typography variant="h6">Datos generales</Typography>
-              <Typography>Estado: <StatusChip label={inventoryStatusLabels[inventory.status]} /></Typography>
-              <Typography>Tienda: {inventory.store.name}</Typography>
-              <Typography>Inicio: {formatDateTime(inventory.scheduledStart)}</Typography>
-              <Typography>Fin: {formatDateTime(inventory.scheduledEnd)}</Typography>
-              <Typography>Tolerancia temprana: {inventory.earlyToleranceMinutes} min</Typography>
-              <Typography>Tolerancia tardía: {inventory.lateToleranceMinutes} min</Typography>
-              <Typography>Asistencias registradas: {inventory.attendanceRecordsCount}</Typography>
-              <Typography>Notas: {inventory.notes ?? "—"}</Typography>
-            </Stack>
+            <Typography variant="h6" gutterBottom>
+              Datos generales
+            </Typography>
+            <DetailFieldGrid
+              fields={[
+                {
+                  label: "Estado",
+                  value: <StatusChip label={inventoryStatusLabels[inventory.status]} />,
+                },
+                { label: "Tienda", value: inventory.store.name },
+                { label: "Dirección", value: inventory.store.address ?? "—" },
+                { label: "Inicio", value: formatDateTime(inventory.scheduledStart) },
+                { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
+                { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },
+                { label: "Tolerancia tardía", value: `${inventory.lateToleranceMinutes} min` },
+                { label: "Asistencias registradas", value: inventory.attendanceRecordsCount },
+                { label: "Notas", value: inventory.notes ?? "—" },
+              ]}
+            />
           </CardContent>
         </Card>
 
@@ -157,7 +164,6 @@ export function InventoryDetailPage() {
               </Typography>
               <InventoryForm
                 mode="edit"
-                stores={storesQuery.data?.data ?? []}
                 currentStatus={inventory.status}
                 defaultValues={{
                   storeId: inventory.storeId,

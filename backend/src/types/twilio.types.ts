@@ -1,6 +1,8 @@
 export type BotSessionState =
   | "WAITING_LOCATION"
   | "WAITING_INVENTORY_SELECTION"
+  | "WAITING_CHECKOUT_LOCATION"
+  | "WAITING_CHECKOUT_INVENTORY_SELECTION"
   | "COMPLETED"
   | "CANCELLED"
   | "EXPIRED";
@@ -75,4 +77,8 @@ export interface CompatibleInventory {
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   status: string;
+}
+
+export interface CheckoutEligibleInventory extends CompatibleInventory {
+  attendanceId: string;
 }

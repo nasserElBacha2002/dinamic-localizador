@@ -1,9 +1,10 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { BotSession, BotSessionState } from "../types/twilio.types";
+import { ACTIVE_BOT_SESSION_STATES_SQL } from "../utils/bot-session-states";
 import { mapBotSessionRow } from "../utils/row-mappers";
 
-const ACTIVE_STATE_SQL = "('WAITING_LOCATION', 'WAITING_INVENTORY_SELECTION')";
+const ACTIVE_STATE_SQL = ACTIVE_BOT_SESSION_STATES_SQL;
 
 const withLock = (transaction?: sql.Transaction): string =>
   transaction ? "WITH (UPDLOCK, HOLDLOCK)" : "";
@@ -223,7 +224,10 @@ export const botSessionRepository = {
     fields.push("updated_at = SYSUTCDATETIME()");
 
     const activeStateGuard =
-      input.state === "WAITING_LOCATION" || input.state === "WAITING_INVENTORY_SELECTION"
+      input.state === "WAITING_LOCATION" ||
+      input.state === "WAITING_INVENTORY_SELECTION" ||
+      input.state === "WAITING_CHECKOUT_LOCATION" ||
+      input.state === "WAITING_CHECKOUT_INVENTORY_SELECTION"
         ? `AND state IN ${ACTIVE_STATE_SQL}`
         : "";
 

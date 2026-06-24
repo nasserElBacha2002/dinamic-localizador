@@ -1,3 +1,4 @@
+import type { CheckoutStatus } from "../constants/checkout-status";
 import type { StoreFormat } from "../constants/store-formats";
 import type { EmployeeType } from "../constants/employee-types";
 
@@ -82,6 +83,15 @@ export interface AttendanceRecord {
   reviewedAt: string | null;
   reviewReason: string | null;
   receivedAt: string;
+  checkoutAt: string | null;
+  checkoutLatitude: number | null;
+  checkoutLongitude: number | null;
+  checkoutDistanceMeters: number | null;
+  checkoutStatus: CheckoutStatus | null;
+  checkoutReviewReason: string | null;
+  earlyDepartureMinutes: number | null;
+  extraWorkedMinutes: number | null;
+  checkoutMessageSid: string | null;
   createdAt: string;
 }
 

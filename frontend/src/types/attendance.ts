@@ -3,6 +3,13 @@ import type { InventoryStatus } from "./inventory";
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
 export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
+export type CheckoutStatus =
+  | "CHECKOUT_VALID"
+  | "CHECKOUT_EARLY_WITHIN_TOLERANCE"
+  | "CHECKOUT_EARLY_REVIEW"
+  | "CHECKOUT_LATE_EXTRA_TIME"
+  | "CHECKOUT_LOCATION_REVIEW"
+  | "CHECKOUT_REJECTED";
 
 export type OperationalStatus = "NO_CHECK_IN" | "VALID" | "PENDING_REVIEW" | "REJECTED";
 
@@ -22,6 +29,15 @@ export interface AttendanceRecord {
   reviewedAt: string | null;
   reviewReason: string | null;
   receivedAt: string;
+  checkoutAt: string | null;
+  checkoutLatitude: number | null;
+  checkoutLongitude: number | null;
+  checkoutDistanceMeters: number | null;
+  checkoutStatus: CheckoutStatus | null;
+  checkoutReviewReason: string | null;
+  earlyDepartureMinutes: number | null;
+  extraWorkedMinutes: number | null;
+  checkoutMessageSid: string | null;
   createdAt: string;
 }
 

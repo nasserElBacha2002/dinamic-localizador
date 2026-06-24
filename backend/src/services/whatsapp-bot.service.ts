@@ -12,23 +12,51 @@ import { whatsappMessageRepository } from "../repositories/whatsapp-message.repo
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
 import { botSessionService } from "./bot-session.service";
 import { geolocationService } from "./geolocation.service";
-import type { BotSession, CompatibleInventory } from "../types/twilio.types";
+import type { BotSession, CheckoutEligibleInventory, CompatibleInventory } from "../types/twilio.types";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import {
   combineAttendanceValidation,
+  evaluateGeofence,
   evaluatePunctuality,
   formatLocalTime,
   isWithinInventoryWindow,
   punctualityLabel,
 } from "../utils/attendance-validation";
+import {
+  checkoutStatusLabel,
+  combineCheckoutValidation,
+  evaluateCheckoutTime,
+} from "../utils/checkout-validation";
+import { isCheckoutSessionState } from "../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../utils/haversine";
-import { isCheckInIntent, isSimpleGreeting, parseInventorySelection } from "../utils/intent";
+import { isCheckInIntent, isCheckoutIntent, isSimpleGreeting, parseInventorySelection } from "../utils/intent";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
 
 const UNKNOWN_EMPLOYEE_MESSAGE =
   "No encontramos un empleado activo asociado a este número de WhatsApp. Contactá a administración.";
 
-const GREETING_MESSAGE = 'Hola. Para registrar tu llegada escribí "Llegué".';
+const GREETING_MESSAGE =
+  'Hola. Para registrar tu llegada escribí "Llegué". Para registrar tu salida escribí "Me voy".';
+
+const NO_CHECK_IN_FOR_CHECKOUT_MESSAGE =
+  "No encontré una llegada registrada para este inventario. Primero tenés que haber marcado 'Llegué'.";
+
+const NO_CHECKOUT_INVENTORY_MESSAGE =
+  "No encontramos un inventario con llegada registrada pendiente de salida. Verificá con administración.";
+
+const LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE =
+  'Para registrar tu salida, primero escribí "Me voy".';
+
+const WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE =
+  "Todavía necesitamos tu ubicación actual para registrar la salida. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
+
+const LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE =
+  "Primero seleccioná el inventario para registrar la salida respondiendo con el número correspondiente.";
+
+const DUPLICATE_CHECKOUT_MESSAGE = "Tu salida ya había sido registrada anteriormente.";
+
+const CHECKOUT_REMINDER =
+  "Cuando finalices el inventario, enviá 'Me voy' para registrar tu salida.";
 
 const NO_INVENTORY_MESSAGE =
   "No encontramos un inventario asignado para vos en la fecha y horario actuales. Verificá con administración.";
@@ -78,6 +106,29 @@ const getMessageType = (payload: TwilioWebhookInput): "TEXT" | "LOCATION" | "UNK
   return "UNKNOWN";
 };
 
+const buildCheckoutInventoryPrompt = (inventory: CheckoutEligibleInventory): string => {
+  const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
+  return `Perfecto. Para registrar tu salida del inventario en ${inventory.storeName} (${localTime}), compartime tu ubicación actual.`;
+};
+
+const buildCheckoutInventorySelectionPrompt = (
+  inventories: CheckoutEligibleInventory[],
+): string => {
+  const lines = inventories.map((inventory, index) => {
+    const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
+    return `${index + 1}. ${inventory.storeName} — ${localTime}`;
+  });
+
+  return `Encontramos más de un inventario con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
+};
+
+const findCheckoutEligibleInventory = async (
+  employeeId: string,
+  inventoryId: string,
+): Promise<CheckoutEligibleInventory | null> => {
+  const inventories = await attendanceRepository.findCheckoutEligibleInventories(employeeId);
+  return inventories.find((inventory) => inventory.id === inventoryId) ?? null;
+};
 const buildInventoryPrompt = (inventory: CompatibleInventory): string => {
   const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
   return `Encontramos tu inventario en ${inventory.storeName}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
@@ -270,9 +321,28 @@ export const whatsappBotService = {
       });
     }
 
+    if (session?.state === "WAITING_CHECKOUT_INVENTORY_SELECTION") {
+      return this.handleCheckoutInventorySelection({
+        session,
+        body,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+      });
+    }
+
     if (session?.state === "WAITING_LOCATION") {
       return respond({
         message: WAITING_LOCATION_TEXT_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (session?.state === "WAITING_CHECKOUT_LOCATION") {
+      return respond({
+        message: WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -288,16 +358,23 @@ export const whatsappBotService = {
       });
     }
 
-    if (!isCheckInIntent(body)) {
-      if (isSimpleGreeting(body)) {
-        return respond({
-          message: GREETING_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
+    if (isCheckoutIntent(body)) {
+      return this.startCheckout({
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+      });
+    }
 
+    if (isCheckInIntent(body)) {
+      return this.startCheckIn({
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+      });
+    }
+
+    if (isSimpleGreeting(body)) {
       return respond({
         message: GREETING_MESSAGE,
         employeeId: input.employeeId,
@@ -306,10 +383,126 @@ export const whatsappBotService = {
       });
     }
 
-    return this.startCheckIn({
+    return respond({
+      message: GREETING_MESSAGE,
       employeeId: input.employeeId,
-      phoneFrom: input.phoneFrom,
-      phoneTo: input.phoneTo,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  },
+
+  async startCheckout(input: {
+    employeeId: string;
+    phoneFrom: string;
+    phoneTo: string;
+  }): Promise<string> {
+    const eligible = await attendanceRepository.findCheckoutEligibleInventories(input.employeeId);
+
+    if (eligible.length === 0) {
+      return respond({
+        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (eligible.length === 1) {
+      const inventory = eligible[0];
+      await botSessionService.createWaitingCheckoutLocationSession({
+        employeeId: input.employeeId,
+        phoneNumber: input.phoneFrom,
+        inventoryId: inventory.id,
+      });
+
+      return respond({
+        message: buildCheckoutInventoryPrompt(inventory),
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const options = eligible.map((inventory) => ({
+      inventoryId: inventory.id,
+      storeName: inventory.storeName,
+      scheduledStart: inventory.scheduledStart,
+    }));
+
+    await botSessionService.createCheckoutInventorySelectionSession({
+      employeeId: input.employeeId,
+      phoneNumber: input.phoneFrom,
+      options,
+    });
+
+    return respond({
+      message: buildCheckoutInventorySelectionPrompt(eligible),
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  },
+
+  async handleCheckoutInventorySelection(input: {
+    session: BotSession;
+    body: string;
+    employeeId: string;
+    phoneFrom: string;
+    phoneTo: string;
+  }): Promise<string> {
+    const selection = parseInventorySelection(input.body);
+    const context = botSessionService.parseContext(input.session.contextJson);
+    const options = context.inventoryOptions ?? [];
+
+    if (!selection || selection > options.length) {
+      return respond({
+        message: INVALID_SELECTION_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const selected = options[selection - 1];
+    const eligible = await findCheckoutEligibleInventory(input.employeeId, selected.inventoryId);
+
+    if (!eligible) {
+      return respond({
+        message: NO_CHECKOUT_INVENTORY_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const selectionResult = await botSessionService.selectCheckoutInventoryAndRenewExpiration(
+      input.session.id,
+      eligible.id,
+    );
+
+    if (selectionResult.kind === "expired") {
+      return respond({
+        message: EXPIRED_SESSION_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (selectionResult.kind !== "ok") {
+      return respond({
+        message: INVALID_SELECTION_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    return respond({
+      message: buildCheckoutInventoryPrompt(eligible),
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
     });
   },
 
@@ -481,9 +674,56 @@ export const whatsappBotService = {
       });
     }
 
+    if (session.state === "WAITING_CHECKOUT_INVENTORY_SELECTION") {
+      return respond({
+        message: LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (session.state === "WAITING_CHECKOUT_LOCATION" && session.inventoryId) {
+      try {
+        const latitude = Number(input.payload.Latitude);
+        const longitude = Number(input.payload.Longitude);
+
+        return await this.processLocationCheckout({
+          session,
+          employeeId: input.employeeId,
+          inventoryId: session.inventoryId,
+          latitude,
+          longitude,
+          messageSid: input.payload.MessageSid,
+          phoneFrom: input.phoneFrom,
+          phoneTo: input.phoneTo,
+        });
+      } catch (error) {
+        if (error instanceof InvalidCoordinatesError) {
+          return respond({
+            message:
+              "Las coordenadas recibidas no son válidas. Volvé a compartir tu ubicación actual.",
+            employeeId: input.employeeId,
+            phoneFrom: input.phoneTo,
+            phoneTo: input.phoneFrom,
+          });
+        }
+
+        console.error("[whatsapp-bot] unexpected checkout location processing error", error);
+        return respond({
+          message: GENERIC_ERROR_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+    }
+
     if (session.state !== "WAITING_LOCATION" || !session.inventoryId) {
       return respond({
-        message: LOCATION_WITHOUT_SESSION_MESSAGE,
+        message: isCheckoutSessionState(session.state)
+          ? LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE
+          : LOCATION_WITHOUT_SESSION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -730,15 +970,220 @@ export const whatsappBotService = {
     const localTime = formatLocalTime(input.receivedAt.toISOString(), env.BOT_OPERATION_TIMEZONE);
     const roundedDistance = Math.round(input.distanceMeters);
 
+    if (input.validationStatus === "REJECTED") {
+      return `❌ No pudimos validar tu llegada.\n\nMotivo: ${input.validationReason}\nContactá a tu supervisor si considerás que existe un error.`;
+    }
+
     if (input.validationStatus === "VALID") {
-      return `✅ Check-in registrado correctamente.\n\nTienda: ${input.compatible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${punctualityLabel(input.punctualityStatus)}`;
+      const punctuality =
+        input.punctualityStatus === "LATE"
+          ? "Tu llegada fue registrada como tarde."
+          : "Tu llegada fue registrada correctamente.";
+      return `${punctuality}\n\nTienda: ${input.compatible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${punctualityLabel(input.punctualityStatus)}\n\n${CHECKOUT_REMINDER}`;
     }
 
-    if (input.validationStatus === "PENDING_REVIEW") {
-      return `⚠️ Recibimos tu ubicación, pero el registro quedó pendiente de revisión.\n\nTienda: ${input.compatible.storeName}\nDistancia detectada: ${roundedDistance} m\nRadio permitido: ${input.compatible.allowedRadiusMeters} m`;
+    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.compatible.storeName}\nDistancia detectada: ${roundedDistance} m\nRadio permitido: ${input.compatible.allowedRadiusMeters} m\n\n${CHECKOUT_REMINDER}`;
+  },
+
+  async processLocationCheckout(input: {
+    session: BotSession;
+    employeeId: string;
+    inventoryId: string;
+    latitude: number;
+    longitude: number;
+    messageSid: string;
+    phoneFrom: string;
+    phoneTo: string;
+  }): Promise<string> {
+    const checkoutAt = new Date();
+    const eligible = await findCheckoutEligibleInventory(input.employeeId, input.inventoryId);
+
+    if (!eligible) {
+      return respond({
+        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
     }
 
-    return `❌ No pudimos validar tu llegada.\n\nMotivo: ${input.validationReason}\nContactá a tu supervisor si considerás que existe un error.`;
+    const attendance = await attendanceRepository.findCheckInForCheckout(
+      input.inventoryId,
+      input.employeeId,
+    );
+
+    if (!attendance) {
+      return respond({
+        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (attendance.checkoutAt) {
+      await botSessionService.completeSession(input.session.id);
+      const checkoutTime = formatLocalTime(attendance.checkoutAt, env.BOT_OPERATION_TIMEZONE);
+      return respond({
+        message: `${DUPLICATE_CHECKOUT_MESSAGE}\nHora registrada: ${checkoutTime}.`,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const geo = geolocationService.evaluateDistance(
+      input.latitude,
+      input.longitude,
+      eligible.storeLatitude,
+      eligible.storeLongitude,
+      eligible.allowedRadiusMeters,
+    );
+
+    const geoEvaluation = evaluateGeofence(
+      geo.distanceMeters,
+      eligible.allowedRadiusMeters,
+      env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+    );
+
+    const timeEvaluation = evaluateCheckoutTime(
+      checkoutAt,
+      eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
+      env.BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES,
+    );
+
+    const validation = combineCheckoutValidation(geoEvaluation, timeEvaluation);
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+
+    try {
+      await transaction.begin();
+
+      const activeSession = await botSessionRepository.findValidActiveById(
+        input.session.id,
+        transaction,
+      );
+
+      if (!activeSession || activeSession.state !== "WAITING_CHECKOUT_LOCATION") {
+        await transaction.rollback();
+        return respond({
+          message: EXPIRED_SESSION_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      const updated = await attendanceRepository.registerCheckoutInTransaction(transaction, {
+        attendanceId: attendance.id,
+        checkoutLatitude: input.latitude,
+        checkoutLongitude: input.longitude,
+        checkoutDistanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+        checkoutStatus: validation.checkoutStatus,
+        checkoutReviewReason: validation.checkoutReviewReason,
+        earlyDepartureMinutes: validation.earlyDepartureMinutes,
+        extraWorkedMinutes: validation.extraWorkedMinutes,
+        checkoutMessageSid: input.messageSid,
+        checkoutAt: checkoutAt.toISOString(),
+      });
+
+      if (!updated) {
+        await transaction.rollback();
+        await botSessionService.completeSession(input.session.id);
+        return respond({
+          message: DUPLICATE_CHECKOUT_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      await botSessionRepository.updateSession(
+        input.session.id,
+        { state: "COMPLETED" },
+        transaction,
+      );
+
+      await transaction.commit();
+
+      const responseMessage = this.buildCheckoutResponse({
+        eligible,
+        checkoutAt,
+        distanceMeters: updated.checkoutDistanceMeters ?? 0,
+        checkoutStatus: validation.checkoutStatus,
+        earlyDepartureMinutes: validation.earlyDepartureMinutes,
+        extraWorkedMinutes: validation.extraWorkedMinutes,
+      });
+
+      return respond({
+        message: responseMessage,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    } catch (error) {
+      await transaction.rollback();
+
+      if (error instanceof Error) {
+        if (error.message.includes("UQ_attendance_records_checkout_message_sid")) {
+          await botSessionService.completeSession(input.session.id);
+          return respond({
+            message: DUPLICATE_CHECKOUT_MESSAGE,
+            employeeId: input.employeeId,
+            phoneFrom: input.phoneTo,
+            phoneTo: input.phoneFrom,
+          });
+        }
+      }
+
+      console.error("[whatsapp-bot] checkout transaction failed", error);
+      return respond({
+        message: GENERIC_ERROR_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+  },
+
+  buildCheckoutResponse(input: {
+    eligible: CheckoutEligibleInventory;
+    checkoutAt: Date;
+    distanceMeters: number;
+    checkoutStatus: import("../constants/checkout-status").CheckoutStatus;
+    earlyDepartureMinutes: number;
+    extraWorkedMinutes: number;
+  }): string {
+    const localTime = formatLocalTime(input.checkoutAt.toISOString(), env.BOT_OPERATION_TIMEZONE);
+    const roundedDistance = Math.round(input.distanceMeters);
+    const statusLabel = checkoutStatusLabel(input.checkoutStatus);
+
+    if (input.checkoutStatus === "CHECKOUT_REJECTED") {
+      return `❌ No pudimos registrar tu salida.\n\nMotivo: ubicación fuera del radio permitido.\nContactá a tu supervisor si considerás que existe un error.`;
+    }
+
+    if (
+      input.checkoutStatus === "CHECKOUT_LOCATION_REVIEW" ||
+      input.checkoutStatus === "CHECKOUT_EARLY_REVIEW"
+    ) {
+      const reason =
+        input.checkoutStatus === "CHECKOUT_LOCATION_REVIEW"
+          ? "estás fuera del radio permitido"
+          : "saliste antes del horario previsto";
+      return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${statusLabel}`;
+    }
+
+    let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${statusLabel}`;
+
+    if (input.extraWorkedMinutes > 0) {
+      message += `\nTiempo extra trabajado: ${input.extraWorkedMinutes} min`;
+    }
+
+    if (input.earlyDepartureMinutes > 0 && input.checkoutStatus === "CHECKOUT_EARLY_WITHIN_TOLERANCE") {
+      message += `\nSalida anticipada: ${input.earlyDepartureMinutes} min (dentro de tolerancia)`;
+    }
+
+    return message;
   },
 };
 

@@ -137,6 +137,32 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
   reviewedAt: row.reviewed_at ? toIsoString(row.reviewed_at as Date | string) : null,
   reviewReason: row.review_reason ? String(row.review_reason) : null,
   receivedAt: toIsoString(row.received_at as Date | string),
+  checkoutAt: row.checkout_at ? toIsoString(row.checkout_at as Date | string) : null,
+  checkoutLatitude:
+    row.checkout_latitude !== null && row.checkout_latitude !== undefined
+      ? Number(row.checkout_latitude)
+      : null,
+  checkoutLongitude:
+    row.checkout_longitude !== null && row.checkout_longitude !== undefined
+      ? Number(row.checkout_longitude)
+      : null,
+  checkoutDistanceMeters:
+    row.checkout_distance_meters !== null && row.checkout_distance_meters !== undefined
+      ? Number(row.checkout_distance_meters)
+      : null,
+  checkoutStatus: row.checkout_status
+    ? (String(row.checkout_status) as AttendanceRecord["checkoutStatus"])
+    : null,
+  checkoutReviewReason: row.checkout_review_reason ? String(row.checkout_review_reason) : null,
+  earlyDepartureMinutes:
+    row.early_departure_minutes !== null && row.early_departure_minutes !== undefined
+      ? Number(row.early_departure_minutes)
+      : null,
+  extraWorkedMinutes:
+    row.extra_worked_minutes !== null && row.extra_worked_minutes !== undefined
+      ? Number(row.extra_worked_minutes)
+      : null,
+  checkoutMessageSid: row.checkout_message_sid ? String(row.checkout_message_sid) : null,
   createdAt: toIsoString(row.created_at as Date | string),
 });
 

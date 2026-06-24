@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   isCheckInIntent,
+  isCheckoutIntent,
   normalizeIntentText,
   parseInventorySelection,
 } from "./intent";
@@ -23,6 +24,19 @@ describe("isCheckInIntent", () => {
 
   it("rejects unsupported text", () => {
     assert.equal(isCheckInIntent("hola equipo"), false);
+  });
+});
+
+describe("isCheckoutIntent", () => {
+  it("accepts supported checkout intents", () => {
+    assert.equal(isCheckoutIntent("Me voy"), true);
+    assert.equal(isCheckoutIntent("Terminé"), true);
+    assert.equal(isCheckoutIntent("finalice"), true);
+    assert.equal(isCheckoutIntent("salida"), true);
+  });
+
+  it("rejects check-in intents", () => {
+    assert.equal(isCheckoutIntent("Llegué"), false);
   });
 });
 

@@ -272,6 +272,128 @@ export const botSessionService = {
     });
   },
 
+  async createWaitingCheckoutLocationSession(input: {
+    employeeId: string;
+    phoneNumber: string;
+    inventoryId: string;
+  }): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            employeeId: input.employeeId,
+            inventoryId: input.inventoryId,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_CHECKOUT_LOCATION",
+            contextJson: null,
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] waiting checkout location session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        inventoryId: input.inventoryId,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async createCheckoutInventorySelectionSession(input: {
+    employeeId: string;
+    phoneNumber: string;
+    options: InventorySelectionOption[];
+  }): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            employeeId: input.employeeId,
+            inventoryId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_CHECKOUT_INVENTORY_SELECTION",
+            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] checkout inventory selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async selectCheckoutInventoryAndRenewExpiration(
+    sessionId: string,
+    inventoryId: string,
+  ): Promise<SessionSelectionResult> {
+    return runInTransaction(async (transaction) => {
+      const valid = await botSessionRepository.findValidActiveById(sessionId, transaction);
+      if (!valid) {
+        const stale = await botSessionRepository.findStaleActiveById(sessionId, transaction);
+        if (stale) {
+          await botSessionRepository.expireSessionById(stale.id, transaction);
+        }
+        return { kind: "expired" };
+      }
+
+      if (valid.state !== "WAITING_CHECKOUT_INVENTORY_SELECTION") {
+        return { kind: "invalid" };
+      }
+
+      const renewedExpiresAt = buildExpiresAt();
+      const updated = await botSessionRepository.updateSession(
+        sessionId,
+        {
+          inventoryId,
+          state: "WAITING_CHECKOUT_LOCATION",
+          contextJson: null,
+          expiresAt: renewedExpiresAt,
+        },
+        transaction,
+      );
+
+      if (!updated) {
+        return { kind: "invalid" };
+      }
+
+      return { kind: "ok", session: updated };
+    });
+  },
+
   async completeSession(sessionId: string, transaction?: sql.Transaction): Promise<void> {
     await botSessionRepository.updateSession(sessionId, { state: "COMPLETED" }, transaction);
     console.info("[bot-session] session completed", { sessionId });

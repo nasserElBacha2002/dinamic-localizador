@@ -34,6 +34,15 @@ export const employeeTypeLabels: Record<import("../constants/employee-types").Em
   eventual: "Eventual",
 };
 
+export const checkoutStatusLabels: Record<import("../types/attendance").CheckoutStatus, string> = {
+  CHECKOUT_VALID: "Salida válida",
+  CHECKOUT_EARLY_WITHIN_TOLERANCE: "Salida anticipada (tolerancia)",
+  CHECKOUT_EARLY_REVIEW: "Salida anticipada (revisión)",
+  CHECKOUT_LATE_EXTRA_TIME: "Salida con tiempo extra",
+  CHECKOUT_LOCATION_REVIEW: "Salida (revisión ubicación)",
+  CHECKOUT_REJECTED: "Salida rechazada",
+};
+
 export const operationalStatusLabels: Record<
   import("../types/attendance").OperationalStatus,
   string

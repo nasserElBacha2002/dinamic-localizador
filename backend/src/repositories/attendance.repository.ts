@@ -1,6 +1,8 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import type { CheckoutStatus } from "../constants/checkout-status";
 import type { AttendanceRecord, AttendanceRecordWithRelations } from "../types/domain";
+import type { CheckoutEligibleInventory } from "../types/twilio.types";
 import { mapAttendanceRow, mapAttendanceWithRelationsRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
@@ -285,6 +287,130 @@ export const attendanceRepository = {
         OUTPUT INSERTED.*
         WHERE id = @attendanceId
       `);
+
+    return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findCheckoutEligibleInventories(employeeId: string): Promise<CheckoutEligibleInventory[]> {
+    const pool = getPool();
+    const result = await pool.request().input("employeeId", sql.UniqueIdentifier, employeeId).query(`
+      SELECT
+        i.id,
+        i.store_id,
+        i.scheduled_start,
+        i.scheduled_end,
+        i.early_tolerance_minutes,
+        i.late_tolerance_minutes,
+        i.status,
+        ar.id AS attendance_id,
+        s.name AS store_name,
+        s.latitude AS store_latitude,
+        s.longitude AS store_longitude,
+        s.allowed_radius_meters
+      FROM attendance_records ar
+      INNER JOIN inventories i ON i.id = ar.inventory_id
+      INNER JOIN inventory_employees ie
+        ON ie.inventory_id = i.id AND ie.employee_id = ar.employee_id
+      INNER JOIN stores s ON s.id = i.store_id
+      WHERE ar.employee_id = @employeeId
+        AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+        AND ar.checkout_at IS NULL
+        AND i.status <> 'CANCELLED'
+        AND s.active = 1
+      ORDER BY i.scheduled_start ASC
+    `);
+
+    return result.recordset.map((row) => ({
+      id: String(row.id),
+      storeId: String(row.store_id),
+      storeName: String(row.store_name),
+      storeLatitude: Number(row.store_latitude),
+      storeLongitude: Number(row.store_longitude),
+      allowedRadiusMeters: Number(row.allowed_radius_meters),
+      scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
+      scheduledEnd: row.scheduled_end
+        ? new Date(row.scheduled_end as Date | string).toISOString()
+        : null,
+      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
+      lateToleranceMinutes: Number(row.late_tolerance_minutes),
+      status: String(row.status),
+      attendanceId: String(row.attendance_id),
+    }));
+  },
+
+  async findCheckInForCheckout(
+    inventoryId: string,
+    employeeId: string,
+  ): Promise<AttendanceRecord | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT TOP 1 *
+        FROM attendance_records
+        WHERE inventory_id = @inventoryId
+          AND employee_id = @employeeId
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND checkout_at IS NULL
+        ORDER BY received_at DESC
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async registerCheckoutInTransaction(
+    transaction: sql.Transaction,
+    input: {
+      attendanceId: string;
+      checkoutLatitude: number;
+      checkoutLongitude: number;
+      checkoutDistanceMeters: number;
+      checkoutStatus: CheckoutStatus;
+      checkoutReviewReason: string | null;
+      earlyDepartureMinutes: number;
+      extraWorkedMinutes: number;
+      checkoutMessageSid: string;
+      checkoutAt: string;
+    },
+  ): Promise<AttendanceRecord | null> {
+    const request = new sql.Request(transaction);
+    const result = await request
+      .input("attendanceId", sql.UniqueIdentifier, input.attendanceId)
+      .input("checkoutLatitude", sql.Decimal(10, 7), input.checkoutLatitude)
+      .input("checkoutLongitude", sql.Decimal(10, 7), input.checkoutLongitude)
+      .input("checkoutDistanceMeters", sql.Decimal(10, 2), input.checkoutDistanceMeters)
+      .input("checkoutStatus", sql.NVarChar(40), input.checkoutStatus)
+      .input("checkoutReviewReason", sql.NVarChar(500), input.checkoutReviewReason)
+      .input("earlyDepartureMinutes", sql.Int, input.earlyDepartureMinutes)
+      .input("extraWorkedMinutes", sql.Int, input.extraWorkedMinutes)
+      .input("checkoutMessageSid", sql.NVarChar(100), input.checkoutMessageSid)
+      .input("checkoutAt", sql.DateTime2, new Date(input.checkoutAt))
+      .query(`
+        UPDATE attendance_records
+        SET checkout_at = @checkoutAt,
+            checkout_latitude = @checkoutLatitude,
+            checkout_longitude = @checkoutLongitude,
+            checkout_distance_meters = @checkoutDistanceMeters,
+            checkout_status = @checkoutStatus,
+            checkout_review_reason = @checkoutReviewReason,
+            early_departure_minutes = @earlyDepartureMinutes,
+            extra_worked_minutes = @extraWorkedMinutes,
+            checkout_message_sid = @checkoutMessageSid
+        OUTPUT INSERTED.*
+        WHERE id = @attendanceId
+          AND checkout_at IS NULL
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
 
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },

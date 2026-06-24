@@ -15,7 +15,12 @@ const session = (state: BotSessionState, expiresAt: string) => ({ state, expires
 
 describe("bot session expiration helpers", () => {
   it("defines only the expected active states", () => {
-    assert.deepEqual(ACTIVE_SESSION_STATES, ["WAITING_LOCATION", "WAITING_INVENTORY_SELECTION"]);
+    assert.deepEqual(ACTIVE_SESSION_STATES, [
+      "WAITING_LOCATION",
+      "WAITING_INVENTORY_SELECTION",
+      "WAITING_CHECKOUT_LOCATION",
+      "WAITING_CHECKOUT_INVENTORY_SELECTION",
+    ]);
   });
 
   it("builds expires_at from UTC now and TTL minutes", () => {

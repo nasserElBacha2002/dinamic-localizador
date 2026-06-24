@@ -19,6 +19,24 @@ export const normalizeIntentText = (text: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+const CHECKOUT_INTENTS = [
+  "me voy",
+  "termine",
+  "terminé",
+  "termine",
+  "finalice",
+  "finalicé",
+  "salida",
+  "salir",
+] as const;
+
+export const isCheckoutIntent = (body: string): boolean => {
+  const normalized = normalizeIntentText(body);
+  return CHECKOUT_INTENTS.some(
+    (intent) => normalized === intent || normalized.includes(intent),
+  );
+};
+
 export const isCheckInIntent = (body: string): boolean => {
   const normalized = normalizeIntentText(body);
   return CHECK_IN_INTENTS.some(

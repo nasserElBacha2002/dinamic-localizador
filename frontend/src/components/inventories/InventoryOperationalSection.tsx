@@ -27,6 +27,7 @@ import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   locationStatusLabels,
+  checkoutStatusLabels,
   operationalStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
@@ -184,6 +185,9 @@ export function InventoryOperationalSection({
                 <TableCell>Hora esperada</TableCell>
                 <TableCell>Check-in</TableCell>
                 <TableCell>Distancia</TableCell>
+                <TableCell>Check-out</TableCell>
+                <TableCell>Estado salida</TableCell>
+                <TableCell>Tiempo extra</TableCell>
                 <TableCell>Ubicación</TableCell>
                 <TableCell>Puntualidad</TableCell>
                 <TableCell>Validación</TableCell>
@@ -203,6 +207,23 @@ export function InventoryOperationalSection({
               </TableCell>
               <TableCell>
                 {row.attendance ? `${row.attendance.distanceMeters.toFixed(1)} m` : "—"}
+              </TableCell>
+              <TableCell>
+                {row.attendance?.checkoutAt ? formatDateTime(row.attendance.checkoutAt) : "—"}
+              </TableCell>
+              <TableCell>
+                {row.attendance?.checkoutStatus ? (
+                  <StatusChip label={checkoutStatusLabels[row.attendance.checkoutStatus]} />
+                ) : (
+                  "—"
+                )}
+              </TableCell>
+              <TableCell>
+                {row.attendance?.extraWorkedMinutes
+                  ? `${row.attendance.extraWorkedMinutes} min`
+                  : row.attendance?.earlyDepartureMinutes
+                    ? `${row.attendance.earlyDepartureMinutes} min antes`
+                    : "—"}
               </TableCell>
               <TableCell>
                 {row.attendance ? (

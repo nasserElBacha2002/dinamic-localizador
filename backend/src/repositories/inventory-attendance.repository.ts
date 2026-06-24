@@ -55,6 +55,15 @@ const mapSummaryRow = (row: Record<string, unknown>): InventoryAttendanceSummary
         reviewed_at: row.reviewed_at,
         review_reason: row.review_reason,
         received_at: row.received_at,
+        checkout_at: row.checkout_at,
+        checkout_latitude: row.checkout_latitude,
+        checkout_longitude: row.checkout_longitude,
+        checkout_distance_meters: row.checkout_distance_meters,
+        checkout_status: row.checkout_status,
+        checkout_review_reason: row.checkout_review_reason,
+        early_departure_minutes: row.early_departure_minutes,
+        extra_worked_minutes: row.extra_worked_minutes,
+        checkout_message_sid: row.checkout_message_sid,
         created_at: row.attendance_created_at,
       } as Record<string, unknown>)
     : null;
@@ -177,6 +186,15 @@ export const inventoryAttendanceRepository = {
           ar.reviewed_at,
           ar.review_reason,
           ar.received_at,
+          ar.checkout_at,
+          ar.checkout_latitude,
+          ar.checkout_longitude,
+          ar.checkout_distance_meters,
+          ar.checkout_status,
+          ar.checkout_review_reason,
+          ar.early_departure_minutes,
+          ar.extra_worked_minutes,
+          ar.checkout_message_sid,
           ar.created_at AS attendance_created_at
         ${employeesBaseQuery}
         ORDER BY e.name ASC

@@ -20,7 +20,6 @@ import {
   evaluatePunctuality,
   formatLocalTime,
   isWithinInventoryWindow,
-  punctualityLabel,
 } from "../utils/attendance-validation";
 import {
   checkoutStatusLabel,
@@ -975,14 +974,14 @@ export const whatsappBotService = {
     }
 
     if (input.validationStatus === "VALID") {
-      const punctuality =
+      const headline =
         input.punctualityStatus === "LATE"
           ? "Tu llegada fue registrada como tarde."
           : "Tu llegada fue registrada correctamente.";
-      return `${punctuality}\n\nTienda: ${input.compatible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${punctualityLabel(input.punctualityStatus)}\n\n${CHECKOUT_REMINDER}`;
+      return `${headline}\n\nTienda: ${input.compatible.storeName}\nLlegada: ${localTime}\nDistancia: ${roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
     }
 
-    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.compatible.storeName}\nDistancia detectada: ${roundedDistance} m\nRadio permitido: ${input.compatible.allowedRadiusMeters} m\n\n${CHECKOUT_REMINDER}`;
+    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.compatible.storeName}\nLlegada: ${localTime}\nDistancia: ${roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
   },
 
   async processLocationCheckout(input: {
@@ -1108,10 +1107,10 @@ export const whatsappBotService = {
 
       const responseMessage = this.buildCheckoutResponse({
         eligible,
+        checkInAt: attendance.receivedAt,
         checkoutAt,
         distanceMeters: updated.checkoutDistanceMeters ?? 0,
         checkoutStatus: validation.checkoutStatus,
-        earlyDepartureMinutes: validation.earlyDepartureMinutes,
         extraWorkedMinutes: validation.extraWorkedMinutes,
       });
 
@@ -1148,13 +1147,14 @@ export const whatsappBotService = {
 
   buildCheckoutResponse(input: {
     eligible: CheckoutEligibleInventory;
+    checkInAt: string;
     checkoutAt: Date;
     distanceMeters: number;
     checkoutStatus: import("../constants/checkout-status").CheckoutStatus;
-    earlyDepartureMinutes: number;
     extraWorkedMinutes: number;
   }): string {
-    const localTime = formatLocalTime(input.checkoutAt.toISOString(), env.BOT_OPERATION_TIMEZONE);
+    const arrivalTime = formatLocalTime(input.checkInAt, env.BOT_OPERATION_TIMEZONE);
+    const departureTime = formatLocalTime(input.checkoutAt.toISOString(), env.BOT_OPERATION_TIMEZONE);
     const roundedDistance = Math.round(input.distanceMeters);
     const statusLabel = checkoutStatusLabel(input.checkoutStatus);
 
@@ -1170,17 +1170,13 @@ export const whatsappBotService = {
         input.checkoutStatus === "CHECKOUT_LOCATION_REVIEW"
           ? "estás fuera del radio permitido"
           : "saliste antes del horario previsto";
-      return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${statusLabel}`;
+      return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\nDistancia: ${roundedDistance} m\nEstado: ${statusLabel}`;
     }
 
-    let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nHora registrada: ${localTime}\nDistancia detectada: ${roundedDistance} m\nEstado: ${statusLabel}`;
+    let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\nDistancia: ${roundedDistance} m\nEstado: ${statusLabel}`;
 
-    if (input.extraWorkedMinutes > 0) {
-      message += `\nTiempo extra trabajado: ${input.extraWorkedMinutes} min`;
-    }
-
-    if (input.earlyDepartureMinutes > 0 && input.checkoutStatus === "CHECKOUT_EARLY_WITHIN_TOLERANCE") {
-      message += `\nSalida anticipada: ${input.earlyDepartureMinutes} min (dentro de tolerancia)`;
+    if (input.checkoutStatus === "CHECKOUT_LATE_EXTRA_TIME" && input.extraWorkedMinutes > 0) {
+      message += `\nTiempo extra: ${input.extraWorkedMinutes} min`;
     }
 
     return message;

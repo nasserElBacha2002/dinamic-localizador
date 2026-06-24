@@ -35,6 +35,7 @@ import { AdminLayout } from "../../layouts/AdminLayout";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
+  checkoutStatusLabels,
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
@@ -111,7 +112,7 @@ export function AttendanceDetailPage() {
     <AdminLayout>
       <PageHeader
         title="Detalle de asistencia"
-        description={`${record.employee.name} · ${formatDateTime(record.receivedAt)}`}
+        description={`${record.employee.name} · Llegada ${formatDateTime(record.receivedAt)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
         action={
           <Stack direction="row" spacing={1}>
             {canReview ? (
@@ -157,18 +158,34 @@ export function AttendanceDetailPage() {
                   value: `${record.employee.name} (${record.employee.phoneNumber})`,
                 },
                 { label: "Tienda", value: record.store.name },
-                { label: "Inventario", value: formatDateTime(record.inventory.scheduledStart) },
+                { label: "Inventario programado", value: formatDateTime(record.inventory.scheduledStart) },
+                { label: "Llegada", value: formatDateTime(record.receivedAt) },
+                { label: "Salida", value: formatDateTime(record.checkoutAt) },
                 {
-                  label: "Coordenadas",
+                  label: "Coordenadas llegada",
                   value: `${record.receivedLatitude}, ${record.receivedLongitude}`,
                 },
-                { label: "Distancia", value: `${record.distanceMeters.toFixed(1)} m` },
+                { label: "Distancia llegada", value: `${record.distanceMeters.toFixed(1)} m` },
+                {
+                  label: "Coordenadas salida",
+                  value:
+                    record.checkoutLatitude != null && record.checkoutLongitude != null
+                      ? `${record.checkoutLatitude}, ${record.checkoutLongitude}`
+                      : "—",
+                },
+                {
+                  label: "Distancia salida",
+                  value:
+                    record.checkoutDistanceMeters != null
+                      ? `${record.checkoutDistanceMeters.toFixed(1)} m`
+                      : "—",
+                },
                 {
                   label: "Radio permitido",
                   value: record.store.allowedRadiusMeters != null ? `${record.store.allowedRadiusMeters} m` : "—",
                 },
                 {
-                  label: "Estado",
+                  label: "Estado llegada",
                   value: (
                     <Stack direction="row" spacing={0.5} flexWrap="wrap" useFlexGap>
                       <StatusChip label={validationStatusLabels[record.validationStatus]} />
@@ -177,7 +194,16 @@ export function AttendanceDetailPage() {
                     </Stack>
                   ),
                 },
+                {
+                  label: "Estado salida",
+                  value: record.checkoutStatus ? (
+                    <StatusChip label={checkoutStatusLabels[record.checkoutStatus]} />
+                  ) : (
+                    "—"
+                  ),
+                },
                 { label: "Motivo original", value: record.validationReason ?? "—" },
+                { label: "Motivo salida", value: record.checkoutReviewReason ?? "—" },
                 {
                   label: "Revisado",
                   value: record.reviewedAt ? formatDateTime(record.reviewedAt) : "—",

@@ -237,7 +237,8 @@ export function AttendanceListPage() {
                   <TableCell>Empleado</TableCell>
                   <TableCell>Tienda</TableCell>
                   <TableCell>Inventario</TableCell>
-                  <TableCell>Fecha</TableCell>
+                  <TableCell>Llegada</TableCell>
+                  <TableCell>Salida</TableCell>
                   <TableCell>Distancia</TableCell>
                   <TableCell>Validación</TableCell>
                   <TableCell>Ubicación</TableCell>
@@ -255,6 +256,7 @@ export function AttendanceListPage() {
                     <TableCell>{record.store.name}</TableCell>
                     <TableCell>{formatDateTime(record.inventory.scheduledStart)}</TableCell>
                     <TableCell>{formatDateTime(record.receivedAt)}</TableCell>
+                    <TableCell>{formatDateTime(record.checkoutAt)}</TableCell>
                     <TableCell>{record.distanceMeters.toFixed(1)} m</TableCell>
                     <TableCell>
                       <StatusChip label={validationStatusLabels[record.validationStatus]} />

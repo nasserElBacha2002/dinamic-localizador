@@ -5,6 +5,20 @@ import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-
 import { mapEmployeeRow } from "../utils/row-mappers";
 import type { ListEmployeesQuery, UpdateEmployeeInput } from "../schemas/employee.schema";
 
+const EMPLOYEE_LAST_WORKED_JOIN = `
+  LEFT JOIN (
+    SELECT employee_id, MAX(received_at) AS last_worked_at
+    FROM attendance_records
+    GROUP BY employee_id
+  ) lw ON lw.employee_id = e.id
+`;
+
+const EMPLOYEE_SELECT = `
+  SELECT e.*, lw.last_worked_at
+  FROM employees e
+  ${EMPLOYEE_LAST_WORKED_JOIN}
+`;
+
 export const employeeRepository = {
   async create(input: {
     name: string;
@@ -33,7 +47,7 @@ export const employeeRepository = {
     const result = await pool
       .request()
       .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM employees WHERE id = @id");
+      .query(`${EMPLOYEE_SELECT} WHERE e.id = @id`);
 
     if (!result.recordset[0]) {
       return null;
@@ -62,14 +76,14 @@ export const employeeRepository = {
 
     if (query.active !== undefined) {
       filters.push({
-        clause: "active = @active",
+        clause: "e.active = @active",
         apply: (request) => request.input("active", sql.Bit, query.active),
       });
     }
 
     if (query.search) {
       filters.push({
-        clause: "(name LIKE @search OR phone_number LIKE @search OR document_number LIKE @search)",
+        clause: "(e.name LIKE @search OR e.phone_number LIKE @search OR e.document_number LIKE @search)",
         apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
       });
     }
@@ -78,7 +92,7 @@ export const employeeRepository = {
 
     const countRequest = pool.request();
     applySqlFilters(countRequest, filters);
-    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM employees ${whereClause}`);
+    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM employees e ${whereClause}`);
     const total = Number(countResult.recordset[0].total);
 
     const dataRequest = pool.request();
@@ -87,10 +101,9 @@ export const employeeRepository = {
     dataRequest.input("limit", sql.Int, query.limit);
 
     const dataResult = await dataRequest.query(`
-      SELECT *
-      FROM employees
+      ${EMPLOYEE_SELECT}
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY e.created_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 

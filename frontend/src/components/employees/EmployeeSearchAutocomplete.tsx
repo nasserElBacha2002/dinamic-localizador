@@ -5,6 +5,8 @@ import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useEmployee } from "../../hooks/useEmployees";
 import type { Employee } from "../../types/employee";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
+import { formatDate } from "../../utils/dates";
+import { employeeTypeLabels } from "../../utils/labels";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
 interface EmployeeSearchAutocompleteProps {
@@ -19,13 +21,26 @@ interface EmployeeSearchAutocompleteProps {
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
+  descriptionMode?: "phone" | "assignment";
 }
 
-function mapEmployeeToOption(employee: Employee): SearchAutocompleteOption {
+function formatEmployeeAssignmentDescription(employee: Employee): string {
+  const typeLabel = employeeTypeLabels[employee.employeeType];
+  const lastDay = employee.lastWorkedAt ? formatDate(employee.lastWorkedAt) : "Sin registros";
+  return `${typeLabel} · Último día: ${lastDay}`;
+}
+
+function mapEmployeeToOption(
+  employee: Employee,
+  descriptionMode: "phone" | "assignment",
+): SearchAutocompleteOption {
   return {
     id: employee.id,
     label: employee.name,
-    description: employee.phoneNumber,
+    description:
+      descriptionMode === "assignment"
+        ? formatEmployeeAssignmentDescription(employee)
+        : employee.phoneNumber,
     disabled: !employee.active,
   };
 }
@@ -42,6 +57,7 @@ export function EmployeeSearchAutocomplete({
   disabled = false,
   required = false,
   placeholder = "Nombre o teléfono",
+  descriptionMode = "phone",
 }: EmployeeSearchAutocompleteProps) {
   const navigate = useNavigate();
   const selectedEmployeeQuery = useEmployee(value ?? undefined);
@@ -66,7 +82,10 @@ export function EmployeeSearchAutocomplete({
     [activeOnly, excludeIds],
   );
 
-  const mapToOption = useCallback((employee: Employee) => mapEmployeeToOption(employee), []);
+  const mapToOption = useCallback(
+    (employee: Employee) => mapEmployeeToOption(employee, descriptionMode),
+    [descriptionMode],
+  );
 
   const {
     inputValue,
@@ -86,8 +105,8 @@ export function EmployeeSearchAutocomplete({
       return null;
     }
 
-    return mapEmployeeToOption(selectedEmployeeQuery.data);
-  }, [selectedEmployeeQuery.data, value]);
+    return mapEmployeeToOption(selectedEmployeeQuery.data, descriptionMode);
+  }, [descriptionMode, selectedEmployeeQuery.data, value]);
 
   return (
     <SearchAutocomplete

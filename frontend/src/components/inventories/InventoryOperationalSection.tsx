@@ -146,7 +146,8 @@ export function InventoryOperationalSection({
               value={selectedEmployeeId || null}
               onChange={(id) => setSelectedEmployeeId(id ?? "")}
               excludeIds={assignedEmployeeIds}
-              helperText="Buscá por nombre o teléfono"
+              descriptionMode="assignment"
+              helperText="Buscá por nombre. Verás tipo y último día trabajado."
             />
             <Button
               variant="contained"

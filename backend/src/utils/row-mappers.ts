@@ -29,6 +29,7 @@ export const mapEmployeeRow = (row: Record<string, unknown>): Employee => ({
   phoneNumber: String(row.phone_number),
   employeeType: parseEmployeeType(row.employee_type),
   active: Boolean(row.active),
+  lastWorkedAt: row.last_worked_at ? toIsoString(row.last_worked_at as Date | string) : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -113,6 +114,7 @@ export const mapAssignmentRow = (row: Record<string, unknown>): InventoryEmploye
         phoneNumber: String(row.employee_phone_number),
         employeeType: parseEmployeeType(row.employee_type),
         active: Boolean(row.employee_active),
+        lastWorkedAt: null,
         createdAt: toIsoString(row.employee_created_at as Date | string),
         updatedAt: toIsoString(row.employee_updated_at as Date | string),
       }

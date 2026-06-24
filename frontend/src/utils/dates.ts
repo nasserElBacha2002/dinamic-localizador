@@ -47,29 +47,49 @@ export function isoToDatetimeLocal(iso: string): string {
   return `${year}-${month}-${day}T${hour}:${minute}`;
 }
 
+function toComparableMs(
+  year: number,
+  month: number,
+  day: number,
+  hour: number,
+  minute: number,
+): number {
+  return Date.UTC(year, month - 1, day, hour, minute);
+}
+
+function readZonedParts(instant: Date) {
+  const parts = dateTimeFormatter.formatToParts(instant);
+  return {
+    year: Number(getPart(parts, "year")),
+    month: Number(getPart(parts, "month")),
+    day: Number(getPart(parts, "day")),
+    hour: Number(getPart(parts, "hour")),
+    minute: Number(getPart(parts, "minute")),
+  };
+}
+
 export function datetimeLocalToIso(localValue: string): string {
   const [datePart, timePart] = localValue.split("T");
   const [year, month, day] = datePart.split("-").map(Number);
   const [hour, minute] = timePart.split(":").map(Number);
 
-  let guess = Date.UTC(year, month - 1, day, hour, minute);
+  const desiredMs = toComparableMs(year, month, day, hour, minute);
+  let guess = desiredMs;
 
-  for (let attempt = 0; attempt < 6; attempt += 1) {
-    const parts = dateTimeFormatter.formatToParts(new Date(guess));
-    const tzYear = Number(getPart(parts, "year"));
-    const tzMonth = Number(getPart(parts, "month"));
-    const tzDay = Number(getPart(parts, "day"));
-    const tzHour = Number(getPart(parts, "hour"));
-    const tzMinute = Number(getPart(parts, "minute"));
-
-    if (tzYear === year && tzMonth === month && tzDay === day && tzHour === hour && tzMinute === minute) {
+  for (let attempt = 0; attempt < 12; attempt += 1) {
+    const zoned = readZonedParts(new Date(guess));
+    if (
+      zoned.year === year &&
+      zoned.month === month &&
+      zoned.day === day &&
+      zoned.hour === hour &&
+      zoned.minute === minute
+    ) {
       return new Date(guess).toISOString();
     }
 
-    const desiredMinutes = hour * 60 + minute;
-    const actualMinutes = tzHour * 60 + tzMinute;
-    const dayDiff = day - tzDay;
-    guess -= (dayDiff * 24 * 60 + (actualMinutes - desiredMinutes)) * 60 * 1000;
+    const actualMs = toComparableMs(zoned.year, zoned.month, zoned.day, zoned.hour, zoned.minute);
+    guess += desiredMs - actualMs;
   }
 
   return new Date(guess).toISOString();

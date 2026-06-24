@@ -13,6 +13,7 @@ export interface Employee {
   phoneNumber: string;
   employeeType: EmployeeType;
   active: boolean;
+  lastWorkedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

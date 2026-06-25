@@ -19,3 +19,7 @@ frontend/.env
 # Local env backups / secrets
 *.env.save
 backend/.env.save
+
+# Generated reconciliation artifacts
+.cache/
+reports/

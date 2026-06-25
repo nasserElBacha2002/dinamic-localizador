@@ -6,10 +6,10 @@ import { connectDatabase, closeDatabase } from "../database/connection";
 
 config();
 
-interface StoreRow {
+interface StoreSeedRow {
   codigo: string;
   direccion: string;
-  localidad: string;
+  locality: string;
   provincia: string;
   latitude: number;
   longitude: number;
@@ -22,19 +22,19 @@ function parseLatitude(value: string): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function buildAddress(direccion: string, localidad: string, provincia: string): string {
-  const parts = [direccion, localidad, provincia].map((part) => part.trim()).filter(Boolean);
+function buildAddress(direccion: string, locality: string, provincia: string): string {
+  const parts = [direccion, locality, provincia].map((part) => part.trim()).filter(Boolean);
   return parts.join(", ");
 }
 
-function parseSeedFile(content: string): StoreRow[] {
+function parseSeedFile(content: string): StoreSeedRow[] {
   const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const [header, ...rows] = lines;
   if (!header?.toLowerCase().includes("codigo")) {
     throw new Error("Invalid seed file: missing header row.");
   }
 
-  const stores: StoreRow[] = [];
+  const stores: StoreSeedRow[] = [];
 
   for (const line of rows) {
     const columns = line.split("\t");
@@ -47,16 +47,16 @@ function parseSeedFile(content: string): StoreRow[] {
     const longitude = parseLatitude(columns.at(-3) ?? "");
 
     let direccion = "";
-    let localidad = "";
+    let locality = "";
     let provincia = "";
 
     if (columns.length >= 10) {
       provincia = columns.at(-6)?.trim() ?? "";
-      localidad = columns.at(-7)?.trim() ?? "";
+      locality = columns.at(-7)?.trim() ?? "";
       direccion = columns.slice(2, -7).join(" ").trim();
     } else {
       direccion = columns[2]?.trim() ?? "";
-      localidad = columns[3]?.trim() ?? "";
+      locality = columns[3]?.trim() ?? "";
       provincia = columns[4]?.trim() ?? "";
     }
 
@@ -67,7 +67,7 @@ function parseSeedFile(content: string): StoreRow[] {
     stores.push({
       codigo,
       direccion,
-      localidad,
+      locality,
       provincia,
       latitude,
       longitude,
@@ -77,16 +77,16 @@ function parseSeedFile(content: string): StoreRow[] {
   return stores;
 }
 
-async function upsertStore(pool: sql.ConnectionPool, store: StoreRow): Promise<"inserted" | "updated"> {
+async function upsertStore(pool: sql.ConnectionPool, store: StoreSeedRow): Promise<"inserted" | "updated"> {
   const name = store.codigo.slice(0, 150);
-  const address = buildAddress(store.direccion, store.localidad, store.provincia).slice(0, 300) || null;
-  const localidad = store.localidad.slice(0, 150) || null;
+  const address = buildAddress(store.direccion, store.locality, store.provincia).slice(0, 300) || null;
+  const locality = store.locality.slice(0, 150) || null;
 
   const result = await pool
     .request()
     .input("name", sql.NVarChar(150), name)
     .input("address", sql.NVarChar(300), address)
-    .input("localidad", sql.NVarChar(150), localidad)
+    .input("locality", sql.NVarChar(150), locality)
     .input("latitude", sql.Decimal(10, 7), store.latitude)
     .input("longitude", sql.Decimal(10, 7), store.longitude)
     .query(`
@@ -95,7 +95,7 @@ async function upsertStore(pool: sql.ConnectionPool, store: StoreRow): Promise<"
         SELECT
           @name AS name,
           @address AS address,
-          @localidad AS localidad,
+          @locality AS locality,
           @latitude AS latitude,
           @longitude AS longitude
       ) AS source
@@ -103,14 +103,14 @@ async function upsertStore(pool: sql.ConnectionPool, store: StoreRow): Promise<"
       WHEN MATCHED THEN
         UPDATE SET
           address = source.address,
-          localidad = source.localidad,
+          locality = source.locality,
           latitude = source.latitude,
           longitude = source.longitude,
           active = 1,
           updated_at = SYSUTCDATETIME()
       WHEN NOT MATCHED THEN
-        INSERT (name, address, localidad, latitude, longitude, allowed_radius_meters, active)
-        VALUES (source.name, source.address, source.localidad, source.latitude, source.longitude, 150, 1)
+        INSERT (name, address, locality, latitude, longitude, allowed_radius_meters, active)
+        VALUES (source.name, source.address, source.locality, source.latitude, source.longitude, 150, 1)
       OUTPUT $action AS action;
     `);
 

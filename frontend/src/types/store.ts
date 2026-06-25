@@ -4,9 +4,9 @@ export interface Store {
   id: string;
   name: string;
   address: string | null;
-  barrio: string | null;
-  localidad: string | null;
-  formato: StoreFormat | null;
+  neighborhood: string | null;
+  locality: string | null;
+  storeFormat: StoreFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters: number;
@@ -33,9 +33,9 @@ export interface StoreFilters {
 export interface CreateStoreInput {
   name: string;
   address?: string | null;
-  barrio?: string | null;
-  localidad?: string | null;
-  formato?: StoreFormat | null;
+  neighborhood?: string | null;
+  locality?: string | null;
+  storeFormat?: StoreFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters?: number;
@@ -45,9 +45,9 @@ export interface CreateStoreInput {
 export interface UpdateStoreInput {
   name?: string;
   address?: string | null;
-  barrio?: string | null;
-  localidad?: string | null;
-  formato?: StoreFormat | null;
+  neighborhood?: string | null;
+  locality?: string | null;
+  storeFormat?: StoreFormat | null;
   latitude?: number;
   longitude?: number;
   allowedRadiusMeters?: number;

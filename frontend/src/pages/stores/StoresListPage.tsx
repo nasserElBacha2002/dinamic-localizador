@@ -109,9 +109,9 @@ export function StoresListPage() {
                     ariaLabel={`Ver tienda ${store.name}`}
                   >
                     <TableCell>{store.name}</TableCell>
-                    <TableCell>{store.barrio ?? "—"}</TableCell>
-                    <TableCell>{store.localidad ?? "—"}</TableCell>
-                    <TableCell>{store.formato ?? "—"}</TableCell>
+                    <TableCell>{store.neighborhood ?? "—"}</TableCell>
+                    <TableCell>{store.locality ?? "—"}</TableCell>
+                    <TableCell>{store.storeFormat ?? "—"}</TableCell>
                     <TableCell>{store.address ?? "—"}</TableCell>
                     <TableCell>{store.latitude}</TableCell>
                     <TableCell>{store.longitude}</TableCell>

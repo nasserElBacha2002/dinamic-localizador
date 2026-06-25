@@ -23,9 +23,9 @@ export interface Store {
   id: string;
   name: string;
   address: string | null;
-  barrio: string | null;
-  localidad: string | null;
-  formato: StoreFormat | null;
+  neighborhood: string | null;
+  locality: string | null;
+  storeFormat: StoreFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters: number;

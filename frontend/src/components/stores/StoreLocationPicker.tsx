@@ -31,8 +31,8 @@ interface StoreLocationPickerProps {
   latitude: number;
   longitude: number;
   address?: string;
-  barrio?: string;
-  localidad?: string;
+  neighborhood?: string;
+  locality?: string;
   googlePlaceId?: string | null;
   allowedRadiusMeters: number;
   setValue: UseFormSetValue<StoreFormValues>;
@@ -124,8 +124,8 @@ export function StoreLocationPicker({
   latitude,
   longitude,
   address = "",
-  barrio = "",
-  localidad = "",
+  neighborhood = "",
+  locality = "",
   googlePlaceId = null,
   allowedRadiusMeters,
   setValue,
@@ -163,15 +163,15 @@ export function StoreLocationPicker({
   const currentFields = useCallback(
     (): StoreLocationFields => ({
       address,
-      barrio,
-      localidad,
+      neighborhood,
+      locality,
       latitude,
       longitude,
       googlePlaceId,
       allowedRadiusMeters,
       name: currentName,
     }),
-    [address, allowedRadiusMeters, barrio, currentName, googlePlaceId, latitude, localidad, longitude],
+    [address, allowedRadiusMeters, neighborhood, currentName, googlePlaceId, latitude, locality, longitude],
   );
 
   const fieldsRef = useRef(currentFields());
@@ -193,8 +193,8 @@ export function StoreLocationPicker({
     (fields: StoreLocationFields, nextState: LocationPickerState) => {
       internalUpdateRef.current = true;
       setValue("address", fields.address ?? "", setValueOptions);
-      setValue("barrio", fields.barrio ?? "", setValueOptions);
-      setValue("localidad", fields.localidad ?? "", setValueOptions);
+      setValue("neighborhood", fields.neighborhood ?? "", setValueOptions);
+      setValue("locality", fields.locality ?? "", setValueOptions);
       setValue("latitude", fields.latitude, setValueOptions);
       setValue("longitude", fields.longitude, setValueOptions);
       setValue("googlePlaceId", fields.googlePlaceId ?? "", setValueOptions);
@@ -208,8 +208,8 @@ export function StoreLocationPicker({
       setErrorMessage(null);
       void trigger([
         "address",
-        "barrio",
-        "localidad",
+        "neighborhood",
+        "locality",
         "latitude",
         "longitude",
         "allowedRadiusMeters",
@@ -349,8 +349,8 @@ export function StoreLocationPicker({
             {
               googlePlaceId: place.id ?? "",
               address: parsedAddress.address,
-              barrio: parsedAddress.barrio,
-              localidad: parsedAddress.localidad,
+              neighborhood: parsedAddress.neighborhood,
+              locality: parsedAddress.locality,
               displayName: readDisplayName(place.displayName),
               latitude: coords.latitude,
               longitude: coords.longitude,
@@ -422,7 +422,7 @@ export function StoreLocationPicker({
   }, [allowedRadiusMeters, latitude, longitude, mapsLoadState, updateMapVisuals]);
 
   const handleManualFieldChange = (
-    patch: Partial<Pick<StoreLocationFields, "address" | "barrio" | "localidad">>,
+    patch: Partial<Pick<StoreLocationFields, "address" | "neighborhood" | "locality">>,
   ) => {
     applyFieldsToForm(
       {
@@ -555,16 +555,16 @@ export function StoreLocationPicker({
                 <TextField
                   label="Barrio"
                   fullWidth
-                  value={barrio}
-                  onChange={(event) => handleManualFieldChange({ barrio: event.target.value })}
+                  value={neighborhood}
+                  onChange={(event) => handleManualFieldChange({ neighborhood: event.target.value })}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>
                 <TextField
                   label="Localidad"
                   fullWidth
-                  value={localidad}
-                  onChange={(event) => handleManualFieldChange({ localidad: event.target.value })}
+                  value={locality}
+                  onChange={(event) => handleManualFieldChange({ locality: event.target.value })}
                 />
               </Grid>
               <Grid size={{ xs: 12, sm: 6 }}>

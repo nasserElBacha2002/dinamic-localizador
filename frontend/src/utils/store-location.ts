@@ -13,8 +13,8 @@ export type GoogleMapsErrorCode =
 export interface PlaceSelectionResult {
   googlePlaceId: string;
   address: string;
-  barrio?: string;
-  localidad?: string;
+  neighborhood?: string;
+  locality?: string;
   displayName: string | null;
   latitude: number;
   longitude: number;
@@ -28,8 +28,8 @@ export interface GoogleAddressComponent {
 
 export interface StoreLocationFields {
   address?: string;
-  barrio?: string;
-  localidad?: string;
+  neighborhood?: string;
+  locality?: string;
   latitude: number;
   longitude: number;
   googlePlaceId?: string | null;
@@ -37,14 +37,14 @@ export interface StoreLocationFields {
   name?: string;
 }
 
-const BARRIO_COMPONENT_TYPES = [
+const NEIGHBORHOOD_COMPONENT_TYPES = [
   "neighborhood",
   "sublocality",
   "sublocality_level_1",
   "administrative_area_level_3",
 ] as const;
 
-const LOCALIDAD_COMPONENT_TYPES = [
+const LOCALITY_COMPONENT_TYPES = [
   "locality",
   "administrative_area_level_2",
   "postal_town",
@@ -56,7 +56,7 @@ const readAddressComponentText = (component: GoogleAddressComponent): string =>
 export const parseGoogleAddressComponents = (
   formattedAddress: string,
   components?: GoogleAddressComponent[] | null,
-): { address: string; barrio: string; localidad: string } => {
+): { address: string; neighborhood: string; locality: string } => {
   const findByTypes = (types: readonly string[]): string => {
     if (!components?.length) {
       return "";
@@ -79,8 +79,8 @@ export const parseGoogleAddressComponents = (
 
   return {
     address: streetAddress || formattedAddress.trim(),
-    barrio: findByTypes(BARRIO_COMPONENT_TYPES),
-    localidad: findByTypes(LOCALIDAD_COMPONENT_TYPES),
+    neighborhood: findByTypes(NEIGHBORHOOD_COMPONENT_TYPES),
+    locality: findByTypes(LOCALITY_COMPONENT_TYPES),
   };
 };
 
@@ -121,8 +121,8 @@ export const applyPlaceSelection = (
   const fields: StoreLocationFields = {
     ...current,
     address: place.address,
-    barrio: place.barrio ?? "",
-    localidad: place.localidad ?? "",
+    neighborhood: place.neighborhood ?? "",
+    locality: place.locality ?? "",
     latitude: place.latitude,
     longitude: place.longitude,
     googlePlaceId: place.googlePlaceId,

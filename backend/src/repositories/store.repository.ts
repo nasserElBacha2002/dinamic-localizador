@@ -12,17 +12,17 @@ export const storeRepository = {
       .request()
       .input("name", sql.NVarChar(150), input.name)
       .input("address", sql.NVarChar(300), input.address ?? null)
-      .input("barrio", sql.NVarChar(150), input.barrio ?? null)
-      .input("localidad", sql.NVarChar(150), input.localidad ?? null)
-      .input("formato", sql.NVarChar(50), input.formato ?? null)
+      .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
+      .input("locality", sql.NVarChar(150), input.locality ?? null)
+      .input("storeFormat", sql.NVarChar(50), input.storeFormat ?? null)
       .input("latitude", sql.Decimal(10, 7), input.latitude)
       .input("longitude", sql.Decimal(10, 7), input.longitude)
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
       .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
       .query(`
-        INSERT INTO stores (name, address, barrio, localidad, formato, latitude, longitude, allowed_radius_meters, google_place_id)
+        INSERT INTO stores (name, address, neighborhood, locality, store_format, latitude, longitude, allowed_radius_meters, google_place_id)
         OUTPUT INSERTED.*
-        VALUES (@name, @address, @barrio, @localidad, @formato, @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId)
+        VALUES (@name, @address, @neighborhood, @locality, @storeFormat, @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId)
       `);
 
     return mapStoreRow(result.recordset[0] as Record<string, unknown>);
@@ -55,7 +55,7 @@ export const storeRepository = {
 
     if (query.search) {
       filters.push({
-        clause: "(name LIKE @search OR address LIKE @search OR barrio LIKE @search OR localidad LIKE @search)",
+        clause: "(name LIKE @search OR address LIKE @search OR neighborhood LIKE @search OR locality LIKE @search)",
         apply: (request) => request.input("search", sql.NVarChar(150), `%${query.search}%`),
       });
     }
@@ -107,19 +107,19 @@ export const storeRepository = {
       fields.push("address = @address");
     }
 
-    if (input.barrio !== undefined) {
-      request.input("barrio", sql.NVarChar(150), input.barrio);
-      fields.push("barrio = @barrio");
+    if (input.neighborhood !== undefined) {
+      request.input("neighborhood", sql.NVarChar(150), input.neighborhood);
+      fields.push("neighborhood = @neighborhood");
     }
 
-    if (input.localidad !== undefined) {
-      request.input("localidad", sql.NVarChar(150), input.localidad);
-      fields.push("localidad = @localidad");
+    if (input.locality !== undefined) {
+      request.input("locality", sql.NVarChar(150), input.locality);
+      fields.push("locality = @locality");
     }
 
-    if (input.formato !== undefined) {
-      request.input("formato", sql.NVarChar(50), input.formato);
-      fields.push("formato = @formato");
+    if (input.storeFormat !== undefined) {
+      request.input("storeFormat", sql.NVarChar(50), input.storeFormat);
+      fields.push("store_format = @storeFormat");
     }
 
     if (input.latitude !== undefined) {

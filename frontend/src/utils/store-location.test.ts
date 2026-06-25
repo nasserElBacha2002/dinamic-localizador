@@ -92,14 +92,14 @@ describe("applyPlaceSelection", () => {
     assert.equal(result.fields.name, "Tienda Demo");
   });
 
-  it("fills barrio and localidad from place selection", () => {
+  it("fills neighborhood and locality from place selection", () => {
     const result = applyPlaceSelection(
       baseFields,
       {
         googlePlaceId: "place-123",
         address: "Av. Corrientes 1234",
-        barrio: "San Nicolás",
-        localidad: "Buenos Aires",
+        neighborhood: "San Nicolás",
+        locality: "Buenos Aires",
         displayName: null,
         latitude: -34.61,
         longitude: -58.39,
@@ -107,13 +107,13 @@ describe("applyPlaceSelection", () => {
       "Mi tienda",
     );
 
-    assert.equal(result.fields.barrio, "San Nicolás");
-    assert.equal(result.fields.localidad, "Buenos Aires");
+    assert.equal(result.fields.neighborhood, "San Nicolás");
+    assert.equal(result.fields.locality, "Buenos Aires");
   });
 });
 
 describe("parseGoogleAddressComponents", () => {
-  it("extracts street, barrio and localidad from components", () => {
+  it("extracts street, neighborhood and locality from components", () => {
     const parsed = parseGoogleAddressComponents("Av. Corrientes 1234, Buenos Aires, Argentina", [
       { types: ["route"], longText: "Avenida Corrientes" },
       { types: ["street_number"], longText: "1234" },
@@ -122,16 +122,16 @@ describe("parseGoogleAddressComponents", () => {
     ]);
 
     assert.equal(parsed.address, "Avenida Corrientes 1234");
-    assert.equal(parsed.barrio, "San Nicolás");
-    assert.equal(parsed.localidad, "Buenos Aires");
+    assert.equal(parsed.neighborhood, "San Nicolás");
+    assert.equal(parsed.locality, "Buenos Aires");
   });
 
   it("falls back to formatted address when street parts are missing", () => {
     const parsed = parseGoogleAddressComponents("Some formatted address", []);
 
     assert.equal(parsed.address, "Some formatted address");
-    assert.equal(parsed.barrio, "");
-    assert.equal(parsed.localidad, "");
+    assert.equal(parsed.neighborhood, "");
+    assert.equal(parsed.locality, "");
   });
 });
 

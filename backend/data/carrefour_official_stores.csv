@@ -1,0 +1,538 @@
+﻿store_id,official_address,neighborhood,locality
+114,Market Bahía Blanca,Bahía Blanca,Bueno Aires Interior Market
+134,Market Tandil,Tandil,Bueno Aires Interior Market
+163,San Jerónimo 444,Córdoba Capital,Córdoba
+164,Rojas 726,Caballito,C.A.B.A.
+171,Virrey Toledo 702,Salta Capital,Salta
+172,San Juan 1128,Mendoza,Mendoza
+173,Caseros 243,Córdoba Capital,Córdoba
+174,Av. Independencia 2054,San Cristobal,C.A.B.A.
+182,Market Juramento 2971,Belgrano,C.A.B.A. Market
+192,Av. Callao 1450,Recoleta,C.A.B.A.
+194,Jacinto de Altolaguirre 1679,Córdoba Capital,Córdoba
+199,Av. Cordoba 1439,Recoleta,C.A.B.A.
+200,Av. Rivadavia 8421,Floresta,C.A.B.A.
+207,Av. San Juan 560,San telmo,C.A.B.A.
+211,Italia y Sáenz Valiente,Martinez,G.B.A. Market
+213,Paraguay 919,Retiro,C.A.B.A.
+216,Av. Maipú 940,Vicente Lopez,G.B.A. Market
+216,Market Vicente Lopez,Vicente Lopez,G.B.A. Market
+222,Paraná 473,Córdoba Capital,Córdoba
+223,Octavio Pinto 2665,Córdoba Capital,Córdoba
+224,Ambrosio Olmos 929,Córdoba Capital,Córdoba
+225,Jose Roque Funes 1145,Córdoba Capital,Córdoba
+226,226 - Market Edison,Martinez,G.B.A. Market
+236,Av. Rivadavia 7070,Flores,C.A.B.A.
+245,Av. San Martín 2999,Paternal,C.A.B.A.
+247,Av. La Plata 430,Boedo,C.A.B.A.
+251,Arce 730,Palermo,C.A.B.A.
+254,Av. Diego Carman 451,San Isidro,G.B.A.
+257,Av. Independencia 1520,Monserrat,C.A.B.A.
+260,Av. Las Heras 2397,Recoleta,C.A.B.A.
+261,Rivadavia 57,Mendoza,Mendoza
+265,Av. Angel Gallardo 30,Villa Crespo,C.A.B.A.
+267,Roque Saenz Peña 121,Lujan de Cuyo,Mendoza
+269,Tiburcio Benegas 2306,Mendoza,Mendoza
+270,Jose Ingenieros 59 (Villa Carlos Paz),Villa Carlos Paz,Córdoba
+273,Av. Cabildo 3722,Belgrano,C.A.B.A.
+280,Av. Republica de China 1045,Córdoba Capital,Córdoba
+281,Sagrada Familia 1305,Córdoba Capital,Córdoba
+283,Av. Las Heras 316,Mendoza,Mendoza
+286,Av. Belgrano 1170,Tupungato,Mendoza
+291,Piedras 383,Monserrat,C.A.B.A.
+295,Bv. Granaderos 2906 (esq. Virgen de la Merced),Córdoba Capital,Córdoba
+296,Market Olavarria II,Olavarria,Bueno Aires Interior Market
+298,Formosa 565,Caballito,C.A.B.A.
+299,Arenales 975,Retiro,C.A.B.A.
+300,Deheza 2239,Nuñez,C.A.B.A.
+301,Pueyrredon 2464,Recoleta,C.A.B.A.
+302,Esmeralda 823,Retiro,C.A.B.A.
+303,Talcahuano 841,Recoleta,C.A.B.A.
+306,Fray Justo Santa María de Oro 2709,Palermo,C.A.B.A.
+307,Av. Las Heras 1936,Recoleta,C.A.B.A.
+308,Maipu 171,San Nicolás,C.A.B.A.
+309,Campana 3050,Villa del Parque,C.A.B.A.
+310,Chivilcoy 3840,Devoto,C.A.B.A.
+311,Av. Monroe 2771,Belgrano,C.A.B.A.
+312,Cerviño 4634,Palermo,C.A.B.A.
+313,Montañeses 2267,Belgrano,C.A.B.A.
+314,Segurola 2344,Villa del Parque,C.A.B.A.
+315,Jose Pedro Varela 3191,Villa del Parque,C.A.B.A.
+316,Av. Cnel.Ramon L.Falcon 2402,Flores,C.A.B.A.
+317,Doctor Tomas Manuel de Anchorena 1253,Palermo,C.A.B.A.
+318,Arroyo 859,Retiro,C.A.B.A.
+320,Mariscal Antonio Jose Sucre 2490,Belgrano,C.A.B.A.
+322,Del Carril 3210,Villa del Parque,C.A.B.A.
+323,Montes de Oca 304,Barracas,C.A.B.A.
+324,Av. Directorio 1766,Parque Chacabuco,C.A.B.A.
+325,Vidal 2355,Belgrano,C.A.B.A.
+326,Alvarez Jonte 4872,Monte castro,C.A.B.A.
+327,Av. Las Heras 2643,Recoleta,C.A.B.A.
+328,Godoy Cruz 2793,Palermo,C.A.B.A.
+329,Lavalle 1747,San Nicolás,C.A.B.A.
+331,Charcas 3171,Palermo,C.A.B.A.
+332,Billinghurst 1380,Palermo,C.A.B.A.
+334,Paraguay 521,Retiro,C.A.B.A.
+335,Cuba 2776,Belgrano,C.A.B.A.
+336,Charcas 3315 II,Palermo,C.A.B.A.
+337,Av. Federico Lacroze 2566,Belgrano,C.A.B.A.
+338,Tucuman 831,San Nicolás,C.A.B.A.
+339,Av. Los Incas 4466,Villa Ortuzar,C.A.B.A.
+341,Viamonte 352,San Nicolás,C.A.B.A.
+343,Amenabar 1187,Belgrano,C.A.B.A.
+344,Marcelo Torcuato de Alvear 2251,Recoleta,C.A.B.A.
+346,Suarez 1599,Barracas,C.A.B.A.
+347,Pacheco de Melo 2648,Recoleta,C.A.B.A.
+348,Av. Rivadavia 3421,Almagro,C.A.B.A.
+349,Av. Cabildo 34,Palermo,C.A.B.A.
+351,Echeverria 2067,Belgrano,C.A.B.A.
+352,Rodriguez Peña 1183,Recoleta,C.A.B.A.
+354,Parana 1053,Recoleta,C.A.B.A.
+355,Pueyrredon 1054,Once,C.A.B.A.
+357,Sarmiento 1592,Congreso,C.A.B.A.
+360,Los Incas II 5174,Villa Urquiza,C.A.B.A.
+361,Moldes 1720,Belgrano,C.A.B.A.
+362,Av. Directorio 1069,Caballito,C.A.B.A.
+363,Independencia 1833,San Cristobal,C.A.B.A.
+364,Ciudad de la Paz 353,Colegiales,C.A.B.A.
+365,Av. Nazca 1944,Santa Rita,C.A.B.A.
+367,Av. Estado de Israel 4309,Villa Crespo,C.A.B.A.
+368,Cuba 2919 II,Nuñez,C.A.B.A.
+369,Caseros 2864,Parque Patricios,C.A.B.A.
+370,Av. Juan Bautista Alberdi 371,Caballito,C.A.B.A.
+371,Av. Olazabal 5483,Villa Urquiza,C.A.B.A.
+373,11 de Septiembre 3910,Nuñez,C.A.B.A.
+374,Romulo Naon 2401,Villa Urquiza,C.A.B.A.
+375,Esmeralda 428,San Nicolás,C.A.B.A.
+376,Alvarez Jonte 3709,Villa del Parque,C.A.B.A.
+378,Billinghurst 1872/76,Recoleta,C.A.B.A.
+380,Otamendi 490,Caballito,C.A.B.A.
+388,Alte. Segui 849,Adrogue,G.B.A.
+391,Av. Cabildo 2865,Belgrano,C.A.B.A.
+392,Jose Luis Borges (Ex Serrano) 2463-65,Palermo,C.A.B.A.
+394,Av. Santa Fe 4489/91,Palermo,C.A.B.A.
+395,Federico Lacroze 4106,Chacarita,C.A.B.A.
+396,Av. San Martin 2289,Paternal,C.A.B.A.
+397,Av. Corrientes 5980,Chacarita,C.A.B.A.
+398,Av. Rivadavia 9436,Villa luro,C.A.B.A.
+400,Av. Del Barco Centenera 177,Caballito,C.A.B.A.
+402,Av. Corrientes 1974,San Nicolás,C.A.B.A.
+403,Av. Santa Fe 5052,Palermo,C.A.B.A.
+404,Av. Medrano 686,Almagro,C.A.B.A.
+406,Salta 1637/39,Constitucion,C.A.B.A.
+408,Peru 916,San telmo,C.A.B.A.
+409,Av. Gaona 3567,Santa Rita,C.A.B.A.
+410,Tucumán 2173,San Nicolás,C.A.B.A.
+411,Av. E. Peron 3479,Flores,C.A.B.A.
+412,Av. Caseros 3535,Parque Patricios,C.A.B.A.
+413,Venezuela 4086,Boedo,C.A.B.A.
+415,Av. San Juan 4351,Boedo,C.A.B.A.
+416,Av. Almafuerte 880,Pompeya,C.A.B.A.
+417,Fray Cayetano Rodriguez 464,Flores,C.A.B.A.
+418,Carlos Calvo 1826,San Cristobal,C.A.B.A.
+419,Olavarria 469,La Boca,C.A.B.A.
+420,Av. Gaona 1384,Caballito,C.A.B.A.
+421,Av. Belgrano 3447,Boedo,C.A.B.A.
+422,Murature 2169,Lomas de Zamora,G.B.A.
+423,Av. Castañares 4854,Villa Lugano,C.A.B.A.
+424,Bartolome Mitre 226,Lujan,G.B.A.
+425,Av. Brig. Gral. Juan Manuel de Rosas 2553,Jose Leon Suarez,G.B.A.
+426,Montañeses 2067,Belgrano,C.A.B.A.
+427,Av. Rivadavia 16051,Haedo,G.B.A.
+428,Rosario 4558,Ing. Adolfo Sordeaux,G.B.A.
+429,Independencia 4731,Villa Ballester,G.B.A.
+430,Carrillo 2170,San Martin,G.B.A.
+431,Av. Presidente Teniente Gral J.D.Peron 3283,Victoria,G.B.A.
+433,Av. Ing. Eduardo Madero 1050 - Ruta 26,Del Viso,G.B.A.
+435,Ruta 26 162,Maquinista Savio,G.B.A.
+436,Parana 6543,Villa Adelina,G.B.A.
+437,Centenario 1890,Beccar,G.B.A.
+438,25 de Mayo 2650,Los Polvorines,G.B.A.
+439,Gob. Arias 2420,Castelar,G.B.A.
+440,Av. Cazon 1336,Tigre,G.B.A.
+441,Velez Sarfield 4690,Munro,G.B.A.
+442,Sarmiento 837,Moron,G.B.A.
+443,Los Tilos 711,Don Bosco,G.B.A.
+444,Camino Gral Belgrano 6498,Florencio Varela,G.B.A.
+445,Av. Arana 231,Villa Elisa,G.B.A.
+446,Eva Peron 4461,Monte Chingolo,G.B.A.
+447,Coronel D`Elia 1649,Lanus,G.B.A.
+448,Carlos Pellegrini 844,Burzaco,G.B.A.
+449,Sallares 151,Florencio Varela,G.B.A.
+450,Bolivar 1343,Longchamps,G.B.A.
+451,Guatambu 12,Almirante Brown,G.B.A.
+452,Av. Centenario 5331,Ezpeleta,G.B.A.
+453,Martin Rodriguez 1399 (Banfield),Banfield,G.B.A.
+454,Mitre 573,Quilmes,G.B.A.
+455,Av. Hipolito Yrigoyen 2323,Gerli,G.B.A.
+456,Av. San Martin 3960,Remedio Escalada,G.B.A.
+457,Sarmiento 72 y M. Moreno,Glew,G.B.A.
+458,Claudio de Alas 2146,Budge,G.B.A.
+459,Camino Gral Belgrano 4861,Lanus Este,G.B.A.
+460,Eva Perón 3330,Lanus Este,G.B.A.
+461,Salta 160,Lomas de Zamora,G.B.A.
+462,12 de octubre 520,Quilmes,G.B.A.
+463,Av. Teniente Gral Juan Domingo Perón 2640,Valentín Alsina,G.B.A.
+464,Av. Peron 5492,Puente La Noria,G.B.A.
+465,Av. Mitre 6328,Wilde,G.B.A.
+466,29 de septiembre 1880,Lanus,G.B.A.
+468,Juan Manuel de Rosas 6956,Isidro Casanova,G.B.A.
+469,Fraga 1629,San Miguel,G.B.A.
+470,El Payador 5550,Villa Bosch,G.B.A.
+471,Av. Honorio Luque 6125/29,Gregorio Laferrere,G.B.A.
+472,Jauretche 1125,Hurlingham,G.B.A.
+473,9 de Julio 46/50,Ramos Mejìa,G.B.A.
+474,Echeverri 943 / 951,Matera,G.B.A.
+475,Av. de Mayo 1832,Ramos Mejìa,G.B.A.
+476,Chilavert 1912,Villa Madero,G.B.A.
+477,Dr. Enrique Simón Perez 4566,González Catán,G.B.A.
+478,Misiones 6572/74,Palomar,G.B.A.
+479,Eva Perón 4215,Libertad,G.B.A.
+480,Av. Crovara 875,La Tablada,G.B.A.
+481,Boulogne Sur Mer 1398,Tapiales,G.B.A.
+482,Sullivan 1597,Merlo,G.B.A.
+483,Av. Carlos Casares 642,Rafael Castillo,G.B.A.
+484,Salvador Maria del Carril 49,Paso del rey,G.B.A.
+485,Av. Presidente Juan Domingo Perón 23866,San Antonio de Padua,G.B.A.
+486,Av. San Juan 1374,San Cristobal,C.A.B.A.
+487,La Rioja 2040,Parque Patricios,C.A.B.A.
+488,Av. Belgrano 1562,Monserrat,C.A.B.A.
+489,Av. Caseros 2423,Parque Patricios,C.A.B.A.
+491,Market Av. Montes de Oca 970,Barracas,C.A.B.A. Market
+492,Pedro Lozano 3150,Villa del Parque,C.A.B.A.
+493,Charcas 3940,Palermo,C.A.B.A.
+494,Francisco Segui 1519,Grand Bourg,G.B.A.
+495,Av. 14 N. 5072,Berazategui,G.B.A.
+496,José Hernandez 130,Ezeiza,G.B.A.
+497,Av. Pte. J. D. Perón 25694,Merlo,G.B.A.
+498,Av. Luro 6329,Laferrere,G.B.A.
+499,Av. Cristiania 1832,Atalaya,G.B.A.
+512,Francisco Ramirez 43,Pilar,G.B.A.
+516,Cosme Beccar 437,San Isidro,G.B.A.
+521,Av. Urquiza 4855,Caseros,G.B.A.
+522,Arieta 2850,San Justo,G.B.A.
+524,Bernardo Irigoyen 746,Gral Rodriguez,G.B.A.
+525,Crisologo Larralde 3721,Saavedra,C.A.B.A.
+526,Av. Dr.Honorio Pueyrredon 925,Caballito,C.A.B.A.
+527,Fray Justo Santa Maria de Oro 2121,Palermo,C.A.B.A.
+528,Aguirre 236,Villa Crespo,C.A.B.A.
+529,Viamonte 2296,San Nicolás,C.A.B.A.
+530,Av. Rivadavia 6074,Caballito,C.A.B.A.
+531,Arevalo 1736,Palermo,C.A.B.A.
+533,Rosario 85,Caballito,C.A.B.A.
+534,Martiniano Leguizamon 1576,Mataderos,C.A.B.A.
+535,Murguiondo 4324,Lugano,C.A.B.A.
+536,Av. Dr. Ricardo Balbin 4189,Saavedra,C.A.B.A.
+537,Charcas 4367,Palermo,C.A.B.A.
+538,Hipolito Irigoyen 3254,Boedo,C.A.B.A.
+539,Av. Teniente Gral Donato Alvarez 837,Caballito,C.A.B.A.
+541,Maipu 918,San Nicolás,C.A.B.A.
+542,Segurola 279,Floresta,C.A.B.A.
+543,Av. Olazabal 5179,Villa Urquiza,C.A.B.A.
+545,Libertad 1039,Recoleta,C.A.B.A.
+546,Moreno 1902,Balvanera,C.A.B.A.
+547,Av. Dorrego 851,Chacarita,C.A.B.A.
+548,Av. Congreso 5241,Villa Urquiza,C.A.B.A.
+550,Sarmiento 3885,Almagro,C.A.B.A.
+551,Av. Monroe 3576,Villa Urquiza,C.A.B.A.
+552,Av. Rivadavia 3751,Almagro,C.A.B.A.
+553,Cuzco 135,Liniers,C.A.B.A.
+554,Coronel Martiniano Chilavert 6280,Villa Riachuelo,C.A.B.A.
+555,Guemes 4161,Palermo,C.A.B.A.
+556,Grecia 3595,Nuñez,C.A.B.A.
+557,Arzobispo Espinosa 1187,La Boca,C.A.B.A.
+558,Sarmiento 345,San Nicolás,C.A.B.A.
+559,Teodoro Garcia 2310,Belgrano,C.A.B.A.
+560,Bartolome Mitre 1749,Congreso,C.A.B.A.
+561,Angel Gallardo 940,Caballito,C.A.B.A.
+562,San Martin 620,San Nicolás,C.A.B.A.
+563,Hidalgo 955,Caballito,C.A.B.A.
+565,Ecuador 932,Once,C.A.B.A.
+566,Alvarez Thomas 1996,Villa Urquiza,C.A.B.A.
+568,Olazabal 1898,Belgrano,C.A.B.A.
+569,Av. Libertador 1140,Recoleta,C.A.B.A.
+570,Defensa 1400,San telmo,C.A.B.A.
+571,Tacuari 89,Balvanera,C.A.B.A.
+572,Av. Del Barco Centenera 1282,Parque Chacabuco,C.A.B.A.
+573,Av. Cordoba 3721,Almagro,C.A.B.A.
+574,Garcia del Rio 3166,Saavedra,C.A.B.A.
+575,Av. Directorio 483,Caballito,C.A.B.A.
+576,Nuñez 1563,Nuñez,C.A.B.A.
+577,Av. Córdoba 2038,Recoleta,C.A.B.A.
+579,Av. Alte. Brown 795,La Boca,C.A.B.A.
+580,Av. Corrientes 4147,Almagro,C.A.B.A.
+581,Juan M. Gutierrez 3756,Palermo,C.A.B.A.
+582,Av. Congreso 4781,Villa Urquiza,C.A.B.A.
+583,Av. de Mayo 1241,San Nicolás,C.A.B.A.
+585,Lima 945,San Nicolás,C.A.B.A.
+586,San Martin 5934,Villa del Parque,C.A.B.A.
+587,Rojas 16,Caballito,C.A.B.A.
+588,Av. San Martin 4685,Agronomia,C.A.B.A.
+589,Peru 487,Monserrat,C.A.B.A.
+590,Peña 2544,Recoleta,C.A.B.A.
+591,Juan Domingo Peron 4177,Almagro,C.A.B.A.
+592,Echeverria 1420,Belgrano,C.A.B.A.
+593,Entre Rios 1192,San Cristobal,C.A.B.A.
+594,Av. Inclan 2502,Parque Patricios,C.A.B.A.
+595,Cosquin 78 / 80,Liniers,C.A.B.A.
+596,Av. Federico Lacroze 3660,Colegiales,C.A.B.A.
+597,Sanabria 2733,Villa del Parque,C.A.B.A.
+598,Sarmiento 1810,Congreso,C.A.B.A.
+599,Blanco Encalada 4470,Villa Urquiza,C.A.B.A.
+600,Directorio 3960,Floresta,C.A.B.A.
+604,Av. Estado de Israel 4684,Villa Crespo,C.A.B.A.
+605,Av. Juan Bautista Alberdi 7071,Mataderos,C.A.B.A.
+606,Obispo Trejo 1166,Córdoba Capital,Córdoba
+607,Chacabuco 727,Córdoba Capital,Córdoba
+608,Serrano 280,Villa Crespo,C.A.B.A.
+609,Av. del Libertador 4534,Palermo,C.A.B.A.
+610,Pueyrredon 298,Córdoba Capital,Córdoba
+613,Av. Congreso 2774,Belgrano,C.A.B.A.
+614,Murguiondo 4053,Lugano,C.A.B.A.
+615,Av. Rivadavia 4702,Caballito,C.A.B.A.
+616,Rio de Janeiro 71,Caballito,C.A.B.A.
+617,Monroe 3131,Villa Urquiza,C.A.B.A.
+618,Bulnes 2751,Recoleta,C.A.B.A.
+619,Ramos Mejia 1019,Caballito,C.A.B.A.
+621,Av. Avellaneda 1034,Caballito,C.A.B.A.
+622,Av. Boyaca 1082,Floresta,C.A.B.A.
+623,Av. Rivadavia 2520,Once,C.A.B.A.
+624,Nazca 3214,Villa del Parque,C.A.B.A.
+625,Montiel 1061,Naon,C.A.B.A.
+626,Ramon Falcon 5547,Villa Luro,C.A.B.A.
+627,Paseo Colon 1179,San telmo,C.A.B.A.
+628,Av. Rivadavia 4119,Almagro,C.A.B.A.
+630,Araoz 2148,Palermo,C.A.B.A.
+631,Lavalle 368,San Nicolás,C.A.B.A.
+632,Amenabar 2702,Belgrano,C.A.B.A.
+633,Bolivar 270,Monserrat,C.A.B.A.
+634,Moreno 1401,Balvanera,C.A.B.A.
+636,Ayacucho 1401,Recoleta,C.A.B.A.
+637,Av. San Martin 2218,Caseros,G.B.A.
+638,Av. De Mayo 432,Derqui,G.B.A.
+639,Av. Pedro Goyena 188,Caballito,C.A.B.A.
+640,Boulogne Sur Mer 431,Almagro,C.A.B.A.
+641,Alvear 126,Córdoba Capital,Córdoba
+642,GralPaz 240,Córdoba Capital,Córdoba
+643,Segurola 1441,Villa del Parque,C.A.B.A.
+644,25 de Mayo 979,Córdoba Capital,Córdoba
+645,Luis María Drago 287,Villa Crespo,C.A.B.A.
+646,Baunes 2692,Villa Urquiza,C.A.B.A.
+648,Belgrano 54,Córdoba Capital,Córdoba
+649,Emilio Castro 6815,Mataderos,C.A.B.A.
+650,San Martin 26,Villa Carlos Paz,Córdoba
+652,Av. Las Heras 2986,Recoleta,C.A.B.A.
+654,Hipolito Yrigoyen 1790,Congreso,C.A.B.A.
+656,Viamonte 170,San Nicolás,C.A.B.A.
+657,Montiel 1718,Naon,C.A.B.A.
+658,Larrazabal 265,Villa Luro,C.A.B.A.
+659,Conesa 999,Colegiales,C.A.B.A.
+660,Juan Segui 4524,Palermo,C.A.B.A.
+661,Araoz 1140,Palermo,C.A.B.A.
+662,Av. Belgrano 3043,Boedo,C.A.B.A.
+664,Nogoya 3644,Villa del Parque,C.A.B.A.
+667,Directorio 4989,Mataderos,C.A.B.A.
+669,Yapeyu 2059,San Martin,G.B.A.
+670,Hidalgo 92,Caballito,C.A.B.A.
+671,Mcal. Antonio Jose Sucre 2774,Belgrano,C.A.B.A.
+672,Coronel Martiniano Chilavert 6901,Villa Riachuelo,C.A.B.A.
+673,Carrasco 421,Floresta,C.A.B.A.
+674,Virrey del Pino 2527,Belgrano,C.A.B.A.
+676,Chile 701,Monserrat,C.A.B.A.
+677,Alvarez Jonte 3079,Santa Rita,C.A.B.A.
+678,Arregui 6369,Versalles,C.A.B.A.
+679,Av. Scalabrini Ortiz 1396,Palermo,C.A.B.A.
+680,Carhue 1427,Naon,C.A.B.A.
+682,Viamonte 702,San Nicolás,C.A.B.A.
+683,Av. Cramer 2463,Belgrano,C.A.B.A.
+684,Mexico 1530,Monserrat,C.A.B.A.
+685,Pareja 4890,Villa Devoto,C.A.B.A.
+686,Juan Agustin Garcia 3202,Santa Rita,C.A.B.A.
+687,Av. Alvarez Jonte 1987,Villa del Parque,C.A.B.A.
+688,Lope de Vega 19,Villa Luro,C.A.B.A.
+689,Av. Independencia 2716,Balvanera,C.A.B.A.
+691,Av. La Plata 716,Boedo,C.A.B.A.
+692,Neuquén 520,Caballito,C.A.B.A.
+693,Av. Pedro Goyena 1680,Caballito,C.A.B.A.
+694,Tucuman 1541,San Nicolás,C.A.B.A.
+695,Almirante Brown 261,La Boca,C.A.B.A.
+697,Caboto 420,La Boca,C.A.B.A.
+698,Belaustegui 2748,Santa Rita,C.A.B.A.
+699,Dorrego 2145,Palermo,C.A.B.A.
+710,Nahuel Huapi 5038,Villa Urquiza,C.A.B.A.
+711,Av. Alvarez Thomas 372,Colegiales,C.A.B.A.
+714,Mariscal Sucre 4230,Villa Urquiza,C.A.B.A.
+715,Av. Cordoba 4967,Palermo,C.A.B.A.
+716,Castañeda 1836,Belgrano,C.A.B.A.
+717,Junin 1460,Recoleta,C.A.B.A.
+719,Yerbal 2701,Flores,C.A.B.A.
+720,Independencia 585,Córdoba Capital,Córdoba
+723,Av. Leandro Nicéforo Alem 198,San Nicolás,C.A.B.A.
+724,Ayacucho 539,San Nicolás,C.A.B.A.
+725,Directorio 2320,Flores,C.A.B.A.
+726,Lisandro de Latorre 199,Liniers,C.A.B.A.
+727,Montiel 168,Liniers,C.A.B.A.
+729,Av. Belgrano 2160,Balvanera,C.A.B.A.
+731,Sarmiento 4551,Villa Crespo,C.A.B.A.
+732,Ambrosetti 758,Caballito,C.A.B.A.
+733,Lisandro de Latorre 790,Mataderos,C.A.B.A.
+734,Urquiza 1013,Boedo,C.A.B.A.
+735,Av. Pueyrredon 2120,Recoleta,C.A.B.A.
+736,Chile 154,Córdoba Capital,Córdoba
+739,Franklin D Roosevelt 3002,Belgrano,C.A.B.A.
+740,Varela 888,Flores,C.A.B.A.
+741,Av. Triunvirato 4210,Villa Urquiza,C.A.B.A.
+742,Av. Juan Bautista Alberdi 5494,Mataderos,C.A.B.A.
+744,Independencia 907,Monserrat,C.A.B.A.
+745,Serrano 1458,Palermo,C.A.B.A.
+747,Jose Antonio Cabrera 4106,Palermo,C.A.B.A.
+748,Malabia 494,Palermo,C.A.B.A.
+751,Esmeralda 1040,Retiro,C.A.B.A.
+752,Balcarce 379,Retiro,C.A.B.A.
+754,Av. Las Heras 3315,Recoleta,C.A.B.A.
+755,Concejal Tribulato 1281,San Miguel,G.B.A.
+756,Paraguay 3079,Palermo,C.A.B.A.
+757,Av. Santa Fe 2429,Recoleta,C.A.B.A.
+758,Av. Corrientes 3401,Almagro,C.A.B.A.
+759,Juan Ramirez Velasco 745,Villa Crespo,C.A.B.A.
+761,Av. Corrientes 919/21,San Nicolás,C.A.B.A.
+762,Sarachaga 780,Córdoba Capital,Córdoba
+764,San Lorenzo 484,Córdoba Capital,Córdoba
+765,Buenos Aires 65,Córdoba Capital,Córdoba
+766,27 de abril 458,Córdoba Capital,Córdoba
+767,24 de Septiembre 1594,Córdoba Capital,Córdoba
+768,Independencia 855,Córdoba Capital,Córdoba
+769,San Martín 625,Villa Carlos Paz,Córdoba
+770,Ituzaingo 514,Córdoba Capital,Córdoba
+771,Santa Fe 723,Córdoba Capital,Córdoba
+772,Lavalleja 49,Córdoba Capital,Córdoba
+773,Pres. Manuel Quintana 570,Recoleta,C.A.B.A.
+774,Av. Saenz 1050,Pompeya,C.A.B.A.
+775,Av. Angel Gallardo 499,Caballito,C.A.B.A.
+776,Illia 490,Córdoba Capital,Córdoba
+777,Bucarelli 1980,Villa Urquiza,C.A.B.A.
+778,Bulnes 758/800,Almagro,C.A.B.A.
+779,Av. Carabobo 269,Flores,C.A.B.A.
+780,Av. Corrientes 5573,Villa Crespo,C.A.B.A.
+781,Gabriela Mistral 3153,Villa Pueyrredon,C.A.B.A.
+782,Zapiola 2215,Belgrano,C.A.B.A.
+783,Av. Cabildo 1287,Belgrano,C.A.B.A.
+784,Jose María Bedoya 695,Córdoba Capital,Córdoba
+785,Boulevard San Juan 217,Córdoba Capital,Córdoba
+786,Lima 987,Córdoba Capital,Córdoba
+787,Alvear 2446,Villa Ballester,G.B.A.
+788,Mansilla 3620,Palermo,C.A.B.A.
+789,Duarte Quirós 1851,Córdoba Capital,Córdoba
+790,Ituzaingó 921,Córdoba Capital,Córdoba
+791,Av. Francisco Beiro 3345,C.A.B.A.,C.A.B.A.
+792,Av. Independencia 3802,Caballito,C.A.B.A.
+793,Boulevard San Juan 835,Córdoba Capital,Córdoba
+794,Mariano Fragueiro 2220,Córdoba Capital,Córdoba
+795,Guatemala 4540,Palermo,C.A.B.A.
+796,Av. Chiclana 3002,Parque Patricios,C.A.B.A.
+797,Nogoya 2744,C.A.B.A.,C.A.B.A.
+798,Franklin D Roosevelt 2268,Belgrano,C.A.B.A.
+799,Soler 5748,Palermo,C.A.B.A.
+802,Artigas 4925,Villa Ballester,G.B.A.
+805,Av. Medrano 414,Almagro,C.A.B.A.
+806,Jacinto de Altolaguirre 2222,Córdoba Capital,Córdoba
+807,Av. Capdevila 264,Córdoba Capital,Córdoba
+808,Av. Constituyentes 4081,Villa Urquiza,C.A.B.A.
+809,Jose Antonio Cabrera 3291/3295/3299,Palermo,C.A.B.A.
+810,Av. Colón 1750,Córdoba Capital,Córdoba
+811,Av. Alvarez Thomas 1002,Colegiales,C.A.B.A.
+812,Av. Cobo 1697,Parque Patricios,C.A.B.A.
+813,Av. Colon 1088,Córdoba Capital,Córdoba
+814,San Jeronimo 3034,Córdoba Capital,Córdoba
+815,Av. Varela 1264,Bajo Flores,C.A.B.A.
+816,Av. Constituyentes 6209,Villa Urquiza,C.A.B.A.
+817,Duarte Quirós 2400,Córdoba Capital,Córdoba
+818,Av. Vélez Sarsfield 1045,Córdoba Capital,Córdoba
+819,Av. Cabildo 3955,Nuñez,C.A.B.A.
+820,Av. Castro Barros 359,Córdoba Capital,Córdoba
+821,Santa Fe 49,Córdoba Capital,Córdoba
+822,Av. España 1244,Mendoza,Mendoza
+823,San Martin 1153,Retiro,C.A.B.A.
+824,Av. San Martin 940,Cosquín,Córdoba
+825,Boulevard Sarmiento 5,Villa Carlos Paz,Córdoba
+826,Av. Francisco Beiro 5418,Villa Real,C.A.B.A.
+827,Av. Juan B Justo 3695,Villa Crespo,C.A.B.A.
+828,Av. Federico Lacroze 1735,Belgrano,C.A.B.A.
+829,Arribeños 2862/2866,Nuñez,C.A.B.A.
+830,Gral José de San Martin 2601,Florida,G.B.A.
+831,Av. Maipu 518,Vicente Lopez,G.B.A.
+833,Av. José Vicente Zapata 42,Mendoza,Mendoza
+834,San Lorenzo 698,Mendoza,Mendoza
+836,Pueyrredon 283/291,Mendoza,Mendoza
+837,Nuñez 3802,Nuñez,C.A.B.A.
+838,Soler 4072,Palermo,C.A.B.A.
+839,Montevideo 461,San Nicolás,C.A.B.A.
+840,Av. Tte. Gral. Donato Alvarez 194,Caballito,C.A.B.A.
+841,Paso de los Andes 2212,Godoy Cruz,Mendoza
+842,Juan Agustín Maza 2777,Villa Maipu,Mendoza
+843,Montevideo 244,Mendoza,Mendoza
+844,Nazaret 2950,Córdoba Capital,Córdoba
+845,Diaz Colodrero 3187/91,Villa Urquiza,C.A.B.A.
+846,Santiago Temple 212,Córdoba Capital,Córdoba
+847,Av. Eden 499,La Falda,Córdoba
+848,Av. Elcano 4200,Chacarita,C.A.B.A.
+849,Av. Monroe 5771,Villa Urquiza,C.A.B.A.
+850,Deheza 2845,Saavedra,C.A.B.A.
+851,Ozamis 31,Maipu,Mendoza
+852,Saenz Peña 130,Villa Allende,Córdoba
+853,Av. Colón 636,Córdoba Capital,Córdoba
+854,Av. Bartolome Mitre 3125/3145,Moreno,G.B.A.
+855,Bartolome Mitre 4202,Almagro,C.A.B.A.
+856,Bulnes 250,Almagro,C.A.B.A.
+857,Perito Moreno 341,Godoy Cruz,Mendoza
+858,Rio de Janeiro 838,Caballito,C.A.B.A.
+859,Thames 647,Villa Crespo,C.A.B.A.
+860,Lopez y Planes 265,La Cumbre,Córdoba
+861,Prudencio Bustos 122,Alta Gracia,Córdoba
+863,Sarmiento 119,Villa Tulumaya - Lavalle,Mendoza
+864,Fray Cayetano Rodriguez 635,Flores,C.A.B.A.
+865,Av. San Martín 623,Cosquín,Córdoba
+866,Av. Montes de Oca 1714,Barracas,C.A.B.A.
+867,9 de Julio 156,La Falda,Córdoba
+868,Gallo 931,Balvanera,C.A.B.A.
+869,Av. Belgrano 140,Alta Gracia,Córdoba
+870,Godoy Cruz 2681,Palermo,C.A.B.A.
+871,Julio A. Roca 177,Jesús María,Córdoba
+872,San Martín 4840,Río Ceballos,Córdoba
+873,Santiago Derqui 33,Córdoba Capital,Córdoba
+874,"Caraffa, Claudio Cuenca 1784",Córdoba Capital,Córdoba
+875,Av. Bandera de Los Andes 9685,Guaymallén,Mendoza
+876,Luis Agote 3092,Córdoba Capital,Córdoba
+877,Av. Cabildo 4300,Belgrano,C.A.B.A.
+6001,Maestro Vidal 304,Córdoba Capital,Córdoba
+6002,Membrillar 33,Flores,C.A.B.A.
+6003,Bv. Sarmiento 870,Río Segundo,Córdoba
+6004,Boulevard San Juan 490,Córdoba Capital,Córdoba
+6005,Rivadeo 1487,Córdoba Capital,Córdoba
+6006,Boulevard Los Granaderos 2269,Córdoba Capital,Córdoba
+6007,Av. Juan Bautista Alberdi 3099,Floresta,C.A.B.A.
+6008,Alvarado 620,Salta Capital,Salta
+6009,Balcarce 401,Salta Capital,Salta
+6010,Dean Funes 1791,Córdoba Capital,Córdoba
+6011,Av. Cólon 3060,Córdoba Capital,Córdoba
+6013,Viamonte 3345,Luján de Cuyo,Mendoza
+6014,Guardia Vieja 1235,Luján de Cuyo,Mendoza
+6015,San Martin 8110,Luján de Cuyo,Mendoza
+6017,Viamonte 4620,Luján de Cuyo,Mendoza
+6018,Viamonte 5366,Lujan de Cuyo,Mendoza
+6019,Ruta 82 Esq. Calle Union,Luján de Cuyo,Mendoza
+6020,Av. Godoy Cruz 55,Mendoza,Mendoza
+6021,Av. Godoy Cruz 178,Mendoza,Mendoza
+6022,"Hipolito Yrigoyen 2695, Maipú, Mendoza (Complejo Comercial Estación Torreón)",Maipu,Mendoza
+6023,Av. San Martin 792,Mendoza,Mendoza
+6024,Agustín Alvarez 37,Mendoza,Mendoza
+6025,Aristides Villanueva 287,Mendoza,Mendoza
+6026,Av. Colón 423,Mendoza,Mendoza
+6027,Ozamis sur S/N,Maipú,Mendoza
+6028,Santiago del Estero 1200,Godoy Cruz,Mendoza
+6029,Av. San Martin Sur 1867,Godoy Cruz,Mendoza
+6030,Av. Castro Barros 858,Córdoba Capital,Córdoba
+6032,Av. Boyacá 613,Caballito,C.A.B.A.
+6035,Santa Ana 2405,Córdoba Capital,Córdoba
+6036,C. Dr. Juan Felipe Aranguren 617,Caballito,C.A.B.A.
+6037,6037_Ejército de los Andes 2222_GBA,Pablo Nogues,Gran Buenos Aires

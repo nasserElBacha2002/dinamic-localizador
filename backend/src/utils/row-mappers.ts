@@ -39,17 +39,17 @@ const parseStoreFormat = (value: unknown): StoreFormat | null => {
     return null;
   }
 
-  const formato = String(value);
-  return (STORE_FORMATS as readonly string[]).includes(formato) ? (formato as StoreFormat) : null;
+  const storeFormat = String(value);
+  return (STORE_FORMATS as readonly string[]).includes(storeFormat) ? (storeFormat as StoreFormat) : null;
 };
 
 export const mapStoreRow = (row: Record<string, unknown>): Store => ({
   id: String(row.id),
   name: String(row.name),
   address: row.address ? String(row.address) : null,
-  barrio: row.barrio ? String(row.barrio) : null,
-  localidad: row.localidad ? String(row.localidad) : null,
-  formato: parseStoreFormat(row.formato),
+  neighborhood: row.neighborhood ? String(row.neighborhood) : null,
+  locality: row.locality ? String(row.locality) : null,
+  storeFormat: parseStoreFormat(row.store_format),
   latitude: Number(row.latitude),
   longitude: Number(row.longitude),
   allowedRadiusMeters: Number(row.allowed_radius_meters),

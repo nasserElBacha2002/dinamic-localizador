@@ -80,13 +80,13 @@ export function StoreForm({
           />
 
           <Controller
-            name="formato"
+            name="storeFormat"
             control={control}
             render={({ field }) => (
-              <FormControl fullWidth error={Boolean(errors.formato)}>
-                <InputLabel id="store-formato-label">Formato</InputLabel>
+              <FormControl fullWidth error={Boolean(errors.storeFormat)}>
+                <InputLabel id="store-format-label">Formato</InputLabel>
                 <Select
-                  labelId="store-formato-label"
+                  labelId="store-format-label"
                   label="Formato"
                   value={field.value ?? ""}
                   onChange={field.onChange}
@@ -95,9 +95,9 @@ export function StoreForm({
                   <MenuItem value="">
                     <em>Sin formato</em>
                   </MenuItem>
-                  {STORE_FORMATS.map((formato) => (
-                    <MenuItem key={formato} value={formato}>
-                      {formato}
+                  {STORE_FORMATS.map((format) => (
+                    <MenuItem key={format} value={format}>
+                      {format}
                     </MenuItem>
                   ))}
                 </Select>
@@ -123,8 +123,8 @@ export function StoreForm({
           latitude={watchedValues.latitude ?? defaultValues.latitude}
           longitude={watchedValues.longitude ?? defaultValues.longitude}
           address={watchedValues.address ?? ""}
-          barrio={watchedValues.barrio ?? ""}
-          localidad={watchedValues.localidad ?? ""}
+          neighborhood={watchedValues.neighborhood ?? ""}
+          locality={watchedValues.locality ?? ""}
           googlePlaceId={watchedValues.googlePlaceId ?? null}
           allowedRadiusMeters={watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters}
           setValue={setValue}

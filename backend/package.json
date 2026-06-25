@@ -15,6 +15,7 @@
     "seed:stores": "tsx src/scripts/seed-stores.ts",
     "seed:employees": "tsx src/scripts/seed-employees.ts",
     "reconcile:stores": "tsx src/scripts/reconcile-stores.ts",
+    "export:stores": "tsx src/scripts/export-database-stores.ts",
     "fix:stores": "tsx src/scripts/fix-stores-from-reconciliation.ts",
     "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",
     "test": "tsx --test src/**/*.test.ts"

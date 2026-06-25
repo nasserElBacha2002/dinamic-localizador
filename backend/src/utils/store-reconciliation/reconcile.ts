@@ -1,101 +1,98 @@
 import { calculateDistanceMeters } from "../haversine";
 import { compareAddresses } from "./address";
-import { resolveGeocodedCoordinates } from "./geocoding";
+import {
+  buildGeocodeQuery,
+  resolveGeocodedCoordinates,
+  toGeocodingDiagnostics,
+  type GeocodeCache,
+} from "./geocoding";
 import { normalizeStoreNumber } from "./store-number";
 import type {
   CoordinateStatus,
   DatabaseStore,
   DuplicateStoreReport,
+  GeocodingDiagnostics,
   OfficialStore,
   ReconcileOptions,
   ReconciliationResult,
   ReconciliationRow,
   ReconciliationStats,
 } from "./types";
-import type { GeocodeCache } from "./geocoding";
+import {
+  MISSING_API_KEY_ERROR_CODE,
+  MISSING_API_KEY_ERROR_MESSAGE,
+} from "./types";
 
-const buildDuplicateReports = (
-  officialByNumber: Map<string, OfficialStore[]>,
-  databaseByNumber: Map<string, DatabaseStore[]>,
-): DuplicateStoreReport[] => {
-  const duplicates: DuplicateStoreReport[] = [];
+const emptyGeocodingDiagnostics = (): GeocodingDiagnostics => ({
+  status: "",
+  errorCode: "",
+  errorMessage: "",
+  query: "",
+  latitude: null,
+  longitude: null,
+});
 
-  for (const [storeNumber, stores] of officialByNumber.entries()) {
-    if (stores.length <= 1) {
-      continue;
-    }
+const skippedGeocodingDiagnostics = (query = ""): GeocodingDiagnostics => ({
+  status: "skipped",
+  errorCode: MISSING_API_KEY_ERROR_CODE,
+  errorMessage: MISSING_API_KEY_ERROR_MESSAGE,
+  query,
+  latitude: null,
+  longitude: null,
+});
 
-    duplicates.push({
-      source: "official",
-      storeNumber,
-      duplicateCount: stores.length,
-      details: stores
-        .map((store) => `${store.rawStoreId}: ${store.officialAddress}`)
-        .join(" | "),
-    });
-  }
-
-  for (const [storeNumber, stores] of databaseByNumber.entries()) {
-    if (stores.length <= 1) {
-      continue;
-    }
-
-    duplicates.push({
-      source: "database",
-      storeNumber,
-      duplicateCount: stores.length,
-      details: stores.map((store) => `${store.id}: ${store.address}`).join(" | "),
-    });
-  }
-
-  return duplicates.sort((left, right) => left.storeNumber.localeCompare(right.storeNumber, "es"));
-};
+const buildRowGeocodingFields = (diagnostics: GeocodingDiagnostics) => ({
+  geocodingStatus: diagnostics.status,
+  geocodingErrorCode: diagnostics.errorCode,
+  geocodingErrorMessage: diagnostics.errorMessage,
+  geocodingQuery: diagnostics.query,
+  geocodedLatitude:
+    diagnostics.latitude === null ? "" : String(diagnostics.latitude),
+  geocodedLongitude:
+    diagnostics.longitude === null ? "" : String(diagnostics.longitude),
+});
 
 const evaluateCoordinateStatus = (
-  dbLatitude: number | null,
-  dbLongitude: number | null,
-  geocodedLatitude: number | null,
-  geocodedLongitude: number | null,
-  geocodingResult: "failed" | "skipped" | "ok",
+  databaseStore: DatabaseStore,
+  diagnostics: GeocodingDiagnostics,
   options: ReconcileOptions,
 ): {
-  coordinateStatus: CoordinateStatus;
+  coordinateStatus: CoordinateStatus | "";
   coordinateDistanceMeters: number | null;
-  geocodedLatitude: number | null;
-  geocodedLongitude: number | null;
 } => {
-  if (geocodingResult === "skipped") {
+  if (!options.geocodingEnabled) {
     return {
       coordinateStatus: "geocoding_skipped",
       coordinateDistanceMeters: null,
-      geocodedLatitude: null,
-      geocodedLongitude: null,
     };
   }
 
-  if (geocodingResult === "failed") {
+  if (diagnostics.status === "skipped") {
+    return {
+      coordinateStatus: "geocoding_skipped",
+      coordinateDistanceMeters: null,
+    };
+  }
+
+  if (diagnostics.status !== "OK") {
     return {
       coordinateStatus: "geocoding_failed",
       coordinateDistanceMeters: null,
-      geocodedLatitude: null,
-      geocodedLongitude: null,
     };
   }
 
-  if (dbLatitude === null || dbLongitude === null) {
+  if (databaseStore.latitude === null || databaseStore.longitude === null) {
     return {
       coordinateStatus: "missing_coordinates",
       coordinateDistanceMeters: null,
-      geocodedLatitude,
-      geocodedLongitude,
     };
   }
 
   const distance = calculateDistanceMeters(
-    dbLatitude,
-    dbLongitude,
-    geocodedLatitude!,
-    geocodedLongitude!,
+    databaseStore.latitude,
+    databaseStore.longitude,
+    diagnostics.latitude!,
+    diagnostics.longitude!,
   );
 
   let coordinateStatus: CoordinateStatus = "mismatch";
@@ -108,32 +105,146 @@ const evaluateCoordinateStatus = (
   return {
     coordinateStatus,
     coordinateDistanceMeters: distance,
-    geocodedLatitude,
-    geocodedLongitude,
   };
+};
+
+const buildDuplicateReports = (
+  officialByNumber: Map<string, OfficialStore[]>,
+  databaseByNumber: Map<string, DatabaseStore[]>,
+  rowByStoreAndDbId: Map<string, ReconciliationRow>,
+): DuplicateStoreReport[] => {
+  const duplicates: DuplicateStoreReport[] = [];
+
+  for (const [storeNumber, stores] of officialByNumber.entries()) {
+    if (stores.length <= 1) {
+      continue;
+    }
+
+    for (const store of stores) {
+      duplicates.push({
+        source: "official",
+        storeNumber,
+        duplicateCount: stores.length,
+        dbId: "",
+        dbAddress: "",
+        googlePlaceId: "",
+        latitude: "",
+        longitude: "",
+        createdAt: "",
+        updatedAt: "",
+        active: "",
+        addressMatchesOfficial: "",
+        coordinateStatus: "",
+        officialAddress: store.officialAddress,
+        details: `raw_store_id=${store.rawStoreId}`,
+      });
+    }
+  }
+
+  for (const [storeNumber, stores] of databaseByNumber.entries()) {
+    if (stores.length <= 1) {
+      continue;
+    }
+
+    const official = officialByNumber.get(storeNumber)?.[0];
+    for (const store of stores) {
+      const matchedRow = rowByStoreAndDbId.get(`${storeNumber}:${store.id}`);
+      const addressComparison = official
+        ? compareAddresses(official.officialAddress, store.address)
+        : null;
+
+      duplicates.push({
+        source: "database",
+        storeNumber,
+        duplicateCount: stores.length,
+        dbId: store.id,
+        dbAddress: store.address,
+        googlePlaceId: store.googlePlaceId,
+        latitude: store.latitudeRaw,
+        longitude: store.longitudeRaw,
+        createdAt: store.createdAt,
+        updatedAt: store.updatedAt,
+        active: store.active,
+        addressMatchesOfficial: addressComparison?.status ?? "",
+        coordinateStatus: matchedRow?.coordinateStatus ?? "",
+        officialAddress: official?.officialAddress ?? "",
+        details: `duplicate_db_ids=${stores.map((entry) => entry.id).join(",")}`,
+      });
+    }
+  }
+
+  return duplicates.sort((left, right) => {
+    const byStore = left.storeNumber.localeCompare(right.storeNumber, "es", { numeric: true });
+    if (byStore !== 0) {
+      return byStore;
+    }
+
+    return left.dbId.localeCompare(right.dbId);
+  });
 };
 
 const buildStats = (
   summary: ReconciliationRow[],
-  duplicates: DuplicateStoreReport[],
-  totalDatabaseStores: number,
+  duplicateGroups: number,
+  totalOfficialRows: number,
+  totalUniqueOfficialStoreNumbers: number,
+  totalDatabaseRows: number,
   numericDatabaseStores: number,
   ignoredNonNumericDatabaseRows: number,
-  totalOfficialStores: number,
-): ReconciliationStats => ({
-  totalOfficialStores,
-  totalDatabaseStores,
-  numericDatabaseStores,
-  ignoredNonNumericDatabaseRows,
-  missingInDatabase: summary.filter((row) => row.status === "missing_in_database").length,
-  extraInDatabase: summary.filter((row) => row.status === "extra_in_database").length,
-  addressMismatches: summary.filter(
-    (row) => row.addressMatchStatus === "mismatch" || row.addressMatchStatus === "likely_match",
-  ).length,
-  coordinateMismatches: summary.filter((row) =>
-    ["review", "mismatch", "missing_coordinates", "geocoding_failed"].includes(row.coordinateStatus),
-  ).length,
-  duplicateCount: duplicates.length,
+): ReconciliationStats => {
+  const matchedRows = summary.filter((row) => row.status === "matched");
+
+  return {
+    totalOfficialRows,
+    totalUniqueOfficialStoreNumbers,
+    totalDatabaseRows,
+    numericDatabaseStores,
+    ignoredNonNumericDatabaseRows,
+    matchedStores: matchedRows.length,
+    missingInDatabase: summary.filter((row) => row.status === "missing_in_database").length,
+    extraInDatabase: summary.filter((row) => row.status === "extra_in_database").length,
+    duplicateStoreNumberGroups: duplicateGroups,
+    addressExactMatches: matchedRows.filter((row) => row.addressMatchStatus === "exact_match").length,
+    addressLikelyMatches: matchedRows.filter((row) => row.addressMatchStatus === "likely_match").length,
+    addressMismatches: matchedRows.filter((row) => row.addressMatchStatus === "mismatch").length,
+    geocodingOkCount: matchedRows.filter((row) => row.geocodingStatus === "OK").length,
+    geocodingSkippedCount: matchedRows.filter((row) => row.coordinateStatus === "geocoding_skipped")
+      .length,
+    geocodingFailedCount: matchedRows.filter((row) => row.coordinateStatus === "geocoding_failed")
+      .length,
+    coordinateOkCount: matchedRows.filter((row) => row.coordinateStatus === "ok").length,
+    coordinateReviewCount: matchedRows.filter((row) => row.coordinateStatus === "review").length,
+    coordinateMismatchCount: matchedRows.filter((row) => row.coordinateStatus === "mismatch").length,
+    missingCoordinatesCount: matchedRows.filter((row) => row.coordinateStatus === "missing_coordinates")
+      .length,
+  };
+};
+
+const createBaseRow = (
+  storeNumber: string,
+  status: ReconciliationRow["status"],
+): ReconciliationRow => ({
+  storeNumber,
+  status,
+  carrefourOfficialAddress: "",
+  dbAddress: "",
+  addressMatchStatus: "",
+  addressSimilarity: null,
+  normalizedOfficialAddress: "",
+  normalizedDbAddress: "",
+  addressDifferenceReason: "",
+  dbLatitude: "",
+  dbLongitude: "",
+  geocodedLatitude: "",
+  geocodedLongitude: "",
+  coordinateDistanceMeters: null,
+  coordinateStatus: "",
+  geocodingStatus: "",
+  geocodingErrorCode: "",
+  geocodingErrorMessage: "",
+  geocodingQuery: "",
+  dbId: "",
+  notes: "",
 });
 
 export const reconcileStores = async (
@@ -166,9 +277,8 @@ export const reconcileStores = async (
     databaseByNumber.set(storeNumber, bucket);
   }
 
-  const duplicates = buildDuplicateReports(officialByNumber, databaseByNumber);
   const summary: ReconciliationRow[] = [];
-
+  const rowByStoreAndDbId = new Map<string, ReconciliationRow>();
   const officialNumbers = new Set(officialByNumber.keys());
   const databaseNumbers = new Set(databaseByNumber.keys());
 
@@ -183,27 +293,16 @@ export const reconcileStores = async (
     const databaseMatches = databaseByNumber.get(storeNumber) ?? [];
     if (databaseMatches.length === 0) {
       summary.push({
-        storeNumber,
-        status: "missing_in_database",
+        ...createBaseRow(storeNumber, "missing_in_database"),
         carrefourOfficialAddress: official.officialAddress,
-        dbAddress: "",
-        addressMatchStatus: "",
-        addressSimilarity: null,
-        dbLatitude: null,
-        dbLongitude: null,
-        geocodedLatitude: null,
-        geocodedLongitude: null,
-        coordinateDistanceMeters: null,
-        coordinateStatus: "",
-        dbId: "",
         notes: "Present in Carrefour official CSV but missing from database export",
       });
       continue;
     }
 
-    let geocodedLatitude: number | null = null;
-    let geocodedLongitude: number | null = null;
-    let geocodingResult: "failed" | "skipped" | "ok" = "skipped";
+    let geocodingDiagnostics: GeocodingDiagnostics = options.geocodingEnabled
+      ? emptyGeocodingDiagnostics()
+      : skippedGeocodingDiagnostics(buildGeocodeQuery(official));
 
     if (options.geocodingEnabled && googleMapsApiKey) {
       const geocoded = await resolveGeocodedCoordinates(
@@ -213,16 +312,9 @@ export const reconcileStores = async (
         geocodeCachePath,
         options.geocodeDelayMs,
       );
-
-      if (geocoded === "skipped") {
-        geocodingResult = "skipped";
-      } else if (geocoded === "failed") {
-        geocodingResult = "failed";
-      } else {
-        geocodingResult = "ok";
-        geocodedLatitude = geocoded.latitude;
-        geocodedLongitude = geocoded.longitude;
-      }
+      geocodingDiagnostics = toGeocodingDiagnostics(geocoded);
+    } else if (!googleMapsApiKey) {
+      geocodingDiagnostics = skippedGeocodingDiagnostics(buildGeocodeQuery(official));
     }
 
     for (const databaseStore of databaseMatches) {
@@ -233,11 +325,8 @@ export const reconcileStores = async (
       );
 
       const coordinateEvaluation = evaluateCoordinateStatus(
-        databaseStore.latitude,
-        databaseStore.longitude,
-        geocodedLatitude,
-        geocodedLongitude,
-        geocodingResult,
+        databaseStore,
+        geocodingDiagnostics,
         options,
       );
 
@@ -248,26 +337,31 @@ export const reconcileStores = async (
         );
       }
 
-      if (officialByNumber.get(storeNumber)?.length && officialByNumber.get(storeNumber)!.length > 1) {
+      if ((officialByNumber.get(storeNumber)?.length ?? 0) > 1) {
         notes.push("duplicate_official_rows");
       }
 
-      summary.push({
+      const row: ReconciliationRow = {
         storeNumber,
         status: "matched",
         carrefourOfficialAddress: official.officialAddress,
         dbAddress: databaseStore.address,
         addressMatchStatus: addressComparison.status,
         addressSimilarity: addressComparison.similarity,
-        dbLatitude: databaseStore.latitude,
-        dbLongitude: databaseStore.longitude,
-        geocodedLatitude: coordinateEvaluation.geocodedLatitude,
-        geocodedLongitude: coordinateEvaluation.geocodedLongitude,
+        normalizedOfficialAddress: addressComparison.normalizedOfficialAddress,
+        normalizedDbAddress: addressComparison.normalizedDbAddress,
+        addressDifferenceReason: addressComparison.addressDifferenceReason,
+        dbLatitude: databaseStore.latitudeRaw,
+        dbLongitude: databaseStore.longitudeRaw,
         coordinateDistanceMeters: coordinateEvaluation.coordinateDistanceMeters,
         coordinateStatus: coordinateEvaluation.coordinateStatus,
+        ...buildRowGeocodingFields(geocodingDiagnostics),
         dbId: databaseStore.id,
         notes: notes.join("; "),
-      });
+      };
+
+      summary.push(row);
+      rowByStoreAndDbId.set(`${storeNumber}:${databaseStore.id}`, row);
     }
   }
 
@@ -281,40 +375,40 @@ export const reconcileStores = async (
     const databaseMatches = databaseByNumber.get(storeNumber) ?? [];
     for (const databaseStore of databaseMatches) {
       summary.push({
-        storeNumber,
-        status: "extra_in_database",
-        carrefourOfficialAddress: "",
+        ...createBaseRow(storeNumber, "extra_in_database"),
         dbAddress: databaseStore.address,
-        addressMatchStatus: "",
-        addressSimilarity: null,
-        dbLatitude: databaseStore.latitude,
-        dbLongitude: databaseStore.longitude,
-        geocodedLatitude: null,
-        geocodedLongitude: null,
-        coordinateDistanceMeters: null,
-        coordinateStatus: "",
+        dbLatitude: databaseStore.latitudeRaw,
+        dbLongitude: databaseStore.longitudeRaw,
         dbId: databaseStore.id,
         notes: "Present in database export but missing from Carrefour official CSV",
       });
     }
   }
 
+  const duplicateGroups =
+    [...officialByNumber.entries()].filter(([, stores]) => stores.length > 1).length +
+    [...databaseByNumber.entries()].filter(([, stores]) => stores.length > 1).length;
+
+  const duplicates = buildDuplicateReports(officialByNumber, databaseByNumber, rowByStoreAndDbId);
   const missingInDatabase = summary.filter((row) => row.status === "missing_in_database");
   const extraInDatabase = summary.filter((row) => row.status === "extra_in_database");
   const addressMismatches = summary.filter(
     (row) => row.addressMatchStatus === "mismatch" || row.addressMatchStatus === "likely_match",
   );
   const coordinateMismatches = summary.filter((row) =>
-    ["review", "mismatch", "missing_coordinates", "geocoding_failed"].includes(row.coordinateStatus),
+    ["review", "mismatch", "missing_coordinates", "geocoding_failed", "geocoding_skipped"].includes(
+      row.coordinateStatus,
+    ),
   );
 
   const stats = buildStats(
     summary,
-    duplicates,
+    duplicateGroups,
+    officialStores.length,
+    officialByNumber.size,
     databaseStores.length,
     numericDatabaseStores.length,
     ignoredDatabaseStores.length,
-    officialStores.length,
   );
 
   return {
@@ -333,3 +427,16 @@ export const getIgnoredDatabaseStoreNames = (databaseStores: DatabaseStore[]): s
     .filter((store) => !normalizeStoreNumber(store.name))
     .map((store) => store.name)
     .sort((left, right) => left.localeCompare(right, "es"));
+
+export const countMatchedGeocodingFailures = (summary: ReconciliationRow[]): number =>
+  summary.filter(
+    (row) => row.status === "matched" && row.coordinateStatus === "geocoding_failed",
+  ).length;
+
+export const countMatchedGeocodingAttempts = (summary: ReconciliationRow[]): number =>
+  summary.filter(
+    (row) =>
+      row.status === "matched" &&
+      row.geocodingStatus !== "" &&
+      row.geocodingStatus !== "skipped",
+  ).length;

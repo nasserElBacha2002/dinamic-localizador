@@ -1,7 +1,6 @@
 #!/usr/bin/env node
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { config } from "dotenv";
 import {
   buildReconciliationCsv,
   DUPLICATE_HEADERS,
@@ -10,21 +9,30 @@ import {
   reconciliationRowToCsv,
   SUMMARY_HEADERS,
 } from "../utils/store-reconciliation/csv-io";
-import { loadGeocodeCache } from "../utils/store-reconciliation/geocoding";
-import { getIgnoredDatabaseStoreNames, reconcileStores } from "../utils/store-reconciliation/reconcile";
+import { resolveGoogleMapsApiKey } from "../utils/store-reconciliation/env";
+import {
+  loadGeocodeCache,
+  runGeocodingDiagnostic,
+  toGeocodingDiagnostics,
+} from "../utils/store-reconciliation/geocoding";
+import {
+  countMatchedGeocodingAttempts,
+  countMatchedGeocodingFailures,
+  getIgnoredDatabaseStoreNames,
+  reconcileStores,
+} from "../utils/store-reconciliation/reconcile";
 import type { ReconcileOptions } from "../utils/store-reconciliation/types";
 
-config();
-
 interface CliOptions {
-  officialPath: string;
-  databasePath: string;
+  officialPath?: string;
+  databasePath?: string;
   outDir: string;
   cachePath: string;
   likelyMatchThreshold: number;
   coordinateOkMeters: number;
   coordinateReviewMeters: number;
   geocodeDelayMs: number;
+  testGeocoding: boolean;
 }
 
 const printUsage = (): void => {
@@ -43,6 +51,7 @@ Options:
   --ok-meters         Coordinate distance threshold for ok (default: 100)
   --review-meters     Coordinate distance threshold for review (default: 300)
   --geocode-delay-ms  Delay between uncached geocode requests (default: 120)
+  --test-geocoding    Run a single geocoding diagnostic request and exit
 `);
 };
 
@@ -72,6 +81,7 @@ const parseCliOptions = (argv: string[]): CliOptions => {
     coordinateOkMeters: 100,
     coordinateReviewMeters: 300,
     geocodeDelayMs: 120,
+    testGeocoding: false,
   };
 
   for (let index = 2; index < argv.length; index += 1) {
@@ -119,6 +129,9 @@ const parseCliOptions = (argv: string[]): CliOptions => {
         options.geocodeDelayMs = parsePositiveNumber(next, "geocode-delay-ms");
         index += 1;
         break;
+      case "--test-geocoding":
+        options.testGeocoding = true;
+        break;
       case "--help":
       case "-h":
         printUsage();
@@ -129,9 +142,9 @@ const parseCliOptions = (argv: string[]): CliOptions => {
     }
   }
 
-  if (!options.officialPath || !options.databasePath) {
+  if (!options.testGeocoding && (!options.officialPath || !options.databasePath)) {
     printUsage();
-    throw new Error("Both --official and --database are required");
+    throw new Error("Both --official and --database are required unless --test-geocoding is used");
   }
 
   return options as CliOptions;
@@ -143,13 +156,46 @@ const writeReport = (outDir: string, fileName: string, headers: readonly string[
   console.log(`Wrote ${filePath}`);
 };
 
+const runTestGeocoding = async (): Promise<void> => {
+  const { key: googleMapsApiKey, source: googleMapsApiKeySource } = resolveGoogleMapsApiKey();
+
+  if (!googleMapsApiKey) {
+    console.error(
+      "No Google Maps API key found. Configure GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY.",
+    );
+    process.exit(1);
+  }
+
+  console.log(`Running geocoding diagnostic using ${googleMapsApiKeySource}...`);
+  const result = await runGeocodingDiagnostic(googleMapsApiKey);
+  const diagnostics = toGeocodingDiagnostics(result);
+
+  console.log(`Query: ${diagnostics.query}`);
+  console.log(`Status: ${diagnostics.status}`);
+  if (diagnostics.errorMessage) {
+    console.log(`Error message: ${diagnostics.errorMessage}`);
+  }
+  if (diagnostics.latitude !== null && diagnostics.longitude !== null) {
+    console.log(`Latitude: ${diagnostics.latitude}`);
+    console.log(`Longitude: ${diagnostics.longitude}`);
+  }
+};
+
 const main = async (): Promise<void> => {
   const cli = parseCliOptions(process.argv);
-  const officialPath = resolve(cli.officialPath);
-  const databasePath = resolve(cli.databasePath);
+
+  if (cli.testGeocoding) {
+    await runTestGeocoding();
+    if (!cli.officialPath || !cli.databasePath) {
+      return;
+    }
+  }
+
+  const officialPath = resolve(cli.officialPath!);
+  const databasePath = resolve(cli.databasePath!);
   const outDir = resolve(cli.outDir);
   const cachePath = resolve(cli.cachePath);
-  const googleMapsApiKey = process.env.GOOGLE_MAPS_API_KEY?.trim() || null;
+  const { key: googleMapsApiKey, source: googleMapsApiKeySource } = resolveGoogleMapsApiKey();
 
   const reconcileOptions: ReconcileOptions = {
     likelyMatchThreshold: cli.likelyMatchThreshold,
@@ -166,10 +212,10 @@ const main = async (): Promise<void> => {
 
   if (!googleMapsApiKey) {
     console.warn(
-      "GOOGLE_MAPS_API_KEY is not set. Coordinate validation will be skipped (coordinate_status = geocoding_skipped).",
+      "No Google Maps API key found (GOOGLE_MAPS_API_KEY or VITE_GOOGLE_MAPS_API_KEY). Coordinate validation will be skipped (coordinate_status = geocoding_skipped).",
     );
   } else {
-    console.log("Geocoding enabled via GOOGLE_MAPS_API_KEY.");
+    console.log(`Geocoding enabled via ${googleMapsApiKeySource}.`);
   }
 
   const geocodeCache = loadGeocodeCache(cachePath);
@@ -184,8 +230,12 @@ const main = async (): Promise<void> => {
 
   mkdirSync(outDir, { recursive: true });
 
-  const summaryRows = result.summary.map(reconciliationRowToCsv);
-  writeReport(outDir, "store_reconciliation_summary.csv", SUMMARY_HEADERS, summaryRows);
+  writeReport(
+    outDir,
+    "store_reconciliation_summary.csv",
+    SUMMARY_HEADERS,
+    result.summary.map(reconciliationRowToCsv),
+  );
   writeReport(
     outDir,
     "missing_in_database.csv",
@@ -206,6 +256,17 @@ const main = async (): Promise<void> => {
       duplicate.source,
       duplicate.storeNumber,
       String(duplicate.duplicateCount),
+      duplicate.dbId,
+      duplicate.dbAddress,
+      duplicate.googlePlaceId,
+      duplicate.latitude,
+      duplicate.longitude,
+      duplicate.createdAt,
+      duplicate.updatedAt,
+      duplicate.active,
+      duplicate.addressMatchesOfficial,
+      duplicate.coordinateStatus,
+      duplicate.officialAddress,
       duplicate.details,
     ]),
   );
@@ -222,20 +283,38 @@ const main = async (): Promise<void> => {
     result.coordinateMismatches.map(reconciliationRowToCsv),
   );
 
+  const geocodingAttempts = countMatchedGeocodingAttempts(result.summary);
+  const geocodingFailures = countMatchedGeocodingFailures(result.summary);
+  if (geocodingAttempts > 0 && geocodingFailures === geocodingAttempts) {
+    console.warn(
+      "All geocoding requests failed. Check GOOGLE_MAPS_API_KEY, Geocoding API enablement, billing, domain/IP restrictions, and Google Maps API permissions.",
+    );
+  }
+
   console.log("");
   console.log("Reconciliation summary");
-  console.log(`- Total official stores: ${result.stats.totalOfficialStores}`);
-  console.log(`- Total database stores: ${result.stats.totalDatabaseStores}`);
-  console.log(`- Numeric database stores considered: ${result.stats.numericDatabaseStores}`);
+  console.log(`- Total official rows: ${result.stats.totalOfficialRows}`);
+  console.log(`- Total unique official store numbers: ${result.stats.totalUniqueOfficialStoreNumbers}`);
+  console.log(`- Total DB rows: ${result.stats.totalDatabaseRows}`);
+  console.log(`- Numeric DB stores considered: ${result.stats.numericDatabaseStores}`);
   console.log(`- Ignored non-numeric DB rows: ${result.stats.ignoredNonNumericDatabaseRows}`);
   if (ignoredNames.length > 0) {
     console.log(`  Ignored names: ${ignoredNames.join(", ")}`);
   }
-  console.log(`- Missing in database: ${result.stats.missingInDatabase}`);
-  console.log(`- Extra in database: ${result.stats.extraInDatabase}`);
-  console.log(`- Address mismatches / likely matches: ${result.stats.addressMismatches}`);
-  console.log(`- Coordinate issues: ${result.stats.coordinateMismatches}`);
-  console.log(`- Duplicate store numbers: ${result.stats.duplicateCount}`);
+  console.log(`- Matched stores: ${result.stats.matchedStores}`);
+  console.log(`- Missing in DB: ${result.stats.missingInDatabase}`);
+  console.log(`- Extra in DB: ${result.stats.extraInDatabase}`);
+  console.log(`- Duplicate store number groups: ${result.stats.duplicateStoreNumberGroups}`);
+  console.log(`- Address exact matches: ${result.stats.addressExactMatches}`);
+  console.log(`- Address likely matches: ${result.stats.addressLikelyMatches}`);
+  console.log(`- Address mismatches: ${result.stats.addressMismatches}`);
+  console.log(`- Geocoding OK: ${result.stats.geocodingOkCount}`);
+  console.log(`- Geocoding skipped: ${result.stats.geocodingSkippedCount}`);
+  console.log(`- Geocoding failed: ${result.stats.geocodingFailedCount}`);
+  console.log(`- Coordinate OK: ${result.stats.coordinateOkCount}`);
+  console.log(`- Coordinate review: ${result.stats.coordinateReviewCount}`);
+  console.log(`- Coordinate mismatch: ${result.stats.coordinateMismatchCount}`);
+  console.log(`- Missing coordinates: ${result.stats.missingCoordinatesCount}`);
 };
 
 void main().catch((error) => {

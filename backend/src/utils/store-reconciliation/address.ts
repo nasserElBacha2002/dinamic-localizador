@@ -3,6 +3,14 @@ import type { AddressMatchStatus } from "./types";
 const EXACT_MATCH_THRESHOLD = 0.99;
 const DEFAULT_LIKELY_MATCH_THRESHOLD = 0.85;
 
+const LOCATION_SUFFIXES = [
+  "provincia de buenos aires",
+  "cdad autonoma de buenos aires",
+  "ciudad autonoma de buenos aires",
+  "capital federal",
+  "argentina",
+] as const;
+
 const ABBREVIATION_RULES: Array<{ pattern: RegExp; replacement: string }> = [
   { pattern: /\bavenida\b/g, replacement: "av" },
   { pattern: /\bav\.\b/g, replacement: "av" },
@@ -15,6 +23,10 @@ const ABBREVIATION_RULES: Array<{ pattern: RegExp; replacement: string }> = [
   { pattern: /\bpte\.\b/g, replacement: "pte" },
   { pattern: /\bcoronel\b/g, replacement: "cnel" },
   { pattern: /\bcnel\.\b/g, replacement: "cnel" },
+  { pattern: /\bsanta\b/g, replacement: "sta" },
+  { pattern: /\bsta\.\b/g, replacement: "sta" },
+  { pattern: /\bjuan domingo\b/g, replacement: "j d" },
+  { pattern: /\bj\.\s*d\.\b/g, replacement: "j d" },
   { pattern: /\besquina\b/g, replacement: "esq" },
   { pattern: /\besq\.\b/g, replacement: "esq" },
   { pattern: /\bdoctor\b/g, replacement: "dr" },
@@ -24,10 +36,34 @@ const ABBREVIATION_RULES: Array<{ pattern: RegExp; replacement: string }> = [
 const stripAccents = (value: string): string =>
   value.normalize("NFD").replace(/\p{M}/gu, "");
 
+const stripStoreNumberPrefix = (value: string): string =>
+  value.replace(/^\d+_/u, "").trim();
+
+const removePostalCodes = (value: string): string =>
+  value.replace(/\b[a-z]\d{4}[a-z0-9]*\b/gi, " ");
+
+const removeLocationSuffixes = (value: string): string => {
+  let result = value;
+  for (const suffix of LOCATION_SUFFIXES) {
+    const pattern = new RegExp(`\\b${suffix.replace(/\s+/g, "\\s+")}\\b`, "g");
+    result = result.replace(pattern, " ");
+  }
+  return result;
+};
+
+const normalizeStreetNumberRanges = (value: string): string =>
+  value
+    .replace(/\b(\d+)\s*\/\s*\d+\b/g, "$1")
+    .replace(/\b(\d+)\s*-\s*\d+\b/g, "$1");
+
 export const normalizeAddress = (address: string): string => {
   let normalized = stripAccents(address.trim().toLowerCase());
-  normalized = normalized.replace(/[.,;:!?'"()[\]-]/g, " ");
+  normalized = normalized.replace(/_/g, " ");
+  normalized = stripStoreNumberPrefix(normalized);
+  normalized = normalized.replace(/[.,;:!?'"()[\]]/g, " ");
   normalized = normalized.replace(/\s+/g, " ").trim();
+  normalized = removePostalCodes(normalized);
+  normalized = removeLocationSuffixes(normalized);
 
   for (const rule of ABBREVIATION_RULES) {
     normalized = normalized.replace(rule.pattern, rule.replacement);
@@ -35,6 +71,9 @@ export const normalizeAddress = (address: string): string => {
 
   return normalized.replace(/\s+/g, " ").trim();
 };
+
+export const normalizeAddressForRangeComparison = (address: string): string =>
+  normalizeStreetNumberRanges(normalizeAddress(address));
 
 const levenshteinDistance = (left: string, right: string): number => {
   if (left === right) {
@@ -91,25 +130,93 @@ export const addressSimilarity = (left: string, right: string): number => {
     return 1;
   }
 
+  const rangeLeft = normalizeAddressForRangeComparison(left);
+  const rangeRight = normalizeAddressForRangeComparison(right);
+  if (rangeLeft === rangeRight) {
+    return 0.98;
+  }
+
   const distance = levenshteinDistance(normalizedLeft, normalizedRight);
   const maxLength = Math.max(normalizedLeft.length, normalizedRight.length);
   return 1 - distance / maxLength;
 };
 
+const isRangeOrFormatDifference = (officialAddress: string, databaseAddress: string): boolean => {
+  const normalizedOfficial = normalizeAddress(officialAddress);
+  const normalizedDatabase = normalizeAddress(databaseAddress);
+  if (normalizedOfficial === normalizedDatabase) {
+    return true;
+  }
+
+  const rangeOfficial = normalizeAddressForRangeComparison(officialAddress);
+  const rangeDatabase = normalizeAddressForRangeComparison(databaseAddress);
+  if (rangeOfficial === rangeDatabase) {
+    return true;
+  }
+
+  const officialBaseNumber = rangeOfficial.match(/\b\d+\b/)?.[0];
+  const databaseBaseNumber = rangeDatabase.match(/\b\d+\b/)?.[0];
+  if (!officialBaseNumber || !databaseBaseNumber || officialBaseNumber !== databaseBaseNumber) {
+    return false;
+  }
+
+  const officialTail = rangeOfficial.replace(officialBaseNumber, "").trim();
+  const databaseTail = rangeDatabase.replace(databaseBaseNumber, "").trim();
+  return officialTail === databaseTail;
+};
+
+export interface AddressComparisonResult {
+  status: AddressMatchStatus;
+  similarity: number;
+  normalizedOfficialAddress: string;
+  normalizedDbAddress: string;
+  addressDifferenceReason: string;
+}
+
 export const compareAddresses = (
   officialAddress: string,
   databaseAddress: string,
   likelyMatchThreshold = DEFAULT_LIKELY_MATCH_THRESHOLD,
-): { status: AddressMatchStatus; similarity: number } => {
+): AddressComparisonResult => {
+  const normalizedOfficialAddress = normalizeAddress(officialAddress);
+  const normalizedDbAddress = normalizeAddress(databaseAddress);
   const similarity = addressSimilarity(officialAddress, databaseAddress);
 
+  if (isRangeOrFormatDifference(officialAddress, databaseAddress)) {
+    return {
+      status: similarity >= EXACT_MATCH_THRESHOLD ? "exact_match" : "likely_match",
+      similarity: Math.max(similarity, 0.95),
+      normalizedOfficialAddress,
+      normalizedDbAddress,
+      addressDifferenceReason: "range_or_format_difference",
+    };
+  }
+
   if (similarity >= EXACT_MATCH_THRESHOLD) {
-    return { status: "exact_match", similarity };
+    return {
+      status: "exact_match",
+      similarity,
+      normalizedOfficialAddress,
+      normalizedDbAddress,
+      addressDifferenceReason: "",
+    };
   }
 
   if (similarity >= likelyMatchThreshold) {
-    return { status: "likely_match", similarity };
+    return {
+      status: "likely_match",
+      similarity,
+      normalizedOfficialAddress,
+      normalizedDbAddress,
+      addressDifferenceReason: "format_difference",
+    };
   }
 
-  return { status: "mismatch", similarity };
+  return {
+    status: "mismatch",
+    similarity,
+    normalizedOfficialAddress,
+    normalizedDbAddress,
+    addressDifferenceReason: "substantive_difference",
+  };
 };

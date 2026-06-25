@@ -1,8 +1,7 @@
 import { readFileSync } from "node:fs";
 import { normalizeCsvHeader, parseCsvContent } from "../csv-parse";
-import { buildCsv } from "../csv";
 import { normalizeStoreNumber } from "./store-number";
-import type { DatabaseStore, OfficialStore } from "./types";
+import type { DatabaseStore, OfficialStore, ReconciliationRow } from "./types";
 
 const readCsvRecords = (filePath: string): Record<string, string>[] => {
   const content = readFileSync(filePath, "utf8");
@@ -58,18 +57,28 @@ export const loadOfficialStores = (filePath: string): OfficialStore[] =>
   });
 
 export const loadDatabaseStores = (filePath: string): DatabaseStore[] =>
-  readCsvRecords(filePath).map((record) => ({
-    id: readField(record, "id"),
-    name: readField(record, "name"),
-    address: readField(record, "address"),
-    latitude: parseCoordinate(readField(record, "latitude")),
-    longitude: parseCoordinate(readField(record, "longitude")),
-    neighborhood: readField(record, "neighborhood", "barrio"),
-    locality: readField(record, "locality", "localidad"),
-    storeFormat: readField(record, "store_format", "formato"),
-    active: readField(record, "active"),
-    raw: record,
-  }));
+  readCsvRecords(filePath).map((record) => {
+    const latitudeRaw = readField(record, "latitude");
+    const longitudeRaw = readField(record, "longitude");
+
+    return {
+      id: readField(record, "id"),
+      name: readField(record, "name"),
+      address: readField(record, "address"),
+      latitude: parseCoordinate(latitudeRaw),
+      longitude: parseCoordinate(longitudeRaw),
+      latitudeRaw,
+      longitudeRaw,
+      neighborhood: readField(record, "neighborhood", "barrio"),
+      locality: readField(record, "locality", "localidad"),
+      storeFormat: readField(record, "store_format", "formato"),
+      active: readField(record, "active"),
+      googlePlaceId: readField(record, "google_place_id"),
+      createdAt: readField(record, "created_at"),
+      updatedAt: readField(record, "updated_at"),
+      raw: record,
+    };
+  });
 
 export const SUMMARY_HEADERS = [
   "store_number",
@@ -78,12 +87,19 @@ export const SUMMARY_HEADERS = [
   "db_address",
   "address_match_status",
   "address_similarity",
+  "normalized_official_address",
+  "normalized_db_address",
+  "address_difference_reason",
   "db_latitude",
   "db_longitude",
   "geocoded_latitude",
   "geocoded_longitude",
   "coordinate_distance_meters",
   "coordinate_status",
+  "geocoding_status",
+  "geocoding_error_code",
+  "geocoding_error_message",
+  "geocoding_query",
   "db_id",
   "notes",
 ] as const;
@@ -92,43 +108,67 @@ export const DUPLICATE_HEADERS = [
   "source",
   "store_number",
   "duplicate_count",
+  "db_id",
+  "db_address",
+  "google_place_id",
+  "latitude",
+  "longitude",
+  "created_at",
+  "updated_at",
+  "active",
+  "address_matches_official",
+  "coordinate_status",
+  "official_address",
   "details",
 ] as const;
 
-const formatNumber = (value: number | null): string =>
-  value === null ? "" : String(Math.round(value * 1000) / 1000);
+const escapeReportCsvValue = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  const stringValue = String(value);
+  if (/[",\n\r]/.test(stringValue)) {
+    return `"${stringValue.replace(/"/g, '""')}"`;
+  }
+
+  return stringValue;
+};
 
 const formatSimilarity = (value: number | null): string =>
   value === null ? "" : String(Math.round(value * 10000) / 10000);
 
-export const reconciliationRowToCsv = (row: {
-  storeNumber: string;
-  status: string;
-  carrefourOfficialAddress: string;
-  dbAddress: string;
-  addressMatchStatus: string;
-  addressSimilarity: number | null;
-  dbLatitude: number | null;
-  dbLongitude: number | null;
-  geocodedLatitude: number | null;
-  geocodedLongitude: number | null;
-  coordinateDistanceMeters: number | null;
-  coordinateStatus: string;
-  dbId: string;
-  notes: string;
-}): string[] => [
+const formatDistanceMeters = (value: number | null): string =>
+  value === null ? "" : String(Math.round(value * 100) / 100);
+
+const formatCoordinateOutput = (value: string | number | null | undefined): string => {
+  if (value === null || value === undefined) {
+    return "";
+  }
+
+  return String(value);
+};
+
+export const reconciliationRowToCsv = (row: ReconciliationRow): string[] => [
   row.storeNumber,
   row.status,
   row.carrefourOfficialAddress,
   row.dbAddress,
   row.addressMatchStatus,
   formatSimilarity(row.addressSimilarity),
-  formatNumber(row.dbLatitude),
-  formatNumber(row.dbLongitude),
-  formatNumber(row.geocodedLatitude),
-  formatNumber(row.geocodedLongitude),
-  formatNumber(row.coordinateDistanceMeters),
+  row.normalizedOfficialAddress,
+  row.normalizedDbAddress,
+  row.addressDifferenceReason,
+  row.dbLatitude,
+  row.dbLongitude,
+  row.geocodedLatitude,
+  row.geocodedLongitude,
+  formatDistanceMeters(row.coordinateDistanceMeters),
   row.coordinateStatus,
+  row.geocodingStatus,
+  row.geocodingErrorCode,
+  row.geocodingErrorMessage,
+  row.geocodingQuery,
   row.dbId,
   row.notes,
 ];
@@ -136,4 +176,10 @@ export const reconciliationRowToCsv = (row: {
 export const buildReconciliationCsv = (
   headers: readonly string[],
   rows: string[][],
-): string => buildCsv([...headers], rows);
+): string => {
+  const lines = [
+    headers.map(escapeReportCsvValue).join(","),
+    ...rows.map((row) => row.map(escapeReportCsvValue).join(",")),
+  ];
+  return `\uFEFF${lines.join("\n")}`;
+};

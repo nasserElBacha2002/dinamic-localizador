@@ -1,10 +1,34 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { addressSimilarity, compareAddresses, normalizeAddress } from "./address";
+import {
+  addressSimilarity,
+  compareAddresses,
+  normalizeAddress,
+  normalizeAddressForRangeComparison,
+} from "./address";
 import { buildGeocodeCacheKey, buildGeocodeQuery } from "./geocoding";
 import { reconcileStores } from "./reconcile";
 import { normalizeStoreNumber } from "./store-number";
 import type { DatabaseStore, OfficialStore } from "./types";
+import { MISSING_API_KEY_ERROR_CODE } from "./types";
+
+const baseDatabaseStore = (
+  overrides: Partial<DatabaseStore> & Pick<DatabaseStore, "id" | "name" | "address">,
+): DatabaseStore => ({
+  latitude: -34.6037,
+  longitude: -58.3816,
+  latitudeRaw: "-34.6037000",
+  longitudeRaw: "-58.3816000",
+  neighborhood: "",
+  locality: "",
+  storeFormat: "",
+  active: "1",
+  googlePlaceId: "",
+  createdAt: "",
+  updatedAt: "",
+  raw: {},
+  ...overrides,
+});
 
 describe("normalizeStoreNumber", () => {
   it("normalizes numeric store ids as strings", () => {
@@ -32,6 +56,20 @@ describe("normalizeAddress", () => {
       1,
     );
   });
+
+  it("strips store number prefixes and postal codes", () => {
+    const normalized = normalizeAddress(
+      "6037_Ejército de los Andes 2222_GBA, C1424, Provincia de Buenos Aires",
+    );
+    assert.match(normalized, /ejercito de los andes 2222/);
+    assert.doesNotMatch(normalized, /c1424/);
+    assert.doesNotMatch(normalized, /provincia de buenos aires/);
+  });
+
+  it("normalizes address ranges to base street numbers", () => {
+    assert.equal(normalizeAddressForRangeComparison("Av. Corrientes 4489/91"), "av corrientes 4489");
+    assert.equal(normalizeAddressForRangeComparison("Av. Corrientes 2463-65"), "av corrientes 2463");
+  });
 });
 
 describe("compareAddresses", () => {
@@ -42,6 +80,12 @@ describe("compareAddresses", () => {
     );
     assert.equal(result.status, "exact_match");
     assert.ok(result.similarity >= 0.99);
+  });
+
+  it("detects likely matches for range-only differences", () => {
+    const result = compareAddresses("Av. Corrientes 4489/91", "Avenida Corrientes 4489");
+    assert.equal(result.status, "likely_match");
+    assert.equal(result.addressDifferenceReason, "range_or_format_difference");
   });
 
   it("detects likely matches for minor formatting differences", () => {
@@ -96,42 +140,21 @@ describe("reconcileStores", () => {
   ];
 
   const databaseStores: DatabaseStore[] = [
-    {
+    baseDatabaseStore({
       id: "db-557",
       name: "557",
       address: "Avenida Corrientes 1234",
-      latitude: -34.6,
-      longitude: -58.38,
-      neighborhood: "",
-      locality: "",
-      storeFormat: "",
-      active: "1",
-      raw: {},
-    },
-    {
+    }),
+    baseDatabaseStore({
       id: "db-test",
       name: "prueba-casa",
       address: "Test",
-      latitude: -34.6,
-      longitude: -58.38,
-      neighborhood: "",
-      locality: "",
-      storeFormat: "",
-      active: "1",
-      raw: {},
-    },
-    {
+    }),
+    baseDatabaseStore({
       id: "db-999",
       name: "999",
       address: "Extra Store",
-      latitude: -34.6,
-      longitude: -58.38,
-      neighborhood: "",
-      locality: "",
-      storeFormat: "",
-      active: "1",
-      raw: {},
-    },
+    }),
   ];
 
   it("identifies missing, extra and ignored rows without geocoding", async () => {
@@ -150,7 +173,7 @@ describe("reconcileStores", () => {
       null,
     );
 
-    assert.equal(result.stats.totalOfficialStores, 2);
+    assert.equal(result.stats.totalOfficialRows, 2);
     assert.equal(result.stats.numericDatabaseStores, 2);
     assert.equal(result.stats.ignoredNonNumericDatabaseRows, 1);
     assert.equal(result.stats.missingInDatabase, 1);
@@ -162,5 +185,9 @@ describe("reconcileStores", () => {
     assert.ok(matched);
     assert.equal(matched?.addressMatchStatus, "exact_match");
     assert.equal(matched?.coordinateStatus, "geocoding_skipped");
+    assert.equal(matched?.geocodingStatus, "skipped");
+    assert.equal(matched?.geocodingErrorCode, MISSING_API_KEY_ERROR_CODE);
+    assert.equal(matched?.dbLatitude, "-34.6037000");
+    assert.equal(matched?.dbLongitude, "-58.3816000");
   });
 });

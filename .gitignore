@@ -23,3 +23,4 @@ backend/.env.save
 # Generated reconciliation artifacts
 .cache/
 reports/
+backend/reports/

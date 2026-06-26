@@ -24,3 +24,6 @@ backend/.env.save
 .cache/
 reports/
 backend/reports/
+
+# Local git review artifacts (Cursor commands)
+review/

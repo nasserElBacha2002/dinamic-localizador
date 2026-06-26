@@ -404,6 +404,50 @@ export const botSessionService = {
     console.info("[bot-session] session cancelled", { sessionId });
   },
 
+  async createAbsenceSession(input: {
+    employeeId: string;
+    phoneNumber: string;
+    state: import("../types/twilio.types").BotSessionState;
+    contextJson: string;
+  }): Promise<BotSession> {
+    const session = await runInTransaction(async (transaction) => {
+      await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+      return botSessionRepository.create(
+        {
+          employeeId: input.employeeId,
+          inventoryId: null,
+          phoneNumber: input.phoneNumber,
+          state: input.state,
+          contextJson: input.contextJson,
+          expiresAt: buildExpiresAt(),
+        },
+        transaction,
+      );
+    });
+
+    console.info("[bot-session] absence session created", {
+      sessionId: session.id,
+      employeeId: input.employeeId,
+      state: input.state,
+    });
+
+    return session;
+  },
+
+  async updateAbsenceSession(
+    sessionId: string,
+    input: {
+      state: import("../types/twilio.types").BotSessionState;
+      contextJson: string;
+    },
+  ): Promise<BotSession | null> {
+    return botSessionRepository.updateSession(sessionId, {
+      state: input.state,
+      contextJson: input.contextJson,
+      expiresAt: buildExpiresAt(),
+    });
+  },
+
   isActive(session: BotSession, now = new Date()): boolean {
     return isSessionActive(session, now);
   },

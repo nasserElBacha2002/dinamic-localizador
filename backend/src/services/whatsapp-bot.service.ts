@@ -26,16 +26,23 @@ import {
   combineCheckoutValidation,
   evaluateCheckoutTime,
 } from "../utils/checkout-validation";
-import { isCheckoutSessionState } from "../utils/bot-session-states";
+import { isCheckoutSessionState, isAbsenceSessionState } from "../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../utils/haversine";
+import { isAbsenceCancelIntent, isAbsenceIntent } from "../utils/absence-intent";
 import { isCheckInIntent, isCheckoutIntent, isSimpleGreeting, parseInventorySelection } from "../utils/intent";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
+import { absenceBotService } from "./absence-bot.service";
+
+const GLOBAL_CANCEL_MESSAGE = "Flujo cancelado. Ahora podés iniciar otra operación.";
 
 const UNKNOWN_EMPLOYEE_MESSAGE =
   "No encontramos un empleado activo asociado a este número de WhatsApp. Contactá a administración.";
 
 const GREETING_MESSAGE =
-  'Hola. Para registrar tu llegada escribí "Llegué". Para registrar tu salida escribí "Me voy".';
+  'Hola. Para registrar tu llegada escribí "Llegué". Para registrar tu salida escribí "Me voy". Para pedir una ausencia escribí "Quiero pedir vacaciones" o "Pedir ausencia".';
+
+const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
+  'Ya tenés un flujo de llegada o salida en curso. Completalo o escribí "Cancelar" antes de solicitar una ausencia.';
 
 const NO_CHECK_IN_FOR_CHECKOUT_MESSAGE =
   "No encontré una llegada registrada para este inventario. Primero tenés que haber marcado 'Llegué'.";
@@ -310,6 +317,16 @@ export const whatsappBotService = {
       });
     }
 
+    if (session && isAbsenceCancelIntent(body)) {
+      await botSessionService.cancelSession(session.id);
+      return respond({
+        message: GLOBAL_CANCEL_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
     if (session?.state === "WAITING_INVENTORY_SELECTION") {
       return this.handleInventorySelection({
         session,
@@ -348,6 +365,18 @@ export const whatsappBotService = {
       });
     }
 
+    if (session && isAbsenceSessionState(session.state)) {
+      return absenceBotService.handleAbsenceSession({
+        session,
+        body,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        messageSid: input.payload.MessageSid,
+        respond,
+      });
+    }
+
     if (!body) {
       return respond({
         message: UNPARSEABLE_MESSAGE,
@@ -358,6 +387,14 @@ export const whatsappBotService = {
     }
 
     if (isCheckoutIntent(body)) {
+      if (session && isAbsenceSessionState(session.state)) {
+        return respond({
+          message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
       return this.startCheckout({
         employeeId: input.employeeId,
         phoneFrom: input.phoneFrom,
@@ -366,10 +403,37 @@ export const whatsappBotService = {
     }
 
     if (isCheckInIntent(body)) {
+      if (session && isAbsenceSessionState(session.state)) {
+        return respond({
+          message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
       return this.startCheckIn({
         employeeId: input.employeeId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
+      });
+    }
+
+    if (isAbsenceIntent(body)) {
+      if (absenceBotService.hasActiveAttendanceSession(session)) {
+        return respond({
+          message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      return absenceBotService.startAbsenceFlow({
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        body,
+        respond,
       });
     }
 

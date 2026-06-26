@@ -1,0 +1,96 @@
+import type { Employee } from "./domain";
+
+export type AbsenceRequestStatus =
+  | "PENDING"
+  | "APPROVED"
+  | "REJECTED"
+  | "CANCELLED"
+  | "NEEDS_INFO";
+
+export type AbsenceRequestedVia = "WHATSAPP" | "ADMIN";
+
+export type AbsenceDayPeriod = "FULL_DAY" | "AM" | "PM";
+
+export type AbsenceRequestEventType =
+  | "CREATED"
+  | "APPROVED"
+  | "REJECTED"
+  | "NEEDS_INFO"
+  | "CANCELLED";
+
+export interface AbsenceType {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  requiresApproval: boolean;
+  requiresAttachment: boolean;
+  deductsBalance: boolean;
+  allowsHalfDay: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AbsenceRequest {
+  id: string;
+  employeeId: string;
+  absenceTypeId: string;
+  startDate: string;
+  endDate: string;
+  startPeriod: AbsenceDayPeriod;
+  endPeriod: AbsenceDayPeriod;
+  totalDays: number;
+  reason: string;
+  status: AbsenceRequestStatus;
+  requestedVia: AbsenceRequestedVia;
+  sourceMessageSid: string | null;
+  reviewedByUserId: string | null;
+  reviewedAt: string | null;
+  reviewComment: string | null;
+  cancelledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AbsenceRequestEvent {
+  id: string;
+  absenceRequestId: string;
+  eventType: AbsenceRequestEventType;
+  oldStatus: AbsenceRequestStatus | null;
+  newStatus: AbsenceRequestStatus | null;
+  performedByUserId: string | null;
+  performedByEmployeeId: string | null;
+  comment: string | null;
+  createdAt: string;
+  performerName?: string | null;
+}
+
+export interface AbsenceRequestWithRelations extends AbsenceRequest {
+  employee: Pick<Employee, "id" | "name" | "phoneNumber" | "active">;
+  absenceType: Pick<AbsenceType, "id" | "code" | "name">;
+  reviewerName?: string | null;
+  affectedInventoriesCount: number;
+}
+
+export interface AbsenceRequestDetail extends AbsenceRequestWithRelations {
+  events: AbsenceRequestEvent[];
+  affectedInventories: AffectedInventoryWarning[];
+}
+
+export interface AffectedInventoryWarning {
+  inventoryId: string;
+  storeId: string;
+  storeName: string;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  status: string;
+}
+
+export interface AbsenceRequestDraft {
+  absenceTypeId?: string;
+  absenceTypeCode?: string;
+  startDate?: string;
+  endDate?: string;
+  reason?: string;
+}

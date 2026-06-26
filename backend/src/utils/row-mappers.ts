@@ -256,3 +256,64 @@ export const mapAttendanceReviewRow = (row: Record<string, unknown>): Attendance
       }
     : undefined,
 });
+
+const toDateOnlyString = (value: Date | string): string => {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  return String(value).slice(0, 10);
+};
+
+export const mapAbsenceTypeRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  code: String(row.code),
+  name: String(row.name),
+  description: row.description ? String(row.description) : null,
+  requiresApproval: Boolean(row.requires_approval),
+  requiresAttachment: Boolean(row.requires_attachment),
+  deductsBalance: Boolean(row.deducts_balance),
+  allowsHalfDay: Boolean(row.allows_half_day),
+  isActive: Boolean(row.is_active),
+  createdAt: toIsoString(row.created_at as Date | string),
+  updatedAt: toIsoString(row.updated_at as Date | string),
+});
+
+export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  employeeId: String(row.employee_id),
+  absenceTypeId: String(row.absence_type_id),
+  startDate: toDateOnlyString(row.start_date as Date | string),
+  endDate: toDateOnlyString(row.end_date as Date | string),
+  startPeriod: String(row.start_period) as import("../types/absence").AbsenceDayPeriod,
+  endPeriod: String(row.end_period) as import("../types/absence").AbsenceDayPeriod,
+  totalDays: Number(row.total_days),
+  reason: String(row.reason),
+  status: String(row.status) as import("../types/absence").AbsenceRequestStatus,
+  requestedVia: String(row.requested_via) as import("../types/absence").AbsenceRequestedVia,
+  sourceMessageSid: row.source_message_sid ? String(row.source_message_sid) : null,
+  reviewedByUserId: row.reviewed_by_user_id ? String(row.reviewed_by_user_id) : null,
+  reviewedAt: row.reviewed_at ? toIsoString(row.reviewed_at as Date | string) : null,
+  reviewComment: row.review_comment ? String(row.review_comment) : null,
+  cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at as Date | string) : null,
+  createdAt: toIsoString(row.created_at as Date | string),
+  updatedAt: toIsoString(row.updated_at as Date | string),
+});
+
+export const mapAbsenceRequestEventRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  absenceRequestId: String(row.absence_request_id),
+  eventType: String(row.event_type) as import("../types/absence").AbsenceRequestEventType,
+  oldStatus: row.old_status
+    ? (String(row.old_status) as import("../types/absence").AbsenceRequestStatus)
+    : null,
+  newStatus: row.new_status
+    ? (String(row.new_status) as import("../types/absence").AbsenceRequestStatus)
+    : null,
+  performedByUserId: row.performed_by_user_id ? String(row.performed_by_user_id) : null,
+  performedByEmployeeId: row.performed_by_employee_id
+    ? String(row.performed_by_employee_id)
+    : null,
+  comment: row.comment ? String(row.comment) : null,
+  createdAt: toIsoString(row.created_at as Date | string),
+  performerName: row.performer_name ? String(row.performer_name) : null,
+});

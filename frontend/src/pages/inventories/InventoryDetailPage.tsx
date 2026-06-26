@@ -161,7 +161,7 @@ export function InventoryDetailPage() {
                   value: <StatusChip label={inventoryStatusLabels[inventory.status]} />,
                 },
                 { label: "Tienda", value: storeFieldValue },
-                { label: "Dirección", value: inventory.store.address ?? "—" },
+                { label: "Dirección", value: inventory.store?.address ?? "—" },
                 { label: "Inicio", value: formatDateTime(inventory.scheduledStart) },
                 { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
                 { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },

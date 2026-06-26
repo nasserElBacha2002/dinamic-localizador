@@ -227,7 +227,12 @@ export const botSessionRepository = {
       input.state === "WAITING_LOCATION" ||
       input.state === "WAITING_INVENTORY_SELECTION" ||
       input.state === "WAITING_CHECKOUT_LOCATION" ||
-      input.state === "WAITING_CHECKOUT_INVENTORY_SELECTION"
+      input.state === "WAITING_CHECKOUT_INVENTORY_SELECTION" ||
+      input.state === "WAITING_ABSENCE_TYPE" ||
+      input.state === "WAITING_ABSENCE_START_DATE" ||
+      input.state === "WAITING_ABSENCE_END_DATE" ||
+      input.state === "WAITING_ABSENCE_REASON" ||
+      input.state === "WAITING_ABSENCE_CONFIRMATION"
         ? `AND state IN ${ACTIVE_STATE_SQL}`
         : "";
 

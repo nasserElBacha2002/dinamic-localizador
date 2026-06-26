@@ -3,6 +3,11 @@ export type BotSessionState =
   | "WAITING_INVENTORY_SELECTION"
   | "WAITING_CHECKOUT_LOCATION"
   | "WAITING_CHECKOUT_INVENTORY_SELECTION"
+  | "WAITING_ABSENCE_TYPE"
+  | "WAITING_ABSENCE_START_DATE"
+  | "WAITING_ABSENCE_END_DATE"
+  | "WAITING_ABSENCE_REASON"
+  | "WAITING_ABSENCE_CONFIRMATION"
   | "COMPLETED"
   | "CANCELLED"
   | "EXPIRED";
@@ -30,6 +35,14 @@ export interface InventorySelectionOption {
 
 export interface BotSessionContext {
   inventoryOptions?: InventorySelectionOption[];
+  flow?: "ABSENCE_REQUEST";
+  absenceDraft?: {
+    absenceTypeId?: string;
+    absenceTypeCode?: string;
+    startDate?: string;
+    endDate?: string;
+    reason?: string;
+  };
 }
 
 export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED" | "DUPLICATE";

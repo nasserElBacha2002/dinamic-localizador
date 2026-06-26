@@ -8,6 +8,7 @@ import { inventoryRouter } from "./inventory.routes";
 import { statisticsRouter } from "./statistics.routes";
 import { storeRouter } from "./store.routes";
 import { twilioRouter } from "./twilio.routes";
+import { absenceRouter } from "./absence.routes";
 import { authenticate, requireAdmin } from "../middleware/authenticate";
 
 export const apiRouter = Router();
@@ -23,3 +24,4 @@ apiRouter.use("/inventories", inventoryRouter);
 apiRouter.use("/inventories/:inventoryId/employees", inventoryAssignmentRouter);
 apiRouter.use("/attendance", attendanceRouter);
 apiRouter.use("/statistics", statisticsRouter);
+apiRouter.use(absenceRouter);

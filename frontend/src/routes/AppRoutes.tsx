@@ -18,6 +18,8 @@ import { NotFoundPage } from "../pages/NotFoundPage";
 import { StoreCreatePage } from "../pages/stores/StoreCreatePage";
 import { StoreEditPage } from "../pages/stores/StoreEditPage";
 import { StoresListPage } from "../pages/stores/StoresListPage";
+import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
+import { AbsenceDetailPage } from "../pages/absences/AbsenceDetailPage";
 
 const StatisticsPage = lazy(() =>
   import("../pages/statistics/StatisticsPage").then((module) => ({
@@ -60,6 +62,8 @@ export function AppRoutes() {
         <Route path="/attendance" element={<AttendanceListPage />} />
         <Route path="/attendance/new" element={<AttendanceCreatePage />} />
         <Route path="/attendance/:id" element={<AttendanceDetailPage />} />
+        <Route path="/absences" element={<AbsencesListPage />} />
+        <Route path="/absences/:id" element={<AbsenceDetailPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />

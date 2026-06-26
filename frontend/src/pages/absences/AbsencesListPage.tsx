@@ -14,6 +14,7 @@ import {
   TextField,
 } from "@mui/material";
 import { useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { ClickableTableRow } from "../../components/common/ClickableTableRow";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
@@ -37,12 +38,13 @@ import {
 } from "../../utils/absence-labels";
 
 export function AbsencesListPage() {
+  const [searchParams] = useSearchParams();
   const pagination = usePaginationState(10);
   const [status, setStatus] = useState<AbsenceRequestStatus | "">("PENDING");
   const [absenceTypeId, setAbsenceTypeId] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [employeeId, setEmployeeId] = useState(searchParams.get("employeeId") ?? "");
+  const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
+  const [dateTo, setDateTo] = useState(searchParams.get("dateTo") ?? "");
 
   const typesQuery = useAbsenceTypes();
   const { data, isPending, isError, error } = useAbsenceRequests({

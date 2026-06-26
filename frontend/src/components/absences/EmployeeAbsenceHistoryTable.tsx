@@ -1,4 +1,6 @@
 import {
+  Button,
+  Stack,
   Table,
   TableBody,
   TableCell,
@@ -32,6 +34,7 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
   }
 
   const rows = historyQuery.data?.data ?? [];
+  const listHref = `/absences?employeeId=${employeeId}&dateFrom=${year}-01-01&dateTo=${year}-12-31`;
 
   if (rows.length === 0) {
     return (
@@ -42,35 +45,43 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
   }
 
   return (
-    <TableContainer>
-      <Table size="small">
-        <TableHead>
-          <TableRow>
-            <TableCell>Tipo</TableCell>
-            <TableCell>Período</TableCell>
-            <TableCell align="right">Días</TableCell>
-            <TableCell>Estado</TableCell>
-            <TableCell align="right">Detalle</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {rows.map((row) => (
-            <TableRow key={row.id}>
-              <TableCell>{row.absenceType.name}</TableCell>
-              <TableCell>
-                {formatAbsenceDate(row.startDate)} - {formatAbsenceDate(row.endDate)}
-              </TableCell>
-              <TableCell align="right">{row.totalDays}</TableCell>
-              <TableCell>
-                <StatusChip label={absenceStatusLabels[row.status]} />
-              </TableCell>
-              <TableCell align="right">
-                <RouterLink to={`/absences/${row.id}`}>Ver</RouterLink>
-              </TableCell>
+    <Stack spacing={1}>
+      <Typography variant="body2" color="text.secondary">
+        Mostrando las últimas 10 solicitudes del año.
+      </Typography>
+      <TableContainer>
+        <Table size="small">
+          <TableHead>
+            <TableRow>
+              <TableCell>Tipo</TableCell>
+              <TableCell>Período</TableCell>
+              <TableCell align="right">Días</TableCell>
+              <TableCell>Estado</TableCell>
+              <TableCell align="right">Detalle</TableCell>
             </TableRow>
-          ))}
-        </TableBody>
-      </Table>
-    </TableContainer>
+          </TableHead>
+          <TableBody>
+            {rows.map((row) => (
+              <TableRow key={row.id}>
+                <TableCell>{row.absenceType.name}</TableCell>
+                <TableCell>
+                  {formatAbsenceDate(row.startDate)} - {formatAbsenceDate(row.endDate)}
+                </TableCell>
+                <TableCell align="right">{row.totalDays}</TableCell>
+                <TableCell>
+                  <StatusChip label={absenceStatusLabels[row.status]} />
+                </TableCell>
+                <TableCell align="right">
+                  <RouterLink to={`/absences/${row.id}`}>Ver</RouterLink>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      </TableContainer>
+      <Button component={RouterLink} to={listHref} size="small" sx={{ alignSelf: "flex-start" }}>
+        Ver todas las solicitudes
+      </Button>
+    </Stack>
   );
 }

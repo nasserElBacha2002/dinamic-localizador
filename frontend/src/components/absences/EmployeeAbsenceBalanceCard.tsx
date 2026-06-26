@@ -15,12 +15,14 @@ import {
   Typography,
 } from "@mui/material";
 import { useMemo, useState } from "react";
+import { FeedbackSnackbar } from "../common/FeedbackSnackbar";
 import { LoadingState } from "../common/LoadingState";
 import {
   useEmployeeAbsenceBalances,
   useUpsertEmployeeAbsenceBalance,
 } from "../../hooks/useAbsences";
 import type { AbsenceBalanceImpact, EmployeeAbsenceBalanceSummary } from "../../types/absence";
+import { getApiErrorMessage } from "../../utils/errors";
 
 interface EmployeeAbsenceBalanceCardProps {
   employeeId: string;
@@ -43,9 +45,14 @@ export function EmployeeAbsenceBalanceCard({
   const [totalDays, setTotalDays] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [successOpen, setSuccessOpen] = useState(false);
 
   const visibleBalances = useMemo(() => {
     const rows = balancesQuery.data ?? [];
+    if (showEdit) {
+      return rows;
+    }
+
     return rows.filter(
       (row) =>
         row.absenceType.deductsBalance ||
@@ -53,12 +60,16 @@ export function EmployeeAbsenceBalanceCard({
         row.approvedDays > 0 ||
         row.pendingDays > 0,
     );
-  }, [balancesQuery.data]);
+  }, [balancesQuery.data, showEdit]);
+
+  const hasNegativeBalance = visibleBalances.some(
+    (row) => row.availableDays < 0 || row.projectedAvailableDays < 0,
+  );
 
   const openEdit = (row: EmployeeAbsenceBalanceSummary) => {
     setEditTarget(row);
     setTotalDays(String(row.assignedDays));
-    setNotes("");
+    setNotes(row.notes ?? "");
     setError(null);
   };
 
@@ -81,9 +92,10 @@ export function EmployeeAbsenceBalanceCard({
         notes: notes.trim() ? notes.trim() : null,
       });
       setEditTarget(null);
+      setSuccessOpen(true);
       onBalanceSaved?.();
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : "No se pudo guardar el saldo.");
+      setError(getApiErrorMessage(saveError, "No se pudo guardar el saldo."));
     }
   };
 
@@ -97,9 +109,16 @@ export function EmployeeAbsenceBalanceCard({
         balanceImpact.deductsBalance ? (
           <Stack spacing={1}>
             {balanceImpact.hasSufficientBalance === false ? (
-              <Alert severity="error">
-                El empleado no tiene saldo suficiente para aprobar esta solicitud.
-              </Alert>
+              <>
+                <Alert severity="error">
+                  El empleado no tiene saldo suficiente para aprobar esta solicitud.
+                </Alert>
+                {showEdit ? (
+                  <Alert severity="info">
+                    Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
+                  </Alert>
+                ) : null}
+              </>
             ) : null}
             <Typography variant="body2" color="text.secondary">
               Año {balanceImpact.year}
@@ -116,6 +135,13 @@ export function EmployeeAbsenceBalanceCard({
         ) : (
           <Alert severity="info">{balanceImpact.message ?? "Este tipo de ausencia no descuenta saldo."}</Alert>
         )
+      ) : null}
+
+      {hasNegativeBalance ? (
+        <Alert severity="warning">
+          El empleado tiene saldo negativo para este tipo de ausencia. Revisá los días asignados o las
+          solicitudes aprobadas.
+        </Alert>
       ) : null}
 
       {visibleBalances.length > 0 ? (
@@ -151,7 +177,7 @@ export function EmployeeAbsenceBalanceCard({
         </Table>
       ) : (
         <Typography color="text.secondary">
-          No hay saldos cargados para este empleado en {year}.
+          No hay tipos de ausencia activos para mostrar en {year}.
         </Typography>
       )}
 
@@ -187,6 +213,13 @@ export function EmployeeAbsenceBalanceCard({
           </Button>
         </DialogActions>
       </Dialog>
+
+      <FeedbackSnackbar
+        open={successOpen}
+        message="Saldo actualizado correctamente."
+        severity="success"
+        onClose={() => setSuccessOpen(false)}
+      />
     </Stack>
   );
 }

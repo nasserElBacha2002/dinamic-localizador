@@ -100,6 +100,7 @@ export interface AbsenceBalanceSummary {
   cancelledDays: number;
   availableDays: number;
   projectedAvailableDays: number;
+  notes: string | null;
 }
 
 export interface AbsenceBalanceImpact {

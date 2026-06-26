@@ -19,6 +19,7 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
@@ -46,6 +47,7 @@ import {
 
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const queryClient = useQueryClient();
   const requestQuery = useAbsenceRequest(id);
   const approveMutation = useApproveAbsenceRequest(id ?? "");
   const rejectMutation = useRejectAbsenceRequest(id ?? "");
@@ -155,6 +157,11 @@ export function AbsenceDetailPage() {
           <Stack direction="row" spacing={1}>
             {canReview ? (
               <>
+                {insufficientBalance ? (
+                  <Alert severity="info" sx={{ alignSelf: "center" }}>
+                    Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
+                  </Alert>
+                ) : null}
                 <Button
                   variant="contained"
                   onClick={handleApprove}
@@ -234,6 +241,11 @@ export function AbsenceDetailPage() {
               employeeId={request.employeeId}
               year={balanceYear}
               balanceImpact={request.balanceImpact}
+              onBalanceSaved={() => {
+                if (id) {
+                  queryClient.invalidateQueries({ queryKey: ["absence-request", id] });
+                }
+              }}
             />
           </CardContent>
         </Card>

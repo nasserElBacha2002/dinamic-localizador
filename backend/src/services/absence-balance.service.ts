@@ -1,4 +1,5 @@
 import { AppError } from "../errors/app-error";
+import sql from "mssql";
 import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
@@ -30,6 +31,7 @@ const buildSummaryForType = (input: {
   absenceType: AbsenceType;
   year: number;
   assignedDays: number;
+  notes: string | null;
   aggregates: Array<{ absenceTypeId: string; status: string; totalDays: number }>;
 }): AbsenceBalanceSummary => {
   const approvedDays = sumDaysForStatuses(input.aggregates, input.absenceType.id, ["APPROVED"]);
@@ -60,6 +62,7 @@ const buildSummaryForType = (input: {
     cancelledDays,
     availableDays: counters.availableDays,
     projectedAvailableDays: counters.projectedAvailableDays,
+    notes: input.notes,
   };
 };
 
@@ -77,12 +80,14 @@ export const absenceBalanceService = {
     ]);
 
     const assignedByType = new Map(balanceRows.map((row) => [row.absenceTypeId, row.totalDays]));
+    const notesByType = new Map(balanceRows.map((row) => [row.absenceTypeId, row.notes]));
 
     return absenceTypes.map((absenceType) =>
       buildSummaryForType({
         absenceType,
         year,
         assignedDays: assignedByType.get(absenceType.id) ?? 0,
+        notes: notesByType.get(absenceType.id) ?? null,
         aggregates,
       }),
     );
@@ -144,14 +149,29 @@ export const absenceBalanceService = {
       AbsenceRequest,
       "employeeId" | "absenceTypeId" | "startDate" | "totalDays" | "status"
     >,
+    transaction: sql.Transaction,
   ): Promise<void> {
     const absenceType = await absenceTypeRepository.findById(request.absenceTypeId);
     if (!absenceType || !absenceType.deductsBalance) {
       return;
     }
 
-    const impact = await this.getSummaryForRequest(request, absenceType);
-    if (!impact.hasSufficientBalance) {
+    const year = getAbsenceRequestYear(request.startDate);
+    const { assignedDays, approvedDays } =
+      await absenceBalanceRepository.lockAndGetApprovalBalanceSnapshot(
+        request.employeeId,
+        request.absenceTypeId,
+        year,
+        transaction,
+      );
+
+    if (
+      !hasSufficientBalanceForApproval({
+        assignedDays,
+        approvedDays,
+        requestDays: request.totalDays,
+      })
+    ) {
       throw new AppError(
         409,
         "INSUFFICIENT_ABSENCE_BALANCE",

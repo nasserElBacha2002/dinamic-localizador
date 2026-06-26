@@ -42,7 +42,7 @@ const transition = async (input: {
     ensureReviewable(existing.status);
 
     if (input.eventType === "APPROVED") {
-      await absenceBalanceService.ensureSufficientBalanceForApproval(existing);
+      await absenceBalanceService.ensureSufficientBalanceForApproval(existing, transaction);
     }
 
     const updated = await absenceRequestRepository.updateStatus(

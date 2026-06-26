@@ -1,4 +1,6 @@
 const TIMEZONE = "America/Argentina/Buenos_Aires";
+/** Argentina (America/Argentina/Buenos_Aires) is UTC-3 without DST since 2009. */
+const ARGENTINA_UTC_OFFSET_HOURS = 3;
 
 const dateTimeFormatter = new Intl.DateTimeFormat("es-AR", {
   timeZone: TIMEZONE,
@@ -95,12 +97,52 @@ export function datetimeLocalToIso(localValue: string): string {
   return new Date(guess).toISOString();
 }
 
+function isValidCalendarDate(year: number, month: number, day: number): boolean {
+  if (month < 1 || month > 12 || day < 1) {
+    return false;
+  }
+
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    utcDate.getUTCFullYear() === year &&
+    utcDate.getUTCMonth() + 1 === month &&
+    utcDate.getUTCDate() === day
+  );
+}
+
+function parseDateInputValue(dateValue: string): { year: number; month: number; day: number } {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dateValue);
+  if (!match) {
+    throw new Error(`Formato de fecha inválido: ${dateValue}`);
+  }
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+    throw new Error(`Formato de fecha inválido: ${dateValue}`);
+  }
+
+  if (!isValidCalendarDate(year, month, day)) {
+    throw new Error(`Fecha inválida: ${dateValue}`);
+  }
+
+  return { year, month, day };
+}
+
 export function dateInputToIsoStart(dateValue: string): string {
-  return datetimeLocalToIso(`${dateValue}T00:00`);
+  const { year, month, day } = parseDateInputValue(dateValue);
+  return new Date(
+    Date.UTC(year, month - 1, day, ARGENTINA_UTC_OFFSET_HOURS, 0, 0, 0),
+  ).toISOString();
 }
 
 export function dateInputToIsoEnd(dateValue: string): string {
-  return datetimeLocalToIso(`${dateValue}T23:59`);
+  const { year, month, day } = parseDateInputValue(dateValue);
+  return new Date(
+    Date.UTC(year, month - 1, day + 1, ARGENTINA_UTC_OFFSET_HOURS - 1, 59, 0, 0),
+  ).toISOString();
 }
 
 export function getCurrentDatetimeLocal(): string {

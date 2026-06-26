@@ -1,5 +1,4 @@
 import * as XLSX from "xlsx";
-import { env } from "../config/env";
 import {
   CLIENT_DEFAULT_END_HOUR,
   CLIENT_DEFAULT_END_MINUTE,
@@ -16,7 +15,8 @@ export interface InventoryDateParts {
   hasTime: boolean;
 }
 
-const OPERATION_TIMEZONE = env.BOT_OPERATION_TIMEZONE;
+const OPERATION_TIMEZONE =
+  process.env.BOT_OPERATION_TIMEZONE?.trim() || "America/Argentina/Buenos_Aires";
 
 const dateTimeFormatter = new Intl.DateTimeFormat("en-GB", {
   timeZone: OPERATION_TIMEZONE,

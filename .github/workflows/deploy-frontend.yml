@@ -1,0 +1,71 @@
+name: Deploy Frontend (develop)
+
+on:
+  push:
+    branches:
+      - develop
+    paths:
+      - "frontend/**"
+      - "docker-compose.yml"
+      - "docker-compose.prod.yml"
+      - ".github/workflows/deploy-frontend.yml"
+      - ".github/scripts/deploy-frontend.sh"
+
+concurrency:
+  group: deploy-frontend-develop
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: frontend-validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run build
+      - run: npm test
+
+  deploy:
+    name: deploy-frontend
+    needs: validate
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - name: Deploy frontend via SSH
+        uses: appleboy/ssh-action@v1.2.0
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: ${{ secrets.DEPLOY_USER }}
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          port: ${{ secrets.DEPLOY_PORT || 22 }}
+          script_stop: true
+          script: |
+            set -euo pipefail
+            DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
+            if [ -z "${DEPLOY_PATH}" ]; then
+              DEPLOY_PATH="/opt/dinamic-attendance/dinamic-localizador"
+            fi
+            DEPLOY_BRANCH="develop"
+            cd "${DEPLOY_PATH}"
+            current_branch="$(git rev-parse --abbrev-ref HEAD)"
+            if [ "${current_branch}" != "${DEPLOY_BRANCH}" ]; then
+              echo "ERROR: expected branch ${DEPLOY_BRANCH}, got ${current_branch}" >&2
+              exit 1
+            fi
+            git fetch origin "${DEPLOY_BRANCH}"
+            git checkout "${DEPLOY_BRANCH}"
+            git reset --hard "origin/${DEPLOY_BRANCH}"
+            export DEPLOY_PATH
+            export DEPLOY_FRONTEND_HEALTH_URL="${{ vars.DEPLOY_FRONTEND_HEALTH_URL }}"
+            bash .github/scripts/deploy-frontend.sh

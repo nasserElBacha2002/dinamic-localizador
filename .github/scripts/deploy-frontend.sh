@@ -21,8 +21,8 @@ docker compose --env-file .env ${COMPOSE_FILES} ps
 print_frontend_diagnostics() {
   echo "==> Docker Compose service status"
   docker compose --env-file .env ${COMPOSE_FILES} ps || true
-  echo "==> Frontend logs (last 200 lines)"
-  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=200 frontend || true
+  echo "==> Frontend logs (last 300 lines)"
+  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=300 frontend || true
 }
 
 echo "==> Frontend health check: ${FRONTEND_HEALTH_URL}"

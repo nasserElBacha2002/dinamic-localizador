@@ -6,10 +6,16 @@ import {
   getAbsenceRequestById,
   getAbsenceRequests,
   getAbsenceTypes,
+  getEmployeeAbsenceBalances,
   needsInfoAbsenceRequest,
   rejectAbsenceRequest,
+  upsertEmployeeAbsenceBalance,
 } from "../api/absences.api";
-import type { AbsenceRequestFilters, CreateAbsenceRequestInput } from "../types/absence";
+import type {
+  AbsenceRequestFilters,
+  CreateAbsenceRequestInput,
+  UpsertEmployeeAbsenceBalanceInput,
+} from "../types/absence";
 
 export function useAbsenceTypes() {
   return useQuery({
@@ -83,6 +89,33 @@ export function useCancelAbsenceRequest(absenceRequestId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
+    },
+  });
+}
+
+export function useEmployeeAbsenceBalances(employeeId?: string, year?: number) {
+  return useQuery({
+    queryKey: ["employee-absence-balances", employeeId, year],
+    queryFn: () => getEmployeeAbsenceBalances(employeeId!, year!),
+    enabled: Boolean(employeeId && year),
+  });
+}
+
+export function useUpsertEmployeeAbsenceBalance(employeeId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpsertEmployeeAbsenceBalanceInput & { absenceTypeId: string }) =>
+      upsertEmployeeAbsenceBalance(employeeId, input.absenceTypeId, {
+        year: input.year,
+        totalDays: input.totalDays,
+        notes: input.notes,
+      }),
+    onSuccess: (_data, variables) => {
+      queryClient.invalidateQueries({
+        queryKey: ["employee-absence-balances", employeeId, variables.year],
+      });
+      queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
+      queryClient.invalidateQueries({ queryKey: ["absence-request"] });
     },
   });
 }

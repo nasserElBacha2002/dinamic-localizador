@@ -8,6 +8,7 @@ import { employeeRepository } from "../repositories/employee.repository";
 import type { CreateAbsenceRequestInput, ListAbsenceRequestsQuery } from "../schemas/absence-request.schema";
 import type { AbsenceRequestDetail } from "../types/absence";
 import { auditService } from "./audit.service";
+import { absenceBalanceService } from "./absence-balance.service";
 import { absenceInventoryImpactService } from "./absence-inventory-impact.service";
 import {
   calculateTotalAbsenceDays,
@@ -219,7 +220,8 @@ export const absenceRequestService = {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
 
-    const [events, affectedInventories] = await Promise.all([
+    const absenceType = await absenceTypeRepository.findById(request.absenceTypeId);
+    const [events, affectedInventories, balanceImpact] = await Promise.all([
       absenceRequestRepository.listEvents(id),
       absenceInventoryImpactService
         .findAffectedInventories({
@@ -234,6 +236,15 @@ export const absenceRequestService = {
           });
           return [];
         }),
+      absenceType
+        ? absenceBalanceService.getSummaryForRequest(request, absenceType).catch((error) => {
+            console.error("[absence-request] balance impact failed", {
+              requestId: id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+            return null;
+          })
+        : Promise.resolve(null),
     ]);
 
     return {
@@ -241,6 +252,7 @@ export const absenceRequestService = {
       affectedInventoriesCount: affectedInventories.length,
       events,
       affectedInventories,
+      balanceImpact,
     };
   },
 

@@ -8,6 +8,7 @@ import type {
 } from "../schemas/absence-request.schema";
 import type { AbsenceRequestStatus } from "../types/absence";
 import { auditService } from "./audit.service";
+import { absenceBalanceService } from "./absence-balance.service";
 import { absenceRequestService, REVIEWABLE_STATUSES } from "./absence-request.service";
 
 const ensureReviewable = (status: AbsenceRequestStatus) => {
@@ -39,6 +40,10 @@ const transition = async (input: {
     }
 
     ensureReviewable(existing.status);
+
+    if (input.eventType === "APPROVED") {
+      await absenceBalanceService.ensureSufficientBalanceForApproval(existing);
+    }
 
     const updated = await absenceRequestRepository.updateStatus(
       input.requestId,

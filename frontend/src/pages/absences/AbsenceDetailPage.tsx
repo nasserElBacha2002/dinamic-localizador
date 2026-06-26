@@ -19,6 +19,8 @@ import {
 } from "@mui/material";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
+import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
@@ -88,6 +90,11 @@ export function AbsenceDetailPage() {
 
   const request = requestQuery.data;
   const canReview = request.status === "PENDING" || request.status === "NEEDS_INFO";
+  const balanceYear =
+    request.balanceImpact?.year ?? Number.parseInt(request.startDate.slice(0, 4), 10);
+  const insufficientBalance =
+    request.balanceImpact?.deductsBalance === true &&
+    request.balanceImpact.hasSufficientBalance === false;
 
   const handleApprove = async () => {
     try {
@@ -148,7 +155,11 @@ export function AbsenceDetailPage() {
           <Stack direction="row" spacing={1}>
             {canReview ? (
               <>
-                <Button variant="contained" onClick={handleApprove} disabled={approveMutation.isPending}>
+                <Button
+                  variant="contained"
+                  onClick={handleApprove}
+                  disabled={approveMutation.isPending || insufficientBalance}
+                >
                   Aprobar
                 </Button>
                 <Button
@@ -211,6 +222,28 @@ export function AbsenceDetailPage() {
                 { label: "Comentario de revisión", value: request.reviewComment ?? "—" },
               ]}
             />
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Saldo del empleado
+            </Typography>
+            <EmployeeAbsenceBalanceCard
+              employeeId={request.employeeId}
+              year={balanceYear}
+              balanceImpact={request.balanceImpact}
+            />
+          </CardContent>
+        </Card>
+
+        <Card variant="outlined">
+          <CardContent>
+            <Typography variant="h6" gutterBottom>
+              Historial del empleado ({balanceYear})
+            </Typography>
+            <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
           </CardContent>
         </Card>
 

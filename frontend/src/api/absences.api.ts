@@ -5,6 +5,8 @@ import type {
   AbsenceRequestListItem,
   AbsenceType,
   CreateAbsenceRequestInput,
+  EmployeeAbsenceBalanceSummary,
+  UpsertEmployeeAbsenceBalanceInput,
 } from "../types/absence";
 import { apiClient, buildParams } from "./client";
 
@@ -72,6 +74,29 @@ export async function needsInfoAbsenceRequest(
 export async function cancelAbsenceRequest(id: string): Promise<AbsenceRequestDetail> {
   const { data } = await apiClient.patch<SingleResponse<AbsenceRequestDetail>>(
     `/absence-requests/${id}/cancel`,
+  );
+  return data.data;
+}
+
+export async function getEmployeeAbsenceBalances(
+  employeeId: string,
+  year: number,
+): Promise<EmployeeAbsenceBalanceSummary[]> {
+  const { data } = await apiClient.get<SingleResponse<EmployeeAbsenceBalanceSummary[]>>(
+    `/employees/${employeeId}/absence-balances`,
+    { params: { year } },
+  );
+  return data.data;
+}
+
+export async function upsertEmployeeAbsenceBalance(
+  employeeId: string,
+  absenceTypeId: string,
+  input: UpsertEmployeeAbsenceBalanceInput,
+): Promise<EmployeeAbsenceBalanceSummary> {
+  const { data } = await apiClient.put<SingleResponse<EmployeeAbsenceBalanceSummary>>(
+    `/employees/${employeeId}/absence-balances/${absenceTypeId}`,
+    input,
   );
   return data.data;
 }

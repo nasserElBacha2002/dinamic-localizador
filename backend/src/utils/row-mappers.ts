@@ -317,3 +317,14 @@ export const mapAbsenceRequestEventRow = (row: Record<string, unknown>) => ({
   createdAt: toIsoString(row.created_at as Date | string),
   performerName: row.performer_name ? String(row.performer_name) : null,
 });
+
+export const mapEmployeeAbsenceBalanceRow = (row: Record<string, unknown>) => ({
+  id: String(row.id),
+  employeeId: String(row.employee_id),
+  absenceTypeId: String(row.absence_type_id),
+  year: Number(row.year),
+  totalDays: Number(row.total_days),
+  notes: row.notes ? String(row.notes) : null,
+  createdAt: toIsoString(row.created_at as Date | string),
+  updatedAt: toIsoString(row.updated_at as Date | string),
+});

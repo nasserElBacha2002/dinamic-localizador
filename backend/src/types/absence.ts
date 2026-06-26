@@ -76,6 +76,43 @@ export interface AbsenceRequestWithRelations extends AbsenceRequest {
 export interface AbsenceRequestDetail extends AbsenceRequestWithRelations {
   events: AbsenceRequestEvent[];
   affectedInventories: AffectedInventoryWarning[];
+  balanceImpact: AbsenceBalanceImpact | null;
+}
+
+export interface EmployeeAbsenceBalance {
+  id: string;
+  employeeId: string;
+  absenceTypeId: string;
+  year: number;
+  totalDays: number;
+  notes: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AbsenceBalanceSummary {
+  absenceType: Pick<AbsenceType, "id" | "code" | "name" | "deductsBalance">;
+  year: number;
+  assignedDays: number;
+  approvedDays: number;
+  pendingDays: number;
+  rejectedDays: number;
+  cancelledDays: number;
+  availableDays: number;
+  projectedAvailableDays: number;
+}
+
+export interface AbsenceBalanceImpact {
+  deductsBalance: boolean;
+  year: number;
+  requestDays: number;
+  assignedDays?: number;
+  approvedDays?: number;
+  pendingDays?: number;
+  availableDays?: number;
+  availableAfterApproval?: number;
+  hasSufficientBalance?: boolean;
+  message?: string;
 }
 
 export interface AffectedInventoryWarning {

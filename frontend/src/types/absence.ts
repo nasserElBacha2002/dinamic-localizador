@@ -83,6 +83,43 @@ export interface AffectedInventoryWarning {
 export interface AbsenceRequestDetail extends AbsenceRequestListItem {
   events: AbsenceRequestEvent[];
   affectedInventories: AffectedInventoryWarning[];
+  balanceImpact?: AbsenceBalanceImpact | null;
+}
+
+export interface EmployeeAbsenceBalanceSummary {
+  absenceType: {
+    id: string;
+    code: string;
+    name: string;
+    deductsBalance: boolean;
+  };
+  year: number;
+  assignedDays: number;
+  approvedDays: number;
+  pendingDays: number;
+  rejectedDays: number;
+  cancelledDays: number;
+  availableDays: number;
+  projectedAvailableDays: number;
+}
+
+export interface AbsenceBalanceImpact {
+  deductsBalance: boolean;
+  year: number;
+  requestDays: number;
+  assignedDays?: number;
+  approvedDays?: number;
+  pendingDays?: number;
+  availableDays?: number;
+  availableAfterApproval?: number;
+  hasSufficientBalance?: boolean;
+  message?: string;
+}
+
+export interface UpsertEmployeeAbsenceBalanceInput {
+  year: number;
+  totalDays: number;
+  notes?: string | null;
 }
 
 export interface AbsenceRequestFilters {

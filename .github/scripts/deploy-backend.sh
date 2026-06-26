@@ -11,24 +11,46 @@ echo "==> Deploy backend in ${DEPLOY_PATH}"
 
 cd "${DEPLOY_PATH}"
 
-echo "==> Running migrations"
-docker compose --env-file .env ${COMPOSE_FILES} run --rm migrations
-
-echo "==> Building backend"
-docker compose --env-file .env ${COMPOSE_FILES} build backend
-
-echo "==> Starting backend without dependencies"
-docker compose --env-file .env ${COMPOSE_FILES} up -d --no-deps backend
-
-echo "==> Service status"
-docker compose --env-file .env ${COMPOSE_FILES} ps
-
-print_backend_diagnostics() {
+print_compose_status() {
   echo "==> Docker Compose service status"
   docker compose --env-file .env ${COMPOSE_FILES} ps || true
+}
+
+print_backend_diagnostics() {
+  print_compose_status
   echo "==> Backend logs (last 300 lines)"
   docker compose --env-file .env ${COMPOSE_FILES} logs --tail=300 backend || true
 }
+
+print_migration_diagnostics() {
+  print_compose_status
+  echo "==> Migrations logs (last 300 lines)"
+  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=300 migrations || true
+}
+
+echo "==> Running migrations"
+if ! docker compose --env-file .env ${COMPOSE_FILES} run --rm migrations; then
+  echo "==> Migrations failed"
+  print_migration_diagnostics
+  exit 1
+fi
+
+echo "==> Building backend"
+if ! docker compose --env-file .env ${COMPOSE_FILES} build backend; then
+  echo "==> Backend image build failed"
+  print_backend_diagnostics
+  exit 1
+fi
+
+echo "==> Starting backend without dependencies"
+if ! docker compose --env-file .env ${COMPOSE_FILES} up -d --no-deps backend; then
+  echo "==> Backend container failed to start"
+  print_backend_diagnostics
+  exit 1
+fi
+
+echo "==> Service status"
+docker compose --env-file .env ${COMPOSE_FILES} ps
 
 backend_container_running() {
   local cid running

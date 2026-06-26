@@ -15,13 +15,13 @@ docker compose --env-file .env ${COMPOSE_FILES} run --rm migrations
 echo "==> Building backend"
 docker compose --env-file .env ${COMPOSE_FILES} build backend
 
-echo "==> Starting backend"
-docker compose --env-file .env ${COMPOSE_FILES} up -d backend
+echo "==> Starting backend without dependencies"
+docker compose --env-file .env ${COMPOSE_FILES} up -d --no-deps backend
 
 echo "==> Service status"
 docker compose --env-file .env ${COMPOSE_FILES} ps
 
-echo "==> Backend health check: ${BACKEND_HEALTH_URL}"
+echo "==> Checking backend health: ${BACKEND_HEALTH_URL}"
 curl -fsS "${BACKEND_HEALTH_URL}" > /dev/null
 
 echo "==> Backend deploy completed successfully"

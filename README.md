@@ -651,6 +651,29 @@ Database health: http://localhost:3000/api/health/database
 
 ---
 
+## CI/CD y despliegue (`develop`)
+
+El servidor de producción deploya desde la rama **`develop`**, no desde `main`.
+
+```text
+feature/* → PR contra develop → CI (lint/build/tests) → merge → deploy SSH automático
+```
+
+Documentación completa: [docs/github-actions.md](docs/github-actions.md)
+
+Validación local antes de abrir PR:
+
+```bash
+cd backend && npm ci && npm run build && npm test
+cd ../frontend && npm ci && npm run lint && npm run build && npm test
+cp .env.example .env
+# Completar secretos vacíos si hace falta (ver .github/workflows/pr-validation.yml)
+docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml config
+rm -f .env
+```
+
+---
+
 ## Panel administrativo (frontend)
 
 ### Rutas disponibles

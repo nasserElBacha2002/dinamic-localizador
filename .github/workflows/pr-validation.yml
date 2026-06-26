@@ -1,0 +1,106 @@
+name: PR Validation
+
+on:
+  pull_request:
+    branches:
+      - develop
+      - main
+
+concurrency:
+  group: pr-validation-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  backend-validation:
+    name: backend-validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: TypeScript build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+  frontend-validation:
+    name: frontend-validation
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      - name: TypeScript build
+        run: npm run build
+
+      - name: Tests
+        run: npm test
+
+  docker-validation:
+    name: docker-validation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Validate Docker Compose config
+        run: |
+          cp .env.example .env
+
+          # Completar solo variables vacías en .env.example requeridas por docker-compose.prod.yml
+          replace_if_empty() {
+            local key="$1"
+            local value="$2"
+            if grep -qE "^${key}=$" .env; then
+              sed -i "s|^${key}=.*|${key}=${value}|" .env
+            fi
+          }
+
+          replace_if_empty DB_PASSWORD ci-db-password
+          replace_if_empty MSSQL_SA_PASSWORD ci-mssql-password
+          replace_if_empty JWT_SECRET ci-jwt-secret-min-16-chars
+          replace_if_empty TWILIO_ACCOUNT_SID ci-twilio-account-sid
+          replace_if_empty TWILIO_AUTH_TOKEN ci-twilio-auth-token
+          replace_if_empty TWILIO_WHATSAPP_NUMBER whatsapp:+10000000000
+          replace_if_empty TWILIO_WEBHOOK_URL https://example.com/api/whatsapp/webhook
+
+          sed -i 's|^NODE_ENV=.*|NODE_ENV=production|' .env
+          sed -i 's|^TWILIO_VALIDATE_SIGNATURE=.*|TWILIO_VALIDATE_SIGNATURE=true|' .env
+
+          docker compose \
+            --env-file .env \
+            -f docker-compose.yml \
+            -f docker-compose.prod.yml \
+            config > /dev/null
+
+          rm -f .env

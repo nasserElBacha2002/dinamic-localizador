@@ -1,20 +1,31 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
-import { connectDatabase, closeDatabase } from "../database/connection";
+import {
+  describeDatabaseIntegration,
+  setupDatabaseIntegration,
+  teardownDatabaseIntegration,
+} from "../test-helpers/integration-test";
 import { isAbsenceCancelIntent } from "../utils/absence-intent";
-import { absenceRequestRepository } from "../repositories/absence-request.repository";
-import { absenceRequestService } from "./absence-request.service";
 
 describe("absence request stabilization", () => {
+  it("recognizes global cancel intent for active bot sessions", () => {
+    assert.equal(isAbsenceCancelIntent("Cancelar"), true);
+    assert.equal(isAbsenceCancelIntent("cancelar flujo"), true);
+    assert.equal(isAbsenceCancelIntent("Llegué"), false);
+  });
+});
+
+describeDatabaseIntegration("absence request stabilization (database)", () => {
   before(async () => {
-    await connectDatabase();
+    await setupDatabaseIntegration();
   });
 
   after(async () => {
-    await closeDatabase();
+    await teardownDatabaseIntegration();
   });
 
   it("lists absence requests with PENDING filter without SQL errors", async () => {
+    const { absenceRequestRepository } = await import("../repositories/absence-request.repository");
     const result = await absenceRequestRepository.list({
       page: 1,
       limit: 10,
@@ -27,6 +38,7 @@ describe("absence request stabilization", () => {
   });
 
   it("returns paginated list response shape from service", async () => {
+    const { absenceRequestService } = await import("./absence-request.service");
     const result = await absenceRequestService.list({
       page: 1,
       limit: 10,
@@ -44,6 +56,7 @@ describe("absence request stabilization", () => {
   });
 
   it("findAffectedInventories tolerates inventories without scheduled_start", async () => {
+    const { absenceRequestRepository } = await import("../repositories/absence-request.repository");
     const inventories = await absenceRequestRepository.findAffectedInventories(
       "00000000-0000-0000-0000-000000000000",
       new Date("2026-01-01T03:00:00.000Z"),
@@ -53,15 +66,10 @@ describe("absence request stabilization", () => {
     assert.ok(Array.isArray(inventories));
   });
 
-  it("forces admin create path to ignore client requestedVia", () => {
+  it("forces admin create path to ignore client requestedVia", async () => {
+    const { absenceRequestService } = await import("./absence-request.service");
     const adminCreate = absenceRequestService.createFromAdmin.toString();
     assert.match(adminCreate, /requestedVia:\s*"ADMIN"/);
     assert.match(adminCreate, /sourceMessageSid:\s*null/);
-  });
-
-  it("recognizes global cancel intent for active bot sessions", () => {
-    assert.equal(isAbsenceCancelIntent("Cancelar"), true);
-    assert.equal(isAbsenceCancelIntent("cancelar flujo"), true);
-    assert.equal(isAbsenceCancelIntent("Llegué"), false);
   });
 });

@@ -2,6 +2,7 @@ import {
   Button,
   Card,
   CardContent,
+  Link,
   Stack,
   Typography,
 } from "@mui/material";
@@ -76,6 +77,22 @@ export function InventoryDetailPage() {
 
   const canAssign = isInventoryAssignable(inventory.status);
   const canEdit = isInventoryEditable(inventory.status);
+  const storeDisplayName = inventory.store?.name ?? "—";
+  const storeDetailId = inventory.storeId || inventory.store?.id;
+  const storeFieldValue =
+    storeDetailId && storeDisplayName !== "—" ? (
+      <Link
+        component={RouterLink}
+        to={`/stores/${storeDetailId}`}
+        title="Ver tienda"
+        underline="hover"
+        color="primary"
+      >
+        {storeDisplayName}
+      </Link>
+    ) : (
+      storeDisplayName
+    );
 
   const handleUpdate = async (values: InventoryFormValues) => {
     setErrorMessage(null);
@@ -143,8 +160,8 @@ export function InventoryDetailPage() {
                   label: "Estado",
                   value: <StatusChip label={inventoryStatusLabels[inventory.status]} />,
                 },
-                { label: "Tienda", value: inventory.store.name },
-                { label: "Dirección", value: inventory.store.address ?? "—" },
+                { label: "Tienda", value: storeFieldValue },
+                { label: "Dirección", value: inventory.store?.address ?? "—" },
                 { label: "Inicio", value: formatDateTime(inventory.scheduledStart) },
                 { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
                 { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },

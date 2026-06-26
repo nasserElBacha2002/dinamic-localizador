@@ -18,7 +18,21 @@ docker compose --env-file .env ${COMPOSE_FILES} up -d frontend
 echo "==> Service status"
 docker compose --env-file .env ${COMPOSE_FILES} ps
 
-echo "==> Frontend health check: ${FRONTEND_HEALTH_URL}"
-curl -fsS "${FRONTEND_HEALTH_URL}" > /dev/null
+print_frontend_diagnostics() {
+  echo "==> Docker Compose service status"
+  docker compose --env-file .env ${COMPOSE_FILES} ps || true
+  echo "==> Frontend logs (last 200 lines)"
+  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=200 frontend || true
+}
 
-echo "==> Frontend deploy completed successfully"
+echo "==> Frontend health check: ${FRONTEND_HEALTH_URL}"
+if health_response="$(curl -fsS "${FRONTEND_HEALTH_URL}")"; then
+  echo "==> Health response:"
+  echo "${health_response}"
+  echo "==> Frontend deploy completed successfully"
+  exit 0
+fi
+
+echo "==> Frontend health check failed"
+print_frontend_diagnostics
+exit 1

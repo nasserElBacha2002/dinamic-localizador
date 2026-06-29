@@ -1,12 +1,22 @@
 import assert from "node:assert/strict";
 import { describe, it, mock } from "node:test";
-import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
-import { attendanceReminderService } from "./attendance-reminder.service";
-import { twilioOutboundService } from "./twilio-outbound.service";
+import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
 describe("attendanceReminderService", () => {
   it("does not call Twilio when attempt claim returns null", async () => {
-    const claimMock = mock.method(attendanceNotificationRepository, "claimNotificationForAttempt", async () => null);
+    setupUnitTestEnv();
+
+    const { attendanceNotificationRepository } = await import(
+      "../repositories/attendance-notification.repository"
+    );
+    const { attendanceReminderService } = await import("./attendance-reminder.service");
+    const { twilioOutboundService } = await import("./twilio-outbound.service");
+
+    const claimMock = mock.method(
+      attendanceNotificationRepository,
+      "claimNotificationForAttempt",
+      async () => null,
+    );
     const sendMock = mock.method(twilioOutboundService, "sendWhatsAppTemplate", async () => ({
       messageSid: "SM_TEST",
     }));

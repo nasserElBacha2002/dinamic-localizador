@@ -27,3 +27,16 @@ backend/reports/
 
 # Local git review artifacts (Cursor commands)
 review/
+
+# Audit generated artifacts (keep structure, ignore volatile run snapshots)
+audit/raw/runs/
+audit/raw/_meta/
+audit/raw/*.txt
+audit/raw/*.json
+audit/raw/*.md
+audit/audit-summary.md
+audit/audit-status.json
+
+# Keep directory placeholders
+!audit/raw/.gitkeep
+!audit/raw/runs/.gitkeep

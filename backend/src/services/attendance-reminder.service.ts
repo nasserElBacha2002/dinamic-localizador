@@ -4,7 +4,7 @@ import { AppError } from "../errors/app-error";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
-import { buildReminderTargetWindow } from "../utils/reminder-time-window";
+import { buildReminderDueWindow } from "../utils/reminder-time-window";
 import { twilioOutboundService } from "./twilio-outbound.service";
 
 export interface AttendanceReminderRunSummary {
@@ -45,22 +45,20 @@ const sendReminderForCandidate = async (
   candidate: AttendanceReminderCandidate,
   notificationType: AttendanceNotificationType,
 ): Promise<"sent" | "failed" | "skipped"> => {
-  const reserved = await attendanceNotificationRepository.reserveNotification({
+  const claimed = await attendanceNotificationRepository.claimNotificationForAttempt({
     inventoryId: candidate.inventoryId,
     employeeId: candidate.employeeId,
     notificationType,
   });
 
-  if (!reserved) {
-    console.info("[attendance-reminder] skipped duplicate reservation", {
+  if (!claimed) {
+    console.info("[attendance-reminder] skipped concurrent or non-retryable notification", {
       notificationType,
       inventoryId: candidate.inventoryId,
       employeeId: candidate.employeeId,
     });
     return "skipped";
   }
-
-  const sentAt = new Date();
 
   try {
     const contentSid = contentSidForType(notificationType);
@@ -71,8 +69,9 @@ const sendReminderForCandidate = async (
       contentVariables,
     });
 
+    const sentAt = new Date();
     await attendanceNotificationRepository.markSent({
-      notificationId: reserved.id,
+      notificationId: claimed.id,
       twilioMessageSid: result.messageSid,
       sentAt,
     });
@@ -81,7 +80,7 @@ const sendReminderForCandidate = async (
       notificationType,
       inventoryId: candidate.inventoryId,
       employeeId: candidate.employeeId,
-      notificationId: reserved.id,
+      notificationId: claimed.id,
       twilioMessageSid: result.messageSid,
     });
 
@@ -91,16 +90,15 @@ const sendReminderForCandidate = async (
       error instanceof Error ? error.message : "Unknown error sending attendance reminder";
 
     await attendanceNotificationRepository.markFailed({
-      notificationId: reserved.id,
+      notificationId: claimed.id,
       errorMessage,
-      sentAt,
     });
 
     console.error("[attendance-reminder] reminder failed", {
       notificationType,
       inventoryId: candidate.inventoryId,
       employeeId: candidate.employeeId,
-      notificationId: reserved.id,
+      notificationId: claimed.id,
       errorMessage,
     });
 
@@ -151,7 +149,7 @@ export const attendanceReminderService = {
       };
     }
 
-    const { windowStart, windowEnd } = buildReminderTargetWindow(referenceAt);
+    const { windowStart, windowEnd } = buildReminderDueWindow(referenceAt);
 
     const [arrivalCandidates, exitCandidates] = await Promise.all([
       attendanceNotificationRepository.findArrivalReminderCandidates({ windowStart, windowEnd }),

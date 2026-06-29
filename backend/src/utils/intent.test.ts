@@ -31,6 +31,7 @@ describe("isCheckoutIntent", () => {
   it("accepts supported checkout intents", () => {
     assert.equal(isCheckoutIntent("Me voy"), true);
     assert.equal(isCheckoutIntent("Terminé"), true);
+    assert.equal(isCheckoutIntent("Finalicé"), true);
     assert.equal(isCheckoutIntent("finalice"), true);
     assert.equal(isCheckoutIntent("salida"), true);
   });

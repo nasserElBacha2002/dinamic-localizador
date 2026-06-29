@@ -1,5 +1,9 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import {
+  ATTENDANCE_REMINDER_MAX_ATTEMPTS,
+  ATTENDANCE_REMINDER_STALE_PENDING_MINUTES,
+} from "../constants/attendance-notification";
 import type {
   AttendanceNotificationStatus,
   AttendanceNotificationType,
@@ -8,6 +12,7 @@ import type {
   AttendanceNotification,
   AttendanceReminderCandidate,
 } from "../types/attendance-notification";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const mapNotificationRow = (row: Record<string, unknown>): AttendanceNotification => ({
   id: String(row.id),
@@ -18,6 +23,10 @@ const mapNotificationRow = (row: Record<string, unknown>): AttendanceNotificatio
   status: String(row.status) as AttendanceNotificationStatus,
   errorMessage: row.error_message ? String(row.error_message) : null,
   sentAt: row.sent_at ? new Date(row.sent_at as Date | string).toISOString() : null,
+  attemptCount: Number(row.attempt_count ?? 0),
+  lastAttemptAt: row.last_attempt_at
+    ? new Date(row.last_attempt_at as Date | string).toISOString()
+    : null,
   createdAt: new Date(row.created_at as Date | string).toISOString(),
 });
 
@@ -33,20 +42,69 @@ const mapCandidateRow = (row: Record<string, unknown>): AttendanceReminderCandid
     : null,
 });
 
-const isDuplicateNotificationError = (error: unknown): boolean =>
-  error instanceof Error &&
-  error.message.includes("UQ_whatsapp_attendance_notifications_inventory_employee_type");
+const PHONE_FILTER_SQL = `
+  AND e.phone_number IS NOT NULL
+  AND LTRIM(RTRIM(e.phone_number)) <> ''
+`;
+
+const buildNotificationEligibilitySql = (): string => `
+  AND (
+    wan.id IS NULL
+    OR (
+      wan.status = 'FAILED'
+      AND wan.attempt_count < @maxAttempts
+    )
+    OR (
+      wan.status = 'PENDING'
+      AND COALESCE(wan.last_attempt_at, wan.created_at) < @staleBefore
+    )
+  )
+`;
+
+const getRetryThresholds = () => ({
+  staleBefore: new Date(Date.now() - ATTENDANCE_REMINDER_STALE_PENDING_MINUTES * 60_000),
+  maxAttempts: ATTENDANCE_REMINDER_MAX_ATTEMPTS,
+});
 
 export const attendanceNotificationRepository = {
+  async findByInventoryEmployeeType(input: {
+    inventoryId: string;
+    employeeId: string;
+    notificationType: AttendanceNotificationType;
+  }): Promise<AttendanceNotification | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("notificationType", sql.NVarChar(40), input.notificationType)
+      .query(`
+        SELECT TOP 1 *
+        FROM whatsapp_attendance_notifications
+        WHERE inventory_id = @inventoryId
+          AND employee_id = @employeeId
+          AND notification_type = @notificationType
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async findArrivalReminderCandidates(input: {
     windowStart: Date;
     windowEnd: Date;
   }): Promise<AttendanceReminderCandidate[]> {
     const pool = getPool();
+    const { staleBefore, maxAttempts } = getRetryThresholds();
     const result = await pool
       .request()
       .input("windowStart", sql.DateTime2, input.windowStart)
       .input("windowEnd", sql.DateTime2, input.windowEnd)
+      .input("staleBefore", sql.DateTime2, staleBefore)
+      .input("maxAttempts", sql.Int, maxAttempts)
       .query(`
         SELECT
           i.id AS inventory_id,
@@ -67,9 +125,10 @@ export const attendanceNotificationRepository = {
         WHERE i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
+          ${PHONE_FILTER_SQL}
           AND i.scheduled_start >= @windowStart
-          AND i.scheduled_start < @windowEnd
-          AND wan.id IS NULL
+          AND i.scheduled_start <= @windowEnd
+          ${buildNotificationEligibilitySql()}
       `);
 
     return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
@@ -80,10 +139,13 @@ export const attendanceNotificationRepository = {
     windowEnd: Date;
   }): Promise<AttendanceReminderCandidate[]> {
     const pool = getPool();
+    const { staleBefore, maxAttempts } = getRetryThresholds();
     const result = await pool
       .request()
       .input("windowStart", sql.DateTime2, input.windowStart)
       .input("windowEnd", sql.DateTime2, input.windowEnd)
+      .input("staleBefore", sql.DateTime2, staleBefore)
+      .input("maxAttempts", sql.Int, maxAttempts)
       .query(`
         SELECT
           i.id AS inventory_id,
@@ -110,9 +172,10 @@ export const attendanceNotificationRepository = {
           AND i.scheduled_end IS NOT NULL
           AND s.active = 1
           AND e.active = 1
+          ${PHONE_FILTER_SQL}
           AND i.scheduled_end >= @windowStart
-          AND i.scheduled_end < @windowEnd
-          AND wan.id IS NULL
+          AND i.scheduled_end <= @windowEnd
+          ${buildNotificationEligibilitySql()}
       `);
 
     return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
@@ -128,12 +191,15 @@ export const attendanceNotificationRepository = {
         SELECT TOP 1 1 AS found
         FROM attendance_records ar
         INNER JOIN inventories i ON i.id = ar.inventory_id
+        INNER JOIN employees e ON e.id = ar.employee_id
         WHERE ar.inventory_id = @inventoryId
           AND ar.employee_id = @employeeId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
           AND ar.checkout_at IS NULL
           AND i.status <> 'CANCELLED'
           AND i.scheduled_end IS NOT NULL
+          AND e.phone_number IS NOT NULL
+          AND LTRIM(RTRIM(e.phone_number)) <> ''
       `);
 
     return Boolean(result.recordset[0]);
@@ -168,6 +234,7 @@ export const attendanceNotificationRepository = {
         WHERE i.id = @inventoryId
           AND s.active = 1
           AND e.active = 1
+          ${PHONE_FILTER_SQL}
           AND ${scheduledColumn} IS NOT NULL
       `);
 
@@ -178,35 +245,197 @@ export const attendanceNotificationRepository = {
     return mapCandidateRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async reserveNotification(input: {
+  async claimNotificationForAttempt(input: {
     inventoryId: string;
     employeeId: string;
     notificationType: AttendanceNotificationType;
+    attemptedAt?: Date;
   }): Promise<AttendanceNotification | null> {
+    const attemptedAt = input.attemptedAt ?? new Date();
+    const { staleBefore, maxAttempts } = getRetryThresholds();
+
+    const reclaimed = await this.reclaimNotificationForAttempt({
+      inventoryId: input.inventoryId,
+      employeeId: input.employeeId,
+      notificationType: input.notificationType,
+      attemptedAt,
+      staleBefore,
+      maxAttempts,
+    });
+    if (reclaimed) {
+      return reclaimed;
+    }
+
     const pool = getPool();
 
     try {
-      const result = await pool
+      const insertResult = await pool
         .request()
         .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
         .input("notificationType", sql.NVarChar(40), input.notificationType)
         .query(`
           INSERT INTO whatsapp_attendance_notifications (
-            inventory_id, employee_id, notification_type, status
+            inventory_id, employee_id, notification_type, status, attempt_count
           )
           OUTPUT INSERTED.*
-          VALUES (@inventoryId, @employeeId, @notificationType, 'PENDING')
+          VALUES (@inventoryId, @employeeId, @notificationType, 'PENDING', 0)
         `);
 
-      return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
+      const inserted = mapNotificationRow(insertResult.recordset[0] as Record<string, unknown>);
+      return this.beginAttempt({
+        notificationId: inserted.id,
+        attemptedAt,
+        maxAttempts,
+        firstAttemptOnly: true,
+      });
     } catch (error) {
-      if (isDuplicateNotificationError(error)) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+
+      const reclaimedAfterRace = await this.reclaimNotificationForAttempt({
+        inventoryId: input.inventoryId,
+        employeeId: input.employeeId,
+        notificationType: input.notificationType,
+        attemptedAt,
+        staleBefore,
+        maxAttempts,
+      });
+      if (reclaimedAfterRace) {
+        return reclaimedAfterRace;
+      }
+
+      const existing = await this.findByInventoryEmployeeType(input);
+      if (!existing) {
         return null;
       }
 
-      throw error;
+      return this.beginAttempt({
+        notificationId: existing.id,
+        attemptedAt,
+        maxAttempts,
+        firstAttemptOnly: true,
+      });
     }
+  },
+
+  async reclaimNotificationForAttempt(input: {
+    notificationId?: string;
+    inventoryId?: string;
+    employeeId?: string;
+    notificationType?: AttendanceNotificationType;
+    attemptedAt: Date;
+    staleBefore: Date;
+    maxAttempts: number;
+  }): Promise<AttendanceNotification | null> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("attemptedAt", sql.DateTime2, input.attemptedAt)
+      .input("staleBefore", sql.DateTime2, input.staleBefore)
+      .input("maxAttempts", sql.Int, input.maxAttempts);
+
+    let whereClause = "id = @notificationId";
+    if (input.notificationId) {
+      request.input("notificationId", sql.UniqueIdentifier, input.notificationId);
+    } else if (input.inventoryId && input.employeeId && input.notificationType) {
+      request
+        .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
+        .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+        .input("notificationType", sql.NVarChar(40), input.notificationType);
+      whereClause = `
+        inventory_id = @inventoryId
+        AND employee_id = @employeeId
+        AND notification_type = @notificationType
+      `;
+    } else {
+      throw new Error("RECLAIM_NOTIFICATION_TARGET_REQUIRED");
+    }
+
+    const result = await request.query(`
+      UPDATE whatsapp_attendance_notifications
+      SET status = 'PENDING',
+          error_message = NULL,
+          attempt_count = attempt_count + 1,
+          last_attempt_at = @attemptedAt
+      OUTPUT INSERTED.*
+      WHERE ${whereClause}
+        AND (
+          (
+            status = 'FAILED'
+            AND attempt_count < @maxAttempts
+          )
+          OR (
+            status = 'PENDING'
+            AND COALESCE(last_attempt_at, created_at) < @staleBefore
+          )
+        )
+    `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async beginAttempt(input: {
+    notificationId: string;
+    attemptedAt: Date;
+    maxAttempts?: number;
+    firstAttemptOnly?: boolean;
+  }): Promise<AttendanceNotification | null> {
+    const pool = getPool();
+    const maxAttempts = input.maxAttempts ?? ATTENDANCE_REMINDER_MAX_ATTEMPTS;
+    const firstAttemptClause = input.firstAttemptOnly
+      ? "AND attempt_count = 0 AND last_attempt_at IS NULL"
+      : "";
+
+    const result = await pool
+      .request()
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
+      .input("attemptedAt", sql.DateTime2, input.attemptedAt)
+      .input("maxAttempts", sql.Int, maxAttempts)
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET attempt_count = attempt_count + 1,
+            last_attempt_at = @attemptedAt
+        OUTPUT INSERTED.*
+        WHERE id = @notificationId
+          AND status = 'PENDING'
+          AND attempt_count < @maxAttempts
+          ${firstAttemptClause}
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /** @deprecated Use claimNotificationForAttempt */
+  async reserveNotification(input: {
+    inventoryId: string;
+    employeeId: string;
+    notificationType: AttendanceNotificationType;
+  }): Promise<AttendanceNotification | null> {
+    return this.claimNotificationForAttempt(input);
+  },
+
+  /** @deprecated Replaced by reclaimNotificationForAttempt */
+  async reclaimNotification(
+    notificationId: string,
+    attemptedAt: Date = new Date(),
+  ): Promise<AttendanceNotification | null> {
+    const { staleBefore, maxAttempts } = getRetryThresholds();
+    return this.reclaimNotificationForAttempt({
+      notificationId,
+      attemptedAt,
+      staleBefore,
+      maxAttempts,
+    });
   },
 
   async markSent(input: {
@@ -233,19 +462,17 @@ export const attendanceNotificationRepository = {
   async markFailed(input: {
     notificationId: string;
     errorMessage: string;
-    sentAt: Date;
   }): Promise<void> {
     const pool = getPool();
     await pool
       .request()
       .input("notificationId", sql.UniqueIdentifier, input.notificationId)
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
-      .input("sentAt", sql.DateTime2, input.sentAt)
       .query(`
         UPDATE whatsapp_attendance_notifications
         SET status = 'FAILED',
             error_message = @errorMessage,
-            sent_at = @sentAt
+            sent_at = NULL
         WHERE id = @notificationId
       `);
   },

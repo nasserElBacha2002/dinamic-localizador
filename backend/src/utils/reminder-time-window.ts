@@ -6,12 +6,12 @@ export interface ReminderTimeWindow {
   referenceAt: Date;
 }
 
-export const buildReminderTargetWindow = (
+export const buildReminderDueWindow = (
   referenceAt: Date,
   leadMinutes: number = ATTENDANCE_REMINDER_LEAD_MINUTES,
 ): ReminderTimeWindow => {
-  const windowStart = new Date(referenceAt.getTime() + leadMinutes * 60_000);
-  const windowEnd = new Date(windowStart.getTime() + 60_000);
+  const windowStart = referenceAt;
+  const windowEnd = new Date(referenceAt.getTime() + leadMinutes * 60_000);
 
   return {
     referenceAt,
@@ -19,3 +19,6 @@ export const buildReminderTargetWindow = (
     windowEnd,
   };
 };
+
+/** @deprecated Use buildReminderDueWindow */
+export const buildReminderTargetWindow = buildReminderDueWindow;

@@ -12,6 +12,8 @@ export interface AttendanceNotification {
   status: AttendanceNotificationStatus;
   errorMessage: string | null;
   sentAt: string | null;
+  attemptCount: number;
+  lastAttemptAt: string | null;
   createdAt: string;
 }
 

@@ -17,7 +17,7 @@ export const apiRouter = Router();
 apiRouter.use("/", healthRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
-apiRouter.use("/dev/attendance-reminders", devReminderRouter);
+apiRouter.use("/dev/attendance-reminders", authenticate, requireAdmin, devReminderRouter);
 
 apiRouter.use(authenticate, requireAdmin);
 apiRouter.use("/employees", employeeRouter);

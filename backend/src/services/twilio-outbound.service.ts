@@ -1,5 +1,6 @@
 import twilio from "twilio";
 import { env } from "../config/env";
+import { formatWhatsAppAddress } from "../utils/whatsapp-phone";
 
 export interface WhatsAppTemplateSendInput {
   toPhoneNumber: string;
@@ -23,11 +24,6 @@ const getTwilioClient = (): ReturnType<typeof twilio> => {
   }
 
   return twilioClient;
-};
-
-const formatWhatsAppAddress = (phoneNumber: string): string => {
-  const normalized = phoneNumber.replace(/^whatsapp:/i, "").trim();
-  return `whatsapp:${normalized}`;
 };
 
 export const twilioOutboundService = {

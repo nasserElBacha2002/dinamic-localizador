@@ -93,6 +93,8 @@ jobs:
           replace_if_empty TWILIO_AUTH_TOKEN ci-twilio-auth-token
           replace_if_empty TWILIO_WHATSAPP_NUMBER whatsapp:+10000000000
           replace_if_empty TWILIO_WEBHOOK_URL https://example.com/api/whatsapp/webhook
+          replace_if_empty TWILIO_ARRIVAL_REMINDER_CONTENT_SID HX00000000000000000000000000000001
+          replace_if_empty TWILIO_EXIT_REMINDER_CONTENT_SID HX00000000000000000000000000000002
 
           sed -i 's|^NODE_ENV=.*|NODE_ENV=production|' .env
           sed -i 's|^TWILIO_VALIDATE_SIGNATURE=.*|TWILIO_VALIDATE_SIGNATURE=true|' .env

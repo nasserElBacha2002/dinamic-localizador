@@ -9,6 +9,7 @@ import { statisticsRouter } from "./statistics.routes";
 import { storeRouter } from "./store.routes";
 import { twilioRouter } from "./twilio.routes";
 import { absenceRouter } from "./absence.routes";
+import { devReminderRouter } from "./dev-reminder.routes";
 import { authenticate, requireAdmin } from "../middleware/authenticate";
 
 export const apiRouter = Router();
@@ -16,6 +17,7 @@ export const apiRouter = Router();
 apiRouter.use("/", healthRouter);
 apiRouter.use("/auth", authRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
+apiRouter.use("/dev/attendance-reminders", devReminderRouter);
 
 apiRouter.use(authenticate, requireAdmin);
 apiRouter.use("/employees", employeeRouter);

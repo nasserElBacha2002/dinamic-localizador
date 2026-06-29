@@ -19,11 +19,11 @@ export const normalizeIntentText = (text: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
+// Exit template copy asks users to reply "Me voy"; keep aligned with approved Twilio content.
 const CHECKOUT_INTENTS = [
   "me voy",
   "termine",
   "terminé",
-  "termine",
   "finalice",
   "finalicé",
   "salida",

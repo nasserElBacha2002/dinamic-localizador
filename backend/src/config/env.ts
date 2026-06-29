@@ -23,6 +23,9 @@ const envSchema = z
     TWILIO_WHATSAPP_NUMBER: z.string().optional(),
     TWILIO_WEBHOOK_URL: z.string().url().optional(),
     TWILIO_VALIDATE_SIGNATURE: z.stringbool().optional(),
+    TWILIO_ARRIVAL_REMINDER_CONTENT_SID: z.string().optional(),
+    TWILIO_EXIT_REMINDER_CONTENT_SID: z.string().optional(),
+    ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
     BOT_OPERATION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
     BOT_DEFAULT_RADIUS_METERS: z.coerce.number().int().positive().default(150),
@@ -93,6 +96,34 @@ const envSchema = z
         message: "TWILIO_WHATSAPP_NUMBER is required in production",
         path: ["TWILIO_WHATSAPP_NUMBER"],
       });
+    }
+
+    if (data.NODE_ENV === "production" && !data.TWILIO_ACCOUNT_SID) {
+      ctx.addIssue({
+        code: "custom",
+        message: "TWILIO_ACCOUNT_SID is required in production",
+        path: ["TWILIO_ACCOUNT_SID"],
+      });
+    }
+
+    if (data.NODE_ENV === "production" && data.ATTENDANCE_REMINDER_JOB_ENABLED) {
+      if (!data.TWILIO_ARRIVAL_REMINDER_CONTENT_SID) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "TWILIO_ARRIVAL_REMINDER_CONTENT_SID is required in production when attendance reminders are enabled",
+          path: ["TWILIO_ARRIVAL_REMINDER_CONTENT_SID"],
+        });
+      }
+
+      if (!data.TWILIO_EXIT_REMINDER_CONTENT_SID) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "TWILIO_EXIT_REMINDER_CONTENT_SID is required in production when attendance reminders are enabled",
+          path: ["TWILIO_EXIT_REMINDER_CONTENT_SID"],
+        });
+      }
     }
   });
 

@@ -2,27 +2,30 @@
 set -euo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/dinamic-attendance/dinamic-localizador}"
-COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 FRONTEND_HEALTH_URL="${DEPLOY_FRONTEND_HEALTH_URL:-http://127.0.0.1:8084/}"
+
+# shellcheck source=/dev/null
+source "${DEPLOY_PATH}/.github/scripts/deploy-compose.sh"
 
 echo "==> Deploy frontend in ${DEPLOY_PATH}"
 
 cd "${DEPLOY_PATH}"
+assert_deploy_env_file
 
 echo "==> Building frontend"
-docker compose --env-file .env ${COMPOSE_FILES} build frontend
+compose build frontend
 
 echo "==> Starting frontend"
-docker compose --env-file .env ${COMPOSE_FILES} up -d frontend
+compose up -d frontend
 
 echo "==> Service status"
-docker compose --env-file .env ${COMPOSE_FILES} ps
+compose ps
 
 print_frontend_diagnostics() {
   echo "==> Docker Compose service status"
-  docker compose --env-file .env ${COMPOSE_FILES} ps || true
+  compose ps || true
   echo "==> Frontend logs (last 300 lines)"
-  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=300 frontend || true
+  compose logs --tail=300 frontend || true
 }
 
 echo "==> Frontend health check: ${FRONTEND_HEALTH_URL}"

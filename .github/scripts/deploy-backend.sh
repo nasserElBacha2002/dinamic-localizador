@@ -2,59 +2,65 @@
 set -euo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/dinamic-attendance/dinamic-localizador}"
-COMPOSE_FILES="-f docker-compose.yml -f docker-compose.prod.yml"
 BACKEND_HEALTH_URL="${DEPLOY_BACKEND_HEALTH_URL:-http://127.0.0.1:3004/api/health}"
 MAX_HEALTH_RETRIES="${DEPLOY_BACKEND_HEALTH_RETRIES:-30}"
 HEALTH_RETRY_SLEEP_SECONDS="${DEPLOY_BACKEND_HEALTH_RETRY_SLEEP_SECONDS:-2}"
 
+# shellcheck source=/dev/null
+source "${DEPLOY_PATH}/.github/scripts/deploy-compose.sh"
+
 echo "==> Deploy backend in ${DEPLOY_PATH}"
 
 cd "${DEPLOY_PATH}"
+assert_deploy_env_file
+assert_env_keys_nonempty \
+  TWILIO_ARRIVAL_REMINDER_CONTENT_SID \
+  TWILIO_EXIT_REMINDER_CONTENT_SID
 
 print_compose_status() {
   echo "==> Docker Compose service status"
-  docker compose --env-file .env ${COMPOSE_FILES} ps || true
+  compose ps || true
 }
 
 print_backend_diagnostics() {
   print_compose_status
   echo "==> Backend logs (last 300 lines)"
-  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=300 backend || true
+  compose logs --tail=300 backend || true
 }
 
 print_migration_diagnostics() {
   print_compose_status
   echo "==> Migrations logs (last 300 lines)"
-  docker compose --env-file .env ${COMPOSE_FILES} logs --tail=300 migrations || true
+  compose logs --tail=300 migrations || true
 }
 
 echo "==> Running migrations"
-if ! docker compose --env-file .env ${COMPOSE_FILES} run --rm migrations; then
+if ! compose run --rm migrations; then
   echo "==> Migrations failed"
   print_migration_diagnostics
   exit 1
 fi
 
 echo "==> Building backend"
-if ! docker compose --env-file .env ${COMPOSE_FILES} build backend; then
+if ! compose build backend; then
   echo "==> Backend image build failed"
   print_backend_diagnostics
   exit 1
 fi
 
 echo "==> Starting backend without dependencies"
-if ! docker compose --env-file .env ${COMPOSE_FILES} up -d --no-deps backend; then
+if ! compose up -d --no-deps backend; then
   echo "==> Backend container failed to start"
   print_backend_diagnostics
   exit 1
 fi
 
 echo "==> Service status"
-docker compose --env-file .env ${COMPOSE_FILES} ps
+compose ps
 
 backend_container_running() {
   local cid running
-  cid="$(docker compose --env-file .env ${COMPOSE_FILES} ps -q backend 2>/dev/null || true)"
+  cid="$(compose ps -q backend 2>/dev/null || true)"
   if [[ -z "${cid}" ]]; then
     return 1
   fi

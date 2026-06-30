@@ -48,6 +48,7 @@ interface StatisticsEmployeeTableProps {
   exportRows: AttendanceByEmployeeRow[];
   dateFrom?: string;
   dateTo?: string;
+  exportsDisabled?: boolean;
 }
 
 const HEADERS = [
@@ -94,6 +95,7 @@ export function StatisticsEmployeeTable({
   exportRows,
   dateFrom,
   dateTo,
+  exportsDisabled = false,
 }: StatisticsEmployeeTableProps) {
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
@@ -117,6 +119,7 @@ export function StatisticsEmployeeTable({
           dateFrom={dateFrom}
           dateTo={dateTo}
           sheetName="Por empleado"
+          disabled={exportsDisabled}
         />
       </Stack>
 

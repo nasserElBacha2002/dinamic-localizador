@@ -12,10 +12,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
+  Typography,
 } from "@mui/material";
 import { useState } from "react";
 import { ClickableTableRow } from "../../components/common/ClickableTableRow";
+import { DateRangeFilter } from "../../components/common/DateRangeFilter";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FilterItem, ListFilters } from "../../components/common/ListFilters";
@@ -30,6 +31,8 @@ import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAtt
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
+import type { DateRangeValue } from "../../types/date-range";
+import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -46,10 +49,11 @@ export function AttendanceListPage() {
   const [validationStatus, setValidationStatus] = useState<ValidationStatus | "">("");
   const [locationStatus, setLocationStatus] = useState<LocationStatus | "">("");
   const [punctualityStatus, setPunctualityStatus] = useState<PunctualityStatus | "">("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateRange, setDateRange] = useState<DateRangeValue>(EMPTY_DATE_RANGE_VALUE);
 
   const exportMutation = useExportAttendanceCsv();
+  const dateQuery = getDateRangeQueryValue(dateRange);
+  const exportsDisabled = isInvalidCustomDateRange(dateRange);
   const filters = {
     page: pagination.page,
     limit: pagination.pageSize,
@@ -59,13 +63,17 @@ export function AttendanceListPage() {
     validationStatus: validationStatus || undefined,
     locationStatus: locationStatus || undefined,
     punctualityStatus: punctualityStatus || undefined,
-    dateFrom: dateFrom ? dateInputToIsoStart(dateFrom) : undefined,
-    dateTo: dateTo ? dateInputToIsoEnd(dateTo) : undefined,
+    dateFrom: dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined,
+    dateTo: dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined,
   };
 
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
 
   const handleExport = async () => {
+    if (exportsDisabled) {
+      return;
+    }
+
     try {
       const blob = await exportMutation.mutateAsync(filters);
       const url = URL.createObjectURL(blob);
@@ -85,10 +93,24 @@ export function AttendanceListPage() {
         title="Asistencias"
         description="Revisá los registros de llegada a inventarios."
         action={
-          <Stack direction="row" spacing={1}>
-            <Button variant="outlined" onClick={handleExport} disabled={exportMutation.isPending}>
+          <Stack direction="row" spacing={1} alignItems="center">
+            <Button
+              variant="outlined"
+              onClick={handleExport}
+              disabled={exportMutation.isPending || exportsDisabled}
+              title={
+                exportsDisabled
+                  ? "Completá un rango de fechas válido antes de exportar."
+                  : undefined
+              }
+            >
               Exportar CSV
             </Button>
+            {exportsDisabled ? (
+              <Typography variant="caption" color="error">
+                Completá un rango de fechas válido antes de exportar.
+              </Typography>
+            ) : null}
             <PageHeaderLinkAction to="/attendance/new" label="Crear registro de prueba" />
           </Stack>
         }
@@ -196,30 +218,16 @@ export function AttendanceListPage() {
           </FormControl>
         </FilterItem>
 
-        <FilterItem size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-          <TextField
-            label="Fecha desde"
-            type="date"
-            value={dateFrom}
-            onChange={(event) => {
+        <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
+          <DateRangeFilter
+            value={dateRange}
+            onChange={(nextDateRange) => {
               pagination.resetPage();
-              setDateFrom(event.target.value);
+              setDateRange(nextDateRange);
             }}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-        </FilterItem>
-        <FilterItem size={{ xs: 12, sm: 6, md: 4, lg: 3 }}>
-          <TextField
-            label="Fecha hasta"
-            type="date"
-            value={dateTo}
-            onChange={(event) => {
-              pagination.resetPage();
-              setDateTo(event.target.value);
-            }}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
+            mode="past"
+            label="Fecha"
+            allowCustomRange
           />
         </FilterItem>
       </ListFilters>

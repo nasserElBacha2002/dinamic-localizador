@@ -11,11 +11,11 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
 } from "@mui/material";
 import { useState } from "react";
 import { useSearchParams } from "react-router-dom";
 import { ClickableTableRow } from "../../components/common/ClickableTableRow";
+import { DateRangeFilter } from "../../components/common/DateRangeFilter";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FilterItem, ListFilters } from "../../components/common/ListFilters";
@@ -28,6 +28,8 @@ import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { AbsenceRequestStatus } from "../../types/absence";
+import type { DateRangeValue } from "../../types/date-range";
+import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue } from "../../utils/date-range";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -43,18 +45,25 @@ export function AbsencesListPage() {
   const [status, setStatus] = useState<AbsenceRequestStatus | "">("PENDING");
   const [absenceTypeId, setAbsenceTypeId] = useState("");
   const [employeeId, setEmployeeId] = useState(searchParams.get("employeeId") ?? "");
-  const [dateFrom, setDateFrom] = useState(searchParams.get("dateFrom") ?? "");
-  const [dateTo, setDateTo] = useState(searchParams.get("dateTo") ?? "");
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() => {
+    const from = searchParams.get("dateFrom");
+    const to = searchParams.get("dateTo");
+    if (from || to) {
+      return { preset: "custom", from, to };
+    }
+    return EMPTY_DATE_RANGE_VALUE;
+  });
 
   const typesQuery = useAbsenceTypes();
+  const dateQuery = getDateRangeQueryValue(dateRange);
   const { data, isPending, isError, error } = useAbsenceRequests({
     page: pagination.page,
     limit: pagination.pageSize,
     status: status || undefined,
     absenceTypeId: absenceTypeId || undefined,
     employeeId: employeeId || undefined,
-    dateFrom: dateFrom || undefined,
-    dateTo: dateTo || undefined,
+    dateFrom: dateQuery.from,
+    dateTo: dateQuery.to,
   });
 
   return (
@@ -117,32 +126,16 @@ export function AbsencesListPage() {
             label="Empleado"
           />
         </FilterItem>
-        <FilterItem>
-          <TextField
-            label="Desde"
-            type="date"
-            size="small"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-            value={dateFrom}
-            onChange={(event) => {
+        <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
+          <DateRangeFilter
+            value={dateRange}
+            onChange={(nextDateRange) => {
               pagination.resetPage();
-              setDateFrom(event.target.value);
+              setDateRange(nextDateRange);
             }}
-          />
-        </FilterItem>
-        <FilterItem>
-          <TextField
-            label="Hasta"
-            type="date"
-            size="small"
-            fullWidth
-            InputLabelProps={{ shrink: true }}
-            value={dateTo}
-            onChange={(event) => {
-              pagination.resetPage();
-              setDateTo(event.target.value);
-            }}
+            mode="mixed"
+            label="Fecha"
+            allowCustomRange
           />
         </FilterItem>
       </ListFilters>

@@ -1,4 +1,4 @@
-import { Box, Grid, Stack, Tab, Tabs } from "@mui/material";
+import { Box, Grid, Stack, Tab, Tabs, Typography } from "@mui/material";
 import { useMemo, useState } from "react";
 import { ErrorState } from "../../components/common/ErrorState";
 import { PageHeader } from "../../components/common/PageHeader";
@@ -26,12 +26,9 @@ import {
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StatisticsFilters, StatisticsValidationStatus } from "../../types/statistics";
-import {
-  dateInputToIsoEnd,
-  dateInputToIsoStart,
-  getDefaultStatisticsDateFrom,
-  getDefaultStatisticsDateTo,
-} from "../../utils/dates";
+import type { DateRangeValue } from "../../types/date-range";
+import { getDefaultStatisticsDateRange, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
+import { dateInputToIsoEnd, dateInputToIsoStart } from "../../utils/dates";
 import { formatPercent } from "../../utils/export";
 import { getApiErrorMessage } from "../../utils/errors";
 
@@ -44,8 +41,8 @@ const SUMMARY_HEADERS = [
 
 export function StatisticsPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("general");
-  const [dateFrom, setDateFrom] = useState(getDefaultStatisticsDateFrom());
-  const [dateTo, setDateTo] = useState(getDefaultStatisticsDateTo());
+  const [defaultDateRange] = useState<DateRangeValue>(() => getDefaultStatisticsDateRange());
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() => defaultDateRange);
   const [inventoryId, setInventoryId] = useState("");
   const [storeId, setStoreId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -64,8 +61,10 @@ export function StatisticsPage() {
   const [locationSortBy, setLocationSortBy] = useState("averageAttendancePercentage");
   const [locationSortDirection, setLocationSortDirection] = useState<"asc" | "desc">("desc");
 
-  const isoDateFrom = dateFrom ? dateInputToIsoStart(dateFrom) : undefined;
-  const isoDateTo = dateTo ? dateInputToIsoEnd(dateTo) : undefined;
+  const dateQuery = getDateRangeQueryValue(dateRange);
+  const isoDateFrom = dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined;
+  const isoDateTo = dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined;
+  const exportsDisabled = isInvalidCustomDateRange(dateRange);
 
   const baseFilters = useMemo<StatisticsFilters>(
     () => ({
@@ -272,21 +271,17 @@ export function StatisticsPage() {
       />
 
       <StatisticsFiltersBar
-        dateFrom={dateFrom}
-        dateTo={dateTo}
+        dateRange={dateRange}
+        defaultDateRange={defaultDateRange}
         inventoryId={inventoryId}
         storeId={storeId}
         employeeId={employeeId}
         validationStatus={validationStatus}
         locationStatus={locationStatus}
         punctualityStatus={punctualityStatus}
-        onDateFromChange={(value) => {
+        onDateRangeChange={(value) => {
           resetAllPages();
-          setDateFrom(value);
-        }}
-        onDateToChange={(value) => {
-          resetAllPages();
-          setDateTo(value);
+          setDateRange(value);
         }}
         onInventoryChange={(value) => {
           resetAllPages();
@@ -314,6 +309,12 @@ export function StatisticsPage() {
         }}
       />
 
+      {exportsDisabled ? (
+        <Typography variant="caption" color="error" sx={{ display: "block", mt: 1 }}>
+          Completá un rango de fechas válido antes de exportar.
+        </Typography>
+      ) : null}
+
       <Box sx={{ borderBottom: 1, borderColor: "divider", mb: 3, mt: 2 }}>
         <Tabs
           value={activeTab}
@@ -338,6 +339,7 @@ export function StatisticsPage() {
               dateFrom={isoDateFrom}
               dateTo={isoDateTo}
               sheetName="Resumen"
+              disabled={exportsDisabled}
             />
           </Stack>
 
@@ -368,6 +370,7 @@ export function StatisticsPage() {
                 exportBaseName="attendance-timeline"
                 dateFrom={isoDateFrom}
                 dateTo={isoDateTo}
+                exportsDisabled={exportsDisabled}
               />
             </Grid>
             <Grid size={{ xs: 12, lg: 4 }}>
@@ -381,6 +384,7 @@ export function StatisticsPage() {
                 exportBaseName="attendance-status-distribution"
                 dateFrom={isoDateFrom}
                 dateTo={isoDateTo}
+                exportsDisabled={exportsDisabled}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -405,6 +409,7 @@ export function StatisticsPage() {
                 exportBaseName="attendance-by-inventory-chart"
                 dateFrom={isoDateFrom}
                 dateTo={isoDateTo}
+                exportsDisabled={exportsDisabled}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -425,6 +430,7 @@ export function StatisticsPage() {
                 exportBaseName="attendance-top-employees"
                 dateFrom={isoDateFrom}
                 dateTo={isoDateTo}
+                exportsDisabled={exportsDisabled}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -442,6 +448,7 @@ export function StatisticsPage() {
                 exportBaseName="attendance-late-employees"
                 dateFrom={isoDateFrom}
                 dateTo={isoDateTo}
+                exportsDisabled={exportsDisabled}
               />
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
@@ -463,6 +470,7 @@ export function StatisticsPage() {
                 exportBaseName="attendance-by-location-chart"
                 dateFrom={isoDateFrom}
                 dateTo={isoDateTo}
+                exportsDisabled={exportsDisabled}
               />
             </Grid>
           </Grid>
@@ -486,6 +494,7 @@ export function StatisticsPage() {
           exportRows={employeeExportQuery.data?.data ?? []}
           dateFrom={isoDateFrom}
           dateTo={isoDateTo}
+          exportsDisabled={exportsDisabled}
         />
       ) : null}
 
@@ -506,6 +515,7 @@ export function StatisticsPage() {
           exportRows={inventoryExportQuery.data?.data ?? []}
           dateFrom={isoDateFrom}
           dateTo={isoDateTo}
+          exportsDisabled={exportsDisabled}
         />
       ) : null}
 
@@ -526,6 +536,7 @@ export function StatisticsPage() {
           exportRows={locationExportQuery.data?.data ?? []}
           dateFrom={isoDateFrom}
           dateTo={isoDateTo}
+          exportsDisabled={exportsDisabled}
         />
       ) : null}
     </AdminLayout>

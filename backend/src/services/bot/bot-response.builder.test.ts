@@ -3,12 +3,14 @@ import { describe, it } from "node:test";
 import {
   buildArrivalRegisteredMessage,
   buildCheckoutRegisteredMessage,
+  buildCheckoutRejectedMessage,
   buildLocationRequestMessage,
   buildMainMenuMessage,
   buildNoInventoryMessage,
   buildOutsideRadiusMessage,
   DUPLICATE_ATTENDANCE_MESSAGE,
   GREETING_MESSAGE,
+  INVALID_COORDINATES_MESSAGE,
   NO_INVENTORY_MESSAGE,
 } from "./bot-response.builder";
 
@@ -31,6 +33,10 @@ describe("bot response builders", () => {
 
   it("builds no inventory message", () => {
     assert.equal(buildNoInventoryMessage(), NO_INVENTORY_MESSAGE);
+    assert.equal(
+      NO_INVENTORY_MESSAGE,
+      "No encontramos un inventario asignado para vos en la fecha y horario actuales. Verificá con administración.",
+    );
   });
 
   it("builds location request message", () => {
@@ -67,10 +73,21 @@ describe("bot response builders", () => {
       checkoutStatus: "CHECKOUT_REJECTED",
       extraWorkedMinutes: 0,
     });
-    assert.match(message, /No pudimos registrar tu salida/);
+    assert.equal(message, buildCheckoutRejectedMessage());
+    assert.match(message, /ubicación fuera del radio permitido/);
   });
 
   it("exposes duplicate attendance message constant", () => {
-    assert.match(DUPLICATE_ATTENDANCE_MESSAGE, /Ya registraste tu llegada/);
+    assert.equal(
+      DUPLICATE_ATTENDANCE_MESSAGE,
+      "Ya registraste tu llegada para este inventario.",
+    );
+  });
+
+  it("exposes invalid coordinates message constant", () => {
+    assert.equal(
+      INVALID_COORDINATES_MESSAGE,
+      "Las coordenadas recibidas no son válidas. Volvé a compartir tu ubicación actual.",
+    );
   });
 });

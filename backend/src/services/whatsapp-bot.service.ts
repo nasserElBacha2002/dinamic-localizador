@@ -10,13 +10,11 @@ import { inventoryEmployeeRepository } from "../repositories/inventory-employee.
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
 import { botSessionService } from "./bot-session.service";
-import { geolocationService } from "./geolocation.service";
 import type { BotSession } from "../types/twilio.types";
 import type { AttendanceRecord } from "../types/domain";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import {
   combineAttendanceValidation,
-  evaluateGeofence,
   evaluatePunctuality,
   formatLocalTime,
   isWithinInventoryWindow,
@@ -32,6 +30,7 @@ import { parseInventorySelection } from "../utils/intent";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { absenceBotService } from "./absence-bot.service";
+import { evaluateAttendanceGeofence } from "./bot/bot-geofence.validator";
 import { parseBotIntent } from "./bot/bot-intent.parser";
 import {
   buildArrivalRegisteredMessage,
@@ -879,13 +878,14 @@ export const whatsappBotService = {
       });
     }
 
-    const geo = geolocationService.evaluateDistance(
-      input.latitude,
-      input.longitude,
-      compatible.storeLatitude,
-      compatible.storeLongitude,
-      compatible.allowedRadiusMeters,
-    );
+    const geo = evaluateAttendanceGeofence({
+      employeeLatitude: input.latitude,
+      employeeLongitude: input.longitude,
+      storeLatitude: compatible.storeLatitude,
+      storeLongitude: compatible.storeLongitude,
+      allowedRadiusMeters: compatible.allowedRadiusMeters,
+      reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+    });
 
     const time = evaluatePunctuality(
       receivedAt,
@@ -1167,19 +1167,14 @@ export const whatsappBotService = {
       });
     }
 
-    const geo = geolocationService.evaluateDistance(
-      input.latitude,
-      input.longitude,
-      eligible.storeLatitude,
-      eligible.storeLongitude,
-      eligible.allowedRadiusMeters,
-    );
-
-    const geoEvaluation = evaluateGeofence(
-      geo.distanceMeters,
-      eligible.allowedRadiusMeters,
-      env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
-    );
+    const geo = evaluateAttendanceGeofence({
+      employeeLatitude: input.latitude,
+      employeeLongitude: input.longitude,
+      storeLatitude: eligible.storeLatitude,
+      storeLongitude: eligible.storeLongitude,
+      allowedRadiusMeters: eligible.allowedRadiusMeters,
+      reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+    });
 
     const timeEvaluation = evaluateCheckoutTime(
       checkoutAt,
@@ -1187,7 +1182,7 @@ export const whatsappBotService = {
       env.BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES,
     );
 
-    const validation = combineCheckoutValidation(geoEvaluation, timeEvaluation);
+    const validation = combineCheckoutValidation(geo, timeEvaluation);
     setTechnicalDetail("checkoutDistanceMeters", Math.round(geo.distanceMeters * 100) / 100);
     setTechnicalDetail("checkoutValidation", validation);
 

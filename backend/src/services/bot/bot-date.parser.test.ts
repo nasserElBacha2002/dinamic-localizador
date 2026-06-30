@@ -39,6 +39,13 @@ describe("parseBotDateDDMMYYYY", () => {
   it("rejects invalid dates", () => {
     assert.equal(parseBotDateDDMMYYYY("31/02/2026", timezone), null);
     assert.equal(parseBotDateDDMMYYYY("2026-07-05", timezone), null);
+    assert.equal(parseBotDateDDMMYYYY("07/31/2026", timezone), null);
+  });
+
+  it("uses noon UTC for calendar dates to avoid timezone day shifts", () => {
+    const date = parseBotDateDDMMYYYY("05/07/2026", timezone);
+    assert.ok(date);
+    assert.equal(date?.toISOString(), "2026-07-05T12:00:00.000Z");
   });
 });
 

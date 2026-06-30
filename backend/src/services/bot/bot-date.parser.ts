@@ -25,6 +25,9 @@ const toCalendarIsoInTimezone = (date: Date, timezone: string): string => {
 };
 
 export const parseBotDateDDMMYYYY = (value: string, _timezone: string): Date | null => {
+  // Bot date inputs are calendar-only dates. We intentionally represent them
+  // at noon UTC to avoid timezone day-shift issues when formatting or storing.
+  // The timezone parameter is kept for API symmetry with formatting helpers.
   const parsed = parseSpanishDateInput(value);
   if (!parsed) {
     return null;

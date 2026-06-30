@@ -32,7 +32,7 @@
     "morgan": "^1.10.0",
     "mssql": "^12.1.0",
     "twilio": "^6.0.2",
-    "xlsx": "^0.18.5",
+    "xlsx": "npm:@e965/xlsx@0.20.3",
     "zod": "^4.1.11"
   },
   "devDependencies": {

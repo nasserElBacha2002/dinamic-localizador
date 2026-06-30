@@ -27,22 +27,48 @@ log_section "Deploy frontend in ${DEPLOY_PATH}"
 cd "${DEPLOY_PATH}"
 assert_deploy_env_file
 
+if [[ -z "${FRONTEND_IMAGE:-}" ]]; then
+  echo "ERROR: FRONTEND_IMAGE is required for production frontend deploy." >&2
+  echo "NOTE: The server must pull a pre-built GHCR image; it must not run vite/tsc builds." >&2
+  exit 1
+fi
+
 print_frontend_diagnostics() {
   print_compose_status
   log_section "Frontend logs (last 300 lines)"
   compose logs --tail=300 frontend || true
 }
 
-log_section "Building frontend image (target: production)"
-export DOCKER_BUILDKIT=1
-if ! compose build frontend; then
-  echo "ERROR: frontend image build failed" >&2
+login_to_ghcr_if_configured() {
+  if [[ -z "${GHCR_PULL_TOKEN:-}" ]]; then
+    log_section "GHCR_PULL_TOKEN not set; assuming docker is already logged in to ghcr.io"
+    return 0
+  fi
+
+  local username="${GHCR_PULL_USERNAME:-github}"
+  log_section "Logging in to ghcr.io as ${username}"
+  echo "${GHCR_PULL_TOKEN}" | docker login ghcr.io -u "${username}" --password-stdin
+}
+
+login_to_ghcr_if_configured
+
+log_section "Recording FRONTEND_IMAGE in ${DEPLOY_ENV_FILE}"
+if grep -qE '^FRONTEND_IMAGE=' "${DEPLOY_ENV_FILE}"; then
+  sed -i "s|^FRONTEND_IMAGE=.*|FRONTEND_IMAGE=${FRONTEND_IMAGE}|" "${DEPLOY_ENV_FILE}"
+else
+  printf '\nFRONTEND_IMAGE=%s\n' "${FRONTEND_IMAGE}" >> "${DEPLOY_ENV_FILE}"
+fi
+export FRONTEND_IMAGE
+
+log_section "Pulling frontend image from GHCR (no server-side build): ${FRONTEND_IMAGE}"
+if ! compose pull frontend; then
+  echo "ERROR: failed to pull frontend image ${FRONTEND_IMAGE}" >&2
   print_frontend_diagnostics
   exit 1
 fi
 
-log_section "Restarting frontend service only (--no-deps; backend/sqlserver will NOT be recreated)"
-if ! compose up -d --no-deps frontend; then
+log_section "Restarting frontend service only (--no-deps --no-build; backend/sqlserver will NOT be recreated)"
+if ! compose up -d --no-deps --no-build frontend; then
   echo "ERROR: frontend container failed to start" >&2
   print_frontend_diagnostics
   exit 1

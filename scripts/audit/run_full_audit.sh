@@ -31,7 +31,12 @@ run_step "run_frontend_architecture_audit.sh"
 run_step "run_security_audit.sh"
 
 log_info "Generating audit summary"
-python3 "${SCRIPT_DIR}/generate_audit_summary.py" || log_warn "generate_audit_summary.py failed"
+if ! python3 "${SCRIPT_DIR}/generate_audit_summary.py"; then
+  log_warn "generate_audit_summary.py failed"
+  if [[ "${AUDIT_STRICT:-0}" == "1" ]]; then
+    exit 1
+  fi
+fi
 
 SNAPSHOT_DIR="${AUDIT_RUNS}/${RUN_TS}"
 mkdir -p "${SNAPSHOT_DIR}"
@@ -49,5 +54,6 @@ log_info "Snapshot saved to ${SNAPSHOT_DIR}"
 
 python3 "${SCRIPT_DIR}/enforce_quality_gate.py" || true
 
-log_info "Full audit completed (local mode is non-blocking by default)"
+log_info "Full audit completed (diagnostic mode — non-blocking)"
+log_info "Use 'npm run audit:strict' to enforce quality gate"
 exit 0

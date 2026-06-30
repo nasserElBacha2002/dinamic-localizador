@@ -36,7 +36,10 @@ audit/raw/*.json
 audit/raw/*.md
 audit/audit-summary.md
 audit/audit-status.json
+audit/audit-diff.md
+audit/baseline/audit-status.baseline.json
 
 # Keep directory placeholders
 !audit/raw/.gitkeep
 !audit/raw/runs/.gitkeep
+!audit/baseline/.gitkeep

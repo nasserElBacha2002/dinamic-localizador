@@ -138,8 +138,10 @@ function validateCoordinate(
 export function BotSimulatorPage() {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [inventoryId, setInventoryId] = useState<string | null>(null);
-  const [storeId, setStoreId] = useState<string | null>(null);
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [manualStoreId, setManualStoreId] = useState<string | null>(null);
+  const [storeManuallySet, setStoreManuallySet] = useState(false);
+  const [manualPhoneNumber, setManualPhoneNumber] = useState("");
+  const [phoneManuallySet, setPhoneManuallySet] = useState(false);
   const [simulatedNowInput, setSimulatedNowInput] = useState(() => toLocalDateTimeInputValue(new Date()));
   const [mode, setMode] = useState<BotSimulationMode>("dry-run");
   const [sessionId, setSessionId] = useState<string | null>(null);
@@ -163,17 +165,10 @@ export function BotSimulatorPage() {
   const sendLocationMutation = useSendBotSimulationLocation();
   const { data: locationPresets } = useBotSimulationLocationPresets(sessionId ?? undefined);
 
-  useEffect(() => {
-    if (employee?.phoneNumber) {
-      setPhoneNumber(employee.phoneNumber);
-    }
-  }, [employee?.phoneNumber]);
-
-  useEffect(() => {
-    if (inventory?.storeId) {
-      setStoreId(inventory.storeId);
-    }
-  }, [inventory?.storeId]);
+  const resolvedPhoneNumber = phoneManuallySet
+    ? manualPhoneNumber
+    : (employee?.phoneNumber ?? manualPhoneNumber);
+  const resolvedStoreId = storeManuallySet ? manualStoreId : (inventory?.storeId ?? manualStoreId);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -185,10 +180,10 @@ export function BotSimulatorPage() {
     sendMessageMutation.isPending ||
     sendLocationMutation.isPending;
 
-  const canStart = Boolean(employeeId && phoneNumber.trim());
+  const canStart = Boolean(employeeId && resolvedPhoneNumber.trim());
 
   const handleStartSession = async () => {
-    if (!employeeId || !phoneNumber.trim()) {
+    if (!employeeId || !resolvedPhoneNumber.trim()) {
       return;
     }
 
@@ -197,8 +192,8 @@ export function BotSimulatorPage() {
       const result = await createSessionMutation.mutateAsync({
         employeeId,
         inventoryId,
-        storeId,
-        phoneNumber: phoneNumber.trim(),
+        storeId: resolvedStoreId,
+        phoneNumber: resolvedPhoneNumber.trim(),
         simulatedNow: localDateTimeInputToIso(simulatedNowInput),
         mode,
       });
@@ -224,6 +219,12 @@ export function BotSimulatorPage() {
     setCustomLatitudeError(null);
     setCustomLongitudeError(null);
     setLocationDialogOpen(false);
+    setEmployeeId(null);
+    setInventoryId(null);
+    setManualStoreId(null);
+    setStoreManuallySet(false);
+    setManualPhoneNumber("");
+    setPhoneManuallySet(false);
   };
 
   const handleRestart = async () => {
@@ -402,7 +403,11 @@ export function BotSimulatorPage() {
 
               <EmployeeSearchAutocomplete
                 value={employeeId}
-                onChange={setEmployeeId}
+                onChange={(id) => {
+                  setEmployeeId(id);
+                  setPhoneManuallySet(false);
+                  setManualPhoneNumber("");
+                }}
                 activeOnly
                 allowCreate={false}
                 required
@@ -410,21 +415,31 @@ export function BotSimulatorPage() {
 
               <InventorySearchAutocomplete
                 value={inventoryId}
-                onChange={setInventoryId}
+                onChange={(id) => {
+                  setInventoryId(id);
+                  setStoreManuallySet(false);
+                  setManualStoreId(null);
+                }}
                 allowCreate={false}
               />
 
               <StoreSearchAutocomplete
-                value={storeId}
-                onChange={setStoreId}
+                value={resolvedStoreId}
+                onChange={(id) => {
+                  setStoreManuallySet(true);
+                  setManualStoreId(id);
+                }}
                 activeOnly={false}
                 allowCreate={false}
               />
 
               <TextField
                 label="Teléfono WhatsApp simulado"
-                value={phoneNumber}
-                onChange={(event) => setPhoneNumber(event.target.value)}
+                value={resolvedPhoneNumber}
+                onChange={(event) => {
+                  setPhoneManuallySet(true);
+                  setManualPhoneNumber(event.target.value);
+                }}
                 placeholder="+5491111111111"
                 fullWidth
                 required

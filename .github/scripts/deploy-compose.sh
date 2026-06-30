@@ -49,6 +49,33 @@ print_compose_status() {
   compose ps || true
 }
 
+print_sqlserver_recovery_instructions() {
+  cat >&2 <<EOF
+
+=== SQL Server recovery (manual operator steps) ===
+Backend deploy will NOT start or recreate sqlserver/db-init automatically.
+
+Inspect status:
+  cd "${DEPLOY_PATH}"
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml ps sqlserver
+
+View logs:
+  cd "${DEPLOY_PATH}"
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml logs --tail=100 sqlserver
+
+Start SQL Server manually:
+  DEPLOY_PATH="${DEPLOY_PATH}" bash "${DEPLOY_PATH}/.github/scripts/provision-database.sh"
+
+Or directly:
+  cd "${DEPLOY_PATH}"
+  docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml up -d sqlserver
+
+Wait for healthy, then verify backend:
+  curl -fsS http://127.0.0.1:3004/api/health
+
+EOF
+}
+
 assert_sqlserver_running_and_healthy() {
   log_section "Verifying SQL Server (existing container; deploy will NOT recreate sqlserver/db-init)"
 
@@ -58,6 +85,7 @@ assert_sqlserver_running_and_healthy() {
     echo "ERROR: sqlserver container is not running." >&2
     echo "NOTE: Production deploy does not start or recreate the database stack." >&2
     echo "NOTE: Provision sqlserver separately before running backend deploy." >&2
+    print_sqlserver_recovery_instructions
     exit 1
   fi
 
@@ -66,6 +94,7 @@ assert_sqlserver_running_and_healthy() {
   if [[ "${running}" != "true" ]]; then
     echo "ERROR: sqlserver container exists but is not running." >&2
     compose logs --tail=100 sqlserver || true
+    print_sqlserver_recovery_instructions
     exit 1
   fi
 
@@ -93,6 +122,7 @@ assert_sqlserver_running_and_healthy() {
     if [[ "${health_status}" == "unhealthy" ]]; then
       echo "ERROR: sqlserver container is unhealthy." >&2
       compose logs --tail=100 sqlserver || true
+      print_sqlserver_recovery_instructions
       exit 1
     fi
     echo "==> Waiting for sqlserver health (${health_status}, attempt ${attempt}/${max_attempts})..."
@@ -102,5 +132,6 @@ assert_sqlserver_running_and_healthy() {
 
   echo "ERROR: sqlserver did not become healthy in time." >&2
   compose logs --tail=100 sqlserver || true
+  print_sqlserver_recovery_instructions
   exit 1
 }

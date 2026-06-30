@@ -45,7 +45,8 @@ login_to_ghcr_if_configured() {
     return 0
   fi
 
-  local username="${GHCR_PULL_USERNAME:-github}"
+  local username
+  username="$(echo "${GHCR_PULL_USERNAME:-github}" | tr '[:upper:]' '[:lower:]')"
   log_section "Logging in to ghcr.io as ${username}"
   echo "${GHCR_PULL_TOKEN}" | docker login ghcr.io -u "${username}" --password-stdin
 }

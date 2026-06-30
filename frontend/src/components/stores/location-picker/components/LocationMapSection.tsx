@@ -1,5 +1,5 @@
 import { Alert, Box, Stack, Typography } from "@mui/material";
-import type { RefObject } from "react";
+import type { ReactNode, RefObject } from "react";
 import type { MapsLoadState } from "../types";
 import type { LocationPickerState } from "../../../../utils/store-location";
 
@@ -61,7 +61,7 @@ export function LocationMapSection({
   );
 }
 
-export function LocationPickerLayout({ children }: { children: React.ReactNode }) {
+export function LocationPickerLayout({ children }: { children: ReactNode }) {
   return (
     <Stack spacing={2} sx={{ width: "100%" }}>
       <Box

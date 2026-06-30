@@ -10,6 +10,18 @@ import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/atte
 const buildAttendanceFilters = (query: ListAttendanceQuery): SqlFilter[] => {
   const filters: SqlFilter[] = [];
 
+  if (query.simulationOnly) {
+    filters.push({
+      clause: "ar.is_simulation = 1",
+      apply: () => undefined,
+    });
+  } else if (!query.includeSimulation) {
+    filters.push({
+      clause: "ar.is_simulation = 0",
+      apply: () => undefined,
+    });
+  }
+
   if (query.inventoryId) {
     filters.push({
       clause: "ar.inventory_id = @inventoryId",
@@ -182,18 +194,32 @@ export const attendanceRepository = {
     };
   },
 
-  async hasActiveRecord(inventoryId: string, employeeId: string): Promise<boolean> {
+  async hasActiveRecord(
+    inventoryId: string,
+    employeeId: string,
+    options?: { simulationSessionId?: string | null },
+  ): Promise<boolean> {
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .query(`
+      .input("employeeId", sql.UniqueIdentifier, employeeId);
+
+    const simulationFilter = options?.simulationSessionId
+      ? "AND is_simulation = 1 AND simulation_session_id = @simulationSessionId"
+      : "AND is_simulation = 0";
+
+    if (options?.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, options.simulationSessionId);
+    }
+
+    const result = await request.query(`
         SELECT TOP 1 1 AS found
         FROM attendance_records
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          ${simulationFilter}
       `);
 
     return Boolean(result.recordset[0]);
@@ -201,7 +227,10 @@ export const attendanceRepository = {
 
   async createInTransaction(
     transaction: sql.Transaction,
-    input: CreateAttendanceInput,
+    input: CreateAttendanceInput & {
+      isSimulation?: boolean;
+      simulationSessionId?: string | null;
+    },
   ): Promise<AttendanceRecord> {
     const request = new sql.Request(transaction);
     const result = await request
@@ -216,17 +245,21 @@ export const attendanceRepository = {
       .input("sourceMessageSid", sql.NVarChar(100), input.sourceMessageSid ?? null)
       .input("validationReason", sql.NVarChar(500), input.validationReason ?? null)
       .input("receivedAt", sql.DateTime2, new Date(input.receivedAt))
+      .input("isSimulation", sql.Bit, input.isSimulation ? 1 : 0)
+      .input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId ?? null)
       .query(`
         INSERT INTO attendance_records (
           inventory_id, employee_id, received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
-          source_message_sid, validation_reason, received_at
+          source_message_sid, validation_reason, received_at,
+          is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
           @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
-          @sourceMessageSid, @validationReason, @receivedAt
+          @sourceMessageSid, @validationReason, @receivedAt,
+          @isSimulation, @simulationSessionId
         )
       `);
 
@@ -341,19 +374,30 @@ export const attendanceRepository = {
   async findCheckInForCheckout(
     inventoryId: string,
     employeeId: string,
+    options?: { simulationSessionId?: string | null },
   ): Promise<AttendanceRecord | null> {
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .query(`
+      .input("employeeId", sql.UniqueIdentifier, employeeId);
+
+    const simulationFilter = options?.simulationSessionId
+      ? "AND is_simulation = 1 AND simulation_session_id = @simulationSessionId"
+      : "AND is_simulation = 0";
+
+    if (options?.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, options.simulationSessionId);
+    }
+
+    const result = await request.query(`
         SELECT TOP 1 *
         FROM attendance_records
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
           AND checkout_at IS NULL
+          ${simulationFilter}
         ORDER BY received_at DESC
       `);
 

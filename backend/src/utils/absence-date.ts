@@ -14,6 +14,20 @@ export const formatAbsenceDateDisplay = (iso: string): string => {
   return `${day}/${month}/${year}`;
 };
 
+export const parseSpanishDateInput = (raw: string): ParsedAbsenceDate | null => {
+  const value = raw.trim();
+  if (!value) {
+    return null;
+  }
+
+  const latinMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+  if (!latinMatch) {
+    return null;
+  }
+
+  return normalizeDateParts(Number(latinMatch[3]), Number(latinMatch[2]), Number(latinMatch[1]));
+};
+
 export const parseAbsenceDateInput = (raw: string): ParsedAbsenceDate | null => {
   const value = raw.trim();
   if (!value) {
@@ -25,12 +39,7 @@ export const parseAbsenceDateInput = (raw: string): ParsedAbsenceDate | null => 
     return normalizeDateParts(Number(isoMatch[1]), Number(isoMatch[2]), Number(isoMatch[3]));
   }
 
-  const latinMatch = value.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-  if (latinMatch) {
-    return normalizeDateParts(Number(latinMatch[3]), Number(latinMatch[2]), Number(latinMatch[1]));
-  }
-
-  return null;
+  return parseSpanishDateInput(value);
 };
 
 const normalizeDateParts = (

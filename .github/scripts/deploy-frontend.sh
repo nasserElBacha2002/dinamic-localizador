@@ -3,39 +3,89 @@ set -euo pipefail
 
 DEPLOY_PATH="${DEPLOY_PATH:-/opt/dinamic-attendance/dinamic-localizador}"
 FRONTEND_HEALTH_URL="${DEPLOY_FRONTEND_HEALTH_URL:-http://127.0.0.1:8084/}"
+MAX_HEALTH_RETRIES="${DEPLOY_FRONTEND_HEALTH_RETRIES:-30}"
+HEALTH_RETRY_SLEEP_SECONDS="${DEPLOY_FRONTEND_HEALTH_RETRY_SLEEP_SECONDS:-2}"
+DEPLOY_LOCK_FILE="${DEPLOY_LOCK_FILE:-/tmp/dinamic-attendance-deploy.lock}"
+DEPLOY_BRANCH="${DEPLOY_BRANCH:-develop}"
+
+exec 9>"${DEPLOY_LOCK_FILE}"
+echo "==> [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Waiting for deploy lock: ${DEPLOY_LOCK_FILE}"
+flock 9
+echo "==> [$(date -u +%Y-%m-%dT%H:%M:%SZ)] Acquired deploy lock"
+
+cd "${DEPLOY_PATH}"
+git fetch origin "${DEPLOY_BRANCH}"
+git checkout "${DEPLOY_BRANCH}"
+git reset --hard "origin/${DEPLOY_BRANCH}"
 
 # shellcheck source=/dev/null
 source "${DEPLOY_PATH}/.github/scripts/deploy-compose.sh"
 
-echo "==> Deploy frontend in ${DEPLOY_PATH}"
+log_section "Repository updated to $(git rev-parse --short HEAD)"
+log_section "Deploy frontend in ${DEPLOY_PATH}"
 
 cd "${DEPLOY_PATH}"
 assert_deploy_env_file
 
-echo "==> Building frontend"
-compose build frontend
-
-echo "==> Starting frontend"
-compose up -d frontend
-
-echo "==> Service status"
-compose ps
-
 print_frontend_diagnostics() {
-  echo "==> Docker Compose service status"
-  compose ps || true
-  echo "==> Frontend logs (last 300 lines)"
+  print_compose_status
+  log_section "Frontend logs (last 300 lines)"
   compose logs --tail=300 frontend || true
 }
 
-echo "==> Frontend health check: ${FRONTEND_HEALTH_URL}"
-if health_response="$(curl -fsS "${FRONTEND_HEALTH_URL}")"; then
-  echo "==> Health response:"
-  echo "${health_response}"
-  echo "==> Frontend deploy completed successfully"
-  exit 0
+log_section "Building frontend image (target: production)"
+export DOCKER_BUILDKIT=1
+if ! compose build frontend; then
+  echo "ERROR: frontend image build failed" >&2
+  print_frontend_diagnostics
+  exit 1
 fi
 
-echo "==> Frontend health check failed"
+log_section "Restarting frontend service only (--no-deps; backend/sqlserver will NOT be recreated)"
+if ! compose up -d --no-deps frontend; then
+  echo "ERROR: frontend container failed to start" >&2
+  print_frontend_diagnostics
+  exit 1
+fi
+
+print_compose_status
+
+frontend_container_running() {
+  local cid running
+  cid="$(compose ps -q frontend 2>/dev/null || true)"
+  if [[ -z "${cid}" ]]; then
+    return 1
+  fi
+
+  running="$(docker inspect -f '{{.State.Running}}' "${cid}" 2>/dev/null || echo false)"
+  [[ "${running}" == "true" ]]
+}
+
+log_section "Checking frontend health: ${FRONTEND_HEALTH_URL}"
+log_section "Waiting up to ${MAX_HEALTH_RETRIES} attempts (${HEALTH_RETRY_SLEEP_SECONDS}s between retries)"
+
+attempt=1
+while [[ "${attempt}" -le "${MAX_HEALTH_RETRIES}" ]]; do
+  if ! frontend_container_running; then
+    echo "ERROR: frontend container is not running (attempt ${attempt}/${MAX_HEALTH_RETRIES})" >&2
+    print_frontend_diagnostics
+    exit 1
+  fi
+
+  if curl -fsS "${FRONTEND_HEALTH_URL}" >/dev/null; then
+    log_section "Frontend health check passed on attempt ${attempt}/${MAX_HEALTH_RETRIES}"
+    log_section "Frontend deploy completed successfully"
+    exit 0
+  fi
+
+  if [[ "${attempt}" -lt "${MAX_HEALTH_RETRIES}" ]]; then
+    echo "==> Health check not ready (attempt ${attempt}/${MAX_HEALTH_RETRIES}), retrying in ${HEALTH_RETRY_SLEEP_SECONDS}s..."
+    sleep "${HEALTH_RETRY_SLEEP_SECONDS}"
+  fi
+
+  attempt=$((attempt + 1))
+done
+
+echo "ERROR: frontend health check failed after ${MAX_HEALTH_RETRIES} attempts" >&2
 print_frontend_diagnostics
 exit 1

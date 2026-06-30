@@ -10,11 +10,8 @@ import {
   isAffirmativeConfirmation,
   isNegativeConfirmation,
 } from "../utils/absence-intent";
-import {
-  calculateTotalAbsenceDays,
-  formatAbsenceDateDisplay,
-  parseSpanishDateInput,
-} from "../utils/absence-date";
+import { calculateTotalAbsenceDays, formatAbsenceDateDisplay } from "../utils/absence-date";
+import { parseSpanishDateInput } from "./bot/bot-date.parser";
 import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../utils/bot-session-states";
 
 type RespondFn = (input: {
@@ -26,9 +23,6 @@ type RespondFn = (input: {
 
 const INVALID_DATE_MESSAGE =
   "No pude interpretar la fecha. Usá el formato DD/MM/AAAA, por ejemplo 05/07/2026.";
-
-const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
-  "Ya tenés un flujo de llegada o salida en curso. Completalo o escribí \"Cancelar\" para salir antes de solicitar una ausencia.";
 
 const buildTypeSelectionPrompt = (types: AbsenceType[]): string => {
   const lines = types.map((type, index) => `${index + 1}. ${type.name}`);

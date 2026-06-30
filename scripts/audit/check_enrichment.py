@@ -26,6 +26,9 @@ CHECK_EVIDENCE: dict[str, str] = {
     "frontend-dead-code": "audit/raw/frontend-dead-code.txt",
     "backend-dead-code": "audit/raw/backend-dead-code.txt",
     "security-secrets": "audit/raw/security-secrets-audit.md",
+    "security-env": "audit/raw/security-env-audit.md",
+    "backend-architecture": "audit/raw/backend-architecture-audit.md",
+    "backend-domain-rules": "audit/raw/backend-domain-rules-audit.md",
     "security-audit": "audit/raw/security-npm-audit.txt",
 }
 
@@ -44,6 +47,7 @@ ENV_PATTERNS = [
     r"listen EPERM",
     r"sandbox",
     r"ECONNREFUSED",
+    r"ConnectionError",
     r"ETIMEDOUT",
     r"ENOTFOUND",
     r"getaddrinfo",
@@ -51,6 +55,8 @@ ENV_PATTERNS = [
     r"Missing required environment",
     r"Could not connect",
     r"network.*unreachable",
+    r"Login failed for user",
+    r"cancelled",
 ]
 
 TEST_FAIL_PATTERNS = [
@@ -268,6 +274,10 @@ def enrich_check(check: dict, repo_root: Path) -> dict:
         if status == "fail":
             failure_type = "security_issue"
             root_cause = message or "Potential hardcoded secrets detected."
+            if "Potential hardcoded secrets detected" in evidence_text:
+                count_match = re.search(r"Total findings:\s*\*\*(\d+)\*\*", evidence_text)
+                if count_match:
+                    root_cause = f"Potential hardcoded secrets detected ({count_match.group(1)} finding(s))."
             action_hint = "Remove secrets from source; use environment variables."
             severity = "critical"
             blocking = True
@@ -275,6 +285,62 @@ def enrich_check(check: dict, repo_root: Path) -> dict:
             failure_type = "unknown"
             root_cause = "No hardcoded secrets detected in scanned paths."
             action_hint = "No action required."
+    elif name == "security-env":
+        missing_vars: list[str] = []
+        if evidence_text:
+            section = re.search(
+                r"## used_but_not_documented.*?\n(.*?)(?:\n## |\Z)",
+                evidence_text,
+                re.S,
+            )
+            if section:
+                missing_vars = [
+                    line.strip()[2:]
+                    for line in section.group(1).splitlines()
+                    if line.strip().startswith("- ") and line.strip() != "- None"
+                ]
+        if status == "fail" and missing_vars:
+            failure_type = "config_missing"
+            root_cause = (
+                f"Environment variables used in code but missing from .env.example: "
+                f"{', '.join(missing_vars[:8])}"
+                + ("..." if len(missing_vars) > 8 else "")
+            )
+            action_hint = "Add missing variables to .env.example and backend/.env.example with placeholders."
+            severity = "medium"
+            blocking = False
+        elif status == "pass":
+            failure_type = "unknown"
+            root_cause = "Environment variables are documented in example files."
+            action_hint = "No action required."
+    elif name in {"backend-architecture", "backend-domain-rules"}:
+        failure_type = "unknown"
+        root_cause = message or "Architecture/domain audit generated."
+        action_hint = "Review evidence for accepted exceptions vs warnings."
+        severity = check.get("severity", "info")
+        if name == "backend-architecture" and evidence_text:
+            warn_match = re.search(
+                r"warning_sql_outside_repository\s*=\s*\*\*(\d+)\*\*",
+                evidence_text,
+            )
+            if warn_match and int(warn_match.group(1)) > 0:
+                failure_type = "architecture_issue"
+                root_cause = (
+                    f"SQL outside repositories: {warn_match.group(1)} occurrence(s) "
+                    "(operational/healthcheck/repository SQL excluded)."
+                )
+                action_hint = "Move data access into repositories where practical."
+                severity = "medium"
+                blocking = False
+        if name == "backend-domain-rules" and evidence_text:
+            input_match = re.search(
+                r"Parameter binding occurrences:\s*\*\*(\d+)\*\*",
+                evidence_text,
+            )
+            if input_match:
+                root_cause = (
+                    f"mssql parameter bindings detected ({input_match.group(1)} `.input(...)` occurrence(s))."
+                )
     elif "circular" in name:
         circular = circular_import_status(evidence_text)
         if circular == "found":

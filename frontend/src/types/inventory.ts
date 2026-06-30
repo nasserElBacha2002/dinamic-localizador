@@ -1,7 +1,8 @@
 import type { Employee } from "./employee";
+import type { InventoryStatus } from "./inventory-status";
 import type { Store, StoreSummary } from "./store";
 
-export type InventoryStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type { InventoryStatus } from "./inventory-status";
 
 export interface Inventory {
   id: string;
@@ -71,29 +72,4 @@ export interface UpdateInventoryInput {
   lateToleranceMinutes?: number;
   notes?: string | null;
   status?: InventoryStatus;
-}
-
-export interface InventoryAttendanceSummaryEmployee {
-  employee: Employee;
-  attendance: import("./attendance").AttendanceRecord | null;
-  operationalStatus: import("./attendance").OperationalStatus;
-}
-
-export interface InventoryAttendanceSummaryResponse {
-  inventory: Inventory & { store: Store };
-  summary: {
-    assigned: number;
-    checkedIn: number;
-    valid: number;
-    pendingReview: number;
-    rejected: number;
-    withoutCheckIn: number;
-  };
-  employees: InventoryAttendanceSummaryEmployee[];
-  meta: import("./api").PaginationMeta;
-}
-
-export interface InventoryAttendanceSummaryFilters {
-  page?: number;
-  limit?: number;
 }

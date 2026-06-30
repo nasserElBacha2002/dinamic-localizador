@@ -1,4 +1,4 @@
-import type { InventoryStatus } from "./inventory";
+import type { InventoryStatus } from "./inventory-status";
 
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";

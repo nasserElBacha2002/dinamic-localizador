@@ -1,5 +1,5 @@
 import axios from "axios";
-import { getStoredToken } from "./auth.api";
+import { getStoredToken } from "./token-storage";
 import { parseApiError } from "../utils/errors";
 
 const baseURL = import.meta.env.VITE_API_URL;

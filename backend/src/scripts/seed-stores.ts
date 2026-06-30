@@ -46,9 +46,9 @@ function parseSeedFile(content: string): StoreSeedRow[] {
     const latitude = parseLatitude(columns.at(-4) ?? "");
     const longitude = parseLatitude(columns.at(-3) ?? "");
 
-    let direccion = "";
-    let locality = "";
-    let provincia = "";
+    let direccion: string;
+    let locality: string;
+    let provincia: string;
 
     if (columns.length >= 10) {
       provincia = columns.at(-6)?.trim() ?? "";

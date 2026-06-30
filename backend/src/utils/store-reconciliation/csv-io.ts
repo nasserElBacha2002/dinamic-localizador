@@ -141,14 +141,6 @@ const formatSimilarity = (value: number | null): string =>
 const formatDistanceMeters = (value: number | null): string =>
   value === null ? "" : String(Math.round(value * 100) / 100);
 
-const formatCoordinateOutput = (value: string | number | null | undefined): string => {
-  if (value === null || value === undefined) {
-    return "";
-  }
-
-  return String(value);
-};
-
 export const reconciliationRowToCsv = (row: ReconciliationRow): string[] => [
   row.storeNumber,
   row.status,

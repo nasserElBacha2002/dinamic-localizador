@@ -27,6 +27,9 @@
     "xlsx": "npm:@e965/xlsx@0.20.3",
     "zod": "^4.1.11"
   },
+  "overrides": {
+    "esbuild": "0.28.1"
+  },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "@types/file-saver": "^2.0.7",

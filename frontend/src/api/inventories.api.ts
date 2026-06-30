@@ -2,13 +2,16 @@ import type { PaginatedResponse, SingleResponse } from "../types/api";
 import type {
   CreateInventoryInput,
   Inventory,
-  InventoryAttendanceSummaryResponse,
   InventoryDetail,
   InventoryEmployeeAssignment,
   InventoryFilters,
   InventoryWithStore,
   UpdateInventoryInput,
 } from "../types/inventory";
+import type {
+  InventoryAttendanceSummaryFilters,
+  InventoryAttendanceSummaryResponse,
+} from "../types/inventory-attendance-summary";
 import type {
   InventoryImportConfirmRow,
   InventoryImportPreviewPayload,
@@ -72,7 +75,7 @@ export async function unassignEmployeeFromInventory(
 
 export async function getInventoryAttendanceSummary(
   inventoryId: string,
-  filters: import("../types/inventory").InventoryAttendanceSummaryFilters = {},
+  filters: InventoryAttendanceSummaryFilters = {},
 ) {
   const { data } = await apiClient.get<SingleResponse<InventoryAttendanceSummaryResponse>>(
     `/inventories/${inventoryId}/attendance-summary`,

@@ -27,9 +27,6 @@ type RespondFn = (input: {
 const INVALID_DATE_MESSAGE =
   "No pude interpretar la fecha. Usá el formato DD/MM/AAAA, por ejemplo 05/07/2026.";
 
-const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
-  "Ya tenés un flujo de llegada o salida en curso. Completalo o escribí \"Cancelar\" para salir antes de solicitar una ausencia.";
-
 const buildTypeSelectionPrompt = (types: AbsenceType[]): string => {
   const lines = types.map((type, index) => `${index + 1}. ${type.name}`);
   return `Seleccioná el tipo de ausencia respondiendo con el número:\n\n${lines.join("\n")}`;

@@ -17,11 +17,13 @@ SAFE_LINE_PATTERNS = [
     re.compile(r"process\.env\.[A-Z0-9_]+"),
     re.compile(r"\benv\.[A-Z0-9_]+\b"),
     re.compile(r"z\.(string|stringbool|coerce)\("),
-    re.compile(r"""['"][A-Z0-9_]+['"]\s*[,:\)]"""),
+    re.compile(r"""['"][A-Z0-9_]+['"]\s*[:,)]"""),
     re.compile(r"is required", re.I),
     re.compile(r"passwordHash|password_hash", re.I),
-    re.compile(r"//.*"),
-    re.compile(r"\*.*"),
+    re.compile(r"(example|placeholder|change-this-secret|ci-)", re.I),
+    re.compile(r"""=\s*['"][^'"]{0,7}['"]"""),
+    re.compile(r"^\s*//"),
+    re.compile(r"^\s*\*"),
 ]
 
 SECRET_ASSIGN_PATTERNS = [
@@ -71,23 +73,9 @@ def should_scan(path: Path) -> bool:
 
 def is_safe_line(line: str) -> bool:
     stripped = line.strip()
-    if not stripped or stripped.startswith("//") or stripped.startswith("*"):
+    if not stripped:
         return True
-    if re.search(r"process\.env\.[A-Z0-9_]+", stripped):
-        return True
-    if re.search(r"\benv\.[A-Z0-9_]+\b", stripped):
-        return True
-    if re.search(r"z\.(string|stringbool|coerce)\(", stripped):
-        return True
-    if re.search(r"""['"][A-Z0-9_]+['"]\s*:""", stripped):
-        return True
-    if re.search(r"passwordHash|password_hash", stripped, re.I):
-        return True
-    if re.search(r"(is required|example|placeholder|change-this-secret|ci-)", stripped, re.I):
-        return True
-    if re.search(r"""=\s*['"][^'"]{0,7}['"]""", stripped):
-        return True
-    return False
+    return any(pattern.search(stripped) for pattern in SAFE_LINE_PATTERNS)
 
 
 def mask_line(line: str) -> str:
@@ -113,7 +101,8 @@ def scan_file(path: Path) -> tuple[list[str], list[str]]:
         if matched:
             continue
 
-        for pattern, label in TOKEN_PATTERNS:
+        for entry in TOKEN_PATTERNS:
+            pattern, label = entry
             if pattern.search(line):
                 findings.append(f"{rel}:{idx} [{label}] {mask_line(line)}")
                 matched = True
@@ -121,7 +110,7 @@ def scan_file(path: Path) -> tuple[list[str], list[str]]:
         if matched:
             continue
 
-        if re.search(r"TWILIO_AUTH_TOKEN|JWT_SECRET|DB_PASSWORD", line) and not is_safe_line(line):
+        if re.search(r"TWILIO_AUTH_TOKEN|JWT_SECRET|DB_PASSWORD", line):
             ignored.append(f"{rel}:{idx} reference-only pattern ignored")
 
     return findings, ignored

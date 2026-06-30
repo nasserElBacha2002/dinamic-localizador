@@ -3,7 +3,9 @@ services:
     ports: !override []
     restart: unless-stopped
     environment:
+      ACCEPT_EULA: "Y"
       MSSQL_SA_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      TZ: ${TZ:?TZ is required}
     healthcheck:
       test:
         [

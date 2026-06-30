@@ -395,6 +395,23 @@ AUDIT_VERSION = "3.0"
 
 
 def parse_sql_classification(raw: Path) -> dict[str, int]:
+    json_path = raw / "backend-sql-analysis.json"
+    if json_path.exists():
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            classification = data.get("sql_classification", {})
+            if classification:
+                return {
+                    "allowed_operational_sql": int(classification.get("allowed_operational_sql", 0)),
+                    "allowed_healthcheck_sql": int(classification.get("allowed_healthcheck_sql", 0)),
+                    "repository_sql": int(classification.get("repository_sql", 0)),
+                    "warning_sql_outside_repository": int(
+                        classification.get("warning_sql_outside_repository", 0)
+                    ),
+                }
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
     path = raw / "backend-architecture-audit.md"
     counts = {
         "allowed_operational_sql": 0,
@@ -421,6 +438,21 @@ def parse_sql_classification(raw: Path) -> dict[str, int]:
 
 
 def parse_domain_sql(raw: Path) -> dict[str, int | str]:
+    json_path = raw / "backend-sql-analysis.json"
+    if json_path.exists():
+        try:
+            data = json.loads(json_path.read_text(encoding="utf-8"))
+            param = data.get("parameterized_sql", {})
+            if param:
+                return {
+                    "input_files": int(param.get("input_files", 0)),
+                    "input_count": int(param.get("input_count", 0)),
+                    "query_files": int(param.get("query_files", 0)),
+                    "risky_count": int(param.get("risky_count", 0)),
+                }
+        except (json.JSONDecodeError, TypeError, ValueError):
+            pass
+
     path = raw / "backend-domain-rules-audit.md"
     result: dict[str, int | str] = {
         "input_files": 0,
@@ -432,10 +464,10 @@ def parse_domain_sql(raw: Path) -> dict[str, int | str]:
         return result
     text = path.read_text(encoding="utf-8", errors="replace")
     for key, pattern in [
-        ("input_files", r"Files with `.input\(\.\.\.\)` bindings: \*\*(\d+)\*\*"),
-        ("input_count", r"Parameter binding occurrences: \*\*(\d+)\*\*"),
-        ("query_files", r"Files executing SQL \(`.query`/`.batch`/`.execute`\): \*\*(\d+)\*\*"),
-        ("risky_count", r"Potential risky dynamic SQL: \*\*(\d+)\*\*"),
+        ("input_files", r"Files with .*input.* bindings:\s*\*\*(\d+)\*\*"),
+        ("input_count", r"Parameter binding occurrences:\s*\*\*(\d+)\*\*"),
+        ("query_files", r"Files executing SQL.*:\s*\*\*(\d+)\*\*"),
+        ("risky_count", r"Potential risky dynamic SQL:\s*\*\*(\d+)\*\*"),
     ]:
         match = re.search(pattern, text)
         if match:

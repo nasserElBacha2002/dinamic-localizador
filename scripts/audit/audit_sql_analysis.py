@@ -3,12 +3,17 @@
 
 from __future__ import annotations
 
+import json
 import re
 import sys
 from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-BACKEND_SRC = REPO_ROOT / "backend" / "src"
+BACKEND_TS_ROOT = REPO_ROOT / "backend" / "src"
+OPERATIONAL_SQL_ROOTS = [
+    REPO_ROOT / "database",
+    REPO_ROOT / "scripts",
+]
 
 INPUT_PATTERN = re.compile(r"\.input\s*\(")
 QUERY_PATTERN = re.compile(r"\.query\s*\(")
@@ -16,7 +21,7 @@ BATCH_PATTERN = re.compile(r"\.batch\s*\(")
 EXECUTE_PATTERN = re.compile(r"\.execute\s*\(")
 
 SQL_KEYWORD = re.compile(r"\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b", re.I)
-INTERPOLATION = re.compile(r"`[^`]*\$\{[^}]+\}[^`]*`")
+SQL_FILE_KEYWORD = re.compile(r"\b(SELECT|INSERT|UPDATE|DELETE|MERGE|CREATE|ALTER|DROP)\b", re.I)
 USER_INPUT_INTERP = re.compile(
     r"\$\{(req\.(params|body|query)|params\.|body\.|query\.|userInput|externalValue|csv)",
     re.I,
@@ -28,6 +33,8 @@ TS_SQL_FALSE_POSITIVE = re.compile(
 )
 
 ALLOWED_OPERATIONAL_PREFIXES = (
+    "database/",
+    "scripts/",
     "backend/src/database/",
     "backend/src/scripts/",
     "backend/src/utils/store-fix/",
@@ -37,21 +44,55 @@ ALLOWED_OPERATIONAL_PREFIXES = (
 HEALTHCHECK_FILE = "backend/src/controllers/health.controller.ts"
 HEALTHCHECK_SQL = re.compile(r"SELECT\s+1", re.I)
 
+BOUNDARY_SCAN_SUFFIXES = {".ts", ".js", ".sh", ".sql"}
 
-def iter_ts_files() -> list[Path]:
+
+def rel(path: Path) -> str:
+    return path.relative_to(REPO_ROOT).as_posix()
+
+
+def is_test_file(path: Path) -> bool:
+    name = path.name
+    return name.endswith(".test.ts") or name.endswith(".test.js")
+
+
+def iter_backend_ts_files() -> list[Path]:
     files: list[Path] = []
-    if not BACKEND_SRC.exists():
+    if not BACKEND_TS_ROOT.exists():
         return files
-    for path in BACKEND_SRC.rglob("*.ts"):
-        rel = path.relative_to(REPO_ROOT).as_posix()
-        if rel.endswith(".test.ts"):
+    for path in BACKEND_TS_ROOT.rglob("*.ts"):
+        if is_test_file(path):
             continue
         files.append(path)
     return sorted(files)
 
 
-def rel(path: Path) -> str:
-    return path.relative_to(REPO_ROOT).as_posix()
+def iter_boundary_files() -> list[Path]:
+    """Production TS plus operational SQL/script assets."""
+    seen: set[Path] = set()
+    files: list[Path] = []
+
+    def add(path: Path) -> None:
+        resolved = path.resolve()
+        if resolved in seen or not path.is_file():
+            return
+        if path.suffix not in BOUNDARY_SCAN_SUFFIXES:
+            return
+        if is_test_file(path):
+            return
+        seen.add(resolved)
+        files.append(path)
+
+    for path in iter_backend_ts_files():
+        add(path)
+
+    for root in OPERATIONAL_SQL_ROOTS:
+        if not root.exists():
+            continue
+        for path in root.rglob("*"):
+            add(path)
+
+    return sorted(files, key=lambda p: rel(p))
 
 
 def classify_sql_location(file_rel: str, line: str) -> str:
@@ -65,10 +106,14 @@ def classify_sql_location(file_rel: str, line: str) -> str:
         return "warning_sql_outside_repository"
     if file_rel.startswith("backend/src/controllers/"):
         return "warning_sql_outside_repository"
+    if file_rel.startswith("backend/src/"):
+        return "warning_sql_outside_repository"
+    if file_rel.startswith("database/") or file_rel.startswith("scripts/"):
+        return "allowed_operational_sql"
     return "warning_sql_outside_repository"
 
 
-def line_contains_sql(line: str) -> bool:
+def line_contains_sql_ts(line: str) -> bool:
     stripped = line.strip()
     if TS_SQL_FALSE_POSITIVE.search(stripped):
         return False
@@ -82,6 +127,19 @@ def line_contains_sql(line: str) -> bool:
     if re.search(r"`\s*(SELECT|INSERT|UPDATE|DELETE|MERGE)\b", stripped, re.I):
         return True
     return False
+
+
+def line_contains_sql_file(line: str) -> bool:
+    stripped = line.strip()
+    if not stripped or stripped.startswith("--"):
+        return False
+    return bool(SQL_FILE_KEYWORD.search(line))
+
+
+def line_contains_sql(path: Path, line: str) -> bool:
+    if path.suffix == ".sql":
+        return line_contains_sql_file(line)
+    return line_contains_sql_ts(line)
 
 
 def is_risky_query_line(line: str) -> bool:
@@ -123,6 +181,7 @@ def analyze_parameterized(files: list[Path]) -> dict:
         "query_files": sorted(query_files),
         "query_count": query_count,
         "risky": risky,
+        "risky_count": len(risky),
     }
 
 
@@ -136,11 +195,15 @@ def analyze_boundaries(files: list[Path]) -> dict[str, list[tuple[str, int, str]
     for path in files:
         file_rel = rel(path)
         for idx, line in enumerate(path.read_text(encoding="utf-8", errors="replace").splitlines(), start=1):
-            if not line_contains_sql(line):
+            if not line_contains_sql(path, line):
                 continue
             category = classify_sql_location(file_rel, line)
             buckets[category].append((file_rel, idx, line.strip()[:140]))
     return buckets
+
+
+def classification_counts(buckets: dict[str, list]) -> dict[str, int]:
+    return {key: len(buckets.get(key, [])) for key in buckets}
 
 
 def render_domain_report(param: dict) -> str:
@@ -148,6 +211,8 @@ def render_domain_report(param: dict) -> str:
         "# Backend domain rules audit",
         "",
         "## Parameterized SQL (mssql)",
+        "",
+        "Scans `backend/src/**/*.ts` production code for `mssql` parameter bindings.",
         "",
         f"- Files with `.input(...)` bindings: **{len(param['input_files'])}**",
         f"- Parameter binding occurrences: **{param['input_count']}**",
@@ -170,7 +235,7 @@ def render_domain_report(param: dict) -> str:
     if not param["risky"]:
         lines.append("- No risky interpolated SQL detected in scanned production files.")
     else:
-        lines.append(f"- Potential risky dynamic SQL: **{len(param['risky'])}** occurrence(s)")
+        lines.append(f"- Potential risky dynamic SQL: **{param['risky_count']}** occurrence(s)")
         for file_rel, idx, snippet in param["risky"][:20]:
             lines.append(f"- `{file_rel}:{idx}` `{snippet}`")
 
@@ -189,14 +254,18 @@ def render_domain_report(param: dict) -> str:
     ]
     for label, pattern in checks:
         count = 0
-        if BACKEND_SRC.exists():
-            for path in BACKEND_SRC.rglob("*.ts"):
-                if path.name.endswith(".test.ts"):
+        if BACKEND_TS_ROOT.exists():
+            for path in BACKEND_TS_ROOT.rglob("*.ts"):
+                if is_test_file(path):
                     continue
                 count += len(re.findall(pattern, path.read_text(encoding="utf-8", errors="replace"), re.I))
         lines.append(f"- {label}: {count} matches")
 
-    migrations = sorted((REPO_ROOT / "database" / "migrations").glob("*.sql")) if (REPO_ROOT / "database" / "migrations").exists() else []
+    migrations = (
+        sorted((REPO_ROOT / "database" / "migrations").glob("*.sql"))
+        if (REPO_ROOT / "database" / "migrations").exists()
+        else []
+    )
     lines.extend(["", "## Migrations", ""])
     if migrations:
         for path in migrations:
@@ -212,6 +281,11 @@ def render_architecture_report(buckets: dict[str, list]) -> str:
         "# Backend architecture audit",
         "",
         "## SQL location classification",
+        "",
+        "Scanned paths:",
+        "- `backend/src/**/*.ts` (production TypeScript)",
+        "- `database/**/*.sql`, `database/**/*.ts`",
+        "- `scripts/**/*.{ts,sh}`",
         "",
         "Accepted exceptions are informational only and do not count as architectural warnings.",
         "",
@@ -245,17 +319,38 @@ def render_architecture_report(buckets: dict[str, list]) -> str:
     return "\n".join(lines)
 
 
+def write_analysis_json(json_path: Path, param: dict, buckets: dict[str, list]) -> None:
+    payload = {
+        "parameterized_sql": {
+            "input_files": len(param["input_files"]),
+            "input_count": param["input_count"],
+            "query_files": len(param["query_files"]),
+            "query_count": param["query_count"],
+            "risky_count": param["risky_count"],
+        },
+        "sql_classification": classification_counts(buckets),
+    }
+    json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
 def main() -> int:
     if len(sys.argv) < 3:
         print("Usage: audit_sql_analysis.py <domain-out.md> <architecture-out.md>", file=sys.stderr)
         return 2
 
-    files = iter_ts_files()
-    param = analyze_parameterized(files)
-    buckets = analyze_boundaries(files)
+    backend_ts = iter_backend_ts_files()
+    boundary_files = iter_boundary_files()
 
-    Path(sys.argv[1]).write_text(render_domain_report(param), encoding="utf-8")
-    Path(sys.argv[2]).write_text(render_architecture_report(buckets), encoding="utf-8")
+    param = analyze_parameterized(backend_ts)
+    buckets = analyze_boundaries(boundary_files)
+
+    domain_path = Path(sys.argv[1])
+    arch_path = Path(sys.argv[2])
+    json_path = arch_path.parent / "backend-sql-analysis.json"
+
+    domain_path.write_text(render_domain_report(param), encoding="utf-8")
+    arch_path.write_text(render_architecture_report(buckets), encoding="utf-8")
+    write_analysis_json(json_path, param, buckets)
     return 0
 
 

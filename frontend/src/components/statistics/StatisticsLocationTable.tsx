@@ -47,6 +47,7 @@ interface StatisticsLocationTableProps {
   exportRows: AttendanceByLocationRow[];
   dateFrom?: string;
   dateTo?: string;
+  exportsDisabled?: boolean;
 }
 
 const HEADERS = [
@@ -93,6 +94,7 @@ export function StatisticsLocationTable({
   exportRows,
   dateFrom,
   dateTo,
+  exportsDisabled = false,
 }: StatisticsLocationTableProps) {
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
@@ -116,6 +118,7 @@ export function StatisticsLocationTable({
           dateFrom={dateFrom}
           dateTo={dateTo}
           sheetName="Por tienda"
+          disabled={exportsDisabled}
         />
       </Stack>
 

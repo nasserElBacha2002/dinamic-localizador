@@ -18,6 +18,7 @@ interface ChartCardProps {
   dateFrom?: string;
   dateTo?: string;
   actions?: ReactNode;
+  exportsDisabled?: boolean;
 }
 
 export function ChartCard({
@@ -33,6 +34,7 @@ export function ChartCard({
   dateFrom,
   dateTo,
   actions,
+  exportsDisabled = false,
 }: ChartCardProps) {
   return (
     <Paper sx={{ p: 2, height: "100%" }}>
@@ -50,6 +52,7 @@ export function ChartCard({
               dateFrom={dateFrom}
               dateTo={dateTo}
               size="small"
+              disabled={exportsDisabled}
             />
           ) : null}
         </Stack>

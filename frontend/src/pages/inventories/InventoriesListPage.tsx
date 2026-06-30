@@ -10,11 +10,11 @@ import {
   TableBody,
   TableCell,
   TableContainer,
-  TextField,
 } from "@mui/material";
 import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { ClickableTableRow } from "../../components/common/ClickableTableRow";
+import { DateRangeFilter } from "../../components/common/DateRangeFilter";
 import { EmptyState } from "../../components/common/EmptyState";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FilterItem, ListFilters } from "../../components/common/ListFilters";
@@ -30,11 +30,12 @@ import { usePaginationState } from "../../hooks/usePaginationState";
 import { useTableSort } from "../../hooks/useTableSort";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryListSortField, InventoryStatus } from "../../types/inventory";
+import type { DateRangeValue } from "../../types/date-range";
+import { getDefaultInventoryDateRange, getDateRangeQueryValue } from "../../utils/date-range";
 import {
   dateInputToIsoEnd,
   dateInputToIsoStart,
   formatDateTime,
-  getTodayDateInput,
 } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { inventoryStatusLabels } from "../../utils/labels";
@@ -57,21 +58,17 @@ export function InventoriesListPage() {
   );
   const [status, setStatus] = useState<InventoryStatus | "">("");
   const [storeId, setStoreId] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
-  const [todayOnly, setTodayOnly] = useState(true);
-
-  const todayDate = getTodayDateInput();
-  const effectiveDateFrom = todayOnly ? todayDate : dateFrom;
-  const effectiveDateTo = todayOnly ? todayDate : dateTo;
+  const [defaultDateRange] = useState<DateRangeValue>(() => getDefaultInventoryDateRange());
+  const [dateRange, setDateRange] = useState<DateRangeValue>(() => defaultDateRange);
+  const dateQuery = getDateRangeQueryValue(dateRange);
 
   const { data, isPending, isError, error } = useInventories({
     page: pagination.page,
     limit: pagination.pageSize,
     status: status || undefined,
     storeId: storeId || undefined,
-    dateFrom: effectiveDateFrom ? dateInputToIsoStart(effectiveDateFrom) : undefined,
-    dateTo: effectiveDateTo ? dateInputToIsoEnd(effectiveDateTo) : undefined,
+    dateFrom: dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined,
+    dateTo: dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined,
     sortBy,
     sortDirection,
   });
@@ -81,11 +78,9 @@ export function InventoriesListPage() {
     onSortChange(field);
   };
 
-  const handleTodayToggle = () => {
+  const handleDateRangeChange = (nextDateRange: DateRangeValue) => {
     pagination.resetPage();
-    setTodayOnly((current) => !current);
-    setDateFrom("");
-    setDateTo("");
+    setDateRange(nextDateRange);
   };
 
   return (
@@ -137,45 +132,14 @@ export function InventoriesListPage() {
           />
         </FilterItem>
 
-        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
-          <Button
-            variant={todayOnly ? "contained" : "outlined"}
-            onClick={handleTodayToggle}
-            fullWidth
-            sx={{ height: "100%" }}
-          >
-            Solo hoy
-          </Button>
-        </FilterItem>
-
-        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            label="Fecha desde"
-            type="date"
-            value={todayOnly ? todayDate : dateFrom}
-            onChange={(event) => {
-              pagination.resetPage();
-              setTodayOnly(false);
-              setDateFrom(event.target.value);
-            }}
-            disabled={todayOnly}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
-          />
-        </FilterItem>
-        <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
-          <TextField
-            label="Fecha hasta"
-            type="date"
-            value={todayOnly ? todayDate : dateTo}
-            onChange={(event) => {
-              pagination.resetPage();
-              setTodayOnly(false);
-              setDateTo(event.target.value);
-            }}
-            disabled={todayOnly}
-            InputLabelProps={{ shrink: true }}
-            fullWidth
+        <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
+          <DateRangeFilter
+            value={dateRange}
+            onChange={handleDateRangeChange}
+            mode="future"
+            label="Fecha"
+            defaultValue={defaultDateRange}
+            allowCustomRange
           />
         </FilterItem>
       </ListFilters>

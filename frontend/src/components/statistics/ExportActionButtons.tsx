@@ -9,6 +9,7 @@ interface ExportActionButtonsProps {
   dateTo?: string;
   size?: "small" | "medium";
   sheetName?: string;
+  disabled?: boolean;
 }
 
 export function ExportActionButtons({
@@ -19,8 +20,10 @@ export function ExportActionButtons({
   dateTo,
   size = "medium",
   sheetName = "Datos",
+  disabled = false,
 }: ExportActionButtonsProps) {
   const filename = buildExportFilename(baseName, dateFrom, dateTo);
+  const isDisabled = disabled || rows.length === 0;
 
   return (
     <Stack direction="row" spacing={1}>
@@ -28,7 +31,8 @@ export function ExportActionButtons({
         size={size}
         variant="outlined"
         onClick={() => exportToCsv(filename, headers, rows)}
-        disabled={rows.length === 0}
+        disabled={isDisabled}
+        title={disabled ? "Completá un rango de fechas válido antes de exportar." : undefined}
       >
         CSV
       </Button>
@@ -36,7 +40,8 @@ export function ExportActionButtons({
         size={size}
         variant="outlined"
         onClick={() => exportToXlsx(filename, headers, rows, sheetName)}
-        disabled={rows.length === 0}
+        disabled={isDisabled}
+        title={disabled ? "Completá un rango de fechas válido antes de exportar." : undefined}
       >
         Excel
       </Button>

@@ -38,6 +38,8 @@ export interface AttendanceRecord {
   earlyDepartureMinutes: number | null;
   extraWorkedMinutes: number | null;
   checkoutMessageSid: string | null;
+  isSimulation: boolean;
+  simulationSessionId: string | null;
   createdAt: string;
 }
 
@@ -124,6 +126,8 @@ export interface AttendanceFilters {
   punctualityStatus?: PunctualityStatus;
   dateFrom?: string;
   dateTo?: string;
+  includeSimulation?: boolean;
+  simulationOnly?: boolean;
 }
 
 export interface CreateAttendanceInput {

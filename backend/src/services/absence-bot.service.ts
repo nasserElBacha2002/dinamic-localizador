@@ -13,7 +13,7 @@ import {
 import {
   calculateTotalAbsenceDays,
   formatAbsenceDateDisplay,
-  parseAbsenceDateInput,
+  parseSpanishDateInput,
 } from "../utils/absence-date";
 import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../utils/bot-session-states";
 
@@ -25,7 +25,7 @@ type RespondFn = (input: {
 }) => Promise<string>;
 
 const INVALID_DATE_MESSAGE =
-  "No pudimos interpretar la fecha. Enviá la fecha con formato DD/MM/AAAA, por ejemplo 25/06/2026.";
+  "No pude interpretar la fecha. Usá el formato DD/MM/AAAA, por ejemplo 05/07/2026.";
 
 const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
   "Ya tenés un flujo de llegada o salida en curso. Completalo o escribí \"Cancelar\" para salir antes de solicitar una ausencia.";
@@ -101,7 +101,7 @@ export const absenceBotService = {
           contextJson: serializeContext(draft),
         });
         return input.respond({
-          message: `Perfecto. Indicá la fecha de inicio de tu ausencia (${absenceType.name}) con formato DD/MM/AAAA.`,
+          message: `Perfecto. Ingresá la fecha de inicio de tu ausencia (${absenceType.name}) en formato DD/MM/AAAA.\nPor ejemplo: 05/07/2026.`,
           employeeId: input.employeeId,
           phoneFrom: input.phoneTo,
           phoneTo: input.phoneFrom,
@@ -166,7 +166,7 @@ export const absenceBotService = {
       });
 
       return input.respond({
-        message: "Indicá la fecha de inicio con formato DD/MM/AAAA.",
+        message: "Ingresá la fecha de inicio en formato DD/MM/AAAA.\nPor ejemplo: 05/07/2026.",
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -174,7 +174,7 @@ export const absenceBotService = {
     }
 
     if (input.session.state === "WAITING_ABSENCE_START_DATE") {
-      const parsed = parseAbsenceDateInput(input.body);
+      const parsed = parseSpanishDateInput(input.body);
       if (!parsed) {
         return input.respond({
           message: INVALID_DATE_MESSAGE,
@@ -192,7 +192,7 @@ export const absenceBotService = {
 
       return input.respond({
         message:
-          "Indicá la fecha de fin con formato DD/MM/AAAA. Si es un solo día, repetí la misma fecha.",
+          "Ingresá la fecha de fin en formato DD/MM/AAAA.\nPor ejemplo: 05/07/2026. Si es un solo día, repetí la misma fecha.",
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -200,7 +200,7 @@ export const absenceBotService = {
     }
 
     if (input.session.state === "WAITING_ABSENCE_END_DATE") {
-      const parsed = parseAbsenceDateInput(input.body);
+      const parsed = parseSpanishDateInput(input.body);
       if (!parsed) {
         return input.respond({
           message: INVALID_DATE_MESSAGE,

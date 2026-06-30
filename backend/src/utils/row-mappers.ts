@@ -163,6 +163,8 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
       ? Number(row.extra_worked_minutes)
       : null,
   checkoutMessageSid: row.checkout_message_sid ? String(row.checkout_message_sid) : null,
+  isSimulation: Boolean(row.is_simulation),
+  simulationSessionId: row.simulation_session_id ? String(row.simulation_session_id) : null,
   createdAt: toIsoString(row.created_at as Date | string),
 });
 

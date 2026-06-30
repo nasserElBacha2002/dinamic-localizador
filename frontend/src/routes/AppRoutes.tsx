@@ -20,6 +20,7 @@ import { StoreEditPage } from "../pages/stores/StoreEditPage";
 import { StoresListPage } from "../pages/stores/StoresListPage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
 import { AbsenceDetailPage } from "../pages/absences/AbsenceDetailPage";
+import { BotSimulatorPage } from "../pages/bot-simulator/BotSimulatorPage";
 
 const StatisticsPage = lazy(() =>
   import("../pages/statistics/StatisticsPage").then((module) => ({
@@ -64,6 +65,7 @@ export function AppRoutes() {
         <Route path="/attendance/:id" element={<AttendanceDetailPage />} />
         <Route path="/absences" element={<AbsencesListPage />} />
         <Route path="/absences/:id" element={<AbsenceDetailPage />} />
+        <Route path="/bot-simulator" element={<BotSimulatorPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />

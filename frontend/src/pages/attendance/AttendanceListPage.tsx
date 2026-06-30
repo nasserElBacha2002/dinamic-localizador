@@ -49,6 +49,7 @@ export function AttendanceListPage() {
   const [validationStatus, setValidationStatus] = useState<ValidationStatus | "">("");
   const [locationStatus, setLocationStatus] = useState<LocationStatus | "">("");
   const [punctualityStatus, setPunctualityStatus] = useState<PunctualityStatus | "">("");
+  const [recordType, setRecordType] = useState<"real" | "simulation" | "all">("real");
   const [dateRange, setDateRange] = useState<DateRangeValue>(EMPTY_DATE_RANGE_VALUE);
 
   const exportMutation = useExportAttendanceCsv();
@@ -65,6 +66,8 @@ export function AttendanceListPage() {
     punctualityStatus: punctualityStatus || undefined,
     dateFrom: dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined,
     dateTo: dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined,
+    includeSimulation: recordType === "all" ? true : undefined,
+    simulationOnly: recordType === "simulation" ? true : undefined,
   };
 
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
@@ -111,7 +114,7 @@ export function AttendanceListPage() {
                 Completá un rango de fechas válido antes de exportar.
               </Typography>
             ) : null}
-            <PageHeaderLinkAction to="/attendance/new" label="Crear registro de prueba" />
+            <PageHeaderLinkAction to="/bot-simulator" label="Probar flujo del bot" />
           </Stack>
         }
       />
@@ -218,6 +221,25 @@ export function AttendanceListPage() {
           </FormControl>
         </FilterItem>
 
+        <FilterItem>
+          <FormControl fullWidth>
+            <InputLabel id="attendance-record-type-filter">Tipo de registro</InputLabel>
+            <Select
+              labelId="attendance-record-type-filter"
+              label="Tipo de registro"
+              value={recordType}
+              onChange={(event) => {
+                pagination.resetPage();
+                setRecordType(event.target.value as "real" | "simulation" | "all");
+              }}
+            >
+              <MenuItem value="real">Registros reales</MenuItem>
+              <MenuItem value="simulation">Registros simulados</MenuItem>
+              <MenuItem value="all">Todos los registros</MenuItem>
+            </Select>
+          </FormControl>
+        </FilterItem>
+
         <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
           <DateRangeFilter
             value={dateRange}
@@ -251,6 +273,7 @@ export function AttendanceListPage() {
                   <TableCell>Validación</TableCell>
                   <TableCell>Ubicación</TableCell>
                   <TableCell>Puntualidad</TableCell>
+                  <TableCell>Tipo</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>
@@ -274,6 +297,9 @@ export function AttendanceListPage() {
                     </TableCell>
                     <TableCell>
                       <StatusChip label={punctualityStatusLabels[record.punctualityStatus]} />
+                    </TableCell>
+                    <TableCell>
+                      {record.isSimulation ? <StatusChip label="Simulación" /> : "Real"}
                     </TableCell>
                   </ClickableTableRow>
                 ))}

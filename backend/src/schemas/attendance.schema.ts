@@ -39,6 +39,8 @@ export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSc
   validationStatus: validationStatusSchema.optional(),
   locationStatus: locationStatusSchema.optional(),
   punctualityStatus: punctualityStatusSchema.optional(),
+  includeSimulation: z.coerce.boolean().optional(),
+  simulationOnly: z.coerce.boolean().optional(),
 });
 
 export type CreateAttendanceInput = z.infer<typeof createAttendanceSchema>;

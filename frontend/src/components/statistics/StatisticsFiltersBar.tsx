@@ -1,8 +1,10 @@
-import { FormControl, InputLabel, MenuItem, Select, TextField } from "@mui/material";
+import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
+import { DateRangeFilter } from "../common/DateRangeFilter";
 import { FilterItem, ListFilters } from "../common/ListFilters";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import { InventorySearchAutocomplete } from "../inventories/InventorySearchAutocomplete";
 import { StoreSearchAutocomplete } from "../stores/StoreSearchAutocomplete";
+import type { DateRangeValue } from "../../types/date-range";
 import type { StatisticsValidationStatus } from "../../types/statistics";
 import {
   locationStatusLabels,
@@ -11,16 +13,15 @@ import {
 } from "../../utils/labels";
 
 interface StatisticsFiltersBarProps {
-  dateFrom: string;
-  dateTo: string;
+  dateRange: DateRangeValue;
+  defaultDateRange: DateRangeValue;
   inventoryId: string;
   storeId: string;
   employeeId: string;
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
   punctualityStatus: string;
-  onDateFromChange: (value: string) => void;
-  onDateToChange: (value: string) => void;
+  onDateRangeChange: (value: DateRangeValue) => void;
   onInventoryChange: (value: string) => void;
   onStoreChange: (value: string) => void;
   onEmployeeChange: (value: string) => void;
@@ -30,16 +31,15 @@ interface StatisticsFiltersBarProps {
 }
 
 export function StatisticsFiltersBar({
-  dateFrom,
-  dateTo,
+  dateRange,
+  defaultDateRange,
   inventoryId,
   storeId,
   employeeId,
   validationStatus,
   locationStatus,
   punctualityStatus,
-  onDateFromChange,
-  onDateToChange,
+  onDateRangeChange,
   onInventoryChange,
   onStoreChange,
   onEmployeeChange,
@@ -49,24 +49,14 @@ export function StatisticsFiltersBar({
 }: StatisticsFiltersBarProps) {
   return (
     <ListFilters>
-      <FilterItem>
-        <TextField
-          label="Desde"
-          type="date"
-          value={dateFrom}
-          onChange={(event) => onDateFromChange(event.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-          fullWidth
-        />
-      </FilterItem>
-      <FilterItem>
-        <TextField
-          label="Hasta"
-          type="date"
-          value={dateTo}
-          onChange={(event) => onDateToChange(event.target.value)}
-          slotProps={{ inputLabel: { shrink: true } }}
-          fullWidth
+      <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
+        <DateRangeFilter
+          value={dateRange}
+          onChange={onDateRangeChange}
+          mode="past"
+          label="Fecha"
+          defaultValue={defaultDateRange}
+          allowCustomRange
         />
       </FilterItem>
       <FilterItem>

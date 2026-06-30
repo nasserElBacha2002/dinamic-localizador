@@ -191,6 +191,7 @@ export function AttendanceDetailPage() {
                       <StatusChip label={validationStatusLabels[record.validationStatus]} />
                       <StatusChip label={locationStatusLabels[record.locationStatus]} />
                       <StatusChip label={punctualityStatusLabels[record.punctualityStatus]} />
+                      {record.isSimulation ? <StatusChip label="Simulación" /> : null}
                     </Stack>
                   ),
                 },

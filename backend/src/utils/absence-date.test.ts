@@ -6,7 +6,51 @@ import {
   formatAbsenceDateDisplay,
   getUtcOffsetHoursFromTimezone,
   parseAbsenceDateInput,
+  parseSpanishDateInput,
 } from "./absence-date";
+
+describe("parseSpanishDateInput", () => {
+  it("parses DD/MM/YYYY as day-first", () => {
+    assert.deepEqual(parseSpanishDateInput("05/07/2026"), {
+      year: 2026,
+      month: 7,
+      day: 5,
+      iso: "2026-07-05",
+    });
+  });
+
+  it("parses single-digit day and month", () => {
+    assert.deepEqual(parseSpanishDateInput("5/7/2026"), {
+      year: 2026,
+      month: 7,
+      day: 5,
+      iso: "2026-07-05",
+    });
+  });
+
+  it("parses end of year", () => {
+    assert.deepEqual(parseSpanishDateInput("31/12/2026"), {
+      year: 2026,
+      month: 12,
+      day: 31,
+      iso: "2026-12-31",
+    });
+  });
+
+  it("rejects MM/DD/YYYY style invalid month", () => {
+    assert.equal(parseSpanishDateInput("12/31/2026"), null);
+  });
+
+  it("rejects invalid calendar dates", () => {
+    assert.equal(parseSpanishDateInput("31/02/2026"), null);
+    assert.equal(parseSpanishDateInput("00/01/2026"), null);
+    assert.equal(parseSpanishDateInput("01/00/2026"), null);
+  });
+
+  it("rejects ISO format for Spanish user input", () => {
+    assert.equal(parseSpanishDateInput("2026-07-05"), null);
+  });
+});
 
 describe("parseAbsenceDateInput", () => {
   it("parses DD/MM/YYYY", () => {
@@ -18,7 +62,7 @@ describe("parseAbsenceDateInput", () => {
     });
   });
 
-  it("parses YYYY-MM-DD", () => {
+  it("parses YYYY-MM-DD for API input", () => {
     assert.equal(parseAbsenceDateInput("2026-06-25")?.iso, "2026-06-25");
   });
 

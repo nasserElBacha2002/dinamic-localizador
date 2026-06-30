@@ -1,4 +1,4 @@
-import type { InventoryStatus } from "./inventory";
+import type { InventoryStatus } from "./inventory-status";
 
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
@@ -38,6 +38,8 @@ export interface AttendanceRecord {
   earlyDepartureMinutes: number | null;
   extraWorkedMinutes: number | null;
   checkoutMessageSid: string | null;
+  isSimulation: boolean;
+  simulationSessionId: string | null;
   createdAt: string;
 }
 
@@ -124,6 +126,8 @@ export interface AttendanceFilters {
   punctualityStatus?: PunctualityStatus;
   dateFrom?: string;
   dateTo?: string;
+  includeSimulation?: boolean;
+  simulationOnly?: boolean;
 }
 
 export interface CreateAttendanceInput {

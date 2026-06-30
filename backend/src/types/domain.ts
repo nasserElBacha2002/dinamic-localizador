@@ -92,6 +92,8 @@ export interface AttendanceRecord {
   earlyDepartureMinutes: number | null;
   extraWorkedMinutes: number | null;
   checkoutMessageSid: string | null;
+  isSimulation: boolean;
+  simulationSessionId: string | null;
   createdAt: string;
 }
 

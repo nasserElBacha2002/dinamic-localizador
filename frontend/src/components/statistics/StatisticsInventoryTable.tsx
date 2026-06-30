@@ -50,6 +50,7 @@ interface StatisticsInventoryTableProps {
   exportRows: AttendanceByInventoryRow[];
   dateFrom?: string;
   dateTo?: string;
+  exportsDisabled?: boolean;
 }
 
 const HEADERS = [
@@ -100,6 +101,7 @@ export function StatisticsInventoryTable({
   exportRows,
   dateFrom,
   dateTo,
+  exportsDisabled = false,
 }: StatisticsInventoryTableProps) {
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
@@ -123,6 +125,7 @@ export function StatisticsInventoryTable({
           dateFrom={dateFrom}
           dateTo={dateTo}
           sheetName="Por inventario"
+          disabled={exportsDisabled}
         />
       </Stack>
 

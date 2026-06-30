@@ -44,7 +44,7 @@ export function EmployeesListPage() {
   const handleSearch = useCallback((value: string) => {
     pagination.resetPage();
     setSearch(value);
-  }, [pagination.resetPage]);
+  }, [pagination]);
 
   return (
     <AdminLayout>

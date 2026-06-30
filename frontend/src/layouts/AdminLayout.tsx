@@ -26,6 +26,7 @@ const navItems = [
   { label: "Asistencias", path: "/attendance" },
   { label: "Ausencias", path: "/absences" },
   { label: "Estadísticas", path: "/statistics" },
+  { label: "Simulador de Bot", path: "/bot-simulator" },
 ];
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {

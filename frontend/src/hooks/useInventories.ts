@@ -11,10 +11,10 @@ import {
   updateInventory,
 } from "../api/inventories.api";
 import type {
-  InventoryAttendanceSummaryFilters,
   InventoryFilters,
   UpdateInventoryInput,
 } from "../types/inventory";
+import type { InventoryAttendanceSummaryFilters } from "../types/inventory-attendance-summary";
 
 export function useInventories(filters: InventoryFilters) {
   return useQuery({

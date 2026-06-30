@@ -672,6 +672,22 @@ docker compose --env-file .env -f docker-compose.yml -f docker-compose.prod.yml 
 rm -f .env
 ```
 
+### Producción Docker (puertos, healthchecks, restart)
+
+Con `docker-compose.prod.yml` activo:
+
+| Servicio | Puerto host | Healthcheck | Restart |
+|----------|-------------|-------------|---------|
+| `sqlserver` | **ninguno** (solo red interna Docker) | `sqlcmd SELECT 1` dentro del contenedor | `unless-stopped` |
+| `backend` | `127.0.0.1:${BACKEND_HOST_PORT}` → puerto interno `PORT` | `GET /api/health` vía `node` + `fetch` | `unless-stopped` |
+| `frontend` | `127.0.0.1:${FRONTEND_HOST_PORT}` → puerto 80 (Nginx) | `wget` a `/` | `unless-stopped` |
+
+Los healthchecks viven en `docker-compose.prod.yml` (no en los Dockerfiles). `db-init` y `migrations` siguen siendo jobs one-shot con `restart: "no"`.
+
+La contraseña SA de SQL Server en Docker se define solo con `DB_PASSWORD` en `.env` (se inyecta como `MSSQL_SA_PASSWORD` dentro del contenedor `sqlserver`). El frontend arranca de forma independiente y no espera el healthcheck del backend.
+
+En desarrollo (`docker compose` sin overlay prod), SQL Server expone `1435:1433` para acceso local; backend y frontend usan los puertos definidos en `.env` sin restricción a localhost.
+
 ---
 
 ## Panel administrativo (frontend)

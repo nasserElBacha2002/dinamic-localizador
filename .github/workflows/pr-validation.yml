@@ -24,7 +24,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: backend/package-lock.json
 
@@ -50,7 +50,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "22"
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
@@ -87,7 +87,6 @@ jobs:
           }
 
           replace_if_empty DB_PASSWORD ci-db-password
-          replace_if_empty MSSQL_SA_PASSWORD ci-mssql-password
           replace_if_empty JWT_SECRET ci-jwt-secret-min-16-chars
           replace_if_empty TWILIO_ACCOUNT_SID ci-twilio-account-sid
           replace_if_empty TWILIO_AUTH_TOKEN ci-twilio-auth-token

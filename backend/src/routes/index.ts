@@ -9,6 +9,7 @@ import { statisticsRouter } from "./statistics.routes";
 import { storeRouter } from "./store.routes";
 import { twilioRouter } from "./twilio.routes";
 import { absenceRouter } from "./absence.routes";
+import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { authenticate, requireAdmin } from "../middleware/authenticate";
 
@@ -26,4 +27,5 @@ apiRouter.use("/inventories", inventoryRouter);
 apiRouter.use("/inventories/:inventoryId/employees", inventoryAssignmentRouter);
 apiRouter.use("/attendance", attendanceRouter);
 apiRouter.use("/statistics", statisticsRouter);
+apiRouter.use("/bot-simulator", botSimulatorRouter);
 apiRouter.use(absenceRouter);

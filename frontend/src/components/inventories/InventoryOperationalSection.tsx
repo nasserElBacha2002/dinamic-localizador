@@ -22,7 +22,7 @@ import {
   useUnassignInventoryEmployee,
 } from "../../hooks/useInventories";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import type { InventoryAttendanceSummaryEmployee } from "../../types/inventory";
+import type { InventoryAttendanceSummaryEmployee } from "../../types/inventory-attendance-summary";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {

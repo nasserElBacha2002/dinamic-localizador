@@ -16,35 +16,71 @@ concurrency:
   group: dinamic-attendance-deploy-develop
   cancel-in-progress: false
 
+permissions:
+  contents: read
+  packages: write
+
+env:
+  REGISTRY: ghcr.io
+  FRONTEND_IMAGE_NAME: ${{ github.repository }}/frontend
+
 jobs:
-  validate:
-    name: frontend-validation
+  build-and-push:
+    name: build-and-push-frontend-image
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: frontend
+    outputs:
+      frontend_image: ${{ steps.image.outputs.frontend_image }}
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
-        with:
-          node-version: "22"
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
-      - run: npm ci
-      - run: npm run lint
-      - run: npm run build
-      - run: npm test
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build and push frontend production image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./frontend
+          file: ./frontend/Dockerfile
+          target: production
+          push: true
+          tags: |
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}
+            ${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:develop-latest
+          build-args: |
+            VITE_API_URL=${{ vars.VITE_API_URL }}
+            VITE_GOOGLE_MAPS_API_KEY=${{ vars.VITE_GOOGLE_MAPS_API_KEY }}
+            VITE_GOOGLE_MAPS_MAP_ID=${{ vars.VITE_GOOGLE_MAPS_MAP_ID }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Export image reference for deploy
+        id: image
+        run: |
+          echo "frontend_image=${{ env.REGISTRY }}/${{ env.FRONTEND_IMAGE_NAME }}:${{ github.sha }}" >> "${GITHUB_OUTPUT}"
 
   deploy:
     name: deploy-frontend
-    needs: validate
+    needs: build-and-push
     runs-on: ubuntu-latest
     environment: production
+    env:
+      FRONTEND_IMAGE: ${{ needs.build-and-push.outputs.frontend_image }}
+      GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+      GHCR_PULL_USERNAME: ${{ github.repository_owner }}
     steps:
       - name: Deploy frontend via SSH
         uses: appleboy/ssh-action@v1.2.0
+        env:
+          FRONTEND_IMAGE: ${{ needs.build-and-push.outputs.frontend_image }}
+          GHCR_PULL_TOKEN: ${{ secrets.GHCR_PULL_TOKEN }}
+          GHCR_PULL_USERNAME: ${{ github.repository_owner }}
         with:
           host: ${{ secrets.DEPLOY_HOST }}
           username: ${{ secrets.DEPLOY_USER }}
@@ -52,14 +88,14 @@ jobs:
           port: ${{ secrets.DEPLOY_PORT || 22 }}
           script_stop: true
           timeout: 30s
-          command_timeout: 30m
+          command_timeout: 15m
+          envs: FRONTEND_IMAGE,GHCR_PULL_TOKEN,GHCR_PULL_USERNAME
           script: |
             set -euo pipefail
             DEPLOY_PATH="${{ secrets.DEPLOY_PATH }}"
             if [ -z "${DEPLOY_PATH}" ]; then
               DEPLOY_PATH="/opt/dinamic-attendance/dinamic-localizador"
             fi
-            # Bootstrap: sync deploy scripts before the locked deploy entrypoint runs.
             cd "${DEPLOY_PATH}"
             git fetch origin develop
             git checkout develop

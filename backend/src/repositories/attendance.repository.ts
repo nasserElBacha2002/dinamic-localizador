@@ -225,6 +225,31 @@ export const attendanceRepository = {
     return Boolean(result.recordset[0]);
   },
 
+  async hasActiveRecordInTransaction(
+    transaction: sql.Transaction,
+    inventoryId: string,
+    employeeId: string,
+    simulationSessionId: string | null,
+  ): Promise<boolean> {
+    const result = await new sql.Request(transaction)
+      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("simulationSessionId", sql.UniqueIdentifier, simulationSessionId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_records WITH (UPDLOCK, HOLDLOCK)
+        WHERE inventory_id = @inventoryId
+          AND employee_id = @employeeId
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND (
+            (@simulationSessionId IS NULL AND is_simulation = 0)
+            OR (is_simulation = 1 AND simulation_session_id = @simulationSessionId)
+          )
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
   async createInTransaction(
     transaction: sql.Transaction,
     input: CreateAttendanceInput & {

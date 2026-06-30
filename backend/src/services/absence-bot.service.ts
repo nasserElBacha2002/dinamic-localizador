@@ -10,11 +10,8 @@ import {
   isAffirmativeConfirmation,
   isNegativeConfirmation,
 } from "../utils/absence-intent";
-import {
-  calculateTotalAbsenceDays,
-  formatAbsenceDateDisplay,
-  parseSpanishDateInput,
-} from "../utils/absence-date";
+import { calculateTotalAbsenceDays, formatAbsenceDateDisplay } from "../utils/absence-date";
+import { parseSpanishDateInput } from "./bot/bot-date.parser";
 import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../utils/bot-session-states";
 
 type RespondFn = (input: {

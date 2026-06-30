@@ -2,6 +2,8 @@ services:
   sqlserver:
     ports: !override []
     restart: unless-stopped
+    environment:
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
     healthcheck:
       test:
         [
@@ -84,9 +86,7 @@ services:
         VITE_GOOGLE_MAPS_API_KEY: ${VITE_GOOGLE_MAPS_API_KEY}
         VITE_GOOGLE_MAPS_MAP_ID: ${VITE_GOOGLE_MAPS_MAP_ID}
     restart: unless-stopped
-    depends_on:
-      backend:
-        condition: service_healthy
+    depends_on: !override []
     environment: !override {}
     ports: !override
       - "127.0.0.1:${FRONTEND_HOST_PORT}:80"

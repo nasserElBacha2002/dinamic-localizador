@@ -391,18 +391,323 @@ def npm_audit_section(checks: list[dict]) -> list[str]:
     return lines
 
 
+AUDIT_VERSION = "3.0"
+
+
+def parse_sql_classification(raw: Path) -> dict[str, int]:
+    path = raw / "backend-architecture-audit.md"
+    counts = {
+        "allowed_operational_sql": 0,
+        "allowed_healthcheck_sql": 0,
+        "repository_sql": 0,
+        "warning_sql_outside_repository": 0,
+    }
+    if not path.exists():
+        return counts
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for key, title_fragment in [
+        ("allowed_operational_sql", "Allowed operational SQL"),
+        ("allowed_healthcheck_sql", "Allowed healthcheck SQL"),
+        ("repository_sql", "Repository SQL"),
+        ("warning_sql_outside_repository", "SQL outside repositories"),
+    ]:
+        match = re.search(rf"### {re.escape(title_fragment)}[^—]*— (\d+) occurrence", text)
+        if match:
+            counts[key] = int(match.group(1))
+    summary = re.search(r"warning_sql_outside_repository = \*\*(\d+)\*\*", text)
+    if summary:
+        counts["warning_sql_outside_repository"] = int(summary.group(1))
+    return counts
+
+
+def parse_domain_sql(raw: Path) -> dict[str, int | str]:
+    path = raw / "backend-domain-rules-audit.md"
+    result: dict[str, int | str] = {
+        "input_files": 0,
+        "input_count": 0,
+        "query_files": 0,
+        "risky_count": 0,
+    }
+    if not path.exists():
+        return result
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for key, pattern in [
+        ("input_files", r"Files with `.input\(\.\.\.\)` bindings: \*\*(\d+)\*\*"),
+        ("input_count", r"Parameter binding occurrences: \*\*(\d+)\*\*"),
+        ("query_files", r"Files executing SQL \(`.query`/`.batch`/`.execute`\): \*\*(\d+)\*\*"),
+        ("risky_count", r"Potential risky dynamic SQL: \*\*(\d+)\*\*"),
+    ]:
+        match = re.search(pattern, text)
+        if match:
+            result[key] = int(match.group(1))
+    return result
+
+
+def parse_security_env(raw: Path) -> dict:
+    path = raw / "security-env-audit.md"
+    result = {
+        "used_not_documented": [],
+        "documented_not_used": [],
+        "missing_count": 0,
+    }
+    if not path.exists():
+        return result
+    text = path.read_text(encoding="utf-8", errors="replace")
+    for section_key, field in [
+        ("used_but_not_documented", "used_not_documented"),
+        ("documented_but_not_used", "documented_not_used"),
+    ]:
+        section = re.search(rf"## {section_key}[^\n]*\n(.*?)(?:\n## |\Z)", text, re.S)
+        if section:
+            result[field] = [
+                line.strip()[2:]
+                for line in section.group(1).splitlines()
+                if line.strip().startswith("- ") and line.strip() != "- None"
+            ]
+    result["missing_count"] = len(result["used_not_documented"])
+    return result
+
+
+def parse_security_secrets(raw: Path) -> dict:
+    path = raw / "security-secrets-audit.md"
+    result = {"findings_count": 0, "has_findings": False}
+    if not path.exists():
+        return result
+    text = path.read_text(encoding="utf-8", errors="replace")
+    if "Potential hardcoded secrets detected" in text:
+        result["has_findings"] = True
+        match = re.search(r"Total findings:\s*\*\*(\d+)\*\*", text)
+        if match:
+            result["findings_count"] = int(match.group(1))
+    return result
+
+
+def build_accepted_exceptions(sql_class: dict[str, int]) -> list[dict]:
+    exceptions: list[dict] = []
+    labels = {
+        "allowed_operational_sql": "SQL in scripts, migrations, and store utilities",
+        "allowed_healthcheck_sql": "Healthcheck SELECT 1 in health.controller.ts",
+        "repository_sql": "SQL inside repository layer (expected)",
+    }
+    for key, description in labels.items():
+        count = sql_class.get(key, 0)
+        if count > 0:
+            exceptions.append(
+                {
+                    "category": key,
+                    "count": count,
+                    "description": description,
+                    "severity": "info",
+                }
+            )
+    return exceptions
+
+
+def build_non_blocking_findings(checks: list[dict], env_info: dict, sql_class: dict) -> list[dict]:
+    findings: list[dict] = []
+    for check in checks:
+        if check.get("status") == "fail" and not check.get("blocking"):
+            findings.append(
+                {
+                    "check": check.get("check"),
+                    "severity": check.get("severity"),
+                    "failure_type": check.get("failure_type"),
+                    "message": check.get("root_cause", check.get("message")),
+                }
+            )
+        elif check.get("failure_type") == "environment_failure":
+            findings.append(
+                {
+                    "check": check.get("check"),
+                    "severity": check.get("severity"),
+                    "failure_type": "environment_failure",
+                    "message": check.get("root_cause", check.get("message")),
+                }
+            )
+    warn_count = sql_class.get("warning_sql_outside_repository", 0)
+    if warn_count > 0:
+        findings.append(
+            {
+                "check": "backend-architecture",
+                "severity": "medium",
+                "failure_type": "architecture_issue",
+                "message": f"SQL outside repositories: {warn_count} occurrence(s) to review",
+            }
+        )
+    if env_info.get("missing_count", 0) > 0:
+        findings.append(
+            {
+                "check": "security-env",
+                "severity": "medium",
+                "failure_type": "config_missing",
+                "message": f"Undocumented env vars: {', '.join(env_info.get('used_not_documented', [])[:6])}",
+            }
+        )
+    return findings
+
+
+def blocking_checks_section(checks: list[dict]) -> list[str]:
+    blocking = [c for c in checks if c.get("blocking") and c.get("status") == "fail"]
+    lines = ["## Blocking checks", ""]
+    if not blocking:
+        lines.append("No blocking failures detected.")
+    else:
+        for check in blocking:
+            lines.append(
+                f"- **{check.get('check')}** ({check.get('severity')}): "
+                f"{check.get('root_cause', check.get('message'))}"
+            )
+    lines.append("")
+    return lines
+
+
+def non_blocking_section(checks: list[dict], non_blocking: list[dict]) -> list[str]:
+    lines = ["## Non-blocking findings", ""]
+    seen = set()
+    items = non_blocking or [
+        c
+        for c in checks
+        if c.get("status") == "fail" and not c.get("blocking")
+    ]
+    if not items:
+        lines.append("No non-blocking warnings.")
+    else:
+        for item in items:
+            key = (item.get("check"), item.get("message"))
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(
+                f"- **{item.get('check')}** ({item.get('severity', 'info')}): {item.get('message')}"
+            )
+    lines.append("")
+    return lines
+
+
+def accepted_exceptions_section(exceptions: list[dict]) -> list[str]:
+    lines = ["## Accepted exceptions", ""]
+    if not exceptions:
+        lines.append("No classified accepted SQL exceptions in this run.")
+    else:
+        lines.append("These are informational and do not count as unresolved architectural defects.")
+        lines.append("")
+        for exc in exceptions:
+            lines.append(
+                f"- **{exc['category']}** ({exc['count']}): {exc['description']}"
+            )
+    lines.append("")
+    return lines
+
+
+def security_findings_section(secrets: dict, env_info: dict, checks: list[dict]) -> list[str]:
+    lines = ["## Security findings", ""]
+    if secrets.get("has_findings"):
+        lines.append(
+            f"- Potential hardcoded secrets: **{secrets.get('findings_count', '?')}** (blocking)"
+        )
+    else:
+        lines.append("- Hardcoded secrets: none detected")
+    if env_info.get("missing_count", 0):
+        lines.append(
+            f"- Undocumented env vars: **{env_info['missing_count']}** "
+            f"({', '.join(env_info.get('used_not_documented', [])[:10])})"
+        )
+    else:
+        lines.append("- Environment documentation: all used vars documented in examples")
+    sec_checks = [c for c in checks if c.get("check", "").startswith("security")]
+    for check in sec_checks:
+        if check.get("status") == "pass" and check.get("check") not in {"security-audit"}:
+            continue
+        if check.get("status") != "pass" or check.get("check") == "security-audit":
+            lines.append(
+                f"- {check.get('check')}: {check.get('status')} — "
+                f"{check.get('root_cause', check.get('message'))}"
+            )
+    lines.append("")
+    return lines
+
+
+def architecture_findings_section(sql_class: dict, domain_sql: dict, checks: list[dict]) -> list[str]:
+    lines = ["## Architecture findings", ""]
+    lines.append(
+        f"- Parameterized SQL: **{domain_sql.get('input_count', 0)}** `.input(...)` bindings "
+        f"across **{domain_sql.get('input_files', 0)}** file(s)"
+    )
+    if domain_sql.get("risky_count", 0):
+        lines.append(f"- Risky dynamic SQL: **{domain_sql['risky_count']}** occurrence(s)")
+    else:
+        lines.append("- Risky dynamic SQL: none detected")
+    lines.append(f"- Repository SQL: **{sql_class.get('repository_sql', 0)}** occurrence(s)")
+    lines.append(
+        f"- SQL outside repositories (warnings): **{sql_class.get('warning_sql_outside_repository', 0)}**"
+    )
+    arch_checks = [
+        c
+        for c in checks
+        if "architecture" in c.get("check", "")
+        or "circular" in c.get("check", "")
+        or "duplication" in c.get("check", "")
+        or "dead-code" in c.get("check", "")
+    ]
+    for check in arch_checks:
+        if check.get("status") == "fail" or check.get("failure_type") == "architecture_issue":
+            lines.append(
+                f"- {check.get('check')}: {check.get('root_cause', check.get('message'))}"
+            )
+    lines.append("")
+    return lines
+
+
+def baseline_status_section(diff: dict | None, status: dict) -> list[str]:
+    lines = ["## Baseline status", ""]
+    if not diff:
+        lines.append(
+            "_No baseline saved yet. Run `npm run audit:baseline` after confirming audit quality._"
+        )
+    else:
+        lines.append(f"- Baseline from: {diff.get('baseline_generated_at', 'unknown')}")
+        lines.append(f"- New findings: {len(diff.get('new_findings', []))}")
+        lines.append(f"- Resolved: {len(diff.get('resolved_findings', []))}")
+        lines.append(f"- Persistent: {len(diff.get('persistent_findings', []))}")
+    lines.append(f"- Current overall status: **{status.get('overall_status')}**")
+    lines.append(f"- Blocking status: **{status.get('blocking_status')}**")
+    lines.append("")
+    return lines
+
+
 def render_markdown(status: dict, artifacts: list[str], diff: dict | None) -> str:
+    raw = audit_raw()
+    sql_class = parse_sql_classification(raw)
+    domain_sql = parse_domain_sql(raw)
+    secrets = parse_security_secrets(raw)
+    env_info = parse_security_env(raw)
+    accepted = status.get("accepted_exceptions", build_accepted_exceptions(sql_class))
+    non_blocking = status.get("non_blocking_findings", [])
+
     lines = [
         "# Code Audit Summary",
         "",
         f"Generated at: {status['generated_at']}",
-        f"Mode: **diagnostic** (`npm run audit` — non-blocking)",
-        f"Overall status: **{status['overall_status']}**",
-        f"Blocking status: **{status.get('blocking_status', 'unknown')}**",
-        f"Max severity (excluding environment-only): **{status['max_severity']}**",
+        f"Audit version: **{status.get('audit_version', AUDIT_VERSION)}**",
+        "",
+        "## Overall status",
+        "",
+        f"- Mode: **diagnostic** (`npm run audit` — non-blocking by default)",
+        f"- Overall status: **{status['overall_status']}**",
+        f"- Blocking status: **{status.get('blocking_status', 'unknown')}** ({status.get('blocking_count', 0)} blocking)",
+        f"- Max severity (excluding environment-only): **{status['max_severity']}**",
         "",
     ]
-    lines.extend(executive_summary(status))
+    lines.extend(blocking_checks_section(status.get("checks", [])))
+    lines.extend(non_blocking_section(status.get("checks", []), non_blocking))
+    lines.extend(accepted_exceptions_section(accepted))
+    lines.extend(security_findings_section(secrets, env_info, status.get("checks", [])))
+    lines.extend(architecture_findings_section(sql_class, domain_sql, status.get("checks", [])))
+    lines.extend(npm_audit_section(status.get("checks", [])))
+    lines.extend(next_actions_section(status.get("checks", [])))
+    lines.extend(baseline_status_section(diff, status))
+    lines.extend(environment_notes(status.get("checks", [])))
+
     lines.extend(
         [
             "## Areas",
@@ -421,20 +726,18 @@ def render_markdown(status: dict, artifacts: list[str], diff: dict | None) -> st
             "",
             "## Checks",
             "",
-            "| Check | Status | Severity | Failure type | Message |",
-            "|-------|--------|----------|--------------|---------|",
+            "| Check | Status | Severity | Blocking | Failure type | Message |",
+            "|-------|--------|----------|----------|--------------|---------|",
         ]
     )
     for check in status.get("checks", []):
         lines.append(
             f"| {check.get('check', '')} | {check.get('status', '')} | {check.get('severity', '')} | "
-            f"{check.get('failure_type', '')} | {str(check.get('message', '')).replace('|', '/')} |"
+            f"{check.get('blocking', False)} | {check.get('failure_type', '')} | "
+            f"{str(check.get('message', '')).replace('|', '/')} |"
         )
 
     lines.extend(root_causes_section(status.get("checks", [])))
-    lines.extend(next_actions_section(status.get("checks", [])))
-    lines.extend(environment_notes(status.get("checks", [])))
-    lines.extend(npm_audit_section(status.get("checks", [])))
     lines.extend(render_baseline_diff(diff))
     lines.extend(["## Evidence files", ""])
     for artifact in artifacts:
@@ -491,16 +794,25 @@ def main() -> int:
     overall, max_sev = overall_status(areas, checks)
     blocking_status, blocking_count = compute_blocking_status(checks)
 
+    raw = audit_raw()
+    sql_class = parse_sql_classification(raw)
+    env_info = parse_security_env(raw)
+    accepted_exceptions = build_accepted_exceptions(sql_class)
+    non_blocking_findings = build_non_blocking_findings(checks, env_info, sql_class)
+
     baseline_path = audit_dir() / "baseline" / "audit-status.baseline.json"
     diff = compare_baseline(checks, baseline_path)
 
     status = {
         "generated_at": datetime.now(timezone.utc).replace(microsecond=0).isoformat().replace("+00:00", "Z"),
         "mode": "diagnostic",
+        "audit_version": AUDIT_VERSION,
         "overall_status": overall,
         "max_severity": max_sev,
         "blocking_status": blocking_status,
         "blocking_count": blocking_count,
+        "accepted_exceptions": accepted_exceptions,
+        "non_blocking_findings": non_blocking_findings,
         "areas": areas,
         "checks": checks,
         "artifacts": list_artifacts(raw),

@@ -684,6 +684,8 @@ Con `docker-compose.prod.yml` activo:
 
 Los healthchecks viven en `docker-compose.prod.yml` (no en los Dockerfiles). `db-init` y `migrations` siguen siendo jobs one-shot con `restart: "no"`.
 
+La contraseña SA de SQL Server en Docker se define solo con `DB_PASSWORD` en `.env` (se inyecta como `MSSQL_SA_PASSWORD` dentro del contenedor `sqlserver`). El frontend arranca de forma independiente y no espera el healthcheck del backend.
+
 En desarrollo (`docker compose` sin overlay prod), SQL Server expone `1435:1433` para acceso local; backend y frontend usan los puertos definidos en `.env` sin restricción a localhost.
 
 ---

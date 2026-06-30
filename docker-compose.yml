@@ -6,7 +6,7 @@ services:
     container_name: dinamic-attendance-sqlserver
     environment:
       ACCEPT_EULA: "Y"
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      MSSQL_SA_PASSWORD: ${DB_PASSWORD}
       TZ: ${TZ}
     expose:
       - "${DB_PORT}"
@@ -32,7 +32,7 @@ services:
       sqlserver:
         condition: service_healthy
     environment:
-      MSSQL_SA_PASSWORD: ${MSSQL_SA_PASSWORD}
+      DB_PASSWORD: ${DB_PASSWORD}
     volumes:
       - ./database/init/init.sql:/init/init.sql:ro
     command:
@@ -42,7 +42,7 @@ services:
         /opt/mssql-tools/bin/sqlcmd
         -S sqlserver
         -U sa
-        -P "$${MSSQL_SA_PASSWORD}"
+        -P "$${DB_PASSWORD}"
         -C
         -i /init/init.sql
     restart: "no"

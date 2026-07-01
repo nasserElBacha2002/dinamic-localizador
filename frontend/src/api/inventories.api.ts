@@ -18,34 +18,46 @@ import type {
   InventoryImportPreviewResult,
 } from "../types/inventory-import";
 import { buildParams } from "./client";
+import {
+  API_ENDPOINTS,
+  inventoryAssignmentMemberPath,
+  inventoryAssignmentPath,
+  operationPath,
+} from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
 
 export async function getInventories(
   filters: InventoryFilters = {},
 ): Promise<PaginatedResponse<InventoryWithStore>> {
-  const { data } = await scopedApiClient.get<PaginatedResponse<InventoryWithStore>>("inventories", {
-    params: buildParams(filters as Record<string, string | number | boolean | undefined>),
-  });
+  const { data } = await scopedApiClient.get<PaginatedResponse<InventoryWithStore>>(
+    API_ENDPOINTS.operations,
+    {
+      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+    },
+  );
   return data;
 }
 
 export async function getInventoryById(id: string): Promise<InventoryDetail> {
-  const { data } = await scopedApiClient.get<SingleResponse<InventoryDetail>>(`inventories/${id}`);
+  const { data } = await scopedApiClient.get<SingleResponse<InventoryDetail>>(operationPath(id));
   return data.data;
 }
 
 export async function createInventory(input: CreateInventoryInput): Promise<Inventory> {
-  const { data } = await scopedApiClient.post<SingleResponse<Inventory>>("inventories", input);
+  const { data } = await scopedApiClient.post<SingleResponse<Inventory>>(
+    API_ENDPOINTS.operations,
+    input,
+  );
   return data.data;
 }
 
 export async function updateInventory(id: string, input: UpdateInventoryInput): Promise<Inventory> {
-  const { data } = await scopedApiClient.put<SingleResponse<Inventory>>(`inventories/${id}`, input);
+  const { data } = await scopedApiClient.put<SingleResponse<Inventory>>(operationPath(id), input);
   return data.data;
 }
 
 export async function cancelInventory(id: string): Promise<Inventory> {
-  const { data } = await scopedApiClient.delete<SingleResponse<Inventory>>(`inventories/${id}`);
+  const { data } = await scopedApiClient.delete<SingleResponse<Inventory>>(operationPath(id));
   return data.data;
 }
 
@@ -53,7 +65,7 @@ export async function getInventoryEmployees(
   inventoryId: string,
 ): Promise<InventoryEmployeeAssignment[]> {
   const { data } = await scopedApiClient.get<SingleResponse<InventoryEmployeeAssignment[]>>(
-    `inventories/${inventoryId}/employees`,
+    inventoryAssignmentPath(inventoryId),
   );
   return data.data;
 }
@@ -63,7 +75,7 @@ export async function assignEmployeeToInventory(
   employeeId: string,
 ): Promise<InventoryEmployeeAssignment> {
   const { data } = await scopedApiClient.post<SingleResponse<InventoryEmployeeAssignment>>(
-    `inventories/${inventoryId}/employees`,
+    inventoryAssignmentPath(inventoryId),
     { employeeId },
   );
   return data.data;
@@ -73,7 +85,7 @@ export async function unassignEmployeeFromInventory(
   inventoryId: string,
   employeeId: string,
 ): Promise<void> {
-  await scopedApiClient.delete(`inventories/${inventoryId}/employees/${employeeId}`);
+  await scopedApiClient.delete(inventoryAssignmentMemberPath(inventoryId, employeeId));
 }
 
 export async function getInventoryAttendanceSummary(
@@ -81,7 +93,7 @@ export async function getInventoryAttendanceSummary(
   filters: InventoryAttendanceSummaryFilters = {},
 ) {
   const { data } = await scopedApiClient.get<SingleResponse<InventoryAttendanceSummaryResponse>>(
-    `inventories/${inventoryId}/attendance-summary`,
+    `${operationPath(inventoryId)}/attendance-summary`,
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
@@ -96,7 +108,7 @@ export async function previewInventoryImport(
   payload: InventoryImportPreviewPayload,
 ): Promise<InventoryImportPreviewResult> {
   const { data } = await scopedApiClient.post<{ data: InventoryImportPreviewResult }>(
-    "inventories/import/preview",
+    `${API_ENDPOINTS.operations}/import/preview`,
     payload,
     { timeout: IMPORT_PREVIEW_TIMEOUT_MS },
   );
@@ -105,7 +117,7 @@ export async function previewInventoryImport(
 
 export async function confirmInventoryImport(rows: InventoryImportConfirmRow[]) {
   const { data } = await scopedApiClient.post<{ data: Inventory[]; count: number }>(
-    "inventories/import/confirm",
+    `${API_ENDPOINTS.operations}/import/confirm`,
     { rows },
     { timeout: IMPORT_CONFIRM_TIMEOUT_MS },
   );

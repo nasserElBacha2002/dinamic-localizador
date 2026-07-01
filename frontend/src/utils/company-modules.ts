@@ -118,7 +118,7 @@ export function getAdminNavItems({
         "inventories:manage",
       ])
     ) {
-      // UI uses "Operaciones"; API contract remains /inventories for backward compatibility.
+      // UI browser route remains /inventories; API calls use /operations (Phase 2.8).
       items.push({ label: terminology.operation.plural, path: "/inventories" });
     }
 

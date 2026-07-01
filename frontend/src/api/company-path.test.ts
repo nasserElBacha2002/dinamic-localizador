@@ -62,8 +62,12 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/statistics/attendance/summary`,
     );
     assert.equal(
-      scopedApiPath("inventories/import/preview"),
-      `companies/${ACTIVE_COMPANY_ID}/inventories/import/preview`,
+      scopedApiPath("operations/import/preview"),
+      `companies/${ACTIVE_COMPANY_ID}/operations/import/preview`,
+    );
+    assert.equal(
+      scopedApiPath("locations"),
+      `companies/${ACTIVE_COMPANY_ID}/locations`,
     );
     assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
     assert.equal(
@@ -131,6 +135,9 @@ describe("isLegacyOperationalApiPath", () => {
   it("detects legacy flat operational paths", () => {
     assert.equal(isLegacyOperationalApiPath("employees"), true);
     assert.equal(isLegacyOperationalApiPath("inventories?page=1"), true);
+    assert.equal(isLegacyOperationalApiPath("stores"), true);
+    assert.equal(isLegacyOperationalApiPath("locations"), true);
+    assert.equal(isLegacyOperationalApiPath("operations"), true);
     assert.equal(isLegacyOperationalApiPath("companies/uuid/employees"), false);
   });
 });

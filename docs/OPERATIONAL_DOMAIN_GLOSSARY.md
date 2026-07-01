@@ -15,7 +15,7 @@ This document maps **current technical names** (stable in DB/API) to **conceptua
 ## Stable contracts (do not rename without a dedicated phase)
 
 - **Database tables and columns** — physical: `operational_locations`, `scheduled_operations`, `operation_assignments`; legacy views: `stores`, `inventories`, `inventory_employees`; columns `store_id`, `inventory_id`, `employee_id` unchanged
-- **REST paths** — `/stores`, `/inventories`, `/employees`, `/attendance` (canonical); optional aliases `/locations`, `/operations`, `/workers` — see [API_ROUTE_ALIASES.md](./API_ROUTE_ALIASES.md)
+- **REST paths** — backend canonical `/stores`, `/inventories`, `/employees`; frontend API prefers `/locations`, `/operations` (Phase 2.8); browser routes remain `/stores`, `/inventories`
 - **JSON fields** — `storeId`, `inventoryId`, `employeeId`, `storeName`, etc.
 - **Permission keys** — `stores:read`, `inventories:manage`, `employees:read`, etc.
 - **Module keys** — `inventory_operations`, `attendance`, `absences`, etc.
@@ -31,6 +31,7 @@ This document maps **current technical names** (stable in DB/API) to **conceptua
 | 2.5 | Optional API route aliases | Complete — `docs/API_ROUTE_ALIASES.md` |
 | 2.6 | Optional DB rename plan | Complete (plan only) — `docs/DB_RENAME_PLAN_PHASE_2_6.md` |
 | 2.7 | Physical DB rename (selected tables) | Complete — `docs/DB_RENAME_IMPLEMENTATION_PHASE_2_7.md` |
+| 2.8 | Frontend API migration to aliases | Complete — `frontend/src/api/endpoints.ts` |
 
 ## Unchanged in Phase 2.3
 

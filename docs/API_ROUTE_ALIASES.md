@@ -43,11 +43,34 @@ Do **not** expect renamed JSON fields when calling alias paths.
 
 ## Usage guidance
 
-- Aliases are **optional**. Canonical routes remain the source of truth for the current frontend and integrations.
-- API consumers may adopt aliases for clearer SaaS terminology in external integrations.
+- Aliases are **optional** for external consumers. The frontend (Phase 2.8) now **prefers** `/locations` and `/operations` for API calls.
+- Canonical backend routes `/stores` and `/inventories` remain mounted for compatibility.
+- Frontend **browser routes** remain `/stores` and `/inventories` (no UI path migration in Phase 2.8).
+- Employee APIs remain on `/employees` (not `/workers`) in the frontend for now.
 - Do not mix alias path names with expectations of renamed JSON fields — paths are aliased, payloads are not.
-- Database schema is unchanged (`stores`, `inventories`, `employees` tables and columns).
-- Canonical routes are **not** deprecated.
+- Database physical tables use `operational_locations`, `scheduled_operations`, `operation_assignments` (Phase 2.7); JSON fields unchanged.
+
+## Frontend API preference (Phase 2.8)
+
+| Resource | Preferred frontend API path | Legacy backend path (still available) | Browser route |
+|----------|----------------------------|---------------------------------------|---------------|
+| Locations | `/locations` | `/stores` | `/stores` |
+| Operations | `/operations` | `/inventories` | `/inventories` |
+| Employees | `/employees` | `/employees` | `/employees` |
+| Location lookups | `/lookups/locations` | `/lookups/stores` | — |
+| Operation lookups | `/lookups/operations` | `/lookups/inventories` | — |
+
+**Nested routes without operation alias (frontend keeps canonical path):**
+
+- `/inventories/:inventoryId/employees` — assignment routes; backend has no `/operations/:inventoryId/employees` mount.
+
+**Migrated to operation alias:**
+
+- `/operations/import/preview`
+- `/operations/import/confirm`
+- `/operations/:id/attendance-summary`
+
+Constants: `frontend/src/api/endpoints.ts`
 
 ## Implementation
 

@@ -21,12 +21,15 @@ GLOBAL_API_FILES = {
     "client.ts",
     "scoped-client.ts",
     "company-path.ts",
+    "endpoints.ts",
 }
 
 OPERATIONAL_PREFIXES = (
     "employees",
     "inventories",
+    "operations",
     "stores",
+    "locations",
     "attendance",
     "statistics",
     "absence-types",

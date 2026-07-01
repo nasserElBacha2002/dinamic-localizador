@@ -42,8 +42,11 @@ describe("company modules frontend module", () => {
 
   it("includes companyId in modules query key and mutation invalidation", () => {
     const hooksFile = readFileSync(join(process.cwd(), "src/hooks/useCompanyModules.ts"), "utf8");
+    const queryFile = readFileSync(join(process.cwd(), "src/hooks/company-modules-query.ts"), "utf8");
     assert.match(hooksFile, /useOperationalQueryEnabled/);
-    assert.match(hooksFile, /"company-modules", companyId/);
+    assert.match(hooksFile, /companyModulesQueryKey/);
+    assert.match(queryFile, /COMPANY_MODULES_STALE_TIME_MS/);
+    assert.match(queryFile, /refetchOnWindowFocus: false/);
     assert.doesNotMatch(hooksFile, /getActiveCompanyId/);
   });
 

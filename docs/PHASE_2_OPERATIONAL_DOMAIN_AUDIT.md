@@ -580,6 +580,17 @@ First implementation PR should:
 - Audits: `scripts/audit/audit_db_operational_rename.py`, updated `audit_tenant_isolation.py`.
 - Documentation: `docs/DB_RENAME_IMPLEMENTATION_PHASE_2_7.md`.
 
+## Phase 2.8 implementation note
+
+**Status:** Implemented
+
+- Frontend API clients prefer operational alias paths via `frontend/src/api/endpoints.ts`.
+- **Migrated:** `stores.api.ts` → `/locations`; `inventories.api.ts` CRUD/import/attendance-summary → `/operations`; lookups → `/lookups/locations`, `/lookups/operations`.
+- **Unchanged:** employee APIs on `/employees`; assignment routes on `/inventories/:inventoryId/employees` (no backend `/operations/:id/employees` mount).
+- **Unchanged:** browser routes `/stores`, `/inventories`, `/employees`; JSON fields; permissions; modules.
+- Tests: `frontend/src/api/endpoints.test.ts`, updated `company-path.test.ts`.
+- Docs: `docs/API_ROUTE_ALIASES.md` (Frontend API preference section).
+
 ## Appendix A — Key file index
 
 | Area | Paths |
@@ -588,7 +599,7 @@ First implementation PR should:
 | Permissions | `backend/src/constants/company-permissions.ts`, `docs/PERMISSIONS.md` |
 | Modules | `backend/src/constants/company-modules.ts`, `docs/COMPANY_MODULES.md` |
 | Routes index | `backend/src/routes/index.ts`, `docs/API_ROUTE_ALIASES.md` |
-| Frontend nav | `frontend/src/utils/company-modules.ts`, `frontend/src/routes/AppRoutes.tsx` |
+| Frontend nav | `frontend/src/utils/company-modules.ts`, `frontend/src/routes/AppRoutes.tsx`, `frontend/src/api/endpoints.ts` |
 | Bot copy | `backend/src/services/bot/bot-response.builder.ts`, `backend/src/utils/intent.ts` |
 | Import | `backend/src/constants/inventory-import.ts`, `backend/src/utils/inventory-import-headers.ts`, `backend/src/services/inventory-import.service.ts` |
 | Attendance export | `backend/src/services/attendance.service.ts` (`exportCsv`) |

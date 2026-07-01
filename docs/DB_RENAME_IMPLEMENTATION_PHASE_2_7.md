@@ -37,10 +37,39 @@ Migration: `database/migrations/021_physical_operational_table_rename.sql`
 - Existing API routes unchanged (`/stores`, `/inventories`, `/employees` and Phase 2.5 aliases).
 - Existing JSON fields unchanged (`storeId`, `inventoryId`, `employeeId`, …).
 - Existing permission and module keys unchanged.
-- Legacy table names available as **read-only views** for emergency SQL compatibility.
-- Backend writes target **physical table names** only.
+- Legacy table names are available as **compatibility views** over the physical tables.
+- **Application writes must target physical tables** (`operational_locations`, `scheduled_operations`, `operation_assignments`). Do not rely on writing through compatibility views.
+- SQL Server simple views are not DML-blocked unless explicit triggers are added (not in scope).
 
-## Rollback
+## Migration runner
+
+- File: `database/migrations/021_physical_operational_table_rename.sql`
+- Runner: `backend/src/database/run-migrations.ts` — splits batches on standalone `GO` lines; uses `DB_NAME` from env (no hardcoded `USE`).
+- View creation uses `EXEC(N'CREATE VIEW ...')` and guards against legacy table name conflicts.
+
+## Validation
+
+Automated:
+
+```bash
+cd backend && npm test   # includes operational-table-rename.integration.test.ts
+python3 scripts/audit/audit_db_operational_rename.py          # static only
+python3 scripts/audit/audit_db_operational_rename.py --live   # + live OBJECT_ID checks when DB env set
+```
+
+Manual deploy order:
+
+1. Backup database
+2. `cd backend && npm run migrate` (applies 021 on target `DB_NAME`)
+3. Run live audit or integration schema test
+4. Deploy backend
+
+```bash
+cd backend && npm test && npm run build
+cd frontend && npm test && npm run build
+python3 scripts/audit/audit_tenant_isolation.py
+python3 scripts/audit/audit_db_operational_rename.py --live
+```
 
 Manual rollback (maintenance window):
 
@@ -56,17 +85,7 @@ EXEC sp_rename 'dbo.operation_assignments', 'inventory_employees';
 
 Then revert application code to pre-2.7 SQL table names and redeploy previous release.
 
-## Validation
-
-```bash
-cd backend && npm test && npm run build
-cd frontend && npm test && npm run build
-python3 scripts/audit/audit_tenant_isolation.py
-python3 scripts/audit/audit_db_operational_rename.py
-cd backend && npm run migrate   # when DB available
-```
-
-Manual SQL:
+Manual SQL after migration:
 
 ```sql
 SELECT OBJECT_ID('dbo.operational_locations', 'U');

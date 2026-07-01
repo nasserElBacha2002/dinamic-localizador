@@ -571,7 +571,9 @@ First implementation PR should:
   - `stores` → `operational_locations`
   - `inventories` → `scheduled_operations`
   - `inventory_employees` → `operation_assignments`
-- Legacy compatibility views: `stores`, `inventories`, `inventory_employees` (read-only).
+- Legacy compatibility views: `stores`, `inventories`, `inventory_employees` (compatibility views; app writes use physical tables).
+- Migration uses `run-migrations.ts` GO batch splitting; no hardcoded `USE` database.
+- Schema validation: `backend/src/database/operational-table-rename.integration.test.ts`, `audit_db_operational_rename.py --live`.
 - Backend SQL updated to physical table names in repositories, store-fix utilities, and seed script.
 - **Not renamed:** `employees`, `attendance_records`, columns (`store_id`, `inventory_id`, `employee_id`).
 - API routes, JSON fields, permissions, modules, frontend routes, bot, and import behavior unchanged.

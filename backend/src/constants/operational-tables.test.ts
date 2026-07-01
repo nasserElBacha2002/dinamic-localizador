@@ -9,7 +9,12 @@ import {
   OPERATIONAL_LOCATIONS_TABLE,
   OPERATION_ASSIGNMENTS_TABLE,
   SCHEDULED_OPERATIONS_TABLE,
-} from "../constants/operational-tables";
+} from "./operational-tables";
+
+const migrationPath = join(
+  process.cwd(),
+  "../database/migrations/021_physical_operational_table_rename.sql",
+);
 
 describe("operational table constants", () => {
   it("defines physical table names for Phase 2.7", () => {
@@ -26,28 +31,38 @@ describe("operational table constants", () => {
 });
 
 describe("021_physical_operational_table_rename migration", () => {
-  const migration = readFileSync(
-    join(process.cwd(), "../database/migrations/021_physical_operational_table_rename.sql"),
-    "utf8",
-  );
+  const migration = readFileSync(migrationPath, "utf8");
+
+  it("does not hardcode database selection", () => {
+    assert.doesNotMatch(migration, /\bUSE\s+dinamic_attendance\b/i);
+  });
+
+  it("documents migration runner GO batch support", () => {
+    assert.match(migration, /run-migrations\.ts/i);
+    assert.match(migration, /^\s*GO\s*$/im);
+  });
 
   it("renames stores, inventories and inventory_employees", () => {
-    assert.match(migration, /sp_rename 'dbo\.stores', 'operational_locations'/);
-    assert.match(migration, /sp_rename 'dbo\.inventories', 'scheduled_operations'/);
-    assert.match(migration, /sp_rename 'dbo\.inventory_employees', 'operation_assignments'/);
+    assert.match(migration, /sp_rename\s+'dbo\.stores',\s+'operational_locations'/i);
+    assert.match(migration, /sp_rename\s+'dbo\.inventories',\s+'scheduled_operations'/i);
+    assert.match(migration, /sp_rename\s+'dbo\.inventory_employees',\s+'operation_assignments'/i);
   });
 
-  it("creates legacy compatibility views", () => {
-    assert.match(migration, /CREATE VIEW dbo\.stores AS SELECT \* FROM dbo\.operational_locations/);
-    assert.match(migration, /CREATE VIEW dbo\.inventories AS SELECT \* FROM dbo\.scheduled_operations/);
-    assert.match(
-      migration,
-      /CREATE VIEW dbo\.inventory_employees AS SELECT \* FROM dbo\.operation_assignments/,
-    );
+  it("creates legacy compatibility views via dynamic SQL", () => {
+    assert.match(migration, /EXEC\(N'CREATE VIEW dbo\.stores/i);
+    assert.match(migration, /EXEC\(N'CREATE VIEW dbo\.inventories/i);
+    assert.match(migration, /EXEC\(N'CREATE VIEW dbo\.inventory_employees/i);
   });
 
-  it("documents rollback steps", () => {
+  it("guards view creation when legacy names still exist as tables", () => {
+    assert.match(migration, /OBJECT_ID\('dbo\.stores', 'U'\) IS NULL/);
+    assert.match(migration, /OBJECT_ID\('dbo\.inventories', 'U'\) IS NULL/);
+    assert.match(migration, /OBJECT_ID\('dbo\.inventory_employees', 'U'\) IS NULL/);
+  });
+
+  it("documents rollback steps without hardcoded database name", () => {
     assert.match(migration, /Rollback/i);
-    assert.match(migration, /DROP VIEW IF EXISTS dbo\.stores/);
+    assert.match(migration, /DROP VIEW dbo\.stores/i);
+    assert.doesNotMatch(migration, /\bUSE\s+dinamic_attendance\b/i);
   });
 });

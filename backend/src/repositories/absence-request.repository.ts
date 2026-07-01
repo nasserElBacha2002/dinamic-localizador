@@ -451,9 +451,9 @@ export const absenceRequestRepository = {
           i.scheduled_start,
           i.scheduled_end,
           i.status
-        FROM inventory_employees ie
-        INNER JOIN inventories i ON i.id = ie.inventory_id AND i.company_id = @companyId
-        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = @companyId
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
         WHERE ie.employee_id = @employeeId
           AND ie.company_id = @companyId
           AND i.status NOT IN ('CANCELLED')

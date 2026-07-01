@@ -45,10 +45,10 @@ LEGACY_API_CLIENT = re.compile(
 )
 
 OPERATIONAL_TABLES = (
+    "operational_locations",
+    "scheduled_operations",
+    "operation_assignments",
     "employees",
-    "stores",
-    "inventories",
-    "inventory_employees",
     "attendance_records",
     "attendance_reviews",
     "absence_requests",
@@ -56,6 +56,13 @@ OPERATIONAL_TABLES = (
     "bot_sessions",
     "bot_simulation_sessions",
     "whatsapp_messages",
+)
+
+# Legacy compatibility views (Phase 2.7). Not scanned for tenant isolation — writes use physical tables.
+LEGACY_COMPATIBILITY_VIEWS = (
+    "stores",
+    "inventories",
+    "inventory_employees",
 )
 
 DANGEROUS_WHERE_ID = re.compile(

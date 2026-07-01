@@ -536,7 +536,47 @@ First implementation PR should:
 - `LOCAL`, `Formato`, `PROVEEDOR` remain ignored.
 - Default start (20:30), end (next day 03:00), and tolerances (60/90) unchanged.
 - Updated import validation messages and frontend helper copy (`frontend/src/utils/inventory-import-template.ts`).
+- Recommended downloadable template uses `Sucursal, Fecha`; legacy `PUNTO, Fecha` remains accepted by the parser.
 - **Unchanged:** DB/API routes, JSON fields, permissions, bot copy, attendance CSV export headers, store auto-creation.
+
+## Phase 2.5 implementation note
+
+**Status:** Implemented
+
+- Optional API route aliases added by re-mounting existing routers in `backend/src/routes/index.ts`:
+  - `/locations` → same as `/stores`
+  - `/operations` → same as `/inventories`
+  - `/workers` → same as `/employees`
+- Lookup aliases: `/lookups/locations`, `/lookups/operations`, `/lookups/workers` in `backend/src/routes/lookup.routes.ts`.
+- Aliases reuse same handlers, services, repositories, permissions (`stores:*`, `inventories:*`, `employees:*`), and module gates (`inventory_operations`, etc.).
+- JSON response fields unchanged (`storeId`, `inventoryId`, `employeeId`, …).
+- No new permission or module keys. No frontend API migration.
+- Documentation: `docs/API_ROUTE_ALIASES.md`.
+- Tests: `backend/src/routes/api-route-aliases.test.ts`, `api-route-aliases.integration.test.ts`.
+
+## Phase 2.6 implementation note
+
+**Status:** Plan only (no code migrations)
+
+- Created `docs/DB_RENAME_PLAN_PHASE_2_6.md` with impact analysis, risk matrix, rollback plan, and validation queries.
+- **Recommendation:** defer DB table/column rename; keep DB/API names stable.
+- Safe future strategy documented (views → read aliases → controlled rename with backward-compatible views).
+- No migrations added. No SQL rename scripts executed.
+
+## Phase 2.7 implementation note
+
+**Status:** Implemented
+
+- Migration `database/migrations/021_physical_operational_table_rename.sql` renames:
+  - `stores` → `operational_locations`
+  - `inventories` → `scheduled_operations`
+  - `inventory_employees` → `operation_assignments`
+- Legacy compatibility views: `stores`, `inventories`, `inventory_employees` (read-only).
+- Backend SQL updated to physical table names in repositories, store-fix utilities, and seed script.
+- **Not renamed:** `employees`, `attendance_records`, columns (`store_id`, `inventory_id`, `employee_id`).
+- API routes, JSON fields, permissions, modules, frontend routes, bot, and import behavior unchanged.
+- Audits: `scripts/audit/audit_db_operational_rename.py`, updated `audit_tenant_isolation.py`.
+- Documentation: `docs/DB_RENAME_IMPLEMENTATION_PHASE_2_7.md`.
 
 ## Appendix A — Key file index
 
@@ -545,12 +585,13 @@ First implementation PR should:
 | Domain types | `backend/src/types/domain.ts`, `frontend/src/types/*.ts` |
 | Permissions | `backend/src/constants/company-permissions.ts`, `docs/PERMISSIONS.md` |
 | Modules | `backend/src/constants/company-modules.ts`, `docs/COMPANY_MODULES.md` |
-| Routes index | `backend/src/routes/index.ts` |
+| Routes index | `backend/src/routes/index.ts`, `docs/API_ROUTE_ALIASES.md` |
 | Frontend nav | `frontend/src/utils/company-modules.ts`, `frontend/src/routes/AppRoutes.tsx` |
 | Bot copy | `backend/src/services/bot/bot-response.builder.ts`, `backend/src/utils/intent.ts` |
 | Import | `backend/src/constants/inventory-import.ts`, `backend/src/utils/inventory-import-headers.ts`, `backend/src/services/inventory-import.service.ts` |
 | Attendance export | `backend/src/services/attendance.service.ts` (`exportCsv`) |
-| Migrations | `database/migrations/002_core_domain.sql`, `015_multi_company_foundation.sql` |
+| Migrations | `database/migrations/002_core_domain.sql`, `015_multi_company_foundation.sql`, `021_physical_operational_table_rename.sql` |
+| DB rename | `docs/DB_RENAME_IMPLEMENTATION_PHASE_2_7.md`, `backend/src/constants/operational-tables.ts` |
 | Phase 1 deferrals | `docs/MULTI_COMPANY_PHASE1.md`, `docs/MULTI_COMPANY_HARDENING.md` |
 
 ## Appendix B — Validation results

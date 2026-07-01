@@ -20,28 +20,28 @@ const whereCurrentStore = (fix: ProposedFix): string => {
   AND name = N'${escapeSqlString(fix.storeNumber)}'`;
 };
 
-const buildCoordinateUpdateSql = (fix: ProposedFix): string => `UPDATE stores
+const buildCoordinateUpdateSql = (fix: ProposedFix): string => `UPDATE operational_locations
 SET latitude = ${formatDecimal(fix.newLatitude)},
     longitude = ${formatDecimal(fix.newLongitude)},
     updated_at = SYSUTCDATETIME()
 ${whereCurrentStore(fix)};`;
 
-const buildAddressUpdateSql = (fix: ProposedFix): string => `UPDATE stores
+const buildAddressUpdateSql = (fix: ProposedFix): string => `UPDATE operational_locations
 SET address = N'${escapeSqlString(fix.newAddress)}',
     updated_at = SYSUTCDATETIME()
 ${whereCurrentStore(fix)};`;
 
-const buildRenameSql = (fix: ProposedFix, newName: string): string => `UPDATE stores
+const buildRenameSql = (fix: ProposedFix, newName: string): string => `UPDATE operational_locations
 SET name = N'${escapeSqlString(newName)}',
     updated_at = SYSUTCDATETIME()
 WHERE id = '${escapeSqlString(fix.dbId)}';`;
 
-const buildDeactivateSql = (fix: ProposedFix): string => `UPDATE stores
+const buildDeactivateSql = (fix: ProposedFix): string => `UPDATE operational_locations
 SET active = 0,
     updated_at = SYSUTCDATETIME()
 ${whereCurrentStore(fix)};`;
 
-const buildInsertSql = (fix: ProposedFix, neighborhood: string, locality: string): string => `INSERT INTO stores (
+const buildInsertSql = (fix: ProposedFix, neighborhood: string, locality: string): string => `INSERT INTO operational_locations (
   name,
   address,
   neighborhood,

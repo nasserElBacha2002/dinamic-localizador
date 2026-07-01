@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
+import * as XLSX from "xlsx";
 import {
   DEFAULT_EARLY_TOLERANCE_MINUTES,
   DEFAULT_LATE_TOLERANCE_MINUTES,
@@ -13,6 +14,8 @@ import { inventoryImportService } from "./inventory-import.service";
 
 const COMPANY_ID = "company-1";
 const FUTURE_DATE = "01/12/2026";
+const CSV_FILE_NAME = "import.csv";
+const XLSX_FILE_NAME = "import.xlsx";
 
 const sampleStore = {
   id: "store-213",
@@ -30,8 +33,15 @@ const sampleStore = {
   updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
-const buildCsv = (headers: string[], row: string[]): string =>
-  `${headers.join(",")}\n${row.join(",")}`;
+const buildCsvBuffer = (headers: string[], row: string[]): Buffer =>
+  Buffer.from(`${headers.join(",")}\n${row.join(",")}`, "utf8");
+
+const buildXlsxBuffer = (headers: string[], row: string[]): Buffer => {
+  const worksheet = XLSX.utils.aoa_to_sheet([headers, row]);
+  const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Import");
+  return Buffer.from(XLSX.write(workbook, { type: "buffer", bookType: "xlsx" }));
+};
 
 describe("inventoryImportService preview", () => {
   afterEach(() => {
@@ -43,7 +53,15 @@ describe("inventoryImportService preview", () => {
     mock.method(inventoryRepository, "findExistingActiveKeys", async () => new Set());
   };
 
-  const expectClientRow = (row: NonNullable<Awaited<ReturnType<typeof inventoryImportService.preview>>["rows"][0]>) => {
+  const previewCsv = (headers: string[], row: string[]) =>
+    inventoryImportService.previewFile(COMPANY_ID, buildCsvBuffer(headers, row), CSV_FILE_NAME);
+
+  const previewXlsx = (headers: string[], row: string[]) =>
+    inventoryImportService.previewFile(COMPANY_ID, buildXlsxBuffer(headers, row), XLSX_FILE_NAME);
+
+  const expectClientRow = (
+    row: NonNullable<Awaited<ReturnType<typeof inventoryImportService.previewFile>>["rows"][0]>,
+  ) => {
     assert.equal(row.storeId, sampleStore.id);
     assert.equal(row.earlyToleranceMinutes, DEFAULT_EARLY_TOLERANCE_MINUTES);
     assert.equal(row.lateToleranceMinutes, DEFAULT_LATE_TOLERANCE_MINUTES);
@@ -55,12 +73,10 @@ describe("inventoryImportService preview", () => {
 
   it("imports legacy minimal PUNTO + Fecha", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]),
-    );
+    const result = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
 
     assert.equal(result.format, "client");
+    assert.equal(result.fileType, "csv");
     assert.equal(result.rows.length, 1);
     expectClientRow(result.rows[0]);
     assert.equal(result.rows[0].punto, "213");
@@ -68,14 +84,8 @@ describe("inventoryImportService preview", () => {
 
   it("imports Sucursal + Fecha with the same result as PUNTO", async () => {
     mockStores();
-    const puntoResult = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]),
-    );
-    const sucursalResult = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["Sucursal", "Fecha"], ["213", FUTURE_DATE]),
-    );
+    const puntoResult = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
+    const sucursalResult = await previewCsv(["Sucursal", "Fecha"], ["213", FUTURE_DATE]);
 
     assert.deepEqual(
       {
@@ -97,32 +107,32 @@ describe("inventoryImportService preview", () => {
 
   it("imports Ubicación + Fecha", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["Ubicación", "Fecha"], ["213", FUTURE_DATE]),
-    );
+    const result = await previewCsv(["Ubicación", "Fecha"], ["213", FUTURE_DATE]);
     assert.equal(result.format, "client");
     expectClientRow(result.rows[0]);
   });
 
   it("imports Ubicacion without accent + Fecha", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["Ubicacion", "Fecha"], ["213", FUTURE_DATE]),
-    );
+    const result = await previewCsv(["Ubicacion", "Fecha"], ["213", FUTURE_DATE]);
     assert.equal(result.format, "client");
+    expectClientRow(result.rows[0]);
+  });
+
+  it("imports Sucursal + Fecha from XLSX", async () => {
+    mockStores();
+    const result = await previewXlsx(["Sucursal", "Fecha"], ["213", FUTURE_DATE]);
+
+    assert.equal(result.format, "client");
+    assert.equal(result.fileType, "xlsx");
     expectClientRow(result.rows[0]);
   });
 
   it("imports extended tienda + fecha_inicio + fecha_fin", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(
-        ["tienda", "fecha_inicio", "fecha_fin"],
-        ["213", `${FUTURE_DATE} 20:30`, "02/12/2026 03:00"],
-      ),
+    const result = await previewCsv(
+      ["tienda", "fecha_inicio", "fecha_fin"],
+      ["213", `${FUTURE_DATE} 20:30`, "02/12/2026 03:00"],
     );
 
     assert.equal(result.format, "legacy");
@@ -132,16 +142,10 @@ describe("inventoryImportService preview", () => {
 
   it("ignores LOCAL, Formato and PROVEEDOR columns", async () => {
     mockStores();
-    const minimal = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]),
-    );
-    const withIgnored = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(
-        ["PUNTO", "Fecha", "LOCAL", "Formato", "PROVEEDOR"],
-        ["213", FUTURE_DATE, "Local X", "Express", "Proveedor Y"],
-      ),
+    const minimal = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
+    const withIgnored = await previewCsv(
+      ["PUNTO", "Fecha", "LOCAL", "Formato", "PROVEEDOR"],
+      ["213", FUTURE_DATE, "Local X", "Express", "Proveedor Y"],
     );
 
     assert.deepEqual(withIgnored.rows[0]?.scheduledStart, minimal.rows[0]?.scheduledStart);
@@ -151,24 +155,21 @@ describe("inventoryImportService preview", () => {
 
   it("fails when location column is missing", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(COMPANY_ID, buildCsv(["Fecha"], [FUTURE_DATE]));
+    const result = await previewCsv(["Fecha"], [FUTURE_DATE]);
     assert.equal(result.format, null);
     assert.ok(result.fileErrors.some((error) => error.includes(IMPORT_MISSING_LOCATION_MESSAGE)));
   });
 
   it("fails when date column is missing", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(COMPANY_ID, buildCsv(["PUNTO"], ["213"]));
+    const result = await previewCsv(["PUNTO"], ["213"]);
     assert.equal(result.format, null);
     assert.ok(result.fileErrors.some((error) => error.includes(IMPORT_MISSING_DATE_MESSAGE)));
   });
 
   it("fails when location does not exist", async () => {
     mockStores();
-    const result = await inventoryImportService.preview(
-      COMPANY_ID,
-      buildCsv(["Sucursal", "Fecha"], ["999999", FUTURE_DATE]),
-    );
+    const result = await previewCsv(["Sucursal", "Fecha"], ["999999", FUTURE_DATE]);
     assert.equal(result.rows[0]?.status, "invalid");
     assert.ok(result.rows[0]?.errors.includes(IMPORT_LOCATION_NOT_FOUND_MESSAGE));
   });

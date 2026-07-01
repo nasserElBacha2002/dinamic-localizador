@@ -45,7 +45,15 @@ describe("inventory import headers", () => {
     assert.equal(result.format, "client");
   });
 
+  it("detects Ubicacion + Fecha as client format", () => {
+    const result = mapImportHeaders(["Ubicacion", "Fecha"]);
+    assert.equal(result.format, "client");
+  });
+
   it("detects extended legacy format with generic location aliases", () => {
+    const tienda = mapImportHeaders(["tienda", "fecha_inicio", "fecha_fin"]);
+    assert.equal(tienda.format, "legacy");
+
     const ubicacion = mapImportHeaders(["ubicacion", "fecha_inicio", "fecha_fin"]);
     assert.equal(ubicacion.format, "legacy");
 

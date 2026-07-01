@@ -1,6 +1,8 @@
 import { exportToCsv } from "./export";
 import type { InventoryImportPreviewResult } from "../types/inventory-import";
 
+export const RECOMMENDED_IMPORT_TEMPLATE_HEADERS = ["Sucursal", "Fecha"] as const;
+
 export const INVENTORY_IMPORT_FORMAT_HELP = [
   "Formatos admitidos: CSV y XLSX.",
   "Formato mínimo recomendado: Sucursal, Fecha.",
@@ -11,6 +13,10 @@ export const INVENTORY_IMPORT_FORMAT_HELP = [
   "Las tolerancias usan 60 y 90 minutos por defecto si no se informan.",
   "También se acepta el formato extendido: tienda, fecha_inicio, fecha_fin (o ubicacion/sucursal).",
 ].join(" ");
+
+export function downloadRecommendedImportTemplate(): void {
+  exportToCsv("plantilla-importacion-operaciones", [...RECOMMENDED_IMPORT_TEMPLATE_HEADERS], [["", ""]]);
+}
 
 export const UNSUPPORTED_IMPORT_FILE_MESSAGE =
   "Formato de archivo no soportado. Subí un archivo CSV o XLSX.";

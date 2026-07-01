@@ -1,4 +1,4 @@
-// Phase 2.3 terminology note: Store remains the technical DB/API model (stores table).
+// Phase 2.3/2.7: Store remains the technical API model; physical table is operational_locations (stores view).
 // Conceptually this represents an OperationalLocation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
@@ -23,7 +23,7 @@ export const storeRepository = {
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
       .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
       .query(`
-        INSERT INTO stores (
+        INSERT INTO operational_locations (
           company_id, name, address, neighborhood, locality, store_format,
           latitude, longitude, allowed_radius_meters, google_place_id
         )
@@ -43,7 +43,7 @@ export const storeRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM stores WHERE id = @id AND company_id = @companyId");
+      .query("SELECT * FROM operational_locations WHERE id = @id AND company_id = @companyId");
 
     if (!result.recordset[0]) {
       return null;
@@ -82,7 +82,7 @@ export const storeRepository = {
 
     const countRequest = pool.request();
     applySqlFilters(countRequest, filters);
-    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM stores ${whereClause}`);
+    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM operational_locations ${whereClause}`);
     const total = Number(countResult.recordset[0].total);
 
     const dataRequest = pool.request();
@@ -92,7 +92,7 @@ export const storeRepository = {
 
     const dataResult = await dataRequest.query(`
       SELECT *
-      FROM stores
+      FROM operational_locations
       ${whereClause}
       ORDER BY created_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -109,7 +109,7 @@ export const storeRepository = {
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .query("SELECT * FROM stores WHERE active = 1 AND company_id = @companyId");
+      .query("SELECT * FROM operational_locations WHERE active = 1 AND company_id = @companyId");
     return result.recordset.map((row) => mapStoreRow(row as Record<string, unknown>));
   },
 
@@ -178,7 +178,7 @@ export const storeRepository = {
     fields.push("updated_at = SYSUTCDATETIME()");
 
     const result = await request.query(`
-      UPDATE stores
+      UPDATE operational_locations
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
       WHERE id = @id AND company_id = @companyId
@@ -203,7 +203,7 @@ export const storeRepository = {
       .input("storeId", sql.UniqueIdentifier, storeId)
       .query(`
         SELECT TOP 1 1 AS found
-        FROM inventories
+        FROM scheduled_operations
         WHERE store_id = @storeId
           AND company_id = @companyId
           AND status IN ('SCHEDULED', 'IN_PROGRESS')

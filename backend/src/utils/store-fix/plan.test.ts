@@ -25,7 +25,7 @@ const environmentSnapshot: EnvironmentSnapshot = {
   dbPort: 1433,
   dbName: "test_db",
   dbUser: "test_user",
-  tableName: "stores",
+  tableName: "operational_locations",
   totalCurrentDbRows: 2,
   totalNumericCurrentDbStores: 2,
   totalNonNumericCurrentDbRows: 0,

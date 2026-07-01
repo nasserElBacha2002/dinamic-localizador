@@ -28,36 +28,51 @@ const readStoreLookups = requireAnyPermission(
 
 const readInventoryLookups = requireAnyPermission("inventories:read", "attendance:read");
 
-lookupRouter.get(
-  "/employees",
-  requireAnyCompanyModule(
-    COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
-    COMPANY_MODULE_KEYS.ABSENCES,
-  ),
-  readEmployeeLookups,
-  validate(employeeLookupQuerySchema, "query"),
-  asyncHandler(lookupController.listEmployees),
-);
+const registerStoreLookupRoute = (path: string) => {
+  lookupRouter.get(
+    path,
+    requireAnyCompanyModule(
+      COMPANY_MODULE_KEYS.ATTENDANCE,
+      COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    ),
+    readStoreLookups,
+    validate(storeLookupQuerySchema, "query"),
+    asyncHandler(lookupController.listStores),
+  );
+};
 
-lookupRouter.get(
-  "/stores",
-  requireAnyCompanyModule(
-    COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
-  ),
-  readStoreLookups,
-  validate(storeLookupQuerySchema, "query"),
-  asyncHandler(lookupController.listStores),
-);
+const registerInventoryLookupRoute = (path: string) => {
+  lookupRouter.get(
+    path,
+    requireAnyCompanyModule(
+      COMPANY_MODULE_KEYS.ATTENDANCE,
+      COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    ),
+    readInventoryLookups,
+    validate(inventoryLookupQuerySchema, "query"),
+    asyncHandler(lookupController.listInventories),
+  );
+};
 
-lookupRouter.get(
-  "/inventories",
-  requireAnyCompanyModule(
-    COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
-  ),
-  readInventoryLookups,
-  validate(inventoryLookupQuerySchema, "query"),
-  asyncHandler(lookupController.listInventories),
-);
+const registerEmployeeLookupRoute = (path: string) => {
+  lookupRouter.get(
+    path,
+    requireAnyCompanyModule(
+      COMPANY_MODULE_KEYS.ATTENDANCE,
+      COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+      COMPANY_MODULE_KEYS.ABSENCES,
+    ),
+    readEmployeeLookups,
+    validate(employeeLookupQuerySchema, "query"),
+    asyncHandler(lookupController.listEmployees),
+  );
+};
+
+registerEmployeeLookupRoute("/employees");
+registerEmployeeLookupRoute("/workers");
+
+registerStoreLookupRoute("/stores");
+registerStoreLookupRoute("/locations");
+
+registerInventoryLookupRoute("/inventories");
+registerInventoryLookupRoute("/operations");

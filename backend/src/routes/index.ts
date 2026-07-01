@@ -35,30 +35,36 @@ apiRouter.use("/webhooks/twilio", twilioRouter);
 apiRouter.use("/companies", authenticate, companyRouter);
 apiRouter.use("/platform", authenticate, platformCompanyRouter);
 
+const mountInventoryOperationsStoreRoutes = (router: Router) => {
+  const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS);
+  router.use("/stores", moduleGuard, storeRouter);
+  router.use("/locations", moduleGuard, storeRouter);
+};
+
+const mountInventoryOperationsInventoryRoutes = (router: Router) => {
+  const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS);
+  router.use("/inventories", moduleGuard, inventoryRouter);
+  router.use("/operations", moduleGuard, inventoryRouter);
+};
+
+const mountEmployeeRoutes = (router: Router) => {
+  const moduleGuard = requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  );
+  router.use("/employees", moduleGuard, employeeRouter);
+  router.use("/workers", moduleGuard, employeeRouter);
+};
+
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
 companyScopedOperationalRouter.use("/users", companyUserRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
 companyScopedOperationalRouter.use("/lookups", lookupRouter);
-companyScopedOperationalRouter.use(
-  "/employees",
-  requireAnyCompanyModule(
-    COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
-    COMPANY_MODULE_KEYS.ABSENCES,
-  ),
-  employeeRouter,
-);
-companyScopedOperationalRouter.use(
-  "/stores",
-  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
-  storeRouter,
-);
-companyScopedOperationalRouter.use(
-  "/inventories",
-  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
-  inventoryRouter,
-);
+mountEmployeeRoutes(companyScopedOperationalRouter);
+mountInventoryOperationsStoreRoutes(companyScopedOperationalRouter);
+mountInventoryOperationsInventoryRoutes(companyScopedOperationalRouter);
 companyScopedOperationalRouter.use(
   "/inventories/:inventoryId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
@@ -101,25 +107,9 @@ const operationalRouter = Router();
 operationalRouter.use(resolveCompanyContext);
 operationalRouter.use(asyncHandler(loadCompanyModuleStates));
 operationalRouter.use("/lookups", lookupRouter);
-operationalRouter.use(
-  "/employees",
-  requireAnyCompanyModule(
-    COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
-    COMPANY_MODULE_KEYS.ABSENCES,
-  ),
-  employeeRouter,
-);
-operationalRouter.use(
-  "/stores",
-  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
-  storeRouter,
-);
-operationalRouter.use(
-  "/inventories",
-  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
-  inventoryRouter,
-);
+mountEmployeeRoutes(operationalRouter);
+mountInventoryOperationsStoreRoutes(operationalRouter);
+mountInventoryOperationsInventoryRoutes(operationalRouter);
 operationalRouter.use(
   "/inventories/:inventoryId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),

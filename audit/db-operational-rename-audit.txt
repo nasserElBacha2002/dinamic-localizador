@@ -1,0 +1,12 @@
+DB operational rename audit (Phase 2.7)
+=====================================
+
+Manual SQL validation:
+SELECT OBJECT_ID('dbo.operational_locations', 'U');
+SELECT OBJECT_ID('dbo.scheduled_operations', 'U');
+SELECT OBJECT_ID('dbo.operation_assignments', 'U');
+SELECT OBJECT_ID('dbo.stores', 'V');
+SELECT OBJECT_ID('dbo.inventories', 'V');
+SELECT OBJECT_ID('dbo.inventory_employees', 'V');
+
+No findings.

@@ -123,9 +123,9 @@ export const attendanceNotificationRepository = {
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
-        FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
-        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN operation_assignments ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.inventory_id = i.id
@@ -170,9 +170,9 @@ export const attendanceNotificationRepository = {
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
-        FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
-        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN operation_assignments ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
         INNER JOIN attendance_records ar
           ON ar.inventory_id = i.id
@@ -213,7 +213,7 @@ export const attendanceNotificationRepository = {
       .query(`
         SELECT TOP 1 1 AS found
         FROM attendance_records ar
-        INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = @companyId
+        INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = @companyId
         INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
         WHERE ar.inventory_id = @inventoryId
           AND ar.employee_id = @employeeId
@@ -255,9 +255,9 @@ export const attendanceNotificationRepository = {
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
-        FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
-        INNER JOIN inventory_employees ie
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN operation_assignments ie
           ON ie.inventory_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
         WHERE i.id = @inventoryId

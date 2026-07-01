@@ -16,7 +16,7 @@ export const inventoryEmployeeRepository = {
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
-        INSERT INTO inventory_employees (company_id, inventory_id, employee_id)
+        INSERT INTO operation_assignments (company_id, inventory_id, employee_id)
         OUTPUT INSERTED.*
         VALUES (@companyId, @inventoryId, @employeeId)
       `);
@@ -33,7 +33,7 @@ export const inventoryEmployeeRepository = {
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT TOP 1 1 AS found
-        FROM inventory_employees
+        FROM operation_assignments
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
           AND company_id = @companyId
@@ -61,7 +61,7 @@ export const inventoryEmployeeRepository = {
         e.active AS employee_active,
         e.created_at AS employee_created_at,
         e.updated_at AS employee_updated_at
-      FROM inventory_employees ie
+      FROM operation_assignments ie
       INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
       WHERE ie.inventory_id = @inventoryId
         AND ie.company_id = @companyId
@@ -79,7 +79,7 @@ export const inventoryEmployeeRepository = {
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
-        DELETE FROM inventory_employees
+        DELETE FROM operation_assignments
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
           AND company_id = @companyId

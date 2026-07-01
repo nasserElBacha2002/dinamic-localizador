@@ -89,7 +89,7 @@ export const lookupRepository = {
         s.id,
         s.name,
         s.address
-      FROM stores s
+      FROM operational_locations s
       WHERE ${filters.join(" AND ")}
       ORDER BY s.name ASC
     `);
@@ -129,8 +129,8 @@ export const lookupRepository = {
         i.scheduled_start,
         i.scheduled_end,
         s.name AS store_name
-      FROM inventories i
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = i.company_id
+      FROM scheduled_operations i
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
       WHERE ${filters.join(" AND ")}
       ORDER BY i.scheduled_start DESC
     `);

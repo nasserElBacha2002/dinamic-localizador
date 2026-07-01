@@ -202,8 +202,8 @@ export const employeeRepository = {
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT TOP 1 1 AS found
-        FROM inventory_employees ie
-        INNER JOIN inventories i ON i.id = ie.inventory_id
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id
         WHERE ie.employee_id = @employeeId
           AND ie.company_id = @companyId
           AND i.company_id = @companyId

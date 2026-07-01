@@ -1,4 +1,4 @@
-// Phase 2.3 terminology note: Inventory remains the technical DB/API model (inventories table).
+// Phase 2.3/2.7: Inventory remains the technical API model; physical table is scheduled_operations (inventories view).
 // Conceptually this represents a ScheduledOperation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
@@ -42,7 +42,7 @@ export const inventoryRepository = {
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
       .input("notes", sql.NVarChar(1000), input.notes ?? null)
       .query(`
-        INSERT INTO inventories (
+        INSERT INTO scheduled_operations (
           company_id, store_id, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
@@ -71,7 +71,7 @@ export const inventoryRepository = {
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
       .input("notes", sql.NVarChar(1000), input.notes ?? null)
       .query(`
-        INSERT INTO inventories (
+        INSERT INTO scheduled_operations (
           company_id, store_id, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
@@ -119,7 +119,7 @@ export const inventoryRepository = {
 
       const result = await request.query(`
         SELECT i.store_id, i.scheduled_start
-        FROM inventories i
+        FROM scheduled_operations i
         INNER JOIN (VALUES ${valueClauses.join(", ")}) AS p(store_id, scheduled_start)
           ON i.store_id = p.store_id
          AND i.scheduled_start = p.scheduled_start
@@ -171,7 +171,7 @@ export const inventoryRepository = {
       });
 
       const result = await request.query(`
-        INSERT INTO inventories (
+        INSERT INTO scheduled_operations (
           company_id, store_id, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
@@ -193,7 +193,7 @@ export const inventoryRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM inventories WHERE id = @id AND company_id = @companyId");
+      .query("SELECT * FROM scheduled_operations WHERE id = @id AND company_id = @companyId");
 
     if (!result.recordset[0]) {
       return null;
@@ -214,7 +214,7 @@ export const inventoryRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("storeId", sql.UniqueIdentifier, inventory.storeId)
-      .query("SELECT * FROM stores WHERE id = @storeId AND company_id = @companyId");
+      .query("SELECT * FROM operational_locations WHERE id = @storeId AND company_id = @companyId");
 
     if (!storeResult.recordset[0]) {
       return null;
@@ -226,7 +226,7 @@ export const inventoryRepository = {
       .input("inventoryId", sql.UniqueIdentifier, id)
       .query(`
       SELECT e.*
-      FROM inventory_employees ie
+      FROM operation_assignments ie
       INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
       WHERE ie.inventory_id = @inventoryId
         AND ie.company_id = @companyId
@@ -308,8 +308,8 @@ export const inventoryRepository = {
     applySqlFilters(countRequest, filters);
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
-      FROM inventories i
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = i.company_id
+      FROM scheduled_operations i
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -332,8 +332,8 @@ export const inventoryRepository = {
         s.name AS store_name,
         s.address AS store_address,
         s.active AS store_active
-      FROM inventories i
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = i.company_id
+      FROM scheduled_operations i
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
       ${whereClause}
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -401,7 +401,7 @@ export const inventoryRepository = {
     fields.push("updated_at = SYSUTCDATETIME()");
 
     const result = await request.query(`
-      UPDATE inventories
+      UPDATE scheduled_operations
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
       WHERE id = @id AND company_id = @companyId
@@ -442,10 +442,10 @@ export const inventoryRepository = {
           s.latitude AS store_latitude,
           s.longitude AS store_longitude,
           s.allowed_radius_meters
-        FROM inventories i
-        INNER JOIN inventory_employees ie
+        FROM scheduled_operations i
+        INNER JOIN operation_assignments ie
           ON ie.inventory_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
-        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
         WHERE i.company_id = @companyId
           AND i.status NOT IN ('COMPLETED', 'CANCELLED')
           AND s.active = 1

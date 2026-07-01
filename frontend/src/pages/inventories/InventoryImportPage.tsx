@@ -32,6 +32,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 import {
   INVENTORY_IMPORT_FORMAT_HELP,
   downloadInventoryImportErrors,
+  downloadRecommendedImportTemplate,
   isAcceptedImportFile,
   readFileAsBase64,
   UNSUPPORTED_IMPORT_FILE_MESSAGE,
@@ -162,6 +163,9 @@ export function InventoryImportPage() {
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1} flexWrap="wrap" useFlexGap>
               <Button variant="contained" onClick={() => fileInputRef.current?.click()}>
                 Cargar archivo
+              </Button>
+              <Button variant="outlined" onClick={downloadRecommendedImportTemplate}>
+                Descargar plantilla
               </Button>
               <Button
                 variant="outlined"

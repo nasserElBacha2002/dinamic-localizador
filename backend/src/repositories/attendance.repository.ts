@@ -145,8 +145,8 @@ export const attendanceRepository = {
         s.allowed_radius_meters AS store_allowed_radius_meters
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
-      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = @companyId
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = @companyId
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
       WHERE ar.id = @id AND ar.company_id = @companyId
     `);
 
@@ -170,7 +170,7 @@ export const attendanceRepository = {
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
       FROM attendance_records ar
-      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
+      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -194,8 +194,8 @@ export const attendanceRepository = {
         s.allowed_radius_meters AS store_allowed_radius_meters
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
-      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = ar.company_id
+      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = ar.company_id
       ${whereClause}
       ORDER BY ar.received_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -337,8 +337,8 @@ export const attendanceRepository = {
         reviewer.name AS reviewer_name
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
-      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = ar.company_id
+      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = ar.company_id
       LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
       ${whereClause}
       ORDER BY ar.received_at DESC
@@ -401,10 +401,10 @@ export const attendanceRepository = {
         s.longitude AS store_longitude,
         s.allowed_radius_meters
       FROM attendance_records ar
-      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = @companyId
-      INNER JOIN inventory_employees ie
+      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = @companyId
+      INNER JOIN operation_assignments ie
         ON ie.inventory_id = i.id AND ie.employee_id = ar.employee_id AND ie.company_id = @companyId
-      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
       WHERE ar.employee_id = @employeeId
         AND ar.company_id = @companyId
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')

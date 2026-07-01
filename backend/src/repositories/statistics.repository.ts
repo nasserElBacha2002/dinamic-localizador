@@ -12,9 +12,9 @@ import type {
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 
 const ASSIGNMENT_BASE_FROM = `
-  FROM inventory_employees ie
-  INNER JOIN inventories i ON i.id = ie.inventory_id AND i.company_id = ie.company_id
-  INNER JOIN stores s ON s.id = i.store_id AND s.company_id = i.company_id
+  FROM operation_assignments ie
+  INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = ie.company_id
+  INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
   INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = ie.company_id
   LEFT JOIN attendance_records ar
     ON ar.inventory_id = ie.inventory_id

@@ -4,18 +4,18 @@ This document maps **current technical names** (stable in DB/API) to **conceptua
 
 ## Terminology mapping
 
-| Current technical name | DB/API stable? | Conceptual backend alias | Spanish UI label | Notes |
-|------------------------|----------------|--------------------------|------------------|-------|
-| `Store` / `stores` | Yes | `OperationalLocation` | Ubicación | Physical/geofenced work site |
-| `Inventory` / `inventories` | Yes | `ScheduledOperation` | Operación | Planned work event with schedule and tolerances |
-| `Employee` / `employees` | Yes | `Worker` | Colaborador | Person who can be assigned and check in |
-| `InventoryEmployeeAssignment` / `inventory_employees` | Yes | `OperationAssignment` | Colaborador asignado | Junction: worker assigned to operation |
-| `AttendanceRecord` / `attendance_records` | Yes | `OperationAttendanceRecord` | Asistencia | Check-in/check-out with geolocation evidence |
+| Current technical name | DB physical (2.7) | Legacy view | Conceptual alias | Spanish UI label |
+|------------------------|-------------------|-------------|------------------|------------------|
+| `Store` / `stores` | `operational_locations` | `stores` | `OperationalLocation` | Ubicación |
+| `Inventory` / `inventories` | `scheduled_operations` | `inventories` | `ScheduledOperation` | Operación |
+| `Employee` / `employees` | `employees` (unchanged) | — | `Worker` | Colaborador |
+| `InventoryEmployeeAssignment` | `operation_assignments` | `inventory_employees` | `OperationAssignment` | Colaborador asignado |
+| `AttendanceRecord` / `attendance_records` | `attendance_records` (unchanged) | — | `OperationAttendanceRecord` | Asistencia |
 
 ## Stable contracts (do not rename without a dedicated phase)
 
-- **Database tables and columns** — e.g. `stores`, `inventories`, `store_id`, `inventory_id`, `employee_id`
-- **REST paths** — `/stores`, `/inventories`, `/employees`, `/attendance`
+- **Database tables and columns** — physical: `operational_locations`, `scheduled_operations`, `operation_assignments`; legacy views: `stores`, `inventories`, `inventory_employees`; columns `store_id`, `inventory_id`, `employee_id` unchanged
+- **REST paths** — `/stores`, `/inventories`, `/employees`, `/attendance` (canonical); optional aliases `/locations`, `/operations`, `/workers` — see [API_ROUTE_ALIASES.md](./API_ROUTE_ALIASES.md)
 - **JSON fields** — `storeId`, `inventoryId`, `employeeId`, `storeName`, etc.
 - **Permission keys** — `stores:read`, `inventories:manage`, `employees:read`, etc.
 - **Module keys** — `inventory_operations`, `attendance`, `absences`, etc.
@@ -28,8 +28,9 @@ This document maps **current technical names** (stable in DB/API) to **conceptua
 | 2.2 | Frontend terminology layer | Complete — `frontend/src/domain/terminology.ts` |
 | 2.3 | Backend type aliases | Complete — `backend/src/types/operational-domain.ts` |
 | 2.4 | Bulk import column aliases | Complete — `backend/src/utils/inventory-import-headers.ts` |
-| 2.5 | Optional API route aliases (`/locations`, `/operations`) | Deferred |
-| 2.6+ | Optional DB rename | Deferred |
+| 2.5 | Optional API route aliases | Complete — `docs/API_ROUTE_ALIASES.md` |
+| 2.6 | Optional DB rename plan | Complete (plan only) — `docs/DB_RENAME_PLAN_PHASE_2_6.md` |
+| 2.7 | Physical DB rename (selected tables) | Complete — `docs/DB_RENAME_IMPLEMENTATION_PHASE_2_7.md` |
 
 ## Unchanged in Phase 2.3
 
@@ -41,10 +42,12 @@ This document maps **current technical names** (stable in DB/API) to **conceptua
 
 Accepted **minimal** columns (location + date):
 
-| Role | Accepted headers (examples) |
-|------|----------------------------|
-| Location | `PUNTO`, `Sucursal`, `Ubicación` / `Ubicacion`, `tienda` |
-| Date | `Fecha` |
+| Role | Accepted headers (examples) | Recommended template |
+|------|----------------------------|----------------------|
+| Location | `PUNTO`, `Sucursal`, `Ubicación` / `Ubicacion`, `tienda` | `Sucursal` |
+| Date | `Fecha` | `Fecha` |
+
+Legacy minimal format `PUNTO` + `Fecha` remains fully supported. Generic minimal format `Ubicación` + `Fecha` is also accepted.
 
 Accepted **extended** columns:
 
@@ -69,5 +72,8 @@ Attendance CSV export and statistics export headers remain legacy labels for bac
 ## Related docs
 
 - [PHASE_2_OPERATIONAL_DOMAIN_AUDIT.md](./PHASE_2_OPERATIONAL_DOMAIN_AUDIT.md)
+- [API_ROUTE_ALIASES.md](./API_ROUTE_ALIASES.md)
+- [DB_RENAME_PLAN_PHASE_2_6.md](./DB_RENAME_PLAN_PHASE_2_6.md)
+- [DB_RENAME_IMPLEMENTATION_PHASE_2_7.md](./DB_RENAME_IMPLEMENTATION_PHASE_2_7.md)
 - [PERMISSIONS.md](./PERMISSIONS.md)
 - [COMPANY_MODULES.md](./COMPANY_MODULES.md)

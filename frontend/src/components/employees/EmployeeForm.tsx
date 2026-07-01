@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { Controller, useForm } from "react-hook-form";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
+import { terminology } from "../../domain/terminology";
 import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
 import { employeeTypeLabels } from "../../utils/labels";
 import { FormActions } from "../common/FormActions";
@@ -81,10 +82,10 @@ export function EmployeeForm({
           control={control}
           render={({ field }) => (
             <FormControl fullWidth required error={Boolean(errors.employeeType)}>
-              <InputLabel id="employee-type-label">Tipo de empleado</InputLabel>
+              <InputLabel id="employee-type-label">Tipo de {terminology.worker.singular.toLowerCase()}</InputLabel>
               <Select
                 labelId="employee-type-label"
-                label="Tipo de empleado"
+                label={`Tipo de ${terminology.worker.singular.toLowerCase()}`}
                 value={field.value ?? ""}
                 onChange={field.onChange}
                 inputRef={field.ref}

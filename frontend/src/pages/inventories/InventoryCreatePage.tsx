@@ -6,6 +6,7 @@ import { useCreateInventory } from "../../hooks/useInventories";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso } from "../../utils/dates";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function InventoryCreatePage() {
@@ -33,7 +34,10 @@ export function InventoryCreatePage() {
 
   return (
     <AdminLayout>
-      <PageHeader title="Nuevo inventario" description="Programá una jornada de inventario." />
+      <PageHeader
+        title={`Nueva ${terminology.operation.singular.toLowerCase()}`}
+        description={`Programá una ${terminology.operation.singular.toLowerCase()}.`}
+      />
       <InventoryForm
         mode="create"
         defaultValues={{
@@ -44,7 +48,7 @@ export function InventoryCreatePage() {
           lateToleranceMinutes: 90,
           notes: "",
         }}
-        submitLabel="Crear inventario"
+        submitLabel={`Crear ${terminology.operation.singular.toLowerCase()}`}
         cancelTo="/inventories"
         loading={createMutation.isPending}
         errorMessage={errorMessage}

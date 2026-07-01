@@ -504,6 +504,28 @@ First implementation PR should:
 
 ---
 
+## Phase 2.2 implementation note
+
+**Status:** Implemented
+
+- Added `frontend/src/domain/terminology.ts` with generic Spanish labels, legacy terms, helpers, and tests.
+- Wired terminology into sidebar nav (`getAdminNavItems`), company module labels (`COMPANY_MODULE_LABELS`), and module descriptions.
+- Updated selected page titles, table headers, lookup autocompletes, statistics display labels, and home page copy.
+- **Unchanged:** routes (`/stores`, `/inventories`, `/employees`), API contracts, permission keys, module keys (`inventory_operations`), DB schema, WhatsApp bot messages, CSV/XLSX import/export column headers (statistics exports keep legacy headers).
+- **Deferred:** bot simulator conversation copy, import preview column names tied to legacy formats, per-company configurable terminology (Phase 2.5+).
+
+## Phase 2.3 implementation note
+
+**Status:** Implemented
+
+- Added `backend/src/types/operational-domain.ts` with conceptual type aliases (`OperationalLocation`, `ScheduledOperation`, `Worker`, `OperationAssignment`, `OperationAttendanceRecord`).
+- Aliases map to existing types in `domain.ts`; no duplicated interfaces, no runtime logic.
+- Added `backend/src/types/operational-domain.test.ts` for assignability and field stability checks.
+- Added `docs/OPERATIONAL_DOMAIN_GLOSSARY.md` documenting technical vs conceptual vs UI terminology.
+- Short Phase 2.3 comments in selected repositories and services (`store`, `inventory`, `employee`, `attendance`).
+- **Unchanged:** DB tables/columns, API routes, JSON fields, permissions, modules, bot copy, imports/exports, service signatures, repository names.
+- **Guidance:** new backend modules may use aliases in type-only contexts; existing contracts remain `Store` / `Inventory` / `Employee` / `AttendanceRecord`.
+
 ## Appendix A — Key file index
 
 | Area | Paths |

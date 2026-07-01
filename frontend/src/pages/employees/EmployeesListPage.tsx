@@ -25,6 +25,7 @@ import { useEmployees } from "../../hooks/useEmployees";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
@@ -56,11 +57,14 @@ export function EmployeesListPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title="Empleados"
-        description="Administrá el personal habilitado para inventarios."
+        title={terminology.worker.plural}
+        description={`Administrá el personal habilitado para ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canManageEmployees ? (
-            <PageHeaderLinkAction to="/employees/new" label="Nuevo empleado" />
+            <PageHeaderLinkAction
+              to="/employees/new"
+              label={`Nuevo ${terminology.worker.singular.toLowerCase()}`}
+            />
           ) : undefined
         }
       />
@@ -97,13 +101,16 @@ export function EmployeesListPage() {
       {isError ? <ErrorState message={getApiErrorMessage(error)} /> : null}
 
       {data && !isError && data.data.length === 0 ? (
-        <EmptyState title="No hay empleados" description="Creá el primer empleado para comenzar." />
+        <EmptyState
+          title={`No hay ${terminology.worker.plural.toLowerCase()}`}
+          description={`Creá el primer ${terminology.worker.singular.toLowerCase()} para comenzar.`}
+        />
       ) : null}
 
       {data && data.data.length > 0 ? (
         <>
           <TableContainer component={Paper} variant="outlined">
-            <Table size="small" aria-label="Listado de empleados">
+            <Table size="small" aria-label={`Listado de ${terminology.worker.plural.toLowerCase()}`}>
               <TableHead>
                 <TableRow>
                   <TableCell>Nombre</TableCell>
@@ -118,7 +125,7 @@ export function EmployeesListPage() {
                   <ClickableTableRow
                     key={employee.id}
                     to={`/employees/${employee.id}`}
-                    ariaLabel={`Ver empleado ${employee.name}`}
+                    ariaLabel={`Ver ${terminology.worker.singular.toLowerCase()} ${employee.name}`}
                   >
                     <TableCell>{employee.name}</TableCell>
                     <TableCell>{employee.documentNumber ?? "—"}</TableCell>

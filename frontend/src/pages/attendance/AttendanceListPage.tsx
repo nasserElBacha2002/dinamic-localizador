@@ -36,14 +36,15 @@ import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../
 import type { DateRangeValue } from "../../types/date-range";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
-import { isModuleEnabled } from "../../utils/company-modules";
 import { hasPermission } from "../../utils/permissions";
+import { isModuleEnabled } from "../../utils/company-modules";
 
 export function AttendanceListPage() {
   const permissionsQuery = useCompanyPermissions();
@@ -106,7 +107,7 @@ export function AttendanceListPage() {
     <AdminLayout>
       <PageHeader
         title="Asistencias"
-        description="Revisá los registros de llegada a inventarios."
+        description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canExport || canUseBotSimulator ? (
             <Stack direction="row" spacing={1} alignItems="center">
@@ -281,9 +282,9 @@ export function AttendanceListPage() {
             <Table size="small" aria-label="Listado de asistencias">
               <TableHead>
                 <TableRow>
-                  <TableCell>Empleado</TableCell>
-                  <TableCell>Tienda</TableCell>
-                  <TableCell>Inventario</TableCell>
+                  <TableCell>{terminology.worker.singular}</TableCell>
+                  <TableCell>{terminology.location.singular}</TableCell>
+                  <TableCell>{terminology.operation.singular}</TableCell>
                   <TableCell>Llegada</TableCell>
                   <TableCell>Salida</TableCell>
                   <TableCell>Distancia</TableCell>

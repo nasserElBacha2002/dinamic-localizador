@@ -18,6 +18,7 @@ import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByEmployeeRow } from "../../types/statistics";
 import { formatDateTime } from "../../utils/dates";
 import { formatPercent } from "../../utils/export";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 type SortableField =
@@ -51,7 +52,7 @@ interface StatisticsEmployeeTableProps {
   exportsDisabled?: boolean;
 }
 
-const HEADERS = [
+const EXPORT_HEADERS = [
   "Empleado",
   "Teléfono",
   "Inventarios asignados",
@@ -100,7 +101,7 @@ export function StatisticsEmployeeTable({
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
   if (isLoading) {
-    return <LoadingState message="Cargando estadísticas por empleado..." />;
+    return <LoadingState message={`Cargando estadísticas por ${terminology.worker.singular.toLowerCase()}...`} />;
   }
 
   if (isError) {
@@ -114,7 +115,7 @@ export function StatisticsEmployeeTable({
       <Stack direction="row" justifyContent="flex-end">
         <ExportActionButtons
           baseName="attendance-by-employee"
-          headers={HEADERS}
+          headers={EXPORT_HEADERS}
           rows={exportData}
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -124,7 +125,10 @@ export function StatisticsEmployeeTable({
       </Stack>
 
       {rows.length === 0 ? (
-        <EmptyState title="Sin resultados" description="No hay datos de empleados para los filtros seleccionados." />
+        <EmptyState
+          title="Sin resultados"
+          description={`No hay datos de ${terminology.worker.plural.toLowerCase()} para los filtros seleccionados.`}
+        />
       ) : (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
@@ -136,11 +140,11 @@ export function StatisticsEmployeeTable({
                     direction={sortBy === "employeeName" ? sortDirection : "asc"}
                     onClick={createSortHandler("employeeName")}
                   >
-                    Empleado
+                    {terminology.worker.singular}
                   </TableSortLabel>
                 </TableCell>
                 <TableCell>Teléfono</TableCell>
-                <TableCell align="right">Inventarios</TableCell>
+                <TableCell align="right">{terminology.operation.plural}</TableCell>
                 <TableCell align="right">Confirmadas</TableCell>
                 <TableCell align="right">Sin asistencia</TableCell>
                 <TableCell align="right">Tarde</TableCell>

@@ -1,3 +1,4 @@
+import { terminology } from "../domain/terminology";
 import type { CompanyModule, CompanyModuleKey } from "../types/company-module";
 import type { CompanyPermission } from "../types/permissions";
 import { hasAnyPermission } from "./permissions";
@@ -9,16 +10,16 @@ export const CORE_COMPANY_MODULE_KEYS: CompanyModuleKey[] = [
 ];
 
 export const COMPANY_MODULE_LABELS: Record<CompanyModuleKey, string> = {
-  attendance: "Asistencias",
-  inventory_operations: "Operaciones de inventario",
-  absences: "Ausencias",
+  attendance: terminology.attendance.plural,
+  inventory_operations: terminology.operation.plural,
+  absences: terminology.absence.plural,
   reports: "Reportes",
   bot_simulator: "Simulador de Bot",
 };
 
 export const COMPANY_MODULE_DESCRIPTIONS: Record<CompanyModuleKey, string> = {
   attendance: "Permite registrar y revisar asistencias.",
-  inventory_operations: "Habilita tiendas, inventarios y asignaciones.",
+  inventory_operations: `Habilita ${terminology.location.plural.toLowerCase()}, ${terminology.operation.plural.toLowerCase()} y asignaciones.`,
   absences: "Permite gestionar tipos y solicitudes de ausencia.",
   reports: "Habilita estadísticas y reportes.",
   bot_simulator: "Permite probar flujos conversacionales del bot.",
@@ -99,7 +100,7 @@ export function getAdminNavItems({
         "employees:manage",
       ])
     ) {
-      items.push({ label: "Empleados", path: "/employees" });
+      items.push({ label: terminology.worker.plural, path: "/employees" });
     }
 
     if (
@@ -108,7 +109,7 @@ export function getAdminNavItems({
         "stores:manage",
       ])
     ) {
-      items.push({ label: "Tiendas", path: "/stores" });
+      items.push({ label: terminology.location.plural, path: "/stores" });
     }
 
     if (
@@ -117,7 +118,8 @@ export function getAdminNavItems({
         "inventories:manage",
       ])
     ) {
-      items.push({ label: "Inventarios", path: "/inventories" });
+      // UI uses "Operaciones"; API contract remains /inventories for backward compatibility.
+      items.push({ label: terminology.operation.plural, path: "/inventories" });
     }
 
     if (
@@ -127,13 +129,13 @@ export function getAdminNavItems({
         "attendance:export",
       ])
     ) {
-      items.push({ label: "Asistencias", path: "/attendance" });
+      items.push({ label: terminology.attendance.plural, path: "/attendance" });
     }
 
     if (
       canShowNavItem(modules, permissions, ["absences"], ["absences:read", "absences:review"])
     ) {
-      items.push({ label: "Ausencias", path: "/absences" });
+      items.push({ label: terminology.absence.plural, path: "/absences" });
     }
 
     if (

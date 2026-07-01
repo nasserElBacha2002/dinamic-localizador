@@ -6,6 +6,7 @@ import { useCreateStore } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreCreatePage() {
@@ -38,7 +39,10 @@ export function StoreCreatePage() {
 
   return (
     <AdminLayout>
-      <PageHeader title="Nueva tienda" description="Definí la ubicación y el radio permitido." />
+      <PageHeader
+        title={`Nueva ${terminology.location.singular.toLowerCase()}`}
+        description="Definí la ubicación y el radio permitido."
+      />
       <StoreForm
         defaultValues={{
           name: defaultName,
@@ -52,7 +56,7 @@ export function StoreCreatePage() {
           googlePlaceId: "",
           active: true,
         }}
-        submitLabel="Crear tienda"
+        submitLabel={`Crear ${terminology.location.singular.toLowerCase()}`}
         cancelTo="/stores"
         loading={createMutation.isPending}
         errorMessage={errorMessage}

@@ -4,11 +4,13 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   getAdminNavItems,
+  COMPANY_MODULE_LABELS,
   isAnyModuleEnabled,
   isModuleEnabled,
   moduleStatesEqual,
   validateCompanyModulesUpdate,
 } from "../utils/company-modules";
+import { terminology } from "../domain/terminology";
 import type { CompanyModule } from "../types/company-module";
 
 const allEnabledModules: CompanyModule[] = [
@@ -77,7 +79,7 @@ describe("company modules frontend module", () => {
     );
   });
 
-  it("shows only Inventarios and Asistencias for OPERATOR with all modules enabled", () => {
+  it("shows only Operaciones and Asistencias for OPERATOR with all modules enabled", () => {
     const items = getAdminNavItems({
       modules: allEnabledModules,
       permissions: ["company:read", "inventories:read", "attendance:read"],
@@ -85,7 +87,39 @@ describe("company modules frontend module", () => {
       modulesLoading: false,
     });
     const paths = items.map((item) => item.path);
+    const labels = items.map((item) => item.label);
     assert.deepEqual(paths, ["/", "/inventories", "/attendance"]);
+    assert.deepEqual(labels, ["Inicio", terminology.operation.plural, terminology.attendance.plural]);
+  });
+
+  it("uses generic terminology labels for OWNER nav items", () => {
+    const items = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: [
+        "company:read",
+        "employees:read",
+        "stores:read",
+        "inventories:read",
+        "attendance:read",
+        "absences:read",
+        "reports:read",
+        "bot_simulator:use",
+        "company:settings:update",
+        "users:manage",
+      ],
+      isPlatformAdmin: true,
+      modulesLoading: false,
+    });
+    const labels = items.map((item) => item.label);
+    assert.ok(labels.includes(terminology.worker.plural));
+    assert.ok(labels.includes(terminology.location.plural));
+    assert.ok(labels.includes(terminology.operation.plural));
+    assert.ok(labels.includes(terminology.attendance.plural));
+  });
+
+  it("exposes generic module labels while keeping inventory_operations key", () => {
+    assert.equal(COMPANY_MODULE_LABELS.inventory_operations, terminology.operation.plural);
+    assert.equal(COMPANY_MODULE_LABELS.attendance, terminology.attendance.plural);
   });
 
   it("hides nav items when permission is missing even if module is enabled", () => {

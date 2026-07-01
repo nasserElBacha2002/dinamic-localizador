@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: AttendanceRecord remains the technical DB/API model.
+// Conceptually this represents an OperationAttendanceRecord — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { CheckoutStatus } from "../constants/checkout-status";

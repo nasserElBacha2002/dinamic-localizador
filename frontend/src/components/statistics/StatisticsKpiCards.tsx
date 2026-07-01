@@ -1,4 +1,5 @@
 import { Card, CardContent, Grid, Skeleton, Typography } from "@mui/material";
+import { assignedWorkersLabel, terminology } from "../../domain/terminology";
 import type { AttendanceStatisticsSummary } from "../../types/statistics";
 import { formatPercent } from "../../utils/export";
 
@@ -13,7 +14,7 @@ const KPI_ITEMS: Array<{
   format?: (value: number) => string;
 }> = [
   { key: "totalAttendanceRecords", label: "Registros de asistencia" },
-  { key: "totalAssignedEmployees", label: "Empleados asignados" },
+  { key: "totalAssignedEmployees", label: assignedWorkersLabel },
   { key: "attendancePercentage", label: "% asistencia", format: formatPercent },
   { key: "presentCount", label: "Presente / a tiempo" },
   { key: "lateCount", label: "Tarde" },
@@ -22,7 +23,7 @@ const KPI_ITEMS: Array<{
   { key: "rejectedCount", label: "Rechazados" },
   { key: "manuallyAcceptedCount", label: "Aceptados manualmente" },
   { key: "noShowCount", label: "Sin asistencia" },
-  { key: "totalInventories", label: "Inventarios" },
+  { key: "totalInventories", label: terminology.operation.plural },
 ];
 
 export function StatisticsKpiCards({ summary, isLoading }: StatisticsKpiCardsProps) {

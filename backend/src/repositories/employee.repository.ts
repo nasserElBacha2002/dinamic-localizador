@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: Employee remains the technical DB/API model (employees table).
+// Conceptually this represents a Worker — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Employee } from "../types/domain";

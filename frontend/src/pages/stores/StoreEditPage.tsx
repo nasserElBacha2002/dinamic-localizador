@@ -9,6 +9,7 @@ import { useStore, useUpdateStore } from "../../hooks/useStores";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreEditPage() {
@@ -22,7 +23,7 @@ export function StoreEditPage() {
   if (!id) {
     return (
       <AdminLayout>
-        <ErrorState message="Tienda no encontrada." />
+        <ErrorState message={`${terminology.location.singular} no encontrada.`} />
       </AdminLayout>
     );
   }
@@ -38,7 +39,12 @@ export function StoreEditPage() {
   if (storeQuery.isError || !storeQuery.data) {
     return (
       <AdminLayout>
-        <ErrorState message={getApiErrorMessage(storeQuery.error, "Tienda no encontrada.")} />
+        <ErrorState
+          message={getApiErrorMessage(
+            storeQuery.error,
+            `${terminology.location.singular} no encontrada.`,
+          )}
+        />
       </AdminLayout>
     );
   }
@@ -70,7 +76,10 @@ export function StoreEditPage() {
 
   return (
     <AdminLayout>
-      <PageHeader title="Editar tienda" description={store.name} />
+      <PageHeader
+        title={`Editar ${terminology.location.singular.toLowerCase()}`}
+        description={store.name}
+      />
       <StoreForm
         defaultValues={{
           name: store.name,
@@ -93,7 +102,7 @@ export function StoreEditPage() {
       />
       <FeedbackSnackbar
         open={successOpen}
-        message="Tienda actualizada correctamente."
+        message={`${terminology.location.singular} actualizada correctamente.`}
         onClose={() => setSuccessOpen(false)}
       />
     </AdminLayout>

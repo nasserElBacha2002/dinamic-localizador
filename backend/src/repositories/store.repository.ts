@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: Store remains the technical DB/API model (stores table).
+// Conceptually this represents an OperationalLocation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Store } from "../types/domain";

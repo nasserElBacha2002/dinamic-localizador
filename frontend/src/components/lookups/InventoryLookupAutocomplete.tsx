@@ -5,6 +5,7 @@ import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { InventoryLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
+import { terminology } from "../../domain/terminology";
 import { formatDateTime } from "../../utils/dates";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
@@ -30,12 +31,12 @@ function mapInventoryLookupToOption(inventory: InventoryLookup): SearchAutocompl
 export function InventoryLookupAutocomplete({
   value,
   onChange,
-  label = "Inventario",
+  label = terminology.operation.singular,
   error = false,
   helperText,
   disabled = false,
   required = false,
-  placeholder = "Tienda o fecha del inventario",
+  placeholder = `${terminology.location.singular} o fecha de la ${terminology.operation.singular.toLowerCase()}`,
 }: InventoryLookupAutocompleteProps) {
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 

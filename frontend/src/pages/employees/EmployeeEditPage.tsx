@@ -11,6 +11,7 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { useEmployee, useUpdateEmployee } from "../../hooks/useEmployees";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function EmployeeEditPage() {
@@ -24,7 +25,7 @@ export function EmployeeEditPage() {
   if (!id) {
     return (
       <AdminLayout>
-        <ErrorState message="Empleado no encontrado." />
+        <ErrorState message={`${terminology.worker.singular} no encontrado.`} />
       </AdminLayout>
     );
   }
@@ -40,7 +41,12 @@ export function EmployeeEditPage() {
   if (employeeQuery.isError || !employeeQuery.data) {
     return (
       <AdminLayout>
-        <ErrorState message={getApiErrorMessage(employeeQuery.error, "Empleado no encontrado.")} />
+        <ErrorState
+          message={getApiErrorMessage(
+            employeeQuery.error,
+            `${terminology.worker.singular} no encontrado.`,
+          )}
+        />
       </AdminLayout>
     );
   }
@@ -68,7 +74,10 @@ export function EmployeeEditPage() {
 
   return (
     <AdminLayout>
-      <PageHeader title="Editar empleado" description={employee.name} />
+      <PageHeader
+        title={`Editar ${terminology.worker.singular.toLowerCase()}`}
+        description={employee.name}
+      />
       <EmployeeForm
         defaultValues={{
           name: employee.name,
@@ -101,7 +110,7 @@ export function EmployeeEditPage() {
       </Card>
       <FeedbackSnackbar
         open={successOpen}
-        message="Empleado actualizado correctamente."
+        message={`${terminology.worker.singular} actualizado correctamente.`}
         onClose={() => setSuccessOpen(false)}
       />
     </AdminLayout>

@@ -5,6 +5,7 @@ import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { StoreLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
+import { terminology } from "../../domain/terminology";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
 interface StoreLookupAutocompleteProps {
@@ -30,13 +31,13 @@ function mapStoreLookupToOption(store: StoreLookup): SearchAutocompleteOption {
 export function StoreLookupAutocomplete({
   value,
   onChange,
-  label = "Tienda",
+  label = terminology.location.singular,
   activeOnly = true,
   error = false,
   helperText,
   disabled = false,
   required = false,
-  placeholder = "Nombre o dirección de la tienda",
+  placeholder = `Nombre o dirección de la ${terminology.location.singular.toLowerCase()}`,
 }: StoreLookupAutocompleteProps) {
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 

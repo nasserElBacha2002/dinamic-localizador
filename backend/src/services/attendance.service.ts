@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: attendance_records remain the technical persistence model.
+// Conceptually each record is operation attendance at a scheduled operation.
 import sql from "mssql";
 import { env } from "../config/env";
 import { getPool } from "../database/connection";

@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: Inventory/inventories remain stable API names.
+// Product-facing UI may refer to a ScheduledOperation / Operación.
 import { AppError } from "../errors/app-error";
 import { inventoryAttendanceRepository } from "../repositories/inventory-attendance.repository";
 import { inventoryRepository } from "../repositories/inventory.repository";

@@ -19,6 +19,7 @@ import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByInventoryRow } from "../../types/statistics";
 import { formatDateTime } from "../../utils/dates";
 import { formatPercent } from "../../utils/export";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { inventoryStatusLabels } from "../../utils/labels";
 
@@ -53,7 +54,7 @@ interface StatisticsInventoryTableProps {
   exportsDisabled?: boolean;
 }
 
-const HEADERS = [
+const EXPORT_HEADERS = [
   "Inventario",
   "Tienda",
   "Dirección",
@@ -106,7 +107,7 @@ export function StatisticsInventoryTable({
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
   if (isLoading) {
-    return <LoadingState message="Cargando estadísticas por inventario..." />;
+    return <LoadingState message={`Cargando estadísticas por ${terminology.operation.singular.toLowerCase()}...`} />;
   }
 
   if (isError) {
@@ -120,7 +121,7 @@ export function StatisticsInventoryTable({
       <Stack direction="row" justifyContent="flex-end">
         <ExportActionButtons
           baseName="attendance-by-inventory"
-          headers={HEADERS}
+          headers={EXPORT_HEADERS}
           rows={exportData}
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -130,20 +131,23 @@ export function StatisticsInventoryTable({
       </Stack>
 
       {rows.length === 0 ? (
-        <EmptyState title="Sin resultados" description="No hay datos de inventarios para los filtros seleccionados." />
+        <EmptyState
+          title="Sin resultados"
+          description={`No hay datos de ${terminology.operation.plural.toLowerCase()} para los filtros seleccionados.`}
+        />
       ) : (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
             <TableHead>
               <TableRow>
-                <TableCell>Inventario</TableCell>
+                <TableCell>{terminology.operation.singular}</TableCell>
                 <TableCell sortDirection={sortBy === "storeName" ? sortDirection : false}>
                   <TableSortLabel
                     active={sortBy === "storeName"}
                     direction={sortBy === "storeName" ? sortDirection : "asc"}
                     onClick={createSortHandler("storeName")}
                   >
-                    Tienda
+                    {terminology.location.singular}
                   </TableSortLabel>
                 </TableCell>
                 <TableCell>Dirección</TableCell>

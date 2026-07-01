@@ -5,6 +5,7 @@ import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { EmployeeLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
+import { terminology } from "../../domain/terminology";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
 interface EmployeeLookupAutocompleteProps {
@@ -29,13 +30,13 @@ function mapEmployeeLookupToOption(employee: EmployeeLookup): SearchAutocomplete
 export function EmployeeLookupAutocomplete({
   value,
   onChange,
-  label = "Empleado",
+  label = terminology.worker.singular,
   activeOnly = true,
   error = false,
   helperText,
   disabled = false,
   required = false,
-  placeholder = "Nombre del empleado",
+  placeholder = `Nombre del ${terminology.worker.singular.toLowerCase()}`,
 }: EmployeeLookupAutocompleteProps) {
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 

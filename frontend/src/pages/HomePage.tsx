@@ -10,6 +10,7 @@ import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
 import { useInventories } from "../hooks/useInventories";
 import { AdminLayout } from "../layouts/AdminLayout";
 import type { InventoryWithStore } from "../types/inventory";
+import { terminology } from "../domain/terminology";
 import { getHomeQuickLinks } from "../utils/company-modules";
 import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
@@ -42,7 +43,7 @@ export function HomePage() {
     <AdminLayout>
       <PageHeader
         title="Dinamic Attendance"
-        description="Panel administrativo para planificar inventarios, asignar empleados y revisar asistencias."
+        description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
       />
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -79,7 +80,7 @@ export function HomePage() {
         {canReadInventories ? (
           <Grid size={{ xs: 12, md: 6 }}>
             <StatusCard
-              title="Próximos inventarios"
+              title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
               status={
                 upcomingInventoriesQuery.isLoading
                   ? "loading"
@@ -89,7 +90,7 @@ export function HomePage() {
               }
               details={
                 upcomingInventoriesQuery.data
-                  ? `${upcomingInventoriesQuery.data.meta.total} inventarios programados`
+                  ? `${upcomingInventoriesQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
                   : "No disponible"
               }
             />
@@ -127,14 +128,14 @@ export function HomePage() {
       {canReadInventories ? (
         <>
           <Typography variant="h5" gutterBottom>
-            Próximos inventarios
+            Próximas {terminology.operation.plural.toLowerCase()}
           </Typography>
           {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
           {upcomingInventoriesQuery.isError ? (
-            <ErrorState message="No se pudieron cargar los inventarios programados." />
+            <ErrorState message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`} />
           ) : null}
           {upcomingInventoriesQuery.data?.data.length === 0 ? (
-            <Typography color="text.secondary">No hay inventarios programados.</Typography>
+            <Typography color="text.secondary">No hay {terminology.operation.plural.toLowerCase()} programadas.</Typography>
           ) : null}
           {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
             <Stack spacing={1}>
@@ -157,7 +158,7 @@ function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore })
       variant="outlined"
       role="link"
       tabIndex={0}
-      aria-label={`Ver inventario de ${inventory.store.name}`}
+      aria-label={`Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`}
       onClick={() => navigate(`/inventories/${inventory.id}`)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {

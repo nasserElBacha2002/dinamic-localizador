@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: Inventory remains the technical DB/API model (inventories table).
+// Conceptually this represents a ScheduledOperation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Inventory, InventoryDetail, InventoryWithStore } from "../types/domain";

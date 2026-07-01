@@ -77,6 +77,35 @@ describe("bot response builders", () => {
     assert.match(message, /ubicación fuera del radio permitido/);
   });
 
+  it("builds checkout message without distance when location was not provided", () => {
+    const message = buildCheckoutRegisteredMessage({
+      eligible: inventory,
+      checkInAt: "2026-07-05T15:00:00.000Z",
+      checkoutAt: new Date("2026-07-05T21:05:00.000Z"),
+      distanceMeters: null,
+      checkoutStatus: "CHECKOUT_VALID",
+      extraWorkedMinutes: 0,
+      locationProvided: false,
+    });
+
+    assert.match(message, /Ubicación: no requerida/);
+    assert.doesNotMatch(message, /Distancia: 0 m/);
+  });
+
+  it("builds checkout message with distance when location was provided", () => {
+    const message = buildCheckoutRegisteredMessage({
+      eligible: inventory,
+      checkInAt: "2026-07-05T15:00:00.000Z",
+      checkoutAt: new Date("2026-07-05T21:05:00.000Z"),
+      distanceMeters: 42,
+      checkoutStatus: "CHECKOUT_VALID",
+      extraWorkedMinutes: 0,
+      locationProvided: true,
+    });
+
+    assert.match(message, /Distancia: 42 m/);
+  });
+
   it("exposes duplicate attendance message constant", () => {
     assert.equal(
       DUPLICATE_ATTENDANCE_MESSAGE,

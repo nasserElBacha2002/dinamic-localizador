@@ -14,12 +14,16 @@ const sanitizePayload = (payload: Record<string, string>): string => {
 };
 
 export const whatsappMessageRepository = {
-  async findByMessageSid(messageSid: string): Promise<WhatsAppMessage | null> {
+  async findByMessageSid(companyId: string, messageSid: string): Promise<WhatsAppMessage | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("messageSid", sql.NVarChar(100), messageSid)
-      .query("SELECT TOP 1 * FROM whatsapp_messages WHERE message_sid = @messageSid");
+      .query(`
+        SELECT TOP 1 * FROM whatsapp_messages
+        WHERE message_sid = @messageSid AND company_id = @companyId
+      `);
 
     if (!result.recordset[0]) {
       return null;
@@ -29,6 +33,7 @@ export const whatsappMessageRepository = {
   },
 
   async create(input: {
+    companyId: string;
     messageSid: string | null;
     direction: WhatsAppMessageDirection;
     employeeId: string | null;
@@ -46,6 +51,7 @@ export const whatsappMessageRepository = {
     try {
       const result = await pool
         .request()
+        .input("companyId", sql.UniqueIdentifier, input.companyId)
         .input("messageSid", sql.NVarChar(100), input.messageSid)
         .input("direction", sql.NVarChar(20), input.direction)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
@@ -63,12 +69,12 @@ export const whatsappMessageRepository = {
         )
         .query(`
           INSERT INTO whatsapp_messages (
-            message_sid, direction, employee_id, phone_from, phone_to,
+            company_id, message_sid, direction, employee_id, phone_from, phone_to,
             message_type, body, latitude, longitude, status, raw_payload
           )
           OUTPUT INSERTED.*
           VALUES (
-            @messageSid, @direction, @employeeId, @phoneFrom, @phoneTo,
+            @companyId, @messageSid, @direction, @employeeId, @phoneFrom, @phoneTo,
             @messageType, @body, @latitude, @longitude, @status, @rawPayload
           )
         `);
@@ -80,7 +86,7 @@ export const whatsappMessageRepository = {
         error instanceof Error &&
         error.message.includes("UQ_whatsapp_messages_message_sid")
       ) {
-        const existing = await this.findByMessageSid(input.messageSid);
+        const existing = await this.findByMessageSid(input.companyId, input.messageSid);
         if (existing) {
           return existing;
         }
@@ -91,6 +97,7 @@ export const whatsappMessageRepository = {
   },
 
   async updateProcessingStatus(
+    companyId: string,
     messageSid: string,
     input: {
       processingStatus: import("../types/twilio.types").WhatsAppMessageProcessingStatus;
@@ -100,6 +107,7 @@ export const whatsappMessageRepository = {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("messageSid", sql.NVarChar(100), messageSid)
       .input("processingStatus", sql.NVarChar(30), input.processingStatus)
       .input("processingErrorCode", sql.NVarChar(100), input.processingErrorCode ?? null)
@@ -108,7 +116,7 @@ export const whatsappMessageRepository = {
         SET processing_status = @processingStatus,
             processing_error_code = @processingErrorCode,
             processed_at = SYSUTCDATETIME()
-        WHERE message_sid = @messageSid
+        WHERE message_sid = @messageSid AND company_id = @companyId
       `);
   },
 };

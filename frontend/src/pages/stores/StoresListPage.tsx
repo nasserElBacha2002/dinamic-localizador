@@ -23,11 +23,16 @@ import { SearchField } from "../../components/common/SearchField";
 import { StatusChip } from "../../components/common/StatusChip";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useStores } from "../../hooks/useStores";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { AdminLayout } from "../../layouts/AdminLayout";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
 
 export function StoresListPage() {
+  const permissionsQuery = useCompanyPermissions();
+  const canManageStores = hasPermission(permissionsQuery.data?.permissions, "stores:manage");
   const pagination = usePaginationState(10);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
@@ -47,9 +52,16 @@ export function StoresListPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title="Tiendas"
+        title={terminology.location.plural}
         description="Configurá ubicaciones y radios permitidos."
-        action={<PageHeaderLinkAction to="/stores/new" label="Nueva tienda" />}
+        action={
+          canManageStores ? (
+            <PageHeaderLinkAction
+              to="/stores/new"
+              label={`Nueva ${terminology.location.singular.toLowerCase()}`}
+            />
+          ) : undefined
+        }
       />
 
       <ListFilters>
@@ -82,12 +94,14 @@ export function StoresListPage() {
 
       {isPending ? <LoadingState /> : null}
       {isError ? <ErrorState message={getApiErrorMessage(error)} /> : null}
-      {data && !isError && data.data.length === 0 ? <EmptyState title="No hay tiendas" /> : null}
+      {data && !isError && data.data.length === 0 ? (
+        <EmptyState title={`No hay ${terminology.location.plural.toLowerCase()}`} />
+      ) : null}
 
       {data && data.data.length > 0 ? (
         <>
           <TableContainer component={Paper} variant="outlined">
-            <Table size="small" aria-label="Listado de tiendas">
+            <Table size="small" aria-label={`Listado de ${terminology.location.plural.toLowerCase()}`}>
               <TableHead>
                 <TableRow>
                   <TableCell>Nombre</TableCell>
@@ -106,7 +120,7 @@ export function StoresListPage() {
                   <ClickableTableRow
                     key={store.id}
                     to={`/stores/${store.id}`}
-                    ariaLabel={`Ver tienda ${store.name}`}
+                    ariaLabel={`Ver ${terminology.location.singular.toLowerCase()} ${store.name}`}
                   >
                     <TableCell>{store.name}</TableCell>
                     <TableCell>{store.neighborhood ?? "—"}</TableCell>

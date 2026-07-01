@@ -22,7 +22,7 @@ const applyCoordinateFix = async (
     .input("latitude", sql.Decimal(10, 7), formatDecimal(fix.newLatitude))
     .input("longitude", sql.Decimal(10, 7), formatDecimal(fix.newLongitude))
     .query(`
-      UPDATE stores
+      UPDATE operational_locations
       SET latitude = @latitude,
           longitude = @longitude,
           updated_at = SYSUTCDATETIME()
@@ -39,7 +39,7 @@ const applyAddressFix = async (transaction: sql.Transaction, fix: ProposedFix): 
     .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
     .input("address", sql.NVarChar(300), fix.newAddress)
     .query(`
-      UPDATE stores
+      UPDATE operational_locations
       SET address = @address,
           updated_at = SYSUTCDATETIME()
       WHERE id = @id
@@ -54,7 +54,7 @@ const applyRenameFix = async (transaction: sql.Transaction, fix: ProposedFix): P
     .input("id", sql.UniqueIdentifier, fix.dbId)
     .input("name", sql.NVarChar(150), fix.storeNumber)
     .query(`
-      UPDATE stores
+      UPDATE operational_locations
       SET name = @name,
           updated_at = SYSUTCDATETIME()
       WHERE id = @id
@@ -68,7 +68,7 @@ const applyDeactivateFix = async (transaction: sql.Transaction, fix: ProposedFix
     .input("id", sql.UniqueIdentifier, fix.dbId)
     .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
     .query(`
-      UPDATE stores
+      UPDATE operational_locations
       SET active = 0,
           updated_at = SYSUTCDATETIME()
       WHERE id = @id
@@ -92,7 +92,7 @@ const applyInsertFix = async (
     .input("latitude", sql.Decimal(10, 7), formatDecimal(fix.newLatitude))
     .input("longitude", sql.Decimal(10, 7), formatDecimal(fix.newLongitude))
     .query(`
-      INSERT INTO stores (
+      INSERT INTO operational_locations (
         name, address, neighborhood, locality, latitude, longitude,
         allowed_radius_meters, active, google_place_id, created_at, updated_at
       )
@@ -184,7 +184,7 @@ export const verifyAppliedFixes = async (
         .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
         .query(`
           SELECT name, address, latitude, longitude, active
-          FROM stores
+          FROM operational_locations
           WHERE id = @id
             AND name = @storeNumber
         `);

@@ -6,6 +6,7 @@ import { mapAttendanceReviewRow } from "../utils/row-mappers";
 
 export const attendanceReviewRepository = {
   async create(
+    companyId: string,
     input: {
       attendanceId: string;
       reviewedBy: string;
@@ -18,6 +19,7 @@ export const attendanceReviewRepository = {
   ): Promise<AttendanceReview> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, input.attendanceId)
       .input("reviewedBy", sql.UniqueIdentifier, input.reviewedBy)
       .input("previousValidationStatus", sql.NVarChar(30), input.previousValidationStatus)
@@ -26,12 +28,12 @@ export const attendanceReviewRepository = {
       .input("reason", sql.NVarChar(1000), input.reason)
       .query(`
         INSERT INTO attendance_reviews (
-          attendance_id, reviewed_by, previous_validation_status,
+          company_id, attendance_id, reviewed_by, previous_validation_status,
           new_validation_status, decision, reason
         )
         OUTPUT INSERTED.*
         VALUES (
-          @attendanceId, @reviewedBy, @previousValidationStatus,
+          @companyId, @attendanceId, @reviewedBy, @previousValidationStatus,
           @newValidationStatus, @decision, @reason
         )
       `);
@@ -39,16 +41,18 @@ export const attendanceReviewRepository = {
     return mapAttendanceReviewRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async listByAttendanceId(attendanceId: string): Promise<AttendanceReview[]> {
+  async listByAttendanceId(companyId: string, attendanceId: string): Promise<AttendanceReview[]> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
       .query(`
         SELECT ar.*, u.name AS reviewer_name, u.email AS reviewer_email
         FROM attendance_reviews ar
         INNER JOIN users u ON u.id = ar.reviewed_by
         WHERE ar.attendance_id = @attendanceId
+          AND ar.company_id = @companyId
         ORDER BY ar.created_at ASC
       `);
 
@@ -58,6 +62,7 @@ export const attendanceReviewRepository = {
   },
 
   async listByAttendanceIdPaginated(
+    companyId: string,
     attendanceId: string,
     page: number,
     limit: number,
@@ -67,17 +72,20 @@ export const attendanceReviewRepository = {
 
     const countResult = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
       .query(`
         SELECT COUNT(*) AS total
         FROM attendance_reviews
         WHERE attendance_id = @attendanceId
+          AND company_id = @companyId
       `);
 
     const total = Number((countResult.recordset[0] as { total: number }).total ?? 0);
 
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
       .input("offset", sql.Int, offset)
       .input("limit", sql.Int, limit)
@@ -86,6 +94,7 @@ export const attendanceReviewRepository = {
         FROM attendance_reviews ar
         INNER JOIN users u ON u.id = ar.reviewed_by
         WHERE ar.attendance_id = @attendanceId
+          AND ar.company_id = @companyId
         ORDER BY ar.created_at ASC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -98,12 +107,17 @@ export const attendanceReviewRepository = {
     };
   },
 
-  async hasReview(attendanceId: string): Promise<boolean> {
+  async hasReview(companyId: string, attendanceId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
-      .query("SELECT TOP 1 1 AS found FROM attendance_reviews WHERE attendance_id = @attendanceId");
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_reviews
+        WHERE attendance_id = @attendanceId AND company_id = @companyId
+      `);
 
     return Boolean(result.recordset[0]);
   },

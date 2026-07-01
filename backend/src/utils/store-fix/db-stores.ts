@@ -3,7 +3,7 @@ import { connectDatabase, closeDatabase } from "../../database/connection";
 import { env } from "../../config/env";
 import type { CurrentDbStore, EnvironmentSnapshot, StoresSchema } from "./types";
 
-const TABLE_NAME = "stores";
+const TABLE_NAME = "operational_locations";
 
 const pickColumn = (
   availableColumns: Set<string>,
@@ -34,7 +34,7 @@ export const detectStoresSchema = async (pool: sql.ConnectionPool): Promise<Stor
   const storeFormatColumn = pickColumn(availableColumns, ["store_format", "formato", "format"]);
 
   if (!availableColumns.has("id") || !availableColumns.has("name") || !availableColumns.has("address")) {
-    throw new Error("stores table is missing required columns: id, name, address");
+    throw new Error("operational_locations table is missing required columns: id, name, address");
   }
 
   return {

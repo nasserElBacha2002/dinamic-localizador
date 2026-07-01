@@ -3,6 +3,7 @@ import { getPool } from "../database/connection";
 
 export const auditRepository = {
   async log(input: {
+    companyId: string;
     entityType: string;
     entityId: string;
     action: string;
@@ -14,6 +15,7 @@ export const auditRepository = {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("entityType", sql.NVarChar(50), input.entityType)
       .input("entityId", sql.UniqueIdentifier, input.entityId)
       .input("action", sql.NVarChar(50), input.action)
@@ -22,8 +24,12 @@ export const auditRepository = {
       .input("reason", sql.NVarChar(500), input.reason ?? null)
       .input("userId", sql.UniqueIdentifier, input.userId ?? null)
       .query(`
-        INSERT INTO audit_logs (entity_type, entity_id, action, previous_data, new_data, reason, user_id)
-        VALUES (@entityType, @entityId, @action, @previousData, @newData, @reason, @userId)
+        INSERT INTO audit_logs (
+          company_id, entity_type, entity_id, action, previous_data, new_data, reason, user_id
+        )
+        VALUES (
+          @companyId, @entityType, @entityId, @action, @previousData, @newData, @reason, @userId
+        )
       `);
   },
 };

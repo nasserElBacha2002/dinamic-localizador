@@ -20,8 +20,8 @@ import { buildPaginationMeta } from "../utils/pagination";
 
 const REVIEWABLE_STATUSES = ["PENDING", "NEEDS_INFO"] as const;
 
-const validateEmployee = async (employeeId: string) => {
-  const employee = await employeeRepository.findById(employeeId);
+const validateEmployee = async (companyId: string, employeeId: string) => {
+  const employee = await employeeRepository.findById(companyId, employeeId);
   if (!employee) {
     throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
   }
@@ -31,8 +31,12 @@ const validateEmployee = async (employeeId: string) => {
   return employee;
 };
 
-const validateAbsenceType = async (absenceTypeId: string, options?: { blockIfRequiresAttachment?: boolean }) => {
-  const absenceType = await absenceTypeRepository.findById(absenceTypeId);
+const validateAbsenceType = async (
+  companyId: string,
+  absenceTypeId: string,
+  options?: { blockIfRequiresAttachment?: boolean },
+) => {
+  const absenceType = await absenceTypeRepository.findById(companyId, absenceTypeId);
   if (!absenceType || !absenceType.isActive) {
     throw new AppError(404, "ABSENCE_TYPE_NOT_FOUND", "Tipo de ausencia no encontrado");
   }
@@ -74,13 +78,19 @@ const validateDates = (input: {
   }
 };
 
-const countAffectedInventoriesSafely = async (input: {
-  employeeId: string;
-  startDate: string;
-  endDate: string;
-}): Promise<number> => {
+const countAffectedInventoriesSafely = async (
+  companyId: string,
+  input: {
+    employeeId: string;
+    startDate: string;
+    endDate: string;
+  },
+): Promise<number> => {
   try {
-    const affectedInventories = await absenceInventoryImpactService.findAffectedInventories(input);
+    const affectedInventories = await absenceInventoryImpactService.findAffectedInventories(
+      companyId,
+      input,
+    );
     return affectedInventories.length;
   } catch (error) {
     console.error("[absence-request] affected inventories count failed", {
@@ -98,21 +108,24 @@ const isDuplicateSourceMessageSidError = (error: unknown): boolean =>
   (error.message.includes("UQ_absence_requests_source_message_sid") ||
     error.message.includes("duplicate key"));
 
-const createRequest = async (input: {
-  employeeId: string;
-  absenceTypeId: string;
-  startDate: string;
-  endDate: string;
-  startPeriod: CreateAbsenceRequestInput["startPeriod"];
-  endPeriod: CreateAbsenceRequestInput["endPeriod"];
-  reason: string;
-  requestedVia: "ADMIN" | "WHATSAPP";
-  sourceMessageSid?: string | null;
-  performedByUserId?: string | null;
-  performedByEmployeeId?: string | null;
-}): Promise<AbsenceRequestDetail> => {
-  await validateEmployee(input.employeeId);
-  const absenceType = await validateAbsenceType(input.absenceTypeId, {
+const createRequest = async (
+  companyId: string,
+  input: {
+    employeeId: string;
+    absenceTypeId: string;
+    startDate: string;
+    endDate: string;
+    startPeriod: CreateAbsenceRequestInput["startPeriod"];
+    endPeriod: CreateAbsenceRequestInput["endPeriod"];
+    reason: string;
+    requestedVia: "ADMIN" | "WHATSAPP";
+    sourceMessageSid?: string | null;
+    performedByUserId?: string | null;
+    performedByEmployeeId?: string | null;
+  },
+): Promise<AbsenceRequestDetail> => {
+  await validateEmployee(companyId, input.employeeId);
+  const absenceType = await validateAbsenceType(companyId, input.absenceTypeId, {
     blockIfRequiresAttachment: input.requestedVia === "WHATSAPP",
   });
   validateDates({
@@ -134,6 +147,7 @@ const createRequest = async (input: {
 
   try {
     const hasOverlap = await absenceRequestRepository.hasOverlappingRequest(
+      companyId,
       input.employeeId,
       input.startDate,
       input.endDate,
@@ -149,6 +163,7 @@ const createRequest = async (input: {
     }
 
     const created = await absenceRequestRepository.create(
+      companyId,
       {
         employeeId: input.employeeId,
         absenceTypeId: input.absenceTypeId,
@@ -165,6 +180,7 @@ const createRequest = async (input: {
     );
 
     await absenceRequestRepository.createEvent(
+      companyId,
       {
         absenceRequestId: created.id,
         eventType: "CREATED",
@@ -179,7 +195,7 @@ const createRequest = async (input: {
 
     await transaction.commit();
 
-    await auditService.log({
+    await auditService.log(companyId, {
       entityType: "absence_request",
       entityId: created.id,
       action: "CREATED",
@@ -187,7 +203,7 @@ const createRequest = async (input: {
       userId: input.performedByUserId ?? null,
     });
 
-    return absenceRequestService.getById(created.id);
+    return absenceRequestService.getById(companyId, created.id);
   } catch (error) {
     await transaction.rollback();
     throw error;
@@ -195,12 +211,12 @@ const createRequest = async (input: {
 };
 
 export const absenceRequestService = {
-  async list(query: ListAbsenceRequestsQuery) {
-    const result = await absenceRequestRepository.list(query);
+  async list(companyId: string, query: ListAbsenceRequestsQuery) {
+    const result = await absenceRequestRepository.list(companyId, query);
     const items = await Promise.all(
       result.items.map(async (item) => ({
         ...item,
-        affectedInventoriesCount: await countAffectedInventoriesSafely({
+        affectedInventoriesCount: await countAffectedInventoriesSafely(companyId, {
           employeeId: item.employeeId,
           startDate: item.startDate,
           endDate: item.endDate,
@@ -214,17 +230,17 @@ export const absenceRequestService = {
     };
   },
 
-  async getById(id: string): Promise<AbsenceRequestDetail> {
-    const request = await absenceRequestRepository.findDetailById(id);
+  async getById(companyId: string, id: string): Promise<AbsenceRequestDetail> {
+    const request = await absenceRequestRepository.findDetailById(companyId, id);
     if (!request) {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
 
-    const absenceType = await absenceTypeRepository.findById(request.absenceTypeId);
+    const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
     const [events, affectedInventories, balanceImpact] = await Promise.all([
-      absenceRequestRepository.listEvents(id),
+      absenceRequestRepository.listEvents(companyId, id),
       absenceInventoryImpactService
-        .findAffectedInventories({
+        .findAffectedInventories(companyId, {
           employeeId: request.employeeId,
           startDate: request.startDate,
           endDate: request.endDate,
@@ -237,7 +253,7 @@ export const absenceRequestService = {
           return [];
         }),
       absenceType
-        ? absenceBalanceService.getSummaryForRequest(request, absenceType).catch((error) => {
+        ? absenceBalanceService.getSummaryForRequest(companyId, request, absenceType).catch((error) => {
             console.error("[absence-request] balance impact failed", {
               requestId: id,
               error: error instanceof Error ? error.message : String(error),
@@ -256,8 +272,8 @@ export const absenceRequestService = {
     };
   },
 
-  async createFromAdmin(input: CreateAbsenceRequestInput, performedByUserId: string) {
-    return createRequest({
+  async createFromAdmin(companyId: string, input: CreateAbsenceRequestInput, performedByUserId: string) {
+    return createRequest(companyId, {
       employeeId: input.employeeId,
       absenceTypeId: input.absenceTypeId,
       startDate: input.startDate,
@@ -272,22 +288,26 @@ export const absenceRequestService = {
   },
 
   async createFromWhatsapp(
+    companyId: string,
     input: Omit<CreateAbsenceRequestInput, "requestedVia" | "sourceMessageSid"> & {
       sourceMessageSid: string;
     },
   ): Promise<{ detail: AbsenceRequestDetail; isExisting: boolean }> {
     if (input.sourceMessageSid) {
-      const existing = await absenceRequestRepository.findBySourceMessageSid(input.sourceMessageSid);
+      const existing = await absenceRequestRepository.findBySourceMessageSid(
+        companyId,
+        input.sourceMessageSid,
+      );
       if (existing) {
         return {
-          detail: await this.getById(existing.id),
+          detail: await this.getById(companyId, existing.id),
           isExisting: true,
         };
       }
     }
 
     try {
-      const detail = await createRequest({
+      const detail = await createRequest(companyId, {
         employeeId: input.employeeId,
         absenceTypeId: input.absenceTypeId,
         startDate: input.startDate,
@@ -302,10 +322,13 @@ export const absenceRequestService = {
       return { detail, isExisting: false };
     } catch (error) {
       if (input.sourceMessageSid && isDuplicateSourceMessageSidError(error)) {
-        const existing = await absenceRequestRepository.findBySourceMessageSid(input.sourceMessageSid);
+        const existing = await absenceRequestRepository.findBySourceMessageSid(
+          companyId,
+          input.sourceMessageSid,
+        );
         if (existing) {
           return {
-            detail: await this.getById(existing.id),
+            detail: await this.getById(companyId, existing.id),
             isExisting: true,
           };
         }
@@ -315,12 +338,16 @@ export const absenceRequestService = {
   },
 
   /** @deprecated Use createFromAdmin or createFromWhatsapp */
-  async create(input: CreateAbsenceRequestInput, performedByUserId?: string | null) {
+  async create(
+    companyId: string,
+    input: CreateAbsenceRequestInput,
+    performedByUserId?: string | null,
+  ) {
     if (input.requestedVia === "WHATSAPP") {
       if (!input.sourceMessageSid) {
         throw new AppError(400, "INVALID_SOURCE_MESSAGE_SID", "sourceMessageSid es obligatorio para WhatsApp");
       }
-      const result = await this.createFromWhatsapp({
+      const result = await this.createFromWhatsapp(companyId, {
         ...input,
         sourceMessageSid: input.sourceMessageSid,
       });
@@ -330,7 +357,7 @@ export const absenceRequestService = {
     if (!performedByUserId) {
       throw new AppError(401, "UNAUTHORIZED", "Usuario no autenticado");
     }
-    return this.createFromAdmin(input, performedByUserId);
+    return this.createFromAdmin(companyId, input, performedByUserId);
   },
 };
 

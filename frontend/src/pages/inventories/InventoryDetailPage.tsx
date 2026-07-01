@@ -25,6 +25,7 @@ import {
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from "../../utils/dates";
+import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { isInventoryAssignable, isInventoryEditable } from "../../utils/inventory-status";
 import { inventoryStatusLabels } from "../../utils/labels";
@@ -54,7 +55,7 @@ export function InventoryDetailPage() {
   if (!id) {
     return (
       <AdminLayout>
-        <ErrorState message="Inventario no encontrado." />
+        <ErrorState message={`${terminology.operation.singular} no encontrada.`} />
       </AdminLayout>
     );
   }
@@ -70,7 +71,12 @@ export function InventoryDetailPage() {
   if (inventoryQuery.isError || !inventory) {
     return (
       <AdminLayout>
-        <ErrorState message={getApiErrorMessage(inventoryQuery.error, "Inventario no encontrado.")} />
+        <ErrorState
+          message={getApiErrorMessage(
+            inventoryQuery.error,
+            `${terminology.operation.singular} no encontrada.`,
+          )}
+        />
       </AdminLayout>
     );
   }
@@ -84,7 +90,7 @@ export function InventoryDetailPage() {
       <Link
         component={RouterLink}
         to={`/stores/${storeDetailId}`}
-        title="Ver tienda"
+        title={`Ver ${terminology.location.singular.toLowerCase()}`}
         underline="hover"
         color="primary"
       >
@@ -108,7 +114,11 @@ export function InventoryDetailPage() {
         status: values.status,
       });
       setEditing(false);
-      setFeedback({ open: true, message: "Inventario actualizado correctamente.", severity: "success" });
+      setFeedback({
+        open: true,
+        message: `${terminology.operation.singular} actualizada correctamente.`,
+        severity: "success",
+      });
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -118,7 +128,11 @@ export function InventoryDetailPage() {
     try {
       await cancelMutation.mutateAsync(id);
       setConfirmCancelOpen(false);
-      setFeedback({ open: true, message: "Inventario cancelado.", severity: "success" });
+      setFeedback({
+        open: true,
+        message: `${terminology.operation.singular} cancelada.`,
+        severity: "success",
+      });
     } catch (error) {
       setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
     }
@@ -127,18 +141,18 @@ export function InventoryDetailPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title="Detalle de inventario"
+        title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
         description={`${inventory.store.name} · ${formatDateTime(inventory.scheduledStart)}`}
         action={
           <Stack direction="row" spacing={1}>
             {canEdit ? (
               <Button variant="outlined" onClick={() => setEditing((current) => !current)}>
-                {editing ? "Cancelar edición" : "Editar inventario"}
+                {editing ? "Cancelar edición" : `Editar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
             {canEdit ? (
               <Button color="error" variant="outlined" onClick={() => setConfirmCancelOpen(true)}>
-                Cancelar inventario
+                {`Cancelar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
             <Button component={RouterLink} to="/inventories">
@@ -160,9 +174,9 @@ export function InventoryDetailPage() {
                   label: "Estado",
                   value: <StatusChip label={inventoryStatusLabels[inventory.status]} />,
                 },
-                { label: "Tienda", value: storeFieldValue },
+                { label: terminology.location.singular, value: storeFieldValue },
                 { label: "Dirección", value: inventory.store?.address ?? "—" },
-                { label: "Inicio", value: formatDateTime(inventory.scheduledStart) },
+                { label: operationScheduleLabel, value: formatDateTime(inventory.scheduledStart) },
                 { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
                 { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },
                 { label: "Tolerancia tardía", value: `${inventory.lateToleranceMinutes} min` },
@@ -177,7 +191,7 @@ export function InventoryDetailPage() {
           <Card variant="outlined">
             <CardContent>
               <Typography variant="h6" gutterBottom>
-                Editar inventario
+                {`Editar ${terminology.operation.singular.toLowerCase()}`}
               </Typography>
               <InventoryForm
                 mode="edit"
@@ -212,9 +226,9 @@ export function InventoryDetailPage() {
 
       <ConfirmDialog
         open={confirmCancelOpen}
-        title="Cancelar inventario"
-        description="¿Confirmás cancelar este inventario? No podrá editarse luego."
-        confirmLabel="Cancelar inventario"
+        title={`Cancelar ${terminology.operation.singular.toLowerCase()}`}
+        description={`¿Confirmás cancelar esta ${terminology.operation.singular.toLowerCase()}? No podrá editarse luego.`}
+        confirmLabel={`Cancelar ${terminology.operation.singular.toLowerCase()}`}
         loading={cancelMutation.isPending}
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={handleCancel}

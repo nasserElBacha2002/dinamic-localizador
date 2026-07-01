@@ -24,8 +24,9 @@ import { PaginationControls } from "../../components/common/PaginationControls";
 import type { SortableColumn } from "../../components/common/SortableTableHead";
 import { SortableTableHead } from "../../components/common/SortableTableHead";
 import { StatusChip } from "../../components/common/StatusChip";
-import { StoreSearchAutocomplete } from "../../components/stores/StoreSearchAutocomplete";
+import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
 import { useInventories } from "../../hooks/useInventories";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useTableSort } from "../../hooks/useTableSort";
 import { AdminLayout } from "../../layouts/AdminLayout";
@@ -39,9 +40,11 @@ import {
 } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { inventoryStatusLabels } from "../../utils/labels";
+import { terminology } from "../../domain/terminology";
+import { hasPermission } from "../../utils/permissions";
 
 const INVENTORY_TABLE_COLUMNS: SortableColumn<InventoryListSortField>[] = [
-  { id: "storeName", label: "Tienda" },
+  { id: "storeName", label: terminology.location.singular },
   { id: "storeAddress", label: "Dirección" },
   { id: "scheduledStart", label: "Inicio" },
   { id: "scheduledEnd", label: "Fin" },
@@ -51,6 +54,12 @@ const INVENTORY_TABLE_COLUMNS: SortableColumn<InventoryListSortField>[] = [
 ];
 
 export function InventoriesListPage() {
+  const permissionsQuery = useCompanyPermissions();
+  const canManageInventories = hasPermission(
+    permissionsQuery.data?.permissions,
+    "inventories:manage",
+  );
+
   const pagination = usePaginationState(10);
   const { sortBy, sortDirection, onSortChange } = useTableSort<InventoryListSortField>(
     "scheduledStart",
@@ -86,15 +95,20 @@ export function InventoriesListPage() {
   return (
     <AdminLayout>
       <PageHeader
-        title="Inventarios"
-        description="Planificá jornadas de inventario y asigná empleados."
+        title={terminology.operation.plural}
+        description={`Planificá ${terminology.operation.plural.toLowerCase()} y asigná ${terminology.worker.plural.toLowerCase()}.`}
         action={
-          <Stack direction="row" spacing={1}>
-            <Button component={RouterLink} to="/inventories/import" variant="outlined">
-              Importar inventarios
-            </Button>
-            <PageHeaderLinkAction to="/inventories/new" label="Nuevo inventario" />
-          </Stack>
+          canManageInventories ? (
+            <Stack direction="row" spacing={1}>
+              <Button component={RouterLink} to="/inventories/import" variant="outlined">
+                {`Importar ${terminology.operation.plural.toLowerCase()}`}
+              </Button>
+              <PageHeaderLinkAction
+                to="/inventories/new"
+                label={`Nueva ${terminology.operation.singular.toLowerCase()}`}
+              />
+            </Stack>
+          ) : undefined
         }
       />
 
@@ -122,13 +136,12 @@ export function InventoriesListPage() {
         </FilterItem>
 
         <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
-          <StoreSearchAutocomplete
+          <StoreLookupAutocomplete
             value={storeId || null}
             onChange={(id) => {
               pagination.resetPage();
               setStoreId(id ?? "");
             }}
-            allowCreate={false}
           />
         </FilterItem>
 
@@ -146,12 +159,14 @@ export function InventoriesListPage() {
 
       {isPending ? <LoadingState /> : null}
       {isError ? <ErrorState message={getApiErrorMessage(error)} /> : null}
-      {data && !isError && data.data.length === 0 ? <EmptyState title="No hay inventarios" /> : null}
+      {data && !isError && data.data.length === 0 ? (
+        <EmptyState title={`No hay ${terminology.operation.plural.toLowerCase()}`} />
+      ) : null}
 
       {data && data.data.length > 0 ? (
         <>
           <TableContainer component={Paper} variant="outlined">
-            <Table size="small" aria-label="Listado de inventarios">
+            <Table size="small" aria-label={`Listado de ${terminology.operation.plural.toLowerCase()}`}>
               <SortableTableHead
                 columns={INVENTORY_TABLE_COLUMNS}
                 sortBy={sortBy}
@@ -163,7 +178,7 @@ export function InventoriesListPage() {
                   <ClickableTableRow
                     key={inventory.id}
                     to={`/inventories/${inventory.id}`}
-                    ariaLabel={`Ver inventario de ${inventory.store.name}`}
+                    ariaLabel={`Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`}
                   >
                     <TableCell>{inventory.store.name}</TableCell>
                     <TableCell>{inventory.store.address ?? "—"}</TableCell>

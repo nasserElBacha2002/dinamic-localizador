@@ -29,6 +29,20 @@ export const punctualityStatusLabels: Record<PunctualityStatus, string> = {
 
 export const activeStatusLabel = (active: boolean): string => (active ? "Activo" : "Inactivo");
 
+export const membershipStatusLabels = {
+  ACTIVE: "Activo",
+  INACTIVE: "Inactivo",
+} as const;
+
+export const companyRoleLabels = {
+  OWNER: "Dueño",
+  ADMIN: "Administrador",
+  HR: "RRHH",
+  SUPERVISOR: "Supervisor",
+  OPERATOR: "Operador",
+  READ_ONLY: "Solo lectura",
+} as const;
+
 export const employeeTypeLabels: Record<import("../constants/employee-types").EmployeeType, string> = {
   fijo: "Fijo",
   eventual: "Eventual",

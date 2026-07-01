@@ -1,3 +1,5 @@
+// Phase 2.3 terminology note: Employee remains the technical DB/API model (employees table).
+// Conceptually this represents a Worker — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Employee } from "../types/domain";
@@ -5,49 +7,55 @@ import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-
 import { mapEmployeeRow } from "../utils/row-mappers";
 import type { ListEmployeesQuery, UpdateEmployeeInput } from "../schemas/employee.schema";
 
-const EMPLOYEE_LAST_WORKED_JOIN = `
+const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
   LEFT JOIN (
     SELECT employee_id, MAX(received_at) AS last_worked_at
     FROM attendance_records
+    WHERE company_id = ${companyIdParam}
     GROUP BY employee_id
   ) lw ON lw.employee_id = e.id
 `;
 
-const EMPLOYEE_SELECT = `
+const buildEmployeeSelect = () => `
   SELECT e.*, lw.last_worked_at
   FROM employees e
-  ${EMPLOYEE_LAST_WORKED_JOIN}
+  ${buildEmployeeLastWorkedJoin()}
 `;
 
 export const employeeRepository = {
-  async create(input: {
-    name: string;
-    documentNumber: string | null;
-    phoneNumber: string;
-    employeeType: Employee["employeeType"];
-  }): Promise<Employee> {
+  async create(
+    companyId: string,
+    input: {
+      name: string;
+      documentNumber: string | null;
+      phoneNumber: string;
+      employeeType: Employee["employeeType"];
+    },
+  ): Promise<Employee> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(150), input.name)
       .input("documentNumber", sql.NVarChar(50), input.documentNumber)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("employeeType", sql.NVarChar(20), input.employeeType)
       .query(`
-        INSERT INTO employees (name, document_number, phone_number, employee_type)
+        INSERT INTO employees (company_id, name, document_number, phone_number, employee_type)
         OUTPUT INSERTED.*
-        VALUES (@name, @documentNumber, @phoneNumber, @employeeType)
+        VALUES (@companyId, @name, @documentNumber, @phoneNumber, @employeeType)
       `);
 
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findById(id: string): Promise<Employee | null> {
+  async findById(companyId: string, id: string): Promise<Employee | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query(`${EMPLOYEE_SELECT} WHERE e.id = @id`);
+      .query(`${buildEmployeeSelect()} WHERE e.id = @id AND e.company_id = @companyId`);
 
     if (!result.recordset[0]) {
       return null;
@@ -56,12 +64,16 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findByPhone(phoneNumber: string): Promise<Employee | null> {
+  async findByPhone(companyId: string, phoneNumber: string): Promise<Employee | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(30), phoneNumber)
-      .query("SELECT * FROM employees WHERE phone_number = @phoneNumber");
+      .query(`
+        SELECT * FROM employees
+        WHERE phone_number = @phoneNumber AND company_id = @companyId
+      `);
 
     if (!result.recordset[0]) {
       return null;
@@ -70,9 +82,17 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async list(query: ListEmployeesQuery): Promise<{ items: Employee[]; total: number }> {
+  async list(
+    companyId: string,
+    query: ListEmployeesQuery,
+  ): Promise<{ items: Employee[]; total: number }> {
     const pool = getPool();
-    const filters: SqlFilter[] = [];
+    const filters: SqlFilter[] = [
+      {
+        clause: "e.company_id = @companyId",
+        apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+      },
+    ];
 
     if (query.active !== undefined) {
       filters.push({
@@ -101,7 +121,7 @@ export const employeeRepository = {
     dataRequest.input("limit", sql.Int, query.limit);
 
     const dataResult = await dataRequest.query(`
-      ${EMPLOYEE_SELECT}
+      ${buildEmployeeSelect()}
       ${whereClause}
       ORDER BY e.created_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -113,10 +133,17 @@ export const employeeRepository = {
     };
   },
 
-  async update(id: string, input: UpdateEmployeeInput & { phoneNumber?: string }): Promise<Employee | null> {
+  async update(
+    companyId: string,
+    id: string,
+    input: UpdateEmployeeInput & { phoneNumber?: string },
+  ): Promise<Employee | null> {
     const pool = getPool();
     const fields: string[] = [];
-    const request = pool.request().input("id", sql.UniqueIdentifier, id);
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id);
 
     if (input.name !== undefined) {
       request.input("name", sql.NVarChar(150), input.name);
@@ -144,7 +171,7 @@ export const employeeRepository = {
     }
 
     if (fields.length === 0) {
-      return this.findById(id);
+      return this.findById(companyId, id);
     }
 
     fields.push("updated_at = SYSUTCDATETIME()");
@@ -153,7 +180,7 @@ export const employeeRepository = {
       UPDATE employees
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
-      WHERE id = @id
+      WHERE id = @id AND company_id = @companyId
     `);
 
     if (!result.recordset[0]) {
@@ -163,20 +190,23 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async deactivate(id: string): Promise<Employee | null> {
-    return this.update(id, { active: false });
+  async deactivate(companyId: string, id: string): Promise<Employee | null> {
+    return this.update(companyId, id, { active: false });
   },
 
-  async hasActiveOrScheduledInventories(employeeId: string): Promise<boolean> {
+  async hasActiveOrScheduledInventories(companyId: string, employeeId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT TOP 1 1 AS found
-        FROM inventory_employees ie
-        INNER JOIN inventories i ON i.id = ie.inventory_id
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id
         WHERE ie.employee_id = @employeeId
+          AND ie.company_id = @companyId
+          AND i.company_id = @companyId
           AND i.status IN ('SCHEDULED', 'IN_PROGRESS')
       `);
 

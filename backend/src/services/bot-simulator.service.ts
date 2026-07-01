@@ -22,6 +22,7 @@ import { normalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { whatsappBotService } from "./whatsapp-bot.service";
 import { botSessionService } from "./bot-session.service";
+import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import { geolocationService } from "./geolocation.service";
 import { evaluateGeofence } from "../utils/attendance-validation";
 
@@ -67,8 +68,12 @@ function hydrateRuntimeArtifacts(
     [];
 }
 
-async function persistRuntimeState(sessionId: string, context: BotRuntimeContext): Promise<void> {
-  await botSimulationSessionRepository.updateConversation(sessionId, {
+async function persistRuntimeState(
+  companyId: string,
+  sessionId: string,
+  context: BotRuntimeContext,
+): Promise<void> {
+  await botSimulationSessionRepository.updateConversation(companyId, sessionId, {
     messages: context.messages,
     technicalDetails: {
       ...context.technicalDetails,
@@ -83,13 +88,20 @@ async function persistRuntimeState(sessionId: string, context: BotRuntimeContext
 }
 
 async function clearBotSessionsForPhone(
+  companyId: string,
   phoneNumber: string,
   employeeId: string,
   simulationSessionId: string,
 ): Promise<void> {
   const scope = { mode: "simulation" as const, simulationSessionId };
-  await botSessionRepository.cancelValidActiveSessions(employeeId, phoneNumber, undefined, scope);
-  await botSessionRepository.expireStaleSessionsForParticipant(employeeId, phoneNumber, undefined, scope);
+  await botSessionRepository.cancelValidActiveSessions(companyId, employeeId, phoneNumber, undefined, scope);
+  await botSessionRepository.expireStaleSessionsForParticipant(
+    companyId,
+    employeeId,
+    phoneNumber,
+    undefined,
+    scope,
+  );
 }
 
 function buildTwilioPayload(input: {
@@ -155,10 +167,11 @@ function deriveStatusBadges(
 }
 
 async function buildSessionState(
+  companyId: string,
   sessionId: string,
   context: BotRuntimeContext,
 ): Promise<BotSimulationSessionState> {
-  const activeSession = await botSessionService.getActiveSessionByPhone(context.phoneNumber);
+  const activeSession = await botSessionService.getActiveSessionByPhone(companyId, context.phoneNumber);
 
   if (activeSession) {
     context.technicalDetails.currentFlow = "whatsapp-bot";
@@ -186,17 +199,18 @@ async function buildSessionState(
 
 export const botSimulatorService = {
   async createSession(
+    companyId: string,
     input: CreateBotSimulationSessionInput,
     createdBy?: string | null,
   ): Promise<BotSimulationSessionState> {
-    const employee = await employeeRepository.findById(input.employeeId);
+    const employee = await employeeRepository.findById(companyId, input.employeeId);
     if (!employee || !employee.active) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado o inactivo.");
     }
 
     let storeId = input.storeId ?? null;
     if (input.inventoryId) {
-      const inventory = await inventoryRepository.findById(input.inventoryId);
+      const inventory = await inventoryRepository.findById(companyId, input.inventoryId);
       if (!inventory) {
         throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado.");
       }
@@ -204,7 +218,7 @@ export const botSimulatorService = {
     }
 
     if (storeId) {
-      const store = await storeRepository.findById(storeId);
+      const store = await storeRepository.findById(companyId, storeId);
       if (!store) {
         throw new AppError(404, "STORE_NOT_FOUND", "Tienda no encontrada.");
       }
@@ -213,7 +227,7 @@ export const botSimulatorService = {
     const phoneNumber = normalizeWhatsAppPhone(input.phoneNumber);
 
     const session = await botSimulationSessionRepository.create({
-      companyId: input.companyId ?? null,
+      companyId,
       employeeId: employee.id,
       inventoryId: input.inventoryId ?? null,
       storeId,
@@ -223,7 +237,7 @@ export const botSimulatorService = {
       createdBy: createdBy ?? null,
     });
 
-    await clearBotSessionsForPhone(phoneNumber, employee.id, session.id);
+    await clearBotSessionsForPhone(companyId, phoneNumber, employee.id, session.id);
 
     const context = buildRuntimeContext({
       id: session.id,
@@ -254,12 +268,12 @@ export const botSimulatorService = {
       createdAt: context.simulatedNow.toISOString(),
     });
 
-    await persistRuntimeState(session.id, context);
-    return buildSessionState(session.id, context);
+    await persistRuntimeState(companyId, session.id, context);
+    return buildSessionState(companyId, session.id, context);
   },
 
-  async getSession(sessionId: string): Promise<BotSimulationSessionState> {
-    const session = await botSimulationSessionRepository.findById(sessionId);
+  async getSession(companyId: string, sessionId: string): Promise<BotSimulationSessionState> {
+    const session = await botSimulationSessionRepository.findById(companyId, sessionId);
     if (!session) {
       throw new AppError(404, "SIMULATION_SESSION_NOT_FOUND", "Sesión de simulación no encontrada.");
     }
@@ -275,17 +289,17 @@ export const botSimulatorService = {
     });
     hydrateRuntimeArtifacts(context, session.technicalDetails);
 
-    return buildSessionState(session.id, context);
+    return buildSessionState(companyId, session.id, context);
   },
 
-  async restartSession(sessionId: string): Promise<BotSimulationSessionState> {
-    const session = await botSimulationSessionRepository.findById(sessionId);
+  async restartSession(companyId: string, sessionId: string): Promise<BotSimulationSessionState> {
+    const session = await botSimulationSessionRepository.findById(companyId, sessionId);
     if (!session) {
       throw new AppError(404, "SIMULATION_SESSION_NOT_FOUND", "Sesión de simulación no encontrada.");
     }
 
-    await clearBotSessionsForPhone(session.phoneNumber, session.employeeId, session.id);
-    await botSimulationSessionRepository.resetConversation(sessionId);
+    await clearBotSessionsForPhone(companyId, session.phoneNumber, session.employeeId, session.id);
+    await botSimulationSessionRepository.resetConversation(companyId, sessionId);
 
     const context = buildRuntimeContext({
       id: session.id,
@@ -315,12 +329,12 @@ export const botSimulatorService = {
       createdAt: context.simulatedNow.toISOString(),
     });
 
-    await persistRuntimeState(session.id, context);
-    return buildSessionState(session.id, context);
+    await persistRuntimeState(companyId, session.id, context);
+    return buildSessionState(companyId, session.id, context);
   },
 
-  async sendMessage(input: SendBotSimulationMessageInput): Promise<BotSimulationSessionState> {
-    const session = await botSimulationSessionRepository.findById(input.sessionId);
+  async sendMessage(companyId: string, input: SendBotSimulationMessageInput): Promise<BotSimulationSessionState> {
+    const session = await botSimulationSessionRepository.findById(companyId, input.sessionId);
     if (!session) {
       throw new AppError(404, "SIMULATION_SESSION_NOT_FOUND", "Sesión de simulación no encontrada.");
     }
@@ -344,7 +358,7 @@ export const botSimulatorService = {
     });
 
     await runWithBotRuntimeContext(context, async () => {
-      const twiml = await whatsappBotService.handleWebhook(payload);
+      const twiml = await whatsappBotService.handleWebhook(companyId, payload);
       const outbound = extractMessageFromTwiml(twiml);
       if (!context.messages.some((message) => message.id === `SIM-OUT-${messageSid}`)) {
         context.messages.push({
@@ -360,12 +374,12 @@ export const botSimulatorService = {
       context.technicalDetails.generatedBotResponse = outbound;
     });
 
-    await persistRuntimeState(session.id, context);
-    return buildSessionState(session.id, context);
+    await persistRuntimeState(companyId, session.id, context);
+    return buildSessionState(companyId, session.id, context);
   },
 
-  async sendLocation(input: SendBotSimulationLocationInput): Promise<BotSimulationSessionState> {
-    const session = await botSimulationSessionRepository.findById(input.sessionId);
+  async sendLocation(companyId: string, input: SendBotSimulationLocationInput): Promise<BotSimulationSessionState> {
+    const session = await botSimulationSessionRepository.findById(companyId, input.sessionId);
     if (!session) {
       throw new AppError(404, "SIMULATION_SESSION_NOT_FOUND", "Sesión de simulación no encontrada.");
     }
@@ -391,7 +405,7 @@ export const botSimulatorService = {
 
     await runWithBotRuntimeContext(context, async () => {
       if (session.storeId) {
-        const store = await storeRepository.findById(session.storeId);
+        const store = await storeRepository.findById(companyId, session.storeId);
         if (store) {
           const geo = geolocationService.evaluateDistance(
             input.latitude,
@@ -412,7 +426,7 @@ export const botSimulatorService = {
         }
       }
 
-      const twiml = await whatsappBotService.handleWebhook(payload);
+      const twiml = await whatsappBotService.handleWebhook(companyId, payload);
       const outbound = extractMessageFromTwiml(twiml);
       if (!context.messages.some((message) => message.id === `SIM-OUT-${messageSid}`)) {
         context.messages.push({
@@ -428,41 +442,42 @@ export const botSimulatorService = {
       context.technicalDetails.generatedBotResponse = outbound;
     });
 
-    await persistRuntimeState(session.id, context);
-    return buildSessionState(session.id, context);
+    await persistRuntimeState(companyId, session.id, context);
+    return buildSessionState(companyId, session.id, context);
   },
 
-  async getLocationPresets(sessionId: string): Promise<{
+  async getLocationPresets(companyId: string, sessionId: string): Promise<{
     storeLocation: { latitude: number; longitude: number } | null;
     outsideRadius: { latitude: number; longitude: number } | null;
     nearRadiusLimit: { latitude: number; longitude: number } | null;
     allowedRadiusMeters: number | null;
     reviewMarginMeters: number;
   }> {
-    const session = await botSimulationSessionRepository.findById(sessionId);
+    const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
+    const session = await botSimulationSessionRepository.findById(companyId, sessionId);
     if (!session?.storeId) {
       return {
         storeLocation: null,
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
-        reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+        reviewMarginMeters: runtimeSettings.geofenceReviewMarginMeters,
       };
     }
 
-    const store = await storeRepository.findById(session.storeId);
+    const store = await storeRepository.findById(companyId, session.storeId);
     if (!store) {
       return {
         storeLocation: null,
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
-        reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+        reviewMarginMeters: runtimeSettings.geofenceReviewMarginMeters,
       };
     }
 
-    const radius = store.allowedRadiusMeters;
-    const margin = env.BOT_GEOFENCE_REVIEW_MARGIN_METERS;
+    const radius = store.allowedRadiusMeters > 0 ? store.allowedRadiusMeters : runtimeSettings.defaultRadiusMeters;
+    const margin = runtimeSettings.geofenceReviewMarginMeters;
     const outsideOffset = (radius + margin + 50) / 111_320;
     const nearOffset = (radius + Math.max(1, margin - 5)) / 111_320;
 

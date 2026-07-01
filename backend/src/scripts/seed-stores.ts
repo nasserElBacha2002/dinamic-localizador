@@ -90,7 +90,7 @@ async function upsertStore(pool: sql.ConnectionPool, store: StoreSeedRow): Promi
     .input("latitude", sql.Decimal(10, 7), store.latitude)
     .input("longitude", sql.Decimal(10, 7), store.longitude)
     .query(`
-      MERGE stores AS target
+      MERGE operational_locations AS target
       USING (
         SELECT
           @name AS name,

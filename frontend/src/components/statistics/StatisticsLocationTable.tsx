@@ -17,6 +17,7 @@ import { PaginationControls } from "../common/PaginationControls";
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByLocationRow } from "../../types/statistics";
 import { formatPercent } from "../../utils/export";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 type SortableField =
@@ -50,7 +51,7 @@ interface StatisticsLocationTableProps {
   exportsDisabled?: boolean;
 }
 
-const HEADERS = [
+const EXPORT_HEADERS = [
   "Tienda",
   "Dirección",
   "Inventarios",
@@ -99,7 +100,7 @@ export function StatisticsLocationTable({
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
   if (isLoading) {
-    return <LoadingState message="Cargando estadísticas por tienda..." />;
+    return <LoadingState message={`Cargando estadísticas por ${terminology.location.singular.toLowerCase()}...`} />;
   }
 
   if (isError) {
@@ -113,7 +114,7 @@ export function StatisticsLocationTable({
       <Stack direction="row" justifyContent="flex-end">
         <ExportActionButtons
           baseName="attendance-by-location"
-          headers={HEADERS}
+          headers={EXPORT_HEADERS}
           rows={exportData}
           dateFrom={dateFrom}
           dateTo={dateTo}
@@ -123,7 +124,10 @@ export function StatisticsLocationTable({
       </Stack>
 
       {rows.length === 0 ? (
-        <EmptyState title="Sin resultados" description="No hay datos de tiendas para los filtros seleccionados." />
+        <EmptyState
+          title="Sin resultados"
+          description={`No hay datos de ${terminology.location.plural.toLowerCase()} para los filtros seleccionados.`}
+        />
       ) : (
         <TableContainer component={Paper} variant="outlined">
           <Table size="small">
@@ -135,11 +139,11 @@ export function StatisticsLocationTable({
                     direction={sortBy === "storeName" ? sortDirection : "asc"}
                     onClick={createSortHandler("storeName")}
                   >
-                    Tienda
+                    {terminology.location.singular}
                   </TableSortLabel>
                 </TableCell>
                 <TableCell>Dirección</TableCell>
-                <TableCell align="right">Inventarios</TableCell>
+                <TableCell align="right">{terminology.operation.plural}</TableCell>
                 <TableCell align="right">% promedio</TableCell>
                 <TableCell align="right">Asignados</TableCell>
                 <TableCell align="right">Confirmadas</TableCell>

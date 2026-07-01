@@ -24,24 +24,37 @@ import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHeader";
 import { PaginationControls } from "../../components/common/PaginationControls";
 import { StatusChip } from "../../components/common/StatusChip";
-import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
-import { InventorySearchAutocomplete } from "../../components/inventories/InventorySearchAutocomplete";
-import { StoreSearchAutocomplete } from "../../components/stores/StoreSearchAutocomplete";
+import { EmployeeLookupAutocomplete } from "../../components/lookups/EmployeeLookupAutocomplete";
+import { InventoryLookupAutocomplete } from "../../components/lookups/InventoryLookupAutocomplete";
+import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
+import { useCompanyModules } from "../../hooks/useCompanyModules";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
 import type { DateRangeValue } from "../../types/date-range";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
+import { isModuleEnabled } from "../../utils/company-modules";
 
 export function AttendanceListPage() {
+  const permissionsQuery = useCompanyPermissions();
+  const modulesQuery = useCompanyModules();
+  const permissions = permissionsQuery.data?.permissions;
+  const canExport = hasPermission(permissions, "attendance:export");
+  const canUseBotSimulator =
+    isModuleEnabled(modulesQuery.data, "bot_simulator") &&
+    hasPermission(permissions, "bot_simulator:use");
+
   const pagination = usePaginationState(10);
   const [inventoryId, setInventoryId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
@@ -94,64 +107,69 @@ export function AttendanceListPage() {
     <AdminLayout>
       <PageHeader
         title="Asistencias"
-        description="Revisá los registros de llegada a inventarios."
+        description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
         action={
-          <Stack direction="row" spacing={1} alignItems="center">
-            <Button
-              variant="outlined"
-              onClick={handleExport}
-              disabled={exportMutation.isPending || exportsDisabled}
-              title={
-                exportsDisabled
-                  ? "Completá un rango de fechas válido antes de exportar."
-                  : undefined
-              }
-            >
-              Exportar CSV
-            </Button>
-            {exportsDisabled ? (
-              <Typography variant="caption" color="error">
-                Completá un rango de fechas válido antes de exportar.
-              </Typography>
-            ) : null}
-            <PageHeaderLinkAction to="/bot-simulator" label="Probar flujo del bot" />
-          </Stack>
+          canExport || canUseBotSimulator ? (
+            <Stack direction="row" spacing={1} alignItems="center">
+              {canExport ? (
+                <>
+                  <Button
+                    variant="outlined"
+                    onClick={handleExport}
+                    disabled={exportMutation.isPending || exportsDisabled}
+                    title={
+                      exportsDisabled
+                        ? "Completá un rango de fechas válido antes de exportar."
+                        : undefined
+                    }
+                  >
+                    Exportar CSV
+                  </Button>
+                  {exportsDisabled ? (
+                    <Typography variant="caption" color="error">
+                      Completá un rango de fechas válido antes de exportar.
+                    </Typography>
+                  ) : null}
+                </>
+              ) : null}
+              {canUseBotSimulator ? (
+                <PageHeaderLinkAction to="/bot-simulator" label="Probar flujo del bot" />
+              ) : null}
+            </Stack>
+          ) : undefined
         }
       />
 
       <ListFilters>
         <FilterItem>
-          <InventorySearchAutocomplete
+          <InventoryLookupAutocomplete
             value={inventoryId || null}
             onChange={(id) => {
               pagination.resetPage();
               setInventoryId(id ?? "");
             }}
-            allowCreate={false}
           />
         </FilterItem>
 
         <FilterItem>
-          <EmployeeSearchAutocomplete
+          <EmployeeLookupAutocomplete
             value={employeeId || null}
             onChange={(id) => {
               pagination.resetPage();
               setEmployeeId(id ?? "");
             }}
             activeOnly={false}
-            allowCreate={false}
           />
         </FilterItem>
 
         <FilterItem>
-          <StoreSearchAutocomplete
+          <StoreLookupAutocomplete
             value={storeId || null}
             onChange={(id) => {
               pagination.resetPage();
               setStoreId(id ?? "");
             }}
             activeOnly={false}
-            allowCreate={false}
           />
         </FilterItem>
 
@@ -264,9 +282,9 @@ export function AttendanceListPage() {
             <Table size="small" aria-label="Listado de asistencias">
               <TableHead>
                 <TableRow>
-                  <TableCell>Empleado</TableCell>
-                  <TableCell>Tienda</TableCell>
-                  <TableCell>Inventario</TableCell>
+                  <TableCell>{terminology.worker.singular}</TableCell>
+                  <TableCell>{terminology.location.singular}</TableCell>
+                  <TableCell>{terminology.operation.singular}</TableCell>
                   <TableCell>Llegada</TableCell>
                   <TableCell>Salida</TableCell>
                   <TableCell>Distancia</TableCell>

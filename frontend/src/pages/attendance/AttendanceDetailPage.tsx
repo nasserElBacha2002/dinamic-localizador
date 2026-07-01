@@ -33,6 +33,7 @@ import {
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import { formatDateTime } from "../../utils/dates";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   checkoutStatusLabels,
@@ -154,11 +155,14 @@ export function AttendanceDetailPage() {
             <DetailFieldGrid
               fields={[
                 {
-                  label: "Empleado",
+                  label: terminology.worker.singular,
                   value: `${record.employee.name} (${record.employee.phoneNumber})`,
                 },
-                { label: "Tienda", value: record.store.name },
-                { label: "Inventario programado", value: formatDateTime(record.inventory.scheduledStart) },
+                { label: terminology.location.singular, value: record.store.name },
+                {
+                  label: `${terminology.operation.singular} programada`,
+                  value: formatDateTime(record.inventory.scheduledStart),
+                },
                 { label: "Llegada", value: formatDateTime(record.receivedAt) },
                 { label: "Salida", value: formatDateTime(record.checkoutAt) },
                 {

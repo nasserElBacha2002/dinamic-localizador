@@ -7,20 +7,26 @@ import {
   updateEmployee,
 } from "../api/employees.api";
 import type { EmployeeFilters, UpdateEmployeeInput } from "../types/employee";
+import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
-export function useEmployees(filters: EmployeeFilters) {
+export function useEmployees(filters: EmployeeFilters, extraEnabled = true) {
+  const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
+
   return useQuery({
-    queryKey: ["employees", filters],
+    queryKey: ["employees", companyId, filters],
     queryFn: () => getEmployees(filters),
+    enabled,
     retry: 1,
   });
 }
 
 export function useEmployee(employeeId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(employeeId));
+
   return useQuery({
-    queryKey: ["employee", employeeId],
+    queryKey: ["employee", companyId, employeeId],
     queryFn: () => getEmployeeById(employeeId!),
-    enabled: Boolean(employeeId),
+    enabled,
   });
 }
 
@@ -42,7 +48,7 @@ export function useUpdateEmployee(employeeId: string) {
     mutationFn: (input: UpdateEmployeeInput) => updateEmployee(employeeId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
-      queryClient.invalidateQueries({ queryKey: ["employee", employeeId] });
+      queryClient.invalidateQueries({ queryKey: ["employee"] });
     },
   });
 }

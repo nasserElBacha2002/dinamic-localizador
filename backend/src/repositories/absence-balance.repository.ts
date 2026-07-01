@@ -15,6 +15,7 @@ const isUniqueConstraintError = (error: unknown): boolean =>
     error.message.includes("duplicate key"));
 
 const upsertInTransaction = async (
+  companyId: string,
   input: {
     employeeId: string;
     absenceTypeId: string;
@@ -25,6 +26,7 @@ const upsertInTransaction = async (
   transaction: sql.Transaction,
 ): Promise<EmployeeAbsenceBalance> => {
   const updateResult = await new sql.Request(transaction)
+    .input("companyId", sql.UniqueIdentifier, companyId)
     .input("employeeId", sql.UniqueIdentifier, input.employeeId)
     .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
     .input("year", sql.Int, input.year)
@@ -39,11 +41,13 @@ const upsertInTransaction = async (
       WHERE employee_id = @employeeId
         AND absence_type_id = @absenceTypeId
         AND year = @year
+        AND company_id = @companyId
     `);
 
   if (updateResult.rowsAffected[0] === 0) {
     try {
       await new sql.Request(transaction)
+        .input("companyId", sql.UniqueIdentifier, companyId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
         .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
         .input("year", sql.Int, input.year)
@@ -51,9 +55,9 @@ const upsertInTransaction = async (
         .input("notes", sql.NVarChar(500), input.notes ?? null)
         .query(`
           INSERT INTO employee_absence_balances (
-            employee_id, absence_type_id, year, total_days, notes
+            company_id, employee_id, absence_type_id, year, total_days, notes
           )
-          VALUES (@employeeId, @absenceTypeId, @year, @totalDays, @notes)
+          VALUES (@companyId, @employeeId, @absenceTypeId, @year, @totalDays, @notes)
         `);
     } catch (error) {
       if (!isUniqueConstraintError(error)) {
@@ -61,6 +65,7 @@ const upsertInTransaction = async (
       }
 
       const retryUpdate = await new sql.Request(transaction)
+        .input("companyId", sql.UniqueIdentifier, companyId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
         .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
         .input("year", sql.Int, input.year)
@@ -75,6 +80,7 @@ const upsertInTransaction = async (
           WHERE employee_id = @employeeId
             AND absence_type_id = @absenceTypeId
             AND year = @year
+            AND company_id = @companyId
         `);
 
       if (retryUpdate.rowsAffected[0] === 0) {
@@ -84,6 +90,7 @@ const upsertInTransaction = async (
   }
 
   const saved = await new sql.Request(transaction)
+    .input("companyId", sql.UniqueIdentifier, companyId)
     .input("employeeId", sql.UniqueIdentifier, input.employeeId)
     .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
     .input("year", sql.Int, input.year)
@@ -93,6 +100,7 @@ const upsertInTransaction = async (
       WHERE employee_id = @employeeId
         AND absence_type_id = @absenceTypeId
         AND year = @year
+        AND company_id = @companyId
     `);
 
   return mapEmployeeAbsenceBalanceRow(saved.recordset[0] as Record<string, unknown>);
@@ -100,6 +108,7 @@ const upsertInTransaction = async (
 
 export const absenceBalanceRepository = {
   async findByEmployeeTypeYear(
+    companyId: string,
     employeeId: string,
     absenceTypeId: string,
     year: number,
@@ -107,6 +116,7 @@ export const absenceBalanceRepository = {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("absenceTypeId", sql.UniqueIdentifier, absenceTypeId)
       .input("year", sql.Int, year)
@@ -116,6 +126,7 @@ export const absenceBalanceRepository = {
         WHERE employee_id = @employeeId
           AND absence_type_id = @absenceTypeId
           AND year = @year
+          AND company_id = @companyId
       `);
 
     if (!result.recordset[0]) {
@@ -125,10 +136,15 @@ export const absenceBalanceRepository = {
     return mapEmployeeAbsenceBalanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async listByEmployeeYear(employeeId: string, year: number): Promise<EmployeeAbsenceBalance[]> {
+  async listByEmployeeYear(
+    companyId: string,
+    employeeId: string,
+    year: number,
+  ): Promise<EmployeeAbsenceBalance[]> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("year", sql.Int, year)
       .query(`
@@ -136,6 +152,7 @@ export const absenceBalanceRepository = {
         FROM employee_absence_balances
         WHERE employee_id = @employeeId
           AND year = @year
+          AND company_id = @companyId
         ORDER BY absence_type_id
       `);
 
@@ -145,6 +162,7 @@ export const absenceBalanceRepository = {
   },
 
   async upsert(
+    companyId: string,
     input: {
       employeeId: string;
       absenceTypeId: string;
@@ -155,7 +173,7 @@ export const absenceBalanceRepository = {
     transaction?: sql.Transaction,
   ): Promise<EmployeeAbsenceBalance> {
     if (transaction) {
-      return upsertInTransaction(input, transaction);
+      return upsertInTransaction(companyId, input, transaction);
     }
 
     const pool = getPool();
@@ -163,7 +181,7 @@ export const absenceBalanceRepository = {
     await tx.begin();
 
     try {
-      const saved = await upsertInTransaction(input, tx);
+      const saved = await upsertInTransaction(companyId, input, tx);
       await tx.commit();
       return saved;
     } catch (error) {
@@ -173,12 +191,14 @@ export const absenceBalanceRepository = {
   },
 
   async lockAndGetApprovalBalanceSnapshot(
+    companyId: string,
     employeeId: string,
     absenceTypeId: string,
     year: number,
     transaction: sql.Transaction,
   ): Promise<{ assignedDays: number; approvedDays: number }> {
     await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("absenceTypeId", sql.UniqueIdentifier, absenceTypeId)
       .input("year", sql.Int, year)
@@ -188,10 +208,12 @@ export const absenceBalanceRepository = {
         WHERE employee_id = @employeeId
           AND absence_type_id = @absenceTypeId
           AND YEAR(start_date) = @year
+          AND company_id = @companyId
           AND status IN ('APPROVED', 'PENDING', 'NEEDS_INFO')
       `);
 
     const balanceResult = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("absenceTypeId", sql.UniqueIdentifier, absenceTypeId)
       .input("year", sql.Int, year)
@@ -201,9 +223,11 @@ export const absenceBalanceRepository = {
         WHERE employee_id = @employeeId
           AND absence_type_id = @absenceTypeId
           AND year = @year
+          AND company_id = @companyId
       `);
 
     const approvedResult = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("absenceTypeId", sql.UniqueIdentifier, absenceTypeId)
       .input("year", sql.Int, year)
@@ -213,6 +237,7 @@ export const absenceBalanceRepository = {
         WHERE employee_id = @employeeId
           AND absence_type_id = @absenceTypeId
           AND YEAR(start_date) = @year
+          AND company_id = @companyId
           AND status = 'APPROVED'
       `);
 
@@ -225,12 +250,14 @@ export const absenceBalanceRepository = {
   },
 
   async aggregateRequestDaysByEmployeeYear(
+    companyId: string,
     employeeId: string,
     year: number,
   ): Promise<RequestDayAggregate[]> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("year", sql.Int, year)
       .query(`
@@ -241,6 +268,7 @@ export const absenceBalanceRepository = {
         FROM absence_requests
         WHERE employee_id = @employeeId
           AND YEAR(start_date) = @year
+          AND company_id = @companyId
         GROUP BY absence_type_id, status
       `);
 

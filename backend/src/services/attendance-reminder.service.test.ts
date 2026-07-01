@@ -34,11 +34,14 @@ describe("attendanceReminderService", () => {
       }),
     );
 
-    const outcome = await attendanceReminderService.sendTestReminder({
-      inventoryId: "11111111-1111-1111-1111-111111111111",
-      employeeId: "22222222-2222-2222-2222-222222222222",
-      notificationType: "ARRIVAL_REMINDER_15_MIN",
-    });
+    const outcome = await attendanceReminderService.sendTestReminder(
+      "11111111-1111-1111-1111-111111111111",
+      {
+        inventoryId: "11111111-1111-1111-1111-111111111111",
+        employeeId: "22222222-2222-2222-2222-222222222222",
+        notificationType: "ARRIVAL_REMINDER_15_MIN",
+      },
+    );
 
     assert.equal(outcome, "skipped");
     assert.equal(claimMock.mock.callCount(), 1);

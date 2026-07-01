@@ -37,28 +37,33 @@ export const isValidInventorySelection = (
   selection !== null && selection > 0 && selection <= optionsLength;
 
 export const findCompatibleInventoryById = async (
+  companyId: string,
   employeeId: string,
   inventoryId: string,
   at: Date,
 ): Promise<CompatibleInventory | null> => {
-  const inventories = await inventoryRepository.findCompatibleForEmployee(employeeId, at);
+  const inventories = await inventoryRepository.findCompatibleForEmployee(companyId, employeeId, at);
   return inventories.find((inventory) => inventory.id === inventoryId) ?? null;
 };
 
 export const findCheckoutEligibleInventoryById = async (
+  companyId: string,
   employeeId: string,
   inventoryId: string,
 ): Promise<CheckoutEligibleInventory | null> => {
-  const inventories = await attendanceRepository.findCheckoutEligibleInventories(employeeId);
+  const inventories = await attendanceRepository.findCheckoutEligibleInventories(companyId, employeeId);
   return inventories.find((inventory) => inventory.id === inventoryId) ?? null;
 };
 
 export const listCompatibleInventories = async (
+  companyId: string,
   employeeId: string,
   at: Date,
-): Promise<CompatibleInventory[]> => inventoryRepository.findCompatibleForEmployee(employeeId, at);
+): Promise<CompatibleInventory[]> =>
+  inventoryRepository.findCompatibleForEmployee(companyId, employeeId, at);
 
 export const listCheckoutEligibleInventories = async (
+  companyId: string,
   employeeId: string,
 ): Promise<CheckoutEligibleInventory[]> =>
-  attendanceRepository.findCheckoutEligibleInventories(employeeId);
+  attendanceRepository.findCheckoutEligibleInventories(companyId, employeeId);

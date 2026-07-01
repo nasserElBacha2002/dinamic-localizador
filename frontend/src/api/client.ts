@@ -1,4 +1,9 @@
 import axios from "axios";
+import {
+  getActiveCompanyId,
+  isLegacyOperationalApiPath,
+  notifyCompanySelectionRequired,
+} from "./company-path";
 import { getStoredToken } from "./token-storage";
 import { parseApiError } from "../utils/errors";
 
@@ -25,14 +30,42 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  if (import.meta.env.DEV) {
+    const requestUrl = config.url ?? "";
+    if (isLegacyOperationalApiPath(requestUrl)) {
+      console.warn(
+        `Legacy operational API route detected. Use scopedApiClient instead: ${requestUrl}`,
+      );
+    }
+  }
+
   return config;
 });
 
 apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      unauthorizedHandler?.();
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 401) {
+        unauthorizedHandler?.();
+      }
+
+      const code = error.response?.data?.error?.code;
+      const requestUrl = error.config?.url;
+
+      if (error.response?.status === 409 && code === "COMPANY_SELECTION_REQUIRED") {
+        const hasActiveCompany = Boolean(getActiveCompanyId());
+        const isLegacyRoute = isLegacyOperationalApiPath(requestUrl);
+
+        if (import.meta.env.DEV && hasActiveCompany && isLegacyRoute) {
+          console.warn(
+            "Ignored COMPANY_SELECTION_REQUIRED for stale legacy request while company is selected:",
+            requestUrl,
+          );
+        } else if (!hasActiveCompany || isLegacyRoute) {
+          notifyCompanySelectionRequired();
+        }
+      }
     }
 
     return Promise.reject(parseApiError(error));

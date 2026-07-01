@@ -13,6 +13,7 @@ import {
   TableRow,
 } from "@mui/material";
 import { useState } from "react";
+import { terminology } from "../../domain/terminology";
 import { useSearchParams } from "react-router-dom";
 import { ClickableTableRow } from "../../components/common/ClickableTableRow";
 import { DateRangeFilter } from "../../components/common/DateRangeFilter";
@@ -123,7 +124,7 @@ export function AbsencesListPage() {
               pagination.resetPage();
               setEmployeeId(value ?? "");
             }}
-            label="Empleado"
+            label={terminology.worker.singular}
           />
         </FilterItem>
         <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
@@ -153,7 +154,7 @@ export function AbsencesListPage() {
             <Table size="small">
               <TableHead>
                 <TableRow>
-                  <TableCell>Empleado</TableCell>
+                  <TableCell>{terminology.worker.singular}</TableCell>
                   <TableCell>Tipo</TableCell>
                   <TableCell>Inicio</TableCell>
                   <TableCell>Fin</TableCell>
@@ -161,7 +162,7 @@ export function AbsencesListPage() {
                   <TableCell>Estado</TableCell>
                   <TableCell>Origen</TableCell>
                   <TableCell>Creada</TableCell>
-                  <TableCell>Inventarios afectados</TableCell>
+                  <TableCell>{terminology.operation.plural} afectadas</TableCell>
                 </TableRow>
               </TableHead>
               <TableBody>

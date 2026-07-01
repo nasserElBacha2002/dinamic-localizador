@@ -12,17 +12,23 @@ import type {
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 
 const ASSIGNMENT_BASE_FROM = `
-  FROM inventory_employees ie
-  INNER JOIN inventories i ON i.id = ie.inventory_id
-  INNER JOIN stores s ON s.id = i.store_id
-  INNER JOIN employees e ON e.id = ie.employee_id
+  FROM operation_assignments ie
+  INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = ie.company_id
+  INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
+  INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = ie.company_id
   LEFT JOIN attendance_records ar
     ON ar.inventory_id = ie.inventory_id
    AND ar.employee_id = ie.employee_id
+   AND ar.company_id = ie.company_id
 `;
 
-const buildStatisticsFilters = (filters: StatisticsFilters): SqlFilter[] => {
-  const sqlFilters: SqlFilter[] = [];
+const buildStatisticsFilters = (companyId: string, filters: StatisticsFilters): SqlFilter[] => {
+  const sqlFilters: SqlFilter[] = [
+    {
+      clause: "i.company_id = @companyId",
+      apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+    },
+  ];
 
   if (filters.dateFrom) {
     sqlFilters.push({
@@ -173,9 +179,12 @@ const resolveSort = (
 };
 
 export const statisticsRepository = {
-  async getSummary(filters: StatisticsFilters): Promise<AttendanceStatisticsSummary> {
+  async getSummary(
+    companyId: string,
+    filters: StatisticsFilters,
+  ): Promise<AttendanceStatisticsSummary> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(filters);
+    const sqlFilters = buildStatisticsFilters(companyId, filters);
     const request = pool.request();
     applySqlFilters(request, sqlFilters);
 
@@ -214,9 +223,12 @@ export const statisticsRepository = {
     };
   },
 
-  async getTimeline(filters: StatisticsFilters): Promise<AttendanceTimelinePoint[]> {
+  async getTimeline(
+    companyId: string,
+    filters: StatisticsFilters,
+  ): Promise<AttendanceTimelinePoint[]> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(filters);
+    const sqlFilters = buildStatisticsFilters(companyId, filters);
     const request = pool.request();
     applySqlFilters(request, sqlFilters);
 
@@ -251,8 +263,11 @@ export const statisticsRepository = {
     });
   },
 
-  async getStatusDistribution(filters: StatisticsFilters): Promise<AttendanceStatusDistributionItem[]> {
-    const summary = await this.getSummary(filters);
+  async getStatusDistribution(
+    companyId: string,
+    filters: StatisticsFilters,
+  ): Promise<AttendanceStatusDistributionItem[]> {
+    const summary = await this.getSummary(companyId, filters);
 
     const items: Array<{ status: string; count: number }> = [
       { status: "present", count: summary.presentCount },
@@ -274,6 +289,7 @@ export const statisticsRepository = {
   },
 
   async getByEmployee(
+    companyId: string,
     filters: StatisticsFilters,
     page: number,
     limit: number,
@@ -281,7 +297,7 @@ export const statisticsRepository = {
     sortDirection: "asc" | "desc" = "desc",
   ): Promise<{ data: AttendanceByEmployeeRow[]; total: number }> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(filters);
+    const sqlFilters = buildStatisticsFilters(companyId, filters);
     const whereClause = buildWhereClause(sqlFilters);
     const orderBy = resolveSort(sortBy, EMPLOYEE_SORT_FIELDS, "e.name", sortDirection);
     const offset = (page - 1) * limit;
@@ -350,6 +366,7 @@ export const statisticsRepository = {
   },
 
   async getByInventory(
+    companyId: string,
     filters: StatisticsFilters,
     page: number,
     limit: number,
@@ -357,7 +374,7 @@ export const statisticsRepository = {
     sortDirection: "asc" | "desc" = "desc",
   ): Promise<{ data: AttendanceByInventoryRow[]; total: number }> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(filters);
+    const sqlFilters = buildStatisticsFilters(companyId, filters);
     const whereClause = buildWhereClause(sqlFilters);
     const orderBy = resolveSort(sortBy, INVENTORY_SORT_FIELDS, "i.scheduled_start", sortDirection);
     const offset = (page - 1) * limit;
@@ -428,6 +445,7 @@ export const statisticsRepository = {
   },
 
   async getByLocation(
+    companyId: string,
     filters: StatisticsFilters,
     page: number,
     limit: number,
@@ -435,7 +453,7 @@ export const statisticsRepository = {
     sortDirection: "asc" | "desc" = "desc",
   ): Promise<{ data: AttendanceByLocationRow[]; total: number }> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(filters);
+    const sqlFilters = buildStatisticsFilters(companyId, filters);
     const whereClause = buildWhereClause(sqlFilters);
     const orderBy = resolveSort(sortBy, LOCATION_SORT_FIELDS, "s.name", sortDirection);
     const offset = (page - 1) * limit;

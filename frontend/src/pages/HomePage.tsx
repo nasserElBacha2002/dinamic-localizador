@@ -4,42 +4,46 @@ import { StatusCard } from "../components/StatusCard";
 import { ErrorState } from "../components/common/ErrorState";
 import { LoadingState } from "../components/common/LoadingState";
 import { PageHeader } from "../components/common/PageHeader";
-import { getEmployees } from "../api/employees.api";
-import { getInventories } from "../api/inventories.api";
+import { useCompanyModules } from "../hooks/useCompanyModules";
+import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
+import { useInventories } from "../hooks/useInventories";
 import { AdminLayout } from "../layouts/AdminLayout";
 import type { InventoryWithStore } from "../types/inventory";
+import { terminology } from "../domain/terminology";
+import { getHomeQuickLinks } from "../utils/company-modules";
+import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
-import { useQuery } from "@tanstack/react-query";
-
-const quickLinks = [
-  { title: "Empleados", description: "Gestionar personal", to: "/employees" },
-  { title: "Tiendas", description: "Configurar puntos de inventario", to: "/stores" },
-  { title: "Inventarios", description: "Planificar jornadas", to: "/inventories" },
-  { title: "Asistencias", description: "Revisar registros", to: "/attendance" },
-];
 
 export function HomePage() {
   const apiHealth = useApiHealth();
   const databaseHealth = useDatabaseHealth();
+  const permissionsQuery = useCompanyPermissions();
+  const modulesQuery = useCompanyModules();
+  const healthReady = databaseHealth.data?.database === "connected";
 
-  const activeEmployeesQuery = useQuery({
-    queryKey: ["employees", { active: true, page: 1, limit: 1 }],
-    queryFn: () => getEmployees({ active: true, page: 1, limit: 1 }),
-    enabled: databaseHealth.data?.database === "connected",
-  });
+  const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
+    "inventories:read",
+    "inventories:manage",
+  ]);
 
-  const upcomingInventoriesQuery = useQuery({
-    queryKey: ["inventories", { status: "SCHEDULED", page: 1, limit: 5 }],
-    queryFn: () => getInventories({ status: "SCHEDULED", page: 1, limit: 5 }),
-    enabled: databaseHealth.data?.database === "connected",
+  const upcomingInventoriesQuery = useInventories(
+    { status: "SCHEDULED", page: 1, limit: 5 },
+    healthReady && canReadInventories,
+  );
+
+  const quickLinks = getHomeQuickLinks({
+    modules: modulesQuery.data,
+    permissions: permissionsQuery.data?.permissions,
+    isPlatformAdmin: Boolean(permissionsQuery.data?.isPlatformAdmin),
+    modulesLoading: permissionsQuery.isPending || modulesQuery.isPending,
   });
 
   return (
     <AdminLayout>
       <PageHeader
         title="Dinamic Attendance"
-        description="Panel administrativo para planificar inventarios, asignar empleados y revisar asistencias."
+        description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
       />
 
       <Grid container spacing={3} sx={{ mb: 4 }}>
@@ -73,75 +77,74 @@ export function HomePage() {
             }
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Empleados activos"
-            status={activeEmployeesQuery.isLoading ? "loading" : activeEmployeesQuery.isError ? "error" : "ok"}
-            details={
-              activeEmployeesQuery.data
-                ? `${activeEmployeesQuery.data.meta.total} empleados activos`
-                : "No disponible"
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Próximos inventarios"
-            status={
-              upcomingInventoriesQuery.isLoading
-                ? "loading"
-                : upcomingInventoriesQuery.isError
-                  ? "error"
-                  : "ok"
-            }
-            details={
-              upcomingInventoriesQuery.data
-                ? `${upcomingInventoriesQuery.data.meta.total} inventarios programados`
-                : "No disponible"
-            }
-          />
-        </Grid>
-      </Grid>
-
-      <Typography variant="h5" gutterBottom>
-        Accesos rápidos
-      </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        {quickLinks.map((link) => (
-          <Grid key={link.to} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card variant="outlined" sx={{ height: "100%" }}>
-              <CardContent>
-                <Typography variant="h6">{link.title}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {link.description}
-                </Typography>
-              </CardContent>
-              <CardActions>
-                <Button component={RouterLink} to={link.to} size="small">
-                  Ir
-                </Button>
-              </CardActions>
-            </Card>
+        {canReadInventories ? (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <StatusCard
+              title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
+              status={
+                upcomingInventoriesQuery.isLoading
+                  ? "loading"
+                  : upcomingInventoriesQuery.isError
+                    ? "error"
+                    : "ok"
+              }
+              details={
+                upcomingInventoriesQuery.data
+                  ? `${upcomingInventoriesQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
+                  : "No disponible"
+              }
+            />
           </Grid>
-        ))}
+        ) : null}
       </Grid>
 
-      <Typography variant="h5" gutterBottom>
-        Próximos inventarios
-      </Typography>
-      {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
-      {upcomingInventoriesQuery.isError ? (
-        <ErrorState message="No se pudieron cargar los inventarios programados." />
+      {quickLinks.length > 0 ? (
+        <>
+          <Typography variant="h5" gutterBottom>
+            Accesos rápidos
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {quickLinks.map((link) => (
+              <Grid key={link.path} size={{ xs: 12, sm: 6, md: 3 }}>
+                <Card variant="outlined" sx={{ height: "100%" }}>
+                  <CardContent>
+                    <Typography variant="h6">{link.label}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Ir a {link.label.toLowerCase()}
+                    </Typography>
+                  </CardContent>
+                  <CardActions>
+                    <Button component={RouterLink} to={link.path} size="small">
+                      Ir
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </>
       ) : null}
-      {upcomingInventoriesQuery.data?.data.length === 0 ? (
-        <Typography color="text.secondary">No hay inventarios programados.</Typography>
-      ) : null}
-      {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
-        <Stack spacing={1}>
-          {upcomingInventoriesQuery.data.data.map((inventory) => (
-            <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
-          ))}
-        </Stack>
+
+      {canReadInventories ? (
+        <>
+          <Typography variant="h5" gutterBottom>
+            Próximas {terminology.operation.plural.toLowerCase()}
+          </Typography>
+          {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
+          {upcomingInventoriesQuery.isError ? (
+            <ErrorState message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`} />
+          ) : null}
+          {upcomingInventoriesQuery.data?.data.length === 0 ? (
+            <Typography color="text.secondary">No hay {terminology.operation.plural.toLowerCase()} programadas.</Typography>
+          ) : null}
+          {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
+            <Stack spacing={1}>
+              {upcomingInventoriesQuery.data.data.map((inventory) => (
+                <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
+              ))}
+            </Stack>
+          ) : null}
+        </>
       ) : null}
     </AdminLayout>
   );
@@ -155,7 +158,7 @@ function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore })
       variant="outlined"
       role="link"
       tabIndex={0}
-      aria-label={`Ver inventario de ${inventory.store.name}`}
+      aria-label={`Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`}
       onClick={() => navigate(`/inventories/${inventory.id}`)}
       onKeyDown={(event) => {
         if (event.key === "Enter" || event.key === " ") {

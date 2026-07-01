@@ -15,22 +15,25 @@ import {
 import { useState, type PropsWithChildren } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useCompanyModules } from "../hooks/useCompanyModules";
+import { useCompanyPermissions } from "../hooks/useCompanyUsers";
+import { CompanySelector } from "../components/company/CompanySelector";
+import { getAdminNavItems } from "../utils/company-modules";
 
 const drawerWidth = 240;
 
-const navItems = [
-  { label: "Inicio", path: "/" },
-  { label: "Empleados", path: "/employees" },
-  { label: "Tiendas", path: "/stores" },
-  { label: "Inventarios", path: "/inventories" },
-  { label: "Asistencias", path: "/attendance" },
-  { label: "Ausencias", path: "/absences" },
-  { label: "Estadísticas", path: "/statistics" },
-  { label: "Simulador de Bot", path: "/bot-simulator" },
-];
-
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const permissionsQuery = useCompanyPermissions();
+  const modulesQuery = useCompanyModules();
+
+  const navItems = getAdminNavItems({
+    modules: modulesQuery.data,
+    permissions: permissionsQuery.data?.permissions,
+    isPlatformAdmin: Boolean(user?.isPlatformAdmin),
+    modulesLoading: permissionsQuery.isPending || modulesQuery.isPending,
+  });
 
   return (
     <List component="nav" aria-label="Navegación principal">
@@ -88,6 +91,7 @@ export function AdminLayout({ children }: PropsWithChildren) {
           </Typography>
           {user ? (
             <Stack direction="row" spacing={1} alignItems="center">
+              <CompanySelector compact />
               <Typography variant="body2" sx={{ display: { xs: "none", sm: "block" } }}>
                 {user.name}
               </Typography>

@@ -24,6 +24,7 @@ import {
 import { usePaginationState } from "../../hooks/usePaginationState";
 import type { InventoryAttendanceSummaryEmployee } from "../../types/inventory-attendance-summary";
 import { formatDateTime } from "../../utils/dates";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   locationStatusLabels,
@@ -83,7 +84,7 @@ export function InventoryOperationalSection({
       await assignMutation.mutateAsync(selectedEmployeeId);
       setSelectedEmployeeId("");
       pagination.resetPage();
-      onFeedback("Empleado asignado correctamente.", "success");
+      onFeedback(`${terminology.worker.singular} asignado correctamente.`, "success");
     } catch (error) {
       onFeedback(getApiErrorMessage(error), "error");
     }
@@ -92,7 +93,7 @@ export function InventoryOperationalSection({
   const handleUnassign = async (employeeId: string) => {
     try {
       await unassignMutation.mutateAsync(employeeId);
-      onFeedback("Empleado desasignado correctamente.", "success");
+      onFeedback(`${terminology.worker.singular} desasignado correctamente.`, "success");
     } catch (error) {
       onFeedback(getApiErrorMessage(error), "error");
     }
@@ -143,7 +144,7 @@ export function InventoryOperationalSection({
         {canAssign ? (
           <Stack direction={{ xs: "column", sm: "row" }} spacing={2} sx={{ mb: 2 }}>
             <EmployeeSearchAutocomplete
-              label="Empleado activo"
+              label={`${terminology.worker.singular} activo`}
               value={selectedEmployeeId || null}
               onChange={(id) => setSelectedEmployeeId(id ?? "")}
               excludeIds={assignedEmployeeIds}
@@ -161,7 +162,8 @@ export function InventoryOperationalSection({
           </Stack>
         ) : (
           <Alert severity="info" sx={{ mb: 2 }}>
-            No se pueden asignar empleados a inventarios completados o cancelados.
+            No se pueden asignar {terminology.worker.plural.toLowerCase()} a{" "}
+            {terminology.operation.plural.toLowerCase()} completadas o canceladas.
           </Alert>
         )}
 
@@ -170,8 +172,8 @@ export function InventoryOperationalSection({
           isError={summaryQuery.isError}
           errorMessage={getApiErrorMessage(summaryQuery.error, "No se pudo cargar la vista operativa.")}
           isEmpty={!summaryQuery.isLoading && rows.length === 0}
-          emptyTitle="No hay empleados asignados"
-          emptyDescription="Asigná empleados activos para comenzar el seguimiento operativo."
+          emptyTitle={`No hay ${terminology.worker.plural.toLowerCase()} asignados`}
+          emptyDescription={`Asigná ${terminology.worker.plural.toLowerCase()} activos para comenzar el seguimiento operativo.`}
           meta={meta}
           pageSize={pagination.pageSize}
           onPageChange={pagination.onPageChange}
@@ -180,7 +182,7 @@ export function InventoryOperationalSection({
           head={
             <TableHead>
               <TableRow>
-                <TableCell>Empleado</TableCell>
+                <TableCell>{terminology.worker.singular}</TableCell>
                 <TableCell>Teléfono</TableCell>
                 <TableCell>Hora esperada</TableCell>
                 <TableCell>Check-in</TableCell>

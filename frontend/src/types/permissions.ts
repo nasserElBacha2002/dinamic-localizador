@@ -1,0 +1,18 @@
+export type CompanyPermission =
+  | "company:read"
+  | "company:settings:update"
+  | "users:manage"
+  | "employees:read"
+  | "employees:manage"
+  | "stores:read"
+  | "stores:manage"
+  | "inventories:read"
+  | "inventories:manage"
+  | "attendance:read"
+  | "attendance:review"
+  | "attendance:export"
+  | "absences:read"
+  | "absences:review"
+  | "reports:read"
+  | "reports:export"
+  | "bot_simulator:use";

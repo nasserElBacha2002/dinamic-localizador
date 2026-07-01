@@ -60,6 +60,8 @@ Hooks use `useOperationalQueryEnabled`:
 | `reports:read` | All read roles |
 | `company:read` / `company:settings:update` | READ_ONLY read; OWNER/ADMIN update |
 
+WhatsApp bot runtime loads `company_settings` after `companyId` is resolved (Phase 1.8). Multi-company WhatsApp routing remains deferred (Phase 1.7). See [BOT_RUNTIME_SETTINGS.md](./BOT_RUNTIME_SETTINGS.md).
+
 Global `users.role = ADMIN` is **not** used for operational authorization. Use `requirePermission` after `resolveCompanyContext`. **Modules and permissions both apply** — see [PERMISSIONS.md](./PERMISSIONS.md).
 
 ## Legacy route deprecation

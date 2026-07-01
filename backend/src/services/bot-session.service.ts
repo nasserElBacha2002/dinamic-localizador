@@ -1,5 +1,4 @@
 import sql from "mssql";
-import { env } from "../config/env";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { botSessionRepository } from "../repositories/bot-session.repository";
@@ -9,13 +8,14 @@ import {
   isSessionActive,
   isSessionExpiredByTime,
 } from "../utils/bot-session-expiration";
+import { getSessionTtlMinutes } from "../utils/bot-runtime-settings-scope";
 
 export type SessionSelectionResult =
   | { kind: "ok"; session: BotSession }
   | { kind: "expired" }
   | { kind: "invalid" };
 
-const buildExpiresAt = (): Date => buildSessionExpiresAt(env.BOT_SESSION_TTL_MINUTES);
+const buildExpiresAt = (): Date => buildSessionExpiresAt(getSessionTtlMinutes());
 
 const parseContext = (contextJson: string | null): BotSessionContext => {
   if (!contextJson) {

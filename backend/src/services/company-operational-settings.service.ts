@@ -13,6 +13,8 @@ export type CompanyOperationalSettings = Pick<
   | "allowManualAttendanceCorrections"
 >;
 
+export type CompanyOperationalSettingsSource = "company_settings" | "operational_defaults";
+
 const toOperationalSettings = (settings: CompanySettings): CompanyOperationalSettings => ({
   companyId: settings.companyId,
   operationTimezone: settings.operationTimezone,
@@ -25,14 +27,28 @@ const toOperationalSettings = (settings: CompanySettings): CompanyOperationalSet
 
 export const companyOperationalSettingsService = {
   async getCompanyOperationalSettings(companyId: string): Promise<CompanyOperationalSettings> {
+    const resolved = await this.getCompanyOperationalSettingsWithSource(companyId);
+    return resolved.settings;
+  },
+
+  async getCompanyOperationalSettingsWithSource(companyId: string): Promise<{
+    settings: CompanyOperationalSettings;
+    source: CompanyOperationalSettingsSource;
+  }> {
     const settings = await companySettingsRepository.findByCompanyId(companyId);
     if (settings) {
-      return toOperationalSettings(settings);
+      return {
+        settings: toOperationalSettings(settings),
+        source: "company_settings",
+      };
     }
 
     return {
-      companyId,
-      ...DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
+      settings: {
+        companyId,
+        ...DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
+      },
+      source: "operational_defaults",
     };
   },
 };

@@ -22,6 +22,7 @@ import { normalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { whatsappBotService } from "./whatsapp-bot.service";
 import { botSessionService } from "./bot-session.service";
+import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import { geolocationService } from "./geolocation.service";
 import { evaluateGeofence } from "../utils/attendance-validation";
 
@@ -452,6 +453,7 @@ export const botSimulatorService = {
     allowedRadiusMeters: number | null;
     reviewMarginMeters: number;
   }> {
+    const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
     const session = await botSimulationSessionRepository.findById(companyId, sessionId);
     if (!session?.storeId) {
       return {
@@ -459,7 +461,7 @@ export const botSimulatorService = {
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
-        reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+        reviewMarginMeters: runtimeSettings.geofenceReviewMarginMeters,
       };
     }
 
@@ -470,12 +472,12 @@ export const botSimulatorService = {
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
-        reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+        reviewMarginMeters: runtimeSettings.geofenceReviewMarginMeters,
       };
     }
 
-    const radius = store.allowedRadiusMeters;
-    const margin = env.BOT_GEOFENCE_REVIEW_MARGIN_METERS;
+    const radius = store.allowedRadiusMeters > 0 ? store.allowedRadiusMeters : runtimeSettings.defaultRadiusMeters;
+    const margin = runtimeSettings.geofenceReviewMarginMeters;
     const outsideOffset = (radius + margin + 50) / 111_320;
     const nearOffset = (radius + Math.max(1, margin - 5)) / 111_320;
 

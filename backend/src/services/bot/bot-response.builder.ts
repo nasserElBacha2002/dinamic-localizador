@@ -1,8 +1,8 @@
-import { env } from "../../config/env";
 import type { CheckoutStatus } from "../../constants/checkout-status";
 import type { PunctualityStatus } from "../../types/domain";
 import type { CheckoutEligibleInventory, CompatibleInventory } from "../../types/twilio.types";
 import { formatLocalTime } from "../../utils/attendance-validation";
+import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
 import { checkoutStatusLabel } from "../../utils/checkout-validation";
 
 export const GLOBAL_CANCEL_MESSAGE =
@@ -72,13 +72,13 @@ export const buildSessionExpiredMessage = (message: string): string => message;
 export const buildNoInventoryMessage = (): string => NO_INVENTORY_MESSAGE;
 
 export const buildLocationRequestMessage = (inventory: CompatibleInventory): string => {
-  const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
+  const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
   return `Encontramos tu inventario en ${inventory.storeName}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
 };
 
 export const buildInventorySelectionPrompt = (inventories: CompatibleInventory[]): string => {
   const lines = inventories.map((inventory, index) => {
-    const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
+    const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
     return `${index + 1}. ${inventory.storeName} — ${localTime}`;
   });
 
@@ -88,7 +88,7 @@ export const buildInventorySelectionPrompt = (inventories: CompatibleInventory[]
 export const buildCheckoutLocationRequestMessage = (
   inventory: CheckoutEligibleInventory,
 ): string => {
-  const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
+  const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
   return `Perfecto. Para registrar tu salida del inventario en ${inventory.storeName} (${localTime}), compartime tu ubicación actual.`;
 };
 
@@ -96,7 +96,7 @@ export const buildCheckoutInventorySelectionPrompt = (
   inventories: CheckoutEligibleInventory[],
 ): string => {
   const lines = inventories.map((inventory, index) => {
-    const localTime = formatLocalTime(inventory.scheduledStart, env.BOT_OPERATION_TIMEZONE);
+    const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
     return `${index + 1}. ${inventory.storeName} — ${localTime}`;
   });
 
@@ -111,7 +111,7 @@ export const buildArrivalRegisteredMessage = (input: {
   validationReason: string;
   receivedAt: Date;
 }): string => {
-  const localTime = formatLocalTime(input.receivedAt.toISOString(), env.BOT_OPERATION_TIMEZONE);
+  const localTime = formatLocalTime(input.receivedAt.toISOString(), getBotOperationTimezone());
   const roundedDistance = Math.round(input.distanceMeters);
 
   if (input.validationStatus === "REJECTED") {
@@ -138,13 +138,17 @@ export const buildCheckoutRegisteredMessage = (input: {
   eligible: CheckoutEligibleInventory;
   checkInAt: string;
   checkoutAt: Date;
-  distanceMeters: number;
+  distanceMeters: number | null;
   checkoutStatus: CheckoutStatus;
   extraWorkedMinutes: number;
+  locationProvided?: boolean;
 }): string => {
-  const arrivalTime = formatLocalTime(input.checkInAt, env.BOT_OPERATION_TIMEZONE);
-  const departureTime = formatLocalTime(input.checkoutAt.toISOString(), env.BOT_OPERATION_TIMEZONE);
-  const roundedDistance = Math.round(input.distanceMeters);
+  const arrivalTime = formatLocalTime(input.checkInAt, getBotOperationTimezone());
+  const departureTime = formatLocalTime(input.checkoutAt.toISOString(), getBotOperationTimezone());
+  const locationProvided = input.locationProvided ?? input.distanceMeters !== null;
+  const distanceLine = locationProvided
+    ? `Distancia: ${Math.round(input.distanceMeters ?? 0)} m`
+    : "Ubicación: no requerida";
   const statusLabel = checkoutStatusLabel(input.checkoutStatus);
 
   if (input.checkoutStatus === "CHECKOUT_REJECTED") {
@@ -159,10 +163,10 @@ export const buildCheckoutRegisteredMessage = (input: {
       input.checkoutStatus === "CHECKOUT_LOCATION_REVIEW"
         ? "estás fuera del radio permitido"
         : "saliste antes del horario previsto";
-    return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\nDistancia: ${roundedDistance} m\nEstado: ${statusLabel}`;
+    return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
   }
 
-  let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\nDistancia: ${roundedDistance} m\nEstado: ${statusLabel}`;
+  let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
 
   if (input.checkoutStatus === "CHECKOUT_LATE_EXTRA_TIME" && input.extraWorkedMinutes > 0) {
     message += `\nTiempo extra: ${input.extraWorkedMinutes} min`;

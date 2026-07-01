@@ -81,14 +81,16 @@ DB enforces one row per company via `UQ_company_settings_company` (migration 015
 |------|--------------------------------|
 | Web admin settings UI | Yes |
 | `getCompanyOperationalSettings(companyId)` helper | Yes, with application defaults when row is missing |
-| WhatsApp bot geofence radius | Deferred — current runtime still uses existing env/config path |
-| WhatsApp on-time grace | Deferred — current runtime still uses `BOT_ON_TIME_GRACE_MINUTES` |
-| WhatsApp operation timezone | Deferred — current runtime still uses `BOT_OPERATION_TIMEZONE` |
-| Checkout tolerance | Deferred — not fully migrated to per-company settings |
+| `getBotRuntimeSettings(companyId)` for WhatsApp bot | Yes — see [BOT_RUNTIME_SETTINGS.md](./BOT_RUNTIME_SETTINGS.md) |
+| WhatsApp check-in geofence / late grace / timezone | Yes (via bot runtime settings) |
+| WhatsApp checkout without location | Yes — nullable checkout fields (migration 007), message shows "Ubicación: no requerida" |
+| Session TTL / geofence review margin | Env only (`BOT_SESSION_TTL_MINUTES`, `BOT_GEOFENCE_REVIEW_MARGIN_METERS`) |
 
 ## Deferred
 
-- Full migration of WhatsApp/bot flows from env defaults to per-company `company_settings`
+- Phase 1.7: WhatsApp multi-company resolution (company pick on inbound message)
+- `geofenceReviewMarginMeters` and `sessionTtlMinutes` in `company_settings`
+- Removing env fallbacks
 - Module enforcement based on `company_modules` — see [COMPANY_MODULES.md](./COMPANY_MODULES.md) (settings page includes module toggles)
 - WhatsApp employee portal
 - Employee self-service accounts

@@ -475,9 +475,9 @@ export const attendanceRepository = {
     transaction: sql.Transaction,
     input: {
       attendanceId: string;
-      checkoutLatitude: number;
-      checkoutLongitude: number;
-      checkoutDistanceMeters: number;
+      checkoutLatitude: number | null;
+      checkoutLongitude: number | null;
+      checkoutDistanceMeters: number | null;
       checkoutStatus: CheckoutStatus;
       checkoutReviewReason: string | null;
       earlyDepartureMinutes: number;

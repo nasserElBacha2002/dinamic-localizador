@@ -1,6 +1,6 @@
-import { env } from "../../config/env";
 import type { GeofenceEvaluation } from "../../utils/attendance-validation";
 import { evaluateGeofence as evaluateGeofenceStatus } from "../../utils/attendance-validation";
+import { getDefaultRadiusMeters } from "../../utils/bot-runtime-settings-scope";
 import { calculateDistanceMeters } from "../../utils/haversine";
 
 export type GeofenceDecision =
@@ -44,6 +44,7 @@ export const evaluateAttendanceGeofence = (input: {
   storeLongitude: number;
   allowedRadiusMeters: number;
   reviewMarginMeters: number;
+  defaultRadiusMeters?: number;
 }): GeofenceEvaluation & { distanceMeters: number } => {
   const distanceMeters = calculateDistanceMeters(
     input.employeeLatitude,
@@ -52,9 +53,9 @@ export const evaluateAttendanceGeofence = (input: {
     input.storeLongitude,
   );
 
-  // Mirrors geolocationService.evaluateDistance: zero/invalid store radius falls back to env default.
+  const fallbackRadius = input.defaultRadiusMeters ?? getDefaultRadiusMeters();
   const allowedRadiusMeters =
-    input.allowedRadiusMeters > 0 ? input.allowedRadiusMeters : env.BOT_DEFAULT_RADIUS_METERS;
+    input.allowedRadiusMeters > 0 ? input.allowedRadiusMeters : fallbackRadius;
 
   const evaluation = evaluateGeofenceStatus(
     distanceMeters,

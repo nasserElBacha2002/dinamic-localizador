@@ -108,7 +108,7 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
             onChange={(event) =>
               setFormValues((current) => ({ ...current, defaultRadiusMeters: event.target.value }))
             }
-            helperText="Se usa como radio base para validar ubicaciones de asistencia."
+            helperText="Se usa para validar la ubicación enviada por WhatsApp en Llegué y Terminé."
             inputProps={{ min: 10, max: 5000, step: 1 }}
             fullWidth
             disabled={isReadOnly || updateMutation.isPending}
@@ -127,6 +127,7 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
               onChange={(event) =>
                 setFormValues((current) => ({ ...current, lateGraceMinutes: event.target.value }))
               }
+              helperText="Define cuántos minutos después del inicio se considera llegada a tiempo."
               inputProps={{ min: 0, max: 240, step: 1 }}
               fullWidth
               disabled={isReadOnly || updateMutation.isPending}
@@ -141,6 +142,7 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
                   earlyLeaveToleranceMinutes: event.target.value,
                 }))
               }
+              helperText="Define cuántos minutos antes del horario de finalización se permite terminar sin marcar salida anticipada."
               inputProps={{ min: 0, max: 240, step: 1 }}
               fullWidth
               disabled={isReadOnly || updateMutation.isPending}

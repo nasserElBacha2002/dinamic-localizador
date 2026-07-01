@@ -14,24 +14,28 @@ import type { BotSession } from "../types/twilio.types";
 import type { AttendanceRecord } from "../types/domain";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import {
-  combineAttendanceValidation,
-  evaluatePunctuality,
   formatLocalTime,
   isWithinInventoryWindow,
 } from "../utils/attendance-validation";
-import {
-  combineCheckoutValidation,
-  evaluateCheckoutTime,
-} from "../utils/checkout-validation";
 import { isCheckoutSessionState, isAbsenceSessionState } from "../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../utils/haversine";
 import { isAbsenceCancelIntent } from "../utils/absence-intent";
 import { parseInventorySelection } from "../utils/intent";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
+import {
+  getBotOperationTimezone,
+  getBotRuntimeSettings,
+  getRequireCheckoutLocation,
+  runWithBotRuntimeSettings,
+} from "../utils/bot-runtime-settings-scope";
 import { absenceBotService } from "./absence-bot.service";
-import { evaluateAttendanceGeofence } from "./bot/bot-geofence.validator";
-import { parseBotIntent } from "./bot/bot-intent.parser";
+import {
+  buildCheckInValidation,
+  buildCheckoutValidation,
+  buildCheckoutValidationWithoutLocation,
+} from "./bot/bot-attendance-runtime";
+import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import {
   buildArrivalRegisteredMessage,
   buildCheckoutInventorySelectionPrompt,
@@ -70,6 +74,7 @@ import {
   mapCompatibleInventoriesToSessionOptions,
   parseInventorySelectionIndex,
 } from "./bot/bot-inventory.selector";
+import { parseBotIntent } from "./bot/bot-intent.parser";
 import {
   addVirtualCheckIn,
   appendSimulatorMessage,
@@ -164,6 +169,11 @@ export const whatsappBotService = {
   buildTwiml,
 
   async handleWebhook(companyId: string, payload: TwilioWebhookInput): Promise<string> {
+    const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
+    return runWithBotRuntimeSettings(runtimeSettings, async () => this.handleWebhookWithSettings(companyId, payload));
+  },
+
+  async handleWebhookWithSettings(companyId: string, payload: TwilioWebhookInput): Promise<string> {
     const phoneFrom = normalizeWhatsAppPhone(payload.From);
     const phoneTo = tryNormalizeWhatsAppPhone(payload.To) ?? payload.To;
     const simulationContext = getBotRuntimeContext();
@@ -359,6 +369,7 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
+        messageSid: input.payload.MessageSid,
       });
     }
 
@@ -419,6 +430,7 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
+        messageSid: input.payload.MessageSid,
       });
     }
 
@@ -484,6 +496,7 @@ export const whatsappBotService = {
     employeeId: string;
     phoneFrom: string;
     phoneTo: string;
+    messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
     const eligible = await listCheckoutEligibleInventories(companyId, input.employeeId);
@@ -497,8 +510,22 @@ export const whatsappBotService = {
       });
     }
 
+    const finalizeWithoutLocation = async (inventoryId: string) =>
+      this.processCheckoutWithoutLocation({
+        companyId,
+        employeeId: input.employeeId,
+        inventoryId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        messageSid: input.messageSid,
+      });
+
     if (eligible.length === 1) {
       const inventory = eligible[0];
+      if (!getRequireCheckoutLocation()) {
+        return finalizeWithoutLocation(inventory.id);
+      }
+
       await botSessionService.createWaitingCheckoutLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
@@ -507,6 +534,22 @@ export const whatsappBotService = {
 
       return respond(companyId, {
         message: buildCheckoutLocationRequestMessage(inventory),
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (!getRequireCheckoutLocation()) {
+      const options = mapCheckoutInventoriesToSessionOptions(eligible);
+      await botSessionService.createCheckoutInventorySelectionSession(companyId, {
+        employeeId: input.employeeId,
+        phoneNumber: input.phoneFrom,
+        options,
+      });
+
+      return respond(companyId, {
+        message: `${buildCheckoutInventorySelectionPrompt(eligible)}\n\nNo se requiere ubicación para registrar la salida.`,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -536,6 +579,7 @@ export const whatsappBotService = {
     employeeId: string;
     phoneFrom: string;
     phoneTo: string;
+    messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
     const selection = parseInventorySelectionIndex(input.body);
@@ -560,6 +604,18 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (!getRequireCheckoutLocation()) {
+      return this.processCheckoutWithoutLocation({
+        companyId,
+        employeeId: input.employeeId,
+        inventoryId: eligible.id,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        messageSid: input.messageSid,
+        sessionId: input.session.id,
       });
     }
 
@@ -911,34 +967,34 @@ export const whatsappBotService = {
       });
     }
 
-    const geo = evaluateAttendanceGeofence({
+    const runtimeSettings = getBotRuntimeSettings();
+    if (!runtimeSettings) {
+      throw new Error("Bot runtime settings are not loaded");
+    }
+
+    const { validation, distanceMeters: geoDistance, effectiveRadiusMeters } = buildCheckInValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
       storeLatitude: compatible.storeLatitude,
       storeLongitude: compatible.storeLongitude,
-      allowedRadiusMeters: compatible.allowedRadiusMeters,
-      reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+      storeAllowedRadiusMeters: compatible.allowedRadiusMeters,
+      receivedAt,
+      scheduledStart: new Date(compatible.scheduledStart),
+      earlyToleranceMinutes: compatible.earlyToleranceMinutes,
+      lateToleranceMinutes: compatible.lateToleranceMinutes,
+      runtimeSettings,
     });
 
-    const time = evaluatePunctuality(
-      receivedAt,
-      new Date(compatible.scheduledStart),
-      compatible.earlyToleranceMinutes,
-      compatible.lateToleranceMinutes,
-      env.BOT_ON_TIME_GRACE_MINUTES,
-    );
-
-    const validation = combineAttendanceValidation(geo, time);
-    setTechnicalDetail("distanceMeters", Math.round(geo.distanceMeters * 100) / 100);
-    setTechnicalDetail("allowedRadiusMeters", compatible.allowedRadiusMeters);
-    setTechnicalDetail("reviewMarginMeters", env.BOT_GEOFENCE_REVIEW_MARGIN_METERS);
+    setTechnicalDetail("distanceMeters", Math.round(geoDistance * 100) / 100);
+    setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
+    setTechnicalDetail("reviewMarginMeters", runtimeSettings.geofenceReviewMarginMeters);
     setTechnicalDetail("locationValidation", validation);
-    setTechnicalDetail("timeValidation", time);
+    setTechnicalDetail("runtimeSettingsSource", runtimeSettings.companyId);
 
     if (isSimulationDryRun()) {
       const responseMessage = buildArrivalRegisteredMessage({
         compatible,
-        distanceMeters: geo.distanceMeters,
+        distanceMeters: geoDistance,
         validationStatus: validation.validationStatus,
         punctualityStatus: validation.punctualityStatus,
         validationReason: validation.validationReason,
@@ -952,7 +1008,7 @@ export const whatsappBotService = {
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
         punctualityStatus: validation.punctualityStatus,
-        distanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+        distanceMeters: Math.round(geoDistance * 100) / 100,
       });
 
       recordSimulationArtifact({
@@ -964,7 +1020,7 @@ export const whatsappBotService = {
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
         punctualityStatus: validation.punctualityStatus,
-        distanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+        distanceMeters: Math.round(geoDistance * 100) / 100,
         receivedAt: receivedAt.toISOString(),
       });
 
@@ -1025,7 +1081,7 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         receivedLatitude: input.latitude,
         receivedLongitude: input.longitude,
-        distanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+        distanceMeters: Math.round(geoDistance * 100) / 100,
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
         punctualityStatus: validation.punctualityStatus,
@@ -1046,7 +1102,7 @@ export const whatsappBotService = {
           validationStatus: validation.validationStatus,
           locationStatus: validation.locationStatus,
           punctualityStatus: validation.punctualityStatus,
-          distanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+          distanceMeters: Math.round(geoDistance * 100) / 100,
           receivedAt: receivedAt.toISOString(),
         });
       }
@@ -1067,7 +1123,7 @@ export const whatsappBotService = {
 
       const responseMessage = buildArrivalRegisteredMessage({
         compatible,
-        distanceMeters: geo.distanceMeters,
+        distanceMeters: geoDistance,
         validationStatus: validation.validationStatus,
         punctualityStatus: validation.punctualityStatus,
         validationReason: validation.validationReason,
@@ -1192,7 +1248,7 @@ export const whatsappBotService = {
 
     if (attendance.checkoutAt) {
       await botSessionService.completeSession(companyId, input.session.id);
-      const checkoutTime = formatLocalTime(attendance.checkoutAt, env.BOT_OPERATION_TIMEZONE);
+      const checkoutTime = formatLocalTime(attendance.checkoutAt, getBotOperationTimezone());
       return respond(companyId, {
         message: `${DUPLICATE_CHECKOUT_MESSAGE}\nHora registrada: ${checkoutTime}.`,
         employeeId: input.employeeId,
@@ -1201,23 +1257,25 @@ export const whatsappBotService = {
       });
     }
 
-    const geo = evaluateAttendanceGeofence({
+    const runtimeSettings = getBotRuntimeSettings();
+    if (!runtimeSettings) {
+      throw new Error("Bot runtime settings are not loaded");
+    }
+
+    const { validation, distanceMeters: checkoutDistance, effectiveRadiusMeters } = buildCheckoutValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
       storeLatitude: eligible.storeLatitude,
       storeLongitude: eligible.storeLongitude,
-      allowedRadiusMeters: eligible.allowedRadiusMeters,
-      reviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
+      storeAllowedRadiusMeters: eligible.allowedRadiusMeters,
+      checkoutAt,
+      scheduledEnd: eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
+      runtimeSettings,
     });
 
-    const timeEvaluation = evaluateCheckoutTime(
-      checkoutAt,
-      eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
-      env.BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES,
-    );
-
-    const validation = combineCheckoutValidation(geo, timeEvaluation);
-    setTechnicalDetail("checkoutDistanceMeters", Math.round(geo.distanceMeters * 100) / 100);
+    setTechnicalDetail("checkoutDistanceMeters", Math.round(checkoutDistance * 100) / 100);
+    setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
+    setTechnicalDetail("reviewMarginMeters", runtimeSettings.geofenceReviewMarginMeters);
     setTechnicalDetail("checkoutValidation", validation);
 
     if (isSimulationDryRun()) {
@@ -1225,7 +1283,7 @@ export const whatsappBotService = {
         eligible,
         checkInAt: attendance.receivedAt,
         checkoutAt,
-        distanceMeters: geo.distanceMeters,
+        distanceMeters: checkoutDistance,
         checkoutStatus: validation.checkoutStatus,
         extraWorkedMinutes: validation.extraWorkedMinutes,
       });
@@ -1240,7 +1298,7 @@ export const whatsappBotService = {
         persisted: false,
         virtualAttendanceId: attendance.id,
         checkoutStatus: validation.checkoutStatus,
-        distanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+        distanceMeters: Math.round(checkoutDistance * 100) / 100,
         checkoutAt: checkoutAt.toISOString(),
       });
 
@@ -1279,7 +1337,7 @@ export const whatsappBotService = {
         attendanceId: attendance.id,
         checkoutLatitude: input.latitude,
         checkoutLongitude: input.longitude,
-        checkoutDistanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+        checkoutDistanceMeters: Math.round(checkoutDistance * 100) / 100,
         checkoutStatus: validation.checkoutStatus,
         checkoutReviewReason: validation.checkoutReviewReason,
         earlyDepartureMinutes: validation.earlyDepartureMinutes,
@@ -1305,7 +1363,7 @@ export const whatsappBotService = {
           persisted: true,
           attendanceId: updated.id,
           checkoutStatus: validation.checkoutStatus,
-          distanceMeters: Math.round(geo.distanceMeters * 100) / 100,
+          distanceMeters: Math.round(checkoutDistance * 100) / 100,
           checkoutAt: checkoutAt.toISOString(),
         });
       }
@@ -1349,6 +1407,206 @@ export const whatsappBotService = {
       }
 
       console.error("[whatsapp-bot] checkout transaction failed", error);
+      return respond(companyId, {
+        message: GENERIC_ERROR_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+  },
+
+  async processCheckoutWithoutLocation(input: {
+    companyId: string;
+    employeeId: string;
+    inventoryId: string;
+    phoneFrom: string;
+    phoneTo: string;
+    messageSid: string;
+    sessionId?: string;
+  }): Promise<string> {
+    const { companyId } = input;
+
+    const completeSessionIfNeeded = async (): Promise<void> => {
+      if (input.sessionId) {
+        await botSessionService.completeSession(companyId, input.sessionId);
+      }
+    };
+    const checkoutAt = getBotNow();
+    const eligible = await findCheckoutEligibleInventoryById(
+      companyId,
+      input.employeeId,
+      input.inventoryId,
+    );
+
+    if (!eligible) {
+      await completeSessionIfNeeded();
+      return respond(companyId, {
+        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const runtimeSettings = getBotRuntimeSettings();
+    if (!runtimeSettings) {
+      throw new Error("Bot runtime settings are not loaded");
+    }
+
+    const simulationSessionId = getSimulationSessionId();
+    let attendance = isSimulationDryRun()
+      ? null
+      : await attendanceRepository.findCheckInForCheckout(companyId, input.inventoryId, input.employeeId, {
+          simulationSessionId,
+        });
+
+    if (isSimulationDryRun()) {
+      const virtual = findVirtualCheckInForCheckout(input.inventoryId, input.employeeId);
+      if (virtual) {
+        attendance = {
+          id: virtual.id,
+          inventoryId: virtual.inventoryId,
+          employeeId: virtual.employeeId,
+          receivedLatitude: 0,
+          receivedLongitude: 0,
+          distanceMeters: virtual.distanceMeters,
+          validationStatus: virtual.validationStatus as AttendanceRecord["validationStatus"],
+          locationStatus: virtual.locationStatus as AttendanceRecord["locationStatus"],
+          punctualityStatus: virtual.punctualityStatus as AttendanceRecord["punctualityStatus"],
+          sourceMessageSid: null,
+          validationReason: null,
+          reviewedBy: null,
+          reviewedAt: null,
+          reviewReason: null,
+          receivedAt: virtual.receivedAt,
+          checkoutAt: virtual.checkoutAt,
+          checkoutLatitude: null,
+          checkoutLongitude: null,
+          checkoutDistanceMeters: null,
+          checkoutStatus: null,
+          checkoutReviewReason: null,
+          earlyDepartureMinutes: null,
+          extraWorkedMinutes: null,
+          checkoutMessageSid: null,
+          isSimulation: true,
+          simulationSessionId,
+          createdAt: virtual.receivedAt,
+        };
+      }
+    }
+
+    if (!attendance) {
+      await completeSessionIfNeeded();
+      return respond(companyId, {
+        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    if (attendance.checkoutAt) {
+      await completeSessionIfNeeded();
+      const checkoutTime = formatLocalTime(attendance.checkoutAt, getBotOperationTimezone());
+      return respond(companyId, {
+        message: `${DUPLICATE_CHECKOUT_MESSAGE}\nHora registrada: ${checkoutTime}.`,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const validation = buildCheckoutValidationWithoutLocation({
+      checkoutAt,
+      scheduledEnd: eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
+      runtimeSettings,
+    });
+
+    setTechnicalDetail("checkoutValidation", validation);
+    setTechnicalDetail("checkoutLocationProvided", false);
+
+    const checkoutMessageInput = {
+      eligible,
+      checkInAt: attendance.receivedAt,
+      checkoutAt,
+      distanceMeters: null,
+      checkoutStatus: validation.checkoutStatus,
+      extraWorkedMinutes: validation.extraWorkedMinutes,
+      locationProvided: false,
+    } as const;
+
+    if (isSimulationDryRun()) {
+      const responseMessage = buildCheckoutRegisteredMessage(checkoutMessageInput);
+
+      completeVirtualCheckOut(attendance.id, {
+        checkoutAt: checkoutAt.toISOString(),
+        checkoutStatus: validation.checkoutStatus,
+      });
+
+      recordSimulationArtifact({
+        type: "check-out",
+        persisted: false,
+        virtualAttendanceId: attendance.id,
+        checkoutStatus: validation.checkoutStatus,
+        checkoutLocationProvided: false,
+        checkoutAt: checkoutAt.toISOString(),
+      });
+
+      await completeSessionIfNeeded();
+
+      return respond(companyId, {
+        message: `${responseMessage}\n\n[Simulación] Se habría registrado el check-out sin ubicación.`,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+
+    try {
+      await transaction.begin();
+
+      const updated = await attendanceRepository.registerCheckoutInTransaction(companyId, transaction, {
+        attendanceId: attendance.id,
+        checkoutLatitude: null,
+        checkoutLongitude: null,
+        checkoutDistanceMeters: null,
+        checkoutStatus: validation.checkoutStatus,
+        checkoutReviewReason: validation.checkoutReviewReason,
+        earlyDepartureMinutes: validation.earlyDepartureMinutes,
+        extraWorkedMinutes: validation.extraWorkedMinutes,
+        checkoutMessageSid: input.messageSid,
+        checkoutAt: checkoutAt.toISOString(),
+      });
+
+      if (!updated) {
+        await transaction.rollback();
+        await completeSessionIfNeeded();
+        return respond(companyId, {
+          message: DUPLICATE_CHECKOUT_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      await transaction.commit();
+      await completeSessionIfNeeded();
+
+      const responseMessage = buildCheckoutRegisteredMessage(checkoutMessageInput);
+
+      return respond(companyId, {
+        message: responseMessage,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    } catch (error) {
+      await transaction.rollback();
+      console.error("[whatsapp-bot] checkout without location failed", error);
       return respond(companyId, {
         message: GENERIC_ERROR_MESSAGE,
         employeeId: input.employeeId,

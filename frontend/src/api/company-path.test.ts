@@ -66,6 +66,10 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/inventories/import/preview`,
     );
     assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
+    assert.equal(
+      scopedApiPath("settings"),
+      `companies/${ACTIVE_COMPANY_ID}/settings`,
+    );
   });
 
   it("leaves global paths unchanged", () => {

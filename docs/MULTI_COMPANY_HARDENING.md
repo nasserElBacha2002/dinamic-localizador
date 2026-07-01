@@ -38,7 +38,7 @@ Route registration order (critical): company-scoped mount **before** legacy flat
 
 Operational API modules use `scopedApiClient`, which calls `scopedApiPath`:
 
-- `employees`, `stores`, `inventories`, `attendance`, `statistics`, `absence-types`, `absence-requests`, `bot-simulator`, `dev` → prefixed with `companies/:activeCompanyId/`
+- `employees`, `stores`, `inventories`, `attendance`, `statistics`, `absence-types`, `absence-requests`, `bot-simulator`, `users`, `settings`, `dev` → prefixed with `companies/:activeCompanyId/`
 - `auth`, `companies`, `health`, `webhooks`, `database` → unchanged
 - Already company-scoped paths → unchanged
 - No active company → `ActiveCompanyRequiredError` (`ACTIVE_COMPANY_REQUIRED`)

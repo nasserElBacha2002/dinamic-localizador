@@ -58,6 +58,8 @@ export interface CompanySettings {
   updatedAt: string;
 }
 
+export type CompanySettingsDto = Omit<CompanySettings, "id">;
+
 export interface CompanyModule {
   id: string;
   companyId: string;

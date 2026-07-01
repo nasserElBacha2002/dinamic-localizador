@@ -1,9 +1,19 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { CompanySettings } from "../types/company";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+export type CompanySettingsInput = {
+  operationTimezone: string;
+  defaultRadiusMeters: number;
+  lateGraceMinutes: number;
+  earlyLeaveToleranceMinutes: number;
+  requireCheckoutLocation: boolean;
+  allowManualAttendanceCorrections: boolean;
+};
 
 const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   id: String(row.id),
@@ -35,14 +45,7 @@ export const companySettingsRepository = {
 
   async create(
     companyId: string,
-    input: {
-      operationTimezone: string;
-      defaultRadiusMeters: number;
-      lateGraceMinutes: number;
-      earlyLeaveToleranceMinutes: number;
-      requireCheckoutLocation: boolean;
-      allowManualAttendanceCorrections: boolean;
-    },
+    input: CompanySettingsInput,
     transaction?: sql.Transaction,
   ): Promise<CompanySettings> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
@@ -73,6 +76,31 @@ export const companySettingsRepository = {
       `);
 
     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findOrCreateByCompanyId(
+    companyId: string,
+    defaults: CompanySettingsInput,
+  ): Promise<CompanySettings> {
+    const existing = await this.findByCompanyId(companyId);
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      return await this.create(companyId, defaults);
+    } catch (error) {
+      if (!isDuplicateKeyError(error)) {
+        throw error;
+      }
+
+      const raced = await this.findByCompanyId(companyId);
+      if (raced) {
+        return raced;
+      }
+
+      throw error;
+    }
   },
 
   async update(

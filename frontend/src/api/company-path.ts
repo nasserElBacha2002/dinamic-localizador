@@ -23,6 +23,7 @@ export const OPERATIONAL_API_PREFIXES = [
   "absence-requests",
   "bot-simulator",
   "users",
+  "settings",
   "dev",
 ] as const;
 

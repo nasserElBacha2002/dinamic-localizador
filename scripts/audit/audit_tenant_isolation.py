@@ -33,6 +33,7 @@ OPERATIONAL_PREFIXES = (
     "absence-requests",
     "bot-simulator",
     "users",
+    "settings",
 )
 
 LEGACY_API_CLIENT = re.compile(

@@ -36,9 +36,13 @@ function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const { user } = useAuth();
   const permissionsQuery = useCompanyPermissions();
   const canManageUsers = permissionsQuery.data?.permissions.includes("users:manage") ?? false;
+  const canReadCompanySettings = permissionsQuery.data?.permissions.includes("company:read") ?? false;
   const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
 
   let navItems = [...baseNavItems];
+  if (canReadCompanySettings) {
+    navItems = [...navItems, { label: "Configuración de empresa", path: "/settings/company" }];
+  }
   if (canManageUsers) {
     navItems = [...navItems, { label: "Usuarios de empresa", path: "/settings/users" }];
   }

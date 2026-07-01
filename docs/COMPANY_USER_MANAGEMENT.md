@@ -66,3 +66,4 @@ All require `users:manage` except `GET /api/companies/:companyId/me` (permission
 
 - [MULTI_COMPANY_PHASE1.md](./MULTI_COMPANY_PHASE1.md)
 - [MULTI_COMPANY_HARDENING.md](./MULTI_COMPANY_HARDENING.md)
+- [COMPANY_SETTINGS.md](./COMPANY_SETTINGS.md)

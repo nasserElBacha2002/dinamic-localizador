@@ -14,7 +14,7 @@ import {
   Switch,
   TextField,
 } from "@mui/material";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import type { CompanyRole, CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
 import { companyRoleLabels } from "../../utils/labels";
 
@@ -43,44 +43,39 @@ interface CompanyUserDialogProps {
   ) => void;
 }
 
-export function CompanyUserDialog({
-  open,
+interface CompanyUserDialogFormProps {
+  mode: "create" | "edit";
+  initialUser?: CompanyUser | null;
+  loading: boolean;
+  errorMessage?: string | null;
+  onClose: () => void;
+  onSubmit: CompanyUserDialogProps["onSubmit"];
+}
+
+function CompanyUserDialogForm({
   mode,
   initialUser,
-  loading = false,
+  loading,
   errorMessage,
   onClose,
   onSubmit,
-}: CompanyUserDialogProps) {
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [role, setRole] = useState<CompanyRole>("ADMIN");
-  const [status, setStatus] = useState<CompanyUser["membershipStatus"]>("ACTIVE");
+}: CompanyUserDialogFormProps) {
+  const [name, setName] = useState(() =>
+    mode === "edit" && initialUser ? initialUser.name : "",
+  );
+  const [email, setEmail] = useState(() =>
+    mode === "edit" && initialUser ? initialUser.email : "",
+  );
+  const [role, setRole] = useState<CompanyRole>(() =>
+    mode === "edit" && initialUser ? initialUser.companyRole : "ADMIN",
+  );
+  const [status, setStatus] = useState<CompanyUser["membershipStatus"]>(() =>
+    mode === "edit" && initialUser ? initialUser.membershipStatus : "ACTIVE",
+  );
   const [temporaryPassword, setTemporaryPassword] = useState("");
-  const [isDefault, setIsDefault] = useState(false);
-
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    if (mode === "edit" && initialUser) {
-      setName(initialUser.name);
-      setEmail(initialUser.email);
-      setRole(initialUser.companyRole);
-      setStatus(initialUser.membershipStatus);
-      setIsDefault(initialUser.isDefault);
-      setTemporaryPassword("");
-      return;
-    }
-
-    setName("");
-    setEmail("");
-    setRole("ADMIN");
-    setStatus("ACTIVE");
-    setTemporaryPassword("");
-    setIsDefault(false);
-  }, [open, mode, initialUser]);
+  const [isDefault, setIsDefault] = useState(() =>
+    mode === "edit" && initialUser ? initialUser.isDefault : false,
+  );
 
   const validationErrors = useMemo(() => {
     if (mode === "create") {
@@ -130,8 +125,7 @@ export function CompanyUserDialog({
   };
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : handleClose} fullWidth maxWidth="sm">
-      <DialogTitle>{mode === "create" ? "Agregar usuario" : "Editar usuario"}</DialogTitle>
+    <>
       <DialogContent>
         <Stack spacing={2} sx={{ mt: 1 }}>
           {mode === "create" ? (
@@ -226,6 +220,40 @@ export function CompanyUserDialog({
           Guardar
         </Button>
       </DialogActions>
+    </>
+  );
+}
+
+export function CompanyUserDialog({
+  open,
+  mode,
+  initialUser,
+  loading = false,
+  errorMessage,
+  onClose,
+  onSubmit,
+}: CompanyUserDialogProps) {
+  const formKey =
+    open && mode === "edit" && initialUser
+      ? `edit-${initialUser.userId}`
+      : open
+        ? "create"
+        : "closed";
+
+  return (
+    <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="sm">
+      <DialogTitle>{mode === "create" ? "Agregar usuario" : "Editar usuario"}</DialogTitle>
+      {open ? (
+        <CompanyUserDialogForm
+          key={formKey}
+          mode={mode}
+          initialUser={initialUser}
+          loading={loading}
+          errorMessage={errorMessage}
+          onClose={onClose}
+          onSubmit={onSubmit}
+        />
+      ) : null}
     </Dialog>
   );
 }

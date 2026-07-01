@@ -33,11 +33,22 @@ function resolveInitialCompany(
   return null;
 }
 
+export function CompanyProviderGate({ children }: PropsWithChildren) {
+  const { isAuthenticated, token } = useAuth();
+  const providerKey = isAuthenticated && token ? token : "logged-out";
+
+  return (
+    <CompanyProvider key={providerKey}>
+      {children}
+    </CompanyProvider>
+  );
+}
+
 export function CompanyProvider({ children }: PropsWithChildren) {
   const { isAuthenticated } = useAuth();
   const [companies, setCompanies] = useState<CompanyMembershipSummary[]>([]);
   const [activeCompany, setActiveCompany] = useState<CompanyMembershipSummary | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(false);
 
   const clearActiveCompany = useCallback(() => {
     setActiveCompany(null);
@@ -78,21 +89,30 @@ export function CompanyProvider({ children }: PropsWithChildren) {
 
   useEffect(() => {
     if (!isAuthenticated) {
-      setCompanies([]);
-      clearActiveCompany();
-      setIsLoading(false);
       return;
     }
 
-    setIsLoading(true);
-    void refreshCompanies()
-      .catch(() => {
-        setCompanies([]);
-        clearActiveCompany();
-      })
-      .finally(() => {
-        setIsLoading(false);
-      });
+    let cancelled = false;
+
+    void (async () => {
+      setIsLoading(true);
+      try {
+        await refreshCompanies();
+      } catch {
+        if (!cancelled) {
+          setCompanies([]);
+          clearActiveCompany();
+        }
+      } finally {
+        if (!cancelled) {
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [isAuthenticated, refreshCompanies, clearActiveCompany]);
 
   const selectCompany = useCallback(

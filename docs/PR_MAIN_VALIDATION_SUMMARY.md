@@ -14,10 +14,16 @@ Company modules (`GET /modules`) are relatively stable per tenant. The frontend 
 - **staleTime:** 10 minutes — navigating between pages under the same company does not refetch while data is fresh.
 - **gcTime:** 30 minutes — cached modules survive layout/guard remounts during navigation.
 - **refetchOnWindowFocus:** disabled for modules.
-- **Company switch / logout:** `queryClient.clear()` in `CompanyContext` clears all cached queries, including modules.
+- **Company switch / logout:** `CompanyProviderGate` remounts company state on auth token change; `queryClient.clear()` on company switch.
 - **Module updates:** `useUpdateCompanyModules` invalidates the company-scoped modules query after a successful PATCH.
 
-Implementation: `frontend/src/hooks/company-modules-query.ts`, `frontend/src/hooks/useCompanyModules.ts`.
+Implementation: `frontend/src/hooks/company-modules-query.ts`, `frontend/src/hooks/useCompanyModules.ts`, `frontend/src/context/CompanyContext.tsx`.
+
+## CI fixes
+
+- Root `.env.example` now documents `BOT_ON_TIME_GRACE_MINUTES` for Docker Compose prod validation.
+- Backend tests preload `setupUnitTestEnv()` via `tsx --import` so CI passes without a `.env` file.
+- Frontend lint: `CompanyProviderGate` remount pattern and keyed `CompanyUserDialogForm` avoid `setState` in `useEffect`.
 
 ## API endpoint preference (Phase 2.8)
 
@@ -47,7 +53,7 @@ Browser routes unchanged: `/stores`, `/inventories`, `/employees`.
 | `cd backend && npm run build` | PASS |
 | `cd frontend && npm test` | PASS (126 tests) |
 | `cd frontend && npm run build` | PASS |
-| `cd frontend && npm run lint` | FAIL (pre-existing: `CompanyContext.tsx`, `CompanyUserDialog.tsx`; unrelated to this branch) |
+| `cd frontend && npm run lint` | PASS |
 | `python3 scripts/audit/audit_tenant_isolation.py` | PASS |
 | `python3 scripts/audit/audit_db_operational_rename.py` | PASS |
 

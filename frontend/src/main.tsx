@@ -5,7 +5,7 @@ import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
 import App from "./App";
 import { AuthProvider } from "./context/AuthContext";
-import { CompanyProvider } from "./context/CompanyContext";
+import { CompanyProviderGate } from "./context/CompanyContext";
 import { queryClient } from "./lib/query-client";
 import { appTheme } from "./theme/theme";
 
@@ -16,9 +16,9 @@ createRoot(document.getElementById("root")!).render(
       <QueryClientProvider client={queryClient}>
         <BrowserRouter>
           <AuthProvider>
-            <CompanyProvider>
+            <CompanyProviderGate>
               <App />
-            </CompanyProvider>
+            </CompanyProviderGate>
           </AuthProvider>
         </BrowserRouter>
       </QueryClientProvider>

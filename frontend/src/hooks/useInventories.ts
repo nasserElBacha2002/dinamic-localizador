@@ -22,7 +22,7 @@ export function useInventories(filters: InventoryFilters, extraEnabled = true) {
 
   return useQuery({
     queryKey: ["inventories", companyId, filters],
-    queryFn: () => getInventories(filters),
+    queryFn: () => getInventories(filters, companyId),
     enabled,
     retry: 1,
   });
@@ -33,7 +33,7 @@ export function useInventory(inventoryId?: string) {
 
   return useQuery({
     queryKey: ["inventory", companyId, inventoryId],
-    queryFn: () => getInventoryById(inventoryId!),
+    queryFn: () => getInventoryById(inventoryId!, companyId),
     enabled,
   });
 }
@@ -43,7 +43,7 @@ export function useInventoryEmployees(inventoryId?: string) {
 
   return useQuery({
     queryKey: ["inventory-employees", companyId, inventoryId],
-    queryFn: () => getInventoryEmployees(inventoryId!),
+    queryFn: () => getInventoryEmployees(inventoryId!, companyId),
     enabled,
   });
 }
@@ -117,7 +117,7 @@ export function useInventoryAttendanceSummary(
 
   return useQuery({
     queryKey: ["inventory-attendance-summary", companyId, inventoryId, filters],
-    queryFn: () => getInventoryAttendanceSummary(inventoryId!, filters),
+    queryFn: () => getInventoryAttendanceSummary(inventoryId!, filters, companyId),
     enabled,
     refetchInterval: enabled ? 30000 : false,
   });

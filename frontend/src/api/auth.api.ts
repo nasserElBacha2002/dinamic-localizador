@@ -19,7 +19,7 @@ export interface LoginResponse {
 }
 
 export async function login(email: string, password: string): Promise<LoginResponse> {
-  const response = await apiClient.post<{ data: LoginResponse }>("/auth/login", {
+  const response = await apiClient.post<{ data: LoginResponse }>("auth/login", {
     email,
     password,
   });
@@ -27,6 +27,6 @@ export async function login(email: string, password: string): Promise<LoginRespo
 }
 
 export async function getCurrentUser(): Promise<PublicUser> {
-  const response = await apiClient.get<{ data: PublicUser }>("/auth/me");
+  const response = await apiClient.get<{ data: PublicUser }>("auth/me");
   return response.data.data;
 }

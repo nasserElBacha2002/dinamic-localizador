@@ -14,7 +14,7 @@ export function useStores(filters: StoreFilters) {
 
   return useQuery({
     queryKey: ["stores", companyId, filters],
-    queryFn: () => getStores(filters),
+    queryFn: () => getStores(filters, companyId),
     enabled,
     retry: 1,
   });
@@ -25,7 +25,7 @@ export function useStore(storeId?: string) {
 
   return useQuery({
     queryKey: ["store", companyId, storeId],
-    queryFn: () => getStoreById(storeId!),
+    queryFn: () => getStoreById(storeId!, companyId),
     enabled,
   });
 }

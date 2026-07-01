@@ -1,5 +1,9 @@
 import axios from "axios";
-import { notifyCompanySelectionRequired } from "./company-path";
+import {
+  getActiveCompanyId,
+  isLegacyOperationalApiPath,
+  notifyCompanySelectionRequired,
+} from "./company-path";
 import { getStoredToken } from "./token-storage";
 import { parseApiError } from "../utils/errors";
 
@@ -26,6 +30,15 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
+  if (import.meta.env.DEV) {
+    const requestUrl = config.url ?? "";
+    if (isLegacyOperationalApiPath(requestUrl)) {
+      console.warn(
+        `Legacy operational API route detected. Use companyApiPath instead: ${requestUrl}`,
+      );
+    }
+  }
+
   return config;
 });
 
@@ -38,8 +51,20 @@ apiClient.interceptors.response.use(
       }
 
       const code = error.response?.data?.error?.code;
+      const requestUrl = error.config?.url;
+
       if (error.response?.status === 409 && code === "COMPANY_SELECTION_REQUIRED") {
-        notifyCompanySelectionRequired();
+        const hasActiveCompany = Boolean(getActiveCompanyId());
+        const isLegacyRoute = isLegacyOperationalApiPath(requestUrl);
+
+        if (import.meta.env.DEV && hasActiveCompany && isLegacyRoute) {
+          console.warn(
+            "Ignored COMPANY_SELECTION_REQUIRED for stale legacy request while company is selected:",
+            requestUrl,
+          );
+        } else if (!hasActiveCompany || isLegacyRoute) {
+          notifyCompanySelectionRequired();
+        }
       }
     }
 

@@ -23,6 +23,21 @@ apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
 
+const companyScopedOperationalRouter = Router({ mergeParams: true });
+companyScopedOperationalRouter.use(resolveCompanyContext);
+companyScopedOperationalRouter.use("/employees", employeeRouter);
+companyScopedOperationalRouter.use("/stores", storeRouter);
+companyScopedOperationalRouter.use("/inventories", inventoryRouter);
+companyScopedOperationalRouter.use("/inventories/:inventoryId/employees", inventoryAssignmentRouter);
+companyScopedOperationalRouter.use("/attendance", attendanceRouter);
+companyScopedOperationalRouter.use("/statistics", statisticsRouter);
+companyScopedOperationalRouter.use("/bot-simulator", botSimulatorRouter);
+companyScopedOperationalRouter.use(absenceRouter);
+companyScopedOperationalRouter.use("/dev/attendance-reminders", devReminderRouter);
+
+// Company-scoped routes must be registered before legacy flat operational routes.
+apiRouter.use("/companies/:companyId", authenticate, companyScopedOperationalRouter);
+
 const operationalRouter = Router();
 operationalRouter.use(resolveCompanyContext);
 operationalRouter.use("/employees", employeeRouter);
@@ -36,17 +51,3 @@ operationalRouter.use(absenceRouter);
 operationalRouter.use("/dev/attendance-reminders", devReminderRouter);
 
 apiRouter.use(authenticate, operationalRouter);
-
-const companyScopedOperationalRouter = Router({ mergeParams: true });
-companyScopedOperationalRouter.use(resolveCompanyContext);
-companyScopedOperationalRouter.use("/employees", employeeRouter);
-companyScopedOperationalRouter.use("/stores", storeRouter);
-companyScopedOperationalRouter.use("/inventories", inventoryRouter);
-companyScopedOperationalRouter.use("/inventories/:inventoryId/employees", inventoryAssignmentRouter);
-companyScopedOperationalRouter.use("/attendance", attendanceRouter);
-companyScopedOperationalRouter.use("/statistics", statisticsRouter);
-companyScopedOperationalRouter.use("/bot-simulator", botSimulatorRouter);
-companyScopedOperationalRouter.use(absenceRouter);
-companyScopedOperationalRouter.use("/dev/attendance-reminders", devReminderRouter);
-
-apiRouter.use("/companies/:companyId", authenticate, companyScopedOperationalRouter);

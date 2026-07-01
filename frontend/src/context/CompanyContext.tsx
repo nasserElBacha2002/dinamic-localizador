@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { getCompanies } from "../api/companies.api";
 import {
+  getActiveCompanyId,
   getStoredCompanyId,
   setCompanySelectionRequiredHandler,
   setRuntimeCompanyId,
@@ -47,6 +48,19 @@ export function CompanyProvider({ children }: PropsWithChildren) {
   const refreshCompanies = useCallback(async () => {
     const memberships = await getCompanies();
     setCompanies(memberships);
+
+    const currentCompanyId = getActiveCompanyId();
+    if (currentCompanyId) {
+      const currentMembership = memberships.find(
+        (membership) => membership.companyId === currentCompanyId,
+      );
+      if (currentMembership) {
+        setActiveCompany(currentMembership);
+        setRuntimeCompanyId(currentMembership.companyId);
+        return;
+      }
+    }
+
     const resolved = resolveInitialCompany(memberships);
     setActiveCompany(resolved);
     setRuntimeCompanyId(resolved?.companyId ?? null);

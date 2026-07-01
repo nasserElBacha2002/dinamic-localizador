@@ -15,7 +15,7 @@ export function useBotSimulationSession(sessionId?: string) {
 
   return useQuery({
     queryKey: ["bot-simulator-session", companyId, sessionId],
-    queryFn: () => getBotSimulationSession(sessionId!),
+    queryFn: () => getBotSimulationSession(sessionId!, companyId),
     enabled,
   });
 }
@@ -25,7 +25,7 @@ export function useBotSimulationLocationPresets(sessionId?: string) {
 
   return useQuery({
     queryKey: ["bot-simulator-location-presets", companyId, sessionId],
-    queryFn: () => getBotSimulationLocationPresets(sessionId!),
+    queryFn: () => getBotSimulationLocationPresets(sessionId!, companyId),
     enabled,
   });
 }

@@ -13,9 +13,10 @@ import { companyApiPath } from "./company-path";
 
 export async function getAttendanceRecords(
   filters: AttendanceFilters = {},
+  companyId?: string,
 ): Promise<PaginatedResponse<AttendanceRecordWithRelations>> {
   const { data } = await apiClient.get<PaginatedResponse<AttendanceRecordWithRelations>>(
-    companyApiPath("/attendance"),
+    companyApiPath("attendance", companyId),
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
@@ -23,16 +24,16 @@ export async function getAttendanceRecords(
   return data;
 }
 
-export async function getAttendanceById(id: string): Promise<AttendanceDetail> {
+export async function getAttendanceById(id: string, companyId?: string): Promise<AttendanceDetail> {
   const { data } = await apiClient.get<SingleResponse<AttendanceDetail>>(
-    companyApiPath(`/attendance/${id}`),
+    companyApiPath(`attendance/${id}`, companyId),
   );
   return data.data;
 }
 
 export async function createAttendanceRecord(input: CreateAttendanceInput): Promise<AttendanceRecord> {
   const { data } = await apiClient.post<SingleResponse<AttendanceRecord>>(
-    companyApiPath("/attendance"),
+    companyApiPath("attendance"),
     input,
   );
   return data.data;
@@ -42,9 +43,10 @@ export async function getAttendanceReviews(
   id: string,
   page = 1,
   limit = 10,
+  companyId?: string,
 ): Promise<PaginatedResponse<AttendanceReview>> {
   const { data } = await apiClient.get<PaginatedResponse<AttendanceReview>>(
-    companyApiPath(`/attendance/${id}/reviews`),
+    companyApiPath(`attendance/${id}/reviews`, companyId),
     {
       params: { page, limit },
     },
@@ -57,14 +59,14 @@ export async function reviewAttendanceRecord(
   input: ReviewAttendanceInput,
 ): Promise<AttendanceDetail> {
   const { data } = await apiClient.patch<SingleResponse<AttendanceDetail>>(
-    companyApiPath(`/attendance/${id}/review`),
+    companyApiPath(`attendance/${id}/review`),
     input,
   );
   return data.data;
 }
 
 export async function exportAttendanceCsv(filters: AttendanceFilters = {}): Promise<Blob> {
-  const response = await apiClient.get<Blob>(companyApiPath("/attendance/export.csv"), {
+  const response = await apiClient.get<Blob>(companyApiPath("attendance/export.csv"), {
     params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     responseType: "blob",
   });

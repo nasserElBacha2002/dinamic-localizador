@@ -44,8 +44,8 @@ export function clearActiveCompanyId(): void {
  * Builds a company-scoped API path relative to the axios baseURL (e.g. companies/:id/employees).
  * Avoids a leading slash so axios keeps the /api prefix from baseURL.
  */
-export function companyApiPath(resourcePath: string): string {
-  const companyId = getActiveCompanyId();
+export function companyApiPath(resourcePath: string, companyIdOverride?: string): string {
+  const companyId = companyIdOverride ?? getActiveCompanyId();
   if (!companyId) {
     throw new ActiveCompanyRequiredError();
   }
@@ -62,4 +62,31 @@ export function setCompanySelectionRequiredHandler(handler: (() => void) | null)
 
 export function notifyCompanySelectionRequired(): void {
   companySelectionRequiredHandler?.();
+}
+
+export const LEGACY_OPERATIONAL_API_PREFIXES = [
+  "employees",
+  "inventories",
+  "stores",
+  "attendance",
+  "statistics",
+  "absence-types",
+  "absence-requests",
+  "bot-simulator",
+] as const;
+
+export function isLegacyOperationalApiPath(url: string | undefined): boolean {
+  if (!url) {
+    return false;
+  }
+
+  const normalized = url.replace(/^\//, "");
+  if (normalized.startsWith("companies/")) {
+    return false;
+  }
+
+  const [firstSegment] = normalized.split(/[/?#]/);
+  return LEGACY_OPERATIONAL_API_PREFIXES.includes(
+    firstSegment as (typeof LEGACY_OPERATIONAL_API_PREFIXES)[number],
+  );
 }

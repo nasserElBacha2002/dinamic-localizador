@@ -12,7 +12,7 @@ import { absenceRouter } from "./absence.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
-import { authenticate, requireAdmin } from "../middleware/authenticate";
+import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
 
 export const apiRouter = Router();
@@ -35,7 +35,7 @@ operationalRouter.use("/bot-simulator", botSimulatorRouter);
 operationalRouter.use(absenceRouter);
 operationalRouter.use("/dev/attendance-reminders", devReminderRouter);
 
-apiRouter.use(authenticate, requireAdmin, operationalRouter);
+apiRouter.use(authenticate, operationalRouter);
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
@@ -49,4 +49,4 @@ companyScopedOperationalRouter.use("/bot-simulator", botSimulatorRouter);
 companyScopedOperationalRouter.use(absenceRouter);
 companyScopedOperationalRouter.use("/dev/attendance-reminders", devReminderRouter);
 
-apiRouter.use("/companies/:companyId", authenticate, requireAdmin, companyScopedOperationalRouter);
+apiRouter.use("/companies/:companyId", authenticate, companyScopedOperationalRouter);

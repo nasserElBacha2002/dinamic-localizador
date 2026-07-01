@@ -4,6 +4,7 @@ import { env } from "../config/env";
 import { ATTENDANCE_NOTIFICATION_TYPES } from "../constants/attendance-notification";
 import { AppError } from "../errors/app-error";
 import { attendanceReminderService } from "../services/attendance-reminder.service";
+import { requirePermission } from "../middleware/company-context";
 import { runAttendanceReminderJobOnce } from "../jobs/attendance-reminder.job";
 import { requireRequestCompanyId } from "../utils/request-company";
 
@@ -24,7 +25,7 @@ devReminderRouter.use((_req, _res, next) => {
   next();
 });
 
-devReminderRouter.post("/run", async (req, res, next) => {
+devReminderRouter.post("/run", requirePermission("attendance:review"), async (req, res, next) => {
   try {
     const companyId = requireRequestCompanyId(req);
     const summary = await attendanceReminderService.runDueReminders(companyId);
@@ -43,25 +44,29 @@ devReminderRouter.post("/run-job-once", async (_req, res, next) => {
   }
 });
 
-devReminderRouter.post("/test", async (req, res, next) => {
-  try {
-    const parsed = testReminderSchema.safeParse(req.body);
-    if (!parsed.success) {
-      throw new AppError(400, "VALIDATION_ERROR", "Datos de prueba inválidos");
-    }
+devReminderRouter.post(
+  "/test",
+  requirePermission("attendance:review"),
+  async (req, res, next) => {
+    try {
+      const parsed = testReminderSchema.safeParse(req.body);
+      if (!parsed.success) {
+        throw new AppError(400, "VALIDATION_ERROR", "Datos de prueba inválidos");
+      }
 
-    const outcome = await attendanceReminderService.sendTestReminder(
-      requireRequestCompanyId(req),
-      parsed.data,
-    );
-    res.status(200).json({
-      status: "ok",
-      outcome,
-      notificationType: parsed.data.notificationType,
-      inventoryId: parsed.data.inventoryId,
-      employeeId: parsed.data.employeeId,
-    });
-  } catch (error) {
-    next(error);
-  }
-});
+      const outcome = await attendanceReminderService.sendTestReminder(
+        requireRequestCompanyId(req),
+        parsed.data,
+      );
+      res.status(200).json({
+        status: "ok",
+        outcome,
+        notificationType: parsed.data.notificationType,
+        inventoryId: parsed.data.inventoryId,
+        employeeId: parsed.data.employeeId,
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);

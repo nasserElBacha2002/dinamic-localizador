@@ -58,6 +58,15 @@ export interface CompanySettings {
   updatedAt: string;
 }
 
+export interface CompanyModule {
+  id: string;
+  companyId: string;
+  moduleKey: string;
+  isEnabled: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export type CompanyPermission =
   | "company:read"
   | "company:settings:update"

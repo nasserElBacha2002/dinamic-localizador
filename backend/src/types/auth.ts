@@ -6,6 +6,7 @@ export interface User {
   email: string;
   passwordHash: string;
   role: UserRole;
+  isPlatformAdmin: boolean;
   active: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -17,6 +18,7 @@ export interface PublicUser {
   name: string;
   email: string;
   role: UserRole;
+  isPlatformAdmin: boolean;
 }
 
 export interface AuthTokenPayload {

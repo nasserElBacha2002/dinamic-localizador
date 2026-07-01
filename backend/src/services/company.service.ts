@@ -1,14 +1,43 @@
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
+import { companyModuleRepository } from "../repositories/company-module.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
-import type { Company, CompanyMembershipSummary, CompanySettings } from "../types/company";
+import type {
+  Company,
+  CompanyMembershipSummary,
+  CompanyModule,
+  CompanySettings,
+} from "../types/company";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
 import { roleHasPermission } from "../constants/company-permissions";
 
 export const companyService = {
-  async listForUser(userId: string): Promise<CompanyMembershipSummary[]> {
+  async listForUser(
+    userId: string,
+    isPlatformAdmin = false,
+  ): Promise<CompanyMembershipSummary[]> {
+    if (isPlatformAdmin) {
+      const companies = await companyRepository.listActive();
+      const memberships = await userCompanyMembershipRepository.listActiveForUser(userId);
+      const defaultCompanyId =
+        memberships.find((membership) => membership.isDefault)?.companyId ??
+        memberships[0]?.companyId;
+
+      return companies.map((company) => ({
+        companyId: company.id,
+        companyName: company.name,
+        role: "OWNER",
+        isDefault: company.id === defaultCompanyId,
+        status: "ACTIVE",
+      }));
+    }
+
     return userCompanyMembershipRepository.listActiveForUser(userId);
+  },
+
+  async listModules(companyId: string): Promise<CompanyModule[]> {
+    return companyModuleRepository.listByCompanyId(companyId);
   },
 
   async getSettings(companyId: string): Promise<CompanySettings> {

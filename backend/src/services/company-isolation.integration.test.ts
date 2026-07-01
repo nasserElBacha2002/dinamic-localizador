@@ -1,16 +1,19 @@
 import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import sql from "mssql";
+import { AppError } from "../errors/app-error";
 import {
   describeDatabaseIntegration,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
 import { companyContextService } from "../services/company-context.service";
+import { companyService } from "../services/company.service";
 import { employeeRepository } from "../repositories/employee.repository";
 import { storeRepository } from "../repositories/store.repository";
 import { companyRepository } from "../repositories/company.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+import { userRepository } from "../repositories/user.repository";
 import { getPool } from "../database/connection";
 
 describeDatabaseIntegration("multi-company foundation isolation", () => {
@@ -61,9 +64,12 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
     await teardownDatabaseIntegration();
   });
 
-  it("resolves default company for bot in single-company deployments", async () => {
-    const companyId = await companyContextService.resolveDefaultCompanyId();
-    assert.equal(companyId, dinamicCompanyId);
+  it("requires explicit default when multiple active companies exist", async () => {
+    await assert.rejects(
+      () => companyContextService.resolveDefaultCompanyId(),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "BOT_COMPANY_SELECTION_REQUIRED",
+    );
   });
 
   it("does not return Dinamic employee when queried under another company", async () => {
@@ -99,5 +105,62 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
     );
     assert.ok(membership);
     assert.equal(membership.companyId, dinamicCompanyId);
+  });
+
+  it("allows platform admin to access any active company without membership", async () => {
+    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    if (!platformAdmin?.isPlatformAdmin) {
+      return;
+    }
+
+    const context = await companyContextService.resolveCompanyContext(
+      platformAdmin.id,
+      otherCompanyId,
+      { isPlatformAdmin: true },
+    );
+    assert.equal(context.company.id, otherCompanyId);
+    assert.equal(context.membership.role, "OWNER");
+  });
+
+  it("denies non-platform user access to company without membership", async () => {
+    const pool = getPool();
+    const regularUserResult = await pool.request().query(`
+      SELECT TOP 1 u.id
+      FROM users u
+      WHERE u.is_platform_admin = 0 AND u.active = 1
+    `);
+
+    const regularUserId = regularUserResult.recordset[0]?.id
+      ? String(regularUserResult.recordset[0].id)
+      : null;
+    if (!regularUserId) {
+      return;
+    }
+
+    const hasOtherMembership = await userCompanyMembershipRepository.findActiveMembership(
+      regularUserId,
+      otherCompanyId,
+    );
+    if (hasOtherMembership) {
+      return;
+    }
+
+    await assert.rejects(
+      () => companyContextService.resolveCompanyContext(regularUserId, otherCompanyId),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "COMPANY_ACCESS_DENIED",
+    );
+  });
+
+  it("lists all active companies for platform admin", async () => {
+    const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    if (!platformAdmin?.isPlatformAdmin) {
+      return;
+    }
+
+    const companies = await companyService.listForUser(platformAdmin.id, true);
+    const activeCompanies = await companyRepository.listActive();
+    assert.equal(companies.length, activeCompanies.length);
+    assert.ok(companies.every((company) => company.role === "OWNER"));
   });
 });

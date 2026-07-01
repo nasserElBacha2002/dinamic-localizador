@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } fro
 import { getCompanies } from "../api/companies.api";
 import { getStoredCompanyId, setRuntimeCompanyId } from "../api/company-path";
 import { useAuth } from "../hooks/useAuth";
+import { queryClient } from "../lib/query-client";
 import { CompanyContext, type CompanyContextValue } from "./company-context";
 import type { CompanyMembershipSummary } from "../types/company";
 
@@ -68,6 +69,7 @@ export function CompanyProvider({ children }: PropsWithChildren) {
       const selected = companies.find((company) => company.companyId === companyId) ?? null;
       setActiveCompany(selected);
       setRuntimeCompanyId(selected?.companyId ?? null);
+      void queryClient.invalidateQueries();
     },
     [companies],
   );

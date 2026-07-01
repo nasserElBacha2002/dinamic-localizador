@@ -35,3 +35,11 @@ companyRouter.patch(
   requirePermission("company:settings:update"),
   asyncHandler(companyController.updateSettings),
 );
+
+companyRouter.get(
+  "/:companyId/modules",
+  validate(companyIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:read"),
+  asyncHandler(companyController.listModules),
+);

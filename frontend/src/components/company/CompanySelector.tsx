@@ -8,6 +8,7 @@ import {
   Typography,
   type SelectChangeEvent,
 } from "@mui/material";
+import { useNavigate } from "react-router-dom";
 import { useCompany } from "../../hooks/useCompany";
 
 export function CompanySelector({ compact = false }: { compact?: boolean }) {
@@ -27,7 +28,6 @@ export function CompanySelector({ compact = false }: { compact?: boolean }) {
 
   const handleChange = (event: SelectChangeEvent<string>) => {
     selectCompany(event.target.value);
-    window.location.reload();
   };
 
   return (
@@ -58,6 +58,7 @@ export function CompanySelector({ compact = false }: { compact?: boolean }) {
 
 export function CompanySelectionPage() {
   const { companies, selectCompany } = useCompany();
+  const navigate = useNavigate();
 
   return (
     <Box sx={{ maxWidth: 480, mx: "auto", mt: 8, px: 2 }}>
@@ -74,7 +75,7 @@ export function CompanySelectionPage() {
             component="button"
             onClick={() => {
               selectCompany(company.companyId);
-              window.location.href = "/";
+              navigate("/");
             }}
             sx={{
               textAlign: "left",

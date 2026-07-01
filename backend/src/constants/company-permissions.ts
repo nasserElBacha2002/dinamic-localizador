@@ -37,7 +37,6 @@ const ROLE_PERMISSIONS: Record<CompanyRole, CompanyPermission[]> = {
     "employees:read",
     "employees:manage",
     "attendance:read",
-    "attendance:review",
     "absences:read",
     "absences:review",
     "reports:read",
@@ -51,12 +50,7 @@ const ROLE_PERMISSIONS: Record<CompanyRole, CompanyPermission[]> = {
     "attendance:review",
     "reports:read",
   ],
-  OPERATOR: [
-    "company:read",
-    "employees:read",
-    "inventories:read",
-    "attendance:read",
-  ],
+  OPERATOR: ["company:read", "inventories:read", "attendance:read"],
   READ_ONLY: READ_ONLY_PERMISSIONS,
 };
 

@@ -85,4 +85,5 @@ export const toPublicUser = (user: User): PublicUser => ({
   name: user.name,
   email: user.email,
   role: user.role,
+  isPlatformAdmin: user.isPlatformAdmin,
 });

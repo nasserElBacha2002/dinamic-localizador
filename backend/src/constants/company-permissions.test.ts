@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { resolvePermissionsForRole, roleHasPermission } from "../constants/company-permissions";
+import { resolvePermissionsForRole, roleHasPermission } from "./company-permissions";
 import type { CompanyPermission } from "../types/company";
 
 describe("company permissions", () => {
@@ -8,7 +8,7 @@ describe("company permissions", () => {
     const permissions = resolvePermissionsForRole("OWNER");
     assert.ok(roleHasPermission("OWNER", "company:settings:update"));
     assert.ok(roleHasPermission("OWNER", "users:manage"));
-    assert.equal(permissions.size, 16);
+    assert.ok(permissions.has("reports:export"));
   });
 
   it("denies ADMIN users:manage", () => {

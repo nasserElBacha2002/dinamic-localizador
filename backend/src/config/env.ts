@@ -32,6 +32,8 @@ const envSchema = z
     BOT_GEOFENCE_REVIEW_MARGIN_METERS: z.coerce.number().int().nonnegative().default(30),
     BOT_ON_TIME_GRACE_MINUTES: z.coerce.number().int().nonnegative().default(15),
     BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES: z.coerce.number().int().nonnegative().default(15),
+    BOT_DEFAULT_COMPANY_ID: z.string().uuid().optional(),
+    BOT_DEFAULT_COMPANY_NAME: z.string().min(1).optional(),
     JWT_SECRET: z.string().min(16),
     JWT_EXPIRES_IN: z.string().default("8h"),
   })

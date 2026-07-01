@@ -34,7 +34,7 @@ apiClient.interceptors.request.use((config) => {
     const requestUrl = config.url ?? "";
     if (isLegacyOperationalApiPath(requestUrl)) {
       console.warn(
-        `Legacy operational API route detected. Use companyApiPath instead: ${requestUrl}`,
+        `Legacy operational API route detected. Use scopedApiClient instead: ${requestUrl}`,
       );
     }
   }

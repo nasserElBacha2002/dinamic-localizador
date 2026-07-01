@@ -11,6 +11,25 @@ export class ActiveCompanyRequiredError extends Error {
 
 const ACTIVE_COMPANY_STORAGE_KEY = "dinamic.activeCompanyId";
 
+const GLOBAL_API_PREFIXES = ["auth", "health", "webhooks", "database"] as const;
+
+export const OPERATIONAL_API_PREFIXES = [
+  "employees",
+  "inventories",
+  "stores",
+  "attendance",
+  "statistics",
+  "absence-types",
+  "absence-requests",
+  "bot-simulator",
+  "dev",
+] as const;
+
+/** @deprecated Use scopedApiPath via scopedApiClient instead. */
+export const LEGACY_OPERATIONAL_API_PREFIXES = OPERATIONAL_API_PREFIXES.filter(
+  (prefix) => prefix !== "dev",
+);
+
 export function getStoredCompanyId(): string | null {
   return localStorage.getItem(ACTIVE_COMPANY_STORAGE_KEY);
 }
@@ -40,17 +59,58 @@ export function clearActiveCompanyId(): void {
   setStoredCompanyId(null);
 }
 
+function normalizePath(path: string): string {
+  return path.replace(/^\//, "");
+}
+
+function isOperationalPath(path: string): boolean {
+  const firstSegment = path.split("/")[0];
+  return OPERATIONAL_API_PREFIXES.includes(
+    firstSegment as (typeof OPERATIONAL_API_PREFIXES)[number],
+  );
+}
+
+function isGlobalPath(path: string): boolean {
+  const firstSegment = path.split("/")[0];
+  return GLOBAL_API_PREFIXES.includes(firstSegment as (typeof GLOBAL_API_PREFIXES)[number]);
+}
+
 /**
- * Builds a company-scoped API path relative to the axios baseURL (e.g. companies/:id/employees).
- * Avoids a leading slash so axios keeps the /api prefix from baseURL.
+ * Prefixes operational paths with companies/:activeCompanyId.
+ * Global paths (auth, health, companies list/settings) are returned unchanged.
  */
-export function companyApiPath(resourcePath: string, companyIdOverride?: string): string {
-  const companyId = companyIdOverride ?? getActiveCompanyId();
+export function scopedApiPath(path: string): string {
+  const normalized = normalizePath(path);
+
+  if (!normalized) {
+    return normalized;
+  }
+
+  if (normalized.startsWith("companies/") || normalized === "companies") {
+    return normalized;
+  }
+
+  if (isGlobalPath(normalized)) {
+    return normalized;
+  }
+
+  if (isOperationalPath(normalized)) {
+    return companyApiPath(normalized);
+  }
+
+  return normalized;
+}
+
+/**
+ * Low-level helper: prefixes a resource path with the active company id.
+ */
+export function companyApiPath(resourcePath: string): string {
+  const companyId = getActiveCompanyId();
   if (!companyId) {
     throw new ActiveCompanyRequiredError();
   }
 
-  const normalized = resourcePath.startsWith("/") ? resourcePath.slice(1) : resourcePath;
+  const normalized = normalizePath(resourcePath);
   return `companies/${companyId}/${normalized}`;
 }
 
@@ -64,23 +124,12 @@ export function notifyCompanySelectionRequired(): void {
   companySelectionRequiredHandler?.();
 }
 
-export const LEGACY_OPERATIONAL_API_PREFIXES = [
-  "employees",
-  "inventories",
-  "stores",
-  "attendance",
-  "statistics",
-  "absence-types",
-  "absence-requests",
-  "bot-simulator",
-] as const;
-
 export function isLegacyOperationalApiPath(url: string | undefined): boolean {
   if (!url) {
     return false;
   }
 
-  const normalized = url.replace(/^\//, "");
+  const normalized = normalizePath(url);
   if (normalized.startsWith("companies/")) {
     return false;
   }

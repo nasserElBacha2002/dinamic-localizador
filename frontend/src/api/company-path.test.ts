@@ -8,6 +8,7 @@ import {
   clearActiveCompanyId,
   companyApiPath,
   isLegacyOperationalApiPath,
+  scopedApiPath,
   setRuntimeCompanyId,
 } from "./company-path";
 
@@ -33,6 +34,64 @@ function installLocalStorageMock(): void {
   });
 }
 
+const ACTIVE_COMPANY_ID = "11111111-1111-1111-1111-111111111111";
+const OTHER_COMPANY_ID = "22222222-2222-2222-2222-222222222222";
+
+describe("scopedApiPath", () => {
+  beforeEach(() => {
+    storage.clear();
+    installLocalStorageMock();
+    clearActiveCompanyId();
+    setRuntimeCompanyId(ACTIVE_COMPANY_ID);
+  });
+
+  it("scopes operational paths with and without a leading slash", () => {
+    assert.equal(
+      scopedApiPath("employees"),
+      `companies/${ACTIVE_COMPANY_ID}/employees`,
+    );
+    assert.equal(
+      scopedApiPath("/employees"),
+      `companies/${ACTIVE_COMPANY_ID}/employees`,
+    );
+  });
+
+  it("scopes nested operational paths", () => {
+    assert.equal(
+      scopedApiPath("statistics/attendance/summary"),
+      `companies/${ACTIVE_COMPANY_ID}/statistics/attendance/summary`,
+    );
+    assert.equal(
+      scopedApiPath("inventories/import/preview"),
+      `companies/${ACTIVE_COMPANY_ID}/inventories/import/preview`,
+    );
+  });
+
+  it("leaves global paths unchanged", () => {
+    assert.equal(scopedApiPath("auth/login"), "auth/login");
+    assert.equal(scopedApiPath("health"), "health");
+    assert.equal(scopedApiPath("companies"), "companies");
+  });
+
+  it("leaves already company-scoped paths unchanged", () => {
+    assert.equal(
+      scopedApiPath(`companies/${OTHER_COMPANY_ID}/employees`),
+      `companies/${OTHER_COMPANY_ID}/employees`,
+    );
+    assert.equal(
+      scopedApiPath(`companies/${OTHER_COMPANY_ID}/settings`),
+      `companies/${OTHER_COMPANY_ID}/settings`,
+    );
+  });
+
+  it("throws ACTIVE_COMPANY_REQUIRED when no company is selected", () => {
+    clearActiveCompanyId();
+    assert.throws(() => scopedApiPath("employees"), (error: unknown) => {
+      return error instanceof ActiveCompanyRequiredError && error.code === ACTIVE_COMPANY_REQUIRED;
+    });
+  });
+});
+
 describe("companyApiPath", () => {
   beforeEach(() => {
     storage.clear();
@@ -41,21 +100,14 @@ describe("companyApiPath", () => {
   });
 
   it("builds a relative company-scoped path without a leading slash", () => {
-    setRuntimeCompanyId("11111111-1111-1111-1111-111111111111");
+    setRuntimeCompanyId(ACTIVE_COMPANY_ID);
     assert.equal(
       companyApiPath("employees"),
-      "companies/11111111-1111-1111-1111-111111111111/employees",
+      `companies/${ACTIVE_COMPANY_ID}/employees`,
     );
     assert.equal(
       companyApiPath("/employees"),
-      "companies/11111111-1111-1111-1111-111111111111/employees",
-    );
-  });
-
-  it("uses explicit companyId override", () => {
-    assert.equal(
-      companyApiPath("employees", "22222222-2222-2222-2222-222222222222"),
-      "companies/22222222-2222-2222-2222-222222222222/employees",
+      `companies/${ACTIVE_COMPANY_ID}/employees`,
     );
   });
 
@@ -75,6 +127,15 @@ describe("isLegacyOperationalApiPath", () => {
 });
 
 describe("operational API audit", () => {
+  const GLOBAL_API_FILES = new Set([
+    "auth.api.ts",
+    "companies.api.ts",
+    "health.api.ts",
+    "client.ts",
+    "scoped-client.ts",
+    "company-path.ts",
+  ]);
+
   it("does not contain direct legacy operational apiClient paths", () => {
     const apiDir = join(process.cwd(), "src/api");
     const legacyPattern =
@@ -83,6 +144,10 @@ describe("operational API audit", () => {
     const offenders: string[] = [];
     for (const fileName of readdirSync(apiDir)) {
       if (!fileName.endsWith(".ts") || fileName.endsWith(".test.ts")) {
+        continue;
+      }
+
+      if (GLOBAL_API_FILES.has(fileName)) {
         continue;
       }
 

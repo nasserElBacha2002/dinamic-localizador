@@ -15,7 +15,7 @@ export function useAttendanceRecords(filters: AttendanceFilters) {
 
   return useQuery({
     queryKey: ["attendance", companyId, filters],
-    queryFn: () => getAttendanceRecords(filters, companyId),
+    queryFn: () => getAttendanceRecords(filters),
     enabled,
     retry: 1,
   });
@@ -26,7 +26,7 @@ export function useAttendanceRecord(attendanceId?: string) {
 
   return useQuery({
     queryKey: ["attendance-record", companyId, attendanceId],
-    queryFn: () => getAttendanceById(attendanceId!, companyId),
+    queryFn: () => getAttendanceById(attendanceId!),
     enabled,
   });
 }
@@ -84,7 +84,7 @@ export function useAttendanceReviews(attendanceId?: string, page = 1, limit = 10
 
   return useQuery({
     queryKey: ["attendance-reviews", companyId, attendanceId, page, limit],
-    queryFn: () => getAttendanceReviews(attendanceId!, page, limit, companyId),
+    queryFn: () => getAttendanceReviews(attendanceId!, page, limit),
     enabled,
   });
 }

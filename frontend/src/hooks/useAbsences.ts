@@ -23,7 +23,7 @@ export function useAbsenceTypes() {
 
   return useQuery({
     queryKey: ["absence-types", companyId],
-    queryFn: () => getAbsenceTypes(companyId),
+    queryFn: getAbsenceTypes,
     enabled,
   });
 }
@@ -33,7 +33,7 @@ export function useAbsenceRequests(filters: AbsenceRequestFilters) {
 
   return useQuery({
     queryKey: ["absence-requests", companyId, filters],
-    queryFn: () => getAbsenceRequests(filters, companyId),
+    queryFn: () => getAbsenceRequests(filters),
     enabled,
   });
 }
@@ -43,7 +43,7 @@ export function useAbsenceRequest(absenceRequestId?: string) {
 
   return useQuery({
     queryKey: ["absence-request", companyId, absenceRequestId],
-    queryFn: () => getAbsenceRequestById(absenceRequestId!, companyId),
+    queryFn: () => getAbsenceRequestById(absenceRequestId!),
     enabled,
   });
 }
@@ -107,7 +107,7 @@ export function useEmployeeAbsenceBalances(employeeId?: string, year?: number) {
 
   return useQuery({
     queryKey: ["employee-absence-balances", companyId, employeeId, year],
-    queryFn: () => getEmployeeAbsenceBalances(employeeId!, year!, companyId),
+    queryFn: () => getEmployeeAbsenceBalances(employeeId!, year!),
     enabled,
   });
 }

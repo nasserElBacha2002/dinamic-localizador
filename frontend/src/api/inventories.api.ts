@@ -17,55 +17,43 @@ import type {
   InventoryImportPreviewPayload,
   InventoryImportPreviewResult,
 } from "../types/inventory-import";
-import { apiClient, buildParams } from "./client";
-import { companyApiPath } from "./company-path";
+import { buildParams } from "./client";
+import { scopedApiClient } from "./scoped-client";
 
 export async function getInventories(
   filters: InventoryFilters = {},
-  companyId?: string,
 ): Promise<PaginatedResponse<InventoryWithStore>> {
-  const { data } = await apiClient.get<PaginatedResponse<InventoryWithStore>>(
-    companyApiPath("inventories", companyId),
-    {
-      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
-    },
-  );
+  const { data } = await scopedApiClient.get<PaginatedResponse<InventoryWithStore>>("inventories", {
+    params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+  });
   return data;
 }
 
-export async function getInventoryById(id: string, companyId?: string): Promise<InventoryDetail> {
-  const { data } = await apiClient.get<SingleResponse<InventoryDetail>>(
-    companyApiPath(`inventories/${id}`, companyId),
-  );
+export async function getInventoryById(id: string): Promise<InventoryDetail> {
+  const { data } = await scopedApiClient.get<SingleResponse<InventoryDetail>>(`inventories/${id}`);
   return data.data;
 }
 
 export async function createInventory(input: CreateInventoryInput): Promise<Inventory> {
-  const { data } = await apiClient.post<SingleResponse<Inventory>>(companyApiPath("inventories"), input);
+  const { data } = await scopedApiClient.post<SingleResponse<Inventory>>("inventories", input);
   return data.data;
 }
 
 export async function updateInventory(id: string, input: UpdateInventoryInput): Promise<Inventory> {
-  const { data } = await apiClient.put<SingleResponse<Inventory>>(
-    companyApiPath(`inventories/${id}`),
-    input,
-  );
+  const { data } = await scopedApiClient.put<SingleResponse<Inventory>>(`inventories/${id}`, input);
   return data.data;
 }
 
 export async function cancelInventory(id: string): Promise<Inventory> {
-  const { data } = await apiClient.delete<SingleResponse<Inventory>>(
-    companyApiPath(`inventories/${id}`),
-  );
+  const { data } = await scopedApiClient.delete<SingleResponse<Inventory>>(`inventories/${id}`);
   return data.data;
 }
 
 export async function getInventoryEmployees(
   inventoryId: string,
-  companyId?: string,
 ): Promise<InventoryEmployeeAssignment[]> {
-  const { data } = await apiClient.get<SingleResponse<InventoryEmployeeAssignment[]>>(
-    companyApiPath(`inventories/${inventoryId}/employees`, companyId),
+  const { data } = await scopedApiClient.get<SingleResponse<InventoryEmployeeAssignment[]>>(
+    `inventories/${inventoryId}/employees`,
   );
   return data.data;
 }
@@ -74,8 +62,8 @@ export async function assignEmployeeToInventory(
   inventoryId: string,
   employeeId: string,
 ): Promise<InventoryEmployeeAssignment> {
-  const { data } = await apiClient.post<SingleResponse<InventoryEmployeeAssignment>>(
-    companyApiPath(`inventories/${inventoryId}/employees`),
+  const { data } = await scopedApiClient.post<SingleResponse<InventoryEmployeeAssignment>>(
+    `inventories/${inventoryId}/employees`,
     { employeeId },
   );
   return data.data;
@@ -85,16 +73,15 @@ export async function unassignEmployeeFromInventory(
   inventoryId: string,
   employeeId: string,
 ): Promise<void> {
-  await apiClient.delete(companyApiPath(`inventories/${inventoryId}/employees/${employeeId}`));
+  await scopedApiClient.delete(`inventories/${inventoryId}/employees/${employeeId}`);
 }
 
 export async function getInventoryAttendanceSummary(
   inventoryId: string,
   filters: InventoryAttendanceSummaryFilters = {},
-  companyId?: string,
 ) {
-  const { data } = await apiClient.get<SingleResponse<InventoryAttendanceSummaryResponse>>(
-    companyApiPath(`inventories/${inventoryId}/attendance-summary`, companyId),
+  const { data } = await scopedApiClient.get<SingleResponse<InventoryAttendanceSummaryResponse>>(
+    `inventories/${inventoryId}/attendance-summary`,
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
@@ -108,8 +95,8 @@ const IMPORT_CONFIRM_TIMEOUT_MS = 120_000;
 export async function previewInventoryImport(
   payload: InventoryImportPreviewPayload,
 ): Promise<InventoryImportPreviewResult> {
-  const { data } = await apiClient.post<{ data: InventoryImportPreviewResult }>(
-    companyApiPath("inventories/import/preview"),
+  const { data } = await scopedApiClient.post<{ data: InventoryImportPreviewResult }>(
+    "inventories/import/preview",
     payload,
     { timeout: IMPORT_PREVIEW_TIMEOUT_MS },
   );
@@ -117,8 +104,8 @@ export async function previewInventoryImport(
 }
 
 export async function confirmInventoryImport(rows: InventoryImportConfirmRow[]) {
-  const { data } = await apiClient.post<{ data: Inventory[]; count: number }>(
-    companyApiPath("inventories/import/confirm"),
+  const { data } = await scopedApiClient.post<{ data: Inventory[]; count: number }>(
+    "inventories/import/confirm",
     { rows },
     { timeout: IMPORT_CONFIRM_TIMEOUT_MS },
   );

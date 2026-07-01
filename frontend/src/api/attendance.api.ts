@@ -8,15 +8,14 @@ import type {
   CreateAttendanceInput,
   ReviewAttendanceInput,
 } from "../types/attendance";
-import { apiClient, buildParams } from "./client";
-import { companyApiPath } from "./company-path";
+import { buildParams } from "./client";
+import { scopedApiClient } from "./scoped-client";
 
 export async function getAttendanceRecords(
   filters: AttendanceFilters = {},
-  companyId?: string,
 ): Promise<PaginatedResponse<AttendanceRecordWithRelations>> {
-  const { data } = await apiClient.get<PaginatedResponse<AttendanceRecordWithRelations>>(
-    companyApiPath("attendance", companyId),
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceRecordWithRelations>>(
+    "attendance",
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
@@ -24,18 +23,13 @@ export async function getAttendanceRecords(
   return data;
 }
 
-export async function getAttendanceById(id: string, companyId?: string): Promise<AttendanceDetail> {
-  const { data } = await apiClient.get<SingleResponse<AttendanceDetail>>(
-    companyApiPath(`attendance/${id}`, companyId),
-  );
+export async function getAttendanceById(id: string): Promise<AttendanceDetail> {
+  const { data } = await scopedApiClient.get<SingleResponse<AttendanceDetail>>(`attendance/${id}`);
   return data.data;
 }
 
 export async function createAttendanceRecord(input: CreateAttendanceInput): Promise<AttendanceRecord> {
-  const { data } = await apiClient.post<SingleResponse<AttendanceRecord>>(
-    companyApiPath("attendance"),
-    input,
-  );
+  const { data } = await scopedApiClient.post<SingleResponse<AttendanceRecord>>("attendance", input);
   return data.data;
 }
 
@@ -43,10 +37,9 @@ export async function getAttendanceReviews(
   id: string,
   page = 1,
   limit = 10,
-  companyId?: string,
 ): Promise<PaginatedResponse<AttendanceReview>> {
-  const { data } = await apiClient.get<PaginatedResponse<AttendanceReview>>(
-    companyApiPath(`attendance/${id}/reviews`, companyId),
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceReview>>(
+    `attendance/${id}/reviews`,
     {
       params: { page, limit },
     },
@@ -58,15 +51,15 @@ export async function reviewAttendanceRecord(
   id: string,
   input: ReviewAttendanceInput,
 ): Promise<AttendanceDetail> {
-  const { data } = await apiClient.patch<SingleResponse<AttendanceDetail>>(
-    companyApiPath(`attendance/${id}/review`),
+  const { data } = await scopedApiClient.patch<SingleResponse<AttendanceDetail>>(
+    `attendance/${id}/review`,
     input,
   );
   return data.data;
 }
 
 export async function exportAttendanceCsv(filters: AttendanceFilters = {}): Promise<Blob> {
-  const response = await apiClient.get<Blob>(companyApiPath("attendance/export.csv"), {
+  const response = await scopedApiClient.get<Blob>("attendance/export.csv", {
     params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     responseType: "blob",
   });

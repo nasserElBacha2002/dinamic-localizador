@@ -14,7 +14,7 @@ export function useEmployees(filters: EmployeeFilters, extraEnabled = true) {
 
   return useQuery({
     queryKey: ["employees", companyId, filters],
-    queryFn: () => getEmployees(filters, companyId),
+    queryFn: () => getEmployees(filters),
     enabled,
     retry: 1,
   });
@@ -25,7 +25,7 @@ export function useEmployee(employeeId?: string) {
 
   return useQuery({
     queryKey: ["employee", companyId, employeeId],
-    queryFn: () => getEmployeeById(employeeId!, companyId),
+    queryFn: () => getEmployeeById(employeeId!),
     enabled,
   });
 }

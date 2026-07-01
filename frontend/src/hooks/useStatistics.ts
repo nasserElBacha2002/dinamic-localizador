@@ -31,7 +31,7 @@ export function useStatisticsSummary(filters: StatisticsFilters) {
 
   return useQuery({
     queryKey: statisticsKeys.summary(companyId, filters),
-    queryFn: () => getAttendanceStatisticsSummary(filters, companyId),
+    queryFn: () => getAttendanceStatisticsSummary(filters),
     enabled,
   });
 }
@@ -41,7 +41,7 @@ export function useStatisticsTimeline(filters: StatisticsFilters) {
 
   return useQuery({
     queryKey: statisticsKeys.timeline(companyId, filters),
-    queryFn: () => getAttendanceStatisticsTimeline(filters, companyId),
+    queryFn: () => getAttendanceStatisticsTimeline(filters),
     enabled,
   });
 }
@@ -51,7 +51,7 @@ export function useStatisticsStatusDistribution(filters: StatisticsFilters) {
 
   return useQuery({
     queryKey: statisticsKeys.statusDistribution(companyId, filters),
-    queryFn: () => getAttendanceStatusDistribution(filters, companyId),
+    queryFn: () => getAttendanceStatusDistribution(filters),
     enabled,
   });
 }
@@ -61,7 +61,7 @@ export function useStatisticsByEmployee(filters: StatisticsFilters) {
 
   return useQuery({
     queryKey: statisticsKeys.byEmployee(companyId, filters),
-    queryFn: () => getAttendanceByEmployee(filters, companyId),
+    queryFn: () => getAttendanceByEmployee(filters),
     enabled,
   });
 }
@@ -71,7 +71,7 @@ export function useStatisticsByInventory(filters: StatisticsFilters) {
 
   return useQuery({
     queryKey: statisticsKeys.byInventory(companyId, filters),
-    queryFn: () => getAttendanceByInventory(filters, companyId),
+    queryFn: () => getAttendanceByInventory(filters),
     enabled,
   });
 }
@@ -81,7 +81,7 @@ export function useStatisticsByLocation(filters: StatisticsFilters) {
 
   return useQuery({
     queryKey: statisticsKeys.byLocation(companyId, filters),
-    queryFn: () => getAttendanceByLocation(filters, companyId),
+    queryFn: () => getAttendanceByLocation(filters),
     enabled,
   });
 }

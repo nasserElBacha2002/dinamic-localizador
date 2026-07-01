@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useMemo, useState, type PropsWithChildren } from "react";
 import { getCompanies } from "../api/companies.api";
-import { getStoredCompanyId, setRuntimeCompanyId } from "../api/company-path";
+import {
+  getStoredCompanyId,
+  setCompanySelectionRequiredHandler,
+  setRuntimeCompanyId,
+} from "../api/company-path";
 import { useAuth } from "../hooks/useAuth";
 import { queryClient } from "../lib/query-client";
 import { CompanyContext, type CompanyContextValue } from "./company-context";
@@ -25,8 +29,7 @@ function resolveInitialCompany(
     }
   }
 
-  const defaultCompany = companies.find((company) => company.isDefault);
-  return defaultCompany ?? null;
+  return null;
 }
 
 export function CompanyProvider({ children }: PropsWithChildren) {
@@ -34,6 +37,12 @@ export function CompanyProvider({ children }: PropsWithChildren) {
   const [companies, setCompanies] = useState<CompanyMembershipSummary[]>([]);
   const [activeCompany, setActiveCompany] = useState<CompanyMembershipSummary | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const clearActiveCompany = useCallback(() => {
+    setActiveCompany(null);
+    setRuntimeCompanyId(null);
+    queryClient.clear();
+  }, []);
 
   const refreshCompanies = useCallback(async () => {
     const memberships = await getCompanies();
@@ -44,10 +53,19 @@ export function CompanyProvider({ children }: PropsWithChildren) {
   }, []);
 
   useEffect(() => {
+    setCompanySelectionRequiredHandler(() => {
+      clearActiveCompany();
+    });
+
+    return () => {
+      setCompanySelectionRequiredHandler(null);
+    };
+  }, [clearActiveCompany]);
+
+  useEffect(() => {
     if (!isAuthenticated) {
       setCompanies([]);
-      setActiveCompany(null);
-      setRuntimeCompanyId(null);
+      clearActiveCompany();
       setIsLoading(false);
       return;
     }
@@ -56,20 +74,19 @@ export function CompanyProvider({ children }: PropsWithChildren) {
     void refreshCompanies()
       .catch(() => {
         setCompanies([]);
-        setActiveCompany(null);
-        setRuntimeCompanyId(null);
+        clearActiveCompany();
       })
       .finally(() => {
         setIsLoading(false);
       });
-  }, [isAuthenticated, refreshCompanies]);
+  }, [isAuthenticated, refreshCompanies, clearActiveCompany]);
 
   const selectCompany = useCallback(
     (companyId: string) => {
       const selected = companies.find((company) => company.companyId === companyId) ?? null;
       setActiveCompany(selected);
       setRuntimeCompanyId(selected?.companyId ?? null);
-      void queryClient.invalidateQueries();
+      queryClient.clear();
     },
     [companies],
   );
@@ -79,12 +96,14 @@ export function CompanyProvider({ children }: PropsWithChildren) {
       companies,
       activeCompany,
       isLoading,
-      isReady: Boolean(activeCompany),
-      requiresSelection: companies.length > 1 && !activeCompany,
+      isReady: !isLoading && Boolean(activeCompany?.companyId),
+      requiresSelection: !isLoading && companies.length > 1 && !activeCompany,
+      hasNoCompanies: !isLoading && companies.length === 0,
       selectCompany,
       refreshCompanies,
+      clearActiveCompany,
     }),
-    [companies, activeCompany, isLoading, selectCompany, refreshCompanies],
+    [companies, activeCompany, isLoading, selectCompany, refreshCompanies, clearActiveCompany],
   );
 
   return <CompanyContext.Provider value={value}>{children}</CompanyContext.Provider>;

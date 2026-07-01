@@ -1,4 +1,5 @@
 import axios from "axios";
+import { notifyCompanySelectionRequired } from "./company-path";
 import { getStoredToken } from "./token-storage";
 import { parseApiError } from "../utils/errors";
 
@@ -31,8 +32,15 @@ apiClient.interceptors.request.use((config) => {
 apiClient.interceptors.response.use(
   (response) => response,
   (error: unknown) => {
-    if (axios.isAxiosError(error) && error.response?.status === 401) {
-      unauthorizedHandler?.();
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 401) {
+        unauthorizedHandler?.();
+      }
+
+      const code = error.response?.data?.error?.code;
+      if (error.response?.status === 409 && code === "COMPANY_SELECTION_REQUIRED") {
+        notifyCompanySelectionRequired();
+      }
     }
 
     return Promise.reject(parseApiError(error));

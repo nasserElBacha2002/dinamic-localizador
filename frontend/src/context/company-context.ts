@@ -7,8 +7,10 @@ export type CompanyContextValue = {
   isLoading: boolean;
   isReady: boolean;
   requiresSelection: boolean;
+  hasNoCompanies: boolean;
   selectCompany: (companyId: string) => void;
   refreshCompanies: () => Promise<void>;
+  clearActiveCompany: () => void;
 };
 
 export const CompanyContext = createContext<CompanyContextValue | null>(null);

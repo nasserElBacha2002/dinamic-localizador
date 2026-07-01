@@ -8,20 +8,25 @@ import {
   sendBotSimulationMessage,
   type CreateBotSimulationSessionInput,
 } from "../api/bot-simulator.api";
+import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useBotSimulationSession(sessionId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(sessionId));
+
   return useQuery({
-    queryKey: ["bot-simulator-session", sessionId],
+    queryKey: ["bot-simulator-session", companyId, sessionId],
     queryFn: () => getBotSimulationSession(sessionId!),
-    enabled: Boolean(sessionId),
+    enabled,
   });
 }
 
 export function useBotSimulationLocationPresets(sessionId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(sessionId));
+
   return useQuery({
-    queryKey: ["bot-simulator-location-presets", sessionId],
+    queryKey: ["bot-simulator-location-presets", companyId, sessionId],
     queryFn: () => getBotSimulationLocationPresets(sessionId!),
-    enabled: Boolean(sessionId),
+    enabled,
   });
 }
 

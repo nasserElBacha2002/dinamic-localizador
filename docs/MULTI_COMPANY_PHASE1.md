@@ -39,8 +39,9 @@ Operational routes use `requirePermission(...)` after `resolveCompanyContext`.
 
 Employee phone uniqueness is **company-scoped** (`UQ_employees_company_phone_number`).
 
-## WhatsApp default company
+## Frontend company selection
 
-- One active company → auto-resolve.
-- Multiple active companies → require `BOT_DEFAULT_COMPANY_ID` or `BOT_DEFAULT_COMPANY_NAME`.
-- Does not randomly pick Dinamic Systems.
+- Operational React Query hooks wait for `isReady` and include `companyId` in query keys.
+- `companyApiPath` throws `ACTIVE_COMPANY_REQUIRED` if no runtime company is set.
+- Multi-company users (including platform superadmin) must select a company before operational pages load.
+- `409 COMPANY_SELECTION_REQUIRED` clears the active company and shows the selector.

@@ -12,6 +12,7 @@ import { useNavigate } from "react-router-dom";
 import { useCompany } from "../../hooks/useCompany";
 
 export function CompanySelector({ compact = false }: { compact?: boolean }) {
+  const navigate = useNavigate();
   const { companies, activeCompany, selectCompany } = useCompany();
 
   if (companies.length <= 1) {
@@ -28,6 +29,7 @@ export function CompanySelector({ compact = false }: { compact?: boolean }) {
 
   const handleChange = (event: SelectChangeEvent<string>) => {
     selectCompany(event.target.value);
+    navigate("/");
   };
 
   return (

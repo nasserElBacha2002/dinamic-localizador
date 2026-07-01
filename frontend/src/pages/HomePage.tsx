@@ -4,13 +4,12 @@ import { StatusCard } from "../components/StatusCard";
 import { ErrorState } from "../components/common/ErrorState";
 import { LoadingState } from "../components/common/LoadingState";
 import { PageHeader } from "../components/common/PageHeader";
-import { getEmployees } from "../api/employees.api";
-import { getInventories } from "../api/inventories.api";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
+import { useEmployees } from "../hooks/useEmployees";
+import { useInventories } from "../hooks/useInventories";
 import { AdminLayout } from "../layouts/AdminLayout";
 import type { InventoryWithStore } from "../types/inventory";
 import { formatDateTime } from "../utils/dates";
-import { useQuery } from "@tanstack/react-query";
 
 const quickLinks = [
   { title: "Empleados", description: "Gestionar personal", to: "/employees" },
@@ -22,18 +21,14 @@ const quickLinks = [
 export function HomePage() {
   const apiHealth = useApiHealth();
   const databaseHealth = useDatabaseHealth();
+  const healthReady = databaseHealth.data?.database === "connected";
 
-  const activeEmployeesQuery = useQuery({
-    queryKey: ["employees", { active: true, page: 1, limit: 1 }],
-    queryFn: () => getEmployees({ active: true, page: 1, limit: 1 }),
-    enabled: databaseHealth.data?.database === "connected",
-  });
+  const activeEmployeesQuery = useEmployees({ active: true, page: 1, limit: 1 }, healthReady);
 
-  const upcomingInventoriesQuery = useQuery({
-    queryKey: ["inventories", { status: "SCHEDULED", page: 1, limit: 5 }],
-    queryFn: () => getInventories({ status: "SCHEDULED", page: 1, limit: 5 }),
-    enabled: databaseHealth.data?.database === "connected",
-  });
+  const upcomingInventoriesQuery = useInventories(
+    { status: "SCHEDULED", page: 1, limit: 5 },
+    healthReady,
+  );
 
   return (
     <AdminLayout>

@@ -13,7 +13,9 @@ const REQUIRED_INTEGRATION_ENV = [
   "JWT_SECRET",
 ] as const;
 
+/** Requires explicit opt-in so CI/unit runs do not attempt localhost SQL connections. */
 export const isDatabaseIntegrationEnabled = (): boolean =>
+  process.env.RUN_DB_INTEGRATION_TESTS === "true" &&
   REQUIRED_INTEGRATION_ENV.every((key) => Boolean(process.env[key]));
 
 /** Use instead of `describe` for suites that require a live SQL Server database. */

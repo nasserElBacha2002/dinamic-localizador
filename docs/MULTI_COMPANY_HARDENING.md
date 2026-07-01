@@ -38,7 +38,7 @@ Route registration order (critical): company-scoped mount **before** legacy flat
 
 Operational API modules use `scopedApiClient`, which calls `scopedApiPath`:
 
-- `employees`, `stores`, `inventories`, `attendance`, `statistics`, `absence-types`, `absence-requests`, `bot-simulator`, `users`, `settings`, `dev` → prefixed with `companies/:activeCompanyId/`
+- `employees`, `stores`, `inventories`, `attendance`, `statistics`, `absence-types`, `absence-requests`, `bot-simulator`, `users`, `settings`, `modules`, `dev` → prefixed with `companies/:activeCompanyId/`
 - `auth`, `companies`, `health`, `webhooks`, `database` → unchanged
 - Already company-scoped paths → unchanged
 - No active company → `ActiveCompanyRequiredError` (`ACTIVE_COMPANY_REQUIRED`)
@@ -60,7 +60,7 @@ Hooks use `useOperationalQueryEnabled`:
 | `reports:read` | All read roles |
 | `company:read` / `company:settings:update` | READ_ONLY read; OWNER/ADMIN update |
 
-Global `users.role = ADMIN` is **not** used for operational authorization. Use `requirePermission` after `resolveCompanyContext`.
+Global `users.role = ADMIN` is **not** used for operational authorization. Use `requirePermission` after `resolveCompanyContext`. **Modules and permissions both apply** — see [PERMISSIONS.md](./PERMISSIONS.md).
 
 ## Legacy route deprecation
 
@@ -151,7 +151,7 @@ python3 scripts/audit/audit_tenant_isolation.py
 - Generic Excel import redesign
 - WhatsApp employee portal
 - WhatsApp multi-company resolution by receiver number
-- `company_modules` enforcement on every route
+- `company_modules` enforcement on operational routes (see [COMPANY_MODULES.md](./COMPANY_MODULES.md))
 - Email invitation flow for new company users
 - Employee self-service web accounts
 
@@ -160,3 +160,4 @@ See [PLATFORM_COMPANY_MANAGEMENT.md](./PLATFORM_COMPANY_MANAGEMENT.md) for platf
 ## Related docs
 
 - [MULTI_COMPANY_PHASE1.md](./MULTI_COMPANY_PHASE1.md) — initial Phase 1 implementation notes
+- [COMPANY_MODULES.md](./COMPANY_MODULES.md) — module visibility and route guards (Phase 1.5)

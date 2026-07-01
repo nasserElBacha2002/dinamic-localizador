@@ -17,6 +17,7 @@ const ALL_PERMISSIONS: CompanyPermission[] = [
   "absences:review",
   "reports:read",
   "reports:export",
+  "bot_simulator:use",
 ];
 
 const READ_ONLY_PERMISSIONS: CompanyPermission[] = [
@@ -49,6 +50,7 @@ const ROLE_PERMISSIONS: Record<CompanyRole, CompanyPermission[]> = {
     "attendance:read",
     "attendance:review",
     "reports:read",
+    "bot_simulator:use",
   ],
   OPERATOR: ["company:read", "inventories:read", "attendance:read"],
   READ_ONLY: READ_ONLY_PERMISSIONS,

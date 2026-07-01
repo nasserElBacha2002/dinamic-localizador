@@ -53,16 +53,16 @@ describe("requirePermission middleware", () => {
     assert.equal(nextCalled, true);
   });
 
-  it("requireAnyPermission grants bot simulator read with inventories:read", () => {
-    const operatorPermissions = resolvePermissionsForRole("OPERATOR");
-    const req = { permissions: operatorPermissions } as Request;
+  it("requireAnyPermission grants bot simulator read with bot_simulator:use", () => {
+    const supervisorPermissions = resolvePermissionsForRole("SUPERVISOR");
+    const req = { permissions: supervisorPermissions } as Request;
     const res = createMockResponse();
     let nextCalled = false;
     const next: NextFunction = () => {
       nextCalled = true;
     };
 
-    requireAnyPermission("attendance:read", "inventories:read")(req, res, next);
+    requirePermission("bot_simulator:use")(req, res, next);
     assert.equal(nextCalled, true);
   });
 });

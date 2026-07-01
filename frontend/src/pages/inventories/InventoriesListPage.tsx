@@ -24,8 +24,9 @@ import { PaginationControls } from "../../components/common/PaginationControls";
 import type { SortableColumn } from "../../components/common/SortableTableHead";
 import { SortableTableHead } from "../../components/common/SortableTableHead";
 import { StatusChip } from "../../components/common/StatusChip";
-import { StoreSearchAutocomplete } from "../../components/stores/StoreSearchAutocomplete";
+import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
 import { useInventories } from "../../hooks/useInventories";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useTableSort } from "../../hooks/useTableSort";
 import { AdminLayout } from "../../layouts/AdminLayout";
@@ -39,6 +40,7 @@ import {
 } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { inventoryStatusLabels } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
 
 const INVENTORY_TABLE_COLUMNS: SortableColumn<InventoryListSortField>[] = [
   { id: "storeName", label: "Tienda" },
@@ -51,6 +53,12 @@ const INVENTORY_TABLE_COLUMNS: SortableColumn<InventoryListSortField>[] = [
 ];
 
 export function InventoriesListPage() {
+  const permissionsQuery = useCompanyPermissions();
+  const canManageInventories = hasPermission(
+    permissionsQuery.data?.permissions,
+    "inventories:manage",
+  );
+
   const pagination = usePaginationState(10);
   const { sortBy, sortDirection, onSortChange } = useTableSort<InventoryListSortField>(
     "scheduledStart",
@@ -89,12 +97,14 @@ export function InventoriesListPage() {
         title="Inventarios"
         description="Planificá jornadas de inventario y asigná empleados."
         action={
-          <Stack direction="row" spacing={1}>
-            <Button component={RouterLink} to="/inventories/import" variant="outlined">
-              Importar inventarios
-            </Button>
-            <PageHeaderLinkAction to="/inventories/new" label="Nuevo inventario" />
-          </Stack>
+          canManageInventories ? (
+            <Stack direction="row" spacing={1}>
+              <Button component={RouterLink} to="/inventories/import" variant="outlined">
+                Importar inventarios
+              </Button>
+              <PageHeaderLinkAction to="/inventories/new" label="Nuevo inventario" />
+            </Stack>
+          ) : undefined
         }
       />
 
@@ -122,13 +132,12 @@ export function InventoriesListPage() {
         </FilterItem>
 
         <FilterItem size={{ xs: 12, sm: 6, md: 3 }}>
-          <StoreSearchAutocomplete
+          <StoreLookupAutocomplete
             value={storeId || null}
             onChange={(id) => {
               pagination.resetPage();
               setStoreId(id ?? "");
             }}
-            allowCreate={false}
           />
         </FilterItem>
 

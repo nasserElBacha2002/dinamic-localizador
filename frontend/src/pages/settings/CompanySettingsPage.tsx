@@ -16,9 +16,17 @@ import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useCompanySettings, useUpdateCompanySettings } from "../../hooks/useCompanySettings";
+import { useCompanyModules, useUpdateCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import type { CompanySettings, CompanySettingsFormValues } from "../../types/company-settings";
+import type { CompanyModule, CompanyModuleKey } from "../../types/company-module";
+import {
+  COMPANY_MODULE_DESCRIPTIONS,
+  COMPANY_MODULE_LABELS,
+  validateCompanyModulesUpdate,
+  moduleStatesEqual,
+} from "../../utils/company-modules";
 import {
   formValuesEqual,
   toCompanySettingsFormValues,
@@ -216,6 +224,119 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
   );
 }
 
+const ALL_MODULE_KEYS: CompanyModuleKey[] = [
+  "attendance",
+  "inventory_operations",
+  "absences",
+  "reports",
+  "bot_simulator",
+];
+
+interface CompanyModulesFormProps {
+  modules: CompanyModule[];
+  canUpdate: boolean;
+  onSaved: (message: string) => void;
+}
+
+function CompanyModulesForm({ modules, canUpdate, onSaved }: CompanyModulesFormProps) {
+  const updateMutation = useUpdateCompanyModules();
+  const [draftModules, setDraftModules] = useState<CompanyModule[]>(() => modules);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+
+  const hasChanges = !moduleStatesEqual(draftModules, modules);
+  const validationError = validateCompanyModulesUpdate(draftModules);
+  const isReadOnly = !canUpdate;
+
+  const handleToggle = (moduleKey: CompanyModuleKey, isEnabled: boolean) => {
+    setDraftModules((current) =>
+      current.map((module) =>
+        module.moduleKey === moduleKey ? { ...module, isEnabled } : module,
+      ),
+    );
+    setSubmitError(null);
+  };
+
+  const handleReset = () => {
+    setDraftModules(modules);
+    setSubmitError(null);
+  };
+
+  const handleSave = async () => {
+    if (!canUpdate || validationError || !hasChanges || updateMutation.isPending) {
+      return;
+    }
+
+    setSubmitError(null);
+    try {
+      await updateMutation.mutateAsync({
+        modules: draftModules.map((module) => ({
+          moduleKey: module.moduleKey,
+          isEnabled: module.isEnabled,
+        })),
+      });
+      onSaved("Módulos guardados correctamente.");
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    }
+  };
+
+  return (
+    <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
+      <Stack spacing={3}>
+        <Box>
+          <Typography variant="h6" gutterBottom>
+            Módulos habilitados
+          </Typography>
+          <Typography variant="body2" color="text.secondary">
+            Controlá qué áreas del producto están disponibles para esta empresa.
+          </Typography>
+        </Box>
+
+        {ALL_MODULE_KEYS.map((moduleKey) => {
+          const moduleState = draftModules.find((module) => module.moduleKey === moduleKey);
+          return (
+            <Box key={moduleKey}>
+              <FormControlLabel
+                control={
+                  <Switch
+                    checked={moduleState?.isEnabled ?? false}
+                    onChange={(event) => handleToggle(moduleKey, event.target.checked)}
+                    disabled={isReadOnly || updateMutation.isPending}
+                  />
+                }
+                label={COMPANY_MODULE_LABELS[moduleKey]}
+              />
+              <FormHelperText>{COMPANY_MODULE_DESCRIPTIONS[moduleKey]}</FormHelperText>
+            </Box>
+          );
+        })}
+
+        {validationError ? <FormHelperText error>{validationError}</FormHelperText> : null}
+        {submitError ? <FormHelperText error>{submitError}</FormHelperText> : null}
+
+        {canUpdate ? (
+          <Stack direction="row" spacing={1}>
+            <Button
+              variant="contained"
+              onClick={() => void handleSave()}
+              disabled={!hasChanges || Boolean(validationError) || updateMutation.isPending}
+            >
+              Guardar módulos
+            </Button>
+            <Button
+              variant="outlined"
+              onClick={handleReset}
+              disabled={!hasChanges || updateMutation.isPending}
+            >
+              Descartar cambios
+            </Button>
+          </Stack>
+        ) : null}
+      </Stack>
+    </Paper>
+  );
+}
+
 export function CompanySettingsPage() {
   const permissionsQuery = useCompanyPermissions();
   const canRead = permissionsQuery.data?.permissions.includes("company:read") ?? false;
@@ -223,6 +344,7 @@ export function CompanySettingsPage() {
     permissionsQuery.data?.permissions.includes("company:settings:update") ?? false;
 
   const settingsQuery = useCompanySettings(canRead);
+  const modulesQuery = useCompanyModules(canRead);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   if (permissionsQuery.isPending) {
@@ -241,7 +363,7 @@ export function CompanySettingsPage() {
     );
   }
 
-  if (settingsQuery.isPending) {
+  if (settingsQuery.isPending || modulesQuery.isPending) {
     return (
       <AdminLayout>
         <LoadingState />
@@ -276,6 +398,17 @@ export function CompanySettingsPage() {
         canUpdate={canUpdate}
         onSaved={setSuccessMessage}
       />
+
+      {modulesQuery.data ? (
+        <CompanyModulesForm
+          key={`${settingsQuery.data.companyId}-modules-${modulesQuery.dataUpdatedAt}`}
+          modules={modulesQuery.data}
+          canUpdate={canUpdate}
+          onSaved={setSuccessMessage}
+        />
+      ) : modulesQuery.isError ? (
+        <ErrorState message={getApiErrorMessage(modulesQuery.error)} />
+      ) : null}
 
       <FeedbackSnackbar
         open={Boolean(successMessage)}

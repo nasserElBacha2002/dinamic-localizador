@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { COMPANY_MODULE_KEYS } from "../constants/company-modules";
+import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import { COMPANY_STATUSES } from "../types/company";
 
 const companySettingsInputSchema = z.object({
@@ -30,9 +30,9 @@ export const createPlatformCompanySchema = z.object({
   status: z.enum(COMPANY_STATUSES).optional().default("ACTIVE"),
   settings: companySettingsInputSchema.optional(),
   modules: z
-    .array(z.enum(COMPANY_MODULE_KEYS))
+    .array(z.enum(ALL_COMPANY_MODULE_KEYS))
     .optional()
-    .default([...COMPANY_MODULE_KEYS]),
+    .default([...ALL_COMPANY_MODULE_KEYS]),
   owner: ownerInputSchema,
 });
 

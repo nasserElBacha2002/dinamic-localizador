@@ -34,6 +34,8 @@ OPERATIONAL_PREFIXES = (
     "bot-simulator",
     "users",
     "settings",
+    "modules",
+    "lookups",
 )
 
 LEGACY_API_CLIENT = re.compile(
@@ -115,10 +117,11 @@ def audit_backend_routes() -> list[str]:
         "inventory-assignment.routes.ts",
         "attendance.routes.ts",
         "statistics.routes.ts",
-        "absence.routes.ts",
+        "absence-type.routes.ts",
         "absence-request.routes.ts",
-        "bot-simulator.routes.ts",
-        "company-user.routes.ts",
+    "bot-simulator.routes.ts",
+    "lookup.routes.ts",
+    "company-user.routes.ts",
     ]
 
     for file_name in operational_route_files:

@@ -23,11 +23,15 @@ import { SearchField } from "../../components/common/SearchField";
 import { StatusChip } from "../../components/common/StatusChip";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useStores } from "../../hooks/useStores";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
 
 export function StoresListPage() {
+  const permissionsQuery = useCompanyPermissions();
+  const canManageStores = hasPermission(permissionsQuery.data?.permissions, "stores:manage");
   const pagination = usePaginationState(10);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
@@ -49,7 +53,11 @@ export function StoresListPage() {
       <PageHeader
         title="Tiendas"
         description="Configurá ubicaciones y radios permitidos."
-        action={<PageHeaderLinkAction to="/stores/new" label="Nueva tienda" />}
+        action={
+          canManageStores ? (
+            <PageHeaderLinkAction to="/stores/new" label="Nueva tienda" />
+          ) : undefined
+        }
       />
 
       <ListFilters>

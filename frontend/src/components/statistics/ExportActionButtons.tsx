@@ -1,5 +1,7 @@
 import { Button, Stack } from "@mui/material";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { buildExportFilename, exportToCsv, exportToXlsx } from "../../utils/export";
+import { hasPermission } from "../../utils/permissions";
 
 interface ExportActionButtonsProps {
   baseName: string;
@@ -22,6 +24,13 @@ export function ExportActionButtons({
   sheetName = "Datos",
   disabled = false,
 }: ExportActionButtonsProps) {
+  const permissionsQuery = useCompanyPermissions();
+  const canExport = hasPermission(permissionsQuery.data?.permissions, "reports:export");
+
+  if (!canExport) {
+    return null;
+  }
+
   const filename = buildExportFilename(baseName, dateFrom, dateTo);
   const isDisabled = disabled || rows.length === 0;
 

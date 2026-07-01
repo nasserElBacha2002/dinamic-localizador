@@ -4,31 +4,39 @@ import { StatusCard } from "../components/StatusCard";
 import { ErrorState } from "../components/common/ErrorState";
 import { LoadingState } from "../components/common/LoadingState";
 import { PageHeader } from "../components/common/PageHeader";
+import { useCompanyModules } from "../hooks/useCompanyModules";
+import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
-import { useEmployees } from "../hooks/useEmployees";
 import { useInventories } from "../hooks/useInventories";
 import { AdminLayout } from "../layouts/AdminLayout";
 import type { InventoryWithStore } from "../types/inventory";
+import { getHomeQuickLinks } from "../utils/company-modules";
+import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
-
-const quickLinks = [
-  { title: "Empleados", description: "Gestionar personal", to: "/employees" },
-  { title: "Tiendas", description: "Configurar puntos de inventario", to: "/stores" },
-  { title: "Inventarios", description: "Planificar jornadas", to: "/inventories" },
-  { title: "Asistencias", description: "Revisar registros", to: "/attendance" },
-];
 
 export function HomePage() {
   const apiHealth = useApiHealth();
   const databaseHealth = useDatabaseHealth();
+  const permissionsQuery = useCompanyPermissions();
+  const modulesQuery = useCompanyModules();
   const healthReady = databaseHealth.data?.database === "connected";
 
-  const activeEmployeesQuery = useEmployees({ active: true, page: 1, limit: 1 }, healthReady);
+  const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
+    "inventories:read",
+    "inventories:manage",
+  ]);
 
   const upcomingInventoriesQuery = useInventories(
     { status: "SCHEDULED", page: 1, limit: 5 },
-    healthReady,
+    healthReady && canReadInventories,
   );
+
+  const quickLinks = getHomeQuickLinks({
+    modules: modulesQuery.data,
+    permissions: permissionsQuery.data?.permissions,
+    isPlatformAdmin: Boolean(permissionsQuery.data?.isPlatformAdmin),
+    modulesLoading: permissionsQuery.isPending || modulesQuery.isPending,
+  });
 
   return (
     <AdminLayout>
@@ -68,75 +76,74 @@ export function HomePage() {
             }
           />
         </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Empleados activos"
-            status={activeEmployeesQuery.isLoading ? "loading" : activeEmployeesQuery.isError ? "error" : "ok"}
-            details={
-              activeEmployeesQuery.data
-                ? `${activeEmployeesQuery.data.meta.total} empleados activos`
-                : "No disponible"
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Próximos inventarios"
-            status={
-              upcomingInventoriesQuery.isLoading
-                ? "loading"
-                : upcomingInventoriesQuery.isError
-                  ? "error"
-                  : "ok"
-            }
-            details={
-              upcomingInventoriesQuery.data
-                ? `${upcomingInventoriesQuery.data.meta.total} inventarios programados`
-                : "No disponible"
-            }
-          />
-        </Grid>
-      </Grid>
-
-      <Typography variant="h5" gutterBottom>
-        Accesos rápidos
-      </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        {quickLinks.map((link) => (
-          <Grid key={link.to} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card variant="outlined" sx={{ height: "100%" }}>
-              <CardContent>
-                <Typography variant="h6">{link.title}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {link.description}
-                </Typography>
-              </CardContent>
-              <CardActions>
-                <Button component={RouterLink} to={link.to} size="small">
-                  Ir
-                </Button>
-              </CardActions>
-            </Card>
+        {canReadInventories ? (
+          <Grid size={{ xs: 12, md: 6 }}>
+            <StatusCard
+              title="Próximos inventarios"
+              status={
+                upcomingInventoriesQuery.isLoading
+                  ? "loading"
+                  : upcomingInventoriesQuery.isError
+                    ? "error"
+                    : "ok"
+              }
+              details={
+                upcomingInventoriesQuery.data
+                  ? `${upcomingInventoriesQuery.data.meta.total} inventarios programados`
+                  : "No disponible"
+              }
+            />
           </Grid>
-        ))}
+        ) : null}
       </Grid>
 
-      <Typography variant="h5" gutterBottom>
-        Próximos inventarios
-      </Typography>
-      {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
-      {upcomingInventoriesQuery.isError ? (
-        <ErrorState message="No se pudieron cargar los inventarios programados." />
+      {quickLinks.length > 0 ? (
+        <>
+          <Typography variant="h5" gutterBottom>
+            Accesos rápidos
+          </Typography>
+          <Grid container spacing={2} sx={{ mb: 4 }}>
+            {quickLinks.map((link) => (
+              <Grid key={link.path} size={{ xs: 12, sm: 6, md: 3 }}>
+                <Card variant="outlined" sx={{ height: "100%" }}>
+                  <CardContent>
+                    <Typography variant="h6">{link.label}</Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      Ir a {link.label.toLowerCase()}
+                    </Typography>
+                  </CardContent>
+                  <CardActions>
+                    <Button component={RouterLink} to={link.path} size="small">
+                      Ir
+                    </Button>
+                  </CardActions>
+                </Card>
+              </Grid>
+            ))}
+          </Grid>
+        </>
       ) : null}
-      {upcomingInventoriesQuery.data?.data.length === 0 ? (
-        <Typography color="text.secondary">No hay inventarios programados.</Typography>
-      ) : null}
-      {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
-        <Stack spacing={1}>
-          {upcomingInventoriesQuery.data.data.map((inventory) => (
-            <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
-          ))}
-        </Stack>
+
+      {canReadInventories ? (
+        <>
+          <Typography variant="h5" gutterBottom>
+            Próximos inventarios
+          </Typography>
+          {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
+          {upcomingInventoriesQuery.isError ? (
+            <ErrorState message="No se pudieron cargar los inventarios programados." />
+          ) : null}
+          {upcomingInventoriesQuery.data?.data.length === 0 ? (
+            <Typography color="text.secondary">No hay inventarios programados.</Typography>
+          ) : null}
+          {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
+            <Stack spacing={1}>
+              {upcomingInventoriesQuery.data.data.map((inventory) => (
+                <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
+              ))}
+            </Stack>
+          ) : null}
+        </>
       ) : null}
     </AdminLayout>
   );

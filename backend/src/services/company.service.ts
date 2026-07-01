@@ -2,14 +2,13 @@ import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-setti
 import { roleHasPermission } from "../constants/company-permissions";
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
-import { companyModuleRepository } from "../repositories/company-module.repository";
+import { companyModuleService } from "./company-module.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
 import type {
   Company,
   CompanyMembershipSummary,
-  CompanyModule,
   CompanySettings,
   CompanySettingsDto,
 } from "../types/company";
@@ -50,8 +49,8 @@ export const companyService = {
     return userCompanyMembershipRepository.listActiveForUser(userId);
   },
 
-  async listModules(companyId: string): Promise<CompanyModule[]> {
-    return companyModuleRepository.listByCompanyId(companyId);
+  async listModules(companyId: string) {
+    return companyModuleService.listModules(companyId);
   },
 
   async getSettings(companyId: string): Promise<CompanySettingsDto> {

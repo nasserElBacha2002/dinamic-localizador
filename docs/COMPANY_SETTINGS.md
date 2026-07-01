@@ -89,7 +89,7 @@ DB enforces one row per company via `UQ_company_settings_company` (migration 015
 ## Deferred
 
 - Full migration of WhatsApp/bot flows from env defaults to per-company `company_settings`
-- Module enforcement based on `company_modules`
+- Module enforcement based on `company_modules` — see [COMPANY_MODULES.md](./COMPANY_MODULES.md) (settings page includes module toggles)
 - WhatsApp employee portal
 - Employee self-service accounts
 
@@ -97,3 +97,4 @@ DB enforces one row per company via `UQ_company_settings_company` (migration 015
 
 - [MULTI_COMPANY_HARDENING.md](./MULTI_COMPANY_HARDENING.md)
 - [COMPANY_USER_MANAGEMENT.md](./COMPANY_USER_MANAGEMENT.md)
+- [COMPANY_MODULES.md](./COMPANY_MODULES.md)

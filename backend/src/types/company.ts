@@ -69,6 +69,10 @@ export interface CompanyModule {
   updatedAt: string;
 }
 
+export type CompanyModuleDto = Omit<CompanyModule, "id"> & {
+  moduleKey: import("../constants/company-modules").CompanyModuleKey;
+};
+
 export type CompanyPermission =
   | "company:read"
   | "company:settings:update"
@@ -85,7 +89,8 @@ export type CompanyPermission =
   | "absences:read"
   | "absences:review"
   | "reports:read"
-  | "reports:export";
+  | "reports:export"
+  | "bot_simulator:use";
 
 export type CompanyScope = {
   companyId: string;

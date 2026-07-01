@@ -70,6 +70,10 @@ describe("scopedApiPath", () => {
       scopedApiPath("settings"),
       `companies/${ACTIVE_COMPANY_ID}/settings`,
     );
+    assert.equal(
+      scopedApiPath("modules"),
+      `companies/${ACTIVE_COMPANY_ID}/modules`,
+    );
   });
 
   it("leaves global paths unchanged", () => {

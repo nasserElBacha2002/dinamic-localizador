@@ -24,6 +24,8 @@ export const OPERATIONAL_API_PREFIXES = [
   "bot-simulator",
   "users",
   "settings",
+  "modules",
+  "lookups",
   "dev",
 ] as const;
 

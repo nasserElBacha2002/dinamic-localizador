@@ -7,6 +7,7 @@ import {
   companyIdParamSchema,
   updateCompanySettingsSchema,
 } from "../schemas/company.schema";
+import { updateCompanyModulesSchema } from "../schemas/company-module.schema";
 
 export const companyRouter = Router();
 
@@ -42,4 +43,13 @@ companyRouter.get(
   resolveCompanyContext,
   requirePermission("company:read"),
   asyncHandler(companyController.listModules),
+);
+
+companyRouter.patch(
+  "/:companyId/modules",
+  validate(companyIdParamSchema, "params"),
+  validate(updateCompanyModulesSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyController.updateModules),
 );

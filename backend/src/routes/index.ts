@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import { attendanceRouter } from "./attendance.routes";
 import { authRouter } from "./auth.routes";
 import { employeeRouter } from "./employee.routes";
@@ -8,14 +9,22 @@ import { inventoryRouter } from "./inventory.routes";
 import { statisticsRouter } from "./statistics.routes";
 import { storeRouter } from "./store.routes";
 import { twilioRouter } from "./twilio.routes";
-import { absenceRouter } from "./absence.routes";
+import { absenceRequestRouter } from "./absence-request.routes";
+import { absenceTypesRouter } from "./absence-type.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
 import { companyUserRouter } from "./company-user.routes";
+import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
+import { asyncHandler } from "../middleware/async-handler";
+import {
+  loadCompanyModuleStates,
+  requireAnyCompanyModule,
+  requireCompanyModule,
+} from "../middleware/require-company-module";
 
 export const apiRouter = Router();
 
@@ -29,29 +38,122 @@ apiRouter.use("/platform", authenticate, platformCompanyRouter);
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
 companyScopedOperationalRouter.use("/users", companyUserRouter);
-companyScopedOperationalRouter.use("/employees", employeeRouter);
-companyScopedOperationalRouter.use("/stores", storeRouter);
-companyScopedOperationalRouter.use("/inventories", inventoryRouter);
-companyScopedOperationalRouter.use("/inventories/:inventoryId/employees", inventoryAssignmentRouter);
-companyScopedOperationalRouter.use("/attendance", attendanceRouter);
-companyScopedOperationalRouter.use("/statistics", statisticsRouter);
-companyScopedOperationalRouter.use("/bot-simulator", botSimulatorRouter);
-companyScopedOperationalRouter.use(absenceRouter);
-companyScopedOperationalRouter.use("/dev/attendance-reminders", devReminderRouter);
+companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
+companyScopedOperationalRouter.use("/lookups", lookupRouter);
+companyScopedOperationalRouter.use(
+  "/employees",
+  requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  ),
+  employeeRouter,
+);
+companyScopedOperationalRouter.use(
+  "/stores",
+  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  storeRouter,
+);
+companyScopedOperationalRouter.use(
+  "/inventories",
+  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  inventoryRouter,
+);
+companyScopedOperationalRouter.use(
+  "/inventories/:inventoryId/employees",
+  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  inventoryAssignmentRouter,
+);
+companyScopedOperationalRouter.use(
+  "/attendance",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
+  attendanceRouter,
+);
+companyScopedOperationalRouter.use(
+  "/statistics",
+  requireCompanyModule(COMPANY_MODULE_KEYS.REPORTS),
+  statisticsRouter,
+);
+companyScopedOperationalRouter.use(
+  "/bot-simulator",
+  requireCompanyModule(COMPANY_MODULE_KEYS.BOT_SIMULATOR),
+  botSimulatorRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-types",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceTypesRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceRequestRouter,
+);
+companyScopedOperationalRouter.use(
+  "/dev/attendance-reminders",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
+  devReminderRouter,
+);
 
-// Company-scoped routes must be registered before legacy flat operational routes.
 apiRouter.use("/companies/:companyId", authenticate, companyScopedOperationalRouter);
 
 const operationalRouter = Router();
 operationalRouter.use(resolveCompanyContext);
-operationalRouter.use("/employees", employeeRouter);
-operationalRouter.use("/stores", storeRouter);
-operationalRouter.use("/inventories", inventoryRouter);
-operationalRouter.use("/inventories/:inventoryId/employees", inventoryAssignmentRouter);
-operationalRouter.use("/attendance", attendanceRouter);
-operationalRouter.use("/statistics", statisticsRouter);
-operationalRouter.use("/bot-simulator", botSimulatorRouter);
-operationalRouter.use(absenceRouter);
-operationalRouter.use("/dev/attendance-reminders", devReminderRouter);
+operationalRouter.use(asyncHandler(loadCompanyModuleStates));
+operationalRouter.use("/lookups", lookupRouter);
+operationalRouter.use(
+  "/employees",
+  requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  ),
+  employeeRouter,
+);
+operationalRouter.use(
+  "/stores",
+  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  storeRouter,
+);
+operationalRouter.use(
+  "/inventories",
+  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  inventoryRouter,
+);
+operationalRouter.use(
+  "/inventories/:inventoryId/employees",
+  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  inventoryAssignmentRouter,
+);
+operationalRouter.use(
+  "/attendance",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
+  attendanceRouter,
+);
+operationalRouter.use(
+  "/statistics",
+  requireCompanyModule(COMPANY_MODULE_KEYS.REPORTS),
+  statisticsRouter,
+);
+operationalRouter.use(
+  "/bot-simulator",
+  requireCompanyModule(COMPANY_MODULE_KEYS.BOT_SIMULATOR),
+  botSimulatorRouter,
+);
+operationalRouter.use(
+  "/absence-types",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceTypesRouter,
+);
+operationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceRequestRouter,
+);
+operationalRouter.use(
+  "/dev/attendance-reminders",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
+  devReminderRouter,
+);
 
 apiRouter.use(authenticate, operationalRouter);

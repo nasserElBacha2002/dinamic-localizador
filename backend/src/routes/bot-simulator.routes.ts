@@ -1,23 +1,22 @@
 import { Router } from "express";
 import { botSimulatorController } from "../controllers/bot-simulator.controller";
-import { requireAnyPermission } from "../middleware/company-context";
+import { requirePermission } from "../middleware/company-context";
 
 export const botSimulatorRouter = Router();
 
-const readBotSimulator = requireAnyPermission("attendance:read", "inventories:read");
-const manageBotSimulator = requireAnyPermission("attendance:review", "inventories:manage");
+const useBotSimulator = requirePermission("bot_simulator:use");
 
-botSimulatorRouter.post("/session", manageBotSimulator, botSimulatorController.createSession);
-botSimulatorRouter.get("/session/:id", readBotSimulator, botSimulatorController.getSession);
+botSimulatorRouter.post("/session", useBotSimulator, botSimulatorController.createSession);
+botSimulatorRouter.get("/session/:id", useBotSimulator, botSimulatorController.getSession);
 botSimulatorRouter.post(
   "/session/:id/restart",
-  manageBotSimulator,
+  useBotSimulator,
   botSimulatorController.restartSession,
 );
 botSimulatorRouter.get(
   "/session/:id/location-presets",
-  readBotSimulator,
+  useBotSimulator,
   botSimulatorController.getLocationPresets,
 );
-botSimulatorRouter.post("/message", manageBotSimulator, botSimulatorController.sendMessage);
-botSimulatorRouter.post("/location", manageBotSimulator, botSimulatorController.sendLocation);
+botSimulatorRouter.post("/message", useBotSimulator, botSimulatorController.sendMessage);
+botSimulatorRouter.post("/location", useBotSimulator, botSimulatorController.sendLocation);

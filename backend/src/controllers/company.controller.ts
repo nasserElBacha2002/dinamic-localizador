@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { companyModuleService } from "../services/company-module.service";
 import { companyService } from "../services/company.service";
 import { platformAdminService } from "../services/platform-admin.service";
 import { userRepository } from "../repositories/user.repository";
@@ -50,7 +51,17 @@ export const companyController = {
 
   async listModules(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const modules = await companyService.listModules(companyId);
+    const modules = await companyModuleService.listModules(companyId);
+    res.status(200).json({ data: modules });
+  },
+
+  async updateModules(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const modules = await companyModuleService.updateModules(
+      companyId,
+      req.companyRole!,
+      req.body,
+    );
     res.status(200).json({ data: modules });
   },
 };

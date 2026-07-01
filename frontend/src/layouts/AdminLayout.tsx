@@ -15,40 +15,25 @@ import {
 import { useState, type PropsWithChildren } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useCompanyModules } from "../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { CompanySelector } from "../components/company/CompanySelector";
+import { getAdminNavItems } from "../utils/company-modules";
 
 const drawerWidth = 240;
-
-const baseNavItems = [
-  { label: "Inicio", path: "/" },
-  { label: "Empleados", path: "/employees" },
-  { label: "Tiendas", path: "/stores" },
-  { label: "Inventarios", path: "/inventories" },
-  { label: "Asistencias", path: "/attendance" },
-  { label: "Ausencias", path: "/absences" },
-  { label: "Estadísticas", path: "/statistics" },
-  { label: "Simulador de Bot", path: "/bot-simulator" },
-];
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
   const { user } = useAuth();
   const permissionsQuery = useCompanyPermissions();
-  const canManageUsers = permissionsQuery.data?.permissions.includes("users:manage") ?? false;
-  const canReadCompanySettings = permissionsQuery.data?.permissions.includes("company:read") ?? false;
-  const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
+  const modulesQuery = useCompanyModules();
 
-  let navItems = [...baseNavItems];
-  if (canReadCompanySettings) {
-    navItems = [...navItems, { label: "Configuración de empresa", path: "/settings/company" }];
-  }
-  if (canManageUsers) {
-    navItems = [...navItems, { label: "Usuarios de empresa", path: "/settings/users" }];
-  }
-  if (isPlatformAdmin) {
-    navItems = [...navItems, { label: "Empresas de plataforma", path: "/platform/companies" }];
-  }
+  const navItems = getAdminNavItems({
+    modules: modulesQuery.data,
+    permissions: permissionsQuery.data?.permissions,
+    isPlatformAdmin: Boolean(user?.isPlatformAdmin),
+    modulesLoading: permissionsQuery.isPending || modulesQuery.isPending,
+  });
 
   return (
     <List component="nav" aria-label="Navegación principal">

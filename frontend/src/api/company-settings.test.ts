@@ -33,13 +33,10 @@ describe("company settings frontend module", () => {
     assert.doesNotMatch(hooksFile, /getActiveCompanyId/);
   });
 
-  it("shows settings nav for company:read permission", () => {
-    const layoutFile = readFileSync(
-      join(process.cwd(), "src/layouts/AdminLayout.tsx"),
-      "utf8",
-    );
-    assert.match(layoutFile, /company:read/);
-    assert.match(layoutFile, /Configuración de empresa/);
+  it("shows settings nav for company:settings:update permission", () => {
+    const navFile = readFileSync(join(process.cwd(), "src/utils/company-modules.ts"), "utf8");
+    assert.match(navFile, /company:settings:update/);
+    assert.match(navFile, /Configuración de empresa/);
   });
 
   it("disables save when user lacks company:settings:update", () => {

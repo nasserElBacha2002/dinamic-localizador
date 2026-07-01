@@ -1,0 +1,162 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
+import { describe, it } from "node:test";
+import {
+  getAdminNavItems,
+  isAnyModuleEnabled,
+  isModuleEnabled,
+  moduleStatesEqual,
+  validateCompanyModulesUpdate,
+} from "../utils/company-modules";
+import type { CompanyModule } from "../types/company-module";
+
+const allEnabledModules: CompanyModule[] = [
+  "attendance",
+  "inventory_operations",
+  "absences",
+  "reports",
+  "bot_simulator",
+].map((moduleKey) => ({
+  companyId: "company-1",
+  moduleKey: moduleKey as CompanyModule["moduleKey"],
+  isEnabled: true,
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+}));
+
+describe("company modules frontend module", () => {
+  it("uses scoped API client for company modules", () => {
+    const apiFile = readFileSync(join(process.cwd(), "src/api/company-modules.api.ts"), "utf8");
+    assert.match(apiFile, /scopedApiClient/);
+    assert.match(apiFile, /"modules"/);
+    assert.doesNotMatch(apiFile, /apiClient\.(get|patch)\(\s*["'`]modules/);
+  });
+
+  it("scopes modules path with active company id", () => {
+    const companyPathFile = readFileSync(join(process.cwd(), "src/api/company-path.ts"), "utf8");
+    assert.match(companyPathFile, /"modules"/);
+  });
+
+  it("includes companyId in modules query key and mutation invalidation", () => {
+    const hooksFile = readFileSync(join(process.cwd(), "src/hooks/useCompanyModules.ts"), "utf8");
+    assert.match(hooksFile, /useOperationalQueryEnabled/);
+    assert.match(hooksFile, /"company-modules", companyId/);
+    assert.doesNotMatch(hooksFile, /getActiveCompanyId/);
+  });
+
+  it("hides Ausencias when absences module is disabled", () => {
+    const modules = allEnabledModules.map((module) =>
+      module.moduleKey === "absences" ? { ...module, isEnabled: false } : module,
+    );
+    const items = getAdminNavItems({
+      modules,
+      permissions: ["absences:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      items.some((item) => item.path === "/absences"),
+      false,
+    );
+  });
+
+  it("hides Estadísticas when reports module is disabled", () => {
+    const modules = allEnabledModules.map((module) =>
+      module.moduleKey === "reports" ? { ...module, isEnabled: false } : module,
+    );
+    const items = getAdminNavItems({
+      modules,
+      permissions: ["reports:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      items.some((item) => item.path === "/statistics"),
+      false,
+    );
+  });
+
+  it("shows only Inventarios and Asistencias for OPERATOR with all modules enabled", () => {
+    const items = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:read", "inventories:read", "attendance:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    const paths = items.map((item) => item.path);
+    assert.deepEqual(paths, ["/", "/inventories", "/attendance"]);
+  });
+
+  it("hides nav items when permission is missing even if module is enabled", () => {
+    const items = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["attendance:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(items.some((item) => item.path === "/employees"), false);
+    assert.equal(items.some((item) => item.path === "/inventories"), false);
+  });
+
+  it("validates at least one core module remains enabled", () => {
+    const disabledCore = allEnabledModules.map((module) => ({
+      ...module,
+      isEnabled: !["attendance", "inventory_operations", "absences"].includes(module.moduleKey),
+    }));
+    assert.equal(
+      validateCompanyModulesUpdate(disabledCore),
+      "Debe quedar habilitado al menos un módulo operativo.",
+    );
+  });
+
+  it("evaluates module helpers", () => {
+    const modules = allEnabledModules.map((module) =>
+      module.moduleKey === "reports" ? { ...module, isEnabled: false } : module,
+    );
+    assert.equal(isModuleEnabled(modules, "attendance"), true);
+    assert.equal(isModuleEnabled(modules, "reports"), false);
+    assert.equal(
+      isAnyModuleEnabled(modules, ["attendance", "inventory_operations", "absences"]),
+      true,
+    );
+  });
+
+  it("compares module states by key without relying on array order", () => {
+    const reordered = [...allEnabledModules].reverse();
+    assert.equal(moduleStatesEqual(allEnabledModules, reordered), true);
+    const changed = allEnabledModules.map((module) =>
+      module.moduleKey === "reports" ? { ...module, isEnabled: false } : module,
+    );
+    assert.equal(moduleStatesEqual(allEnabledModules, changed), false);
+  });
+
+  it("guards routes with FeatureRouteGuard", () => {
+    const guardFile = readFileSync(
+      join(process.cwd(), "src/components/company/FeatureRouteGuard.tsx"),
+      "utf8",
+    );
+    assert.match(guardFile, /Módulo no habilitado/);
+    assert.match(guardFile, /No tenés permisos para acceder a esta sección/);
+    assert.match(guardFile, /useCompanyModules/);
+    assert.match(guardFile, /useCompanyPermissions/);
+  });
+
+  it("uses lookup autocompletes on attendance filters", () => {
+    const attendancePage = readFileSync(
+      join(process.cwd(), "src/pages/attendance/AttendanceListPage.tsx"),
+      "utf8",
+    );
+    assert.match(attendancePage, /EmployeeLookupAutocomplete/);
+    assert.match(attendancePage, /StoreLookupAutocomplete/);
+    assert.match(attendancePage, /InventoryLookupAutocomplete/);
+    assert.doesNotMatch(attendancePage, /EmployeeSearchAutocomplete/);
+    assert.doesNotMatch(attendancePage, /StoreSearchAutocomplete/);
+  });
+
+  it("builds HomePage quick links without forbidden employee APIs", () => {
+    const homePage = readFileSync(join(process.cwd(), "src/pages/HomePage.tsx"), "utf8");
+    assert.match(homePage, /getHomeQuickLinks/);
+    assert.doesNotMatch(homePage, /useEmployees/);
+  });
+});

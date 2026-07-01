@@ -22,12 +22,19 @@ import { PaginationControls } from "../../components/common/PaginationControls";
 import { SearchField } from "../../components/common/SearchField";
 import { StatusChip } from "../../components/common/StatusChip";
 import { useEmployees } from "../../hooks/useEmployees";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { AdminLayout } from "../../layouts/AdminLayout";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
 
 export function EmployeesListPage() {
+  const permissionsQuery = useCompanyPermissions();
+  const canManageEmployees = hasPermission(
+    permissionsQuery.data?.permissions,
+    "employees:manage",
+  );
   const pagination = usePaginationState(10);
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
@@ -51,7 +58,11 @@ export function EmployeesListPage() {
       <PageHeader
         title="Empleados"
         description="Administrá el personal habilitado para inventarios."
-        action={<PageHeaderLinkAction to="/employees/new" label="Nuevo empleado" />}
+        action={
+          canManageEmployees ? (
+            <PageHeaderLinkAction to="/employees/new" label="Nuevo empleado" />
+          ) : undefined
+        }
       />
 
       <ListFilters>

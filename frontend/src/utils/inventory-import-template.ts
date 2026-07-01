@@ -3,14 +3,13 @@ import type { InventoryImportPreviewResult } from "../types/inventory-import";
 
 export const INVENTORY_IMPORT_FORMAT_HELP = [
   "Formatos admitidos: CSV y XLSX.",
-  "Formato cliente mínimo: PUNTO, Fecha.",
-  "Ejemplo: PUNTO=213, Fecha=01/06/2026.",
-  "El sistema usa PUNTO para buscar la tienda existente.",
+  "Formato mínimo recomendado: Sucursal, Fecha.",
+  "También se acepta el formato legacy: PUNTO, Fecha.",
+  "El sistema usa Sucursal/PUNTO para buscar una ubicación existente.",
   "Las columnas LOCAL, Formato y PROVEEDOR pueden venir en el archivo, pero se ignoran.",
-  "Si solo se informa una fecha, el inventario empieza a las 20:30.",
-  "Si no hay fecha de fin, el inventario finaliza al día siguiente a las 03:00.",
+  "Si solo se informa una fecha, la operación empieza a las 20:30 y finaliza al día siguiente a las 03:00.",
   "Las tolerancias usan 60 y 90 minutos por defecto si no se informan.",
-  "También se acepta el formato extendido: tienda, fecha_inicio, fecha_fin.",
+  "También se acepta el formato extendido: tienda, fecha_inicio, fecha_fin (o ubicacion/sucursal).",
 ].join(" ");
 
 export const UNSUPPORTED_IMPORT_FILE_MESSAGE =

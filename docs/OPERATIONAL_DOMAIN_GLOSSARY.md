@@ -27,16 +27,38 @@ This document maps **current technical names** (stable in DB/API) to **conceptua
 | 2.1 | Audit and migration plan | Complete — `docs/PHASE_2_OPERATIONAL_DOMAIN_AUDIT.md` |
 | 2.2 | Frontend terminology layer | Complete — `frontend/src/domain/terminology.ts` |
 | 2.3 | Backend type aliases | Complete — `backend/src/types/operational-domain.ts` |
-| 2.4 | Import/export column aliases | Deferred |
+| 2.4 | Bulk import column aliases | Complete — `backend/src/utils/inventory-import-headers.ts` |
 | 2.5 | Optional API route aliases (`/locations`, `/operations`) | Deferred |
 | 2.6+ | Optional DB rename | Deferred |
 
 ## Unchanged in Phase 2.3
 
 - WhatsApp bot copy and intent parsing
-- CSV/XLSX import/export column formats
 - Runtime validation, geofencing, and attendance logic
 - Repository, service, and route file names
+
+## Bulk import column aliases (Phase 2.4)
+
+Accepted **minimal** columns (location + date):
+
+| Role | Accepted headers (examples) |
+|------|----------------------------|
+| Location | `PUNTO`, `Sucursal`, `Ubicación` / `Ubicacion`, `tienda` |
+| Date | `Fecha` |
+
+Accepted **extended** columns:
+
+| Role | Accepted headers (examples) |
+|------|----------------------------|
+| Location | `tienda`, `ubicacion`, `sucursal`, `punto` |
+| Start | `fecha_inicio`, `Fecha de inicio` |
+| End | `fecha_fin`, `Fecha de fin` |
+
+Ignored columns (unchanged): `LOCAL`, `Formato`, `PROVEEDOR`.
+
+Default schedule for date-only minimal import: start 20:30, end next day 03:00. Default tolerances: 60 / 90 minutes.
+
+Attendance CSV export and statistics export headers remain legacy labels for backward compatibility.
 
 ## Usage guidance
 

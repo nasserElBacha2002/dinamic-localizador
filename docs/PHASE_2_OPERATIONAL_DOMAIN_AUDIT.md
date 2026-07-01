@@ -526,6 +526,18 @@ First implementation PR should:
 - **Unchanged:** DB tables/columns, API routes, JSON fields, permissions, modules, bot copy, imports/exports, service signatures, repository names.
 - **Guidance:** new backend modules may use aliases in type-only contexts; existing contracts remain `Store` / `Inventory` / `Employee` / `AttendanceRecord`.
 
+## Phase 2.4 implementation note
+
+**Status:** Implemented
+
+- Centralized import column aliases in `backend/src/constants/inventory-import.ts` and `backend/src/utils/inventory-import-headers.ts`.
+- **Minimal formats supported:** `PUNTO` + `Fecha` (legacy), `Sucursal` + `Fecha`, `Ubicación` / `Ubicacion` + `Fecha`.
+- **Extended formats supported:** `tienda` / `ubicacion` / `sucursal` + `fecha_inicio` + `fecha_fin` (unchanged behavior).
+- `LOCAL`, `Formato`, `PROVEEDOR` remain ignored.
+- Default start (20:30), end (next day 03:00), and tolerances (60/90) unchanged.
+- Updated import validation messages and frontend helper copy (`frontend/src/utils/inventory-import-template.ts`).
+- **Unchanged:** DB/API routes, JSON fields, permissions, bot copy, attendance CSV export headers, store auto-creation.
+
 ## Appendix A — Key file index
 
 | Area | Paths |
@@ -536,7 +548,7 @@ First implementation PR should:
 | Routes index | `backend/src/routes/index.ts` |
 | Frontend nav | `frontend/src/utils/company-modules.ts`, `frontend/src/routes/AppRoutes.tsx` |
 | Bot copy | `backend/src/services/bot/bot-response.builder.ts`, `backend/src/utils/intent.ts` |
-| Import | `backend/src/constants/inventory-import.ts`, `backend/src/services/inventory-import.service.ts` |
+| Import | `backend/src/constants/inventory-import.ts`, `backend/src/utils/inventory-import-headers.ts`, `backend/src/services/inventory-import.service.ts` |
 | Attendance export | `backend/src/services/attendance.service.ts` (`exportCsv`) |
 | Migrations | `database/migrations/002_core_domain.sql`, `015_multi_company_foundation.sql` |
 | Phase 1 deferrals | `docs/MULTI_COMPANY_PHASE1.md`, `docs/MULTI_COMPANY_HARDENING.md` |

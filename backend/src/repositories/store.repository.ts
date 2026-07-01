@@ -6,10 +6,11 @@ import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-
 import type { CreateStoreInput, ListStoresQuery, UpdateStoreInput } from "../schemas/store.schema";
 
 export const storeRepository = {
-  async create(input: CreateStoreInput): Promise<Store> {
+  async create(companyId: string, input: CreateStoreInput): Promise<Store> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(150), input.name)
       .input("address", sql.NVarChar(300), input.address ?? null)
       .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
@@ -20,20 +21,27 @@ export const storeRepository = {
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
       .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
       .query(`
-        INSERT INTO stores (name, address, neighborhood, locality, store_format, latitude, longitude, allowed_radius_meters, google_place_id)
+        INSERT INTO stores (
+          company_id, name, address, neighborhood, locality, store_format,
+          latitude, longitude, allowed_radius_meters, google_place_id
+        )
         OUTPUT INSERTED.*
-        VALUES (@name, @address, @neighborhood, @locality, @storeFormat, @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId)
+        VALUES (
+          @companyId, @name, @address, @neighborhood, @locality, @storeFormat,
+          @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId
+        )
       `);
 
     return mapStoreRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findById(id: string): Promise<Store | null> {
+  async findById(companyId: string, id: string): Promise<Store | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM stores WHERE id = @id");
+      .query("SELECT * FROM stores WHERE id = @id AND company_id = @companyId");
 
     if (!result.recordset[0]) {
       return null;
@@ -42,9 +50,17 @@ export const storeRepository = {
     return mapStoreRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async list(query: ListStoresQuery): Promise<{ items: Store[]; total: number }> {
+  async list(
+    companyId: string,
+    query: ListStoresQuery,
+  ): Promise<{ items: Store[]; total: number }> {
     const pool = getPool();
-    const filters: SqlFilter[] = [];
+    const filters: SqlFilter[] = [
+      {
+        clause: "company_id = @companyId",
+        apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+      },
+    ];
 
     if (query.active !== undefined) {
       filters.push({
@@ -86,16 +102,22 @@ export const storeRepository = {
     };
   },
 
-  async listAllActive(): Promise<Store[]> {
+  async listAllActive(companyId: string): Promise<Store[]> {
     const pool = getPool();
-    const result = await pool.request().query("SELECT * FROM stores WHERE active = 1");
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query("SELECT * FROM stores WHERE active = 1 AND company_id = @companyId");
     return result.recordset.map((row) => mapStoreRow(row as Record<string, unknown>));
   },
 
-  async update(id: string, input: UpdateStoreInput): Promise<Store | null> {
+  async update(companyId: string, id: string, input: UpdateStoreInput): Promise<Store | null> {
     const pool = getPool();
     const fields: string[] = [];
-    const request = pool.request().input("id", sql.UniqueIdentifier, id);
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id);
 
     if (input.name !== undefined) {
       request.input("name", sql.NVarChar(150), input.name);
@@ -148,7 +170,7 @@ export const storeRepository = {
     }
 
     if (fields.length === 0) {
-      return this.findById(id);
+      return this.findById(companyId, id);
     }
 
     fields.push("updated_at = SYSUTCDATETIME()");
@@ -157,7 +179,7 @@ export const storeRepository = {
       UPDATE stores
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
-      WHERE id = @id
+      WHERE id = @id AND company_id = @companyId
     `);
 
     if (!result.recordset[0]) {
@@ -167,19 +189,21 @@ export const storeRepository = {
     return mapStoreRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async deactivate(id: string): Promise<Store | null> {
-    return this.update(id, { active: false });
+  async deactivate(companyId: string, id: string): Promise<Store | null> {
+    return this.update(companyId, id, { active: false });
   },
 
-  async hasActiveOrScheduledInventories(storeId: string): Promise<boolean> {
+  async hasActiveOrScheduledInventories(companyId: string, storeId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("storeId", sql.UniqueIdentifier, storeId)
       .query(`
         SELECT TOP 1 1 AS found
         FROM inventories
         WHERE store_id = @storeId
+          AND company_id = @companyId
           AND status IN ('SCHEDULED', 'IN_PROGRESS')
       `);
 

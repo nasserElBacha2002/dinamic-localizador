@@ -9,9 +9,10 @@ import type {
   UpsertEmployeeAbsenceBalanceInput,
 } from "../types/absence";
 import { apiClient, buildParams } from "./client";
+import { companyApiPath } from "./company-path";
 
 export async function getAbsenceTypes(): Promise<AbsenceType[]> {
-  const { data } = await apiClient.get<SingleResponse<AbsenceType[]>>("/absence-types");
+  const { data } = await apiClient.get<SingleResponse<AbsenceType[]>>(companyApiPath("/absence-types"));
   return data.data;
 }
 
@@ -19,7 +20,7 @@ export async function getAbsenceRequests(
   filters: AbsenceRequestFilters = {},
 ): Promise<PaginatedResponse<AbsenceRequestListItem>> {
   const { data } = await apiClient.get<PaginatedResponse<AbsenceRequestListItem>>(
-    "/absence-requests",
+    companyApiPath("/absence-requests"),
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
@@ -28,7 +29,9 @@ export async function getAbsenceRequests(
 }
 
 export async function getAbsenceRequestById(id: string): Promise<AbsenceRequestDetail> {
-  const { data } = await apiClient.get<SingleResponse<AbsenceRequestDetail>>(`/absence-requests/${id}`);
+  const { data } = await apiClient.get<SingleResponse<AbsenceRequestDetail>>(
+    companyApiPath(`/absence-requests/${id}`),
+  );
   return data.data;
 }
 
@@ -36,7 +39,7 @@ export async function createAbsenceRequest(
   input: CreateAbsenceRequestInput,
 ): Promise<AbsenceRequestDetail> {
   const { data } = await apiClient.post<SingleResponse<AbsenceRequestDetail>>(
-    "/absence-requests",
+    companyApiPath("/absence-requests"),
     input,
   );
   return data.data;
@@ -44,7 +47,7 @@ export async function createAbsenceRequest(
 
 export async function approveAbsenceRequest(id: string): Promise<AbsenceRequestDetail> {
   const { data } = await apiClient.patch<SingleResponse<AbsenceRequestDetail>>(
-    `/absence-requests/${id}/approve`,
+    companyApiPath(`/absence-requests/${id}/approve`),
   );
   return data.data;
 }
@@ -54,7 +57,7 @@ export async function rejectAbsenceRequest(
   reason: string,
 ): Promise<AbsenceRequestDetail> {
   const { data } = await apiClient.patch<SingleResponse<AbsenceRequestDetail>>(
-    `/absence-requests/${id}/reject`,
+    companyApiPath(`/absence-requests/${id}/reject`),
     { reason },
   );
   return data.data;
@@ -65,7 +68,7 @@ export async function needsInfoAbsenceRequest(
   comment: string,
 ): Promise<AbsenceRequestDetail> {
   const { data } = await apiClient.patch<SingleResponse<AbsenceRequestDetail>>(
-    `/absence-requests/${id}/needs-info`,
+    companyApiPath(`/absence-requests/${id}/needs-info`),
     { comment },
   );
   return data.data;
@@ -73,7 +76,7 @@ export async function needsInfoAbsenceRequest(
 
 export async function cancelAbsenceRequest(id: string): Promise<AbsenceRequestDetail> {
   const { data } = await apiClient.patch<SingleResponse<AbsenceRequestDetail>>(
-    `/absence-requests/${id}/cancel`,
+    companyApiPath(`/absence-requests/${id}/cancel`),
   );
   return data.data;
 }
@@ -83,7 +86,7 @@ export async function getEmployeeAbsenceBalances(
   year: number,
 ): Promise<EmployeeAbsenceBalanceSummary[]> {
   const { data } = await apiClient.get<SingleResponse<EmployeeAbsenceBalanceSummary[]>>(
-    `/employees/${employeeId}/absence-balances`,
+    companyApiPath(`/employees/${employeeId}/absence-balances`),
     { params: { year } },
   );
   return data.data;
@@ -95,7 +98,7 @@ export async function upsertEmployeeAbsenceBalance(
   input: UpsertEmployeeAbsenceBalanceInput,
 ): Promise<EmployeeAbsenceBalanceSummary> {
   const { data } = await apiClient.put<SingleResponse<EmployeeAbsenceBalanceSummary>>(
-    `/employees/${employeeId}/absence-balances/${absenceTypeId}`,
+    companyApiPath(`/employees/${employeeId}/absence-balances/${absenceTypeId}`),
     input,
   );
   return data.data;

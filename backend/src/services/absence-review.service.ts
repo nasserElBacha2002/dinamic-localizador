@@ -22,6 +22,7 @@ const ensureReviewable = (status: AbsenceRequestStatus) => {
 };
 
 const transition = async (input: {
+  companyId: string;
   requestId: string;
   userId: string;
   newStatus: AbsenceRequestStatus;
@@ -34,7 +35,11 @@ const transition = async (input: {
   await transaction.begin();
 
   try {
-    const existing = await absenceRequestRepository.findByIdForUpdate(input.requestId, transaction);
+    const existing = await absenceRequestRepository.findByIdForUpdate(
+      input.companyId,
+      input.requestId,
+      transaction,
+    );
     if (!existing) {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
@@ -42,10 +47,15 @@ const transition = async (input: {
     ensureReviewable(existing.status);
 
     if (input.eventType === "APPROVED") {
-      await absenceBalanceService.ensureSufficientBalanceForApproval(existing, transaction);
+      await absenceBalanceService.ensureSufficientBalanceForApproval(
+        input.companyId,
+        existing,
+        transaction,
+      );
     }
 
     const updated = await absenceRequestRepository.updateStatus(
+      input.companyId,
       input.requestId,
       {
         status: input.newStatus,
@@ -67,6 +77,7 @@ const transition = async (input: {
     }
 
     await absenceRequestRepository.createEvent(
+      input.companyId,
       {
         absenceRequestId: input.requestId,
         eventType: input.eventType,
@@ -80,7 +91,7 @@ const transition = async (input: {
 
     await transaction.commit();
 
-    await auditService.log({
+    await auditService.log(input.companyId, {
       entityType: "absence_request",
       entityId: input.requestId,
       action: input.eventType,
@@ -91,7 +102,7 @@ const transition = async (input: {
     });
 
     // Proactive WhatsApp notifications are intentionally deferred to a later phase.
-    return absenceRequestService.getById(input.requestId);
+    return absenceRequestService.getById(input.companyId, input.requestId);
   } catch (error) {
     await transaction.rollback();
     throw error;
@@ -99,8 +110,9 @@ const transition = async (input: {
 };
 
 export const absenceReviewService = {
-  approve(requestId: string, userId: string) {
+  approve(companyId: string, requestId: string, userId: string) {
     return transition({
+      companyId,
       requestId,
       userId,
       newStatus: "APPROVED",
@@ -108,8 +120,9 @@ export const absenceReviewService = {
     });
   },
 
-  reject(requestId: string, userId: string, input: RejectAbsenceRequestInput) {
+  reject(companyId: string, requestId: string, userId: string, input: RejectAbsenceRequestInput) {
     return transition({
+      companyId,
       requestId,
       userId,
       newStatus: "REJECTED",
@@ -118,8 +131,9 @@ export const absenceReviewService = {
     });
   },
 
-  needsInfo(requestId: string, userId: string, input: NeedsInfoAbsenceRequestInput) {
+  needsInfo(companyId: string, requestId: string, userId: string, input: NeedsInfoAbsenceRequestInput) {
     return transition({
+      companyId,
       requestId,
       userId,
       newStatus: "NEEDS_INFO",
@@ -128,8 +142,9 @@ export const absenceReviewService = {
     });
   },
 
-  cancel(requestId: string, userId: string) {
+  cancel(companyId: string, requestId: string, userId: string) {
     return transition({
+      companyId,
       requestId,
       userId,
       newStatus: "CANCELLED",

@@ -5,6 +5,7 @@ import { ATTENDANCE_NOTIFICATION_TYPES } from "../constants/attendance-notificat
 import { AppError } from "../errors/app-error";
 import { attendanceReminderService } from "../services/attendance-reminder.service";
 import { runAttendanceReminderJobOnce } from "../jobs/attendance-reminder.job";
+import { requireRequestCompanyId } from "../utils/request-company";
 
 const testReminderSchema = z.object({
   inventoryId: z.uuid(),
@@ -23,9 +24,10 @@ devReminderRouter.use((_req, _res, next) => {
   next();
 });
 
-devReminderRouter.post("/run", async (_req, res, next) => {
+devReminderRouter.post("/run", async (req, res, next) => {
   try {
-    const summary = await attendanceReminderService.runDueReminders();
+    const companyId = requireRequestCompanyId(req);
+    const summary = await attendanceReminderService.runDueReminders(companyId);
     res.status(200).json(summary);
   } catch (error) {
     next(error);
@@ -48,7 +50,10 @@ devReminderRouter.post("/test", async (req, res, next) => {
       throw new AppError(400, "VALIDATION_ERROR", "Datos de prueba inválidos");
     }
 
-    const outcome = await attendanceReminderService.sendTestReminder(parsed.data);
+    const outcome = await attendanceReminderService.sendTestReminder(
+      requireRequestCompanyId(req),
+      parsed.data,
+    );
     res.status(200).json({
       status: "ok",
       outcome,

@@ -18,24 +18,25 @@ const resolvePagination = (query: StatisticsTableQuery) => {
 };
 
 export const statisticsService = {
-  async getSummary(filters: StatisticsFilters) {
-    const data = await statisticsRepository.getSummary(filters);
+  async getSummary(companyId: string, filters: StatisticsFilters) {
+    const data = await statisticsRepository.getSummary(companyId, filters);
     return { data };
   },
 
-  async getTimeline(filters: StatisticsFilters) {
-    const data = await statisticsRepository.getTimeline(filters);
+  async getTimeline(companyId: string, filters: StatisticsFilters) {
+    const data = await statisticsRepository.getTimeline(companyId, filters);
     return { data };
   },
 
-  async getStatusDistribution(filters: StatisticsFilters) {
-    const data = await statisticsRepository.getStatusDistribution(filters);
+  async getStatusDistribution(companyId: string, filters: StatisticsFilters) {
+    const data = await statisticsRepository.getStatusDistribution(companyId, filters);
     return { data };
   },
 
-  async getByEmployee(query: StatisticsTableQuery) {
+  async getByEmployee(companyId: string, query: StatisticsTableQuery) {
     const { page, limit } = resolvePagination(query);
     const { data, total } = await statisticsRepository.getByEmployee(
+      companyId,
       query,
       page,
       limit,
@@ -49,9 +50,10 @@ export const statisticsService = {
     };
   },
 
-  async getByInventory(query: StatisticsTableQuery) {
+  async getByInventory(companyId: string, query: StatisticsTableQuery) {
     const { page, limit } = resolvePagination(query);
     const { data, total } = await statisticsRepository.getByInventory(
+      companyId,
       query,
       page,
       limit,
@@ -65,9 +67,10 @@ export const statisticsService = {
     };
   },
 
-  async getByLocation(query: StatisticsTableQuery) {
+  async getByLocation(companyId: string, query: StatisticsTableQuery) {
     const { page, limit } = resolvePagination(query);
     const { data, total } = await statisticsRepository.getByLocation(
+      companyId,
       query,
       page,
       limit,

@@ -26,18 +26,21 @@ const isUniqueConstraintError = (error: unknown): boolean =>
 
 export const botSessionRepository = {
   async findValidActiveByPhone(
+    companyId: string,
     phoneNumber: string,
     transaction?: sql.Transaction,
     scope?: BotSessionScope,
   ): Promise<BotSession | null> {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("phoneNumber", sql.NVarChar(30), phoneNumber);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       SELECT TOP 1 *
       FROM bot_sessions ${withLock(transaction)}
       WHERE phone_number = @phoneNumber
+        AND company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at > SYSUTCDATETIME()
         ${scopeSql}
@@ -48,18 +51,21 @@ export const botSessionRepository = {
   },
 
   async findStaleActiveByPhone(
+    companyId: string,
     phoneNumber: string,
     transaction?: sql.Transaction,
     scope?: BotSessionScope,
   ): Promise<BotSession | null> {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("phoneNumber", sql.NVarChar(30), phoneNumber);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       SELECT TOP 1 *
       FROM bot_sessions ${withLock(transaction)}
       WHERE phone_number = @phoneNumber
+        AND company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at <= SYSUTCDATETIME()
         ${scopeSql}
@@ -70,18 +76,21 @@ export const botSessionRepository = {
   },
 
   async findValidActiveById(
+    companyId: string,
     sessionId: string,
     transaction?: sql.Transaction,
     scope?: BotSessionScope,
   ): Promise<BotSession | null> {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("sessionId", sql.UniqueIdentifier, sessionId);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       SELECT TOP 1 *
       FROM bot_sessions ${withLock(transaction)}
       WHERE id = @sessionId
+        AND company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at > SYSUTCDATETIME()
         ${scopeSql}
@@ -91,18 +100,21 @@ export const botSessionRepository = {
   },
 
   async findStaleActiveById(
+    companyId: string,
     sessionId: string,
     transaction?: sql.Transaction,
     scope?: BotSessionScope,
   ): Promise<BotSession | null> {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("sessionId", sql.UniqueIdentifier, sessionId);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       SELECT TOP 1 *
       FROM bot_sessions ${withLock(transaction)}
       WHERE id = @sessionId
+        AND company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at <= SYSUTCDATETIME()
         ${scopeSql}
@@ -111,15 +123,21 @@ export const botSessionRepository = {
     return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
   },
 
-  async findLatestByPhone(phoneNumber: string, scope?: BotSessionScope): Promise<BotSession | null> {
+  async findLatestByPhone(
+    companyId: string,
+    phoneNumber: string,
+    scope?: BotSessionScope,
+  ): Promise<BotSession | null> {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("phoneNumber", sql.NVarChar(30), phoneNumber);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       SELECT TOP 1 *
       FROM bot_sessions
       WHERE phone_number = @phoneNumber
+        AND company_id = @companyId
         ${scopeSql}
       ORDER BY created_at DESC
     `);
@@ -128,18 +146,21 @@ export const botSessionRepository = {
   },
 
   async expireSessionById(
+    companyId: string,
     sessionId: string,
     transaction?: sql.Transaction,
     scope?: BotSessionScope,
   ): Promise<boolean> {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("sessionId", sql.UniqueIdentifier, sessionId);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       UPDATE bot_sessions
       SET state = 'EXPIRED', updated_at = SYSUTCDATETIME()
       WHERE id = @sessionId
+        AND company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         ${scopeSql}
     `);
@@ -148,6 +169,7 @@ export const botSessionRepository = {
   },
 
   async expireStaleSessionsForParticipant(
+    companyId: string,
     employeeId: string,
     phoneNumber: string,
     transaction?: sql.Transaction,
@@ -156,13 +178,15 @@ export const botSessionRepository = {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("phoneNumber", sql.NVarChar(30), phoneNumber);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       UPDATE bot_sessions
       SET state = 'EXPIRED', updated_at = SYSUTCDATETIME()
-      WHERE state IN ${ACTIVE_STATE_SQL}
+      WHERE company_id = @companyId
+        AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at <= SYSUTCDATETIME()
         AND (employee_id = @employeeId OR phone_number = @phoneNumber)
         ${scopeSql}
@@ -172,6 +196,7 @@ export const botSessionRepository = {
   },
 
   async cancelValidActiveSessions(
+    companyId: string,
     employeeId: string,
     phoneNumber: string,
     transaction?: sql.Transaction,
@@ -180,13 +205,15 @@ export const botSessionRepository = {
     const resolvedScope = resolveBotSessionScope(scope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("phoneNumber", sql.NVarChar(30), phoneNumber);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       UPDATE bot_sessions
       SET state = 'CANCELLED', updated_at = SYSUTCDATETIME()
-      WHERE state IN ${ACTIVE_STATE_SQL}
+      WHERE company_id = @companyId
+        AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at > SYSUTCDATETIME()
         AND (employee_id = @employeeId OR phone_number = @phoneNumber)
         ${scopeSql}
@@ -197,6 +224,7 @@ export const botSessionRepository = {
 
   async create(
     input: {
+      companyId: string;
       employeeId: string;
       inventoryId: string | null;
       phoneNumber: string;
@@ -211,6 +239,7 @@ export const botSessionRepository = {
     const createFlags = getBotSessionCreateFlags(resolvedScope);
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
@@ -221,12 +250,12 @@ export const botSessionRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, createFlags.simulationSessionId)
       .query(`
         INSERT INTO bot_sessions (
-          employee_id, inventory_id, phone_number, state, context_json, expires_at,
+          company_id, employee_id, inventory_id, phone_number, state, context_json, expires_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @employeeId, @inventoryId, @phoneNumber, @state, @contextJson, @expiresAt,
+          @companyId, @employeeId, @inventoryId, @phoneNumber, @state, @contextJson, @expiresAt,
           @isSimulation, @simulationSessionId
         )
       `);
@@ -235,6 +264,7 @@ export const botSessionRepository = {
   },
 
   async updateSession(
+    companyId: string,
     id: string,
     input: {
       inventoryId?: string | null;
@@ -248,6 +278,7 @@ export const botSessionRepository = {
     const resolvedScope = resolveBotSessionScope(scope);
     const fields: string[] = [];
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("id", sql.UniqueIdentifier, id);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
 
@@ -295,6 +326,7 @@ export const botSessionRepository = {
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
       WHERE id = @id
+        AND company_id = @companyId
         ${activeStateGuard}
         ${scopeSql}
     `);

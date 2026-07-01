@@ -7,7 +7,7 @@ import type {
   ListInventoriesQuery,
   UpdateInventoryInput,
 } from "../schemas/inventory.schema";
-import { auditRepository } from "../repositories/audit.repository";
+import { auditService } from "./audit.service";
 import { canTransitionInventoryStatus, isInventoryEditable } from "../utils/inventory-status";
 import {
   isInventoryStartInPast,
@@ -43,19 +43,22 @@ const validateInventoryStartNotInPast = (scheduledStart: string): void => {
 
 type InventoryRecord = NonNullable<Awaited<ReturnType<typeof inventoryRepository.findById>>>;
 
-const syncLifecycleStatus = async (inventory: InventoryRecord): Promise<InventoryRecord> => {
+const syncLifecycleStatus = async (
+  companyId: string,
+  inventory: InventoryRecord,
+): Promise<InventoryRecord> => {
   const resolvedStatus = resolveLifecycleInventoryStatus(inventory);
   if (resolvedStatus === inventory.status || !canTransitionInventoryStatus(inventory.status, resolvedStatus)) {
     return inventory;
   }
 
-  const updated = await inventoryRepository.update(inventory.id, { status: resolvedStatus });
+  const updated = await inventoryRepository.update(companyId, inventory.id, { status: resolvedStatus });
   return updated ?? inventory;
 };
 
 export const inventoryService = {
-  async create(input: CreateInventoryInput) {
-    const store = await storeRepository.findById(input.storeId);
+  async create(companyId: string, input: CreateInventoryInput) {
+    const store = await storeRepository.findById(companyId, input.storeId);
     if (!store) {
       throw new AppError(404, "STORE_NOT_FOUND", "Tienda no encontrada");
     }
@@ -65,41 +68,41 @@ export const inventoryService = {
 
     validateInventoryDates(input.scheduledStart, input.scheduledEnd);
     validateInventoryStartNotInPast(input.scheduledStart);
-    return inventoryRepository.create(input);
+    return inventoryRepository.create(companyId, input);
   },
 
-  async list(query: ListInventoriesQuery) {
-    const result = await inventoryRepository.list(query);
-    const data = await Promise.all(result.items.map((item) => syncLifecycleStatus(item)));
+  async list(companyId: string, query: ListInventoriesQuery) {
+    const result = await inventoryRepository.list(companyId, query);
+    const data = await Promise.all(result.items.map((item) => syncLifecycleStatus(companyId, item)));
     return {
       data,
       meta: buildPaginationMeta(query.page, query.limit, result.total),
     };
   },
 
-  async getById(id: string) {
-    const inventory = await inventoryRepository.findById(id);
+  async getById(companyId: string, id: string) {
+    const inventory = await inventoryRepository.findById(companyId, id);
     if (!inventory) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
-    return syncLifecycleStatus(inventory);
+    return syncLifecycleStatus(companyId, inventory);
   },
 
-  async getDetailById(id: string) {
-    const detail = await inventoryRepository.findDetailById(id);
+  async getDetailById(companyId: string, id: string) {
+    const detail = await inventoryRepository.findDetailById(companyId, id);
     if (!detail) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
-    const synced = await syncLifecycleStatus(detail);
+    const synced = await syncLifecycleStatus(companyId, detail);
     return {
       ...detail,
       ...synced,
     };
   },
 
-  async update(id: string, input: UpdateInventoryInput) {
-    const current = await this.getById(id);
+  async update(companyId: string, id: string, input: UpdateInventoryInput) {
+    const current = await this.getById(companyId, id);
 
     if (!isInventoryEditable(current.status)) {
       throw new AppError(
@@ -110,7 +113,7 @@ export const inventoryService = {
     }
 
     if (input.storeId) {
-      const store = await storeRepository.findById(input.storeId);
+      const store = await storeRepository.findById(companyId, input.storeId);
       if (!store) {
         throw new AppError(404, "STORE_NOT_FOUND", "Tienda no encontrada");
       }
@@ -136,25 +139,25 @@ export const inventoryService = {
       validateInventoryStartNotInPast(input.scheduledStart);
     }
 
-    const updated = await inventoryRepository.update(id, input);
+    const updated = await inventoryRepository.update(companyId, id, input);
     if (!updated) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
-    await auditRepository.log({
+    await auditService.log(companyId, {
       entityType: "inventory",
       entityId: id,
       action: "update",
-      previousData: JSON.stringify(current),
-      newData: JSON.stringify(updated),
+      previousData: current as unknown as Record<string, unknown>,
+      newData: updated as unknown as Record<string, unknown>,
       reason: "Actualización vía API",
     });
 
     return updated;
   },
 
-  async cancel(id: string) {
-    const current = await this.getById(id);
+  async cancel(companyId: string, id: string) {
+    const current = await this.getById(companyId, id);
     if (!canTransitionInventoryStatus(current.status, "CANCELLED")) {
       throw new AppError(
         409,
@@ -163,25 +166,26 @@ export const inventoryService = {
       );
     }
 
-    const cancelled = await inventoryRepository.cancel(id);
+    const cancelled = await inventoryRepository.cancel(companyId, id);
     if (!cancelled) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
-    await auditRepository.log({
+    await auditService.log(companyId, {
       entityType: "inventory",
       entityId: id,
       action: "cancel",
-      previousData: JSON.stringify(current),
-      newData: JSON.stringify(cancelled),
+      previousData: current as unknown as Record<string, unknown>,
+      newData: cancelled as unknown as Record<string, unknown>,
       reason: "Cancelación vía API",
     });
 
     return cancelled;
   },
 
-  async getAttendanceSummary(inventoryId: string, page = 1, limit = 10) {
+  async getAttendanceSummary(companyId: string, inventoryId: string, page = 1, limit = 10) {
     const summary = await inventoryAttendanceRepository.getAttendanceSummary(
+      companyId,
       inventoryId,
       page,
       limit,
@@ -190,7 +194,7 @@ export const inventoryService = {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
-    const syncedInventory = await syncLifecycleStatus(summary.inventory);
+    const syncedInventory = await syncLifecycleStatus(companyId, summary.inventory);
 
     return {
       inventory: {

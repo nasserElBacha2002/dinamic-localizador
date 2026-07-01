@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { twilioWebhookSchema } from "../schemas/twilio-webhook.schema";
+import { companyContextService } from "../services/company-context.service";
 import { whatsappBotService } from "../services/whatsapp-bot.service";
 
 export const twilioWebhookController = {
@@ -11,7 +12,8 @@ export const twilioWebhookController = {
       return;
     }
 
-    const twiml = await whatsappBotService.handleWebhook(parsed.data);
+    const companyId = await companyContextService.resolveDefaultCompanyId();
+    const twiml = await whatsappBotService.handleWebhook(companyId, parsed.data);
     res.status(200).type("text/xml").send(twiml);
   },
 };

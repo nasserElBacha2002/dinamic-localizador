@@ -1,6 +1,7 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
 import { Outlet, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
+import { CompanyGate } from "../components/company/CompanyGate";
 import { LoadingState } from "../components/common/LoadingState";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
@@ -66,7 +67,9 @@ function LazyPage({
 function ProtectedLayout() {
   return (
     <ProtectedRoute>
-      <Outlet />
+      <CompanyGate>
+        <Outlet />
+      </CompanyGate>
     </ProtectedRoute>
   );
 }

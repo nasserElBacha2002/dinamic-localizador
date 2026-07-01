@@ -4,11 +4,14 @@ import type { AffectedInventoryWarning } from "../types/absence";
 import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../utils/absence-date";
 
 export const absenceInventoryImpactService = {
-  async findAffectedInventories(input: {
-    employeeId: string;
-    startDate: string;
-    endDate: string;
-  }): Promise<AffectedInventoryWarning[]> {
+  async findAffectedInventories(
+    companyId: string,
+    input: {
+      employeeId: string;
+      startDate: string;
+      endDate: string;
+    },
+  ): Promise<AffectedInventoryWarning[]> {
     const timezone = env.BOT_OPERATION_TIMEZONE;
     const utcOffsetHours = getUtcOffsetHoursFromTimezone(timezone);
     const { startAt, endAt } = absenceDateRangeToUtcBounds(
@@ -18,6 +21,7 @@ export const absenceInventoryImpactService = {
     );
 
     const inventories = await absenceRequestRepository.findAffectedInventories(
+      companyId,
       input.employeeId,
       startAt,
       endAt,

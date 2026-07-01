@@ -2,6 +2,7 @@ import { env } from "../config/env";
 import type { AttendanceNotificationType } from "../constants/attendance-notification";
 import { AppError } from "../errors/app-error";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
+import { companyRepository } from "../repositories/company.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
 import { buildReminderDueWindow } from "../utils/reminder-time-window";
@@ -18,6 +19,18 @@ export interface AttendanceReminderRunSummary {
   arrivalSkipped: number;
   exitSkipped: number;
 }
+
+const emptySummary = (referenceAt: Date): AttendanceReminderRunSummary => ({
+  referenceAt: referenceAt.toISOString(),
+  arrivalCandidates: 0,
+  exitCandidates: 0,
+  arrivalSent: 0,
+  exitSent: 0,
+  arrivalFailed: 0,
+  exitFailed: 0,
+  arrivalSkipped: 0,
+  exitSkipped: 0,
+});
 
 const contentSidForType = (notificationType: AttendanceNotificationType): string => {
   if (notificationType === "ARRIVAL_REMINDER_15_MIN") {
@@ -42,10 +55,11 @@ const buildTemplateVariables = (
   buildAttendanceReminderTemplateVariables(candidate, notificationType, env.BOT_OPERATION_TIMEZONE);
 
 const sendReminderForCandidate = async (
+  companyId: string,
   candidate: AttendanceReminderCandidate,
   notificationType: AttendanceNotificationType,
 ): Promise<"sent" | "failed" | "skipped"> => {
-  const claimed = await attendanceNotificationRepository.claimNotificationForAttempt({
+  const claimed = await attendanceNotificationRepository.claimNotificationForAttempt(companyId, {
     inventoryId: candidate.inventoryId,
     employeeId: candidate.employeeId,
     notificationType,
@@ -70,7 +84,7 @@ const sendReminderForCandidate = async (
     });
 
     const sentAt = new Date();
-    await attendanceNotificationRepository.markSent({
+    await attendanceNotificationRepository.markSent(companyId, {
       notificationId: claimed.id,
       twilioMessageSid: result.messageSid,
       sentAt,
@@ -89,7 +103,7 @@ const sendReminderForCandidate = async (
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error sending attendance reminder";
 
-    await attendanceNotificationRepository.markFailed({
+    await attendanceNotificationRepository.markFailed(companyId, {
       notificationId: claimed.id,
       errorMessage,
     });
@@ -107,6 +121,7 @@ const sendReminderForCandidate = async (
 };
 
 const processCandidates = async (
+  companyId: string,
   candidates: AttendanceReminderCandidate[],
   notificationType: AttendanceNotificationType,
 ): Promise<{ sent: number; failed: number; skipped: number }> => {
@@ -115,7 +130,7 @@ const processCandidates = async (
   let skipped = 0;
 
   for (const candidate of candidates) {
-    const outcome = await sendReminderForCandidate(candidate, notificationType);
+    const outcome = await sendReminderForCandidate(companyId, candidate, notificationType);
     if (outcome === "sent") {
       sent += 1;
     } else if (outcome === "failed") {
@@ -128,36 +143,52 @@ const processCandidates = async (
   return { sent, failed, skipped };
 };
 
+const mergeSummaries = (
+  referenceAt: Date,
+  summaries: AttendanceReminderRunSummary[],
+): AttendanceReminderRunSummary =>
+  summaries.reduce(
+    (acc, summary) => ({
+      referenceAt: referenceAt.toISOString(),
+      arrivalCandidates: acc.arrivalCandidates + summary.arrivalCandidates,
+      exitCandidates: acc.exitCandidates + summary.exitCandidates,
+      arrivalSent: acc.arrivalSent + summary.arrivalSent,
+      exitSent: acc.exitSent + summary.exitSent,
+      arrivalFailed: acc.arrivalFailed + summary.arrivalFailed,
+      exitFailed: acc.exitFailed + summary.exitFailed,
+      arrivalSkipped: acc.arrivalSkipped + summary.arrivalSkipped,
+      exitSkipped: acc.exitSkipped + summary.exitSkipped,
+    }),
+    emptySummary(referenceAt),
+  );
+
 export const attendanceReminderService = {
   isEnabled(): boolean {
     return env.ATTENDANCE_REMINDER_JOB_ENABLED && twilioOutboundService.isConfigured();
   },
 
-  async runDueReminders(referenceAt: Date = new Date()): Promise<AttendanceReminderRunSummary> {
+  async runDueReminders(
+    companyId: string,
+    referenceAt: Date = new Date(),
+  ): Promise<AttendanceReminderRunSummary> {
     if (!this.isEnabled()) {
       console.info("[attendance-reminder] job skipped because reminders are disabled or Twilio is not configured");
-      return {
-        referenceAt: referenceAt.toISOString(),
-        arrivalCandidates: 0,
-        exitCandidates: 0,
-        arrivalSent: 0,
-        exitSent: 0,
-        arrivalFailed: 0,
-        exitFailed: 0,
-        arrivalSkipped: 0,
-        exitSkipped: 0,
-      };
+      return emptySummary(referenceAt);
     }
 
     const { windowStart, windowEnd } = buildReminderDueWindow(referenceAt);
 
     const [arrivalCandidates, exitCandidates] = await Promise.all([
-      attendanceNotificationRepository.findArrivalReminderCandidates({ windowStart, windowEnd }),
-      attendanceNotificationRepository.findExitReminderCandidates({ windowStart, windowEnd }),
+      attendanceNotificationRepository.findArrivalReminderCandidates(companyId, { windowStart, windowEnd }),
+      attendanceNotificationRepository.findExitReminderCandidates(companyId, { windowStart, windowEnd }),
     ]);
 
-    const arrivalResult = await processCandidates(arrivalCandidates, "ARRIVAL_REMINDER_15_MIN");
-    const exitResult = await processCandidates(exitCandidates, "EXIT_REMINDER_15_MIN");
+    const arrivalResult = await processCandidates(
+      companyId,
+      arrivalCandidates,
+      "ARRIVAL_REMINDER_15_MIN",
+    );
+    const exitResult = await processCandidates(companyId, exitCandidates, "EXIT_REMINDER_15_MIN");
 
     const summary: AttendanceReminderRunSummary = {
       referenceAt: referenceAt.toISOString(),
@@ -171,22 +202,42 @@ export const attendanceReminderService = {
       exitSkipped: exitResult.skipped,
     };
 
-    console.info("[attendance-reminder] job completed", summary);
+    console.info("[attendance-reminder] job completed", { companyId, ...summary });
     return summary;
   },
 
-  async sendTestReminder(input: {
-    inventoryId: string;
-    employeeId: string;
-    notificationType: AttendanceNotificationType;
-  }): Promise<"sent" | "failed" | "skipped"> {
-    const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(input);
+  async runDueRemindersForAllCompanies(referenceAt: Date = new Date()): Promise<AttendanceReminderRunSummary> {
+    if (!this.isEnabled()) {
+      console.info("[attendance-reminder] job skipped because reminders are disabled or Twilio is not configured");
+      return emptySummary(referenceAt);
+    }
+
+    const companies = await companyRepository.listActive();
+    const summaries = await Promise.all(
+      companies.map((company) => this.runDueReminders(company.id, referenceAt)),
+    );
+
+    const merged = mergeSummaries(referenceAt, summaries);
+    console.info("[attendance-reminder] all companies job completed", merged);
+    return merged;
+  },
+
+  async sendTestReminder(
+    companyId: string,
+    input: {
+      inventoryId: string;
+      employeeId: string;
+      notificationType: AttendanceNotificationType;
+    },
+  ): Promise<"sent" | "failed" | "skipped"> {
+    const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);
     if (!candidate) {
       throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado al inventario");
     }
 
     if (input.notificationType === "EXIT_REMINDER_15_MIN") {
       const isEligible = await attendanceNotificationRepository.isExitReminderEligible(
+        companyId,
         input.inventoryId,
         input.employeeId,
       );
@@ -200,6 +251,6 @@ export const attendanceReminderService = {
       }
     }
 
-    return sendReminderForCandidate(candidate, input.notificationType);
+    return sendReminderForCandidate(companyId, candidate, input.notificationType);
   },
 };

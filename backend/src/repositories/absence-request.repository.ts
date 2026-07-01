@@ -36,6 +36,7 @@ const mapListRow = (row: Record<string, unknown>): AbsenceRequestWithRelations =
 
 export const absenceRequestRepository = {
   async create(
+    companyId: string,
     input: {
       employeeId: string;
       absenceTypeId: string;
@@ -52,6 +53,7 @@ export const absenceRequestRepository = {
   ): Promise<AbsenceRequest> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
       .input("startDate", sql.Date, input.startDate)
@@ -64,13 +66,13 @@ export const absenceRequestRepository = {
       .input("sourceMessageSid", sql.NVarChar(100), input.sourceMessageSid ?? null)
       .query(`
         INSERT INTO absence_requests (
-          employee_id, absence_type_id, start_date, end_date,
+          company_id, employee_id, absence_type_id, start_date, end_date,
           start_period, end_period, total_days, reason,
           status, requested_via, source_message_sid
         )
         OUTPUT INSERTED.*
         VALUES (
-          @employeeId, @absenceTypeId, @startDate, @endDate,
+          @companyId, @employeeId, @absenceTypeId, @startDate, @endDate,
           @startPeriod, @endPeriod, @totalDays, @reason,
           'PENDING', @requestedVia, @sourceMessageSid
         )
@@ -79,12 +81,16 @@ export const absenceRequestRepository = {
     return mapAbsenceRequestRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findById(id: string): Promise<AbsenceRequest | null> {
+  async findById(companyId: string, id: string): Promise<AbsenceRequest | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query(`SELECT TOP 1 * FROM absence_requests WHERE id = @id`);
+      .query(`
+        SELECT TOP 1 * FROM absence_requests
+        WHERE id = @id AND company_id = @companyId
+      `);
 
     if (!result.recordset[0]) {
       return null;
@@ -93,15 +99,20 @@ export const absenceRequestRepository = {
     return mapAbsenceRequestRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findBySourceMessageSid(sourceMessageSid: string): Promise<AbsenceRequest | null> {
+  async findBySourceMessageSid(
+    companyId: string,
+    sourceMessageSid: string,
+  ): Promise<AbsenceRequest | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("sourceMessageSid", sql.NVarChar(100), sourceMessageSid)
       .query(`
         SELECT TOP 1 *
         FROM absence_requests
         WHERE source_message_sid = @sourceMessageSid
+          AND company_id = @companyId
       `);
 
     if (!result.recordset[0]) {
@@ -112,15 +123,17 @@ export const absenceRequestRepository = {
   },
 
   async findByIdForUpdate(
+    companyId: string,
     id: string,
     transaction: sql.Transaction,
   ): Promise<AbsenceRequest | null> {
     const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .query(`
         SELECT *
         FROM absence_requests WITH (UPDLOCK, HOLDLOCK)
-        WHERE id = @id
+        WHERE id = @id AND company_id = @companyId
       `);
 
     if (!result.recordset[0]) {
@@ -130,9 +143,13 @@ export const absenceRequestRepository = {
     return mapAbsenceRequestRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findDetailById(id: string): Promise<AbsenceRequestWithRelations | null> {
+  async findDetailById(companyId: string, id: string): Promise<AbsenceRequestWithRelations | null> {
     const pool = getPool();
-    const result = await pool.request().input("id", sql.UniqueIdentifier, id).query(`
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
       SELECT
         ar.*,
         e.name AS employee_name,
@@ -143,10 +160,10 @@ export const absenceRequestRepository = {
         u.name AS reviewer_name,
         0 AS affected_inventories_count
       FROM absence_requests ar
-      INNER JOIN employees e ON e.id = ar.employee_id
-      INNER JOIN absence_types at ON at.id = ar.absence_type_id
+      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
+      INNER JOIN absence_types at ON at.id = ar.absence_type_id AND at.company_id = @companyId
       LEFT JOIN users u ON u.id = ar.reviewed_by_user_id
-      WHERE ar.id = @id
+      WHERE ar.id = @id AND ar.company_id = @companyId
     `);
 
     if (!result.recordset[0]) {
@@ -156,13 +173,21 @@ export const absenceRequestRepository = {
     return mapListRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async list(query: ListAbsenceRequestsQuery): Promise<{
+  async list(
+    companyId: string,
+    query: ListAbsenceRequestsQuery,
+  ): Promise<{
     items: AbsenceRequestWithRelations[];
     total: number;
   }> {
     const pool = getPool();
     const { offset } = getPagination(query.page, query.limit);
-    const filters: SqlFilter[] = [];
+    const filters: SqlFilter[] = [
+      {
+        clause: "ar.company_id = @companyId",
+        apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+      },
+    ];
 
     if (query.status) {
       filters.push({
@@ -207,8 +232,8 @@ export const absenceRequestRepository = {
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
       FROM absence_requests ar
-      INNER JOIN employees e ON e.id = ar.employee_id
-      INNER JOIN absence_types at ON at.id = ar.absence_type_id
+      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
+      INNER JOIN absence_types at ON at.id = ar.absence_type_id AND at.company_id = @companyId
       ${whereClause}
     `);
     const total = Number((countResult.recordset[0] as { total: number }).total ?? 0);
@@ -229,8 +254,8 @@ export const absenceRequestRepository = {
         u.name AS reviewer_name,
         0 AS affected_inventories_count
       FROM absence_requests ar
-      INNER JOIN employees e ON e.id = ar.employee_id
-      INNER JOIN absence_types at ON at.id = ar.absence_type_id
+      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
+      INNER JOIN absence_types at ON at.id = ar.absence_type_id AND at.company_id = @companyId
       LEFT JOIN users u ON u.id = ar.reviewed_by_user_id
       ${whereClause}
       ORDER BY ar.created_at DESC
@@ -244,6 +269,7 @@ export const absenceRequestRepository = {
   },
 
   async hasOverlappingRequest(
+    companyId: string,
     employeeId: string,
     startDate: string,
     endDate: string,
@@ -255,6 +281,7 @@ export const absenceRequestRepository = {
       : getPool().request();
 
     request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("startDate", sql.Date, startDate)
       .input("endDate", sql.Date, endDate);
@@ -270,6 +297,7 @@ export const absenceRequestRepository = {
       SELECT TOP 1 id
       FROM absence_requests ${lockHint}
       WHERE employee_id = @employeeId
+        AND company_id = @companyId
         AND status IN ('PENDING', 'APPROVED')
         AND start_date <= @endDate
         AND end_date >= @startDate
@@ -280,6 +308,7 @@ export const absenceRequestRepository = {
   },
 
   async updateStatus(
+    companyId: string,
     id: string,
     input: {
       status: AbsenceRequestStatus;
@@ -297,6 +326,7 @@ export const absenceRequestRepository = {
       : "";
 
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .input("status", sql.NVarChar(30), input.status)
       .input("reviewedByUserId", sql.UniqueIdentifier, input.reviewedByUserId ?? null)
@@ -313,7 +343,7 @@ export const absenceRequestRepository = {
           cancelled_at = @cancelledAt,
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
-        WHERE id = @id
+        WHERE id = @id AND company_id = @companyId
         ${statusFilter}
       `);
 
@@ -325,6 +355,7 @@ export const absenceRequestRepository = {
   },
 
   async createEvent(
+    companyId: string,
     input: {
       absenceRequestId: string;
       eventType: AbsenceRequestEvent["eventType"];
@@ -338,6 +369,7 @@ export const absenceRequestRepository = {
   ): Promise<AbsenceRequestEvent> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
       .input("eventType", sql.NVarChar(40), input.eventType)
       .input("oldStatus", sql.NVarChar(30), input.oldStatus ?? null)
@@ -347,12 +379,12 @@ export const absenceRequestRepository = {
       .input("comment", sql.NVarChar(1000), input.comment ?? null)
       .query(`
         INSERT INTO absence_request_events (
-          absence_request_id, event_type, old_status, new_status,
+          company_id, absence_request_id, event_type, old_status, new_status,
           performed_by_user_id, performed_by_employee_id, comment
         )
         OUTPUT INSERTED.*
         VALUES (
-          @absenceRequestId, @eventType, @oldStatus, @newStatus,
+          @companyId, @absenceRequestId, @eventType, @oldStatus, @newStatus,
           @performedByUserId, @performedByEmployeeId, @comment
         )
       `);
@@ -360,10 +392,11 @@ export const absenceRequestRepository = {
     return mapAbsenceRequestEventRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async listEvents(absenceRequestId: string): Promise<AbsenceRequestEvent[]> {
+  async listEvents(companyId: string, absenceRequestId: string): Promise<AbsenceRequestEvent[]> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
       .query(`
         SELECT
@@ -373,6 +406,7 @@ export const absenceRequestRepository = {
         LEFT JOIN users u ON u.id = are.performed_by_user_id
         LEFT JOIN employees e ON e.id = are.performed_by_employee_id
         WHERE are.absence_request_id = @absenceRequestId
+          AND are.company_id = @companyId
         ORDER BY are.created_at ASC
       `);
 
@@ -382,6 +416,7 @@ export const absenceRequestRepository = {
   },
 
   async findAffectedInventories(
+    companyId: string,
     employeeId: string,
     absenceStartAt: Date,
     absenceEndAt: Date,
@@ -398,6 +433,7 @@ export const absenceRequestRepository = {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("absenceStartAt", sql.DateTime2, absenceStartAt)
       .input("absenceEndAt", sql.DateTime2, absenceEndAt)
@@ -410,9 +446,10 @@ export const absenceRequestRepository = {
           i.scheduled_end,
           i.status
         FROM inventory_employees ie
-        INNER JOIN inventories i ON i.id = ie.inventory_id
-        INNER JOIN stores s ON s.id = i.store_id
+        INNER JOIN inventories i ON i.id = ie.inventory_id AND i.company_id = @companyId
+        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
         WHERE ie.employee_id = @employeeId
+          AND ie.company_id = @companyId
           AND i.status NOT IN ('CANCELLED')
           AND i.scheduled_start IS NOT NULL
           AND DATEADD(

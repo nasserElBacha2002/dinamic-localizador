@@ -30,3 +30,12 @@ export const teardownDatabaseIntegration = async () => {
   const { closeDatabase } = await import("../database/connection");
   await closeDatabase();
 };
+
+export const requireDinamicCompanyId = async (): Promise<string> => {
+  const { companyRepository } = await import("../repositories/company.repository");
+  const company = await companyRepository.findByName("Dinamic Systems");
+  if (!company) {
+    throw new Error("Migration 015 required: Dinamic Systems company is missing");
+  }
+  return company.id;
+};

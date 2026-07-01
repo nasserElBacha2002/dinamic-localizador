@@ -15,6 +15,7 @@ import {
 import { useState, type PropsWithChildren } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { CompanySelector } from "../components/company/CompanySelector";
 
 const drawerWidth = 240;
 
@@ -88,6 +89,7 @@ export function AdminLayout({ children }: PropsWithChildren) {
           </Typography>
           {user ? (
             <Stack direction="row" spacing={1} alignItems="center">
+              <CompanySelector compact />
               <Typography variant="body2" sx={{ display: { xs: "none", sm: "block" } }}>
                 {user.name}
               </Typography>

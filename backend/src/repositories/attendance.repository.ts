@@ -7,8 +7,13 @@ import { mapAttendanceRow, mapAttendanceWithRelationsRow } from "../utils/row-ma
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
 
-const buildAttendanceFilters = (query: ListAttendanceQuery): SqlFilter[] => {
-  const filters: SqlFilter[] = [];
+const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): SqlFilter[] => {
+  const filters: SqlFilter[] = [
+    {
+      clause: "ar.company_id = @companyId",
+      apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+    },
+  ];
 
   if (query.simulationOnly) {
     filters.push({
@@ -85,10 +90,11 @@ const buildAttendanceFilters = (query: ListAttendanceQuery): SqlFilter[] => {
 };
 
 export const attendanceRepository = {
-  async create(input: CreateAttendanceInput): Promise<AttendanceRecord> {
+  async create(companyId: string, input: CreateAttendanceInput): Promise<AttendanceRecord> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("receivedLatitude", sql.Decimal(10, 7), input.receivedLatitude)
@@ -102,13 +108,13 @@ export const attendanceRepository = {
       .input("receivedAt", sql.DateTime2, new Date(input.receivedAt))
       .query(`
         INSERT INTO attendance_records (
-          inventory_id, employee_id, received_latitude, received_longitude,
+          company_id, inventory_id, employee_id, received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at
         )
         OUTPUT INSERTED.*
         VALUES (
-          @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
+          @companyId, @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt
         )
@@ -117,9 +123,13 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findById(id: string): Promise<AttendanceRecordWithRelations | null> {
+  async findById(companyId: string, id: string): Promise<AttendanceRecordWithRelations | null> {
     const pool = getPool();
-    const result = await pool.request().input("id", sql.UniqueIdentifier, id).query(`
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
       SELECT
         ar.*,
         e.name AS employee_name,
@@ -132,10 +142,10 @@ export const attendanceRepository = {
         s.address AS store_address,
         s.allowed_radius_meters AS store_allowed_radius_meters
       FROM attendance_records ar
-      INNER JOIN employees e ON e.id = ar.employee_id
-      INNER JOIN inventories i ON i.id = ar.inventory_id
-      INNER JOIN stores s ON s.id = i.store_id
-      WHERE ar.id = @id
+      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
+      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = @companyId
+      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+      WHERE ar.id = @id AND ar.company_id = @companyId
     `);
 
     if (!result.recordset[0]) {
@@ -145,9 +155,12 @@ export const attendanceRepository = {
     return mapAttendanceWithRelationsRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async list(query: ListAttendanceQuery): Promise<{ items: AttendanceRecordWithRelations[]; total: number }> {
+  async list(
+    companyId: string,
+    query: ListAttendanceQuery,
+  ): Promise<{ items: AttendanceRecordWithRelations[]; total: number }> {
     const pool = getPool();
-    const filters = buildAttendanceFilters(query);
+    const filters = buildAttendanceFilters(companyId, query);
     const whereClause = buildWhereClause(filters);
 
     const countRequest = pool.request();
@@ -155,7 +168,7 @@ export const attendanceRepository = {
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
       FROM attendance_records ar
-      INNER JOIN inventories i ON i.id = ar.inventory_id
+      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -178,9 +191,9 @@ export const attendanceRepository = {
         s.address AS store_address,
         s.allowed_radius_meters AS store_allowed_radius_meters
       FROM attendance_records ar
-      INNER JOIN employees e ON e.id = ar.employee_id
-      INNER JOIN inventories i ON i.id = ar.inventory_id
-      INNER JOIN stores s ON s.id = i.store_id
+      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
+      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
+      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = ar.company_id
       ${whereClause}
       ORDER BY ar.received_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -195,6 +208,7 @@ export const attendanceRepository = {
   },
 
   async hasActiveRecord(
+    companyId: string,
     inventoryId: string,
     employeeId: string,
     options?: { simulationSessionId?: string | null },
@@ -202,6 +216,7 @@ export const attendanceRepository = {
     const pool = getPool();
     const request = pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("employeeId", sql.UniqueIdentifier, employeeId);
 
@@ -218,6 +233,7 @@ export const attendanceRepository = {
         FROM attendance_records
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
+          AND company_id = @companyId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
           ${simulationFilter}
       `);
@@ -226,12 +242,14 @@ export const attendanceRepository = {
   },
 
   async hasActiveRecordInTransaction(
+    companyId: string,
     transaction: sql.Transaction,
     inventoryId: string,
     employeeId: string,
     simulationSessionId: string | null,
   ): Promise<boolean> {
     const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("simulationSessionId", sql.UniqueIdentifier, simulationSessionId)
@@ -240,6 +258,7 @@ export const attendanceRepository = {
         FROM attendance_records WITH (UPDLOCK, HOLDLOCK)
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
+          AND company_id = @companyId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
           AND (
             (@simulationSessionId IS NULL AND is_simulation = 0)
@@ -251,6 +270,7 @@ export const attendanceRepository = {
   },
 
   async createInTransaction(
+    companyId: string,
     transaction: sql.Transaction,
     input: CreateAttendanceInput & {
       isSimulation?: boolean;
@@ -259,6 +279,7 @@ export const attendanceRepository = {
   ): Promise<AttendanceRecord> {
     const request = new sql.Request(transaction);
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("receivedLatitude", sql.Decimal(10, 7), input.receivedLatitude)
@@ -274,14 +295,14 @@ export const attendanceRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId ?? null)
       .query(`
         INSERT INTO attendance_records (
-          inventory_id, employee_id, received_latitude, received_longitude,
+          company_id, inventory_id, employee_id, received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
+          @companyId, @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt,
           @isSimulation, @simulationSessionId
@@ -291,9 +312,12 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async listForExport(query: ListAttendanceQuery): Promise<Record<string, unknown>[]> {
+  async listForExport(
+    companyId: string,
+    query: ListAttendanceQuery,
+  ): Promise<Record<string, unknown>[]> {
     const pool = getPool();
-    const filters = buildAttendanceFilters(query);
+    const filters = buildAttendanceFilters(companyId, query);
     const whereClause = buildWhereClause(filters);
     const request = pool.request();
     applySqlFilters(request, filters);
@@ -310,9 +334,9 @@ export const attendanceRepository = {
         s.allowed_radius_meters AS store_allowed_radius_meters,
         reviewer.name AS reviewer_name
       FROM attendance_records ar
-      INNER JOIN employees e ON e.id = ar.employee_id
-      INNER JOIN inventories i ON i.id = ar.inventory_id
-      INNER JOIN stores s ON s.id = i.store_id
+      INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
+      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
+      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = ar.company_id
       LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
       ${whereClause}
       ORDER BY ar.received_at DESC
@@ -322,6 +346,7 @@ export const attendanceRepository = {
   },
 
   async applyReview(
+    companyId: string,
     input: {
       attendanceId: string;
       reviewedBy: string;
@@ -332,6 +357,7 @@ export const attendanceRepository = {
   ): Promise<AttendanceRecord> {
     const request = new sql.Request(transaction);
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, input.attendanceId)
       .input("reviewedBy", sql.UniqueIdentifier, input.reviewedBy)
       .input("newValidationStatus", sql.NVarChar(30), input.newValidationStatus)
@@ -343,15 +369,22 @@ export const attendanceRepository = {
             reviewed_at = SYSUTCDATETIME(),
             review_reason = @reason
         OUTPUT INSERTED.*
-        WHERE id = @attendanceId
+        WHERE id = @attendanceId AND company_id = @companyId
       `);
 
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findCheckoutEligibleInventories(employeeId: string): Promise<CheckoutEligibleInventory[]> {
+  async findCheckoutEligibleInventories(
+    companyId: string,
+    employeeId: string,
+  ): Promise<CheckoutEligibleInventory[]> {
     const pool = getPool();
-    const result = await pool.request().input("employeeId", sql.UniqueIdentifier, employeeId).query(`
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
       SELECT
         i.id,
         i.store_id,
@@ -366,11 +399,12 @@ export const attendanceRepository = {
         s.longitude AS store_longitude,
         s.allowed_radius_meters
       FROM attendance_records ar
-      INNER JOIN inventories i ON i.id = ar.inventory_id
+      INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = @companyId
       INNER JOIN inventory_employees ie
-        ON ie.inventory_id = i.id AND ie.employee_id = ar.employee_id
-      INNER JOIN stores s ON s.id = i.store_id
+        ON ie.inventory_id = i.id AND ie.employee_id = ar.employee_id AND ie.company_id = @companyId
+      INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
       WHERE ar.employee_id = @employeeId
+        AND ar.company_id = @companyId
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         AND ar.checkout_at IS NULL
         AND i.status <> 'CANCELLED'
@@ -397,6 +431,7 @@ export const attendanceRepository = {
   },
 
   async findCheckInForCheckout(
+    companyId: string,
     inventoryId: string,
     employeeId: string,
     options?: { simulationSessionId?: string | null },
@@ -404,6 +439,7 @@ export const attendanceRepository = {
     const pool = getPool();
     const request = pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("employeeId", sql.UniqueIdentifier, employeeId);
 
@@ -420,6 +456,7 @@ export const attendanceRepository = {
         FROM attendance_records
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
+          AND company_id = @companyId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
           AND checkout_at IS NULL
           ${simulationFilter}
@@ -434,6 +471,7 @@ export const attendanceRepository = {
   },
 
   async registerCheckoutInTransaction(
+    companyId: string,
     transaction: sql.Transaction,
     input: {
       attendanceId: string;
@@ -450,6 +488,7 @@ export const attendanceRepository = {
   ): Promise<AttendanceRecord | null> {
     const request = new sql.Request(transaction);
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attendanceId", sql.UniqueIdentifier, input.attendanceId)
       .input("checkoutLatitude", sql.Decimal(10, 7), input.checkoutLatitude)
       .input("checkoutLongitude", sql.Decimal(10, 7), input.checkoutLongitude)
@@ -473,6 +512,7 @@ export const attendanceRepository = {
             checkout_message_sid = @checkoutMessageSid
         OUTPUT INSERTED.*
         WHERE id = @attendanceId
+          AND company_id = @companyId
           AND checkout_at IS NULL
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
       `);

@@ -67,16 +67,20 @@ const buildSummaryForType = (input: {
 };
 
 export const absenceBalanceService = {
-  async listEmployeeBalances(employeeId: string, year: number): Promise<AbsenceBalanceSummary[]> {
-    const employee = await employeeRepository.findById(employeeId);
+  async listEmployeeBalances(
+    companyId: string,
+    employeeId: string,
+    year: number,
+  ): Promise<AbsenceBalanceSummary[]> {
+    const employee = await employeeRepository.findById(companyId, employeeId);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
     const [absenceTypes, balanceRows, aggregates] = await Promise.all([
-      absenceTypeRepository.listAll(true),
-      absenceBalanceRepository.listByEmployeeYear(employeeId, year),
-      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(employeeId, year),
+      absenceTypeRepository.listAll(companyId, true),
+      absenceBalanceRepository.listByEmployeeYear(companyId, employeeId, year),
+      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(companyId, employeeId, year),
     ]);
 
     const assignedByType = new Map(balanceRows.map((row) => [row.absenceTypeId, row.totalDays]));
@@ -94,6 +98,7 @@ export const absenceBalanceService = {
   },
 
   async getSummaryForRequest(
+    companyId: string,
     request: Pick<
       AbsenceRequest,
       "employeeId" | "absenceTypeId" | "startDate" | "totalDays" | "status"
@@ -112,8 +117,13 @@ export const absenceBalanceService = {
     }
 
     const [balanceRow, aggregates] = await Promise.all([
-      absenceBalanceRepository.findByEmployeeTypeYear(request.employeeId, absenceType.id, year),
-      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(request.employeeId, year),
+      absenceBalanceRepository.findByEmployeeTypeYear(
+        companyId,
+        request.employeeId,
+        absenceType.id,
+        year,
+      ),
+      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(companyId, request.employeeId, year),
     ]);
 
     const assignedDays = balanceRow?.totalDays ?? 0;
@@ -145,13 +155,14 @@ export const absenceBalanceService = {
   },
 
   async ensureSufficientBalanceForApproval(
+    companyId: string,
     request: Pick<
       AbsenceRequest,
       "employeeId" | "absenceTypeId" | "startDate" | "totalDays" | "status"
     >,
     transaction: sql.Transaction,
   ): Promise<void> {
-    const absenceType = await absenceTypeRepository.findById(request.absenceTypeId);
+    const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
     if (!absenceType || !absenceType.deductsBalance) {
       return;
     }
@@ -159,6 +170,7 @@ export const absenceBalanceService = {
     const year = getAbsenceRequestYear(request.startDate);
     const { assignedDays, approvedDays } =
       await absenceBalanceRepository.lockAndGetApprovalBalanceSnapshot(
+        companyId,
         request.employeeId,
         request.absenceTypeId,
         year,
@@ -181,28 +193,30 @@ export const absenceBalanceService = {
   },
 
   async upsertEmployeeBalance(
+    companyId: string,
     employeeId: string,
     absenceTypeId: string,
     input: UpsertEmployeeAbsenceBalanceInput,
     userId: string,
   ) {
-    const employee = await employeeRepository.findById(employeeId);
+    const employee = await employeeRepository.findById(companyId, employeeId);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
-    const absenceType = await absenceTypeRepository.findById(absenceTypeId);
+    const absenceType = await absenceTypeRepository.findById(companyId, absenceTypeId);
     if (!absenceType) {
       throw new AppError(404, "ABSENCE_TYPE_NOT_FOUND", "Tipo de ausencia no encontrado");
     }
 
     const previous = await absenceBalanceRepository.findByEmployeeTypeYear(
+      companyId,
       employeeId,
       absenceTypeId,
       input.year,
     );
 
-    const saved = await absenceBalanceRepository.upsert({
+    const saved = await absenceBalanceRepository.upsert(companyId, {
       employeeId,
       absenceTypeId,
       year: input.year,
@@ -210,7 +224,7 @@ export const absenceBalanceService = {
       notes: input.notes ?? null,
     });
 
-    await auditService.log({
+    await auditService.log(companyId, {
       entityType: "employee_absence_balance",
       entityId: saved.id,
       action: previous ? "UPDATED" : "CREATED",
@@ -221,7 +235,7 @@ export const absenceBalanceService = {
     });
 
     const [summary] = (
-      await this.listEmployeeBalances(employeeId, input.year)
+      await this.listEmployeeBalances(companyId, employeeId, input.year)
     ).filter((item) => item.absenceType.id === absenceTypeId);
 
     return summary;

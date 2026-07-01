@@ -1,4 +1,5 @@
 import { apiClient } from "./client";
+import { companyApiPath } from "./company-path";
 
 export type BotSimulationMode = "dry-run" | "persistent";
 
@@ -44,12 +45,17 @@ export type LocationPresets = {
 export async function createBotSimulationSession(
   input: CreateBotSimulationSessionInput,
 ): Promise<BotSimulationSessionState> {
-  const { data } = await apiClient.post<BotSimulationSessionState>("/bot-simulator/session", input);
+  const { data } = await apiClient.post<BotSimulationSessionState>(
+    companyApiPath("/bot-simulator/session"),
+    input,
+  );
   return data;
 }
 
 export async function getBotSimulationSession(sessionId: string): Promise<BotSimulationSessionState> {
-  const { data } = await apiClient.get<BotSimulationSessionState>(`/bot-simulator/session/${sessionId}`);
+  const { data } = await apiClient.get<BotSimulationSessionState>(
+    companyApiPath(`/bot-simulator/session/${sessionId}`),
+  );
   return data;
 }
 
@@ -57,7 +63,7 @@ export async function restartBotSimulationSession(
   sessionId: string,
 ): Promise<BotSimulationSessionState> {
   const { data } = await apiClient.post<BotSimulationSessionState>(
-    `/bot-simulator/session/${sessionId}/restart`,
+    companyApiPath(`/bot-simulator/session/${sessionId}/restart`),
   );
   return data;
 }
@@ -66,10 +72,13 @@ export async function sendBotSimulationMessage(
   sessionId: string,
   text: string,
 ): Promise<BotSimulationSessionState> {
-  const { data } = await apiClient.post<BotSimulationSessionState>("/bot-simulator/message", {
-    sessionId,
-    text,
-  });
+  const { data } = await apiClient.post<BotSimulationSessionState>(
+    companyApiPath("/bot-simulator/message"),
+    {
+      sessionId,
+      text,
+    },
+  );
   return data;
 }
 
@@ -78,17 +87,20 @@ export async function sendBotSimulationLocation(
   latitude: number,
   longitude: number,
 ): Promise<BotSimulationSessionState> {
-  const { data } = await apiClient.post<BotSimulationSessionState>("/bot-simulator/location", {
-    sessionId,
-    latitude,
-    longitude,
-  });
+  const { data } = await apiClient.post<BotSimulationSessionState>(
+    companyApiPath("/bot-simulator/location"),
+    {
+      sessionId,
+      latitude,
+      longitude,
+    },
+  );
   return data;
 }
 
 export async function getBotSimulationLocationPresets(sessionId: string): Promise<LocationPresets> {
   const { data } = await apiClient.get<LocationPresets>(
-    `/bot-simulator/session/${sessionId}/location-presets`,
+    companyApiPath(`/bot-simulator/session/${sessionId}/location-presets`),
   );
   return data;
 }

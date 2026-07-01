@@ -33,18 +33,22 @@ const formatLocalDateTime = (value: string | Date | null | undefined): string =>
 };
 
 export const attendanceService = {
-  async create(input: CreateAttendanceInput) {
-    const inventory = await inventoryRepository.findById(input.inventoryId);
+  async create(companyId: string, input: CreateAttendanceInput) {
+    const inventory = await inventoryRepository.findById(companyId, input.inventoryId);
     if (!inventory) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
-    const employee = await employeeRepository.findById(input.employeeId);
+    const employee = await employeeRepository.findById(companyId, input.employeeId);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
-    const isAssigned = await inventoryEmployeeRepository.exists(input.inventoryId, input.employeeId);
+    const isAssigned = await inventoryEmployeeRepository.exists(
+      companyId,
+      input.inventoryId,
+      input.employeeId,
+    );
     if (!isAssigned) {
       throw new AppError(
         409,
@@ -54,6 +58,7 @@ export const attendanceService = {
     }
 
     const hasActiveRecord = await attendanceRepository.hasActiveRecord(
+      companyId,
       input.inventoryId,
       input.employeeId,
     );
@@ -66,7 +71,7 @@ export const attendanceService = {
     }
 
     try {
-      return await attendanceRepository.create(input);
+      return await attendanceRepository.create(companyId, input);
     } catch (error) {
       if (error instanceof Error && error.message.includes("UQ_attendance_records_source_message_sid")) {
         throw new AppError(
@@ -80,21 +85,21 @@ export const attendanceService = {
     }
   },
 
-  async list(query: ListAttendanceQuery) {
-    const result = await attendanceRepository.list(query);
+  async list(companyId: string, query: ListAttendanceQuery) {
+    const result = await attendanceRepository.list(companyId, query);
     return {
       data: result.items,
       meta: buildPaginationMeta(query.page, query.limit, result.total),
     };
   },
 
-  async getById(id: string) {
-    const record = await attendanceRepository.findById(id);
+  async getById(companyId: string, id: string) {
+    const record = await attendanceRepository.findById(companyId, id);
     if (!record) {
       throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Registro de asistencia no encontrado");
     }
 
-    const technical = await this.getTechnicalDetails(record);
+    const technical = await this.getTechnicalDetails(companyId, record);
 
     return {
       ...record,
@@ -102,13 +107,14 @@ export const attendanceService = {
     };
   },
 
-  async listReviews(attendanceId: string, page: number, limit: number) {
-    const record = await attendanceRepository.findById(attendanceId);
+  async listReviews(companyId: string, attendanceId: string, page: number, limit: number) {
+    const record = await attendanceRepository.findById(companyId, attendanceId);
     if (!record) {
       throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Registro de asistencia no encontrado");
     }
 
     const result = await attendanceReviewRepository.listByAttendanceIdPaginated(
+      companyId,
       attendanceId,
       page,
       limit,
@@ -120,22 +126,25 @@ export const attendanceService = {
     };
   },
 
-  async getTechnicalDetails(record: {
-    id: string;
-    employeeId: string;
-    sourceMessageSid: string | null;
-    receivedLatitude: number;
-    receivedLongitude: number;
-    distanceMeters: number;
-    validationReason: string | null;
-  }) {
+  async getTechnicalDetails(
+    companyId: string,
+    record: {
+      id: string;
+      employeeId: string;
+      sourceMessageSid: string | null;
+      receivedLatitude: number;
+      receivedLongitude: number;
+      distanceMeters: number;
+      validationReason: string | null;
+    },
+  ) {
     const message = record.sourceMessageSid
-      ? await whatsappMessageRepository.findByMessageSid(record.sourceMessageSid)
+      ? await whatsappMessageRepository.findByMessageSid(companyId, record.sourceMessageSid)
       : null;
 
-    const employee = await employeeRepository.findById(record.employeeId);
+    const employee = await employeeRepository.findById(companyId, record.employeeId);
     const session = employee
-      ? await botSessionRepository.findLatestByPhone(employee.phoneNumber)
+      ? await botSessionRepository.findLatestByPhone(companyId, employee.phoneNumber)
       : null;
 
     return {
@@ -170,13 +179,13 @@ export const attendanceService = {
     };
   },
 
-  async review(attendanceId: string, userId: string, input: ReviewAttendanceInput) {
-    const record = await attendanceRepository.findById(attendanceId);
+  async review(companyId: string, attendanceId: string, userId: string, input: ReviewAttendanceInput) {
+    const record = await attendanceRepository.findById(companyId, attendanceId);
     if (!record) {
       throw new AppError(404, "ATTENDANCE_NOT_FOUND", "Registro de asistencia no encontrado");
     }
 
-    if (record.reviewedAt || (await attendanceReviewRepository.hasReview(attendanceId))) {
+    if (record.reviewedAt || (await attendanceReviewRepository.hasReview(companyId, attendanceId))) {
       throw new AppError(409, "ATTENDANCE_ALREADY_REVIEWED", "La asistencia ya fue revisada");
     }
 
@@ -195,6 +204,7 @@ export const attendanceService = {
 
     try {
       const updated = await attendanceRepository.applyReview(
+        companyId,
         {
           attendanceId,
           reviewedBy: userId,
@@ -205,6 +215,7 @@ export const attendanceService = {
       );
 
       await attendanceReviewRepository.create(
+        companyId,
         {
           attendanceId,
           reviewedBy: userId,
@@ -218,7 +229,7 @@ export const attendanceService = {
 
       await transaction.commit();
 
-      await auditService.log({
+      await auditService.log(companyId, {
         entityType: "attendance",
         entityId: attendanceId,
         action: "review",
@@ -235,15 +246,15 @@ export const attendanceService = {
         userId,
       });
 
-      return this.getById(updated.id);
+      return this.getById(companyId, updated.id);
     } catch (error) {
       await transaction.rollback();
       throw error;
     }
   },
 
-  async exportCsv(query: ListAttendanceQuery): Promise<string> {
-    const rows = await attendanceRepository.listForExport({ ...query, page: 1, limit: 10000 });
+  async exportCsv(companyId: string, query: ListAttendanceQuery): Promise<string> {
+    const rows = await attendanceRepository.listForExport(companyId, { ...query, page: 1, limit: 10000 });
     const csvRows = rows.map((row) => [
       String(row.employee_name ?? ""),
       row.employee_document_number ? String(row.employee_document_number) : "",

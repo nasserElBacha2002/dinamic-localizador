@@ -15,7 +15,7 @@ const runJobSafely = async (): Promise<void> => {
   isRunning = true;
 
   try {
-    await attendanceReminderService.runDueReminders();
+    await attendanceReminderService.runDueRemindersForAllCompanies();
   } catch (error) {
     console.error("[attendance-reminder] unexpected job error", error);
   } finally {

@@ -67,14 +67,18 @@ const getRetryThresholds = () => ({
 });
 
 export const attendanceNotificationRepository = {
-  async findByInventoryEmployeeType(input: {
-    inventoryId: string;
-    employeeId: string;
-    notificationType: AttendanceNotificationType;
-  }): Promise<AttendanceNotification | null> {
+  async findByInventoryEmployeeType(
+    companyId: string,
+    input: {
+      inventoryId: string;
+      employeeId: string;
+      notificationType: AttendanceNotificationType;
+    },
+  ): Promise<AttendanceNotification | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("notificationType", sql.NVarChar(40), input.notificationType)
@@ -84,6 +88,7 @@ export const attendanceNotificationRepository = {
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
           AND notification_type = @notificationType
+          AND company_id = @companyId
       `);
 
     if (!result.recordset[0]) {
@@ -93,14 +98,18 @@ export const attendanceNotificationRepository = {
     return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findArrivalReminderCandidates(input: {
-    windowStart: Date;
-    windowEnd: Date;
-  }): Promise<AttendanceReminderCandidate[]> {
+  async findArrivalReminderCandidates(
+    companyId: string,
+    input: {
+      windowStart: Date;
+      windowEnd: Date;
+    },
+  ): Promise<AttendanceReminderCandidate[]> {
     const pool = getPool();
     const { staleBefore, maxAttempts } = getRetryThresholds();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("windowStart", sql.DateTime2, input.windowStart)
       .input("windowEnd", sql.DateTime2, input.windowEnd)
       .input("staleBefore", sql.DateTime2, staleBefore)
@@ -115,14 +124,16 @@ export const attendanceNotificationRepository = {
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
         FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id
-        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id
-        INNER JOIN employees e ON e.id = ie.employee_id
+        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.inventory_id = i.id
           AND wan.employee_id = e.id
           AND wan.notification_type = 'ARRIVAL_REMINDER_15_MIN'
-        WHERE i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND wan.company_id = @companyId
+        WHERE i.company_id = @companyId
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
           ${PHONE_FILTER_SQL}
@@ -134,14 +145,18 @@ export const attendanceNotificationRepository = {
     return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
   },
 
-  async findExitReminderCandidates(input: {
-    windowStart: Date;
-    windowEnd: Date;
-  }): Promise<AttendanceReminderCandidate[]> {
+  async findExitReminderCandidates(
+    companyId: string,
+    input: {
+      windowStart: Date;
+      windowEnd: Date;
+    },
+  ): Promise<AttendanceReminderCandidate[]> {
     const pool = getPool();
     const { staleBefore, maxAttempts } = getRetryThresholds();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("windowStart", sql.DateTime2, input.windowStart)
       .input("windowEnd", sql.DateTime2, input.windowEnd)
       .input("staleBefore", sql.DateTime2, staleBefore)
@@ -156,19 +171,22 @@ export const attendanceNotificationRepository = {
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
         FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id
-        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id
-        INNER JOIN employees e ON e.id = ie.employee_id
+        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
         INNER JOIN attendance_records ar
           ON ar.inventory_id = i.id
           AND ar.employee_id = e.id
+          AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
           AND ar.checkout_at IS NULL
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.inventory_id = i.id
           AND wan.employee_id = e.id
           AND wan.notification_type = 'EXIT_REMINDER_15_MIN'
-        WHERE i.status <> 'CANCELLED'
+          AND wan.company_id = @companyId
+        WHERE i.company_id = @companyId
+          AND i.status <> 'CANCELLED'
           AND i.scheduled_end IS NOT NULL
           AND s.active = 1
           AND e.active = 1
@@ -181,19 +199,25 @@ export const attendanceNotificationRepository = {
     return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
   },
 
-  async isExitReminderEligible(inventoryId: string, employeeId: string): Promise<boolean> {
+  async isExitReminderEligible(
+    companyId: string,
+    inventoryId: string,
+    employeeId: string,
+  ): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT TOP 1 1 AS found
         FROM attendance_records ar
-        INNER JOIN inventories i ON i.id = ar.inventory_id
-        INNER JOIN employees e ON e.id = ar.employee_id
+        INNER JOIN inventories i ON i.id = ar.inventory_id AND i.company_id = @companyId
+        INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
         WHERE ar.inventory_id = @inventoryId
           AND ar.employee_id = @employeeId
+          AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
           AND ar.checkout_at IS NULL
           AND i.status <> 'CANCELLED'
@@ -205,17 +229,21 @@ export const attendanceNotificationRepository = {
     return Boolean(result.recordset[0]);
   },
 
-  async findReminderCandidateByIds(input: {
-    inventoryId: string;
-    employeeId: string;
-    notificationType: AttendanceNotificationType;
-  }): Promise<AttendanceReminderCandidate | null> {
+  async findReminderCandidateByIds(
+    companyId: string,
+    input: {
+      inventoryId: string;
+      employeeId: string;
+      notificationType: AttendanceNotificationType;
+    },
+  ): Promise<AttendanceReminderCandidate | null> {
     const pool = getPool();
     const scheduledColumn =
       input.notificationType === "ARRIVAL_REMINDER_15_MIN" ? "i.scheduled_start" : "i.scheduled_end";
 
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .query(`
@@ -228,10 +256,12 @@ export const attendanceNotificationRepository = {
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
         FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id
-        INNER JOIN inventory_employees ie ON ie.inventory_id = i.id AND ie.employee_id = @employeeId
-        INNER JOIN employees e ON e.id = ie.employee_id
+        INNER JOIN stores s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN inventory_employees ie
+          ON ie.inventory_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
         WHERE i.id = @inventoryId
+          AND i.company_id = @companyId
           AND s.active = 1
           AND e.active = 1
           ${PHONE_FILTER_SQL}
@@ -245,16 +275,19 @@ export const attendanceNotificationRepository = {
     return mapCandidateRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async claimNotificationForAttempt(input: {
-    inventoryId: string;
-    employeeId: string;
-    notificationType: AttendanceNotificationType;
-    attemptedAt?: Date;
-  }): Promise<AttendanceNotification | null> {
+  async claimNotificationForAttempt(
+    companyId: string,
+    input: {
+      inventoryId: string;
+      employeeId: string;
+      notificationType: AttendanceNotificationType;
+      attemptedAt?: Date;
+    },
+  ): Promise<AttendanceNotification | null> {
     const attemptedAt = input.attemptedAt ?? new Date();
     const { staleBefore, maxAttempts } = getRetryThresholds();
 
-    const reclaimed = await this.reclaimNotificationForAttempt({
+    const reclaimed = await this.reclaimNotificationForAttempt(companyId, {
       inventoryId: input.inventoryId,
       employeeId: input.employeeId,
       notificationType: input.notificationType,
@@ -271,19 +304,20 @@ export const attendanceNotificationRepository = {
     try {
       const insertResult = await pool
         .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
         .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
         .input("notificationType", sql.NVarChar(40), input.notificationType)
         .query(`
           INSERT INTO whatsapp_attendance_notifications (
-            inventory_id, employee_id, notification_type, status, attempt_count
+            company_id, inventory_id, employee_id, notification_type, status, attempt_count
           )
           OUTPUT INSERTED.*
-          VALUES (@inventoryId, @employeeId, @notificationType, 'PENDING', 0)
+          VALUES (@companyId, @inventoryId, @employeeId, @notificationType, 'PENDING', 0)
         `);
 
       const inserted = mapNotificationRow(insertResult.recordset[0] as Record<string, unknown>);
-      return this.beginAttempt({
+      return this.beginAttempt(companyId, {
         notificationId: inserted.id,
         attemptedAt,
         maxAttempts,
@@ -294,7 +328,7 @@ export const attendanceNotificationRepository = {
         throw error;
       }
 
-      const reclaimedAfterRace = await this.reclaimNotificationForAttempt({
+      const reclaimedAfterRace = await this.reclaimNotificationForAttempt(companyId, {
         inventoryId: input.inventoryId,
         employeeId: input.employeeId,
         notificationType: input.notificationType,
@@ -306,12 +340,12 @@ export const attendanceNotificationRepository = {
         return reclaimedAfterRace;
       }
 
-      const existing = await this.findByInventoryEmployeeType(input);
+      const existing = await this.findByInventoryEmployeeType(companyId, input);
       if (!existing) {
         return null;
       }
 
-      return this.beginAttempt({
+      return this.beginAttempt(companyId, {
         notificationId: existing.id,
         attemptedAt,
         maxAttempts,
@@ -320,23 +354,27 @@ export const attendanceNotificationRepository = {
     }
   },
 
-  async reclaimNotificationForAttempt(input: {
-    notificationId?: string;
-    inventoryId?: string;
-    employeeId?: string;
-    notificationType?: AttendanceNotificationType;
-    attemptedAt: Date;
-    staleBefore: Date;
-    maxAttempts: number;
-  }): Promise<AttendanceNotification | null> {
+  async reclaimNotificationForAttempt(
+    companyId: string,
+    input: {
+      notificationId?: string;
+      inventoryId?: string;
+      employeeId?: string;
+      notificationType?: AttendanceNotificationType;
+      attemptedAt: Date;
+      staleBefore: Date;
+      maxAttempts: number;
+    },
+  ): Promise<AttendanceNotification | null> {
     const pool = getPool();
     const request = pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("attemptedAt", sql.DateTime2, input.attemptedAt)
       .input("staleBefore", sql.DateTime2, input.staleBefore)
       .input("maxAttempts", sql.Int, input.maxAttempts);
 
-    let whereClause = "id = @notificationId";
+    let whereClause = "id = @notificationId AND company_id = @companyId";
     if (input.notificationId) {
       request.input("notificationId", sql.UniqueIdentifier, input.notificationId);
     } else if (input.inventoryId && input.employeeId && input.notificationType) {
@@ -348,6 +386,7 @@ export const attendanceNotificationRepository = {
         inventory_id = @inventoryId
         AND employee_id = @employeeId
         AND notification_type = @notificationType
+        AND company_id = @companyId
       `;
     } else {
       throw new Error("RECLAIM_NOTIFICATION_TARGET_REQUIRED");
@@ -380,12 +419,15 @@ export const attendanceNotificationRepository = {
     return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async beginAttempt(input: {
-    notificationId: string;
-    attemptedAt: Date;
-    maxAttempts?: number;
-    firstAttemptOnly?: boolean;
-  }): Promise<AttendanceNotification | null> {
+  async beginAttempt(
+    companyId: string,
+    input: {
+      notificationId: string;
+      attemptedAt: Date;
+      maxAttempts?: number;
+      firstAttemptOnly?: boolean;
+    },
+  ): Promise<AttendanceNotification | null> {
     const pool = getPool();
     const maxAttempts = input.maxAttempts ?? ATTENDANCE_REMINDER_MAX_ATTEMPTS;
     const firstAttemptClause = input.firstAttemptOnly
@@ -394,6 +436,7 @@ export const attendanceNotificationRepository = {
 
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("notificationId", sql.UniqueIdentifier, input.notificationId)
       .input("attemptedAt", sql.DateTime2, input.attemptedAt)
       .input("maxAttempts", sql.Int, maxAttempts)
@@ -403,6 +446,7 @@ export const attendanceNotificationRepository = {
             last_attempt_at = @attemptedAt
         OUTPUT INSERTED.*
         WHERE id = @notificationId
+          AND company_id = @companyId
           AND status = 'PENDING'
           AND attempt_count < @maxAttempts
           ${firstAttemptClause}
@@ -416,21 +460,25 @@ export const attendanceNotificationRepository = {
   },
 
   /** @deprecated Use claimNotificationForAttempt */
-  async reserveNotification(input: {
-    inventoryId: string;
-    employeeId: string;
-    notificationType: AttendanceNotificationType;
-  }): Promise<AttendanceNotification | null> {
-    return this.claimNotificationForAttempt(input);
+  async reserveNotification(
+    companyId: string,
+    input: {
+      inventoryId: string;
+      employeeId: string;
+      notificationType: AttendanceNotificationType;
+    },
+  ): Promise<AttendanceNotification | null> {
+    return this.claimNotificationForAttempt(companyId, input);
   },
 
   /** @deprecated Replaced by reclaimNotificationForAttempt */
   async reclaimNotification(
+    companyId: string,
     notificationId: string,
     attemptedAt: Date = new Date(),
   ): Promise<AttendanceNotification | null> {
     const { staleBefore, maxAttempts } = getRetryThresholds();
-    return this.reclaimNotificationForAttempt({
+    return this.reclaimNotificationForAttempt(companyId, {
       notificationId,
       attemptedAt,
       staleBefore,
@@ -438,14 +486,18 @@ export const attendanceNotificationRepository = {
     });
   },
 
-  async markSent(input: {
-    notificationId: string;
-    twilioMessageSid: string;
-    sentAt: Date;
-  }): Promise<void> {
+  async markSent(
+    companyId: string,
+    input: {
+      notificationId: string;
+      twilioMessageSid: string;
+      sentAt: Date;
+    },
+  ): Promise<void> {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("notificationId", sql.UniqueIdentifier, input.notificationId)
       .input("twilioMessageSid", sql.NVarChar(100), input.twilioMessageSid)
       .input("sentAt", sql.DateTime2, input.sentAt)
@@ -455,17 +507,21 @@ export const attendanceNotificationRepository = {
             twilio_message_sid = @twilioMessageSid,
             sent_at = @sentAt,
             error_message = NULL
-        WHERE id = @notificationId
+        WHERE id = @notificationId AND company_id = @companyId
       `);
   },
 
-  async markFailed(input: {
-    notificationId: string;
-    errorMessage: string;
-  }): Promise<void> {
+  async markFailed(
+    companyId: string,
+    input: {
+      notificationId: string;
+      errorMessage: string;
+    },
+  ): Promise<void> {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("notificationId", sql.UniqueIdentifier, input.notificationId)
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
       .query(`
@@ -473,7 +529,7 @@ export const attendanceNotificationRepository = {
         SET status = 'FAILED',
             error_message = @errorMessage,
             sent_at = NULL
-        WHERE id = @notificationId
+        WHERE id = @notificationId AND company_id = @companyId
       `);
   },
 };

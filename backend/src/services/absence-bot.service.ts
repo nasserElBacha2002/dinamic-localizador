@@ -69,14 +69,16 @@ export const absenceBotService = {
     return Boolean(session && (isCheckInSessionState(session.state) || isCheckoutSessionState(session.state)));
   },
 
-  async startAbsenceFlow(input: {
+  async startAbsenceFlow(
+    companyId: string,
+    input: {
     employeeId: string;
     phoneFrom: string;
     phoneTo: string;
     body: string;
     respond: RespondFn;
   }): Promise<string> {
-    const types = await absenceTypeRepository.listActive();
+    const types = await absenceTypeRepository.listActive(companyId);
     const detectedCode = detectAbsenceTypeCode(input.body);
     const draft = {
       flow: "ABSENCE_REQUEST" as const,
@@ -88,7 +90,7 @@ export const absenceBotService = {
       if (absenceType) {
         draft.absenceDraft.absenceTypeId = absenceType.id;
         draft.absenceDraft.absenceTypeCode = absenceType.code;
-        await botSessionService.createAbsenceSession({
+        await botSessionService.createAbsenceSession(companyId, {
           employeeId: input.employeeId,
           phoneNumber: input.phoneFrom,
           state: "WAITING_ABSENCE_START_DATE",
@@ -103,7 +105,7 @@ export const absenceBotService = {
       }
     }
 
-    await botSessionService.createAbsenceSession({
+    await botSessionService.createAbsenceSession(companyId, {
       employeeId: input.employeeId,
       phoneNumber: input.phoneFrom,
       state: "WAITING_ABSENCE_TYPE",
@@ -118,7 +120,9 @@ export const absenceBotService = {
     });
   },
 
-  async handleAbsenceSession(input: {
+  async handleAbsenceSession(
+    companyId: string,
+    input: {
     session: BotSession;
     body: string;
     employeeId: string;
@@ -128,7 +132,7 @@ export const absenceBotService = {
     respond: RespondFn;
   }): Promise<string> {
     if (isAbsenceCancelIntent(input.body)) {
-      await botSessionService.cancelSession(input.session.id);
+      await botSessionService.cancelSession(companyId, input.session.id);
       return input.respond({
         message: "Solicitud de ausencia cancelada. Si necesitás algo más, escribinos.",
         employeeId: input.employeeId,
@@ -141,7 +145,7 @@ export const absenceBotService = {
     const draft = context.absenceDraft ?? {};
 
     if (input.session.state === "WAITING_ABSENCE_TYPE") {
-      const types = await absenceTypeRepository.listActive();
+      const types = await absenceTypeRepository.listActive(companyId);
       const selected = parseTypeSelection(input.body, types);
       if (!selected) {
         return input.respond({
@@ -154,7 +158,7 @@ export const absenceBotService = {
 
       draft.absenceTypeId = selected.id;
       draft.absenceTypeCode = selected.code;
-      await botSessionService.updateAbsenceSession(input.session.id, {
+      await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_START_DATE",
         contextJson: serializeContext({ ...context, absenceDraft: draft }),
       });
@@ -179,7 +183,7 @@ export const absenceBotService = {
       }
 
       draft.startDate = parsed.iso;
-      await botSessionService.updateAbsenceSession(input.session.id, {
+      await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_END_DATE",
         contextJson: serializeContext({ ...context, absenceDraft: draft }),
       });
@@ -205,7 +209,7 @@ export const absenceBotService = {
       }
 
       draft.endDate = parsed.iso;
-      await botSessionService.updateAbsenceSession(input.session.id, {
+      await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_REASON",
         contextJson: serializeContext({ ...context, absenceDraft: draft }),
       });
@@ -231,7 +235,7 @@ export const absenceBotService = {
 
       draft.reason = reason;
       const absenceType = draft.absenceTypeId
-        ? await absenceTypeRepository.findById(draft.absenceTypeId)
+        ? await absenceTypeRepository.findById(companyId, draft.absenceTypeId)
         : null;
 
       const totalDays = calculateTotalAbsenceDays({
@@ -241,7 +245,7 @@ export const absenceBotService = {
         endPeriod: "FULL_DAY",
       });
 
-      await botSessionService.updateAbsenceSession(input.session.id, {
+      await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_CONFIRMATION",
         contextJson: serializeContext({ ...context, absenceDraft: draft }),
       });
@@ -262,7 +266,7 @@ export const absenceBotService = {
 
     if (input.session.state === "WAITING_ABSENCE_CONFIRMATION") {
       if (isNegativeConfirmation(input.body)) {
-        await botSessionService.cancelSession(input.session.id);
+        await botSessionService.cancelSession(companyId, input.session.id);
         return input.respond({
           message: "Solicitud de ausencia cancelada.",
           employeeId: input.employeeId,
@@ -281,7 +285,7 @@ export const absenceBotService = {
       }
 
       if (!draft.absenceTypeId || !draft.startDate || !draft.endDate || !draft.reason) {
-        await botSessionService.cancelSession(input.session.id);
+        await botSessionService.cancelSession(companyId, input.session.id);
         return input.respond({
           message: "No pudimos completar la solicitud. Iniciá nuevamente escribiendo que querés pedir una ausencia.",
           employeeId: input.employeeId,
@@ -291,7 +295,7 @@ export const absenceBotService = {
       }
 
       try {
-        const { isExisting } = await absenceRequestService.createFromWhatsapp({
+        const { isExisting } = await absenceRequestService.createFromWhatsapp(companyId, {
           employeeId: input.employeeId,
           absenceTypeId: draft.absenceTypeId,
           startDate: draft.startDate,
@@ -302,7 +306,7 @@ export const absenceBotService = {
           sourceMessageSid: input.messageSid,
         });
 
-        await botSessionService.completeSession(input.session.id);
+        await botSessionService.completeSession(companyId, input.session.id);
         return input.respond({
           message: isExisting
             ? "Tu solicitud de ausencia ya había sido registrada y quedó pendiente de revisión."
@@ -312,7 +316,7 @@ export const absenceBotService = {
           phoneTo: input.phoneFrom,
         });
       } catch (error) {
-        await botSessionService.cancelSession(input.session.id);
+        await botSessionService.cancelSession(companyId, input.session.id);
         const message =
           error instanceof AppError
             ? error.message

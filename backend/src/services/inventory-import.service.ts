@@ -423,7 +423,11 @@ const emptyPreview = (
 });
 
 export const inventoryImportService = {
-  async previewFile(buffer: Buffer, fileName: string): Promise<InventoryImportPreviewResult> {
+  async previewFile(
+    companyId: string,
+    buffer: Buffer,
+    fileName: string,
+  ): Promise<InventoryImportPreviewResult> {
     const fileType = detectSpreadsheetFileType(fileName);
     if (!fileType) {
       return emptyPreview([UNSUPPORTED_FILE_TYPE_MESSAGE]);
@@ -454,7 +458,7 @@ export const inventoryImportService = {
       return emptyPreview(["El archivo no contiene filas de datos"], fileType);
     }
 
-    const stores = await storeRepository.listAllActive();
+    const stores = await storeRepository.listAllActive(companyId);
     const storeLookup = buildStoreLookup(stores);
     const seenKeys = new Set<string>();
 
@@ -479,7 +483,7 @@ export const inventoryImportService = {
         storeId: row.storeId as string,
         scheduledStart: row.scheduledStart as string,
       }));
-    const existingKeys = await inventoryRepository.findExistingActiveKeys(pairsToCheck);
+    const existingKeys = await inventoryRepository.findExistingActiveKeys(companyId, pairsToCheck);
     markExistingInventoryConflicts(rows, existingKeys);
 
     const fileErrors: string[] = [];
@@ -504,12 +508,12 @@ export const inventoryImportService = {
     };
   },
 
-  async preview(csvContent: string): Promise<InventoryImportPreviewResult> {
-    return this.previewFile(Buffer.from(csvContent, "utf8"), "upload.csv");
+  async preview(companyId: string, csvContent: string): Promise<InventoryImportPreviewResult> {
+    return this.previewFile(companyId, Buffer.from(csvContent, "utf8"), "upload.csv");
   },
 
-  async confirm(rows: InventoryImportConfirmRow[]) {
-    const stores = await storeRepository.listAllActive();
+  async confirm(companyId: string, rows: InventoryImportConfirmRow[]) {
+    const stores = await storeRepository.listAllActive(companyId);
     const storeById = new Map(stores.map((store) => [store.id, store]));
     const seenKeys = new Set<string>();
 
@@ -555,6 +559,7 @@ export const inventoryImportService = {
     }
 
     const existingKeys = await inventoryRepository.findExistingActiveKeys(
+      companyId,
       rows.map((row) => ({
         storeId: row.storeId,
         scheduledStart: row.scheduledStart,
@@ -574,6 +579,7 @@ export const inventoryImportService = {
 
     try {
       const created = await inventoryRepository.createManyInTransaction(
+        companyId,
         transaction,
         rows.map(toCreateInput),
       );

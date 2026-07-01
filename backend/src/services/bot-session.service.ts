@@ -45,16 +45,19 @@ const runInTransaction = async <T>(operation: (transaction: sql.Transaction) => 
 };
 
 const prepareForNewSession = async (
+  companyId: string,
   employeeId: string,
   phoneNumber: string,
   transaction: sql.Transaction,
 ): Promise<void> => {
   const expiredCount = await botSessionRepository.expireStaleSessionsForParticipant(
+    companyId,
     employeeId,
     phoneNumber,
     transaction,
   );
   const cancelledCount = await botSessionRepository.cancelValidActiveSessions(
+    companyId,
     employeeId,
     phoneNumber,
     transaction,
@@ -81,19 +84,19 @@ export const botSessionService = {
   parseContext,
   buildExpiresAt,
 
-  async getActiveSessionByPhone(phoneNumber: string): Promise<BotSession | null> {
+  async getActiveSessionByPhone(companyId: string, phoneNumber: string): Promise<BotSession | null> {
     return runInTransaction(async (transaction) => {
-      const valid = await botSessionRepository.findValidActiveByPhone(phoneNumber, transaction);
+      const valid = await botSessionRepository.findValidActiveByPhone(companyId, phoneNumber, transaction);
       if (valid) {
         return valid;
       }
 
-      const stale = await botSessionRepository.findStaleActiveByPhone(phoneNumber, transaction);
+      const stale = await botSessionRepository.findStaleActiveByPhone(companyId, phoneNumber, transaction);
       if (!stale) {
         return null;
       }
 
-      const expired = await botSessionRepository.expireSessionById(stale.id, transaction);
+      const expired = await botSessionRepository.expireSessionById(companyId, stale.id, transaction);
       if (expired) {
         console.info("[bot-session] session expired lazily", {
           sessionId: stale.id,
@@ -105,44 +108,47 @@ export const botSessionService = {
     });
   },
 
-  async getLatestSessionByPhone(phoneNumber: string): Promise<BotSession | null> {
-    return botSessionRepository.findLatestByPhone(phoneNumber);
+  async getLatestSessionByPhone(companyId: string, phoneNumber: string): Promise<BotSession | null> {
+    return botSessionRepository.findLatestByPhone(companyId, phoneNumber);
   },
 
-  async getSessionResolutionByPhone(phoneNumber: string): Promise<{
+  async getSessionResolutionByPhone(companyId: string, phoneNumber: string): Promise<{
     activeSession: BotSession | null;
     recentlyExpired: boolean;
   }> {
-    const activeSession = await this.getActiveSessionByPhone(phoneNumber);
+    const activeSession = await this.getActiveSessionByPhone(companyId, phoneNumber);
     if (activeSession) {
       return { activeSession, recentlyExpired: false };
     }
 
-    const latest = await botSessionRepository.findLatestByPhone(phoneNumber);
+    const latest = await botSessionRepository.findLatestByPhone(companyId, phoneNumber);
     return {
       activeSession: null,
       recentlyExpired: latest?.state === "EXPIRED",
     };
   },
 
-  async expireSession(sessionId: string): Promise<boolean> {
-    const expired = await botSessionRepository.expireSessionById(sessionId);
+  async expireSession(companyId: string, sessionId: string): Promise<boolean> {
+    const expired = await botSessionRepository.expireSessionById(companyId, sessionId);
     if (expired) {
       console.info("[bot-session] session expired explicitly", { sessionId });
     }
     return expired;
   },
 
-  async createWaitingLocationSession(input: {
+  async createWaitingLocationSession(
+    companyId: string,
+    input: {
     employeeId: string;
     phoneNumber: string;
     inventoryId: string;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
-        await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
         return botSessionRepository.create(
           {
+            companyId,
             employeeId: input.employeeId,
             inventoryId: input.inventoryId,
             phoneNumber: input.phoneNumber,
@@ -179,16 +185,19 @@ export const botSessionService = {
     }
   },
 
-  async createInventorySelectionSession(input: {
+  async createInventorySelectionSession(
+    companyId: string,
+    input: {
     employeeId: string;
     phoneNumber: string;
     options: InventorySelectionOption[];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
-        await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
         return botSessionRepository.create(
           {
+            companyId,
             employeeId: input.employeeId,
             inventoryId: null,
             phoneNumber: input.phoneNumber,
@@ -226,15 +235,16 @@ export const botSessionService = {
   },
 
   async selectInventoryAndRenewExpiration(
+    companyId: string,
     sessionId: string,
     inventoryId: string,
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
-      const valid = await botSessionRepository.findValidActiveById(sessionId, transaction);
+      const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
       if (!valid) {
-        const stale = await botSessionRepository.findStaleActiveById(sessionId, transaction);
+        const stale = await botSessionRepository.findStaleActiveById(companyId, sessionId, transaction);
         if (stale) {
-          await botSessionRepository.expireSessionById(stale.id, transaction);
+          await botSessionRepository.expireSessionById(companyId, stale.id, transaction);
           console.info("[bot-session] selection attempted on expired session", {
             sessionId: stale.id,
           });
@@ -248,6 +258,7 @@ export const botSessionService = {
 
       const renewedExpiresAt = buildExpiresAt();
       const updated = await botSessionRepository.updateSession(
+        companyId,
         sessionId,
         {
           inventoryId,
@@ -272,16 +283,19 @@ export const botSessionService = {
     });
   },
 
-  async createWaitingCheckoutLocationSession(input: {
+  async createWaitingCheckoutLocationSession(
+    companyId: string,
+    input: {
     employeeId: string;
     phoneNumber: string;
     inventoryId: string;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
-        await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
         return botSessionRepository.create(
           {
+            companyId,
             employeeId: input.employeeId,
             inventoryId: input.inventoryId,
             phoneNumber: input.phoneNumber,
@@ -314,16 +328,19 @@ export const botSessionService = {
     }
   },
 
-  async createCheckoutInventorySelectionSession(input: {
+  async createCheckoutInventorySelectionSession(
+    companyId: string,
+    input: {
     employeeId: string;
     phoneNumber: string;
     options: InventorySelectionOption[];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
-        await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
         return botSessionRepository.create(
           {
+            companyId,
             employeeId: input.employeeId,
             inventoryId: null,
             phoneNumber: input.phoneNumber,
@@ -357,15 +374,16 @@ export const botSessionService = {
   },
 
   async selectCheckoutInventoryAndRenewExpiration(
+    companyId: string,
     sessionId: string,
     inventoryId: string,
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
-      const valid = await botSessionRepository.findValidActiveById(sessionId, transaction);
+      const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
       if (!valid) {
-        const stale = await botSessionRepository.findStaleActiveById(sessionId, transaction);
+        const stale = await botSessionRepository.findStaleActiveById(companyId, sessionId, transaction);
         if (stale) {
-          await botSessionRepository.expireSessionById(stale.id, transaction);
+          await botSessionRepository.expireSessionById(companyId, stale.id, transaction);
         }
         return { kind: "expired" };
       }
@@ -376,6 +394,7 @@ export const botSessionService = {
 
       const renewedExpiresAt = buildExpiresAt();
       const updated = await botSessionRepository.updateSession(
+        companyId,
         sessionId,
         {
           inventoryId,
@@ -394,26 +413,29 @@ export const botSessionService = {
     });
   },
 
-  async completeSession(sessionId: string, transaction?: sql.Transaction): Promise<void> {
-    await botSessionRepository.updateSession(sessionId, { state: "COMPLETED" }, transaction);
+  async completeSession(companyId: string, sessionId: string, transaction?: sql.Transaction): Promise<void> {
+    await botSessionRepository.updateSession(companyId, sessionId, { state: "COMPLETED" }, transaction);
     console.info("[bot-session] session completed", { sessionId });
   },
 
-  async cancelSession(sessionId: string): Promise<void> {
-    await botSessionRepository.updateSession(sessionId, { state: "CANCELLED" });
+  async cancelSession(companyId: string, sessionId: string): Promise<void> {
+    await botSessionRepository.updateSession(companyId, sessionId, { state: "CANCELLED" });
     console.info("[bot-session] session cancelled", { sessionId });
   },
 
-  async createAbsenceSession(input: {
+  async createAbsenceSession(
+    companyId: string,
+    input: {
     employeeId: string;
     phoneNumber: string;
     state: import("../types/twilio.types").BotSessionState;
     contextJson: string;
   }): Promise<BotSession> {
     const session = await runInTransaction(async (transaction) => {
-      await prepareForNewSession(input.employeeId, input.phoneNumber, transaction);
+      await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
       return botSessionRepository.create(
         {
+          companyId,
           employeeId: input.employeeId,
           inventoryId: null,
           phoneNumber: input.phoneNumber,
@@ -435,13 +457,14 @@ export const botSessionService = {
   },
 
   async updateAbsenceSession(
+    companyId: string,
     sessionId: string,
     input: {
       state: import("../types/twilio.types").BotSessionState;
       contextJson: string;
     },
   ): Promise<BotSession | null> {
-    return botSessionRepository.updateSession(sessionId, {
+    return botSessionRepository.updateSession(companyId, sessionId, {
       state: input.state,
       contextJson: input.contextJson,
       expiresAt: buildExpiresAt(),

@@ -9,14 +9,14 @@ import { normalizePhoneNumber } from "../utils/phone";
 import { buildPaginationMeta } from "../utils/pagination";
 
 export const employeeService = {
-  async create(input: CreateEmployeeInput) {
+  async create(companyId: string, input: CreateEmployeeInput) {
     const phoneNumber = normalizePhoneNumber(input.phoneNumber);
-    const exists = await employeeRepository.findByPhone(phoneNumber);
+    const exists = await employeeRepository.findByPhone(companyId, phoneNumber);
     if (exists) {
       throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
     }
 
-    return employeeRepository.create({
+    return employeeRepository.create(companyId, {
       name: input.name.trim(),
       documentNumber: input.documentNumber?.trim() ?? null,
       phoneNumber,
@@ -24,29 +24,29 @@ export const employeeService = {
     });
   },
 
-  async list(query: ListEmployeesQuery) {
-    const result = await employeeRepository.list(query);
+  async list(companyId: string, query: ListEmployeesQuery) {
+    const result = await employeeRepository.list(companyId, query);
     return {
       data: result.items,
       meta: buildPaginationMeta(query.page, query.limit, result.total),
     };
   },
 
-  async getById(id: string) {
-    const employee = await employeeRepository.findById(id);
+  async getById(companyId: string, id: string) {
+    const employee = await employeeRepository.findById(companyId, id);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
     return employee;
   },
 
-  async update(id: string, input: UpdateEmployeeInput) {
-    await this.getById(id);
+  async update(companyId: string, id: string, input: UpdateEmployeeInput) {
+    await this.getById(companyId, id);
 
     const updatePayload: UpdateEmployeeInput & { phoneNumber?: string } = { ...input };
     if (input.phoneNumber !== undefined) {
       const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
-      const existing = await employeeRepository.findByPhone(normalizedPhone);
+      const existing = await employeeRepository.findByPhone(companyId, normalizedPhone);
       if (existing && existing.id !== id) {
         throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
       }
@@ -54,7 +54,7 @@ export const employeeService = {
     }
 
     if (input.active === false) {
-      const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(id);
+      const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(companyId, id);
       if (hasSchedules) {
         throw new AppError(
           409,
@@ -64,16 +64,16 @@ export const employeeService = {
       }
     }
 
-    const updated = await employeeRepository.update(id, updatePayload);
+    const updated = await employeeRepository.update(companyId, id, updatePayload);
     if (!updated) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
     return updated;
   },
 
-  async deactivate(id: string) {
-    await this.getById(id);
-    const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(id);
+  async deactivate(companyId: string, id: string) {
+    await this.getById(companyId, id);
+    const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(companyId, id);
     if (hasSchedules) {
       throw new AppError(
         409,
@@ -82,7 +82,7 @@ export const employeeService = {
       );
     }
 
-    const updated = await employeeRepository.deactivate(id);
+    const updated = await employeeRepository.deactivate(companyId, id);
     if (!updated) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }

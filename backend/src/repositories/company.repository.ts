@@ -65,7 +65,7 @@ export const companyRepository = {
   ): Promise<Company> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request
-      .input("name", sql.NVarChar(200), input.name)
+      .input("name", sql.NVarChar(200), input.name.trim())
       .input("defaultTimezone", sql.NVarChar(80), input.defaultTimezone)
       .input("status", sql.NVarChar(30), input.status ?? "ACTIVE")
       .query(`

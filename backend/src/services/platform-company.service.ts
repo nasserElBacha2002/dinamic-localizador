@@ -9,6 +9,7 @@ import { userCompanyMembershipRepository } from "../repositories/user-company-me
 import { userRepository } from "../repositories/user.repository";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
 import { hashPassword, normalizeEmail } from "../utils/password";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const DEFAULT_SETTINGS = {
   operationTimezone: "America/Argentina/Buenos_Aires",
@@ -69,7 +70,9 @@ export const platformCompanyService = {
 
       await companySettingsRepository.create(company.id, settingsInput, transaction);
 
-      const moduleKeys = input.modules?.length ? input.modules : DEFAULT_COMPANY_MODULE_KEYS;
+      const moduleKeys = [
+        ...new Set(input.modules?.length ? input.modules : DEFAULT_COMPANY_MODULE_KEYS),
+      ];
       await companyModuleRepository.bulkEnable(company.id, moduleKeys, transaction);
 
       let ownerUser = existingOwner;
@@ -136,6 +139,13 @@ export const platformCompanyService = {
       };
     } catch (error) {
       await transaction.rollback();
+      if (isDuplicateKeyError(error)) {
+        throw new AppError(
+          409,
+          "COMPANY_NAME_ALREADY_EXISTS",
+          "Ya existe una empresa con ese nombre.",
+        );
+      }
       throw error;
     }
   },

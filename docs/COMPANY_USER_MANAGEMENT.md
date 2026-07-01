@@ -52,10 +52,8 @@ All require `users:manage` except `GET /api/companies/:companyId/me` (permission
 
 ## Temporary password behavior
 
-- **New user**: `temporaryPassword` is required (min 8 chars). Returned once in API response; not logged.
-- **Existing user**: no password required; membership is created/reactivated.
-- Email invitations are **deferred** (no mailer in this phase).
-- Temporary passwords are never returned by the API; admins must share them manually.
+- **New user**: `temporaryPassword` is required (min 8 chars). The backend hashes it and never returns it in API responses. The admin must share the password they entered through a secure channel. Email invitations are **deferred** (no mailer in this phase).
+- **Existing user**: password is not changed; membership is created or reactivated.
 
 ## Frontend
 

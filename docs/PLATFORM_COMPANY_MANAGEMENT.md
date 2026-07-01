@@ -33,7 +33,11 @@ Does **not** create:
 | Owner email exists | Membership created; password unchanged |
 | Owner email new | `temporaryPassword` required; password hashed |
 
-Password is **never** returned in API responses.
+Password is **never** returned in API responses. The admin must share the password they entered through a secure channel.
+
+## Frontend note
+
+The create-company dialog always requires an owner password as a UI simplification for this phase. The backend only uses it when the owner user does not exist yet.
 
 ## Users vs employees
 
@@ -50,7 +54,7 @@ Inbound WhatsApp tenant resolution (`BOT_DEFAULT_COMPANY_ID`) remains separate f
 
 - Email invitation flow
 - Employee self-service accounts
-- Moving platform routes outside `CompanyGate`
+- Moving platform routes outside `CompanyGate` (superadmin currently selects an existing company before accessing `/platform/companies`)
 
 ## Related docs
 

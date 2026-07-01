@@ -7,7 +7,7 @@ import { createPlatformCompanySchema } from "../schemas/platform-company.schema"
 
 export const platformCompanyRouter = Router();
 
-platformCompanyRouter.use(requirePlatformAdmin);
+platformCompanyRouter.use(asyncHandler(requirePlatformAdmin));
 
 platformCompanyRouter.get("/companies", asyncHandler(platformCompanyController.listCompanies));
 

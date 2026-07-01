@@ -35,14 +35,15 @@ export const companyModuleRepository = {
     moduleKeys: string[],
     transaction?: sql.Transaction,
   ): Promise<void> {
-    if (moduleKeys.length === 0) {
+    const uniqueModuleKeys = [...new Set(moduleKeys)];
+    if (uniqueModuleKeys.length === 0) {
       return;
     }
 
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     request.input("companyId", sql.UniqueIdentifier, companyId);
 
-    const values = moduleKeys
+    const values = uniqueModuleKeys
       .map((moduleKey, index) => {
         request.input(`moduleKey${index}`, sql.NVarChar(80), moduleKey);
         return `(@companyId, @moduleKey${index}, 1)`;

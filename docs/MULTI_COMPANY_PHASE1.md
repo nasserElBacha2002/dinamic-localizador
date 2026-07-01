@@ -42,6 +42,9 @@ Employee phone uniqueness is **company-scoped** (`UQ_employees_company_phone_num
 ## Frontend company selection
 
 - Operational React Query hooks wait for `isReady` and include `companyId` in query keys.
-- `companyApiPath` throws `ACTIVE_COMPANY_REQUIRED` if no runtime company is set.
+- `scopedApiClient` / `scopedApiPath` prefix operational paths with `companies/:activeCompanyId/`.
+- `scopedApiPath` throws `ACTIVE_COMPANY_REQUIRED` if no runtime company is set.
 - Multi-company users (including platform superadmin) must select a company before operational pages load.
 - `409 COMPANY_SELECTION_REQUIRED` clears the active company and shows the selector.
+
+See [MULTI_COMPANY_HARDENING.md](./MULTI_COMPANY_HARDENING.md) for the Phase 1.2 audit and hardening checklist.

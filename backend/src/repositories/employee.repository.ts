@@ -5,18 +5,19 @@ import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-
 import { mapEmployeeRow } from "../utils/row-mappers";
 import type { ListEmployeesQuery, UpdateEmployeeInput } from "../schemas/employee.schema";
 
-const EMPLOYEE_LAST_WORKED_JOIN = `
+const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
   LEFT JOIN (
     SELECT employee_id, MAX(received_at) AS last_worked_at
     FROM attendance_records
+    WHERE company_id = ${companyIdParam}
     GROUP BY employee_id
   ) lw ON lw.employee_id = e.id
 `;
 
-const EMPLOYEE_SELECT = `
+const buildEmployeeSelect = () => `
   SELECT e.*, lw.last_worked_at
   FROM employees e
-  ${EMPLOYEE_LAST_WORKED_JOIN}
+  ${buildEmployeeLastWorkedJoin()}
 `;
 
 export const employeeRepository = {
@@ -52,7 +53,7 @@ export const employeeRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query(`${EMPLOYEE_SELECT} WHERE e.id = @id AND e.company_id = @companyId`);
+      .query(`${buildEmployeeSelect()} WHERE e.id = @id AND e.company_id = @companyId`);
 
     if (!result.recordset[0]) {
       return null;
@@ -118,7 +119,7 @@ export const employeeRepository = {
     dataRequest.input("limit", sql.Int, query.limit);
 
     const dataResult = await dataRequest.query(`
-      ${EMPLOYEE_SELECT}
+      ${buildEmployeeSelect()}
       ${whereClause}
       ORDER BY e.created_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

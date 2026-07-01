@@ -366,7 +366,7 @@ export const absenceRequestRepository = {
       comment?: string | null;
     },
     transaction?: sql.Transaction,
-  ): Promise<AbsenceRequestEvent> {
+  ): Promise<AbsenceRequestEvent | null> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -383,11 +383,17 @@ export const absenceRequestRepository = {
           performed_by_user_id, performed_by_employee_id, comment
         )
         OUTPUT INSERTED.*
-        VALUES (
+        SELECT
           @companyId, @absenceRequestId, @eventType, @oldStatus, @newStatus,
           @performedByUserId, @performedByEmployeeId, @comment
-        )
+        FROM absence_requests ar
+        WHERE ar.id = @absenceRequestId
+          AND ar.company_id = @companyId
       `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
 
     return mapAbsenceRequestEventRow(result.recordset[0] as Record<string, unknown>);
   },
@@ -404,7 +410,7 @@ export const absenceRequestRepository = {
           COALESCE(u.name, e.name) AS performer_name
         FROM absence_request_events are
         LEFT JOIN users u ON u.id = are.performed_by_user_id
-        LEFT JOIN employees e ON e.id = are.performed_by_employee_id
+        LEFT JOIN employees e ON e.id = are.performed_by_employee_id AND e.company_id = @companyId
         WHERE are.absence_request_id = @absenceRequestId
           AND are.company_id = @companyId
         ORDER BY are.created_at ASC

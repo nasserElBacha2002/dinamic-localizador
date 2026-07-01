@@ -225,7 +225,7 @@ export const inventoryRepository = {
       .query(`
       SELECT e.*
       FROM inventory_employees ie
-      INNER JOIN employees e ON e.id = ie.employee_id
+      INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
       WHERE ie.inventory_id = @inventoryId
         AND ie.company_id = @companyId
         AND e.company_id = @companyId

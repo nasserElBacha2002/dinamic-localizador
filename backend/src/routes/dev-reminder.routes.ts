@@ -35,7 +35,7 @@ devReminderRouter.post("/run", requirePermission("attendance:review"), async (re
   }
 });
 
-devReminderRouter.post("/run-job-once", async (_req, res, next) => {
+devReminderRouter.post("/run-job-once", requirePermission("attendance:review"), async (_req, res, next) => {
   try {
     await runAttendanceReminderJobOnce();
     res.status(200).json({ status: "ok" });

@@ -82,6 +82,7 @@ const employeesBaseQuery = `
     ON ar.inventory_id = ie.inventory_id
    AND ar.employee_id = ie.employee_id
    AND ar.company_id = @companyId
+   AND ar.is_simulation = 0
   WHERE ie.inventory_id = @inventoryId
     AND ie.company_id = @companyId
 `;

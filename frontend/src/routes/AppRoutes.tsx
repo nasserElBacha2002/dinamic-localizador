@@ -5,6 +5,8 @@ import { CompanyGate } from "../components/company/CompanyGate";
 import { LoadingState } from "../components/common/LoadingState";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
+import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";
+import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { EmployeesListPage } from "../pages/employees/EmployeesListPage";
 import { EmployeeCreatePage } from "../pages/employees/EmployeeCreatePage";
@@ -115,6 +117,8 @@ export function AppRoutes() {
           path="/bot-simulator"
           element={<LazyPage component={BotSimulatorPage} message="Cargando simulador..." />}
         />
+        <Route path="/settings/users" element={<CompanyUsersPage />} />
+        <Route path="/platform/companies" element={<PlatformCompaniesPage />} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
       <Route path="*" element={<NotFoundPage />} />

@@ -32,6 +32,7 @@ OPERATIONAL_PREFIXES = (
     "absence-types",
     "absence-requests",
     "bot-simulator",
+    "users",
 )
 
 LEGACY_API_CLIENT = re.compile(
@@ -116,6 +117,7 @@ def audit_backend_routes() -> list[str]:
         "absence.routes.ts",
         "absence-request.routes.ts",
         "bot-simulator.routes.ts",
+        "company-user.routes.ts",
     ]
 
     for file_name in operational_route_files:

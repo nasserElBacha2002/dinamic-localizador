@@ -4,15 +4,17 @@ import type { PublicUser, User } from "../types/auth";
 import { mapUserRow } from "../utils/row-mappers";
 
 export const userRepository = {
-  async create(input: {
-    name: string;
-    email: string;
-    passwordHash: string;
-    role?: "ADMIN";
-  }): Promise<User> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async create(
+    input: {
+      name: string;
+      email: string;
+      passwordHash: string;
+      role?: "ADMIN";
+    },
+    transaction?: sql.Transaction,
+  ): Promise<User> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("name", sql.NVarChar(150), input.name)
       .input("email", sql.NVarChar(255), input.email)
       .input("passwordHash", sql.NVarChar(255), input.passwordHash)

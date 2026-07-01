@@ -12,6 +12,8 @@ import { absenceRouter } from "./absence.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
+import { companyUserRouter } from "./company-user.routes";
+import { platformCompanyRouter } from "./platform-company.routes";
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
 
@@ -22,9 +24,11 @@ apiRouter.use("/auth", authRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
+apiRouter.use("/platform", authenticate, platformCompanyRouter);
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
+companyScopedOperationalRouter.use("/users", companyUserRouter);
 companyScopedOperationalRouter.use("/employees", employeeRouter);
 companyScopedOperationalRouter.use("/stores", storeRouter);
 companyScopedOperationalRouter.use("/inventories", inventoryRouter);

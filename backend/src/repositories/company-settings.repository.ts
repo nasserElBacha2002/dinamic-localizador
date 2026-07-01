@@ -33,6 +33,48 @@ export const companySettingsRepository = {
     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async create(
+    companyId: string,
+    input: {
+      operationTimezone: string;
+      defaultRadiusMeters: number;
+      lateGraceMinutes: number;
+      earlyLeaveToleranceMinutes: number;
+      requireCheckoutLocation: boolean;
+      allowManualAttendanceCorrections: boolean;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<CompanySettings> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationTimezone", sql.NVarChar(80), input.operationTimezone)
+      .input("defaultRadiusMeters", sql.Int, input.defaultRadiusMeters)
+      .input("lateGraceMinutes", sql.Int, input.lateGraceMinutes)
+      .input("earlyLeaveToleranceMinutes", sql.Int, input.earlyLeaveToleranceMinutes)
+      .input("requireCheckoutLocation", sql.Bit, input.requireCheckoutLocation ? 1 : 0)
+      .input(
+        "allowManualAttendanceCorrections",
+        sql.Bit,
+        input.allowManualAttendanceCorrections ? 1 : 0,
+      )
+      .query(`
+        INSERT INTO company_settings (
+          company_id, operation_timezone, default_radius_meters,
+          late_grace_minutes, early_leave_tolerance_minutes,
+          require_checkout_location, allow_manual_attendance_corrections
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @companyId, @operationTimezone, @defaultRadiusMeters,
+          @lateGraceMinutes, @earlyLeaveToleranceMinutes,
+          @requireCheckoutLocation, @allowManualAttendanceCorrections
+        )
+      `);
+
+    return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async update(
     companyId: string,
     input: Partial<

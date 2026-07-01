@@ -65,6 +65,7 @@ describe("scopedApiPath", () => {
       scopedApiPath("inventories/import/preview"),
       `companies/${ACTIVE_COMPANY_ID}/inventories/import/preview`,
     );
+    assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
   });
 
   it("leaves global paths unchanged", () => {
@@ -139,7 +140,7 @@ describe("operational API audit", () => {
   it("does not contain direct legacy operational apiClient paths", () => {
     const apiDir = join(process.cwd(), "src/api");
     const legacyPattern =
-      /apiClient\.(get|post|put|patch|delete)\(\s*["'`]\/?(employees|inventories|stores|attendance|statistics|absence-types|absence-requests|bot-simulator)/;
+      /apiClient\.(get|post|put|patch|delete)\(\s*["'`]\/?(employees|inventories|stores|attendance|statistics|absence-types|absence-requests|bot-simulator|users)/;
 
     const offenders: string[] = [];
     for (const fileName of readdirSync(apiDir)) {

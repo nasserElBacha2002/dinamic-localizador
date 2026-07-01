@@ -15,11 +15,12 @@ import {
 import { useState, type PropsWithChildren } from "react";
 import { Link as RouterLink, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { CompanySelector } from "../components/company/CompanySelector";
 
 const drawerWidth = 240;
 
-const navItems = [
+const baseNavItems = [
   { label: "Inicio", path: "/" },
   { label: "Empleados", path: "/employees" },
   { label: "Tiendas", path: "/stores" },
@@ -32,6 +33,18 @@ const navItems = [
 
 function NavList({ onNavigate }: { onNavigate?: () => void }) {
   const location = useLocation();
+  const { user } = useAuth();
+  const permissionsQuery = useCompanyPermissions();
+  const canManageUsers = permissionsQuery.data?.permissions.includes("users:manage") ?? false;
+  const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
+
+  let navItems = [...baseNavItems];
+  if (canManageUsers) {
+    navItems = [...navItems, { label: "Usuarios de empresa", path: "/settings/users" }];
+  }
+  if (isPlatformAdmin) {
+    navItems = [...navItems, { label: "Empresas de plataforma", path: "/platform/companies" }];
+  }
 
   return (
     <List component="nav" aria-label="Navegación principal">

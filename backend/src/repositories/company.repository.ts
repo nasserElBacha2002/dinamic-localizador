@@ -54,4 +54,26 @@ export const companyRepository = {
 
     return result.recordset.map((row) => mapCompanyRow(row as Record<string, unknown>));
   },
+
+  async create(
+    input: {
+      name: string;
+      defaultTimezone: string;
+      status?: CompanyStatus;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<Company> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("name", sql.NVarChar(200), input.name)
+      .input("defaultTimezone", sql.NVarChar(80), input.defaultTimezone)
+      .input("status", sql.NVarChar(30), input.status ?? "ACTIVE")
+      .query(`
+        INSERT INTO companies (name, default_timezone, status)
+        OUTPUT INSERTED.*
+        VALUES (@name, @defaultTimezone, @status)
+      `);
+
+    return mapCompanyRow(result.recordset[0] as Record<string, unknown>);
+  },
 };

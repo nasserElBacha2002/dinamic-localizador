@@ -152,8 +152,10 @@ python3 scripts/audit/audit_tenant_isolation.py
 - WhatsApp employee portal
 - WhatsApp multi-company resolution by receiver number
 - `company_modules` enforcement on every route
-- `users:manage` HTTP routes
-- `reports:export` separate from `attendance:export`
+- Email invitation flow for new company users
+- Employee self-service web accounts
+
+See [PLATFORM_COMPANY_MANAGEMENT.md](./PLATFORM_COMPANY_MANAGEMENT.md) for platform superadmin company creation.
 
 ## Related docs
 

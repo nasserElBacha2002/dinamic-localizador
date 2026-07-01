@@ -29,4 +29,29 @@ export const companyModuleRepository = {
 
     return result.recordset.map((row) => mapCompanyModuleRow(row as Record<string, unknown>));
   },
+
+  async bulkEnable(
+    companyId: string,
+    moduleKeys: string[],
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    if (moduleKeys.length === 0) {
+      return;
+    }
+
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+
+    const values = moduleKeys
+      .map((moduleKey, index) => {
+        request.input(`moduleKey${index}`, sql.NVarChar(80), moduleKey);
+        return `(@companyId, @moduleKey${index}, 1)`;
+      })
+      .join(", ");
+
+    await request.query(`
+      INSERT INTO company_modules (company_id, module_key, is_enabled)
+      VALUES ${values}
+    `);
+  },
 };

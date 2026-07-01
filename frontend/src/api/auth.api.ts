@@ -11,6 +11,7 @@ export interface PublicUser {
   name: string;
   email: string;
   role: "ADMIN";
+  isPlatformAdmin: boolean;
 }
 
 export interface LoginResponse {

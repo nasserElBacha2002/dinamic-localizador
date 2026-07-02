@@ -4,7 +4,7 @@ import type { PropsWithChildren } from "react";
 import { AppSidebar } from "./AppSidebar";
 import { AppTopbar } from "./AppTopbar";
 
-const NAVBAR_WIDTH = 240;
+const NAVBAR_WIDTH = 260;
 const HEADER_HEIGHT = 56;
 const NAVBAR_BREAKPOINT = "md";
 
@@ -25,7 +25,7 @@ export function AppLayout({ children }: PropsWithChildren) {
         <AppTopbar mobileOpened={mobileOpened} onToggleMobile={toggle} />
       </AppShell.Header>
 
-      <AppShell.Navbar p={0}>
+      <AppShell.Navbar p={0} withBorder={false}>
         <AppSidebar onNavigate={close} />
       </AppShell.Navbar>
 

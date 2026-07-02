@@ -1,16 +1,22 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Button, Card, Center, Stack, Text, Title } from "@mantine/core";
+import {
+  Box,
+  Button,
+  Paper,
+  PasswordInput,
+  Stack,
+  Text,
+  TextInput,
+  Title,
+} from "@mantine/core";
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { Navigate, useLocation } from "react-router-dom";
 import { z } from "zod";
-import {
-  FormErrorAlert,
-  FormSection,
-  RHFTextInput,
-} from "../design-system";
+import { FormErrorAlert } from "../design-system";
 import { useAuth } from "../hooks/useAuth";
 import { getApiErrorMessage } from "../utils/errors";
+import classes from "./login-page.module.css";
 
 const loginSchema = z.object({
   email: z.string().trim().email("Ingresá un email válido"),
@@ -19,12 +25,23 @@ const loginSchema = z.object({
 
 type LoginFormValues = z.infer<typeof loginSchema>;
 
+const highlights = [
+  "Validación de llegada por ubicación",
+  "Operaciones multiempresa",
+  "Seguimiento de asistencias en tiempo real",
+] as const;
+
 export function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const { control, handleSubmit, formState: { isSubmitting } } = useForm<LoginFormValues>({
+  const {
+    control,
+    handleSubmit,
+    register,
+    formState: { isSubmitting, errors },
+  } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
@@ -45,42 +62,81 @@ export function LoginPage() {
   };
 
   return (
-    <Center mih="100vh" p="md" bg="gray.0">
-      <Card withBorder radius="md" padding="lg" w="100%" maw={420}>
-        <Stack gap="md">
-          <div>
-            <Title order={3}>Dinamic Attendance</Title>
-            <Text c="dimmed" size="sm">
-              Iniciá sesión para acceder al panel administrativo.
-            </Text>
-          </div>
+    <Box className={classes.page}>
+      <Box className={classes.layout}>
+        <Box className={classes.brandPanel}>
+          <Stack gap="lg" className={classes.brandContent}>
+            <div>
+              <Text className={classes.brandEyebrow}>Dinamic Attendance</Text>
+              <Title order={2} className={classes.brandTitle}>
+                Control operativo de asistencias por WhatsApp y geocerca.
+              </Title>
+            </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} noValidate>
-            <FormSection>
-              <Stack gap="md">
-                <FormErrorAlert message={errorMessage} />
-                <RHFTextInput
-                  control={control}
-                  name="email"
-                  label="Email"
-                  type="email"
-                  required
-                />
-                <RHFTextInput
-                  control={control}
-                  name="password"
-                  label="Contraseña"
-                  type="password"
-                  required
-                />
-                <Button type="submit" loading={isSubmitting}>
-                  Iniciar sesión
-                </Button>
-              </Stack>
-            </FormSection>
-          </form>
-        </Stack>
-      </Card>
-    </Center>
+            <Stack gap="sm">
+              {highlights.map((text) => (
+                <Text key={text} size="sm" className={classes.highlight}>
+                  {text}
+                </Text>
+              ))}
+            </Stack>
+          </Stack>
+        </Box>
+
+        <Box className={classes.formPanel}>
+          <Stack w="100%" maw={420} gap="md">
+            <div className={classes.mobileBrand}>
+              <Text className={classes.brandEyebrow} c="brand" fw={600}>
+                Dinamic Attendance
+              </Text>
+            </div>
+            <Paper className={classes.formCard} radius="lg" withBorder shadow="md" p="xl">
+            <Stack gap="lg">
+              <div>
+                <Title order={2}>Iniciar sesión</Title>
+                <Text c="dimmed" size="sm" mt={4}>
+                  Accedé al panel operativo de Dinamic Attendance.
+                </Text>
+              </div>
+
+              <form onSubmit={handleSubmit(onSubmit)} noValidate>
+                <Stack gap="md">
+                  <FormErrorAlert message={errorMessage} />
+
+                  <TextInput
+                    {...register("email")}
+                    label="Email"
+                    type="email"
+                    autoComplete="email"
+                    autoFocus
+                    disabled={isSubmitting}
+                    error={errors.email?.message}
+                  />
+
+                  <Controller
+                    control={control}
+                    name="password"
+                    render={({ field }) => (
+                      <PasswordInput
+                        {...field}
+                        label="Contraseña"
+                        autoComplete="current-password"
+                        disabled={isSubmitting}
+                        error={errors.password?.message}
+                      />
+                    )}
+                  />
+
+                  <Button type="submit" fullWidth loading={isSubmitting} loaderProps={{ type: "dots" }}>
+                    {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
+                  </Button>
+                </Stack>
+              </form>
+            </Stack>
+            </Paper>
+          </Stack>
+        </Box>
+      </Box>
+    </Box>
   );
 }

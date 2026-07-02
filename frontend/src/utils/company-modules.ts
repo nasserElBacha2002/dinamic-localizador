@@ -28,7 +28,10 @@ export const COMPANY_MODULE_DESCRIPTIONS: Record<CompanyModuleKey, string> = {
 export interface AdminNavItem {
   label: string;
   path: string;
+  section: NavSectionKey;
 }
+
+export type NavSectionKey = "general" | "operation" | "management" | "tools" | "settings";
 
 export interface GetAdminNavItemsInput {
   modules: CompanyModule[] | undefined;
@@ -91,7 +94,7 @@ export function getAdminNavItems({
   isPlatformAdmin,
   modulesLoading,
 }: GetAdminNavItemsInput): AdminNavItem[] {
-  const items: AdminNavItem[] = [{ label: "Inicio", path: "/" }];
+  const items: AdminNavItem[] = [{ label: "Inicio", path: "/", section: "general" }];
 
   if (!modulesLoading) {
     if (
@@ -100,7 +103,7 @@ export function getAdminNavItems({
         "employees:manage",
       ])
     ) {
-      items.push({ label: terminology.worker.plural, path: "/employees" });
+      items.push({ label: terminology.worker.plural, path: "/employees", section: "management" });
     }
 
     if (
@@ -109,7 +112,7 @@ export function getAdminNavItems({
         "stores:manage",
       ])
     ) {
-      items.push({ label: terminology.location.plural, path: "/stores" });
+      items.push({ label: terminology.location.plural, path: "/stores", section: "management" });
     }
 
     if (
@@ -119,7 +122,7 @@ export function getAdminNavItems({
       ])
     ) {
       // UI browser route remains /inventories; API calls use /operations (Phase 2.8).
-      items.push({ label: terminology.operation.plural, path: "/inventories" });
+      items.push({ label: terminology.operation.plural, path: "/inventories", section: "operation" });
     }
 
     if (
@@ -129,36 +132,42 @@ export function getAdminNavItems({
         "attendance:export",
       ])
     ) {
-      items.push({ label: terminology.attendance.plural, path: "/attendance" });
+      items.push({ label: terminology.attendance.plural, path: "/attendance", section: "operation" });
     }
 
     if (
       canShowNavItem(modules, permissions, ["absences"], ["absences:read", "absences:review"])
     ) {
-      items.push({ label: terminology.absence.plural, path: "/absences" });
+      items.push({ label: terminology.absence.plural, path: "/absences", section: "operation" });
     }
 
     if (
       canShowNavItem(modules, permissions, ["reports"], ["reports:read", "reports:export"])
     ) {
-      items.push({ label: "Estadísticas", path: "/statistics" });
+      items.push({ label: "Estadísticas", path: "/statistics", section: "operation" });
     }
 
     if (canShowNavItem(modules, permissions, ["bot_simulator"], ["bot_simulator:use"])) {
-      items.push({ label: "Simulador de Bot", path: "/bot-simulator" });
+      items.push({ label: "Simulador de Bot", path: "/bot-simulator", section: "tools" });
+    }
+
+    if (
+      canShowNavItem(modules, permissions, ["inventory_operations"], ["inventories:manage"])
+    ) {
+      items.push({ label: "Importación", path: "/inventories/import", section: "tools" });
     }
   }
 
   if (hasAnyPermission(permissions, ["company:settings:update"])) {
-    items.push({ label: "Configuración de empresa", path: "/settings/company" });
+    items.push({ label: "Configuración de empresa", path: "/settings/company", section: "settings" });
   }
 
   if (hasAnyPermission(permissions, ["users:manage"])) {
-    items.push({ label: "Usuarios de empresa", path: "/settings/users" });
+    items.push({ label: "Usuarios de empresa", path: "/settings/users", section: "settings" });
   }
 
   if (isPlatformAdmin) {
-    items.push({ label: "Empresas de plataforma", path: "/platform/companies" });
+    items.push({ label: "Empresas de plataforma", path: "/platform/companies", section: "settings" });
   }
 
   return items;

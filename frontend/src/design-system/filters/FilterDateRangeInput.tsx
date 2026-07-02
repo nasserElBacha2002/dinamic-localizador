@@ -9,7 +9,7 @@ import {
   UnstyledButton,
 } from "@mantine/core";
 import { useId, useMemo, useState, type MouseEvent } from "react";
-import { DateRangeCalendar } from "../../components/common/DateRangeCalendar";
+import { DateRangeCalendar } from "./DateRangeCalendar";
 import type { DateRangeMode, DateRangePresetKey, DateRangeValue } from "../../types/date-range";
 import {
   clearDateRangeValue,
@@ -190,7 +190,7 @@ export function FilterDateRangeInput({
                 style={{
                   borderRadius: "var(--mantine-radius-sm)",
                   backgroundColor:
-                    value.preset === preset ? "var(--mantine-color-blue-light)" : undefined,
+                    value.preset === preset ? "var(--mantine-color-brand-light)" : undefined,
                 }}
               >
                 <Text size="sm">{getDateRangePresetLabel(preset)}</Text>
@@ -208,7 +208,7 @@ export function FilterDateRangeInput({
                     borderRadius: "var(--mantine-radius-sm)",
                     backgroundColor:
                       customPanelOpen || value.preset === "custom"
-                        ? "var(--mantine-color-blue-light)"
+                        ? "var(--mantine-color-brand-light)"
                         : undefined,
                   }}
                 >

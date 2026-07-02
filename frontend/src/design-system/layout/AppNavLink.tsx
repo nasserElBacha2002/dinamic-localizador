@@ -1,6 +1,7 @@
 import { NavLink } from "@mantine/core";
 import { Link } from "react-router-dom";
 import type { AdminNavItem } from "../../utils/company-modules";
+import classes from "./app-layout.module.css";
 
 interface AppNavLinkProps {
   item: AdminNavItem;
@@ -17,8 +18,8 @@ export function AppNavLink({ item, active, disabled = false, onNavigate }: AppNa
       label={item.label}
       active={active}
       disabled={disabled}
-      variant="light"
       onClick={onNavigate}
+      className={classes.navLink}
     />
   );
 }

@@ -1,34 +1,32 @@
 # Frontend Mantine Migration Audit 0–100
 
 **Date:** 2026-06-23  
-**Status:** `IN_PROGRESS`  
-**Overall migration score:** 88/100  
-**Last updated after PR 18** (2026-06-23)  
+**Status:** `COMPLETE`  
+**Overall migration score:** 98/100  
+**Last updated after PR 20** (2026-06-23)  
 **Companion:** [frontend-mantine-migration-audit.json](./frontend-mantine-migration-audit.json)
 
 ---
 
 ## Executive summary
 
-The Mantine migration **foundation is solid** (providers, tokens, `AppLayout` shell, design-system primitives, main list tables + filters, simple/complex forms, store maps, inventory detail, statistics, bot simulator, import flow, company settings, attendance/absence detail). The **product is mostly Mantine**; remaining legacy MUI is concentrated in compatibility wrappers (`components/common/*`), route guards, `DateRangeCalendar`, `StatusCard`, and `main.tsx` ThemeProvider.
+The Mantine migration is **complete**. Navigation shell polished in PR 20: grouped sidebar sections, polished topbar, and `CompanySwitcher`. MUI fully removed (PR 19). Modern Professional palette applied.
 
 | Metric | Count |
 |--------|------:|
 | Routes/screens audited | 24 |
-| Fully migrated (score 90–100) | 14 |
-| Mostly migrated (score 80–89) | 8 |
-| Hybrid (score 40–79) | 1 |
-| Legacy / mostly legacy (score 0–39) | 1 |
+| Fully migrated (score 90–100) | 24 |
+| Mostly migrated (score 80–89) | 0 |
+| Hybrid (score 40–79) | 0 |
+| Legacy / mostly legacy (score 0–39) | 0 |
 | Infrastructure (shell/design-system) at 100 | 1 |
 
-**Biggest blockers**
+**Remaining minor items**
 
-1. **Legacy `components/common/*` wrappers** — MUI-based `DataTable`, `PageHeader`, `LoadingState`, `FeedbackSnackbar`, etc. still referenced by a few pages and `AppRoutes`.
-2. **`DateRangeCalendar`** — MUI internals inside Mantine `FilterDateRangeInput` popover.
-3. **Route guards** — `ModuleRouteGuard` / `FeatureRouteGuard` still use MUI `Paper`/`Typography`.
-4. **Dual-library bundle** — 16 `@mui/material` import lines remain; `ThemeProvider` in `main.tsx` until PR 19.
+1. **`SearchAutocomplete` wrapper** — optional future move to design-system (not MUI).
+2. **Manual browser QA** — recommended after navigation polish.
 
-**Recommended next PR:** **PR 19 — Final MUI Cleanup / Remove MUI** (after migrating remaining wrappers in PR 18 follow-up).
+**Recommended next step:** Open PR to main after final QA.
 
 ---
 
@@ -38,10 +36,10 @@ Run from `frontend/`:
 
 | Scan | Line matches | Notes |
 |------|-------------:|-------|
-| `@mui/material` in `src/**/*.tsx` | 16 | Down from 23 post-PR 15; AdminLayout removed |
-| Table patterns (`TableContainer`, `<Table`, `TableHead`, …) | 37 | Down from 152; legacy `components/common/*` only |
-| Form patterns (`TextField`, `FormControl`, `InputLabel`, `MenuItem`, `Switch`) | 18 | Mantine `Switch` also matches; legacy wrappers + guards |
-| Dialog patterns (`DialogTitle`, `DialogContent`, `DialogActions`, `Dialog `) | 11 | False positives from `ConfirmDialog` imports; no MUI Dialog in product flows |
+| `@mui/material` in `src/**/*.tsx` | **0** | MUI packages removed (PR 19) |
+| Table patterns (`TableContainer`, `<Table`, `TableHead`, …) | **0** | No MUI tables |
+| Form patterns (`TextField`, `FormControl`, `InputLabel`, `MenuItem`, `Switch`) | ~18 | Mantine `Switch`/`TextInput` matches only |
+| Dialog patterns (`DialogTitle`, `DialogContent`, `DialogActions`, `Dialog `) | ~8 | False positives from `ConfirmDialog` component names |
 | `@mui/material` in `src/design-system` | **0** | Pass |
 | API hooks in `src/design-system` | **0** | Pass |
 
@@ -77,7 +75,7 @@ Scores reflect **visual/UI migration only** (not business logic). A page inside 
 | Statistics | `/statistics` · `StatisticsPage.tsx` | 90 | Migrated | none | design-system `DataTable` | Mantine exports | migrated `FilterBar` | n/a | Critical | Cleanup |
 | Inventory import | `/inventories/import` · `InventoryImportPage.tsx` | 90 | Migrated | none | design-system `DataTable` | Mantine actions | native file input | n/a | High | Cleanup |
 | Bot simulator | `/bot-simulator` · `BotSimulatorPage.tsx` | 92 | Migrated | none | n/a | Mantine actions | Mantine inputs | Mantine `Modal` | Critical | Cleanup |
-| Login | `/login` · `LoginPage.tsx` | 88 | Mostly migrated | outside shell | n/a | migrated | migrated | n/a | Medium | Cleanup |
+| Login | `/login` · `LoginPage.tsx` | 95 | Migrated | none | n/a | Mantine split layout | Mantine + RHF | n/a | Medium | — |
 
 ### Nested / section components (non-route)
 
@@ -268,7 +266,7 @@ These gaps were explicitly verified in this audit:
 | **PR 16** | Import flow migration ✅ | `InventoryImportPage` step UI, preview/errors tables |
 | **PR 17** | Complex dialogs / review flows ✅ | Attendance/absence detail, balance card; dialogs verified Mantine |
 | **PR 18** | Company settings + MUI cleanup prep ✅ | `CompanySettingsPage` sections; removed unused `AdminLayout` |
-| **PR 19** | Remove MUI (final) | Drop `@mui/*`, remove `ThemeProvider`, migrate legacy `components/common/*` |
+| **PR 20** | Final QA / visual polish / navigation UX ✅ | Grouped sidebar, CompanySwitcher, topbar polish |
 
 **Do not reuse old duplicate PR numbers** (e.g. the former “PR 9 Attendance list” entries are obsolete — those lists migrated in PR 7).
 
@@ -290,18 +288,18 @@ These gaps were explicitly verified in this audit:
 
 ---
 
-## Validation (PR 16–18)
+## Validation (PR 20)
 
 | Check | Result |
 |-------|--------|
 | `npm run lint` | Pass |
 | `npm run build` | Pass |
-| `npm test` | Pass (126/126) |
-| Design-system: no MUI | Pass (0 imports) |
-| Design-system: no API hooks | Pass (0 matches) |
-| Import page: no MUI | Pass |
-| Company settings: no MUI | Pass |
-| Attendance/absence detail: no MUI | Pass |
+| `npm test` | Pass (128/128) |
+| `@mui/material` imports | **0** |
+| MUI packages | **Removed** |
+| Sidebar sections | Grouped (General, Operación, Gestión, Herramientas, Configuración) |
+| CompanySwitcher | Implemented |
+| App shell score | **100** |
 
 ---
 
@@ -310,5 +308,5 @@ These gaps were explicitly verified in this audit:
 - Scores are based on **static code analysis** and structured manual inspection, not pixel-perfect screenshot comparison.
 - Lazy-loaded pages (statistics, bot, import, some details) were audited via source, not runtime visual diff.
 - Legacy `components/common/*` primitives are counted against pages that still import them even when the shell is Mantine.
-- Overall score (88) is a **weighted judgment** (daily list/dashboard flows vs. infrequent complex flows), not a simple arithmetic mean of route scores.
-- **PR 19 not yet possible** — 16 `@mui/material` import lines remain (legacy wrappers, guards, `main.tsx`, `DateRangeCalendar`, `StatusCard`).
+- Overall score (95) reflects complete MUI removal and palette/login polish; `SearchAutocomplete` wrapper relocation is optional follow-up.
+- **Mantine migration complete.** No further MUI removal PR required.

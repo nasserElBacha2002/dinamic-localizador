@@ -5,9 +5,9 @@ import { Link as RouterLink, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
-import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
 import {
   DataTable,
+  DetailFieldGrid,
   ErrorState,
   LoadingState,
   PageHeader,
@@ -31,6 +31,7 @@ import {
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
+import { inventoryStatusLabels } from "../../utils/labels";
 
 const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
   { key: "store", header: "Tienda", getValue: (row) => row.storeName },
@@ -40,7 +41,12 @@ const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
     header: "Fin",
     getValue: (row) => (row.scheduledEnd ? formatDateTime(row.scheduledEnd) : "—"),
   },
-  { key: "status", header: "Estado", getValue: (row) => row.status },
+  {
+    key: "status",
+    header: "Estado",
+    getValue: (row) =>
+      inventoryStatusLabels[row.status as keyof typeof inventoryStatusLabels] ?? row.status,
+  },
   {
     key: "action",
     header: "Acción",
@@ -85,6 +91,26 @@ export function AbsenceDetailPage() {
     request.balanceImpact?.deductsBalance === true &&
     request.balanceImpact.hasSufficientBalance === false;
 
+  const closeRejectModal = () => {
+    setRejectOpen(false);
+    setComment("");
+  };
+
+  const closeNeedsInfoModal = () => {
+    setNeedsInfoOpen(false);
+    setComment("");
+  };
+
+  const openRejectModal = () => {
+    setComment("");
+    setRejectOpen(true);
+  };
+
+  const openNeedsInfoModal = () => {
+    setComment("");
+    setNeedsInfoOpen(true);
+  };
+
   const notify = (message: string, color: "green" | "red" = "green") => {
     notifications.show({ color, message });
   };
@@ -106,8 +132,7 @@ export function AbsenceDetailPage() {
 
     try {
       await rejectMutation.mutateAsync(comment.trim());
-      setRejectOpen(false);
-      setComment("");
+      closeRejectModal();
       notify("Solicitud rechazada.");
     } catch (error) {
       notify(getApiErrorMessage(error), "red");
@@ -122,8 +147,7 @@ export function AbsenceDetailPage() {
 
     try {
       await needsInfoMutation.mutateAsync(comment.trim());
-      setNeedsInfoOpen(false);
-      setComment("");
+      closeNeedsInfoModal();
       notify(
         "La solicitud quedó marcada como requiere información. En esta fase el empleado todavía no será notificado automáticamente.",
       );
@@ -149,24 +173,10 @@ export function AbsenceDetailPage() {
                 <Button onClick={() => void handleApprove()} disabled={approveMutation.isPending || insufficientBalance}>
                   Aprobar
                 </Button>
-                <Button
-                  color="yellow"
-                  variant="default"
-                  onClick={() => {
-                    setComment("");
-                    setNeedsInfoOpen(true);
-                  }}
-                >
+                <Button color="yellow" variant="default" onClick={openNeedsInfoModal}>
                   Requiere información
                 </Button>
-                <Button
-                  color="red"
-                  variant="default"
-                  onClick={() => {
-                    setComment("");
-                    setRejectOpen(true);
-                  }}
-                >
+                <Button color="red" variant="default" onClick={openRejectModal}>
                   Rechazar
                 </Button>
               </>
@@ -256,7 +266,7 @@ export function AbsenceDetailPage() {
         </Stack>
       </SectionCard>
 
-      <Modal opened={rejectOpen} onClose={() => setRejectOpen(false)} title="Rechazar solicitud" centered>
+      <Modal opened={rejectOpen} onClose={closeRejectModal} title="Rechazar solicitud" centered>
         <Stack gap="md">
           <Textarea
             label="Motivo del rechazo"
@@ -266,7 +276,7 @@ export function AbsenceDetailPage() {
             autoFocus
           />
           <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setRejectOpen(false)}>
+            <Button variant="default" onClick={closeRejectModal}>
               Cancelar
             </Button>
             <Button color="red" onClick={() => void handleReject()} loading={rejectMutation.isPending}>
@@ -278,7 +288,7 @@ export function AbsenceDetailPage() {
 
       <Modal
         opened={needsInfoOpen}
-        onClose={() => setNeedsInfoOpen(false)}
+        onClose={closeNeedsInfoModal}
         title="Solicitar más información"
         centered
       >
@@ -291,7 +301,7 @@ export function AbsenceDetailPage() {
             autoFocus
           />
           <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setNeedsInfoOpen(false)}>
+            <Button variant="default" onClick={closeNeedsInfoModal}>
               Cancelar
             </Button>
             <Button onClick={() => void handleNeedsInfo()} loading={needsInfoMutation.isPending}>

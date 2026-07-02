@@ -1,9 +1,11 @@
-import { Box, IconButton, Stack, Typography } from "@mui/material";
+import { ActionIcon, Box, Group, SimpleGrid, Text, UnstyledButton } from "@mantine/core";
 import { useMemo, useState } from "react";
+import { designTokens } from "../theme/tokens";
 import {
   buildDateInputValue,
   getCalendarViewDateFromRange,
 } from "../../utils/date-range";
+import classes from "./date-range-calendar.module.css";
 
 type DateRangeCalendarProps = {
   from: string | null;
@@ -101,111 +103,93 @@ export function DateRangeCalendar({
   };
 
   return (
-    <Box sx={{ width: "100%" }}>
-      <Stack direction="row" alignItems="center" justifyContent="space-between" sx={{ mb: 1 }}>
-        <IconButton
+    <Box className={classes.root}>
+      <Group justify="space-between" mb="xs" wrap="nowrap">
+        <ActionIcon
           aria-label="Año anterior"
-          size="small"
+          size="sm"
+          variant="subtle"
           onClick={() => shiftYear(-1)}
           disabled={disabled}
         >
           «
-        </IconButton>
-        <IconButton
+        </ActionIcon>
+        <ActionIcon
           aria-label="Mes anterior"
-          size="small"
+          size="sm"
+          variant="subtle"
           onClick={() => shiftMonth(-1)}
           disabled={disabled}
         >
           ‹
-        </IconButton>
-        <Typography variant="subtitle2" sx={{ minWidth: 120, textAlign: "center" }}>
+        </ActionIcon>
+        <Text size="sm" fw={600} ta="center" style={{ minWidth: 120 }}>
           {MONTH_LABELS[viewMonth - 1]} {viewYear}
-        </Typography>
-        <IconButton
+        </Text>
+        <ActionIcon
           aria-label="Mes siguiente"
-          size="small"
+          size="sm"
+          variant="subtle"
           onClick={() => shiftMonth(1)}
           disabled={disabled}
         >
           ›
-        </IconButton>
-        <IconButton
+        </ActionIcon>
+        <ActionIcon
           aria-label="Año siguiente"
-          size="small"
+          size="sm"
+          variant="subtle"
           onClick={() => shiftYear(1)}
           disabled={disabled}
         >
           »
-        </IconButton>
-      </Stack>
+        </ActionIcon>
+      </Group>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 0.5,
-          mb: 1,
-        }}
-      >
+      <SimpleGrid cols={7} spacing={4} mb="xs">
         {WEEKDAY_LABELS.map((label) => (
-          <Typography
-            key={label}
-            variant="caption"
-            color="text.secondary"
-            sx={{ textAlign: "center", fontWeight: 600 }}
-          >
+          <Text key={label} size="xs" c="dimmed" ta="center" fw={600}>
             {label}
-          </Typography>
+          </Text>
         ))}
-      </Box>
+      </SimpleGrid>
 
-      <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: "repeat(7, 1fr)",
-          gap: 0.5,
-        }}
-      >
+      <SimpleGrid cols={7} spacing={4}>
         {calendarDays.map((cell) => {
           if (!cell.dateValue || cell.day === null) {
-            return <Box key={cell.key} sx={{ height: 32 }} />;
+            return <Box key={cell.key} h={32} />;
           }
 
           const isStart = cell.dateValue === from;
           const isEnd = cell.dateValue === to;
           const inRange = isDateInRange(cell.dateValue, from, to);
+          const isSelected = isStart || isEnd;
 
           return (
-            <Box
+            <UnstyledButton
               key={cell.key}
-              component="button"
               type="button"
               onClick={() => handleDayClick(cell.dateValue!)}
               disabled={disabled}
-              sx={{
-                height: 32,
-                border: "none",
-                borderRadius: 1,
-                cursor: disabled ? "not-allowed" : "pointer",
-                bgcolor: isStart || isEnd ? "primary.main" : inRange ? "action.selected" : "transparent",
-                color: isStart || isEnd ? "primary.contrastText" : "text.primary",
-                fontSize: "0.8125rem",
-                fontWeight: isStart || isEnd ? 700 : 400,
-                "&:hover": {
-                  bgcolor: disabled
-                    ? undefined
-                    : isStart || isEnd
-                      ? "primary.dark"
-                      : "action.hover",
-                },
-              }}
+              className={classes.day}
+              data-selected={isSelected || undefined}
+              data-in-range={inRange && !isSelected ? true : undefined}
+              style={
+                isSelected
+                  ? {
+                      backgroundColor: designTokens.colors.primary,
+                      color: designTokens.colors.surface,
+                    }
+                  : inRange
+                    ? { backgroundColor: designTokens.colors.primaryLight }
+                    : undefined
+              }
             >
               {cell.day}
-            </Box>
+            </UnstyledButton>
           );
         })}
-      </Box>
+      </SimpleGrid>
     </Box>
   );
 }

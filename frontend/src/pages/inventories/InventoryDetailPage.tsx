@@ -1,4 +1,5 @@
 import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import {
@@ -11,7 +12,6 @@ import {
   StatusBadge,
   type StatusBadgeTone,
 } from "../../design-system";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { InventoryDetailFieldGrid } from "../../components/inventories/InventoryDetailFieldGrid";
 import { InventoryForm, INVENTORY_DETAIL_FORM_ID } from "../../components/inventories/InventoryForm";
 import { InventoryOperationalSection } from "../../components/inventories/InventoryOperationalSection";
@@ -53,11 +53,10 @@ export function InventoryDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
+
+  const showFeedback = (message: string, severity: "success" | "error" = "success") => {
+    notifications.show({ color: severity === "error" ? "red" : "green", message });
+  };
 
   const inventory = inventoryQuery.data;
 
@@ -116,11 +115,7 @@ export function InventoryDetailPage() {
         status: values.status,
       });
       setEditing(false);
-      setFeedback({
-        open: true,
-        message: `${terminology.operation.singular} actualizada correctamente.`,
-        severity: "success",
-      });
+      showFeedback(`${terminology.operation.singular} actualizada correctamente.`);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -130,13 +125,9 @@ export function InventoryDetailPage() {
     try {
       await cancelMutation.mutateAsync(id);
       setConfirmCancelOpen(false);
-      setFeedback({
-        open: true,
-        message: `${terminology.operation.singular} cancelada.`,
-        severity: "success",
-      });
+      showFeedback(`${terminology.operation.singular} cancelada.`);
     } catch (error) {
-      setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
+      showFeedback(getApiErrorMessage(error), "error");
     }
   };
 
@@ -214,7 +205,7 @@ export function InventoryDetailPage() {
               canAssign={canAssign}
               scheduledStart={inventory.scheduledStart}
               assignedEmployeeIds={assignedEmployeeIds}
-              onFeedback={(message, severity) => setFeedback({ open: true, message, severity })}
+              onFeedback={(message, severity) => showFeedback(message, severity)}
             />
           </Box>
 
@@ -286,13 +277,6 @@ export function InventoryDetailPage() {
         loading={cancelMutation.isPending}
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={() => void handleCancel()}
-      />
-
-      <FeedbackSnackbar
-        open={feedback.open}
-        message={feedback.message}
-        severity={feedback.severity}
-        onClose={() => setFeedback((current) => ({ ...current, open: false }))}
       />
     </>
   );

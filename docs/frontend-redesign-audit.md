@@ -1,7 +1,7 @@
 # Frontend Redesign — Technical Audit
 
-**Status:** `IN_PROGRESS` — Mantine foundation through PR 18 complete; **product mostly migrated (~88/100)**. Remaining MUI in legacy wrappers and `main.tsx`. See [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).  
-**Stage audited:** Frontend redesign integration (updated post PR 18)  
+**Status:** `COMPLETE` — Mantine migration + navigation polish (PR 20). Ready for PR to main. See [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).  
+**Stage audited:** Frontend redesign integration (updated post PR 20)  
 **Date:** 2026-06-23 (updated — Mantine migration audit)  
 **Scope:** Read-only analysis of `frontend/` — architecture, multi-company, permissions, React Query, components, styling, page impact, migration plan.  
 **Companion doc:** [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md) — **mandatory Mantine adoption strategy**.
@@ -21,7 +21,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 ### Main findings
 
 - **Architecture is sound for incremental migration.** Domain hooks, API modules, Zod schemas, and route guards can remain unchanged while the shell and shared UI are refactored.
-- **MUI 7 is the current page UI library; Mantine 9 is installed** as the redesign foundation. Adoption follows a **dual-library strangler pattern** documented in [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). **PR 1–18 implemented** (foundation through import, detail/review flows, company settings). MUI remains only in legacy `components/common/*` wrappers, route guards, `DateRangeCalendar`, and `main.tsx` ThemeProvider.
+- **MUI removed (PR 19).** Mantine 9 is the sole UI library. Modern Professional palette applied. **Navigation shell polished (PR 20):** grouped sidebar, `CompanySwitcher`, topbar user menu.
 - **Multi-company foundations exist** (active company in context + localStorage, scoped APIs, `queryClient.clear()` on switch). Gaps remain around **route validation after company switch** and **avoiding stale UI during reload**.
 - **Module fetching was recently stabilized** (`company-modules-query.ts`: 10 min `staleTime`, company-scoped key). Repeated `useCompanyModules()` calls share cache; network refetch on every navigation is **no longer the primary risk**, but **duplicate hook subscriptions** in layout + guards + pages still add coordination complexity.
 - **Layout uses route-level Mantine `AppLayout`.** Protected routes render inside `design-system/layout/AppLayout`; legacy `AdminLayout` removed (PR 18).
@@ -38,10 +38,10 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Route guards | Yes | `FeatureRouteGuard` on all feature routes |
 | API scoping | Yes | `scopedApiClient` + `company-path.ts` |
 | Shared UI primitives | Partial | Exist but underused / MUI-coupled |
-| Design system (Mantine 9) | PR 1–18 done | Foundation through company settings; **product mostly migrated (~88/100)** — see [audit](./frontend-mantine-migration-audit-0-100.md) |
+| Design system (Mantine 9) | PR 1–20 complete | **Migration complete (~98/100)** — grouped nav + CompanySwitcher |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended next work:** **PR 19 — Final MUI Cleanup / Remove MUI** (migrate remaining legacy wrappers, then drop packages). Full scored audit: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).
+**Recommended next work:** Open PR to main after manual QA on login, company switching, and sidebar navigation.
 
 ---
 

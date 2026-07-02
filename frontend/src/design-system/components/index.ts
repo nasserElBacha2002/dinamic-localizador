@@ -14,3 +14,4 @@ export {
 } from "./PaginationControls";
 export { mapApiPaginationMeta, type PaginationMeta } from "./pagination-meta";
 export { SearchInput, type SearchInputProps } from "./SearchInput";
+export { DetailFieldGrid, type DetailFieldGridProps, type DetailFieldItem } from "./DetailFieldGrid";

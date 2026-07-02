@@ -1,16 +1,9 @@
-import {
-  ActionIcon,
-  Burger,
-  Button,
-  Group,
-  Menu,
-  Select,
-  Text,
-  Title,
-} from "@mantine/core";
-import { useNavigate } from "react-router-dom";
+import { ActionIcon, Badge, Box, Burger, Group, Menu, Text, Title } from "@mantine/core";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompany } from "../../hooks/useCompany";
+import { companyRoleLabels } from "../../utils/labels";
+import type { CompanyRole } from "../../types/company-user";
+import { CompanySwitcher } from "./CompanySwitcher";
 
 const NAVBAR_BREAKPOINT = "md";
 
@@ -19,93 +12,63 @@ interface AppTopbarProps {
   onToggleMobile: () => void;
 }
 
-function CompanyTopbarSelector({ mobile = false }: { mobile?: boolean }) {
-  const navigate = useNavigate();
-  const { companies, activeCompany, selectCompany } = useCompany();
-
-  const handleCompanyChange = (value: string | null) => {
-    if (!value) {
-      return;
-    }
-
-    // selectCompany is synchronous; clears query cache via CompanyContext.
-    selectCompany(value);
-    navigate("/");
-  };
-
-  if (companies.length <= 1) {
-    if (!activeCompany) {
-      return null;
-    }
-
-    return (
-      <Text
-        size={mobile ? "xs" : "sm"}
-        fw={500}
-        style={{
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          maxWidth: mobile ? 112 : 240,
-        }}
-      >
-        {activeCompany.companyName}
-      </Text>
-    );
+function getRoleLabel(role: string | undefined): string | null {
+  if (!role) {
+    return null;
   }
 
-  return (
-    <Select
-      size="xs"
-      w={mobile ? 112 : 220}
-      maw="100%"
-      label={mobile ? undefined : "Empresa activa"}
-      aria-label="Empresa activa"
-      comboboxProps={{ withinPortal: true }}
-      value={activeCompany?.companyId ?? ""}
-      onChange={handleCompanyChange}
-      data={companies.map((company) => ({
-        value: company.companyId,
-        label: company.companyName,
-      }))}
-    />
-  );
+  return companyRoleLabels[role as CompanyRole] ?? role;
 }
 
-function DesktopUserActions({ userName, onLogout }: { userName: string; onLogout: () => void }) {
-  return (
-    <Group gap="sm" wrap="nowrap" visibleFrom="sm">
-      <Text
-        size="sm"
-        style={{
-          overflow: "hidden",
-          textOverflow: "ellipsis",
-          whiteSpace: "nowrap",
-          maxWidth: 180,
-        }}
-      >
-        {userName}
+function UserMenu({
+  userName,
+  roleLabel,
+  onLogout,
+  mobile = false,
+}: {
+  userName: string;
+  roleLabel: string | null;
+  onLogout: () => void;
+  mobile?: boolean;
+}) {
+  const trigger = mobile ? (
+    <ActionIcon variant="light" color="brand" size="lg" aria-label="Menú de usuario">
+      <Text size="sm" fw={700}>
+        {userName.charAt(0).toUpperCase()}
       </Text>
-      <Button variant="subtle" size="compact-sm" onClick={onLogout}>
-        Cerrar sesión
-      </Button>
+    </ActionIcon>
+  ) : (
+    <Group gap="xs" wrap="nowrap" style={{ cursor: "pointer" }}>
+      <div style={{ textAlign: "right", minWidth: 0 }}>
+        <Text
+          size="sm"
+          fw={600}
+          style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: 160 }}
+        >
+          {userName}
+        </Text>
+        {roleLabel ? (
+          <Text size="xs" c="dimmed" style={{ lineHeight: 1.2 }}>
+            {roleLabel}
+          </Text>
+        ) : null}
+      </div>
+      <Badge variant="light" color="secondary" size="sm">
+        ▾
+      </Badge>
     </Group>
   );
-}
 
-function MobileUserMenu({ userName, onLogout }: { userName: string; onLogout: () => void }) {
   return (
-    <Menu withinPortal position="bottom-end" shadow="md">
-      <Menu.Target>
-        <ActionIcon variant="subtle" size="lg" aria-label="Menú de usuario" hiddenFrom="sm">
-          <Text size="sm" fw={600}>
-            {userName.charAt(0).toUpperCase()}
-          </Text>
-        </ActionIcon>
-      </Menu.Target>
+    <Menu withinPortal position="bottom-end" shadow="md" width={220}>
+      <Menu.Target>{trigger}</Menu.Target>
       <Menu.Dropdown>
         <Menu.Label>{userName}</Menu.Label>
-        <Menu.Item onClick={onLogout}>Cerrar sesión</Menu.Item>
+        {roleLabel ? <Menu.Label>{roleLabel}</Menu.Label> : null}
+        <Menu.Divider />
+        <Menu.Item color="red" onClick={onLogout}>
+          Cerrar sesión
+        </Menu.Item>
       </Menu.Dropdown>
     </Menu>
   );
@@ -113,9 +76,11 @@ function MobileUserMenu({ userName, onLogout }: { userName: string; onLogout: ()
 
 export function AppTopbar({ mobileOpened, onToggleMobile }: AppTopbarProps) {
   const { user, logout } = useAuth();
+  const { activeCompany } = useCompany();
+  const roleLabel = getRoleLabel(activeCompany?.role);
 
   return (
-    <Group h="100%" px="md" justify="space-between" wrap="nowrap" gap="xs">
+    <Group h="100%" px="md" justify="space-between" wrap="nowrap" gap="sm">
       <Group gap="sm" wrap="nowrap" style={{ flex: 1, minWidth: 0 }}>
         <Burger
           opened={mobileOpened}
@@ -126,6 +91,7 @@ export function AppTopbar({ mobileOpened, onToggleMobile }: AppTopbarProps) {
         />
         <Title
           order={4}
+          c="brand.7"
           visibleFrom="xs"
           style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
         >
@@ -133,6 +99,7 @@ export function AppTopbar({ mobileOpened, onToggleMobile }: AppTopbarProps) {
         </Title>
         <Title
           order={5}
+          c="brand.7"
           hiddenFrom="xs"
           style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
         >
@@ -141,15 +108,19 @@ export function AppTopbar({ mobileOpened, onToggleMobile }: AppTopbarProps) {
       </Group>
 
       {user ? (
-        <Group gap="xs" wrap="nowrap" style={{ flexShrink: 1, minWidth: 0, justifyContent: "flex-end" }}>
+        <Group gap="sm" wrap="nowrap" style={{ flexShrink: 1, minWidth: 0, justifyContent: "flex-end" }}>
           <Group gap="xs" wrap="nowrap" visibleFrom="sm">
-            <CompanyTopbarSelector />
+            <CompanySwitcher />
           </Group>
           <Group gap="xs" wrap="nowrap" hiddenFrom="sm">
-            <CompanyTopbarSelector mobile />
+            <CompanySwitcher compact />
           </Group>
-          <DesktopUserActions userName={user.name} onLogout={logout} />
-          <MobileUserMenu userName={user.name} onLogout={logout} />
+          <Group gap="xs" wrap="nowrap" visibleFrom="sm">
+            <UserMenu userName={user.name} roleLabel={roleLabel} onLogout={logout} />
+          </Group>
+          <Box hiddenFrom="sm">
+            <UserMenu userName={user.name} roleLabel={roleLabel} onLogout={logout} mobile />
+          </Box>
         </Group>
       ) : null}
     </Group>

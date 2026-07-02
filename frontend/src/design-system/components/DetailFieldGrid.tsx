@@ -6,7 +6,7 @@ export interface DetailFieldItem {
   value: ReactNode;
 }
 
-interface DetailFieldGridProps {
+export interface DetailFieldGridProps {
   fields: DetailFieldItem[];
 }
 

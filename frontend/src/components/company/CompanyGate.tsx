@@ -1,7 +1,6 @@
 import { Navigate } from "react-router-dom";
 import { CompanySelectionPage } from "./CompanySelector";
-import { ErrorState } from "../common/ErrorState";
-import { LoadingState } from "../common/LoadingState";
+import { ErrorState, LoadingState } from "../../design-system";
 import { useCompany } from "../../hooks/useCompany";
 
 export function CompanyGate({ children }: { children: React.ReactNode }) {

@@ -2,16 +2,42 @@ import { createTheme, type MantineColorsTuple } from "@mantine/core";
 import { designTokens } from "./tokens";
 
 const brand: MantineColorsTuple = [
-  "#eff6ff",
-  "#dbeafe",
-  "#bfdbfe",
-  "#93c5fd",
-  "#60a5fa",
-  "#3b82f6",
+  designTokens.colors.primaryLight,
+  "#D4E6FD",
+  "#A8CDFB",
+  "#7BB3F8",
+  "#4F9AF6",
+  "#2680F4",
   designTokens.colors.primary,
-  "#1d4ed8",
-  "#1e40af",
-  "#1e3a8a",
+  designTokens.colors.primaryHover,
+  "#0C52B0",
+  "#0A418E",
+];
+
+const secondary: MantineColorsTuple = [
+  designTokens.colors.secondaryLight,
+  "#DDE5F0",
+  "#C5D1E3",
+  "#AEBDD6",
+  "#96A9C9",
+  "#7E95BC",
+  designTokens.colors.secondary,
+  "#4F6585",
+  "#3F516A",
+  "#2F3D50",
+];
+
+const accent: MantineColorsTuple = [
+  designTokens.colors.tertiaryLight,
+  "#FFE4CC",
+  "#FFD1A8",
+  "#FFBE85",
+  "#FFAB61",
+  "#E87400",
+  designTokens.colors.tertiary,
+  "#A44A00",
+  "#833900",
+  "#622B00",
 ];
 
 const success: MantineColorsTuple = [
@@ -41,25 +67,41 @@ const danger: MantineColorsTuple = [
 ];
 
 const warning: MantineColorsTuple = [
-  "#fffbeb",
-  "#fef3c7",
-  "#fde68a",
-  "#fcd34d",
-  "#fbbf24",
-  "#f59e0b",
-  designTokens.colors.warning,
-  "#d97706",
-  "#b45309",
-  "#92400e",
+  designTokens.colors.tertiaryLight,
+  "#FFE4CC",
+  "#FFD1A8",
+  "#FFBE85",
+  "#FFAB61",
+  "#E87400",
+  designTokens.colors.tertiary,
+  "#A44A00",
+  "#833900",
+  "#622B00",
+];
+
+const gray: MantineColorsTuple = [
+  "#F6F8FC",
+  "#EEF1F6",
+  "#E2E6EE",
+  "#D7DDE8",
+  "#C5CBD6",
+  "#A8AEB8",
+  designTokens.colors.neutral,
+  "#5C6068",
+  "#43464D",
+  "#2B2D32",
 ];
 
 export const mantineTheme = createTheme({
   primaryColor: "brand",
   colors: {
     brand,
+    secondary,
+    accent,
     success,
     danger,
     warning,
+    gray,
   },
   fontFamily: designTokens.fontFamily,
   headings: {
@@ -77,6 +119,11 @@ export const mantineTheme = createTheme({
   },
   white: designTokens.colors.surface,
   black: designTokens.colors.textPrimary,
+  other: {
+    background: designTokens.colors.background,
+    border: designTokens.colors.border,
+    textSecondary: designTokens.colors.textSecondary,
+  },
   components: {
     Button: {
       defaultProps: {
@@ -103,6 +150,11 @@ export const mantineTheme = createTheme({
       },
     },
     TextInput: {
+      defaultProps: {
+        radius: "md",
+      },
+    },
+    PasswordInput: {
       defaultProps: {
         radius: "md",
       },

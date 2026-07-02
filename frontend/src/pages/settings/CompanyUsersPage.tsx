@@ -1,7 +1,7 @@
 import { Button, Group, Select } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
 import { ConfirmDialog } from "../../design-system";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import {
   DataTable,
   ErrorState,
@@ -40,7 +40,6 @@ export function CompanyUsersPage() {
   const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
   const [deactivateTarget, setDeactivateTarget] = useState<CompanyUser | null>(null);
   const [dialogError, setDialogError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const permissionsQuery = useCompanyPermissions();
   const canManageUsers = permissionsQuery.data?.permissions.includes("users:manage") ?? false;
@@ -108,10 +107,12 @@ export function CompanyUsersPage() {
       if (dialogMode === "create") {
         const result = await createMutation.mutateAsync(input as CreateCompanyUserInput);
         setDialogOpen(false);
-        setSuccessMessage(
-          result.message ||
+        notifications.show({
+          color: "green",
+          message:
+            result.message ||
             "Usuario creado. Recordá compartir de forma segura la contraseña temporal que ingresaste.",
-        );
+        });
         return;
       }
 
@@ -124,7 +125,7 @@ export function CompanyUsersPage() {
         input,
       });
       setDialogOpen(false);
-      setSuccessMessage("Usuario actualizado.");
+      notifications.show({ color: "green", message: "Usuario actualizado." });
     } catch (error) {
       setDialogError(getApiErrorMessage(error));
     }
@@ -138,7 +139,7 @@ export function CompanyUsersPage() {
     try {
       await deactivateMutation.mutateAsync(deactivateTarget.userId);
       setDeactivateTarget(null);
-      setSuccessMessage("Acceso desactivado.");
+      notifications.show({ color: "green", message: "Acceso desactivado." });
     } catch (error) {
       setDialogError(getApiErrorMessage(error));
       setDeactivateTarget(null);
@@ -307,11 +308,6 @@ export function CompanyUsersPage() {
         onCancel={() => setDeactivateTarget(null)}
       />
 
-      <FeedbackSnackbar
-        open={Boolean(successMessage)}
-        message={successMessage ?? ""}
-        onClose={() => setSuccessMessage(null)}
-      />
     </>
   );
 }

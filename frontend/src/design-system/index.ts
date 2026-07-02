@@ -3,6 +3,7 @@ export { mantineTheme } from "./theme/theme";
 export { AppLayout } from "./layout/AppLayout";
 export { AppSidebar } from "./layout/AppSidebar";
 export { AppTopbar } from "./layout/AppTopbar";
+export { CompanySwitcher } from "./layout/CompanySwitcher";
 export { AppNavLink } from "./layout/AppNavLink";
 export {
   PageHeader,
@@ -35,6 +36,9 @@ export {
   type PaginationControlsProps,
   type PaginationMeta,
   type SearchInputProps,
+  DetailFieldGrid,
+  type DetailFieldGridProps,
+  type DetailFieldItem,
 } from "./components";
 export {
   FormSection,

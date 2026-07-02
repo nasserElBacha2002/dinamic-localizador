@@ -1,11 +1,9 @@
 import { Button, Group } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
 import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../design-system";
+import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useStore, useUpdateStore } from "../../hooks/useStores";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
@@ -18,7 +16,6 @@ export function StoreEditPage() {
   const storeQuery = useStore(id);
   const updateMutation = useUpdateStore(id ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successOpen, setSuccessOpen] = useState(false);
 
   if (!id) {
     return <ErrorState message={`${terminology.location.singular} no encontrada.`} />;
@@ -57,7 +54,10 @@ export function StoreEditPage() {
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
         active: values.active,
       });
-      setSuccessOpen(true);
+      notifications.show({
+        color: "green",
+        message: `${terminology.location.singular} actualizada correctamente.`,
+      });
       navigate("/stores");
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
@@ -99,11 +99,6 @@ export function StoreEditPage() {
         errorMessage={errorMessage}
         isEditMode
         onSubmit={handleSubmit}
-      />
-      <FeedbackSnackbar
-        open={successOpen}
-        message={`${terminology.location.singular} actualizada correctamente.`}
-        onClose={() => setSuccessOpen(false)}
       />
     </>
   );

@@ -1,6 +1,6 @@
 import { Button } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import {
   DataTable,
   ErrorState,
@@ -23,7 +23,6 @@ export function PlatformCompaniesPage() {
   const createMutation = useCreatePlatformCompany();
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogError, setDialogError] = useState<string | null>(null);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
 
   const handleCreate = async (input: CreatePlatformCompanyInput) => {
     setDialogError(null);
@@ -31,10 +30,12 @@ export function PlatformCompaniesPage() {
       const result = await createMutation.mutateAsync(input);
       setDialogOpen(false);
       await refreshCompanies();
-      setSuccessMessage(
-        result.data.message ||
+      notifications.show({
+        color: "green",
+        message:
+          result.data.message ||
           "Empresa creada. Compartí la contraseña temporal que ingresaste con el usuario owner.",
-      );
+      });
     } catch (error) {
       setDialogError(getApiErrorMessage(error));
     }
@@ -94,11 +95,6 @@ export function PlatformCompaniesPage() {
         onSubmit={handleCreate}
       />
 
-      <FeedbackSnackbar
-        open={Boolean(successMessage)}
-        message={successMessage ?? ""}
-        onClose={() => setSuccessMessage(null)}
-      />
     </>
   );
 }

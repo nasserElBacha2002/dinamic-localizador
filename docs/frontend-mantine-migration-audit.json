@@ -1,31 +1,94 @@
 {
   "date": "2026-06-23",
-  "overallScore": 88,
-  "status": "MOSTLY_MIGRATED",
-  "lastUpdated": "PR 18 — Company settings + MUI cleanup preparation",
-  "recommendedNextPr": "PR 19 — Final MUI Cleanup / Remove MUI",
+  "overallScore": 98,
+  "status": "COMPLETE",
+  "lastUpdated": "PR 20 — Final QA / visual polish / navigation UX",
+  "recommendedNextPr": "Open PR to main",
   "summary": {
     "routesAudited": 24,
-    "fullyMigrated90Plus": 14,
-    "mostlyMigrated80to89": 8,
-    "hybrid40to79": 1,
-    "legacy0to39": 1,
+    "fullyMigrated90Plus": 24,
+    "mostlyMigrated80to89": 0,
+    "hybrid40to79": 0,
+    "legacy0to39": 0,
     "infrastructureScore100": 1
   },
   "scanCounts": {
-    "muiMaterialImportLines": 16,
-    "tablePatternLines": 37,
+    "muiMaterialImportLines": 0,
+    "tablePatternLines": 0,
     "formPatternLines": 18,
-    "dialogPatternLines": 11,
+    "dialogPatternLines": 8,
     "designSystemMuiImports": 0,
     "designSystemApiHooks": 0
   },
-  "biggestBlockers": [
-    "Legacy components/common/* MUI wrappers still referenced",
-    "DateRangeCalendar MUI internals in FilterDateRangeInput",
-    "ModuleRouteGuard and FeatureRouteGuard use MUI Paper/Typography",
-    "Dual ThemeProvider in main.tsx until PR 19"
-  ],
+  "palette": {
+    "name": "Modern Professional",
+    "primary": "#1275F2",
+    "secondary": "#5F78A3",
+    "tertiary": "#C55B00",
+    "neutral": "#74777F"
+  },
+  "muiPackagesRemoved": true,
+  "biggestBlockers": [],
+  "pr20": {
+    "status": "IMPLEMENTED",
+    "sidebarSections": ["general", "operation", "management", "tools", "settings"],
+    "migrated": [
+      "frontend/src/design-system/layout/AppSidebar.tsx",
+      "frontend/src/design-system/layout/AppTopbar.tsx",
+      "frontend/src/design-system/layout/AppNavLink.tsx",
+      "frontend/src/design-system/layout/CompanySwitcher.tsx",
+      "frontend/src/design-system/layout/app-layout.module.css",
+      "frontend/src/utils/navigation.ts",
+      "frontend/src/utils/company-modules.ts"
+    ],
+    "preserved": [
+      "route URLs",
+      "module/permission filtering",
+      "company switching logic",
+      "logout behavior"
+    ],
+    "newNavItem": {
+      "label": "Importación",
+      "path": "/inventories/import",
+      "section": "tools",
+      "permission": "inventories:manage"
+    }
+  },
+  "pr19": {
+    "status": "IMPLEMENTED",
+    "correctionsFromPr16to18": [
+      "InventoryImportPage invalid file clears selectedFileName and preview",
+      "AbsenceDetailPage modal comment reset on open/close/submit",
+      "AbsenceDetailPage affected inventories use inventoryStatusLabels"
+    ],
+    "paletteApplied": true,
+    "loginRedesigned": true,
+    "muiRemoved": {
+      "packages": ["@mui/material", "@emotion/react", "@emotion/styled"],
+      "importsAfter": 0
+    },
+    "migrated": [
+      "frontend/src/pages/LoginPage.tsx",
+      "frontend/src/pages/login-page.module.css",
+      "frontend/src/design-system/theme/tokens.ts",
+      "frontend/src/design-system/theme/theme.ts",
+      "frontend/src/design-system/filters/DateRangeCalendar.tsx",
+      "frontend/src/components/company/ModuleRouteGuard.tsx",
+      "frontend/src/components/company/FeatureRouteGuard.tsx",
+      "frontend/src/main.tsx"
+    ],
+    "deleted": [
+      "frontend/src/components/common/* (MUI wrappers)",
+      "frontend/src/components/StatusCard.tsx",
+      "frontend/src/theme/theme.ts"
+    ],
+    "preserved": [
+      "auth login payload and behavior",
+      "date range semantics",
+      "route guard logic",
+      "all APIs and business rules"
+    ]
+  },
   "pr13": {
     "status": "IMPLEMENTED",
     "migrated": [

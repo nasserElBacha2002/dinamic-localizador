@@ -149,10 +149,13 @@ export function InventoryImportPage() {
     setPreview(null);
 
     if (!file) {
+      setSelectedFileName(null);
       return;
     }
 
     if (!isAcceptedImportFile(file)) {
+      setSelectedFileName(null);
+      setPreview(null);
       setClientError(UNSUPPORTED_IMPORT_FILE_MESSAGE);
       return;
     }

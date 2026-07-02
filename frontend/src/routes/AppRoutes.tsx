@@ -4,7 +4,7 @@ import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
 import { AppLayout } from "../design-system";
-import { LoadingState } from "../components/common/LoadingState";
+import { LoadingState } from "../design-system";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
 import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";

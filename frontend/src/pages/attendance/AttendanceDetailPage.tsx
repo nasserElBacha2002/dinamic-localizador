@@ -3,7 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { ReviewAttendanceDialog } from "../../components/attendance/ReviewAttendanceDialog";
-import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
+import { DetailFieldGrid } from "../../design-system";
 import {
   DataTable,
   ErrorState,

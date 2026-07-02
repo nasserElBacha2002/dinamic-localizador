@@ -1,16 +1,23 @@
-/** Redesign baseline tokens — source of truth for Mantine theme (PR 1 foundation). */
+/** Modern Professional palette — source of truth for Mantine theme. */
 export const designTokens = {
   colors: {
-    primary: "#2563EB",
-    background: "#F8FAFC",
+    primary: "#1275F2",
+    primaryHover: "#0F63D1",
+    primaryLight: "#EAF2FF",
+    secondary: "#5F78A3",
+    secondaryLight: "#EEF3FA",
+    tertiary: "#C55B00",
+    tertiaryLight: "#FFF3E8",
+    neutral: "#74777F",
+    background: "#F6F8FC",
     surface: "#FFFFFF",
-    border: "#E2E8F0",
-    textPrimary: "#0F172A",
-    textSecondary: "#64748B",
+    border: "#D7DDE8",
+    textPrimary: "#101828",
+    textSecondary: "#667085",
     success: "#16A34A",
-    warning: "#F59E0B",
+    warning: "#C55B00",
     danger: "#DC2626",
-    info: "#0284C7",
+    info: "#1275F2",
   },
   fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
   radius: {
@@ -26,7 +33,7 @@ export const designTokens = {
     xl: "2rem",
   },
   shadows: {
-    sm: "0 1px 2px rgba(15, 23, 42, 0.06)",
-    md: "0 4px 12px rgba(15, 23, 42, 0.08)",
+    sm: "0 1px 2px rgba(16, 24, 40, 0.06)",
+    md: "0 4px 16px rgba(16, 24, 40, 0.08)",
   },
 } as const;

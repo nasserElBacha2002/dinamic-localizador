@@ -5,6 +5,7 @@ import {
   describeDatabaseIntegration,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
+  requireDinamicCompanyId,
 } from "../test-helpers/integration-test";
 import { AppError } from "../errors/app-error";
 import { computeBalanceCounters } from "../utils/absence-balance.utils";
@@ -31,14 +32,32 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
 
   const requireActiveEmployee = async () => {
     const { employeeRepository } = await import("../repositories/employee.repository");
-    const employees = await employeeRepository.list({ page: 1, limit: 1, active: true });
+    const companyId = await requireDinamicCompanyId();
+    const employees = await employeeRepository.list(companyId, { page: 1, limit: 1, active: true });
     const employee = employees.items[0];
     if (!employee) {
       assert.fail("Test requires at least one active employee fixture");
     }
-    return employee;
+    return { companyId, employee };
   };
 
+  const requireVacationType = async (companyId: string) => {
+    const { absenceTypeRepository } = await import("../repositories/absence-type.repository");
+    const vacationType = await absenceTypeRepository.findByCode(companyId, "VACATION");
+    if (!vacationType) {
+      assert.fail("Test requires VACATION absence type fixture");
+    }
+    return vacationType;
+  };
+
+  const requireSickLeaveType = async (companyId: string) => {
+    const { absenceTypeRepository } = await import("../repositories/absence-type.repository");
+    const sickLeave = await absenceTypeRepository.findByCode(companyId, "SICK_LEAVE");
+    if (!sickLeave) {
+      assert.fail("Test requires SICK_LEAVE absence type fixture");
+    }
+    return sickLeave;
+  };
   const requireAdminUserId = async () => {
     const { getPool } = await import("../database/connection");
     const adminResult = await getPool()
@@ -56,28 +75,10 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
     return adminUserId;
   };
 
-  const requireVacationType = async () => {
-    const { absenceTypeRepository } = await import("../repositories/absence-type.repository");
-    const vacationType = await absenceTypeRepository.findByCode("VACATION");
-    if (!vacationType) {
-      assert.fail("Test requires VACATION absence type fixture");
-    }
-    return vacationType;
-  };
-
-  const requireSickLeaveType = async () => {
-    const { absenceTypeRepository } = await import("../repositories/absence-type.repository");
-    const sickLeave = await absenceTypeRepository.findByCode("SICK_LEAVE");
-    if (!sickLeave) {
-      assert.fail("Test requires SICK_LEAVE absence type fixture");
-    }
-    return sickLeave;
-  };
-
   it("lists employee balances for active employee", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
-    const employee = await requireActiveEmployee();
-    const balances = await absenceBalanceService.listEmployeeBalances(employee.id, TEST_YEAR);
+    const { companyId, employee } = await requireActiveEmployee();
+    const balances = await absenceBalanceService.listEmployeeBalances(companyId, employee.id, TEST_YEAR);
     assert.ok(Array.isArray(balances));
     assert.ok(balances.length > 0);
     assert.ok(Object.prototype.hasOwnProperty.call(balances[0], "notes"));
@@ -86,11 +87,12 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   it("upserts balance and updates the same employee/type/year row", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
     const { absenceBalanceRepository } = await import("../repositories/absence-balance.repository");
-    const employee = await requireActiveEmployee();
-    const vacationType = await requireVacationType();
+    const { companyId, employee } = await requireActiveEmployee();
+    const vacationType = await requireVacationType(companyId);
     const adminUserId = await requireAdminUserId();
 
     const created = await absenceBalanceService.upsertEmployeeBalance(
+      companyId,
       employee.id,
       vacationType.id,
       { year: TEST_YEAR, totalDays: 10, notes: "initial notes" },
@@ -100,6 +102,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
     assert.equal(created.notes, "initial notes");
 
     const updated = await absenceBalanceService.upsertEmployeeBalance(
+      companyId,
       employee.id,
       vacationType.id,
       { year: TEST_YEAR, totalDays: 14, notes: "updated notes" },
@@ -109,6 +112,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
     assert.equal(updated.notes, "updated notes");
 
     const stored = await absenceBalanceRepository.findByEmployeeTypeYear(
+      companyId,
       employee.id,
       vacationType.id,
       TEST_YEAR,
@@ -120,8 +124,8 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   it("blocks approval when balance is insufficient inside a transaction", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
     const { getPool } = await import("../database/connection");
-    const employee = await requireActiveEmployee();
-    const vacationType = await requireVacationType();
+    const { companyId, employee } = await requireActiveEmployee();
+    const vacationType = await requireVacationType(companyId);
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -130,6 +134,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
       await assert.rejects(
         () =>
           absenceBalanceService.ensureSufficientBalanceForApproval(
+            companyId,
             {
               employeeId: employee.id,
               absenceTypeId: vacationType.id,
@@ -155,11 +160,12 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   it("allows approval when sufficient vacation balance exists", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
     const { getPool } = await import("../database/connection");
-    const employee = await requireActiveEmployee();
-    const vacationType = await requireVacationType();
+    const { companyId, employee } = await requireActiveEmployee();
+    const vacationType = await requireVacationType(companyId);
     const adminUserId = await requireAdminUserId();
 
     await absenceBalanceService.upsertEmployeeBalance(
+      companyId,
       employee.id,
       vacationType.id,
       { year: TEST_YEAR, totalDays: 20, notes: null },
@@ -172,6 +178,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
 
     try {
       await absenceBalanceService.ensureSufficientBalanceForApproval(
+        companyId,
         {
           employeeId: employee.id,
           absenceTypeId: vacationType.id,
@@ -191,14 +198,15 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   it("does not block approval for non-deducting absence types", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
     const { getPool } = await import("../database/connection");
-    const employee = await requireActiveEmployee();
-    const sickLeave = await requireSickLeaveType();
+    const { companyId, employee } = await requireActiveEmployee();
+    const sickLeave = await requireSickLeaveType(companyId);
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
       await absenceBalanceService.ensureSufficientBalanceForApproval(
+        companyId,
         {
           employeeId: employee.id,
           absenceTypeId: sickLeave.id,
@@ -217,11 +225,12 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
 
   it("builds balanceImpact for deducting and non-deducting absence types", async () => {
     const { absenceBalanceService } = await import("./absence-balance.service");
-    const employee = await requireActiveEmployee();
-    const vacationType = await requireVacationType();
-    const sickLeave = await requireSickLeaveType();
+    const { companyId, employee } = await requireActiveEmployee();
+    const vacationType = await requireVacationType(companyId);
+    const sickLeave = await requireSickLeaveType(companyId);
 
     const deductingImpact = await absenceBalanceService.getSummaryForRequest(
+      companyId,
       {
         employeeId: employee.id,
         absenceTypeId: vacationType.id,
@@ -236,6 +245,7 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
     assert.equal(deductingImpact.requestDays, 3);
 
     const nonDeductingImpact = await absenceBalanceService.getSummaryForRequest(
+      companyId,
       {
         employeeId: employee.id,
         absenceTypeId: sickLeave.id,
@@ -250,12 +260,14 @@ describeDatabaseIntegration("absence balance phase 2 stabilization (database)", 
   });
 
   it("identifies vacation as deducting balance type", async () => {
-    const vacationType = await requireVacationType();
+    const companyId = await requireDinamicCompanyId();
+    const vacationType = await requireVacationType(companyId);
     assert.equal(vacationType.deductsBalance, true);
   });
 
   it("identifies sick leave as non-deducting balance type", async () => {
-    const sickLeave = await requireSickLeaveType();
+    const companyId = await requireDinamicCompanyId();
+    const sickLeave = await requireSickLeaveType(companyId);
     assert.equal(sickLeave.deductsBalance, false);
   });
 });

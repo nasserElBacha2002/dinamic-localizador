@@ -13,7 +13,9 @@ const REQUIRED_INTEGRATION_ENV = [
   "JWT_SECRET",
 ] as const;
 
+/** Requires explicit opt-in so CI/unit runs do not attempt localhost SQL connections. */
 export const isDatabaseIntegrationEnabled = (): boolean =>
+  process.env.RUN_DB_INTEGRATION_TESTS === "true" &&
   REQUIRED_INTEGRATION_ENV.every((key) => Boolean(process.env[key]));
 
 /** Use instead of `describe` for suites that require a live SQL Server database. */
@@ -29,4 +31,13 @@ export const setupDatabaseIntegration = async () => {
 export const teardownDatabaseIntegration = async () => {
   const { closeDatabase } = await import("../database/connection");
   await closeDatabase();
+};
+
+export const requireDinamicCompanyId = async (): Promise<string> => {
+  const { companyRepository } = await import("../repositories/company.repository");
+  const company = await companyRepository.findByName("Dinamic Systems");
+  if (!company) {
+    throw new Error("Migration 015 required: Dinamic Systems company is missing");
+  }
+  return company.id;
 };

@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useCreateEmployee } from "../../hooks/useEmployees";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function EmployeeCreatePage() {
@@ -31,16 +31,19 @@ export function EmployeeCreatePage() {
   };
 
   return (
-    <AdminLayout>
-      <PageHeader title="Nuevo empleado" description="Registrá un empleado habilitado para inventarios." />
+    <>
+      <PageHeader
+        title={`Nuevo ${terminology.worker.singular.toLowerCase()}`}
+        description={`Registrá un ${terminology.worker.singular.toLowerCase()} habilitado para ${terminology.operation.plural.toLowerCase()}.`}
+      />
       <EmployeeForm
         defaultValues={{ name: defaultName, documentNumber: "", phoneNumber: "", employeeType: "", active: true }}
-        submitLabel="Crear empleado"
+        submitLabel={`Crear ${terminology.worker.singular.toLowerCase()}`}
         cancelTo="/employees"
         loading={createMutation.isPending}
         errorMessage={errorMessage}
         onSubmit={handleSubmit}
       />
-    </AdminLayout>
+    </>
   );
 }

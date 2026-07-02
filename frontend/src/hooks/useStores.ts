@@ -7,20 +7,26 @@ import {
   updateStore,
 } from "../api/stores.api";
 import type { StoreFilters, UpdateStoreInput } from "../types/store";
+import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useStores(filters: StoreFilters) {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
   return useQuery({
-    queryKey: ["stores", filters],
+    queryKey: ["stores", companyId, filters],
     queryFn: () => getStores(filters),
+    enabled,
     retry: 1,
   });
 }
 
 export function useStore(storeId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(storeId));
+
   return useQuery({
-    queryKey: ["store", storeId],
+    queryKey: ["store", companyId, storeId],
     queryFn: () => getStoreById(storeId!),
-    enabled: Boolean(storeId),
+    enabled,
   });
 }
 
@@ -42,7 +48,7 @@ export function useUpdateStore(storeId: string) {
     mutationFn: (input: UpdateStoreInput) => updateStore(storeId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["stores"] });
-      queryClient.invalidateQueries({ queryKey: ["store", storeId] });
+      queryClient.invalidateQueries({ queryKey: ["store"] });
     },
   });
 }

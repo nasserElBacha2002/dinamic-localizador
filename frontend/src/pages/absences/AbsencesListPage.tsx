@@ -1,36 +1,25 @@
-import {
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-} from "@mui/material";
-import { useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { ClickableTableRow } from "../../components/common/ClickableTableRow";
-import { DateRangeFilter } from "../../components/common/DateRangeFilter";
-import { EmptyState } from "../../components/common/EmptyState";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FilterItem, ListFilters } from "../../components/common/ListFilters";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
-import { PaginationControls } from "../../components/common/PaginationControls";
-import { StatusChip } from "../../components/common/StatusChip";
+import { useMemo, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
+import {
+  DataTable,
+  FilterBar,
+  FilterDateRangeInput,
+  FilterSelect,
+  mapApiPaginationMeta,
+  PageHeader,
+  PaginationControls,
+  StatusBadge,
+  type DataTableColumn,
+} from "../../design-system";
 import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
-import type { AbsenceRequestStatus } from "../../types/absence";
+import type { AbsenceRequestListItem, AbsenceRequestStatus } from "../../types/absence";
 import type { DateRangeValue } from "../../types/date-range";
+import { terminology } from "../../domain/terminology";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue } from "../../utils/date-range";
 import { formatDateTime } from "../../utils/dates";
+import { getRelatedName, safeText } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   absenceRequestedViaLabels,
@@ -40,8 +29,10 @@ import {
 } from "../../utils/absence-labels";
 
 export function AbsencesListPage() {
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const pagination = usePaginationState(10);
+  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
   const [status, setStatus] = useState<AbsenceRequestStatus | "">("PENDING");
   const [absenceTypeId, setAbsenceTypeId] = useState("");
   const [employeeId, setEmployeeId] = useState(searchParams.get("employeeId") ?? "");
@@ -57,8 +48,8 @@ export function AbsencesListPage() {
   const typesQuery = useAbsenceTypes();
   const dateQuery = getDateRangeQueryValue(dateRange);
   const { data, isPending, isError, error } = useAbsenceRequests({
-    page: pagination.page,
-    limit: pagination.pageSize,
+    page,
+    limit: pageSize,
     status: status || undefined,
     absenceTypeId: absenceTypeId || undefined,
     employeeId: employeeId || undefined,
@@ -66,139 +57,140 @@ export function AbsencesListPage() {
     dateTo: dateQuery.to,
   });
 
+  const statusOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(absenceStatusLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
+  const typeOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...(typesQuery.data ?? []).map((type) => ({
+        value: type.id,
+        label: absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name,
+      })),
+    ],
+    [typesQuery.data],
+  );
+
+  const columns = useMemo<DataTableColumn<AbsenceRequestListItem>[]>(
+    () => [
+      {
+        key: "employee",
+        header: terminology.worker.singular,
+        getValue: (row) => getRelatedName(row.employee),
+      },
+      {
+        key: "type",
+        header: "Tipo",
+        getValue: (row) =>
+          absenceTypeLabels[row.absenceType?.code as keyof typeof absenceTypeLabels] ??
+          safeText(row.absenceType?.name ?? null),
+      },
+      { key: "startDate", header: "Inicio", getValue: (row) => formatAbsenceDate(row.startDate) },
+      { key: "endDate", header: "Fin", getValue: (row) => formatAbsenceDate(row.endDate) },
+      { key: "totalDays", header: "Días", getValue: (row) => row.totalDays },
+      {
+        key: "status",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+        ),
+      },
+      {
+        key: "requestedVia",
+        header: "Origen",
+        getValue: (row) => absenceRequestedViaLabels[row.requestedVia],
+      },
+      { key: "createdAt", header: "Creada", getValue: (row) => formatDateTime(row.createdAt) },
+      {
+        key: "affectedInventories",
+        header: `${terminology.operation.plural} afectadas`,
+        getValue: (row) => row.affectedInventoriesCount,
+      },
+    ],
+    [],
+  );
+
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Solicitudes de ausencia"
         description="Revisá y gestioná las solicitudes enviadas por WhatsApp o administración."
       />
 
-      <ListFilters>
-        <FilterItem>
-          <FormControl fullWidth size="small">
-            <InputLabel id="absence-status-filter">Estado</InputLabel>
-            <Select
-              labelId="absence-status-filter"
-              label="Estado"
-              value={status}
-              onChange={(event) => {
-                pagination.resetPage();
-                setStatus(event.target.value as AbsenceRequestStatus | "");
-              }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {Object.entries(absenceStatusLabels).map(([value, label]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </FilterItem>
-        <FilterItem>
-          <FormControl fullWidth size="small">
-            <InputLabel id="absence-type-filter">Tipo</InputLabel>
-            <Select
-              labelId="absence-type-filter"
-              label="Tipo"
-              value={absenceTypeId}
-              onChange={(event) => {
-                pagination.resetPage();
-                setAbsenceTypeId(event.target.value);
-              }}
-            >
-              <MenuItem value="">Todos</MenuItem>
-              {(typesQuery.data ?? []).map((type) => (
-                <MenuItem key={type.id} value={type.id}>
-                  {absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </FilterItem>
-        <FilterItem>
+      <FilterBar>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Estado"
+            value={status}
+            onChange={(nextValue) => {
+              resetPage();
+              setStatus(nextValue as AbsenceRequestStatus | "");
+            }}
+            data={statusOptions}
+          />
+        </FilterBar.Item>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Tipo"
+            value={absenceTypeId}
+            onChange={(nextValue) => {
+              resetPage();
+              setAbsenceTypeId(nextValue);
+            }}
+            data={typeOptions}
+          />
+        </FilterBar.Item>
+        <FilterBar.Item>
           <EmployeeSearchAutocomplete
             value={employeeId || null}
             onChange={(value) => {
-              pagination.resetPage();
+              resetPage();
               setEmployeeId(value ?? "");
             }}
-            label="Empleado"
+            label={terminology.worker.singular}
           />
-        </FilterItem>
-        <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
-          <DateRangeFilter
+        </FilterBar.Item>
+        <FilterBar.Item minWidth={280}>
+          <FilterDateRangeInput
             value={dateRange}
             onChange={(nextDateRange) => {
-              pagination.resetPage();
+              resetPage();
               setDateRange(nextDateRange);
             }}
             mode="mixed"
             label="Fecha"
             allowCustomRange
           />
-        </FilterItem>
-      </ListFilters>
+        </FilterBar.Item>
+      </FilterBar>
 
-      {isPending ? <LoadingState /> : null}
-      {isError ? <ErrorState message={getApiErrorMessage(error)} /> : null}
-
-      {!isPending && !isError && data && data.data.length === 0 ? (
-        <EmptyState title="No hay solicitudes de ausencia para los filtros seleccionados." />
-      ) : null}
-
-      {!isPending && !isError && data && data.data.length > 0 ? (
-        <Stack spacing={2}>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small">
-              <TableHead>
-                <TableRow>
-                  <TableCell>Empleado</TableCell>
-                  <TableCell>Tipo</TableCell>
-                  <TableCell>Inicio</TableCell>
-                  <TableCell>Fin</TableCell>
-                  <TableCell>Días</TableCell>
-                  <TableCell>Estado</TableCell>
-                  <TableCell>Origen</TableCell>
-                  <TableCell>Creada</TableCell>
-                  <TableCell>Inventarios afectados</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.data.map((request) => (
-                  <ClickableTableRow
-                    key={request.id}
-                    to={`/absences/${request.id}`}
-                    ariaLabel={`Ver solicitud de ${request.employee.name}`}
-                  >
-                    <TableCell>{request.employee.name}</TableCell>
-                    <TableCell>
-                      {absenceTypeLabels[request.absenceType.code as keyof typeof absenceTypeLabels] ??
-                        request.absenceType.name}
-                    </TableCell>
-                    <TableCell>{formatAbsenceDate(request.startDate)}</TableCell>
-                    <TableCell>{formatAbsenceDate(request.endDate)}</TableCell>
-                    <TableCell>{request.totalDays}</TableCell>
-                    <TableCell>
-                      <StatusChip label={absenceStatusLabels[request.status]} />
-                    </TableCell>
-                    <TableCell>{absenceRequestedViaLabels[request.requestedVia]}</TableCell>
-                    <TableCell>{formatDateTime(request.createdAt)}</TableCell>
-                    <TableCell>{request.affectedInventoriesCount}</TableCell>
-                  </ClickableTableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <PaginationControls
-            meta={data.meta}
-            onPageChange={pagination.onPageChange}
-            pageSize={pagination.pageSize}
-            onPageSizeChange={pagination.onPageSizeChange}
-            showPageSizeSelector
-          />
-        </Stack>
-      ) : null}
-    </AdminLayout>
+      <DataTable
+        rows={data?.data ?? []}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        loading={isPending}
+        error={isError ? getApiErrorMessage(error) : undefined}
+        emptyTitle="No hay solicitudes de ausencia para los filtros seleccionados."
+        emptyDescription="Ajustá los filtros o esperá nuevas solicitudes."
+        onRowClick={(row) => navigate(`/absences/${row.id}`)}
+        aria-label="Listado de solicitudes de ausencia"
+        pagination={
+          data && data.data.length > 0 ? (
+            <PaginationControls
+              meta={mapApiPaginationMeta(data.meta)}
+              onPageChange={onPageChange}
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
+              showPageSizeSelector
+            />
+          ) : undefined
+        }
+      />
+    </>
   );
 }

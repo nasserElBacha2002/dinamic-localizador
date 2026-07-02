@@ -1,9 +1,10 @@
 import sql from "mssql";
 import {
-  CLIENT_IMPORT_REQUIRED_HEADERS,
   DEFAULT_EARLY_TOLERANCE_MINUTES,
   DEFAULT_LATE_TOLERANCE_MINUTES,
-  LEGACY_IMPORT_REQUIRED_HEADERS,
+  IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
+  IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
+  IMPORT_LOCATION_NOT_FOUND_MESSAGE,
   UNSUPPORTED_FILE_TYPE_MESSAGE,
 } from "../constants/inventory-import";
 import { getPool } from "../database/connection";
@@ -18,7 +19,7 @@ import type {
   InventoryImportPreviewResult,
   InventoryImportPreviewRow,
 } from "../types/inventory-import";
-import { normalizeCsvHeader } from "../utils/csv-parse";
+import { mapImportHeaders } from "../utils/inventory-import-headers";
 import {
   buildClientInventorySchedule,
   parseInventoryImportDateTime,
@@ -30,20 +31,6 @@ import {
   parseSpreadsheetBuffer,
   type SpreadsheetFileType,
 } from "../utils/spreadsheet-parse";
-
-const HEADER_ALIASES: Record<string, string> = {
-  punto: "punto",
-  fecha: "fecha",
-  local: "local",
-  formato: "formato",
-  proveedor: "proveedor",
-  tienda: "tienda",
-  fecha_inicio: "fecha_inicio",
-  fecha_fin: "fecha_fin",
-  tolerancia_temprana: "tolerancia_temprana",
-  tolerancia_tardia: "tolerancia_tardia",
-  notas: "notas",
-};
 
 const normalizeStoreKey = (value: string): string => {
   const trimmed = value.trim();
@@ -109,33 +96,6 @@ const parseTolerance = (
   };
 };
 
-const mapHeaders = (
-  headers: string[],
-): { mapped: string[]; format: InventoryImportFormat | null; missing: string[] } => {
-  const mapped = headers.map((header) => {
-    const normalized = normalizeCsvHeader(header);
-    return HEADER_ALIASES[normalized] ?? normalized;
-  });
-
-  const mappedSet = new Set(mapped);
-  const hasClient = CLIENT_IMPORT_REQUIRED_HEADERS.every((required) => mappedSet.has(required));
-  if (hasClient) {
-    return { mapped, format: "client", missing: [] };
-  }
-
-  const missingLegacy = LEGACY_IMPORT_REQUIRED_HEADERS.filter((required) => !mappedSet.has(required));
-  if (missingLegacy.length === 0) {
-    return { mapped, format: "legacy", missing: [] };
-  }
-
-  const missingClient = CLIENT_IMPORT_REQUIRED_HEADERS.filter((required) => !mappedSet.has(required));
-  return {
-    mapped,
-    format: null,
-    missing: missingClient.length <= missingLegacy.length ? missingClient : missingLegacy,
-  };
-};
-
 const getCell = (row: string[], headers: string[], key: string): string => {
   const index = headers.indexOf(key);
   if (index === -1) {
@@ -158,7 +118,7 @@ const markExistingInventoryConflicts = (
     }
 
     if (existingKeys.has(buildInventoryDuplicateKey(row.storeId, row.scheduledStart))) {
-      row.errors.push("Ya existe un inventario para esa tienda y fecha de inicio");
+      row.errors.push("Ya existe una operación programada para esa ubicación y fecha de inicio");
       row.status = "invalid";
       row.earlyToleranceMinutes = null;
       row.lateToleranceMinutes = null;
@@ -196,7 +156,7 @@ const validateClientRow = (
   storeLookup: Map<string, Store[]>,
   seenKeys: Set<string>,
 ): InventoryImportPreviewRow => {
-  const punto = getCell(row, headers, "punto").trim();
+  const locationValue = getCell(row, headers, "location").trim();
   const rawFecha = getCell(row, headers, "fecha").trim();
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
@@ -205,16 +165,16 @@ const validateClientRow = (
   const errors: string[] = [];
 
   const storeResolution = resolveStore(
-    punto,
+    locationValue,
     storeLookup,
-    "El punto es obligatorio",
-    "No existe una tienda con ese punto",
-    "El punto corresponde a más de una tienda",
+    IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
+    IMPORT_LOCATION_NOT_FOUND_MESSAGE,
+    IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
   );
   errors.push(...storeResolution.errors);
 
   if (!rawFecha) {
-    errors.push("La fecha es obligatoria");
+    errors.push("La columna Fecha es obligatoria");
   }
 
   const earlyTolerance = parseTolerance(
@@ -255,7 +215,7 @@ const validateClientRow = (
   if (storeResolution.storeId && scheduledStart) {
     const duplicateKey = buildInventoryDuplicateKey(storeResolution.storeId, scheduledStart);
     if (seenKeys.has(duplicateKey)) {
-      errors.push("Fila duplicada en el archivo para el mismo punto y fecha de inicio");
+      errors.push("Fila duplicada en el archivo para la misma ubicación y fecha de inicio");
     } else {
       seenKeys.add(duplicateKey);
     }
@@ -267,8 +227,8 @@ const validateClientRow = (
   return {
     rowNumber,
     format: "client",
-    punto,
-    tienda: punto,
+    punto: locationValue,
+    tienda: locationValue,
     storeId: storeResolution.storeId,
     storeName: storeResolution.storeName,
     rawFecha,
@@ -298,7 +258,7 @@ const validateLegacyRow = (
   storeLookup: Map<string, Store[]>,
   seenKeys: Set<string>,
 ): InventoryImportPreviewRow => {
-  const tienda = getCell(row, headers, "tienda").trim();
+  const locationValue = getCell(row, headers, "location").trim();
   const fechaInicio = getCell(row, headers, "fecha_inicio").trim();
   const fechaFin = getCell(row, headers, "fecha_fin").trim();
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
@@ -308,11 +268,11 @@ const validateLegacyRow = (
   const errors: string[] = [];
 
   const storeResolution = resolveStore(
-    tienda,
+    locationValue,
     storeLookup,
-    "La tienda es obligatoria",
-    "La tienda no existe",
-    "Nombre de tienda ambiguo: hay más de una tienda con ese nombre",
+    IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
+    IMPORT_LOCATION_NOT_FOUND_MESSAGE,
+    IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
   );
   errors.push(...storeResolution.errors);
 
@@ -366,7 +326,7 @@ const validateLegacyRow = (
   if (storeResolution.storeId && scheduledStart) {
     const duplicateKey = buildInventoryDuplicateKey(storeResolution.storeId, scheduledStart);
     if (seenKeys.has(duplicateKey)) {
-      errors.push("Fila duplicada en el archivo para la misma tienda y fecha de inicio");
+      errors.push("Fila duplicada en el archivo para la misma ubicación y fecha de inicio");
     } else {
       seenKeys.add(duplicateKey);
     }
@@ -379,7 +339,7 @@ const validateLegacyRow = (
     rowNumber,
     format: "legacy",
     punto: "",
-    tienda,
+    tienda: locationValue,
     storeId: storeResolution.storeId,
     storeName: storeResolution.storeName,
     rawFecha: fechaInicio,
@@ -423,7 +383,11 @@ const emptyPreview = (
 });
 
 export const inventoryImportService = {
-  async previewFile(buffer: Buffer, fileName: string): Promise<InventoryImportPreviewResult> {
+  async previewFile(
+    companyId: string,
+    buffer: Buffer,
+    fileName: string,
+  ): Promise<InventoryImportPreviewResult> {
     const fileType = detectSpreadsheetFileType(fileName);
     if (!fileType) {
       return emptyPreview([UNSUPPORTED_FILE_TYPE_MESSAGE]);
@@ -442,19 +406,16 @@ export const inventoryImportService = {
       return emptyPreview(["El archivo está vacío o no contiene encabezados"], fileType);
     }
 
-    const { mapped, format, missing } = mapHeaders(parsed.headers);
+    const { mapped, format, fileErrors: headerErrors } = mapImportHeaders(parsed.headers);
     if (!format) {
-      return emptyPreview(
-        [`Faltan columnas obligatorias: ${missing.join(", ")}`],
-        fileType,
-      );
+      return emptyPreview(headerErrors, fileType);
     }
 
     if (parsed.rows.length === 0) {
       return emptyPreview(["El archivo no contiene filas de datos"], fileType);
     }
 
-    const stores = await storeRepository.listAllActive();
+    const stores = await storeRepository.listAllActive(companyId);
     const storeLookup = buildStoreLookup(stores);
     const seenKeys = new Set<string>();
 
@@ -479,7 +440,7 @@ export const inventoryImportService = {
         storeId: row.storeId as string,
         scheduledStart: row.scheduledStart as string,
       }));
-    const existingKeys = await inventoryRepository.findExistingActiveKeys(pairsToCheck);
+    const existingKeys = await inventoryRepository.findExistingActiveKeys(companyId, pairsToCheck);
     markExistingInventoryConflicts(rows, existingKeys);
 
     const fileErrors: string[] = [];
@@ -504,12 +465,12 @@ export const inventoryImportService = {
     };
   },
 
-  async preview(csvContent: string): Promise<InventoryImportPreviewResult> {
-    return this.previewFile(Buffer.from(csvContent, "utf8"), "upload.csv");
+  async preview(companyId: string, csvContent: string): Promise<InventoryImportPreviewResult> {
+    return this.previewFile(companyId, Buffer.from(csvContent, "utf8"), "upload.csv");
   },
 
-  async confirm(rows: InventoryImportConfirmRow[]) {
-    const stores = await storeRepository.listAllActive();
+  async confirm(companyId: string, rows: InventoryImportConfirmRow[]) {
+    const stores = await storeRepository.listAllActive(companyId);
     const storeById = new Map(stores.map((store) => [store.id, store]));
     const seenKeys = new Set<string>();
 
@@ -555,6 +516,7 @@ export const inventoryImportService = {
     }
 
     const existingKeys = await inventoryRepository.findExistingActiveKeys(
+      companyId,
       rows.map((row) => ({
         storeId: row.storeId,
         scheduledStart: row.scheduledStart,
@@ -574,6 +536,7 @@ export const inventoryImportService = {
 
     try {
       const created = await inventoryRepository.createManyInTransaction(
+        companyId,
         transaction,
         rows.map(toCreateInput),
       );

@@ -1,3 +1,5 @@
+// Phase 2.3/2.7: Inventory remains the technical API model; physical table is scheduled_operations (inventories view).
+// Conceptually this represents a ScheduledOperation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Inventory, InventoryDetail, InventoryWithStore } from "../types/domain";
@@ -28,10 +30,11 @@ const INVENTORY_LIST_SORT_FIELDS: Record<string, string> = {
 };
 
 export const inventoryRepository = {
-  async create(input: CreateInventoryInput): Promise<Inventory> {
+  async create(companyId: string, input: CreateInventoryInput): Promise<Inventory> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("storeId", sql.UniqueIdentifier, input.storeId)
       .input("scheduledStart", sql.DateTime2, new Date(input.scheduledStart))
       .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
@@ -39,13 +42,13 @@ export const inventoryRepository = {
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
       .input("notes", sql.NVarChar(1000), input.notes ?? null)
       .query(`
-        INSERT INTO inventories (
-          store_id, scheduled_start, scheduled_end,
+        INSERT INTO scheduled_operations (
+          company_id, store_id, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
         OUTPUT INSERTED.*
         VALUES (
-          @storeId, @scheduledStart, @scheduledEnd,
+          @companyId, @storeId, @scheduledStart, @scheduledEnd,
           @earlyToleranceMinutes, @lateToleranceMinutes, @notes
         )
       `);
@@ -54,11 +57,13 @@ export const inventoryRepository = {
   },
 
   async createInTransaction(
+    companyId: string,
     transaction: sql.Transaction,
     input: CreateInventoryInput,
   ): Promise<Inventory> {
     const request = new sql.Request(transaction);
     const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("storeId", sql.UniqueIdentifier, input.storeId)
       .input("scheduledStart", sql.DateTime2, new Date(input.scheduledStart))
       .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
@@ -66,13 +71,13 @@ export const inventoryRepository = {
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
       .input("notes", sql.NVarChar(1000), input.notes ?? null)
       .query(`
-        INSERT INTO inventories (
-          store_id, scheduled_start, scheduled_end,
+        INSERT INTO scheduled_operations (
+          company_id, store_id, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
         OUTPUT INSERTED.*
         VALUES (
-          @storeId, @scheduledStart, @scheduledEnd,
+          @companyId, @storeId, @scheduledStart, @scheduledEnd,
           @earlyToleranceMinutes, @lateToleranceMinutes, @notes
         )
       `);
@@ -80,12 +85,17 @@ export const inventoryRepository = {
     return mapInventoryRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async existsActiveForStoreAtStart(storeId: string, scheduledStart: string): Promise<boolean> {
-    const existing = await this.findExistingActiveKeys([{ storeId, scheduledStart }]);
+  async existsActiveForStoreAtStart(
+    companyId: string,
+    storeId: string,
+    scheduledStart: string,
+  ): Promise<boolean> {
+    const existing = await this.findExistingActiveKeys(companyId, [{ storeId, scheduledStart }]);
     return existing.size > 0;
   },
 
   async findExistingActiveKeys(
+    companyId: string,
     pairs: Array<{ storeId: string; scheduledStart: string }>,
   ): Promise<Set<string>> {
     if (pairs.length === 0) {
@@ -98,7 +108,7 @@ export const inventoryRepository = {
 
     for (let offset = 0; offset < pairs.length; offset += chunkSize) {
       const chunk = pairs.slice(offset, offset + chunkSize);
-      const request = pool.request();
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
       const valueClauses: string[] = [];
 
       chunk.forEach((pair, index) => {
@@ -109,11 +119,12 @@ export const inventoryRepository = {
 
       const result = await request.query(`
         SELECT i.store_id, i.scheduled_start
-        FROM inventories i
+        FROM scheduled_operations i
         INNER JOIN (VALUES ${valueClauses.join(", ")}) AS p(store_id, scheduled_start)
           ON i.store_id = p.store_id
          AND i.scheduled_start = p.scheduled_start
         WHERE i.status <> 'CANCELLED'
+          AND i.company_id = @companyId
       `);
 
       for (const row of result.recordset) {
@@ -127,6 +138,7 @@ export const inventoryRepository = {
   },
 
   async createManyInTransaction(
+    companyId: string,
     transaction: sql.Transaction,
     inputs: CreateInventoryInput[],
   ): Promise<Inventory[]> {
@@ -139,7 +151,7 @@ export const inventoryRepository = {
 
     for (let offset = 0; offset < inputs.length; offset += chunkSize) {
       const chunk = inputs.slice(offset, offset + chunkSize);
-      const request = new sql.Request(transaction);
+      const request = new sql.Request(transaction).input("companyId", sql.UniqueIdentifier, companyId);
       const valueRows: string[] = [];
 
       chunk.forEach((input, index) => {
@@ -154,13 +166,13 @@ export const inventoryRepository = {
         request.input(`lateToleranceMinutes${index}`, sql.Int, input.lateToleranceMinutes);
         request.input(`notes${index}`, sql.NVarChar(1000), input.notes ?? null);
         valueRows.push(
-          `(@storeId${index}, @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
+          `(@companyId, @storeId${index}, @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
         );
       });
 
       const result = await request.query(`
-        INSERT INTO inventories (
-          store_id, scheduled_start, scheduled_end,
+        INSERT INTO scheduled_operations (
+          company_id, store_id, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
         OUTPUT INSERTED.*
@@ -175,12 +187,13 @@ export const inventoryRepository = {
     return created;
   },
 
-  async findById(id: string): Promise<Inventory | null> {
+  async findById(companyId: string, id: string): Promise<Inventory | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM inventories WHERE id = @id");
+      .query("SELECT * FROM scheduled_operations WHERE id = @id AND company_id = @companyId");
 
     if (!result.recordset[0]) {
       return null;
@@ -189,8 +202,8 @@ export const inventoryRepository = {
     return mapInventoryRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findDetailById(id: string): Promise<InventoryDetail | null> {
-    const inventory = await this.findById(id);
+  async findDetailById(companyId: string, id: string): Promise<InventoryDetail | null> {
+    const inventory = await this.findById(companyId, id);
     if (!inventory) {
       return null;
     }
@@ -199,28 +212,37 @@ export const inventoryRepository = {
 
     const storeResult = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("storeId", sql.UniqueIdentifier, inventory.storeId)
-      .query("SELECT * FROM stores WHERE id = @storeId");
+      .query("SELECT * FROM operational_locations WHERE id = @storeId AND company_id = @companyId");
 
     if (!storeResult.recordset[0]) {
       return null;
     }
 
-    const employeesResult = await pool.request().input("inventoryId", sql.UniqueIdentifier, id).query(`
+    const employeesResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("inventoryId", sql.UniqueIdentifier, id)
+      .query(`
       SELECT e.*
-      FROM inventory_employees ie
-      INNER JOIN employees e ON e.id = ie.employee_id
+      FROM operation_assignments ie
+      INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
       WHERE ie.inventory_id = @inventoryId
+        AND ie.company_id = @companyId
+        AND e.company_id = @companyId
       ORDER BY e.name ASC
     `);
 
     const attendanceCountResult = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, id)
       .query(`
         SELECT COUNT(*) AS total
         FROM attendance_records
         WHERE inventory_id = @inventoryId
+          AND company_id = @companyId
       `);
 
     return mapInventoryDetail(
@@ -231,9 +253,17 @@ export const inventoryRepository = {
     );
   },
 
-  async list(query: ListInventoriesQuery): Promise<{ items: InventoryWithStore[]; total: number }> {
+  async list(
+    companyId: string,
+    query: ListInventoriesQuery,
+  ): Promise<{ items: InventoryWithStore[]; total: number }> {
     const pool = getPool();
-    const filters: SqlFilter[] = [];
+    const filters: SqlFilter[] = [
+      {
+        clause: "i.company_id = @companyId",
+        apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+      },
+    ];
 
     if (query.status) {
       filters.push({
@@ -278,8 +308,8 @@ export const inventoryRepository = {
     applySqlFilters(countRequest, filters);
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
-      FROM inventories i
-      INNER JOIN stores s ON s.id = i.store_id
+      FROM scheduled_operations i
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -302,8 +332,8 @@ export const inventoryRepository = {
         s.name AS store_name,
         s.address AS store_address,
         s.active AS store_active
-      FROM inventories i
-      INNER JOIN stores s ON s.id = i.store_id
+      FROM scheduled_operations i
+      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
       ${whereClause}
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -317,10 +347,17 @@ export const inventoryRepository = {
     };
   },
 
-  async update(id: string, input: UpdateInventoryInput): Promise<Inventory | null> {
+  async update(
+    companyId: string,
+    id: string,
+    input: UpdateInventoryInput,
+  ): Promise<Inventory | null> {
     const pool = getPool();
     const fields: string[] = [];
-    const request = pool.request().input("id", sql.UniqueIdentifier, id);
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id);
 
     if (input.storeId !== undefined) {
       request.input("storeId", sql.UniqueIdentifier, input.storeId);
@@ -358,16 +395,16 @@ export const inventoryRepository = {
     }
 
     if (fields.length === 0) {
-      return this.findById(id);
+      return this.findById(companyId, id);
     }
 
     fields.push("updated_at = SYSUTCDATETIME()");
 
     const result = await request.query(`
-      UPDATE inventories
+      UPDATE scheduled_operations
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
-      WHERE id = @id
+      WHERE id = @id AND company_id = @companyId
     `);
 
     if (!result.recordset[0]) {
@@ -377,17 +414,19 @@ export const inventoryRepository = {
     return mapInventoryRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async cancel(id: string): Promise<Inventory | null> {
-    return this.update(id, { status: "CANCELLED" });
+  async cancel(companyId: string, id: string): Promise<Inventory | null> {
+    return this.update(companyId, id, { status: "CANCELLED" });
   },
 
   async findCompatibleForEmployee(
+    companyId: string,
     employeeId: string,
     at: Date,
   ): Promise<CompatibleInventory[]> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("at", sql.DateTime2, at)
       .query(`
@@ -403,11 +442,12 @@ export const inventoryRepository = {
           s.latitude AS store_latitude,
           s.longitude AS store_longitude,
           s.allowed_radius_meters
-        FROM inventories i
-        INNER JOIN inventory_employees ie
-          ON ie.inventory_id = i.id AND ie.employee_id = @employeeId
-        INNER JOIN stores s ON s.id = i.store_id
-        WHERE i.status NOT IN ('COMPLETED', 'CANCELLED')
+        FROM scheduled_operations i
+        INNER JOIN operation_assignments ie
+          ON ie.inventory_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        WHERE i.company_id = @companyId
+          AND i.status NOT IN ('COMPLETED', 'CANCELLED')
           AND s.active = 1
           AND @at >= DATEADD(MINUTE, -i.early_tolerance_minutes, i.scheduled_start)
           AND @at <= DATEADD(MINUTE, i.late_tolerance_minutes, i.scheduled_start)

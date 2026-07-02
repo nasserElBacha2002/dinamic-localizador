@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getInventories } from "../../api/inventories.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useInventory } from "../../hooks/useInventories";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { InventoryWithStore } from "../../types/inventory";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { formatDateTime } from "../../utils/dates";
@@ -41,6 +42,7 @@ export function InventorySearchAutocomplete({
   placeholder = "Tienda o dirección del inventario",
 }: InventorySearchAutocompleteProps) {
   const navigate = useNavigate();
+  const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
   const selectedInventoryQuery = useInventory(value ?? undefined);
 
   const fetchInventories = useCallback(async (search: string) => {
@@ -68,6 +70,8 @@ export function InventorySearchAutocomplete({
     queryKey: "inventory-search",
     fetchItems: fetchInventories,
     mapToOption,
+    enabled: companyReady,
+    queryExtra: { companyId },
   });
 
   const selectedOption = useMemo(() => {

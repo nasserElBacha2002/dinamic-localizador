@@ -8,20 +8,26 @@ import {
   reviewAttendanceRecord,
 } from "../api/attendance.api";
 import type { AttendanceFilters, ReviewAttendanceInput } from "../types/attendance";
+import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useAttendanceRecords(filters: AttendanceFilters) {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
   return useQuery({
-    queryKey: ["attendance", filters],
+    queryKey: ["attendance", companyId, filters],
     queryFn: () => getAttendanceRecords(filters),
+    enabled,
     retry: 1,
   });
 }
 
 export function useAttendanceRecord(attendanceId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(attendanceId));
+
   return useQuery({
-    queryKey: ["attendance-record", attendanceId],
+    queryKey: ["attendance-record", companyId, attendanceId],
     queryFn: () => getAttendanceById(attendanceId!),
-    enabled: Boolean(attendanceId),
+    enabled,
   });
 }
 
@@ -46,8 +52,8 @@ export function useReviewAttendanceRecord(attendanceId: string) {
     mutationFn: (input: ReviewAttendanceInput) => reviewAttendanceRecord(attendanceId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
-      queryClient.invalidateQueries({ queryKey: ["attendance-record", attendanceId] });
-      queryClient.invalidateQueries({ queryKey: ["attendance-reviews", attendanceId] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-record"] });
+      queryClient.invalidateQueries({ queryKey: ["attendance-reviews"] });
       queryClient.invalidateQueries({ queryKey: ["inventory-attendance-summary"] });
     },
   });
@@ -74,10 +80,12 @@ export function useReviewAttendance() {
 }
 
 export function useAttendanceReviews(attendanceId?: string, page = 1, limit = 10) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(attendanceId));
+
   return useQuery({
-    queryKey: ["attendance-reviews", attendanceId, page, limit],
+    queryKey: ["attendance-reviews", companyId, attendanceId, page, limit],
     queryFn: () => getAttendanceReviews(attendanceId!, page, limit),
-    enabled: Boolean(attendanceId),
+    enabled,
   });
 }
 

@@ -1,11 +1,5 @@
-import {
-  Autocomplete,
-  Box,
-  CircularProgress,
-  ListItemText,
-  TextField,
-} from "@mui/material";
 import { useMemo } from "react";
+import { FilterLookupInput } from "../../design-system/filters/FilterLookupInput";
 import { CREATE_OPTION_ID, type SearchAutocompleteOption } from "../../types/search-autocomplete";
 
 interface SearchAutocompleteProps {
@@ -57,125 +51,64 @@ export function SearchAutocomplete({
 }: SearchAutocompleteProps) {
   const trimmedInput = inputValue.trim();
 
-  const displayedOptions = useMemo(() => {
+  const lookupOptions = useMemo(() => {
     if (!createOption || !trimmedInput || loading || !hasSearched || options.length > 0) {
-      return options;
+      return options
+        .filter((option) => !isCreateOption(option))
+        .map((option) => ({
+          value: option.id,
+          label: option.label,
+          description: option.description,
+          disabled: option.disabled,
+        }));
     }
 
-    return [
-      {
-        id: CREATE_OPTION_ID,
-        label: createOption.getLabel(trimmedInput),
-        description: createOption.getDescription?.(trimmedInput),
-        isCreateAction: true,
-      },
-    ];
+    return [];
   }, [createOption, hasSearched, loading, options, trimmedInput]);
 
-  const autocompleteValue = useMemo(() => {
-    if (!value) {
+  const lookupCreateOption = useMemo(() => {
+    if (!createOption || !trimmedInput || loading || !hasSearched || options.length > 0) {
+      return undefined;
+    }
+
+    return {
+      label: createOption.getLabel(trimmedInput),
+      description: createOption.getDescription?.(trimmedInput),
+      onSelect: () => createOption.onSelect(trimmedInput),
+    };
+  }, [createOption, hasSearched, loading, options.length, trimmedInput]);
+
+  const mappedSelectedOption = useMemo(() => {
+    if (!selectedOption) {
       return null;
     }
 
-    return (
-      displayedOptions.find((option) => option.id === value)
-      ?? (selectedOption?.id === value ? selectedOption : null)
-    );
-  }, [displayedOptions, selectedOption, value]);
+    return {
+      value: selectedOption.id,
+      label: selectedOption.label,
+      description: selectedOption.description,
+      disabled: selectedOption.disabled,
+    };
+  }, [selectedOption]);
 
   return (
-    <Autocomplete
-      fullWidth
-      disabled={disabled}
-      loading={loading}
-      value={autocompleteValue}
+    <FilterLookupInput
+      label={label}
+      value={value}
+      onChange={onChange}
+      options={lookupOptions}
       inputValue={inputValue}
-      options={displayedOptions}
-      filterOptions={(items) => items}
-      getOptionLabel={(option) => option.label}
-      isOptionEqualToValue={(option, current) => option.id === current.id}
-      getOptionDisabled={(option) => Boolean(option.disabled)}
-      noOptionsText={loading ? loadingText : noOptionsText}
-      onInputChange={(_event, nextInputValue) => {
-        onInputChange(nextInputValue);
-      }}
-      onChange={(_event, option) => {
-        if (!option) {
-          onChange(null);
-          return;
-        }
-
-        if (isCreateOption(option)) {
-          createOption?.onSelect(trimmedInput);
-          return;
-        }
-
-        onChange(option.id);
-      }}
-      renderOption={(props, option) => {
-        const { key, ...optionProps } = props;
-
-        if (isCreateOption(option)) {
-          return (
-            <Box component="li" key={key} {...optionProps} sx={{ display: "flex", alignItems: "center", gap: 1.5 }}>
-              <Box
-                sx={{
-                  width: 28,
-                  height: 28,
-                  borderRadius: "50%",
-                  border: 1,
-                  borderColor: "primary.main",
-                  color: "primary.main",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  fontSize: 20,
-                  lineHeight: 1,
-                  flexShrink: 0,
-                }}
-              >
-                +
-              </Box>
-              <ListItemText
-                primary={option.label}
-                secondary={option.description}
-                primaryTypographyProps={{ color: "primary" }}
-              />
-            </Box>
-          );
-        }
-
-        return (
-          <Box component="li" key={key} {...optionProps}>
-            <ListItemText
-              primary={option.label}
-              secondary={option.description ?? undefined}
-              secondaryTypographyProps={{ color: "text.secondary" }}
-            />
-          </Box>
-        );
-      }}
-      renderInput={(params) => (
-        <TextField
-          {...params}
-          label={label}
-          required={required}
-          error={error}
-          helperText={helperText}
-          placeholder={placeholder}
-          slotProps={{
-            input: {
-              ...params.InputProps,
-              endAdornment: (
-                <>
-                  {loading ? <CircularProgress color="inherit" size={18} /> : null}
-                  {params.InputProps.endAdornment}
-                </>
-              ),
-            },
-          }}
-        />
-      )}
+      onInputChange={onInputChange}
+      selectedOption={mappedSelectedOption}
+      loading={loading}
+      disabled={disabled}
+      required={required}
+      error={error}
+      description={helperText}
+      placeholder={placeholder}
+      emptyMessage={noOptionsText}
+      loadingMessage={loadingText}
+      createOption={lookupCreateOption}
     />
   );
 }

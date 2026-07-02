@@ -235,6 +235,7 @@ export const mapUserRow = (row: Record<string, unknown>): User => ({
   email: String(row.email),
   passwordHash: String(row.password_hash),
   role: String(row.role) as User["role"],
+  isPlatformAdmin: Boolean(row.is_platform_admin),
   active: Boolean(row.active),
   lastLoginAt: row.last_login_at ? toIsoString(row.last_login_at as Date | string) : null,
   createdAt: toIsoString(row.created_at as Date | string),

@@ -1,19 +1,9 @@
-import {
-  Alert,
-  Button,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Button, Stack, Text, TextInput } from "@mantine/core";
 import type { BotSimulationMode } from "../../../api/bot-simulator.api";
 import { EmployeeSearchAutocomplete } from "../../../components/employees/EmployeeSearchAutocomplete";
 import { InventorySearchAutocomplete } from "../../../components/inventories/InventorySearchAutocomplete";
 import { StoreSearchAutocomplete } from "../../../components/stores/StoreSearchAutocomplete";
+import { FilterSelect, SectionCard } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 
 type BotSessionPanelProps = Pick<
@@ -59,21 +49,16 @@ export function BotSessionPanel({
   handleStartSession,
 }: BotSessionPanelProps) {
   return (
-    <Paper sx={{ p: 2 }}>
-      <Typography variant="h6" gutterBottom>
-        Contexto de prueba
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-        Configurá el escenario antes de iniciar la simulación.
-      </Typography>
-
-      <Stack spacing={2}>
-        <TextField
+    <SectionCard
+      title="Contexto de prueba"
+      description="Configurá empleado, operación, tienda y escenario antes de iniciar."
+    >
+      <Stack gap="md">
+        <TextInput
           label="Empresa"
           value=""
           disabled
-          helperText="Preparado para multi-empresa (próximamente)"
-          fullWidth
+          description="Preparado para multi-empresa (próximamente)"
         />
 
         <EmployeeSearchAutocomplete
@@ -108,50 +93,47 @@ export function BotSessionPanel({
           allowCreate={false}
         />
 
-        <TextField
+        <TextInput
           label="Teléfono WhatsApp simulado"
           value={resolvedPhoneNumber}
           onChange={(event) => {
             setPhoneManuallySet(true);
-            setManualPhoneNumber(event.target.value);
+            setManualPhoneNumber(event.currentTarget.value);
           }}
           placeholder="+5491111111111"
-          fullWidth
           required
         />
 
-        <TextField
+        <TextInput
           label="Fecha y hora simulada"
           type="datetime-local"
           value={simulatedNowInput}
-          onChange={(event) => setSimulatedNowInput(event.target.value)}
-          fullWidth
-          InputLabelProps={{ shrink: true }}
+          onChange={(event) => setSimulatedNowInput(event.currentTarget.value)}
+          description="Formato local del navegador (DD/MM/AAAA en visualización regional)."
         />
 
-        <FormControl fullWidth>
-          <InputLabel id="simulation-mode-label">Modo de simulación</InputLabel>
-          <Select
-            labelId="simulation-mode-label"
-            label="Modo de simulación"
-            value={mode}
-            onChange={(event) => setMode(event.target.value as BotSimulationMode)}
-          >
-            <MenuItem value="dry-run">Simulación (dry-run)</MenuItem>
-            <MenuItem value="persistent">Persistente (marca registros como simulación)</MenuItem>
-          </Select>
-        </FormControl>
+        <FilterSelect
+          label="Modo de simulación"
+          value={mode}
+          onChange={(value) => setMode(value as BotSimulationMode)}
+          data={[
+            { value: "dry-run", label: "Simulación (dry-run)" },
+            { value: "persistent", label: "Persistente (marca registros como simulación)" },
+          ]}
+        />
 
         {!sessionId ? (
-          <Button variant="contained" onClick={() => void handleStartSession()} disabled={!canStart || isBusy}>
+          <Button onClick={() => void handleStartSession()} disabled={!canStart || isBusy} loading={isBusy}>
             Iniciar simulación
           </Button>
         ) : (
-          <Alert severity="info">
-            Sesión activa: <strong>{sessionId}</strong>. Reiniciá para limpiar mensajes y estado.
+          <Alert color="blue" title="Sesión activa">
+            <Text size="sm">
+              ID: <strong>{sessionId}</strong>. Reiniciá para limpiar mensajes y estado.
+            </Text>
           </Alert>
         )}
       </Stack>
-    </Paper>
+    </SectionCard>
   );
 }

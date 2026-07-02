@@ -4,6 +4,7 @@ import { getStores } from "../../api/stores.api";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useStore } from "../../hooks/useStores";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { Store } from "../../types/store";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 
@@ -42,6 +43,7 @@ export function StoreSearchAutocomplete({
   placeholder = "Nombre o dirección de la tienda",
 }: StoreSearchAutocompleteProps) {
   const navigate = useNavigate();
+  const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
   const selectedStoreQuery = useStore(value ?? undefined);
 
   const fetchStores = useCallback(
@@ -70,7 +72,8 @@ export function StoreSearchAutocomplete({
     queryKey: "store-search",
     fetchItems: fetchStores,
     mapToOption,
-    queryExtra: activeOnly,
+    enabled: companyReady,
+    queryExtra: { activeOnly, companyId },
   });
 
   const selectedOption = useMemo(() => {

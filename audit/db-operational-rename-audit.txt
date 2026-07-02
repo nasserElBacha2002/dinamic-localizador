@@ -1,0 +1,18 @@
+DB operational rename audit (Phase 2.7)
+=====================================
+
+Static audit: no findings.
+
+Live DB validation: not executed by this report.
+Run: python3 scripts/audit/audit_db_operational_rename.py --live
+Or: cd backend && npm test -- src/database/operational-table-rename.integration.test.ts
+
+Manual SQL validation on target DB after migrations:
+SELECT OBJECT_ID('dbo.operational_locations', 'U') AS operational_locations_table;
+SELECT OBJECT_ID('dbo.scheduled_operations', 'U') AS scheduled_operations_table;
+SELECT OBJECT_ID('dbo.operation_assignments', 'U') AS operation_assignments_table;
+SELECT OBJECT_ID('dbo.stores', 'V') AS stores_view;
+SELECT OBJECT_ID('dbo.inventories', 'V') AS inventories_view;
+SELECT OBJECT_ID('dbo.inventory_employees', 'V') AS inventory_employees_view;
+SELECT OBJECT_ID('dbo.employees', 'U') AS employees_table;
+SELECT OBJECT_ID('dbo.attendance_records', 'U') AS attendance_records_table;

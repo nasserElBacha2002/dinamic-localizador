@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import {
   describeDatabaseIntegration,
+  requireDinamicCompanyId,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
@@ -26,7 +27,8 @@ describeDatabaseIntegration("absence request stabilization (database)", () => {
 
   it("lists absence requests with PENDING filter without SQL errors", async () => {
     const { absenceRequestRepository } = await import("../repositories/absence-request.repository");
-    const result = await absenceRequestRepository.list({
+    const companyId = await requireDinamicCompanyId();
+    const result = await absenceRequestRepository.list(companyId, {
       page: 1,
       limit: 10,
       status: "PENDING",
@@ -39,7 +41,8 @@ describeDatabaseIntegration("absence request stabilization (database)", () => {
 
   it("returns paginated list response shape from service", async () => {
     const { absenceRequestService } = await import("./absence-request.service");
-    const result = await absenceRequestService.list({
+    const companyId = await requireDinamicCompanyId();
+    const result = await absenceRequestService.list(companyId, {
       page: 1,
       limit: 10,
       status: "PENDING",
@@ -57,7 +60,9 @@ describeDatabaseIntegration("absence request stabilization (database)", () => {
 
   it("findAffectedInventories tolerates inventories without scheduled_start", async () => {
     const { absenceRequestRepository } = await import("../repositories/absence-request.repository");
+    const companyId = await requireDinamicCompanyId();
     const inventories = await absenceRequestRepository.findAffectedInventories(
+      companyId,
       "00000000-0000-0000-0000-000000000000",
       new Date("2026-01-01T03:00:00.000Z"),
       new Date("2026-01-02T02:59:59.999Z"),

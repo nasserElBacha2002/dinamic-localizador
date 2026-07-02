@@ -1,11 +1,12 @@
+import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { StoreForm } from "../../components/stores/StoreForm";
-import { PageHeader } from "../../components/common/PageHeader";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
+import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
+import { PageHeader } from "../../design-system";
 import { useCreateStore } from "../../hooks/useStores";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
+import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreCreatePage() {
@@ -14,6 +15,7 @@ export function StoreCreatePage() {
   const createMutation = useCreateStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const defaultName = useMemo(() => searchParams.get("name")?.trim() ?? "", [searchParams]);
+  const submitLabel = `Crear ${terminology.location.singular.toLowerCase()}`;
 
   const handleSubmit = async (values: StoreFormValues) => {
     setErrorMessage(null);
@@ -37,8 +39,21 @@ export function StoreCreatePage() {
   };
 
   return (
-    <AdminLayout>
-      <PageHeader title="Nueva tienda" description="Definí la ubicación y el radio permitido." />
+    <>
+      <PageHeader
+        title={`Nueva ${terminology.location.singular.toLowerCase()}`}
+        description="Definí la ubicación y el perímetro de validación."
+        action={
+          <Group gap="sm" visibleFrom="lg">
+            <Button component={RouterLink} to="/stores" variant="default">
+              Cancelar
+            </Button>
+            <Button type="submit" form={STORE_FORM_ID} loading={createMutation.isPending}>
+              {submitLabel}
+            </Button>
+          </Group>
+        }
+      />
       <StoreForm
         defaultValues={{
           name: defaultName,
@@ -52,13 +67,13 @@ export function StoreCreatePage() {
           googlePlaceId: "",
           active: true,
         }}
-        submitLabel="Crear tienda"
+        submitLabel={submitLabel}
         cancelTo="/stores"
         loading={createMutation.isPending}
         errorMessage={errorMessage}
         isEditMode={false}
         onSubmit={handleSubmit}
       />
-    </AdminLayout>
+    </>
   );
 }

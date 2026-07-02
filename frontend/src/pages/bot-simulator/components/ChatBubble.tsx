@@ -1,4 +1,4 @@
-import { Box, Paper, Stack, Typography } from "@mui/material";
+import { Box, Paper, Stack, Text } from "@mantine/core";
 import type { BotSimulatorMessage } from "../../../api/bot-simulator.api";
 import { formatDateTime } from "../../../utils/dates";
 
@@ -8,46 +8,42 @@ export function ChatBubble({ message }: { message: BotSimulatorMessage }) {
 
   return (
     <Box
-      sx={{
+      mb="sm"
+      style={{
         display: "flex",
         justifyContent: isUser ? "flex-end" : "flex-start",
-        mb: 1.5,
       }}
     >
       <Paper
-        elevation={0}
-        sx={{
-          maxWidth: "85%",
-          px: 2,
-          py: 1.25,
-          borderRadius: 2,
-          bgcolor: isUser ? "primary.main" : "grey.100",
-          color: isUser ? "primary.contrastText" : "text.primary",
-        }}
+        shadow="xs"
+        radius="md"
+        p="sm"
+        maw="85%"
+        bg={isUser ? "blue.6" : "gray.1"}
+        c={isUser ? "white" : "dark"}
       >
         {isLocation ? (
-          <Stack spacing={0.5}>
-            <Typography variant="body2" fontWeight={600}>
-              📍 Ubicación enviada
-            </Typography>
-            <Typography variant="caption" component="div">
-              Lat: {message.latitude}
-            </Typography>
-            <Typography variant="caption" component="div">
-              Lng: {message.longitude}
-            </Typography>
+          <Stack gap={4}>
+            <Text size="sm" fw={600}>
+              Ubicación enviada
+            </Text>
+            <Text size="xs">Lat: {message.latitude}</Text>
+            <Text size="xs">Lng: {message.longitude}</Text>
           </Stack>
         ) : (
-          <Typography variant="body2" sx={{ whiteSpace: "pre-wrap" }}>
+          <Text size="sm" style={{ whiteSpace: "pre-wrap" }}>
             {message.body}
-          </Typography>
+          </Text>
         )}
-        <Typography
-          variant="caption"
-          sx={{ display: "block", mt: 0.5, opacity: 0.75, textAlign: isUser ? "right" : "left" }}
+        <Text
+          size="xs"
+          mt={6}
+          opacity={0.75}
+          ta={isUser ? "right" : "left"}
+          c={isUser ? "white" : "dimmed"}
         >
           {formatDateTime(message.createdAt)}
-        </Typography>
+        </Text>
       </Paper>
     </Box>
   );

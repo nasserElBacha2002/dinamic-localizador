@@ -38,6 +38,8 @@ jobs:
           replace_if_empty TWILIO_WEBHOOK_URL https://example.com/api/whatsapp/webhook
           replace_if_empty TWILIO_ARRIVAL_REMINDER_CONTENT_SID HX00000000000000000000000000000001
           replace_if_empty TWILIO_EXIT_REMINDER_CONTENT_SID HX00000000000000000000000000000002
+          replace_if_empty TWILIO_TEMPLATE_NO_CHECKIN_SID HX00000000000000000000000000000003
+          replace_if_empty BOT_ON_TIME_GRACE_MINUTES 15
 
           sed -i 's|^NODE_ENV=.*|NODE_ENV=production|' .env
           sed -i 's|^TWILIO_VALIDATE_SIGNATURE=.*|TWILIO_VALIDATE_SIGNATURE=true|' .env

@@ -1,21 +1,21 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Alert,
-  FormControl,
-  FormControlLabel,
-  FormHelperText,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
-import { Controller, useForm } from "react-hook-form";
+import { Stack } from "@mantine/core";
+import { useMemo } from "react";
+import { useForm } from "react-hook-form";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
+import { terminology } from "../../domain/terminology";
+import {
+  FormActions,
+  FormErrorAlert,
+  FormGrid,
+  FormSection,
+  RHFPhoneInput,
+  RHFSelect,
+  RHFSwitch,
+  RHFTextInput,
+} from "../../design-system";
 import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
 import { employeeTypeLabels } from "../../utils/labels";
-import { FormActions } from "../common/FormActions";
 
 interface EmployeeFormProps {
   defaultValues: EmployeeFormInputValues;
@@ -34,90 +34,54 @@ export function EmployeeForm({
   errorMessage,
   onSubmit,
 }: EmployeeFormProps) {
-  const {
-    register,
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<EmployeeFormInputValues, unknown, EmployeeFormValues>({
+  const employeeTypeOptions = useMemo(
+    () =>
+      EMPLOYEE_TYPES.map((employeeType) => ({
+        value: employeeType,
+        label: employeeTypeLabels[employeeType],
+      })),
+    [],
+  );
+
+  const workerTypeLabel = `Tipo de ${terminology.worker.singular.toLowerCase()}`;
+
+  const { control, handleSubmit } = useForm<EmployeeFormInputValues, unknown, EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues,
   });
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Stack spacing={2} maxWidth={560}>
-        {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+      <FormSection>
+        <Stack gap="md">
+          <FormErrorAlert message={errorMessage} />
 
-        <TextField
-          label="Nombre"
-          required
-          fullWidth
-          error={Boolean(errors.name)}
-          helperText={errors.name?.message}
-          {...register("name")}
-        />
-
-        <TextField
-          label="Documento"
-          fullWidth
-          error={Boolean(errors.documentNumber)}
-          helperText={errors.documentNumber?.message}
-          {...register("documentNumber")}
-        />
-
-        <TextField
-          label="Teléfono"
-          required
-          fullWidth
-          placeholder="+5491112345678"
-          error={Boolean(errors.phoneNumber)}
-          helperText={errors.phoneNumber?.message ?? "Formato internacional E.164"}
-          {...register("phoneNumber")}
-        />
-
-        <Controller
-          name="employeeType"
-          control={control}
-          render={({ field }) => (
-            <FormControl fullWidth required error={Boolean(errors.employeeType)}>
-              <InputLabel id="employee-type-label">Tipo de empleado</InputLabel>
-              <Select
-                labelId="employee-type-label"
-                label="Tipo de empleado"
-                value={field.value ?? ""}
-                onChange={field.onChange}
-                inputRef={field.ref}
-              >
-                <MenuItem value="" disabled>
-                  <em>Seleccionar tipo</em>
-                </MenuItem>
-                {EMPLOYEE_TYPES.map((employeeType) => (
-                  <MenuItem key={employeeType} value={employeeType}>
-                    {employeeTypeLabels[employeeType]}
-                  </MenuItem>
-                ))}
-              </Select>
-              {errors.employeeType?.message ? (
-                <FormHelperText>{errors.employeeType.message}</FormHelperText>
-              ) : null}
-            </FormControl>
-          )}
-        />
-
-        <Controller
-          name="active"
-          control={control}
-          render={({ field }) => (
-            <FormControlLabel
-              control={<Switch checked={field.value} onChange={field.onChange} inputRef={field.ref} />}
-              label="Activo"
+          <FormGrid>
+            <RHFTextInput control={control} name="name" label="Nombre" required />
+            <RHFTextInput control={control} name="documentNumber" label="Documento" />
+            <RHFPhoneInput
+              control={control}
+              name="phoneNumber"
+              label="Teléfono"
+              placeholder="+5491112345678"
+              description="Formato internacional E.164"
+              required
             />
-          )}
-        />
+            <RHFSelect
+              control={control}
+              name="employeeType"
+              label={workerTypeLabel}
+              placeholder="Seleccionar tipo"
+              data={employeeTypeOptions}
+              required
+            />
+          </FormGrid>
 
-        <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
-      </Stack>
+          <RHFSwitch control={control} name="active" label="Activo" />
+
+          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+        </Stack>
+      </FormSection>
     </form>
   );
 }

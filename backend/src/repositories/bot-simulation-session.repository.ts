@@ -75,12 +75,16 @@ export const botSimulationSessionRepository = {
     return mapSession(result.recordset[0] as BotSimulationSessionRow);
   },
 
-  async findById(id: string): Promise<BotSimulationSession | null> {
+  async findById(companyId: string, id: string): Promise<BotSimulationSession | null> {
     const pool = getPool();
     const result = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
-      .query("SELECT * FROM bot_simulation_sessions WHERE id = @id");
+      .query(`
+        SELECT * FROM bot_simulation_sessions
+        WHERE id = @id AND company_id = @companyId
+      `);
 
     if (!result.recordset[0]) {
       return null;
@@ -90,6 +94,7 @@ export const botSimulationSessionRepository = {
   },
 
   async updateConversation(
+    companyId: string,
     id: string,
     input: {
       messages: BotSimulatorMessage[];
@@ -99,6 +104,7 @@ export const botSimulationSessionRepository = {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .input("messagesJson", sql.NVarChar(sql.MAX), JSON.stringify(input.messages))
       .input("technicalDetailsJson", sql.NVarChar(sql.MAX), JSON.stringify(input.technicalDetails))
@@ -107,21 +113,22 @@ export const botSimulationSessionRepository = {
         SET messages_json = @messagesJson,
             technical_details_json = @technicalDetailsJson,
             updated_at = SYSUTCDATETIME()
-        WHERE id = @id
+        WHERE id = @id AND company_id = @companyId
       `);
   },
 
-  async resetConversation(id: string): Promise<void> {
+  async resetConversation(companyId: string, id: string): Promise<void> {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .query(`
         UPDATE bot_simulation_sessions
         SET messages_json = '[]',
             technical_details_json = '{}',
             updated_at = SYSUTCDATETIME()
-        WHERE id = @id
+        WHERE id = @id AND company_id = @companyId
       `);
   },
 };

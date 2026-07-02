@@ -1,5 +1,6 @@
 import { connectDatabase, closeDatabase } from "../database/connection";
 import { attendanceReminderService } from "../services/attendance-reminder.service";
+import { companyContextService } from "../services/company-context.service";
 import type { AttendanceNotificationType } from "../constants/attendance-notification";
 import { ATTENDANCE_NOTIFICATION_TYPES } from "../constants/attendance-notification";
 
@@ -19,6 +20,7 @@ const printUsage = (): void => {
 
   npm run reminders:test -- --type=ARRIVAL_REMINDER_15_MIN --inventory-id=UUID --employee-id=UUID
   npm run reminders:test -- --type=EXIT_REMINDER_15_MIN --inventory-id=UUID --employee-id=UUID
+  npm run reminders:test -- --type=NO_CHECKIN_AT_START --inventory-id=UUID --employee-id=UUID
 
 Supported types: ${ATTENDANCE_NOTIFICATION_TYPES.join(", ")}`);
 };
@@ -30,7 +32,7 @@ const main = async (): Promise<void> => {
 
   try {
     if (!mode || mode === "run") {
-      const summary = await attendanceReminderService.runDueReminders();
+      const summary = await attendanceReminderService.runDueRemindersForAllCompanies();
       console.info(JSON.stringify(summary, null, 2));
       return;
     }
@@ -51,7 +53,8 @@ const main = async (): Promise<void> => {
         process.exit(1);
       }
 
-      const outcome = await attendanceReminderService.sendTestReminder({
+      const companyId = await companyContextService.resolveDefaultCompanyId();
+      const outcome = await attendanceReminderService.sendTestReminder(companyId, {
         notificationType,
         inventoryId,
         employeeId,

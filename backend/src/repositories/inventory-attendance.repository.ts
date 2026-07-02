@@ -76,16 +76,20 @@ const mapSummaryRow = (row: Record<string, unknown>): InventoryAttendanceSummary
 };
 
 const employeesBaseQuery = `
-  FROM inventory_employees ie
-  INNER JOIN employees e ON e.id = ie.employee_id
+  FROM operation_assignments ie
+  INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
   LEFT JOIN attendance_records ar
     ON ar.inventory_id = ie.inventory_id
    AND ar.employee_id = ie.employee_id
+   AND ar.company_id = @companyId
+   AND ar.is_simulation = 0
   WHERE ie.inventory_id = @inventoryId
+    AND ie.company_id = @companyId
 `;
 
 export const inventoryAttendanceRepository = {
   async getAttendanceSummary(
+    companyId: string,
     inventoryId: string,
     page = 1,
     limit = 10,
@@ -101,6 +105,7 @@ export const inventoryAttendanceRepository = {
 
     const inventoryResult = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .query(`
         SELECT
@@ -115,9 +120,10 @@ export const inventoryAttendanceRepository = {
           s.active AS store_active,
           s.created_at AS store_created_at,
           s.updated_at AS store_updated_at
-        FROM inventories i
-        INNER JOIN stores s ON s.id = i.store_id
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
         WHERE i.id = @inventoryId
+          AND i.company_id = @companyId
       `);
 
     if (!inventoryResult.recordset[0]) {
@@ -141,6 +147,7 @@ export const inventoryAttendanceRepository = {
 
     const summaryResult = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .query(`
         SELECT
@@ -165,6 +172,7 @@ export const inventoryAttendanceRepository = {
 
     const employeesResult = await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .input("offset", sql.Int, offset)
       .input("limit", sql.Int, limit)

@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { getEmployees } from "../../api/employees.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useEmployee } from "../../hooks/useEmployees";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import type { Employee } from "../../types/employee";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { formatDate } from "../../utils/dates";
@@ -60,6 +61,7 @@ export function EmployeeSearchAutocomplete({
   descriptionMode = "phone",
 }: EmployeeSearchAutocompleteProps) {
   const navigate = useNavigate();
+  const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
   const selectedEmployeeQuery = useEmployee(value ?? undefined);
   const excludeKey = excludeIds.join(",");
 
@@ -97,7 +99,8 @@ export function EmployeeSearchAutocomplete({
     queryKey: "employee-search",
     fetchItems: fetchEmployees,
     mapToOption,
-    queryExtra: { activeOnly, excludeKey },
+    enabled: companyReady,
+    queryExtra: { activeOnly, excludeKey, companyId },
   });
 
   const selectedOption = useMemo(() => {

@@ -16,26 +16,35 @@ import type {
   CreateAbsenceRequestInput,
   UpsertEmployeeAbsenceBalanceInput,
 } from "../types/absence";
+import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useAbsenceTypes() {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
   return useQuery({
-    queryKey: ["absence-types"],
+    queryKey: ["absence-types", companyId],
     queryFn: getAbsenceTypes,
+    enabled,
   });
 }
 
 export function useAbsenceRequests(filters: AbsenceRequestFilters) {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
   return useQuery({
-    queryKey: ["absence-requests", filters],
+    queryKey: ["absence-requests", companyId, filters],
     queryFn: () => getAbsenceRequests(filters),
+    enabled,
   });
 }
 
 export function useAbsenceRequest(absenceRequestId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(absenceRequestId));
+
   return useQuery({
-    queryKey: ["absence-request", absenceRequestId],
+    queryKey: ["absence-request", companyId, absenceRequestId],
     queryFn: () => getAbsenceRequestById(absenceRequestId!),
-    enabled: Boolean(absenceRequestId),
+    enabled,
   });
 }
 
@@ -94,10 +103,12 @@ export function useCancelAbsenceRequest(absenceRequestId: string) {
 }
 
 export function useEmployeeAbsenceBalances(employeeId?: string, year?: number) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(employeeId && year));
+
   return useQuery({
-    queryKey: ["employee-absence-balances", employeeId, year],
+    queryKey: ["employee-absence-balances", companyId, employeeId, year],
     queryFn: () => getEmployeeAbsenceBalances(employeeId!, year!),
-    enabled: Boolean(employeeId && year),
+    enabled,
   });
 }
 

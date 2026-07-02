@@ -1,193 +1,224 @@
-import { Button, Card, CardActions, CardContent, Grid, Stack, Typography } from "@mui/material";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
-import { StatusCard } from "../components/StatusCard";
-import { ErrorState } from "../components/common/ErrorState";
-import { LoadingState } from "../components/common/LoadingState";
-import { PageHeader } from "../components/common/PageHeader";
-import { getEmployees } from "../api/employees.api";
-import { getInventories } from "../api/inventories.api";
+import { Card, SimpleGrid, Stack, Text } from "@mantine/core";
+import type { KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  PageHeader,
+  SectionCard,
+  StatusBadge,
+} from "../design-system";
+import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
-import { AdminLayout } from "../layouts/AdminLayout";
+import { useInventories } from "../hooks/useInventories";
 import type { InventoryWithStore } from "../types/inventory";
+import { terminology } from "../domain/terminology";
+import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
-import { useQuery } from "@tanstack/react-query";
+import { inventoryStatusLabels } from "../utils/labels";
 
-const quickLinks = [
-  { title: "Empleados", description: "Gestionar personal", to: "/employees" },
-  { title: "Tiendas", description: "Configurar puntos de inventario", to: "/stores" },
-  { title: "Inventarios", description: "Planificar jornadas", to: "/inventories" },
-  { title: "Asistencias", description: "Revisar registros", to: "/attendance" },
-];
+type HealthStatus = "loading" | "ok" | "error";
 
-export function HomePage() {
-  const apiHealth = useApiHealth();
-  const databaseHealth = useDatabaseHealth();
+function healthStatusLabel(status: HealthStatus): string {
+  if (status === "loading") {
+    return "Consultando";
+  }
 
-  const activeEmployeesQuery = useQuery({
-    queryKey: ["employees", { active: true, page: 1, limit: 1 }],
-    queryFn: () => getEmployees({ active: true, page: 1, limit: 1 }),
-    enabled: databaseHealth.data?.database === "connected",
-  });
+  if (status === "ok") {
+    return "Operativo";
+  }
 
-  const upcomingInventoriesQuery = useQuery({
-    queryKey: ["inventories", { status: "SCHEDULED", page: 1, limit: 5 }],
-    queryFn: () => getInventories({ status: "SCHEDULED", page: 1, limit: 5 }),
-    enabled: databaseHealth.data?.database === "connected",
-  });
+  return "Con error";
+}
 
+function healthStatusTone(status: HealthStatus): "success" | "warning" | "danger" {
+  if (status === "ok") {
+    return "success";
+  }
+
+  if (status === "loading") {
+    return "warning";
+  }
+
+  return "danger";
+}
+
+interface HealthMetricCardProps {
+  title: string;
+  status: HealthStatus;
+  details: string;
+}
+
+function HealthMetricCard({ title, status, details }: HealthMetricCardProps) {
   return (
-    <AdminLayout>
-      <PageHeader
-        title="Dinamic Attendance"
-        description="Panel administrativo para planificar inventarios, asignar empleados y revisar asistencias."
-      />
-
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Backend"
-            status={apiHealth.isLoading ? "loading" : apiHealth.isError ? "error" : "ok"}
-            details={
-              apiHealth.data
-                ? `Servicio ${apiHealth.data.service} operativo`
-                : apiHealth.isError
-                  ? "No se pudo contactar al backend"
-                  : "Verificando..."
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Base de datos"
-            status={
-              databaseHealth.isLoading
-                ? "loading"
-                : databaseHealth.data?.database === "connected"
-                  ? "ok"
-                  : "error"
-            }
-            details={
-              databaseHealth.data?.database === "connected"
-                ? "Conexión establecida"
-                : databaseHealth.data?.message ?? "Verificando conexión..."
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Empleados activos"
-            status={activeEmployeesQuery.isLoading ? "loading" : activeEmployeesQuery.isError ? "error" : "ok"}
-            details={
-              activeEmployeesQuery.data
-                ? `${activeEmployeesQuery.data.meta.total} empleados activos`
-                : "No disponible"
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Próximos inventarios"
-            status={
-              upcomingInventoriesQuery.isLoading
-                ? "loading"
-                : upcomingInventoriesQuery.isError
-                  ? "error"
-                  : "ok"
-            }
-            details={
-              upcomingInventoriesQuery.data
-                ? `${upcomingInventoriesQuery.data.meta.total} inventarios programados`
-                : "No disponible"
-            }
-          />
-        </Grid>
-      </Grid>
-
-      <Typography variant="h5" gutterBottom>
-        Accesos rápidos
-      </Typography>
-      <Grid container spacing={2} sx={{ mb: 4 }}>
-        {quickLinks.map((link) => (
-          <Grid key={link.to} size={{ xs: 12, sm: 6, md: 3 }}>
-            <Card variant="outlined" sx={{ height: "100%" }}>
-              <CardContent>
-                <Typography variant="h6">{link.title}</Typography>
-                <Typography variant="body2" color="text.secondary">
-                  {link.description}
-                </Typography>
-              </CardContent>
-              <CardActions>
-                <Button component={RouterLink} to={link.to} size="small">
-                  Ir
-                </Button>
-              </CardActions>
-            </Card>
-          </Grid>
-        ))}
-      </Grid>
-
-      <Typography variant="h5" gutterBottom>
-        Próximos inventarios
-      </Typography>
-      {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
-      {upcomingInventoriesQuery.isError ? (
-        <ErrorState message="No se pudieron cargar los inventarios programados." />
-      ) : null}
-      {upcomingInventoriesQuery.data?.data.length === 0 ? (
-        <Typography color="text.secondary">No hay inventarios programados.</Typography>
-      ) : null}
-      {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
-        <Stack spacing={1}>
-          {upcomingInventoriesQuery.data.data.map((inventory) => (
-            <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
-          ))}
-        </Stack>
-      ) : null}
-    </AdminLayout>
+    <MetricCard
+      title={title}
+      value={<StatusBadge label={healthStatusLabel(status)} tone={healthStatusTone(status)} />}
+      description={details}
+      loading={status === "loading"}
+    />
   );
 }
 
 function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore }) {
   const navigate = useNavigate();
+  const destination = `/inventories/${inventory.id}`;
+  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`;
+
+  const handleNavigate = () => {
+    navigate(destination);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleNavigate();
+    }
+  };
+
+  const scheduleText = inventory.scheduledEnd
+    ? `${formatDateTime(inventory.scheduledStart)} – ${formatDateTime(inventory.scheduledEnd)}`
+    : formatDateTime(inventory.scheduledStart);
 
   return (
     <Card
-      variant="outlined"
+      withBorder
+      padding="md"
+      radius="md"
       role="link"
       tabIndex={0}
-      aria-label={`Ver inventario de ${inventory.store.name}`}
-      onClick={() => navigate(`/inventories/${inventory.id}`)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          navigate(`/inventories/${inventory.id}`);
-        }
-      }}
-      sx={{
-        cursor: "pointer",
-        transition: (theme) => theme.transitions.create("background-color"),
-        "&:hover": {
-          backgroundColor: "action.hover",
-        },
-      }}
+      aria-label={ariaLabel}
+      onClick={handleNavigate}
+      onKeyDown={handleKeyDown}
+      style={{ cursor: "pointer" }}
     >
-      <CardContent>
-        <BoxInfo
-          title={inventory.store.name}
-          subtitle={`${inventory.store.address ?? "—"} · ${formatDateTime(inventory.scheduledStart)}`}
+      <Stack gap={4}>
+        <Text fw={600}>{inventory.store.name}</Text>
+        <Text size="sm" c="dimmed">
+          {inventory.store.address ?? "—"} · {scheduleText}
+        </Text>
+        <StatusBadge
+          label={inventoryStatusLabels[inventory.status] ?? inventory.status}
+          tone="info"
+          variant="light"
         />
-      </CardContent>
+      </Stack>
     </Card>
   );
 }
 
-function BoxInfo({ title, subtitle }: { title: string; subtitle: string }) {
+export function HomePage() {
+  const apiHealth = useApiHealth();
+  const databaseHealth = useDatabaseHealth();
+  const permissionsQuery = useCompanyPermissions();
+  const healthReady = databaseHealth.data?.database === "connected";
+
+  const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
+    "inventories:read",
+    "inventories:manage",
+  ]);
+
+  const upcomingInventoriesQuery = useInventories(
+    { status: "SCHEDULED", page: 1, limit: 5 },
+    healthReady && canReadInventories,
+  );
+
+  const apiStatus: HealthStatus = apiHealth.isLoading
+    ? "loading"
+    : apiHealth.isError
+      ? "error"
+      : "ok";
+
+  const databaseStatus: HealthStatus = databaseHealth.isLoading
+    ? "loading"
+    : databaseHealth.data?.database === "connected"
+      ? "ok"
+      : "error";
+
+  const upcomingSummaryStatus: HealthStatus = upcomingInventoriesQuery.isLoading
+    ? "loading"
+    : upcomingInventoriesQuery.isError
+      ? "error"
+      : "ok";
+
   return (
-    <div>
-      <Typography fontWeight={600}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary">
-        {subtitle}
-      </Typography>
-    </div>
+    <>
+      <PageHeader
+        title="Dinamic Attendance"
+        description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
+      />
+
+      <SimpleGrid cols={{ base: 1, md: 2, lg: canReadInventories ? 3 : 2 }} spacing="md" mb="xl">
+        <HealthMetricCard
+          title="Backend"
+          status={apiStatus}
+          details={
+            apiHealth.data
+              ? `Servicio ${apiHealth.data.service} operativo`
+              : apiHealth.isError
+                ? "No se pudo contactar al backend"
+                : "Verificando..."
+          }
+        />
+        <HealthMetricCard
+          title="Base de datos"
+          status={databaseStatus}
+          details={
+            databaseHealth.data?.database === "connected"
+              ? "Conexión establecida"
+              : databaseHealth.data?.message ?? "Verificando conexión..."
+          }
+        />
+        {canReadInventories ? (
+          <HealthMetricCard
+            title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
+            status={upcomingSummaryStatus}
+            details={
+              upcomingInventoriesQuery.data
+                ? `${upcomingInventoriesQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
+                : "No disponible"
+            }
+          />
+        ) : null}
+      </SimpleGrid>
+
+      {canReadInventories ? (
+        <SectionCard
+          title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
+          description={`${terminology.operation.plural} programadas a continuación.`}
+        >
+          {upcomingInventoriesQuery.isLoading ? <LoadingState height={160} /> : null}
+          {upcomingInventoriesQuery.isError ? (
+            <ErrorState
+              message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`}
+            />
+          ) : null}
+          {!upcomingInventoriesQuery.isLoading &&
+          !upcomingInventoriesQuery.isError &&
+          upcomingInventoriesQuery.data?.data.length === 0 ? (
+            <EmptyState
+              title={`No hay ${terminology.operation.plural.toLowerCase()} programadas`}
+              description={`Cuando programes ${terminology.operation.plural.toLowerCase()}, aparecerán aquí.`}
+            />
+          ) : null}
+          {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
+            <Stack gap="sm">
+              {upcomingInventoriesQuery.data.data.map((inventory) => (
+                <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
+              ))}
+            </Stack>
+          ) : null}
+        </SectionCard>
+      ) : (
+        <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
+          <Text size="sm" c="dimmed">
+            Conectá la base de datos y revisá el estado del backend para habilitar más información
+            operativa en el panel.
+          </Text>
+        </SectionCard>
+      )}
+    </>
   );
 }

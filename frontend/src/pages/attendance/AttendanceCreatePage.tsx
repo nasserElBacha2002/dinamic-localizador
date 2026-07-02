@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { AttendanceTestForm } from "../../components/attendance/AttendanceTestForm";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useCreateAttendanceRecord } from "../../hooks/useAttendance";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { AttendanceTestFormValues } from "../../schemas/attendance.schema";
 import { datetimeLocalToIso } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -37,7 +36,7 @@ export function AttendanceCreatePage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Crear registro de prueba"
         description="Herramienta temporal para validar el modelo de asistencia."
@@ -62,6 +61,6 @@ export function AttendanceCreatePage() {
         errorMessage={errorMessage}
         onSubmit={handleSubmit}
       />
-    </AdminLayout>
+    </>
   );
 }

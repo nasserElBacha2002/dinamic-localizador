@@ -5,8 +5,8 @@ import { inventoryRepository } from "../repositories/inventory.repository";
 import { isInventoryAssignable } from "../utils/inventory-status";
 
 export const inventoryAssignmentService = {
-  async assignEmployee(inventoryId: string, employeeId: string) {
-    const inventory = await inventoryRepository.findById(inventoryId);
+  async assignEmployee(companyId: string, inventoryId: string, employeeId: string) {
+    const inventory = await inventoryRepository.findById(companyId, inventoryId);
     if (!inventory) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
@@ -18,7 +18,7 @@ export const inventoryAssignmentService = {
       );
     }
 
-    const employee = await employeeRepository.findById(employeeId);
+    const employee = await employeeRepository.findById(companyId, employeeId);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
@@ -26,29 +26,33 @@ export const inventoryAssignmentService = {
       throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
     }
 
-    const exists = await inventoryEmployeeRepository.exists(inventoryId, employeeId);
+    const exists = await inventoryEmployeeRepository.exists(companyId, inventoryId, employeeId);
     if (exists) {
       throw new AppError(409, "INVENTORY_EMPLOYEE_ALREADY_ASSIGNED", "La asignación ya existe");
     }
 
-    return inventoryEmployeeRepository.assign(inventoryId, employeeId);
+    return inventoryEmployeeRepository.assign(companyId, inventoryId, employeeId);
   },
 
-  async listAssignedEmployees(inventoryId: string) {
-    const inventory = await inventoryRepository.findById(inventoryId);
+  async listAssignedEmployees(companyId: string, inventoryId: string) {
+    const inventory = await inventoryRepository.findById(companyId, inventoryId);
     if (!inventory) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
-    return inventoryEmployeeRepository.listByInventory(inventoryId);
+    return inventoryEmployeeRepository.listByInventory(companyId, inventoryId);
   },
 
-  async unassignEmployee(inventoryId: string, employeeId: string) {
-    const inventory = await inventoryRepository.findById(inventoryId);
+  async unassignEmployee(companyId: string, inventoryId: string, employeeId: string) {
+    const inventory = await inventoryRepository.findById(companyId, inventoryId);
     if (!inventory) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
     }
 
-    const hasAttendance = await inventoryEmployeeRepository.hasAttendanceRecord(inventoryId, employeeId);
+    const hasAttendance = await inventoryEmployeeRepository.hasAttendanceRecord(
+      companyId,
+      inventoryId,
+      employeeId,
+    );
     if (hasAttendance) {
       throw new AppError(
         409,
@@ -57,7 +61,7 @@ export const inventoryAssignmentService = {
       );
     }
 
-    const removed = await inventoryEmployeeRepository.remove(inventoryId, employeeId);
+    const removed = await inventoryEmployeeRepository.remove(companyId, inventoryId, employeeId);
     if (!removed) {
       throw new AppError(404, "INVENTORY_EMPLOYEE_NOT_ASSIGNED", "La asignación no existe");
     }

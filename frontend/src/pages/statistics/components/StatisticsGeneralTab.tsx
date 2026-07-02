@@ -1,5 +1,5 @@
-import { Grid, Stack } from "@mui/material";
-import { ErrorState } from "../../../components/common/ErrorState";
+import { Grid, Group, Stack } from "@mantine/core";
+import { ErrorState } from "../../../design-system";
 import { ChartCard } from "../../../components/statistics/ChartCard";
 import { ExportActionButtons } from "../../../components/statistics/ExportActionButtons";
 import { StatisticsKpiCards } from "../../../components/statistics/StatisticsKpiCards";
@@ -57,8 +57,8 @@ export function StatisticsGeneralTab({
   topLocationsByAttendance,
 }: StatisticsGeneralTabProps) {
   return (
-    <Stack spacing={3}>
-      <Stack direction="row" justifyContent="flex-end">
+    <Stack gap="lg">
+      <Group justify="flex-end">
         <ExportActionButtons
           baseName="attendance-summary"
           headers={summaryHeaders}
@@ -68,7 +68,7 @@ export function StatisticsGeneralTab({
           sheetName="Resumen"
           disabled={exportsDisabled}
         />
-      </Stack>
+      </Group>
 
       {summaryQuery.isError ? (
         <ErrorState message={getApiErrorMessage(summaryQuery.error)} />
@@ -76,8 +76,8 @@ export function StatisticsGeneralTab({
         <StatisticsKpiCards summary={summary} isLoading={summaryQuery.isPending} />
       )}
 
-      <Grid container spacing={2}>
-        <Grid size={{ xs: 12, lg: 8 }}>
+      <Grid gap="md">
+        <Grid.Col span={{ base: 12, lg: 8 }}>
           <ChartCard
             title="Asistencia en el tiempo"
             isLoading={timelineQuery.isPending}
@@ -99,8 +99,8 @@ export function StatisticsGeneralTab({
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
-        </Grid>
-        <Grid size={{ xs: 12, lg: 4 }}>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, lg: 4 }}>
           <ChartCard
             title="Distribución por estado"
             isLoading={distributionQuery.isPending}
@@ -113,8 +113,8 @@ export function StatisticsGeneralTab({
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
             title="% asistencia por inventario (top 10)"
             isLoading={inventoryExportQuery.isPending}
@@ -138,8 +138,8 @@ export function StatisticsGeneralTab({
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
             title="Top empleados por % asistencia"
             isLoading={employeeExportQuery.isPending}
@@ -159,8 +159,8 @@ export function StatisticsGeneralTab({
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
             title="Empleados con más registros tarde"
             isLoading={employeeExportQuery.isPending}
@@ -177,8 +177,8 @@ export function StatisticsGeneralTab({
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
+        </Grid.Col>
+        <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
             title="Rendimiento por tienda / ubicación"
             isLoading={locationExportQuery.isPending}
@@ -199,7 +199,7 @@ export function StatisticsGeneralTab({
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
-        </Grid>
+        </Grid.Col>
       </Grid>
     </Stack>
   );

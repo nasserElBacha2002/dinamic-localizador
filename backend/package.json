@@ -21,7 +21,7 @@
     "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
-    "test": "tsx --test src/**/*.test.ts"
+    "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -1,6 +1,6 @@
 # Frontend Redesign — Technical Audit
 
-**Status:** `READY_TO_IMPLEMENT` (PR 1–2 complete; PR 3+ components and page migration)  
+**Status:** `READY_TO_IMPLEMENT` (PR 1–3 complete; PR 4+ DataTable and page migration)  
 **Stage audited:** Frontend redesign integration (pre-implementation audit)  
 **Date:** 2026-07-01 (updated 2026-07-01 — Mantine decision)  
 **Scope:** Read-only analysis of `frontend/` — architecture, multi-company, permissions, React Query, components, styling, page impact, migration plan.  
@@ -24,7 +24,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 - **MUI 7 is the current page UI library; Mantine 9 is installed** as the redesign foundation. Adoption follows a **dual-library strangler pattern** documented in [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). **PR 1 (foundation) and PR 2 (route-level AppLayout shell) are implemented.** MUI remains on unmigrated page content.
 - **Multi-company foundations exist** (active company in context + localStorage, scoped APIs, `queryClient.clear()` on switch). Gaps remain around **route validation after company switch** and **avoiding stale UI during reload**.
 - **Module fetching was recently stabilized** (`company-modules-query.ts`: 10 min `staleTime`, company-scoped key). Repeated `useCompanyModules()` calls share cache; network refetch on every navigation is **no longer the primary risk**, but **duplicate hook subscriptions** in layout + guards + pages still add coordination complexity.
-- **Layout is per-page, not route-level.** Every protected page wraps itself in `<AdminLayout>`. A new `AppLayout` should become a **route layout** to avoid drift.
+- **Layout uses route-level Mantine `AppLayout`.** Protected routes render inside `design-system/layout/AppLayout`; legacy `AdminLayout` is deprecated and unused.
 - **Table/filter patterns are inconsistent.** `DataTable` exists but is used in only 2 places; most list pages hand-roll MUI `Table` + `PaginationControls`.
 - **No redesign specification file** was found in the repository (`docs/` has operational/permissions docs only). Visual targets, Mantine component mapping, and token definitions must be confirmed before Phase 1.
 
@@ -41,7 +41,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Design system (Mantine 9) | PR 1–2 done | Foundation + route-level AppShell; see adoption plan PR 3+ |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended next work:** PR 3 base Mantine components → PR 4 DataTable/FilterBar → PR 5+ page migration. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
+**Recommended next work:** PR 4 Mantine DataTable/FilterBar → PR 5+ page migration. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
 
 ---
 
@@ -645,8 +645,8 @@ Every redesign PR must pass:
 | Tables/filters/forms | PARTIAL | Primitives exist; inconsistent adoption |
 | Business flows intact | OK | All major pages implemented |
 | Redesign spec available | GAP | Not in repository |
-| Mantine design system | PR 1–2 done | Installed; route-level AppShell; MUI on page content |
-| AppLayout route shell | GAP | `AdminLayout` per-page |
+| Mantine design system | PR 1–3 done | Shell + UI-only base components; MUI on page content |
+| AppLayout route shell | OK | Mantine `AppLayout` route-level; `AdminLayout` deprecated/unused |
 | Company switch route safety | RISK | Navigates `/` only from selector |
 | No stale company data | RISK | Cache clear OK; no switching overlay |
 | Responsive tables | GAP | Scroll only; no card fallback |

@@ -15,7 +15,7 @@ Mantine is **mandatory** for the Dinamic Attendance frontend redesign. The curre
 
 1. **PR 1** — ✅ **Done** — Install Mantine 9, `MantineProvider`, CSS imports, `src/design-system/theme/` tokens (no page changes).
 2. **PR 2** — ✅ **Done** — Mantine `AppLayout` (AppShell) at **route level**; legacy MUI pages render inside `<Outlet />`.
-3. **PR 3+** — Mantine UI-only primitives, then progressive page migration.
+3. **PR 3+** — ✅ **Done (PR 3)** — Mantine UI-only primitives; progressive page migration from PR 5+.
 
 **What stays legacy for now:** All page content, domain forms, tables, bot simulator, statistics, import flow, Google Maps picker, and all MUI `components/common/*` until explicitly migrated.
 
@@ -644,15 +644,24 @@ function ProtectedLayout() {
 
 ---
 
-### PR 3 — Mantine base components
+### PR 3 — Mantine base components ✅ IMPLEMENTED
 
 **Goal:** UI-only primitives; no complex page migration.
 
-**Components:** PageHeader, MetricCard, StatusBadge, SectionCard, EmptyState, LoadingState, ErrorState, ConfirmDialog.
+**Components created:**
 
-**Optional:** Restyle `FeatureRouteGuard` forbidden states with Mantine.
+- `PageHeader`, `MetricCard`, `StatusBadge`, `SectionCard`
+- `EmptyState`, `LoadingState`, `ErrorState`, `ConfirmDialog`
 
-**Validation:** Storybook optional; unit smoke via one demo route or internal test page if needed.
+**Rules:**
+
+- `src/design-system/**` uses Mantine only — no `@mui/material` imports.
+- Design-system components are UI-only: no API clients, React Query hooks, or business logic.
+- Legacy `components/common/*` remains until pages are migrated.
+
+**Next:** PR 4 — Mantine DataTable and FilterBar.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass; no page migrations in this PR.
 
 ---
 

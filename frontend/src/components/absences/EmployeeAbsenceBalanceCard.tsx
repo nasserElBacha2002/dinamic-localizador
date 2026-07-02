@@ -1,18 +1,11 @@
-import {
-  Alert,
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
-  Typography,
-} from "@mui/material";
-import { Button as MantineButton, Group, Modal, NumberInput, Stack as MantineStack, Textarea } from "@mantine/core";
+import { Alert, Button, Group, Modal, NumberInput, SimpleGrid, Stack, Text, Textarea } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { FeedbackSnackbar } from "../common/FeedbackSnackbar";
-import { LoadingState } from "../common/LoadingState";
+import {
+  DataTable,
+  LoadingState,
+  type DataTableColumn,
+} from "../../design-system";
 import {
   useEmployeeAbsenceBalances,
   useUpsertEmployeeAbsenceBalance,
@@ -41,7 +34,6 @@ export function EmployeeAbsenceBalanceCard({
   const [totalDays, setTotalDays] = useState("");
   const [notes, setNotes] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const [successOpen, setSuccessOpen] = useState(false);
 
   const visibleBalances = useMemo(() => {
     const rows = balancesQuery.data ?? [];
@@ -69,6 +61,31 @@ export function EmployeeAbsenceBalanceCard({
     setError(null);
   };
 
+  const columns = useMemo<DataTableColumn<EmployeeAbsenceBalanceSummary>[]>(
+    () => [
+      { key: "type", header: "Tipo", getValue: (row) => row.absenceType.name },
+      { key: "assigned", header: "Asignados", getValue: (row) => row.assignedDays, align: "right" },
+      { key: "approved", header: "Aprobados", getValue: (row) => row.approvedDays, align: "right" },
+      { key: "pending", header: "Pendientes", getValue: (row) => row.pendingDays, align: "right" },
+      { key: "available", header: "Disponibles", getValue: (row) => row.availableDays, align: "right" },
+      ...(showEdit
+        ? [
+            {
+              key: "actions",
+              header: "Acción",
+              align: "right" as const,
+              render: (row: EmployeeAbsenceBalanceSummary) => (
+                <Button size="compact-xs" variant="light" onClick={() => openEdit(row)}>
+                  Editar saldo
+                </Button>
+              ),
+            },
+          ]
+        : []),
+    ],
+    [showEdit],
+  );
+
   const handleSave = async () => {
     if (!editTarget) {
       return;
@@ -88,7 +105,10 @@ export function EmployeeAbsenceBalanceCard({
         notes: notes.trim() ? notes.trim() : null,
       });
       setEditTarget(null);
-      setSuccessOpen(true);
+      notifications.show({
+        color: "green",
+        message: "Saldo actualizado correctamente.",
+      });
       onBalanceSaved?.();
     } catch (saveError) {
       setError(getApiErrorMessage(saveError, "No se pudo guardar el saldo."));
@@ -100,25 +120,25 @@ export function EmployeeAbsenceBalanceCard({
   }
 
   return (
-    <Stack spacing={2}>
+    <Stack gap="md">
       {balanceImpact ? (
         balanceImpact.deductsBalance ? (
-          <Stack spacing={1}>
+          <Stack gap="sm">
             {balanceImpact.hasSufficientBalance === false ? (
               <>
-                <Alert severity="error">
+                <Alert color="red">
                   El empleado no tiene saldo suficiente para aprobar esta solicitud.
                 </Alert>
                 {showEdit ? (
-                  <Alert severity="info">
+                  <Alert color="blue">
                     Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
                   </Alert>
                 ) : null}
               </>
             ) : null}
-            <Typography variant="body2" color="text.secondary">
+            <Text size="sm" c="dimmed">
               Año {balanceImpact.year}
-            </Typography>
+            </Text>
             <DetailBalanceGrid
               assignedDays={balanceImpact.assignedDays}
               approvedDays={balanceImpact.approvedDays}
@@ -129,52 +149,26 @@ export function EmployeeAbsenceBalanceCard({
             />
           </Stack>
         ) : (
-          <Alert severity="info">{balanceImpact.message ?? "Este tipo de ausencia no descuenta saldo."}</Alert>
+          <Alert color="blue">{balanceImpact.message ?? "Este tipo de ausencia no descuenta saldo."}</Alert>
         )
       ) : null}
 
       {hasNegativeBalance ? (
-        <Alert severity="warning">
+        <Alert color="yellow">
           El empleado tiene saldo negativo para este tipo de ausencia. Revisá los días asignados o las
           solicitudes aprobadas.
         </Alert>
       ) : null}
 
       {visibleBalances.length > 0 ? (
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Tipo</TableCell>
-              <TableCell align="right">Asignados</TableCell>
-              <TableCell align="right">Aprobados</TableCell>
-              <TableCell align="right">Pendientes</TableCell>
-              <TableCell align="right">Disponibles</TableCell>
-              {showEdit ? <TableCell align="right">Acción</TableCell> : null}
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {visibleBalances.map((row) => (
-              <TableRow key={row.absenceType.id}>
-                <TableCell>{row.absenceType.name}</TableCell>
-                <TableCell align="right">{row.assignedDays}</TableCell>
-                <TableCell align="right">{row.approvedDays}</TableCell>
-                <TableCell align="right">{row.pendingDays}</TableCell>
-                <TableCell align="right">{row.availableDays}</TableCell>
-                {showEdit ? (
-                  <TableCell align="right">
-                    <Button size="small" onClick={() => openEdit(row)}>
-                      Editar saldo
-                    </Button>
-                  </TableCell>
-                ) : null}
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+        <DataTable
+          rows={visibleBalances}
+          columns={columns}
+          getRowKey={(row) => row.absenceType.id}
+          emptyTitle={`No hay tipos de ausencia activos para mostrar en ${year}.`}
+        />
       ) : (
-        <Typography color="text.secondary">
-          No hay tipos de ausencia activos para mostrar en {year}.
-        </Typography>
+        <Text c="dimmed">No hay tipos de ausencia activos para mostrar en {year}.</Text>
       )}
 
       <Modal
@@ -183,7 +177,7 @@ export function EmployeeAbsenceBalanceCard({
         title={`Editar saldo · ${editTarget?.absenceType.name} · ${year}`}
         centered
       >
-        <MantineStack gap="md">
+        <Stack gap="md">
           <NumberInput
             label="Días asignados"
             value={totalDays === "" ? "" : Number(totalDays)}
@@ -198,24 +192,17 @@ export function EmployeeAbsenceBalanceCard({
             onChange={(event) => setNotes(event.currentTarget.value)}
             minRows={2}
           />
-          {error ? <Alert severity="error">{error}</Alert> : null}
+          {error ? <Alert color="red">{error}</Alert> : null}
           <Group justify="flex-end" gap="sm">
-            <MantineButton variant="default" onClick={() => setEditTarget(null)}>
+            <Button variant="default" onClick={() => setEditTarget(null)}>
               Cancelar
-            </MantineButton>
-            <MantineButton onClick={handleSave} loading={upsertMutation.isPending}>
+            </Button>
+            <Button onClick={() => void handleSave()} loading={upsertMutation.isPending}>
               Guardar
-            </MantineButton>
+            </Button>
           </Group>
-        </MantineStack>
+        </Stack>
       </Modal>
-
-      <FeedbackSnackbar
-        open={successOpen}
-        message="Saldo actualizado correctamente."
-        severity="success"
-        onClose={() => setSuccessOpen(false)}
-      />
     </Stack>
   );
 }
@@ -238,12 +225,12 @@ function DetailBalanceGrid(input: {
   ];
 
   return (
-    <Stack direction={{ xs: "column", sm: "row" }} spacing={2} flexWrap="wrap" useFlexGap>
+    <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="sm">
       {fields.map((field) => (
-        <Typography key={field.label} variant="body2">
+        <Text key={field.label} size="sm">
           <strong>{field.label}:</strong> {field.value ?? "—"}
-        </Typography>
+        </Text>
       ))}
-    </Stack>
+    </SimpleGrid>
   );
 }

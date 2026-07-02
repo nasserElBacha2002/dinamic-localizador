@@ -1,4 +1,4 @@
-import { Box, Grid, Typography } from "@mui/material";
+import { SimpleGrid, Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
 
 export interface DetailFieldItem {
@@ -12,19 +12,17 @@ interface DetailFieldGridProps {
 
 export function DetailFieldGrid({ fields }: DetailFieldGridProps) {
   return (
-    <Grid container spacing={2} columns={{ xs: 2, sm: 4, md: 9, lg: 9 }}>
+    <SimpleGrid cols={{ base: 1, sm: 2, lg: 3 }} spacing="md">
       {fields.map((field) => (
-        <Grid key={field.label} size={1} sx={{ minWidth: 0 }}>
-          <Box>
-            <Typography variant="caption" color="text.secondary" display="block" noWrap>
-              {field.label}
-            </Typography>
-            <Typography component="div" variant="body2" sx={{ mt: 0.25, wordBreak: "break-word" }}>
-              {field.value}
-            </Typography>
-          </Box>
-        </Grid>
+        <Stack key={field.label} gap={4}>
+          <Text size="xs" c="dimmed" fw={500}>
+            {field.label}
+          </Text>
+          <Text size="sm" component="div">
+            {field.value}
+          </Text>
+        </Stack>
       ))}
-    </Grid>
+    </SimpleGrid>
   );
 }

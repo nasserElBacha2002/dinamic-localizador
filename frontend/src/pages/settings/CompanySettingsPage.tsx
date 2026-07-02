@@ -1,9 +1,7 @@
-import { Alert, Button, Group, NumberInput, Stack, Switch, Text, TextInput, Title } from "@mantine/core";
-import { useMemo, useState } from "react";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { FormErrorAlert, PageHeader, SectionCard } from "../../design-system";
+import { Alert, Button, Group, NumberInput, Stack, Switch, Text, TextInput } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { ErrorState, FormErrorAlert, LoadingState, PageHeader, SectionCard } from "../../design-system";
 import { useCompanySettings, useUpdateCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyModules, useUpdateCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -69,140 +67,195 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
   };
 
   return (
-    <SectionCard>
-      <Stack gap="lg">
-        <div>
-          <Title order={4} mb="sm">
-            General
-          </Title>
-          <TextInput
-            label="Zona horaria operativa"
-            value={formValues.operationTimezone}
-            onChange={(event) =>
-              setFormValues((current) => ({ ...current, operationTimezone: event.currentTarget.value }))
-            }
-            disabled={disabled}
-          />
-        </div>
+    <Stack gap="md">
+      <SectionCard title="Datos generales" description="Zona horaria operativa de la empresa.">
+        <TextInput
+          label="Zona horaria operativa"
+          value={formValues.operationTimezone}
+          onChange={(event) =>
+            setFormValues((current) => ({ ...current, operationTimezone: event.currentTarget.value }))
+          }
+          disabled={disabled}
+        />
+      </SectionCard>
 
-        <div>
-          <Title order={4} mb="sm">
-            Geolocalización
-          </Title>
-          <NumberInput
-            label="Radio predeterminado de validación (m)"
-            description="Se usa para validar la ubicación enviada por WhatsApp en Llegué y Terminé."
-            value={formValues.defaultRadiusMeters === "" ? "" : Number(formValues.defaultRadiusMeters)}
-            onChange={(value) =>
-              setFormValues((current) => ({
-                ...current,
-                defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
-              }))
-            }
-            min={10}
-            max={5000}
-            disabled={disabled}
-          />
-        </div>
+      <CompanySettingsGeofenceSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
+      <CompanySettingsTolerancesSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
+      <CompanySettingsCheckoutSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
+      <CompanySettingsCorrectionsSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
 
-        <div>
-          <Title order={4} mb="sm">
-            Tolerancias horarias
-          </Title>
-          <Stack gap="md">
-            <NumberInput
-              label="Tolerancia de llegada tarde (min)"
-              description="Define cuántos minutos después del inicio se considera llegada a tiempo."
-              value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
-              onChange={(value) =>
-                setFormValues((current) => ({
-                  ...current,
-                  lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
-                }))
-              }
-              min={0}
-              max={240}
-              disabled={disabled}
-            />
-            <NumberInput
-              label="Tolerancia de salida anticipada (min)"
-              description="Define cuántos minutos antes del horario de finalización se permite terminar sin marcar salida anticipada."
-              value={
-                formValues.earlyLeaveToleranceMinutes === ""
-                  ? ""
-                  : Number(formValues.earlyLeaveToleranceMinutes)
-              }
-              onChange={(value) =>
-                setFormValues((current) => ({
-                  ...current,
-                  earlyLeaveToleranceMinutes: value === "" || value === undefined ? "" : String(value),
-                }))
-              }
-              min={0}
-              max={240}
-              disabled={disabled}
-            />
-          </Stack>
-        </div>
+      {validationErrors.length > 0 ? (
+        <Text size="sm" c="red">
+          {validationErrors.join(" ")}
+        </Text>
+      ) : null}
+      <FormErrorAlert message={submitError} />
 
-        <div>
-          <Title order={4} mb="sm">
-            Check-out
-          </Title>
-          <Switch
-            label="Requerir ubicación al finalizar"
-            description="Si está activo, el empleado deberá compartir ubicación al enviar 'Terminé'."
-            checked={formValues.requireCheckoutLocation}
-            onChange={(event) =>
-              setFormValues((current) => ({
-                ...current,
-                requireCheckoutLocation: event.currentTarget.checked,
-              }))
-            }
-            disabled={disabled}
-          />
-        </div>
+      {canUpdate ? (
+        <Group gap="sm">
+          <Button
+            onClick={() => void handleSave()}
+            disabled={!hasChanges || !isValid || updateMutation.isPending}
+            loading={updateMutation.isPending}
+          >
+            Guardar cambios
+          </Button>
+          <Button variant="default" onClick={handleReset} disabled={!hasChanges || updateMutation.isPending}>
+            Descartar cambios
+          </Button>
+        </Group>
+      ) : null}
+    </Stack>
+  );
+}
 
-        <div>
-          <Title order={4} mb="sm">
-            Correcciones manuales
-          </Title>
-          <Switch
-            label="Permitir correcciones manuales de asistencia"
-            description="Permite que usuarios autorizados registren o ajusten asistencias desde el panel."
-            checked={formValues.allowManualAttendanceCorrections}
-            onChange={(event) =>
-              setFormValues((current) => ({
-                ...current,
-                allowManualAttendanceCorrections: event.currentTarget.checked,
-              }))
-            }
-            disabled={disabled}
-          />
-        </div>
+function CompanySettingsGeofenceSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard
+      title="Asistencia y geocerca"
+      description="Parámetros usados para validar ubicación en llegada y salida."
+    >
+      <NumberInput
+        label="Radio predeterminado de validación (m)"
+        description="Se usa para validar la ubicación enviada por WhatsApp en Llegué y Terminé."
+        value={formValues.defaultRadiusMeters === "" ? "" : Number(formValues.defaultRadiusMeters)}
+        onChange={(value) =>
+          setFormValues((current) => ({
+            ...current,
+            defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
+          }))
+        }
+        min={10}
+        max={5000}
+        disabled={disabled}
+      />
+    </SectionCard>
+  );
+}
 
-        {validationErrors.length > 0 ? (
-          <Text size="sm" c="red">
-            {validationErrors.join(" ")}
-          </Text>
-        ) : null}
-        <FormErrorAlert message={submitError} />
-
-        {canUpdate ? (
-          <Group gap="sm">
-            <Button
-              onClick={() => void handleSave()}
-              disabled={!hasChanges || !isValid || updateMutation.isPending}
-              loading={updateMutation.isPending}
-            >
-              Guardar cambios
-            </Button>
-            <Button variant="default" onClick={handleReset} disabled={!hasChanges || updateMutation.isPending}>
-              Descartar cambios
-            </Button>
-          </Group>
-        ) : null}
+function CompanySettingsTolerancesSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard title="Tolerancias horarias">
+      <Stack gap="md">
+        <NumberInput
+          label="Tolerancia de llegada tarde (min)"
+          description="Define cuántos minutos después del inicio se considera llegada a tiempo."
+          value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
+          onChange={(value) =>
+            setFormValues((current) => ({
+              ...current,
+              lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
+            }))
+          }
+          min={0}
+          max={240}
+          disabled={disabled}
+        />
+        <NumberInput
+          label="Tolerancia de salida anticipada (min)"
+          description="Define cuántos minutos antes del horario de finalización se permite terminar sin marcar salida anticipada."
+          value={
+            formValues.earlyLeaveToleranceMinutes === ""
+              ? ""
+              : Number(formValues.earlyLeaveToleranceMinutes)
+          }
+          onChange={(value) =>
+            setFormValues((current) => ({
+              ...current,
+              earlyLeaveToleranceMinutes: value === "" || value === undefined ? "" : String(value),
+            }))
+          }
+          min={0}
+          max={240}
+          disabled={disabled}
+        />
       </Stack>
+    </SectionCard>
+  );
+}
+
+function CompanySettingsCheckoutSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard title="Check-out">
+      <Switch
+        label="Requerir ubicación al finalizar"
+        description="Si está activo, el empleado deberá compartir ubicación al enviar 'Terminé'."
+        checked={formValues.requireCheckoutLocation}
+        onChange={(event) =>
+          setFormValues((current) => ({
+            ...current,
+            requireCheckoutLocation: event.currentTarget.checked,
+          }))
+        }
+        disabled={disabled}
+      />
+    </SectionCard>
+  );
+}
+
+function CompanySettingsCorrectionsSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard title="Correcciones manuales">
+      <Switch
+        label="Permitir correcciones manuales de asistencia"
+        description="Permite que usuarios autorizados registren o ajusten asistencias desde el panel."
+        checked={formValues.allowManualAttendanceCorrections}
+        onChange={(event) =>
+          setFormValues((current) => ({
+            ...current,
+            allowManualAttendanceCorrections: event.currentTarget.checked,
+          }))
+        }
+        disabled={disabled}
+      />
     </SectionCard>
   );
 }
@@ -265,15 +318,11 @@ function CompanyModulesForm({ modules, canUpdate, onSaved }: CompanyModulesFormP
   };
 
   return (
-    <SectionCard>
-      <Stack gap="lg" mt="md">
-        <div>
-          <Title order={4}>Módulos habilitados</Title>
-          <Text size="sm" c="dimmed">
-            Controlá qué áreas del producto están disponibles para esta empresa.
-          </Text>
-        </div>
-
+    <SectionCard
+      title="Módulos habilitados"
+      description="Controlá qué áreas del producto están disponibles para esta empresa."
+    >
+      <Stack gap="lg">
         {ALL_MODULE_KEYS.map((moduleKey) => {
           const moduleState = draftModules.find((module) => module.moduleKey === moduleKey);
           return (
@@ -322,7 +371,10 @@ export function CompanySettingsPage() {
 
   const settingsQuery = useCompanySettings(canRead);
   const modulesQuery = useCompanyModules(canRead);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleSaved = (message: string) => {
+    notifications.show({ color: "green", message });
+  };
 
   if (permissionsQuery.isPending) {
     return <LoadingState />;
@@ -341,23 +393,21 @@ export function CompanySettingsPage() {
   }
 
   return (
-    <>
+    <Stack gap="md">
       <PageHeader
         title="Configuración de empresa"
         description="Definí los parámetros operativos que aplican a esta empresa."
       />
 
       {!canUpdate ? (
-        <Alert color="blue" mb="md">
-          No tenés permisos para editar esta configuración.
-        </Alert>
+        <Alert color="blue">No tenés permisos para editar esta configuración.</Alert>
       ) : null}
 
       <CompanySettingsForm
         key={`${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
         settings={settingsQuery.data}
         canUpdate={canUpdate}
-        onSaved={setSuccessMessage}
+        onSaved={handleSaved}
       />
 
       {modulesQuery.data ? (
@@ -365,17 +415,11 @@ export function CompanySettingsPage() {
           key={`${settingsQuery.data.companyId}-modules-${modulesQuery.dataUpdatedAt}`}
           modules={modulesQuery.data}
           canUpdate={canUpdate}
-          onSaved={setSuccessMessage}
+          onSaved={handleSaved}
         />
       ) : modulesQuery.isError ? (
         <ErrorState message={getApiErrorMessage(modulesQuery.error)} />
       ) : null}
-
-      <FeedbackSnackbar
-        open={Boolean(successMessage)}
-        message={successMessage ?? ""}
-        onClose={() => setSuccessMessage(null)}
-      />
-    </>
+    </Stack>
   );
 }

@@ -1,13 +1,11 @@
+import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Card, CardContent, Typography } from "@mui/material";
+import { Stack } from "@mantine/core";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../design-system";
+import { ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
 import { useEmployee, useUpdateEmployee } from "../../hooks/useEmployees";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import { terminology } from "../../domain/terminology";
@@ -19,28 +17,23 @@ export function EmployeeEditPage() {
   const employeeQuery = useEmployee(id);
   const updateMutation = useUpdateEmployee(id ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successOpen, setSuccessOpen] = useState(false);
 
   if (!id) {
-    return (
-      <ErrorState message={`${terminology.worker.singular} no encontrado.`} />
-    );
+    return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
   }
 
   if (employeeQuery.isLoading) {
-    return (
-      <LoadingState />
-    );
+    return <LoadingState />;
   }
 
   if (employeeQuery.isError || !employeeQuery.data) {
     return (
       <ErrorState
-          message={getApiErrorMessage(
-            employeeQuery.error,
-            `${terminology.worker.singular} no encontrado.`,
-          )}
-        />
+        message={getApiErrorMessage(
+          employeeQuery.error,
+          `${terminology.worker.singular} no encontrado.`,
+        )}
+      />
     );
   }
 
@@ -58,7 +51,10 @@ export function EmployeeEditPage() {
         employeeType: values.employeeType,
         active: values.active,
       });
-      setSuccessOpen(true);
+      notifications.show({
+        color: "green",
+        message: `${terminology.worker.singular} actualizado correctamente.`,
+      });
       navigate("/employees");
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
@@ -66,7 +62,7 @@ export function EmployeeEditPage() {
   };
 
   return (
-    <>
+    <Stack gap="md">
       <PageHeader
         title={`Editar ${terminology.worker.singular.toLowerCase()}`}
         description={employee.name}
@@ -85,27 +81,12 @@ export function EmployeeEditPage() {
         errorMessage={errorMessage}
         onSubmit={handleSubmit}
       />
-      <Card variant="outlined" sx={{ mt: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Ausencias · Saldos {currentYear}
-          </Typography>
-          <EmployeeAbsenceBalanceCard employeeId={employee.id} year={currentYear} />
-        </CardContent>
-      </Card>
-      <Card variant="outlined" sx={{ mt: 3 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            Ausencias · Historial {currentYear}
-          </Typography>
-          <EmployeeAbsenceHistoryTable employeeId={employee.id} year={currentYear} />
-        </CardContent>
-      </Card>
-      <FeedbackSnackbar
-        open={successOpen}
-        message={`${terminology.worker.singular} actualizado correctamente.`}
-        onClose={() => setSuccessOpen(false)}
-      />
-    </>
+      <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
+        <EmployeeAbsenceBalanceCard employeeId={employee.id} year={currentYear} />
+      </SectionCard>
+      <SectionCard title={`Ausencias · Historial ${currentYear}`}>
+        <EmployeeAbsenceHistoryTable employeeId={employee.id} year={currentYear} />
+      </SectionCard>
+    </Stack>
   );
 }

@@ -1,30 +1,29 @@
 {
   "date": "2026-06-23",
-  "overallScore": 76,
-  "status": "HYBRID",
-  "lastUpdated": "PR 15 — Bot simulator migration",
-  "recommendedNextPr": "PR 16 — Import Flow Migration",
+  "overallScore": 88,
+  "status": "MOSTLY_MIGRATED",
+  "lastUpdated": "PR 18 — Company settings + MUI cleanup preparation",
+  "recommendedNextPr": "PR 19 — Final MUI Cleanup / Remove MUI",
   "summary": {
     "routesAudited": 24,
-    "fullyMigrated90Plus": 7,
-    "mostlyMigrated80to89": 9,
-    "hybrid40to79": 5,
-    "legacy0to39": 3,
+    "fullyMigrated90Plus": 14,
+    "mostlyMigrated80to89": 8,
+    "hybrid40to79": 1,
+    "legacy0to39": 1,
     "infrastructureScore100": 1
   },
   "scanCounts": {
-    "muiMaterialImportLines": 23,
-    "tablePatternLines": 152,
+    "muiMaterialImportLines": 16,
+    "tablePatternLines": 37,
     "formPatternLines": 18,
     "dialogPatternLines": 11,
     "designSystemMuiImports": 0,
     "designSystemApiHooks": 0
   },
   "biggestBlockers": [
-    "Inventory import flow still full MUI",
-    "Attendance/absence detail shells and review dialogs legacy",
-    "Company settings page still MUI form controls",
-    "EmployeeAbsenceBalanceCard edit dialog and platform/company user dialogs legacy",
+    "Legacy components/common/* MUI wrappers still referenced",
+    "DateRangeCalendar MUI internals in FilterDateRangeInput",
+    "ModuleRouteGuard and FeatureRouteGuard use MUI Paper/Typography",
     "Dual ThemeProvider in main.tsx until PR 19"
   ],
   "pr13": {
@@ -41,6 +40,60 @@
       "review attendance flow",
       "cancel/edit inventory rules",
       "API payloads"
+    ]
+  },
+  "pr18": {
+    "status": "IMPLEMENTED",
+    "migrated": [
+      "frontend/src/pages/settings/CompanySettingsPage.tsx",
+      "frontend/src/pages/employees/EmployeeEditPage.tsx"
+    ],
+    "removed": ["frontend/src/layouts/AdminLayout.tsx"],
+    "preserved": [
+      "company settings API payloads",
+      "module toggles",
+      "validation rules",
+      "permission checks"
+    ],
+    "remainingMuiForPr19": [
+      "frontend/src/components/common/*",
+      "frontend/src/components/company/ModuleRouteGuard.tsx",
+      "frontend/src/components/company/FeatureRouteGuard.tsx",
+      "frontend/src/components/common/DateRangeCalendar.tsx",
+      "frontend/src/components/StatusCard.tsx",
+      "frontend/src/main.tsx"
+    ]
+  },
+  "pr17": {
+    "status": "IMPLEMENTED",
+    "migrated": [
+      "frontend/src/pages/absences/AbsenceDetailPage.tsx",
+      "frontend/src/pages/attendance/AttendanceDetailPage.tsx",
+      "frontend/src/components/absences/EmployeeAbsenceBalanceCard.tsx",
+      "frontend/src/components/common/DetailFieldGrid.tsx"
+    ],
+    "verifiedAlreadyMantine": [
+      "frontend/src/components/attendance/ReviewAttendanceDialog.tsx",
+      "frontend/src/pages/settings/CompanyUserDialog.tsx",
+      "frontend/src/pages/platform/CreatePlatformCompanyDialog.tsx",
+      "frontend/src/pages/bot-simulator/components/BotLocationDialog.tsx"
+    ],
+    "preserved": [
+      "approve/reject review flows",
+      "mutation payloads",
+      "attendance/absence review rules",
+      "balance edit validation"
+    ]
+  },
+  "pr16": {
+    "status": "IMPLEMENTED",
+    "migrated": ["frontend/src/pages/inventories/InventoryImportPage.tsx"],
+    "preserved": [
+      "CSV/XLSX parsing",
+      "template download",
+      "validation messages",
+      "confirm import payload",
+      "navigation after import"
     ]
   },
   "pr15": {
@@ -337,15 +390,15 @@
       "name": "Absence detail",
       "route": "/absences/:id",
       "files": ["frontend/src/pages/absences/AbsenceDetailPage.tsx"],
-      "score": 40,
-      "status": "Hybrid",
-      "muiRemaining": ["Card", "Grid", "Typography", "Table", "Dialog"],
-      "tables": "legacy",
-      "buttons": "hybrid",
-      "inputs": "legacy",
-      "dialogs": "legacy",
+      "score": 90,
+      "status": "Migrated",
+      "muiRemaining": [],
+      "tables": "design-system DataTable",
+      "buttons": "migrated",
+      "inputs": "Mantine review modal",
+      "dialogs": "Mantine Modal",
       "complexity": "High",
-      "recommendedPr": "PR 17 — Complex dialogs / review flows"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Attendance detail",
@@ -354,15 +407,15 @@
         "frontend/src/pages/attendance/AttendanceDetailPage.tsx",
         "frontend/src/components/attendance/ReviewAttendanceDialog.tsx"
       ],
-      "score": 38,
-      "status": "Hybrid",
-      "muiRemaining": ["Card", "Typography", "Table", "Dialog", "TextField"],
-      "tables": "legacy",
-      "buttons": "hybrid",
-      "inputs": "legacy",
-      "dialogs": "legacy",
+      "score": 90,
+      "status": "Migrated",
+      "muiRemaining": [],
+      "tables": "design-system DataTable",
+      "buttons": "migrated",
+      "inputs": "n/a",
+      "dialogs": "Mantine Modal",
       "complexity": "High",
-      "recommendedPr": "PR 17 — Complex dialogs / review flows"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Employee edit",
@@ -372,15 +425,15 @@
         "frontend/src/components/employees/EmployeeForm.tsx",
         "frontend/src/components/absences/EmployeeAbsenceBalanceCard.tsx"
       ],
-      "score": 55,
-      "status": "Hybrid",
-      "muiRemaining": ["PageHeader", "Card", "Typography", "balance table/dialog"],
-      "tables": "legacy",
-      "buttons": "hybrid",
+      "score": 88,
+      "status": "Mostly migrated",
+      "muiRemaining": [],
+      "tables": "design-system DataTable",
+      "buttons": "migrated",
       "inputs": "migrated",
-      "dialogs": "legacy",
+      "dialogs": "Mantine Modal",
       "complexity": "Medium",
-      "recommendedPr": "PR 11 — Simple forms migration"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Employee create",
@@ -486,15 +539,15 @@
       "name": "Company settings",
       "route": "/settings/company",
       "files": ["frontend/src/pages/settings/CompanySettingsPage.tsx"],
-      "score": 18,
-      "status": "Legacy",
-      "muiRemaining": ["TextField", "Switch", "Button", "Card"],
+      "score": 90,
+      "status": "Migrated",
+      "muiRemaining": [],
       "tables": "n/a",
-      "buttons": "legacy",
-      "inputs": "legacy",
+      "buttons": "Mantine",
+      "inputs": "Mantine",
       "dialogs": "n/a",
       "complexity": "Medium",
-      "recommendedPr": "PR 11 — Simple forms migration"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Statistics",
@@ -524,15 +577,15 @@
       "name": "Inventory import",
       "route": "/inventories/import",
       "files": ["frontend/src/pages/inventories/InventoryImportPage.tsx"],
-      "score": 12,
-      "status": "Legacy",
-      "muiRemaining": ["Table", "Button", "Card", "Typography"],
-      "tables": "legacy",
-      "buttons": "legacy",
-      "inputs": "legacy",
+      "score": 90,
+      "status": "Migrated",
+      "muiRemaining": [],
+      "tables": "design-system DataTable",
+      "buttons": "Mantine",
+      "inputs": "native file input",
       "dialogs": "n/a",
       "complexity": "High",
-      "recommendedPr": "PR 16 — Import flow migration"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Bot simulator",
@@ -609,52 +662,29 @@
     }
   ],
   "remainingMuiCategories": {
-    "tables": [
-      "frontend/src/components/absences/EmployeeAbsenceBalanceCard.tsx",
-      "frontend/src/pages/absences/AbsenceDetailPage.tsx",
-      "frontend/src/pages/attendance/AttendanceDetailPage.tsx",
-      "frontend/src/pages/inventories/InventoryImportPage.tsx",
+    "wrappers": [
       "frontend/src/components/common/DataTable.tsx",
-      "frontend/src/components/common/SortableTableHead.tsx",
-      "frontend/src/components/common/ClickableTableRow.tsx"
-    ],
-    "buttons": [
-      "frontend/src/components/common/FormActions.tsx",
-      "frontend/src/pages/settings/CompanySettingsPage.tsx",
-      "frontend/src/pages/LoginPage.tsx",
-      "frontend/src/pages/inventories/InventoryImportPage.tsx",
-      "frontend/src/components/company/CompanySelector.tsx"
-    ],
-    "inputs": [
-      "frontend/src/components/employees/EmployeeForm.tsx",
-      "frontend/src/components/stores/StoreForm.tsx",
-      "frontend/src/components/inventories/InventoryForm.tsx",
-      "frontend/src/components/attendance/AttendanceTestForm.tsx",
-      "frontend/src/components/stores/location-picker/StoreLocationPicker.tsx",
-      "frontend/src/components/stores/location-picker/components/ManualCoordinatesFields.tsx",
-      "frontend/src/components/stores/location-picker/components/LocationMapSection.tsx",
-      "frontend/src/components/common/DateRangeFilter.tsx",
-      "frontend/src/components/common/DateRangeCalendar.tsx",
-      "frontend/src/components/common/SearchAutocomplete.tsx",
-      "frontend/src/pages/settings/CompanySettingsPage.tsx",
-      "frontend/src/components/statistics/StatisticsFiltersBar.tsx",
-      "frontend/src/pages/LoginPage.tsx"
-    ],
-    "dialogs": [
-      "frontend/src/pages/settings/CompanyUserDialog.tsx",
-      "frontend/src/pages/platform/CreatePlatformCompanyDialog.tsx",
-      "frontend/src/components/attendance/ReviewAttendanceDialog.tsx",
-      "frontend/src/components/absences/EmployeeAbsenceBalanceCard.tsx",
-      "frontend/src/pages/absences/AbsenceDetailPage.tsx"
-    ],
-    "layout": [
       "frontend/src/components/common/PageHeader.tsx",
-      "frontend/src/pages/attendance/AttendanceDetailPage.tsx",
-      "frontend/src/pages/absences/AbsenceDetailPage.tsx",
-      "frontend/src/components/common/DetailFieldGrid.tsx",
-      "frontend/src/pages/inventories/InventoryImportPage.tsx",
+      "frontend/src/components/common/LoadingState.tsx",
+      "frontend/src/components/common/ErrorState.tsx",
+      "frontend/src/components/common/EmptyState.tsx",
+      "frontend/src/components/common/FeedbackSnackbar.tsx",
+      "frontend/src/components/common/FormActions.tsx",
+      "frontend/src/components/common/StatusChip.tsx",
+      "frontend/src/components/common/SortableTableHead.tsx",
+      "frontend/src/components/common/ClickableTableRow.tsx",
+      "frontend/src/components/common/ListFilters.tsx"
+    ],
+    "guards": [
+      "frontend/src/components/company/ModuleRouteGuard.tsx",
+      "frontend/src/components/company/FeatureRouteGuard.tsx"
+    ],
+    "filters": [
+      "frontend/src/components/common/DateRangeCalendar.tsx"
+    ],
+    "misc": [
       "frontend/src/components/StatusCard.tsx",
-      "frontend/src/layouts/AdminLayout.tsx"
+      "frontend/src/main.tsx"
     ]
   },
   "correctedRoadmap": [
@@ -665,9 +695,9 @@
     "PR 13 — Inventory detail / operational command center",
     "PR 14 — Statistics migration ✅",
     "PR 15 — Bot simulator migration ✅",
-    "PR 16 — Import flow migration",
-    "PR 17 — Complex dialogs/review flows",
-    "PR 18 — MUI cleanup",
+    "PR 16 — Import flow migration ✅",
+    "PR 17 — Complex dialogs/review flows ✅",
+    "PR 18 — Company settings + MUI cleanup prep ✅",
     "PR 19 — Remove MUI final"
   ],
   "definitionOfDone": [

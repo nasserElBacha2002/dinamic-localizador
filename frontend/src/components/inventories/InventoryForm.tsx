@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Stack } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
@@ -23,6 +23,8 @@ import { getAllowedStatusOptions, isInventoryEditable } from "../../utils/invent
 import { inventoryStatusLabels } from "../../utils/labels";
 import { StoreSearchAutocomplete } from "../stores/StoreSearchAutocomplete";
 
+export const INVENTORY_DETAIL_FORM_ID = "inventory-detail-form";
+
 interface InventoryFormProps {
   mode: "create" | "edit";
   defaultValues: InventoryFormValues;
@@ -32,6 +34,9 @@ interface InventoryFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   onSubmit: (values: InventoryFormValues) => Promise<void>;
+  embedded?: boolean;
+  formId?: string;
+  hideActions?: boolean;
 }
 
 export function InventoryForm({
@@ -43,6 +48,9 @@ export function InventoryForm({
   loading = false,
   errorMessage,
   onSubmit,
+  embedded = false,
+  formId,
+  hideActions = false,
 }: InventoryFormProps) {
   const validationSchema = useMemo(
     () => (mode === "create" ? createInventoryFormSchema : inventoryFormSchema),
@@ -68,12 +76,12 @@ export function InventoryForm({
   const storeFieldDisabled = mode === "edit" && !isInventoryEditable(currentStatus);
   const minScheduledStart = mode === "create" ? getCurrentDatetimeLocal() : undefined;
 
-  return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <FormSection>
-        <Stack gap="md">
-          <FormErrorAlert message={errorMessage} />
+  const formContent = (
+    <Stack gap="md">
+      <FormErrorAlert message={errorMessage} />
 
+      <FormGrid>
+        <FormGrid.Full>
           <Controller
             name="storeId"
             control={control}
@@ -89,44 +97,66 @@ export function InventoryForm({
               />
             )}
           />
+        </FormGrid.Full>
+      </FormGrid>
 
-          <FormGrid>
-            <RHFDateTimeInput
-              control={control}
-              name="scheduledStart"
-              label="Inicio programado"
-              description="Zona horaria: America/Argentina/Buenos_Aires"
-              required
-              min={minScheduledStart}
-            />
-            <RHFDateTimeInput control={control} name="scheduledEnd" label="Fin programado" />
-            <RHFNumberInput
-              control={control}
-              name="earlyToleranceMinutes"
-              label="Tolerancia temprana (minutos)"
-              required
-              min={0}
-              step={1}
-            />
-            <RHFNumberInput
-              control={control}
-              name="lateToleranceMinutes"
-              label="Tolerancia tardía (minutos)"
-              required
-              min={0}
-              step={1}
-            />
-          </FormGrid>
+      <Text size="xs" c="dimmed">
+        Zona horaria: America/Argentina/Buenos_Aires
+      </Text>
 
+      <FormGrid>
+        <RHFDateTimeInput
+          control={control}
+          name="scheduledStart"
+          label="Inicio programado"
+          required
+          min={minScheduledStart}
+        />
+        <RHFDateTimeInput control={control} name="scheduledEnd" label="Fin programado" />
+      </FormGrid>
+
+      <FormGrid>
+        <RHFNumberInput
+          control={control}
+          name="earlyToleranceMinutes"
+          label="Tolerancia temprana (minutos)"
+          required
+          min={0}
+          step={1}
+        />
+        <RHFNumberInput
+          control={control}
+          name="lateToleranceMinutes"
+          label="Tolerancia tardía (minutos)"
+          required
+          min={0}
+          step={1}
+        />
+      </FormGrid>
+
+      <FormGrid>
+        <FormGrid.Full>
           <RHFTextarea control={control} name="notes" label="Notas" minRows={3} />
+        </FormGrid.Full>
+      </FormGrid>
 
-          {mode === "edit" && statusOptions.length > 0 ? (
+      {mode === "edit" && statusOptions.length > 0 ? (
+        <FormGrid>
+          <FormGrid.Full>
             <RHFSelect control={control} name="status" label="Estado" data={statusOptions} />
-          ) : null}
+          </FormGrid.Full>
+        </FormGrid>
+      ) : null}
 
-          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
-        </Stack>
-      </FormSection>
+      {!hideActions ? (
+        <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+      ) : null}
+    </Stack>
+  );
+
+  return (
+    <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
+      {embedded ? formContent : <FormSection>{formContent}</FormSection>}
     </form>
   );
 }

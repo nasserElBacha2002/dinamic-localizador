@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Stack } from "@mantine/core";
+import { Alert, Box } from "@mantine/core";
 import { useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import { STORE_FORMATS } from "../../constants/store-formats";
@@ -13,7 +13,12 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { storeFormSchema, type StoreFormValues } from "../../schemas/store.schema";
-import { StoreLocationPicker } from "./location-picker/StoreLocationPicker";
+import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
+import { StoreInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
+import { useLocationPickerState } from "./location-picker/hooks/useLocationPickerState";
+import classes from "./store-form-layout.module.css";
+
+export const STORE_FORM_ID = "store-form";
 
 interface StoreFormProps {
   defaultValues: StoreFormValues;
@@ -23,6 +28,8 @@ interface StoreFormProps {
   errorMessage?: string | null;
   isEditMode?: boolean;
   onSubmit: (values: StoreFormValues) => Promise<void>;
+  formId?: string;
+  showBottomActions?: boolean;
 }
 
 export function StoreForm({
@@ -33,6 +40,8 @@ export function StoreForm({
   errorMessage,
   isEditMode = false,
   onSubmit,
+  formId = STORE_FORM_ID,
+  showBottomActions = true,
 }: StoreFormProps) {
   const { control, handleSubmit, setValue, trigger } = useForm<StoreFormValues>({
     resolver: zodResolver(storeFormSchema),
@@ -40,6 +49,20 @@ export function StoreForm({
   });
 
   const watchedValues = useWatch({ control });
+
+  const picker = useLocationPickerState({
+    isEditMode,
+    currentName: watchedValues.name,
+    latitude: watchedValues.latitude ?? defaultValues.latitude,
+    longitude: watchedValues.longitude ?? defaultValues.longitude,
+    address: watchedValues.address ?? "",
+    neighborhood: watchedValues.neighborhood ?? "",
+    locality: watchedValues.locality ?? "",
+    googlePlaceId: watchedValues.googlePlaceId ?? null,
+    allowedRadiusMeters: watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters,
+    setValue,
+    trigger,
+  });
 
   const storeFormatOptions = useMemo(
     () => [
@@ -50,41 +73,80 @@ export function StoreForm({
   );
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <FormSection>
-        <Stack gap="lg">
-          <FormErrorAlert message={errorMessage} />
+    <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
+      <FormErrorAlert message={errorMessage} />
 
-          <FormGrid>
-            <RHFTextInput control={control} name="name" label="Nombre" required />
-            <RHFSelect
-              control={control}
-              name="storeFormat"
-              label="Formato"
-              data={storeFormatOptions}
-              clearable
-            />
-          </FormGrid>
+      <Box className={classes.storeFormLayout} mt="md">
+        <Box className={classes.infoSection}>
+          <FormSection
+            title="Información general"
+            description="Datos principales de la ubicación."
+          >
+            <FormGrid>
+              <RHFTextInput
+                control={control}
+                name="name"
+                label="Nombre de la ubicación"
+                required
+              />
+              <RHFSelect
+                control={control}
+                name="storeFormat"
+                label="Formato de tienda"
+                data={storeFormatOptions}
+                clearable
+              />
+            </FormGrid>
+            <Box mt="md">
+              <RHFSwitch control={control} name="active" label="Activa" />
+            </Box>
+          </FormSection>
+        </Box>
 
-          <RHFSwitch control={control} name="active" label="Activa" />
-
-          <StoreLocationPicker
-            isEditMode={isEditMode}
-            currentName={watchedValues.name}
-            latitude={watchedValues.latitude ?? defaultValues.latitude}
-            longitude={watchedValues.longitude ?? defaultValues.longitude}
-            address={watchedValues.address ?? ""}
-            neighborhood={watchedValues.neighborhood ?? ""}
-            locality={watchedValues.locality ?? ""}
-            googlePlaceId={watchedValues.googlePlaceId ?? null}
-            allowedRadiusMeters={watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters}
-            setValue={setValue}
-            trigger={trigger}
+        <Box className={classes.mapSection}>
+          <StoreInteractiveMapPanel
+            autocompleteContainerRef={picker.autocompleteContainerRef}
+            mapContainerRef={picker.mapContainerRef}
+            mapsLoadState={picker.mapsLoadState}
+            locationState={picker.locationState}
           />
+        </Box>
 
-          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
-        </Stack>
-      </FormSection>
+        <Box className={classes.geoSection}>
+          <FormSection
+            title="Geolocalización"
+            description="Coordenadas y radio usados para validar la asistencia por WhatsApp."
+          >
+            <ManualCoordinatesFields
+              address={picker.address}
+              neighborhood={picker.neighborhood}
+              locality={picker.locality}
+              latitude={picker.latitude}
+              longitude={picker.longitude}
+              allowedRadiusMeters={picker.allowedRadiusMeters}
+              onAddressChange={(value) => picker.handleManualFieldChange({ address: value })}
+              onNeighborhoodChange={(value) =>
+                picker.handleManualFieldChange({ neighborhood: value })
+              }
+              onLocalityChange={(value) => picker.handleManualFieldChange({ locality: value })}
+              onLatitudeChange={picker.handleManualLatitudeChange}
+              onLongitudeChange={picker.handleManualLongitudeChange}
+              onRadiusChange={picker.handleRadiusChange}
+            />
+            {picker.errorMessage ? (
+              <Alert color="yellow" mt="md">
+                {picker.errorMessage}
+              </Alert>
+            ) : null}
+          </FormSection>
+        </Box>
+
+        {showBottomActions ? (
+          <Box className={classes.actionsSection} hiddenFrom="lg">
+            <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+          </Box>
+        ) : null}
+      </Box>
     </form>
   );
 }

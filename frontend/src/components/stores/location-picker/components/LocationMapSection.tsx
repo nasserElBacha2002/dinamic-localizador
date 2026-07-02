@@ -1,21 +1,19 @@
-import { Alert, Box, Stack, Typography } from "@mui/material";
-import type { ReactNode, RefObject } from "react";
+import { Alert, Badge, Box, Group, Input, Paper, Stack, Text } from "@mantine/core";
+import type { RefObject } from "react";
+import { FormSection } from "../../../../design-system";
 import type { MapsLoadState } from "../types";
 import type { LocationPickerState } from "../../../../utils/store-location";
+import classes from "./location-map-section.module.css";
 
-type LocationMapSectionProps = {
-  mapContainerRef: RefObject<HTMLDivElement | null>;
+type LocationAddressSearchProps = {
   autocompleteContainerRef: RefObject<HTMLDivElement | null>;
   mapsLoadState: MapsLoadState;
-  locationState: LocationPickerState;
 };
 
-export function LocationMapSection({
-  mapContainerRef,
+export function LocationAddressSearch({
   autocompleteContainerRef,
   mapsLoadState,
-  locationState,
-}: LocationMapSectionProps) {
+}: LocationAddressSearchProps) {
   const showGoogleMapsUi = mapsLoadState === "loading" || mapsLoadState === "ready";
 
   if (!showGoogleMapsUi) {
@@ -23,57 +21,90 @@ export function LocationMapSection({
   }
 
   return (
-    <>
-      <Box
-        ref={autocompleteContainerRef}
-        sx={{
-          width: "100%",
-          minHeight: 56,
-          "& gmp-place-autocomplete": {
-            width: "100%",
-            colorScheme: "light",
-          },
-        }}
-      />
+    <Input.Wrapper
+      label="Buscar dirección"
+      description="Seleccioná una sugerencia de Google Maps para confirmar la ubicación."
+    >
+      <Box ref={autocompleteContainerRef} className={classes.searchHost} />
       {mapsLoadState === "loading" ? (
-        <Typography variant="body2" color="text.secondary">
+        <Text size="sm" c="dimmed" mt="xs">
           Cargando Google Maps…
-        </Typography>
+        </Text>
       ) : null}
-      <Box
-        ref={mapContainerRef}
-        sx={{
-          width: "100%",
-          flex: 1,
-          minHeight: { xs: 260, lg: 380 },
-          borderRadius: 1,
-          border: "1px solid",
-          borderColor: "divider",
-          visibility: mapsLoadState === "ready" ? "visible" : "hidden",
-        }}
-      />
-      {locationState === "SEARCHING" ? (
-        <Alert severity="info">
-          Seleccioná una sugerencia de la lista para confirmar la ubicación. Escribir texto no alcanza.
-        </Alert>
-      ) : null}
-    </>
+    </Input.Wrapper>
   );
 }
 
-export function LocationPickerLayout({ children }: { children: ReactNode }) {
+type LocationMapCanvasProps = {
+  mapContainerRef: RefObject<HTMLDivElement | null>;
+  mapsLoadState: MapsLoadState;
+  locationState: LocationPickerState;
+};
+
+export function LocationMapCanvas({
+  mapContainerRef,
+  mapsLoadState,
+  locationState,
+}: LocationMapCanvasProps) {
+  const showGoogleMapsUi = mapsLoadState === "loading" || mapsLoadState === "ready";
+
+  if (!showGoogleMapsUi) {
+    return null;
+  }
+
   return (
-    <Stack spacing={2} sx={{ width: "100%" }}>
+    <Paper withBorder radius="md" p={0} style={{ display: "flex", flexDirection: "column", flex: 1 }}>
       <Box
-        sx={{
-          display: "grid",
-          gridTemplateColumns: { xs: "1fr", lg: "1.15fr 1fr" },
-          gap: 2,
-          alignItems: "stretch",
-        }}
-      >
-        {children}
-      </Box>
-    </Stack>
+        ref={mapContainerRef}
+        className={classes.mapCanvas}
+        style={{ visibility: mapsLoadState === "ready" ? "visible" : "hidden" }}
+      />
+      {locationState === "SEARCHING" ? (
+        <Alert color="blue" m="sm" mt={0}>
+          Seleccioná una sugerencia de la lista para confirmar la ubicación. Escribir texto no alcanza.
+        </Alert>
+      ) : null}
+    </Paper>
   );
+}
+
+type StoreInteractiveMapPanelProps = LocationAddressSearchProps & LocationMapCanvasProps;
+
+export function StoreInteractiveMapPanel({
+  autocompleteContainerRef,
+  mapContainerRef,
+  mapsLoadState,
+  locationState,
+}: StoreInteractiveMapPanelProps) {
+  return (
+    <FormSection
+      title="Mapa interactivo"
+      description="Arrastrá el marcador o buscá una dirección para ajustar la ubicación."
+    >
+      <Stack gap="md" className={classes.mapPanel}>
+        <LocationAddressSearch
+          autocompleteContainerRef={autocompleteContainerRef}
+          mapsLoadState={mapsLoadState}
+        />
+        <LocationMapCanvas
+          mapContainerRef={mapContainerRef}
+          mapsLoadState={mapsLoadState}
+          locationState={locationState}
+        />
+        <Group gap="xs">
+          <Badge variant="light" color="red">
+            Centro tienda
+          </Badge>
+          <Badge variant="light" color="blue">
+            Área validada
+          </Badge>
+        </Group>
+      </Stack>
+    </FormSection>
+  );
+}
+
+/** @deprecated Use StoreInteractiveMapPanel or LocationAddressSearch + LocationMapCanvas. */
+export function LocationMapSection(props: StoreInteractiveMapPanelProps) {
+  return <StoreInteractiveMapPanel {...props} />;
 }

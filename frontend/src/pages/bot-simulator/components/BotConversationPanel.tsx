@@ -1,6 +1,8 @@
-import { Badge, Box, Button, Group, Paper, Text, TextInput } from "@mantine/core";
+import { Badge, Button, Group, ScrollArea, Stack, Textarea } from "@mantine/core";
+import { EmptyState, SectionCard } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 import { BADGE_LABELS } from "../types";
+import { BotQuickActions } from "./BotQuickActions";
 import { ChatBubble } from "./ChatBubble";
 
 type BotConversationPanelProps = Pick<
@@ -28,104 +30,56 @@ export function BotConversationPanel({
   setLocationDialogOpen,
 }: BotConversationPanelProps) {
   return (
-    <Paper withBorder radius="md" p="md" style={{ minHeight: 480, display: "flex", flexDirection: "column" }}>
-      <Group gap="xs" mb="md">
-        {sessionState?.statusBadges.map((badge) => (
-          <Badge key={badge} variant="light">
-            {BADGE_LABELS[badge] ?? badge}
-          </Badge>
-        ))}
-      </Group>
-
+    <SectionCard
+      title="Conversación"
+      description="Simulá el intercambio de mensajes como en WhatsApp."
+      action={
+        sessionState ? (
+          <Group gap="xs">
+            {sessionState.statusBadges.map((badge) => (
+              <Badge key={badge} variant="light" size="sm">
+                {BADGE_LABELS[badge] ?? badge}
+              </Badge>
+            ))}
+          </Group>
+        ) : undefined
+      }
+    >
       {!sessionState ? (
-        <Box style={{ flex: 1, display: "grid", placeItems: "center" }}>
-          <Text c="dimmed">Configurá el contexto y presioná &quot;Iniciar simulación&quot; para comenzar.</Text>
-        </Box>
+        <EmptyState
+          title="Sin conversación activa"
+          description='Configurá el contexto y presioná "Iniciar simulación" para comenzar.'
+        />
       ) : (
-        <>
-          <Box
+        <Stack gap="md" style={{ minHeight: 480 }}>
+          <ScrollArea
+            type="auto"
+            offsetScrollbars
             style={{
               flex: 1,
-              overflowY: "auto",
-              maxHeight: 420,
-              marginBottom: 16,
-              paddingRight: 8,
+              minHeight: 360,
+              maxHeight: 460,
               backgroundColor: "var(--mantine-color-gray-0)",
               borderRadius: "var(--mantine-radius-sm)",
-              padding: 16,
             }}
+            p="sm"
           >
             {sessionState.messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
             ))}
             <div ref={chatEndRef} />
-          </Box>
+          </ScrollArea>
 
-          <Group gap="xs" mb="md">
-            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Llegué")}>
-              Enviar &quot;Llegué&quot;
-            </Button>
-            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Terminé")}>
-              Enviar &quot;Terminé&quot;
-            </Button>
-            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Hola")}>
-              Enviar &quot;Hola&quot;
-            </Button>
-            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Menú")}>
-              Enviar &quot;Menú&quot;
-            </Button>
-            <Button
-              size="xs"
-              variant="default"
-              disabled={isBusy || !locationPresets?.storeLocation}
-              onClick={() => {
-                if (locationPresets?.storeLocation) {
-                  void handleSendLocation(
-                    locationPresets.storeLocation.latitude,
-                    locationPresets.storeLocation.longitude,
-                  );
-                }
-              }}
-            >
-              Ubicación de tienda
-            </Button>
-            <Button
-              size="xs"
-              variant="default"
-              disabled={isBusy || !locationPresets?.outsideRadius}
-              onClick={() => {
-                if (locationPresets?.outsideRadius) {
-                  void handleSendLocation(
-                    locationPresets.outsideRadius.latitude,
-                    locationPresets.outsideRadius.longitude,
-                  );
-                }
-              }}
-            >
-              Fuera del radio
-            </Button>
-            <Button
-              size="xs"
-              variant="default"
-              disabled={isBusy || !locationPresets?.nearRadiusLimit}
-              onClick={() => {
-                if (locationPresets?.nearRadiusLimit) {
-                  void handleSendLocation(
-                    locationPresets.nearRadiusLimit.latitude,
-                    locationPresets.nearRadiusLimit.longitude,
-                  );
-                }
-              }}
-            >
-              Cerca del límite
-            </Button>
-            <Button size="xs" variant="default" disabled={isBusy} onClick={() => setLocationDialogOpen(true)}>
-              Enviar ubicación
-            </Button>
-          </Group>
+          <BotQuickActions
+            isBusy={isBusy}
+            locationPresets={locationPresets}
+            onSendText={(text) => void handleSendText(text)}
+            onSendLocation={(latitude, longitude) => void handleSendLocation(latitude, longitude)}
+            onOpenLocationDialog={() => setLocationDialogOpen(true)}
+          />
 
-          <Group gap="sm" align="flex-end">
-            <TextInput
+          <Group gap="sm" align="flex-end" wrap="nowrap">
+            <Textarea
               style={{ flex: 1 }}
               placeholder="Escribí un mensaje..."
               value={draftText}
@@ -137,13 +91,16 @@ export function BotConversationPanel({
                 }
               }}
               disabled={isBusy}
+              autosize
+              minRows={1}
+              maxRows={4}
             />
             <Button onClick={() => void handleSendText(draftText)} disabled={isBusy || !draftText.trim()}>
               Enviar
             </Button>
           </Group>
-        </>
+        </Stack>
       )}
-    </Paper>
+    </SectionCard>
   );
 }

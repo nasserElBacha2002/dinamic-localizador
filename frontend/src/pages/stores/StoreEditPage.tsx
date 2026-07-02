@@ -1,6 +1,7 @@
+import { Button, Group } from "@mantine/core";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { StoreForm } from "../../components/stores/StoreForm";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
@@ -20,25 +21,21 @@ export function StoreEditPage() {
   const [successOpen, setSuccessOpen] = useState(false);
 
   if (!id) {
-    return (
-      <ErrorState message={`${terminology.location.singular} no encontrada.`} />
-    );
+    return <ErrorState message={`${terminology.location.singular} no encontrada.`} />;
   }
 
   if (storeQuery.isLoading) {
-    return (
-      <LoadingState />
-    );
+    return <LoadingState />;
   }
 
   if (storeQuery.isError || !storeQuery.data) {
     return (
       <ErrorState
-          message={getApiErrorMessage(
-            storeQuery.error,
-            `${terminology.location.singular} no encontrada.`,
-          )}
-        />
+        message={getApiErrorMessage(
+          storeQuery.error,
+          `${terminology.location.singular} no encontrada.`,
+        )}
+      />
     );
   }
 
@@ -71,7 +68,17 @@ export function StoreEditPage() {
     <>
       <PageHeader
         title={`Editar ${terminology.location.singular.toLowerCase()}`}
-        description={store.name}
+        description="Actualizá la información y el perímetro de validación de la ubicación."
+        action={
+          <Group gap="sm" visibleFrom="lg">
+            <Button component={RouterLink} to="/stores" variant="default">
+              Cancelar
+            </Button>
+            <Button type="submit" form={STORE_FORM_ID} loading={updateMutation.isPending}>
+              Guardar cambios
+            </Button>
+          </Group>
+        }
       />
       <StoreForm
         defaultValues={{

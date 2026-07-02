@@ -1,6 +1,7 @@
+import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { StoreForm } from "../../components/stores/StoreForm";
+import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
+import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
 import { PageHeader } from "../../design-system";
 import { useCreateStore } from "../../hooks/useStores";
 import type { StoreFormValues } from "../../schemas/store.schema";
@@ -14,6 +15,7 @@ export function StoreCreatePage() {
   const createMutation = useCreateStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const defaultName = useMemo(() => searchParams.get("name")?.trim() ?? "", [searchParams]);
+  const submitLabel = `Crear ${terminology.location.singular.toLowerCase()}`;
 
   const handleSubmit = async (values: StoreFormValues) => {
     setErrorMessage(null);
@@ -40,7 +42,17 @@ export function StoreCreatePage() {
     <>
       <PageHeader
         title={`Nueva ${terminology.location.singular.toLowerCase()}`}
-        description="Definí la ubicación y el radio permitido."
+        description="Definí la ubicación y el perímetro de validación."
+        action={
+          <Group gap="sm" visibleFrom="lg">
+            <Button component={RouterLink} to="/stores" variant="default">
+              Cancelar
+            </Button>
+            <Button type="submit" form={STORE_FORM_ID} loading={createMutation.isPending}>
+              {submitLabel}
+            </Button>
+          </Group>
+        }
       />
       <StoreForm
         defaultValues={{
@@ -55,7 +67,7 @@ export function StoreCreatePage() {
           googlePlaceId: "",
           active: true,
         }}
-        submitLabel={`Crear ${terminology.location.singular.toLowerCase()}`}
+        submitLabel={submitLabel}
         cancelTo="/stores"
         loading={createMutation.isPending}
         errorMessage={errorMessage}

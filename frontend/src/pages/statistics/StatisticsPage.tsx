@@ -1,4 +1,4 @@
-import { Text, Tabs } from "@mantine/core";
+import { Stack, Tabs, Text } from "@mantine/core";
 import { PageHeader } from "../../design-system";
 import { StatisticsEmployeeTable } from "../../components/statistics/StatisticsEmployeeTable";
 import { StatisticsFiltersBar } from "../../components/statistics/StatisticsFiltersBar";
@@ -12,10 +12,10 @@ export function StatisticsPage() {
   const data = useStatisticsPageData();
 
   return (
-    <>
+    <Stack gap="md">
       <PageHeader
-        title="Estadísticas de asistencia"
-        description="Panel analítico de asistencias por empleado, inventario y tienda con filtros globales y exportación."
+        title="Estadísticas"
+        description="Panel analítico de asistencias por colaborador, operación y ubicación."
       />
 
       <StatisticsFiltersBar
@@ -141,6 +141,6 @@ export function StatisticsPage() {
           exportsDisabled={data.exportsDisabled}
         />
       ) : null}
-    </>
+    </Stack>
   );
 }

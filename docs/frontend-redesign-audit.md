@@ -41,7 +41,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Design system (Mantine 9) | PR 1–9 done | Foundation + shell + lists; **product hybrid (~46/100)** — see [audit](./frontend-mantine-migration-audit-0-100.md) |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended next work:** **PR 12 — Complex forms + maps** (store create/edit, location picker, company settings). Full scored audit: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).
+**Recommended next work:** **PR 16 — Import Flow migration**. Bot simulator migrated in PR 15. Full scored audit: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).
 
 ---
 

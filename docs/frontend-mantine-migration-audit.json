@@ -1,32 +1,125 @@
 {
   "date": "2026-06-23",
-  "overallScore": 54,
+  "overallScore": 76,
   "status": "HYBRID",
-  "lastUpdated": "PR 11 — shared filter inputs + simple forms migration",
+  "lastUpdated": "PR 15 — Bot simulator migration",
+  "recommendedNextPr": "PR 16 — Import Flow Migration",
   "summary": {
     "routesAudited": 24,
-    "fullyMigrated90Plus": 4,
-    "mostlyMigrated80to89": 2,
+    "fullyMigrated90Plus": 7,
+    "mostlyMigrated80to89": 9,
     "hybrid40to79": 5,
-    "legacy0to39": 13,
+    "legacy0to39": 3,
     "infrastructureScore100": 1
   },
   "scanCounts": {
-    "muiMaterialImportLines": 56,
-    "tablePatternLines": 317,
-    "formPatternLines": 206,
-    "dialogPatternLines": 82,
+    "muiMaterialImportLines": 23,
+    "tablePatternLines": 152,
+    "formPatternLines": 18,
+    "dialogPatternLines": 11,
     "designSystemMuiImports": 0,
     "designSystemApiHooks": 0
   },
   "biggestBlockers": [
-    "No Mantine form-control foundation; all CRUD forms still MUI",
-    "Detail pages hybrid: Mantine actions + MUI cards/tables/dialogs",
-    "Statistics, import, bot simulator, store maps untouched",
-    "Legacy shared filters/autocompletes/PageHeader on many screens",
-    "56 files still import @mui/material; dual ThemeProvider in main.tsx"
+    "Inventory import flow still full MUI",
+    "Attendance/absence detail shells and review dialogs legacy",
+    "Company settings page still MUI form controls",
+    "EmployeeAbsenceBalanceCard edit dialog and platform/company user dialogs legacy",
+    "Dual ThemeProvider in main.tsx until PR 19"
   ],
-  "recommendedNextPr": "PR 12 — Complex Forms + Maps",
+  "pr13": {
+    "status": "IMPLEMENTED",
+    "migrated": [
+      "frontend/src/pages/inventories/InventoryDetailPage.tsx",
+      "frontend/src/components/inventories/InventoryOperationalSection.tsx",
+      "frontend/src/components/inventories/InventoryDetailFieldGrid.tsx",
+      "frontend/src/components/inventories/inventory-detail-layout.module.css"
+    ],
+    "inventoryFormChanges": ["embedded mode", "hideActions", "formId for header submit"],
+    "preserved": [
+      "assign/unassign mutations",
+      "review attendance flow",
+      "cancel/edit inventory rules",
+      "API payloads"
+    ]
+  },
+  "pr15": {
+    "status": "IMPLEMENTED",
+    "migrated": [
+      "frontend/src/pages/bot-simulator/BotSimulatorPage.tsx",
+      "frontend/src/pages/bot-simulator/components/BotSessionPanel.tsx",
+      "frontend/src/pages/bot-simulator/components/BotConversationPanel.tsx",
+      "frontend/src/pages/bot-simulator/components/BotTechnicalDetails.tsx",
+      "frontend/src/pages/bot-simulator/components/BotQuickActions.tsx",
+      "frontend/src/pages/bot-simulator/components/ChatBubble.tsx",
+      "frontend/src/pages/bot-simulator/components/BotLocationDialog.tsx",
+      "frontend/src/pages/bot-simulator/bot-simulator-console.module.css"
+    ],
+    "preserved": [
+      "useBotSimulatorSession hook",
+      "bot-simulator API contracts",
+      "location presets and geofence simulation",
+      "quick actions and message sending",
+      "JSON export",
+      "datetime-local input (regional DD/MM/YYYY display)"
+    ]
+  },
+  "pr14": {
+    "status": "IMPLEMENTED",
+    "corrections": [
+      "InventoryForm FormGrid alignment + shared timezone caption",
+      "InventoryOperationalSection domain-specific status tone helpers",
+      "FormGrid.Full span support"
+    ],
+    "migrated": [
+      "frontend/src/pages/statistics/StatisticsPage.tsx",
+      "frontend/src/pages/statistics/components/StatisticsGeneralTab.tsx",
+      "frontend/src/components/statistics/StatisticsFiltersBar.tsx",
+      "frontend/src/components/statistics/StatisticsEmployeeTable.tsx",
+      "frontend/src/components/statistics/StatisticsInventoryTable.tsx",
+      "frontend/src/components/statistics/StatisticsLocationTable.tsx",
+      "frontend/src/components/statistics/StatisticsKpiCards.tsx",
+      "frontend/src/components/statistics/ChartCard.tsx",
+      "frontend/src/components/statistics/ExportActionButtons.tsx"
+    ],
+    "preserved": [
+      "statistics APIs and query params",
+      "ECharts data mapping",
+      "CSV/Excel export behavior",
+      "filters, tabs, pagination, sorting"
+    ]
+  },
+  "pr12": {
+    "status": "IMPLEMENTED",
+    "migrated": [
+      "frontend/src/pages/stores/StoreCreatePage.tsx",
+      "frontend/src/pages/stores/StoreEditPage.tsx",
+      "frontend/src/components/stores/StoreForm.tsx",
+      "frontend/src/components/stores/location-picker/StoreLocationPicker.tsx",
+      "frontend/src/components/stores/location-picker/components/ManualCoordinatesFields.tsx",
+      "frontend/src/components/stores/location-picker/components/LocationMapSection.tsx"
+    ],
+    "newFiles": [
+      "frontend/src/components/stores/location-picker/components/location-map-section.module.css"
+    ],
+    "preserved": [
+      "useLocationPickerState hook",
+      "Google Maps loader / Places / geocoding",
+      "store.schema.ts",
+      "useStores hooks and API payloads",
+      "default radius 150m",
+      "navigation after create/edit"
+    ],
+    "targetGrepMuiImports": 0
+  },
+  "pr12Correction": {
+    "status": "IMPLEMENTED",
+    "summary": "Store form left/right layout: info + geolocation left, interactive map right; mobile stack",
+    "newFiles": [
+      "frontend/src/components/stores/store-form-layout.module.css",
+      "frontend/src/components/stores/location-picker/useStoreLocationPicker.ts"
+    ]
+  },
   "pr11": {
     "status": "IMPLEMENTED_PARTIAL",
     "filterComponentsCreated": [
@@ -230,15 +323,15 @@
         "frontend/src/components/inventories/InventoryOperationalSection.tsx",
         "frontend/src/components/inventories/InventoryForm.tsx"
       ],
-      "score": 44,
-      "status": "Hybrid",
-      "muiRemaining": ["Card", "Typography", "Table", "TextField", "PageHeader"],
-      "tables": "legacy",
-      "buttons": "hybrid",
-      "inputs": "legacy",
+      "score": 88,
+      "status": "Mostly migrated",
+      "muiRemaining": [],
+      "tables": "migrated",
+      "buttons": "migrated",
+      "inputs": "migrated",
       "dialogs": "partial",
       "complexity": "Critical",
-      "recommendedPr": "PR 13 — Inventory detail / operational command center"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Absence detail",
@@ -252,7 +345,7 @@
       "inputs": "legacy",
       "dialogs": "legacy",
       "complexity": "High",
-      "recommendedPr": "PR 13 — Inventory detail / operational command center"
+      "recommendedPr": "PR 17 — Complex dialogs / review flows"
     },
     {
       "name": "Attendance detail",
@@ -269,7 +362,7 @@
       "inputs": "legacy",
       "dialogs": "legacy",
       "complexity": "High",
-      "recommendedPr": "PR 13 — Inventory detail / operational command center"
+      "recommendedPr": "PR 17 — Complex dialogs / review flows"
     },
     {
       "name": "Employee edit",
@@ -313,15 +406,15 @@
         "frontend/src/pages/stores/StoreCreatePage.tsx",
         "frontend/src/components/stores/StoreForm.tsx"
       ],
-      "score": 22,
-      "status": "Legacy",
-      "muiRemaining": ["TextField", "FormControl", "PageHeader", "FormActions"],
+      "score": 92,
+      "status": "Mostly migrated",
+      "muiRemaining": [],
       "tables": "n/a",
-      "buttons": "legacy",
-      "inputs": "legacy",
+      "buttons": "migrated",
+      "inputs": "migrated two-column layout",
       "dialogs": "n/a",
       "complexity": "High",
-      "recommendedPr": "PR 12 — Complex forms + maps"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Store edit",
@@ -331,15 +424,15 @@
         "frontend/src/components/stores/StoreForm.tsx",
         "frontend/src/components/stores/location-picker/StoreLocationPicker.tsx"
       ],
-      "score": 22,
-      "status": "Legacy",
-      "muiRemaining": ["TextField", "FormControl", "Map layout", "PageHeader"],
+      "score": 92,
+      "status": "Mostly migrated",
+      "muiRemaining": [],
       "tables": "n/a",
-      "buttons": "legacy",
-      "inputs": "legacy",
+      "buttons": "migrated",
+      "inputs": "migrated",
       "dialogs": "n/a",
-      "complexity": "Critical",
-      "recommendedPr": "PR 12 — Complex forms + maps"
+      "complexity": "High",
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Inventory create",
@@ -408,20 +501,24 @@
       "route": "/statistics",
       "files": [
         "frontend/src/pages/statistics/StatisticsPage.tsx",
+        "frontend/src/pages/statistics/components/StatisticsGeneralTab.tsx",
         "frontend/src/components/statistics/StatisticsFiltersBar.tsx",
         "frontend/src/components/statistics/StatisticsEmployeeTable.tsx",
         "frontend/src/components/statistics/StatisticsInventoryTable.tsx",
-        "frontend/src/components/statistics/StatisticsLocationTable.tsx"
+        "frontend/src/components/statistics/StatisticsLocationTable.tsx",
+        "frontend/src/components/statistics/StatisticsKpiCards.tsx",
+        "frontend/src/components/statistics/ChartCard.tsx",
+        "frontend/src/components/statistics/ExportActionButtons.tsx"
       ],
-      "score": 14,
-      "status": "Legacy",
-      "muiRemaining": ["Tabs", "Table", "TextField", "FormControl", "Card", "PageHeader"],
-      "tables": "legacy",
-      "buttons": "hybrid",
-      "inputs": "legacy",
+      "score": 90,
+      "status": "Migrated",
+      "muiRemaining": [],
+      "tables": "migrated",
+      "buttons": "migrated",
+      "inputs": "migrated",
       "dialogs": "n/a",
       "complexity": "Critical",
-      "recommendedPr": "PR 14 — Statistics migration"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Inventory import",
@@ -442,17 +539,22 @@
       "route": "/bot-simulator",
       "files": [
         "frontend/src/pages/bot-simulator/BotSimulatorPage.tsx",
+        "frontend/src/pages/bot-simulator/components/BotSessionPanel.tsx",
+        "frontend/src/pages/bot-simulator/components/BotConversationPanel.tsx",
+        "frontend/src/pages/bot-simulator/components/BotTechnicalDetails.tsx",
+        "frontend/src/pages/bot-simulator/components/BotQuickActions.tsx",
+        "frontend/src/pages/bot-simulator/components/ChatBubble.tsx",
         "frontend/src/pages/bot-simulator/components/BotLocationDialog.tsx"
       ],
-      "score": 10,
-      "status": "Legacy",
-      "muiRemaining": ["Card", "Grid", "TextField", "Dialog", "Button"],
+      "score": 92,
+      "status": "Migrated",
+      "muiRemaining": [],
       "tables": "n/a",
-      "buttons": "legacy",
-      "inputs": "legacy",
-      "dialogs": "legacy",
+      "buttons": "migrated",
+      "inputs": "migrated",
+      "dialogs": "migrated",
       "complexity": "Critical",
-      "recommendedPr": "PR 15 — Bot simulator migration"
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "Login",
@@ -473,9 +575,9 @@
     {
       "name": "InventoryOperationalSection",
       "files": ["frontend/src/components/inventories/InventoryOperationalSection.tsx"],
-      "score": 55,
-      "status": "Hybrid",
-      "recommendedPr": "PR 13 — Inventory detail / operational command center"
+      "score": 88,
+      "status": "Mostly migrated",
+      "recommendedPr": "Cleanup"
     },
     {
       "name": "EmployeeAbsenceHistoryTable",
@@ -501,20 +603,16 @@
     {
       "name": "ExportActionButtons",
       "files": ["frontend/src/components/statistics/ExportActionButtons.tsx"],
-      "score": 70,
-      "status": "Hybrid",
-      "recommendedPr": "PR 14 — Statistics migration"
+      "score": 95,
+      "status": "Migrated",
+      "recommendedPr": "Cleanup"
     }
   ],
   "remainingMuiCategories": {
     "tables": [
-      "frontend/src/components/inventories/InventoryOperationalSection.tsx",
       "frontend/src/components/absences/EmployeeAbsenceBalanceCard.tsx",
       "frontend/src/pages/absences/AbsenceDetailPage.tsx",
       "frontend/src/pages/attendance/AttendanceDetailPage.tsx",
-      "frontend/src/components/statistics/StatisticsEmployeeTable.tsx",
-      "frontend/src/components/statistics/StatisticsInventoryTable.tsx",
-      "frontend/src/components/statistics/StatisticsLocationTable.tsx",
       "frontend/src/pages/inventories/InventoryImportPage.tsx",
       "frontend/src/components/common/DataTable.tsx",
       "frontend/src/components/common/SortableTableHead.tsx",
@@ -524,7 +622,6 @@
       "frontend/src/components/common/FormActions.tsx",
       "frontend/src/pages/settings/CompanySettingsPage.tsx",
       "frontend/src/pages/LoginPage.tsx",
-      "frontend/src/pages/bot-simulator/BotSimulatorPage.tsx",
       "frontend/src/pages/inventories/InventoryImportPage.tsx",
       "frontend/src/components/company/CompanySelector.tsx"
     ],
@@ -548,18 +645,13 @@
       "frontend/src/pages/platform/CreatePlatformCompanyDialog.tsx",
       "frontend/src/components/attendance/ReviewAttendanceDialog.tsx",
       "frontend/src/components/absences/EmployeeAbsenceBalanceCard.tsx",
-      "frontend/src/pages/bot-simulator/components/BotLocationDialog.tsx",
       "frontend/src/pages/absences/AbsenceDetailPage.tsx"
     ],
     "layout": [
       "frontend/src/components/common/PageHeader.tsx",
-      "frontend/src/pages/inventories/InventoryDetailPage.tsx",
       "frontend/src/pages/attendance/AttendanceDetailPage.tsx",
       "frontend/src/pages/absences/AbsenceDetailPage.tsx",
-      "frontend/src/pages/statistics/StatisticsPage.tsx",
-      "frontend/src/components/statistics/ChartCard.tsx",
       "frontend/src/components/common/DetailFieldGrid.tsx",
-      "frontend/src/pages/bot-simulator/BotSimulatorPage.tsx",
       "frontend/src/pages/inventories/InventoryImportPage.tsx",
       "frontend/src/components/StatusCard.tsx",
       "frontend/src/layouts/AdminLayout.tsx"
@@ -571,8 +663,8 @@
     "PR 11 — Simple forms migration",
     "PR 12 — Complex forms + maps",
     "PR 13 — Inventory detail / operational command center",
-    "PR 14 — Statistics migration",
-    "PR 15 — Bot simulator migration",
+    "PR 14 — Statistics migration ✅",
+    "PR 15 — Bot simulator migration ✅",
     "PR 16 — Import flow migration",
     "PR 17 — Complex dialogs/review flows",
     "PR 18 — MUI cleanup",

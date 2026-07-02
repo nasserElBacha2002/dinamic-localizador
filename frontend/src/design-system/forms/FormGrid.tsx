@@ -1,4 +1,4 @@
-import { SimpleGrid } from "@mantine/core";
+import { Box, SimpleGrid } from "@mantine/core";
 import type { ReactNode } from "react";
 
 export interface FormGridProps {
@@ -11,6 +11,10 @@ export interface FormGridProps {
   };
 }
 
+function FormGridFull({ children }: { children: ReactNode }) {
+  return <Box style={{ gridColumn: "1 / -1" }}>{children}</Box>;
+}
+
 export function FormGrid({
   children,
   columns = { base: 1, md: 2 },
@@ -21,3 +25,5 @@ export function FormGrid({
     </SimpleGrid>
   );
 }
+
+FormGrid.Full = FormGridFull;

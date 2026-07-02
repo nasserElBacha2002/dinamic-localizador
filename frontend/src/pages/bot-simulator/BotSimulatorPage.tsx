@@ -1,5 +1,6 @@
-import { Alert, Button, Grid, Group } from "@mantine/core";
+import { Alert, Button, Group, Stack } from "@mantine/core";
 import { PageHeader } from "../../design-system";
+import classes from "./bot-simulator-console.module.css";
 import { BotConversationPanel } from "./components/BotConversationPanel";
 import { BotLocationDialog } from "./components/BotLocationDialog";
 import { BotSessionPanel } from "./components/BotSessionPanel";
@@ -10,10 +11,10 @@ export function BotSimulatorPage() {
   const session = useBotSimulatorSession();
 
   return (
-    <>
+    <Stack gap="md">
       <PageHeader
         title="Simulador de Bot"
-        description="Probá flujos conversacionales del bot de WhatsApp sin depender del webhook de Twilio."
+        description="Probá flujos de WhatsApp sin enviar mensajes reales."
         action={
           session.sessionState ? (
             <Group gap="sm">
@@ -32,23 +33,24 @@ export function BotSimulatorPage() {
       />
 
       {session.actionError ? (
-        <Alert color="red" mb="md">
-          {session.actionError}
-        </Alert>
+        <Alert color="red">{session.actionError}</Alert>
       ) : null}
 
-      <Grid gap="lg">
-        <Grid.Col span={{ base: 12, lg: 4 }}>
+      <div className={classes.console}>
+        <div>
           <BotSessionPanel {...session} />
-        </Grid.Col>
-        <Grid.Col span={{ base: 12, lg: 8 }}>
-          <BotConversationPanel {...session} />
-        </Grid.Col>
-      </Grid>
+        </div>
 
-      {session.sessionState ? <BotTechnicalDetails entries={session.technicalEntries} /> : null}
+        <div>
+          <BotConversationPanel {...session} />
+        </div>
+
+        <div className={classes.technical}>
+          <BotTechnicalDetails entries={session.technicalEntries} />
+        </div>
+      </div>
 
       <BotLocationDialog {...session} />
-    </>
+    </Stack>
   );
 }

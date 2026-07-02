@@ -1,12 +1,13 @@
-import { Box, Paper, Skeleton, Stack, Typography } from "@mui/material";
+import { Box, Group, Skeleton } from "@mantine/core";
 import ReactECharts from "echarts-for-react";
 import type { EChartsOption } from "echarts";
 import type { ReactNode } from "react";
-import { EmptyState } from "../common/EmptyState";
+import { EmptyState, SectionCard } from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
 
 interface ChartCardProps {
   title: string;
+  description?: ReactNode;
   height?: number;
   isLoading?: boolean;
   isEmpty?: boolean;
@@ -23,6 +24,7 @@ interface ChartCardProps {
 
 export function ChartCard({
   title,
+  description,
   height = 360,
   isLoading,
   isEmpty,
@@ -36,37 +38,41 @@ export function ChartCard({
   actions,
   exportsDisabled = false,
 }: ChartCardProps) {
-  return (
-    <Paper sx={{ p: 2, height: "100%" }}>
-      <Stack direction="row" justifyContent="space-between" alignItems="flex-start" spacing={1} sx={{ mb: 1 }}>
-        <Typography variant="subtitle1" fontWeight={600}>
-          {title}
-        </Typography>
-        <Stack direction="row" spacing={1} alignItems="center">
-          {actions}
-          {exportHeaders && exportRows && exportBaseName ? (
-            <ExportActionButtons
-              baseName={exportBaseName}
-              headers={exportHeaders}
-              rows={exportRows}
-              dateFrom={dateFrom}
-              dateTo={dateTo}
-              size="small"
-              disabled={exportsDisabled}
-            />
-          ) : null}
-        </Stack>
-      </Stack>
+  const exportActions =
+    exportHeaders && exportRows && exportBaseName ? (
+      <ExportActionButtons
+        baseName={exportBaseName}
+        headers={exportHeaders}
+        rows={exportRows}
+        dateFrom={dateFrom}
+        dateTo={dateTo}
+        size="small"
+        disabled={exportsDisabled}
+      />
+    ) : null;
 
+  return (
+    <SectionCard
+      title={title}
+      description={description}
+      action={
+        actions || exportActions ? (
+          <Group gap="xs" wrap="nowrap">
+            {actions}
+            {exportActions}
+          </Group>
+        ) : undefined
+      }
+    >
       {isLoading ? (
-        <Skeleton variant="rounded" height={height} />
+        <Skeleton height={height} radius="md" />
       ) : isEmpty || !option ? (
-        <Box sx={{ minHeight: height, display: "flex", alignItems: "center", justifyContent: "center" }}>
+        <Box mih={height} style={{ display: "flex", alignItems: "center", justifyContent: "center" }}>
           <EmptyState title={emptyMessage} />
         </Box>
       ) : (
-        <ReactECharts option={option} style={{ height }} notMerge lazyUpdate />
+        <ReactECharts option={option} style={{ height, width: "100%" }} notMerge lazyUpdate />
       )}
-    </Paper>
+    </SectionCard>
   );
 }

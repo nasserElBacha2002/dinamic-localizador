@@ -1,9 +1,9 @@
-import { Alert, Button, Paper, Stack, Text, TextInput, Title } from "@mantine/core";
+import { Alert, Button, Stack, Text, TextInput } from "@mantine/core";
 import type { BotSimulationMode } from "../../../api/bot-simulator.api";
 import { EmployeeSearchAutocomplete } from "../../../components/employees/EmployeeSearchAutocomplete";
 import { InventorySearchAutocomplete } from "../../../components/inventories/InventorySearchAutocomplete";
 import { StoreSearchAutocomplete } from "../../../components/stores/StoreSearchAutocomplete";
-import { FilterSelect } from "../../../design-system";
+import { FilterSelect, SectionCard } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 
 type BotSessionPanelProps = Pick<
@@ -49,14 +49,10 @@ export function BotSessionPanel({
   handleStartSession,
 }: BotSessionPanelProps) {
   return (
-    <Paper withBorder radius="md" p="md">
-      <Title order={4} mb={4}>
-        Contexto de prueba
-      </Title>
-      <Text size="sm" c="dimmed" mb="md">
-        Configurá el escenario antes de iniciar la simulación.
-      </Text>
-
+    <SectionCard
+      title="Contexto de prueba"
+      description="Configurá empleado, operación, tienda y escenario antes de iniciar."
+    >
       <Stack gap="md">
         <TextInput
           label="Empresa"
@@ -113,6 +109,7 @@ export function BotSessionPanel({
           type="datetime-local"
           value={simulatedNowInput}
           onChange={(event) => setSimulatedNowInput(event.currentTarget.value)}
+          description="Formato local del navegador (DD/MM/AAAA en visualización regional)."
         />
 
         <FilterSelect
@@ -126,7 +123,7 @@ export function BotSessionPanel({
         />
 
         {!sessionId ? (
-          <Button onClick={() => void handleStartSession()} disabled={!canStart || isBusy}>
+          <Button onClick={() => void handleStartSession()} disabled={!canStart || isBusy} loading={isBusy}>
             Iniciar simulación
           </Button>
         ) : (
@@ -137,6 +134,6 @@ export function BotSessionPanel({
           </Alert>
         )}
       </Stack>
-    </Paper>
+    </SectionCard>
   );
 }

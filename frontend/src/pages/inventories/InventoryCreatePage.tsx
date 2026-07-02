@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InventoryForm } from "../../components/inventories/InventoryForm";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useCreateInventory } from "../../hooks/useInventories";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso } from "../../utils/dates";

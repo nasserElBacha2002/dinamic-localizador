@@ -1,8 +1,8 @@
 {
   "date": "2026-06-23",
-  "overallScore": 48,
+  "overallScore": 54,
   "status": "HYBRID",
-  "lastUpdated": "PR 10 — form controls foundation",
+  "lastUpdated": "PR 11 — shared filter inputs + simple forms migration",
   "summary": {
     "routesAudited": 24,
     "fullyMigrated90Plus": 4,
@@ -26,7 +26,34 @@
     "Legacy shared filters/autocompletes/PageHeader on many screens",
     "56 files still import @mui/material; dual ThemeProvider in main.tsx"
   ],
-  "recommendedNextPr": "PR 11 — Simple Forms Migration",
+  "recommendedNextPr": "PR 12 — Complex Forms + Maps",
+  "pr11": {
+    "status": "IMPLEMENTED_PARTIAL",
+    "filterComponentsCreated": [
+      "FilterSelect",
+      "FilterDateRangeInput",
+      "FilterLookupInput",
+      "FilterActions"
+    ],
+    "listPagesMigrated": [
+      "AttendanceListPage",
+      "InventoriesListPage",
+      "AbsencesListPage"
+    ],
+    "simpleFormsMigrated": [
+      "InventoryForm",
+      "AttendanceTestForm",
+      "LoginPage",
+      "CompanySelector",
+      "EmployeeEditPage (header only)"
+    ],
+    "deferred": [
+      "CompanySettingsPage",
+      "StoreForm",
+      "DateRangeCalendar internals",
+      "StatisticsFiltersBar"
+    ]
+  },
   "pr10": {
     "status": "IMPLEMENTED",
     "mantineDates": "deferred",

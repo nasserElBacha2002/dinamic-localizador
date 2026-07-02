@@ -1,9 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Alert, Box, Button, Card, CardContent, Stack, TextField, Typography } from "@mui/material";
+import { Button, Card, Center, Stack, Text, Title } from "@mantine/core";
 import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { Navigate, useLocation } from "react-router-dom";
 import { z } from "zod";
+import {
+  FormErrorAlert,
+  FormSection,
+  RHFTextInput,
+} from "../design-system";
 import { useAuth } from "../hooks/useAuth";
 import { getApiErrorMessage } from "../utils/errors";
 
@@ -19,11 +24,7 @@ export function LoginPage() {
   const location = useLocation();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  const {
-    register,
-    handleSubmit,
-    formState: { errors, isSubmitting },
-  } = useForm<LoginFormValues>({
+  const { control, handleSubmit, formState: { isSubmitting } } = useForm<LoginFormValues>({
     resolver: zodResolver(loginSchema),
     defaultValues: { email: "", password: "" },
   });
@@ -44,56 +45,42 @@ export function LoginPage() {
   };
 
   return (
-    <Box
-      sx={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        p: 2,
-        bgcolor: "background.default",
-      }}
-    >
-      <Card sx={{ width: "100%", maxWidth: 420 }}>
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography variant="h5" component="h1">
-              Dinamic Attendance
-            </Typography>
-            <Typography color="text.secondary">
+    <Center mih="100vh" p="md" bg="gray.0">
+      <Card withBorder radius="md" padding="lg" w="100%" maw={420}>
+        <Stack gap="md">
+          <div>
+            <Title order={3}>Dinamic Attendance</Title>
+            <Text c="dimmed" size="sm">
               Iniciá sesión para acceder al panel administrativo.
-            </Typography>
+            </Text>
+          </div>
 
-            {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
-
-            <form onSubmit={handleSubmit(onSubmit)} noValidate>
-              <Stack spacing={2}>
-                <TextField
+          <form onSubmit={handleSubmit(onSubmit)} noValidate>
+            <FormSection>
+              <Stack gap="md">
+                <FormErrorAlert message={errorMessage} />
+                <RHFTextInput
+                  control={control}
+                  name="email"
                   label="Email"
                   type="email"
-                  autoComplete="username"
-                  fullWidth
-                  error={Boolean(errors.email)}
-                  helperText={errors.email?.message}
-                  {...register("email")}
+                  required
                 />
-                <TextField
+                <RHFTextInput
+                  control={control}
+                  name="password"
                   label="Contraseña"
                   type="password"
-                  autoComplete="current-password"
-                  fullWidth
-                  error={Boolean(errors.password)}
-                  helperText={errors.password?.message}
-                  {...register("password")}
+                  required
                 />
-                <Button type="submit" variant="contained" disabled={isSubmitting}>
+                <Button type="submit" loading={isSubmitting}>
                   Iniciar sesión
                 </Button>
               </Stack>
-            </form>
-          </Stack>
-        </CardContent>
+            </FormSection>
+          </form>
+        </Stack>
       </Card>
-    </Box>
+    </Center>
   );
 }

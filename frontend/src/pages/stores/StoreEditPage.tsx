@@ -4,7 +4,7 @@ import { StoreForm } from "../../components/stores/StoreForm";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useStore, useUpdateStore } from "../../hooks/useStores";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";

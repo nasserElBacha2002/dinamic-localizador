@@ -1,12 +1,4 @@
-import {
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Pagination,
-  Select,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Group, Pagination, Select, Stack, Text } from "@mantine/core";
 import type { PaginationMeta } from "../../types/api";
 import { DEFAULT_PAGE_SIZE_OPTIONS } from "../../hooks/usePaginationState";
 
@@ -34,47 +26,31 @@ export function PaginationControls({
   const showPagination = meta.totalPages > 1;
 
   return (
-    <Stack
-      direction={{ xs: "column", sm: "row" }}
-      justifyContent="space-between"
-      alignItems={{ xs: "stretch", sm: "center" }}
-      spacing={2}
-      sx={{ mt: 3 }}
-    >
-      <Typography variant="body2" color="text.secondary">
+    <Stack gap="md" mt="lg">
+      <Text size="sm" c="dimmed">
         Página {meta.page} de {Math.max(meta.totalPages, 1)} · {meta.total} registros
-      </Typography>
+      </Text>
 
-      <Stack direction="row" spacing={2} alignItems="center" justifyContent="flex-end">
+      <Group justify="flex-end" gap="md" wrap="wrap">
         {showPageSizeSelector && onPageSizeChange && pageSize ? (
-          <FormControl size="small" sx={{ minWidth: 120 }}>
-            <InputLabel id="page-size-label">Por página</InputLabel>
-            <Select
-              labelId="page-size-label"
-              label="Por página"
-              value={pageSize}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-            >
-              {pageSizeOptions.map((option) => (
-                <MenuItem key={option} value={option}>
-                  {option}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
+          <Select
+            label="Por página"
+            data={pageSizeOptions.map((option) => ({ value: String(option), label: String(option) }))}
+            value={String(pageSize)}
+            onChange={(value) => onPageSizeChange(Number(value))}
+            w={120}
+          />
         ) : null}
 
         {showPagination ? (
           <Pagination
-            page={meta.page}
-            count={meta.totalPages}
-            onChange={(_event, page) => onPageChange(page)}
-            color="primary"
-            showFirstButton
-            showLastButton
+            total={meta.totalPages}
+            value={meta.page}
+            onChange={onPageChange}
+            withEdges
           />
         ) : null}
-      </Stack>
+      </Group>
     </Stack>
   );
 }

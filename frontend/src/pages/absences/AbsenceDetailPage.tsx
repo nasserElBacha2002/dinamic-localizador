@@ -2,10 +2,6 @@ import {
   Alert,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Stack,
   Table,
   TableBody,
@@ -13,10 +9,9 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
-import { Button, Group } from "@mantine/core";
+import { Button, Group, Modal, Stack as MantineStack, Textarea } from "@mantine/core";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -323,49 +318,55 @@ export function AbsenceDetailPage() {
         </Card>
       </Stack>
 
-      <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Rechazar solicitud</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
+      <Modal
+        opened={rejectOpen}
+        onClose={() => setRejectOpen(false)}
+        title="Rechazar solicitud"
+        centered
+      >
+        <MantineStack gap="md">
+          <Textarea
             label="Motivo del rechazo"
-            fullWidth
-            multiline
-            minRows={3}
             value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRejectOpen(false)}>Cancelar</Button>
-          <Button color="error" onClick={handleReject} disabled={rejectMutation.isPending}>
-            Rechazar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={needsInfoOpen} onClose={() => setNeedsInfoOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Solicitar más información</DialogTitle>
-        <DialogContent>
-          <TextField
+            onChange={(event) => setComment(event.currentTarget.value)}
+            minRows={3}
             autoFocus
-            margin="dense"
-            label="Comentario para el empleado"
-            fullWidth
-            multiline
-            minRows={3}
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setNeedsInfoOpen(false)}>Cancelar</Button>
-          <Button onClick={handleNeedsInfo} disabled={needsInfoMutation.isPending}>
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={() => setRejectOpen(false)}>
+              Cancelar
+            </Button>
+            <Button color="red" onClick={handleReject} loading={rejectMutation.isPending}>
+              Rechazar
+            </Button>
+          </Group>
+        </MantineStack>
+      </Modal>
+
+      <Modal
+        opened={needsInfoOpen}
+        onClose={() => setNeedsInfoOpen(false)}
+        title="Solicitar más información"
+        centered
+      >
+        <MantineStack gap="md">
+          <Textarea
+            label="Comentario para el empleado"
+            value={comment}
+            onChange={(event) => setComment(event.currentTarget.value)}
+            minRows={3}
+            autoFocus
+          />
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={() => setNeedsInfoOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleNeedsInfo} loading={needsInfoMutation.isPending}>
+              Guardar
+            </Button>
+          </Group>
+        </MantineStack>
+      </Modal>
 
       <FeedbackSnackbar
         open={feedback.open}

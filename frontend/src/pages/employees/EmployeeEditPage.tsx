@@ -7,7 +7,7 @@ import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useEmployee, useUpdateEmployee } from "../../hooks/useEmployees";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import { terminology } from "../../domain/terminology";

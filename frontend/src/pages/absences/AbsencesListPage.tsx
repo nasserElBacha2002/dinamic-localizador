@@ -1,11 +1,11 @@
-import { Select } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { DateRangeFilter } from "../../components/common/DateRangeFilter";
 import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
 import {
   DataTable,
   FilterBar,
+  FilterDateRangeInput,
+  FilterSelect,
   mapApiPaginationMeta,
   PageHeader,
   PaginationControls,
@@ -119,23 +119,23 @@ export function AbsencesListPage() {
 
       <FilterBar>
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Estado"
             value={status}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setStatus((value ?? "") as AbsenceRequestStatus | "");
+              setStatus(nextValue as AbsenceRequestStatus | "");
             }}
             data={statusOptions}
           />
         </FilterBar.Item>
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Tipo"
             value={absenceTypeId}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setAbsenceTypeId(value ?? "");
+              setAbsenceTypeId(nextValue);
             }}
             data={typeOptions}
           />
@@ -151,7 +151,7 @@ export function AbsencesListPage() {
           />
         </FilterBar.Item>
         <FilterBar.Item minWidth={280}>
-          <DateRangeFilter
+          <FilterDateRangeInput
             value={dateRange}
             onChange={(nextDateRange) => {
               resetPage();

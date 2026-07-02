@@ -1,4 +1,4 @@
-import { Card, CardContent, Grid, TextField, Typography } from "@mui/material";
+import { Card, NumberInput, SimpleGrid, Stack, TextInput, Title } from "@mantine/core";
 
 type ManualCoordinatesFieldsProps = {
   address: string;
@@ -30,75 +30,47 @@ export function ManualCoordinatesFields({
   onRadiusChange,
 }: ManualCoordinatesFieldsProps) {
   return (
-    <Card
-      variant="outlined"
-      sx={{
-        minWidth: 0,
-        height: "100%",
-        display: "flex",
-        flexDirection: "column",
-      }}
-    >
-      <CardContent sx={{ flex: 1 }}>
-        <Typography variant="subtitle2" gutterBottom>
-          Ubicación manual
-        </Typography>
-        <Grid container spacing={2}>
-          <Grid size={12}>
-            <TextField
-              label="Dirección"
-              fullWidth
-              value={address}
-              onChange={(event) => onAddressChange(event.target.value)}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label="Barrio"
-              fullWidth
-              value={neighborhood}
-              onChange={(event) => onNeighborhoodChange(event.target.value)}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label="Localidad"
-              fullWidth
-              value={locality}
-              onChange={(event) => onLocalityChange(event.target.value)}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label="Latitud"
-              type="number"
-              fullWidth
-              inputProps={{ step: "any" }}
-              value={latitude}
-              onChange={(event) => onLatitudeChange(Number(event.target.value))}
-            />
-          </Grid>
-          <Grid size={{ xs: 12, sm: 6 }}>
-            <TextField
-              label="Longitud"
-              type="number"
-              fullWidth
-              inputProps={{ step: "any" }}
-              value={longitude}
-              onChange={(event) => onLongitudeChange(Number(event.target.value))}
-            />
-          </Grid>
-          <Grid size={12}>
-            <TextField
-              label="Radio permitido (metros)"
-              type="number"
-              fullWidth
-              value={allowedRadiusMeters}
-              onChange={(event) => onRadiusChange(Number(event.target.value))}
-            />
-          </Grid>
-        </Grid>
-      </CardContent>
+    <Card withBorder radius="md" padding="md" h="100%">
+      <Stack gap="md">
+        <Title order={5}>Ubicación manual</Title>
+        <TextInput
+          label="Dirección"
+          value={address}
+          onChange={(event) => onAddressChange(event.currentTarget.value)}
+        />
+        <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
+          <TextInput
+            label="Barrio"
+            value={neighborhood}
+            onChange={(event) => onNeighborhoodChange(event.currentTarget.value)}
+          />
+          <TextInput
+            label="Localidad"
+            value={locality}
+            onChange={(event) => onLocalityChange(event.currentTarget.value)}
+          />
+          <NumberInput
+            label="Latitud"
+            value={latitude}
+            onChange={(value) => onLatitudeChange(typeof value === "number" ? value : latitude)}
+            allowDecimal
+            decimalScale={8}
+          />
+          <NumberInput
+            label="Longitud"
+            value={longitude}
+            onChange={(value) => onLongitudeChange(typeof value === "number" ? value : longitude)}
+            allowDecimal
+            decimalScale={8}
+          />
+        </SimpleGrid>
+        <NumberInput
+          label="Radio permitido (metros)"
+          value={allowedRadiusMeters}
+          onChange={(value) => onRadiusChange(typeof value === "number" ? value : allowedRadiusMeters)}
+          min={1}
+        />
+      </Stack>
     </Card>
   );
 }

@@ -1,21 +1,19 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Alert,
-  Box,
-  FormControl,
-  FormControlLabel,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Stack } from "@mantine/core";
+import { useMemo } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { STORE_FORMATS } from "../../constants/store-formats";
+import {
+  FormActions,
+  FormErrorAlert,
+  FormGrid,
+  FormSection,
+  RHFSelect,
+  RHFSwitch,
+  RHFTextInput,
+} from "../../design-system";
 import { storeFormSchema, type StoreFormValues } from "../../schemas/store.schema";
-import { FormActions } from "../common/FormActions";
-import { StoreLocationPicker } from "./StoreLocationPicker";
+import { StoreLocationPicker } from "./location-picker/StoreLocationPicker";
 
 interface StoreFormProps {
   defaultValues: StoreFormValues;
@@ -36,103 +34,57 @@ export function StoreForm({
   isEditMode = false,
   onSubmit,
 }: StoreFormProps) {
-  const {
-    control,
-    handleSubmit,
-    setValue,
-    trigger,
-    formState: { errors },
-  } = useForm<StoreFormValues>({
+  const { control, handleSubmit, setValue, trigger } = useForm<StoreFormValues>({
     resolver: zodResolver(storeFormSchema),
     defaultValues,
   });
 
   const watchedValues = useWatch({ control });
 
+  const storeFormatOptions = useMemo(
+    () => [
+      { value: "", label: "Sin formato" },
+      ...STORE_FORMATS.map((format) => ({ value: format, label: format })),
+    ],
+    [],
+  );
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Stack spacing={3} sx={{ width: "100%" }}>
-        {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+      <FormSection>
+        <Stack gap="lg">
+          <FormErrorAlert message={errorMessage} />
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-            gap: 2,
-            alignItems: "start",
-          }}
-        >
-          <Controller
-            name="name"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Nombre"
-                required
-                fullWidth
-                value={field.value ?? ""}
-                error={Boolean(errors.name)}
-                helperText={errors.name?.message}
-                InputLabelProps={{ shrink: Boolean(field.value) }}
-              />
-            )}
-          />
-
-          <Controller
-            name="storeFormat"
-            control={control}
-            render={({ field }) => (
-              <FormControl fullWidth error={Boolean(errors.storeFormat)}>
-                <InputLabel id="store-format-label">Formato</InputLabel>
-                <Select
-                  labelId="store-format-label"
-                  label="Formato"
-                  value={field.value ?? ""}
-                  onChange={field.onChange}
-                  inputRef={field.ref}
-                >
-                  <MenuItem value="">
-                    <em>Sin formato</em>
-                  </MenuItem>
-                  {STORE_FORMATS.map((format) => (
-                    <MenuItem key={format} value={format}>
-                      {format}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
-          />
-        </Box>
-
-        <Controller
-          name="active"
-          control={control}
-          render={({ field }) => (
-            <FormControlLabel
-              control={<Switch checked={field.value} onChange={field.onChange} inputRef={field.ref} />}
-              label="Activa"
+          <FormGrid>
+            <RHFTextInput control={control} name="name" label="Nombre" required />
+            <RHFSelect
+              control={control}
+              name="storeFormat"
+              label="Formato"
+              data={storeFormatOptions}
+              clearable
             />
-          )}
-        />
+          </FormGrid>
 
-        <StoreLocationPicker
-          isEditMode={isEditMode}
-          currentName={watchedValues.name}
-          latitude={watchedValues.latitude ?? defaultValues.latitude}
-          longitude={watchedValues.longitude ?? defaultValues.longitude}
-          address={watchedValues.address ?? ""}
-          neighborhood={watchedValues.neighborhood ?? ""}
-          locality={watchedValues.locality ?? ""}
-          googlePlaceId={watchedValues.googlePlaceId ?? null}
-          allowedRadiusMeters={watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters}
-          setValue={setValue}
-          trigger={trigger}
-        />
-      </Stack>
+          <RHFSwitch control={control} name="active" label="Activa" />
 
-      <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+          <StoreLocationPicker
+            isEditMode={isEditMode}
+            currentName={watchedValues.name}
+            latitude={watchedValues.latitude ?? defaultValues.latitude}
+            longitude={watchedValues.longitude ?? defaultValues.longitude}
+            address={watchedValues.address ?? ""}
+            neighborhood={watchedValues.neighborhood ?? ""}
+            locality={watchedValues.locality ?? ""}
+            googlePlaceId={watchedValues.googlePlaceId ?? null}
+            allowedRadiusMeters={watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters}
+            setValue={setValue}
+            trigger={trigger}
+          />
+
+          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+        </Stack>
+      </FormSection>
     </form>
   );
 }

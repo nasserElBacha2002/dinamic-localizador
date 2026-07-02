@@ -1,19 +1,15 @@
 import {
   Alert,
   Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Stack,
   Table,
   TableBody,
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
+import { Button as MantineButton, Group, Modal, NumberInput, Stack as MantineStack, Textarea } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { FeedbackSnackbar } from "../common/FeedbackSnackbar";
 import { LoadingState } from "../common/LoadingState";
@@ -181,38 +177,38 @@ export function EmployeeAbsenceBalanceCard({
         </Typography>
       )}
 
-      <Dialog open={Boolean(editTarget)} onClose={() => setEditTarget(null)} fullWidth maxWidth="sm">
-        <DialogTitle>
-          Editar saldo · {editTarget?.absenceType.name} · {year}
-        </DialogTitle>
-        <DialogContent>
-          <Stack spacing={2} sx={{ mt: 1 }}>
-            <TextField
-              label="Días asignados"
-              type="number"
-              inputProps={{ min: 0, step: 0.5 }}
-              value={totalDays}
-              onChange={(event) => setTotalDays(event.target.value)}
-              fullWidth
-            />
-            <TextField
-              label="Notas"
-              value={notes}
-              onChange={(event) => setNotes(event.target.value)}
-              fullWidth
-              multiline
-              minRows={2}
-            />
-            {error ? <Alert severity="error">{error}</Alert> : null}
-          </Stack>
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setEditTarget(null)}>Cancelar</Button>
-          <Button onClick={handleSave} disabled={upsertMutation.isPending}>
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <Modal
+        opened={Boolean(editTarget)}
+        onClose={() => setEditTarget(null)}
+        title={`Editar saldo · ${editTarget?.absenceType.name} · ${year}`}
+        centered
+      >
+        <MantineStack gap="md">
+          <NumberInput
+            label="Días asignados"
+            value={totalDays === "" ? "" : Number(totalDays)}
+            onChange={(value) => setTotalDays(value === "" || value === undefined ? "" : String(value))}
+            min={0}
+            step={0.5}
+            decimalScale={1}
+          />
+          <Textarea
+            label="Notas"
+            value={notes}
+            onChange={(event) => setNotes(event.currentTarget.value)}
+            minRows={2}
+          />
+          {error ? <Alert severity="error">{error}</Alert> : null}
+          <Group justify="flex-end" gap="sm">
+            <MantineButton variant="default" onClick={() => setEditTarget(null)}>
+              Cancelar
+            </MantineButton>
+            <MantineButton onClick={handleSave} loading={upsertMutation.isPending}>
+              Guardar
+            </MantineButton>
+          </Group>
+        </MantineStack>
+      </Modal>
 
       <FeedbackSnackbar
         open={successOpen}

@@ -1,11 +1,12 @@
-import { Button, Group, Select } from "@mantine/core";
+import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { DateRangeFilter } from "../../components/common/DateRangeFilter";
 import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
 import {
   DataTable,
   FilterBar,
+  FilterDateRangeInput,
+  FilterSelect,
   mapApiPaginationMeta,
   PageHeader,
   PaginationControls,
@@ -149,12 +150,12 @@ export function InventoriesListPage() {
 
       <FilterBar>
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Estado"
             value={status}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setStatus((value ?? "") as InventoryStatus | "");
+              setStatus(nextValue as InventoryStatus | "");
             }}
             data={statusOptions}
           />
@@ -171,7 +172,7 @@ export function InventoriesListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item minWidth={280}>
-          <DateRangeFilter
+          <FilterDateRangeInput
             value={dateRange}
             onChange={handleDateRangeChange}
             mode="future"

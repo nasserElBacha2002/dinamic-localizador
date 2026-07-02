@@ -1,7 +1,7 @@
 # Frontend Mantine Adoption Plan
 
-**Status:** `IN_PROGRESS` (PR 1–10 complete for foundation/lists/forms infra; product visually hybrid — see [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md))  
-**Date:** 2026-06-23  
+**Status:** `IN_PROGRESS` (PR 1–11 complete for foundation/lists/filters/simple forms; product visually hybrid — see [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md))  
+**Date:** 2026-06-23 · **Last updated after PR 11**  
 **Related:** [frontend-redesign-audit.md](./frontend-redesign-audit.md)  
 **Scope:** Safe, progressive introduction of Mantine as the mandatory design-system layer while MUI 7 remains operational during migration. **No full page migrations in this plan phase.**
 
@@ -833,24 +833,62 @@ function ProtectedLayout() {
 - `EmployeeCreatePage` uses design-system `PageHeader`
 - Schemas, RHF resolver, API payloads, submit handlers unchanged
 
-**Still pending (PR 11+):** `StoreForm`, `InventoryForm`, `AttendanceTestForm`, `CompanySettingsPage`, login, filters (`DateRangeFilter`, lookups), form dialogs, store maps.
+**Still pending (PR 11+):** `StoreForm`, filters, form dialogs, store maps (addressed in PR 11).
 
 **No API/hooks/schemas/routes changed.**
 
-**Next:** PR 11 — Simple forms migration.
+**Next:** PR 11 — Shared filter inputs + simple forms migration.
 
 **Validation:** `npm run build`, `npm run lint`, `npm test` pass.
 
 ---
 
-### PR 11+ — Corrected progressive migration roadmap
+### PR 11 — Shared filter inputs + simple forms migration ✅ IMPLEMENTED
+
+**Goal:** Align list filter visuals with Mantine design-system; migrate simple forms without touching complex maps/detail flows.
+
+**Filter foundation (`design-system/filters/`):**
+
+- `FilterSelect`, `FilterDateRangeInput`, `FilterLookupInput`, `FilterActions`
+- `DateRangeFilter` (common) now re-exports `FilterDateRangeInput` — preserves `DateRangeValue` / `getDateRangeQueryValue` semantics
+- `SearchAutocomplete` (common) now renders `FilterLookupInput` — lookup wrappers unchanged at API level
+
+**List pages migrated (filters only):**
+
+- `AttendanceListPage`, `InventoriesListPage`, `AbsencesListPage` — `FilterSelect` + `FilterDateRangeInput` + Mantine lookup visuals
+
+**Simple forms migrated:**
+
+- `InventoryForm` + `InventoryCreatePage` header
+- `AttendanceTestForm` + `AttendanceCreatePage` header
+- `LoginPage`
+- `CompanySelector` / `CompanySelectionPage`
+- `EmployeeEditPage` shell (`PageHeader` only; absence cards remain legacy MUI)
+
+**Deferred:**
+
+- `CompanySettingsPage` (large local-state form — PR 12+)
+- `StoreForm` / maps (PR 12)
+- `DateRangeCalendar` custom panel internals still MUI (wrapped inside Mantine popover)
+- `StatisticsFiltersBar`, form dialogs, detail pages, bot/import
+
+**`@mantine/dates`:** Still deferred. Custom date range uses native calendar wrapper + existing `DateRangeCalendar`.
+
+**No API/hooks/schemas/routes changed.**
+
+**Next:** PR 12 — Complex forms + maps.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
+
+---
+
+### PR 12+ — Corrected progressive migration roadmap
 
 One module area per PR. **Do not duplicate PR numbers** (obsolete entries like “PR 9 Attendance list” removed — those lists migrated in PR 7).
 
 | PR | Title |
 |----|-------|
-| PR 11 | Simple forms migration (inventory create, attendance create, settings, login; employee edit page shell) |
-| PR 12 | Complex forms + maps (store create/edit, location picker) |
+| PR 12 | Complex forms + maps (store create/edit, location picker) + `CompanySettingsPage` |
 | PR 13 | Inventory detail / operational command center (+ attendance/absence detail shells) |
 | PR 14 | Statistics migration |
 | PR 15 | Bot simulator migration |

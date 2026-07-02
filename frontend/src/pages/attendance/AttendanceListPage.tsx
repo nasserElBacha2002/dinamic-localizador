@@ -1,13 +1,14 @@
-import { Button, Group, Select, Text } from "@mantine/core";
+import { Button, Group, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { DateRangeFilter } from "../../components/common/DateRangeFilter";
 import { EmployeeLookupAutocomplete } from "../../components/lookups/EmployeeLookupAutocomplete";
 import { InventoryLookupAutocomplete } from "../../components/lookups/InventoryLookupAutocomplete";
 import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
 import {
   DataTable,
   FilterBar,
+  FilterDateRangeInput,
+  FilterSelect,
   mapApiPaginationMeta,
   PageHeader,
   PaginationControls,
@@ -215,12 +216,12 @@ export function AttendanceListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Validación"
             value={validationStatus}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setValidationStatus((value ?? "") as ValidationStatus | "");
+              setValidationStatus(nextValue as ValidationStatus | "");
             }}
             data={[
               { value: "", label: "Todas" },
@@ -230,12 +231,12 @@ export function AttendanceListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Ubicación"
             value={locationStatus}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setLocationStatus((value ?? "") as LocationStatus | "");
+              setLocationStatus(nextValue as LocationStatus | "");
             }}
             data={[
               { value: "", label: "Todas" },
@@ -245,12 +246,12 @@ export function AttendanceListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Puntualidad"
             value={punctualityStatus}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setPunctualityStatus((value ?? "") as PunctualityStatus | "");
+              setPunctualityStatus(nextValue as PunctualityStatus | "");
             }}
             data={[
               { value: "", label: "Todas" },
@@ -260,12 +261,12 @@ export function AttendanceListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <Select
+          <FilterSelect
             label="Tipo de registro"
             value={recordType}
-            onChange={(value) => {
+            onChange={(nextValue) => {
               resetPage();
-              setRecordType((value ?? "real") as "real" | "simulation" | "all");
+              setRecordType((nextValue || "real") as "real" | "simulation" | "all");
             }}
             data={[
               { value: "real", label: "Registros reales" },
@@ -276,7 +277,7 @@ export function AttendanceListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item minWidth={280}>
-          <DateRangeFilter
+          <FilterDateRangeInput
             value={dateRange}
             onChange={(nextDateRange) => {
               resetPage();

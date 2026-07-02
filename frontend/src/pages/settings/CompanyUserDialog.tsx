@@ -1,19 +1,4 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControl,
-  FormControlLabel,
-  FormHelperText,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
+import { Button, Group, Modal, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
 import type { CompanyRole, CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
 import { companyRoleLabels } from "../../utils/labels";
@@ -77,6 +62,14 @@ function CompanyUserDialogForm({
     mode === "edit" && initialUser ? initialUser.isDefault : false,
   );
 
+  const roleOptions = useMemo(
+    () => COMPANY_ROLES.map((companyRole) => ({
+      value: companyRole,
+      label: companyRoleLabels[companyRole],
+    })),
+    [],
+  );
+
   const validationErrors = useMemo(() => {
     if (mode === "create") {
       const errors: string[] = [];
@@ -125,102 +118,87 @@ function CompanyUserDialogForm({
   };
 
   return (
-    <>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          {mode === "create" ? (
-            <>
-              <TextField
-                label="Email"
-                type="email"
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-                required
-                fullWidth
-              />
-              <TextField
-                label="Nombre"
-                value={name}
-                onChange={(event) => setName(event.target.value)}
-                required
-                fullWidth
-              />
-              <FormHelperText>
-                Se usará solo si el usuario no existe todavía. Si el usuario ya existe, se agregará
-                su acceso a esta empresa.
-              </FormHelperText>
-              <TextField
-                label="Contraseña temporal"
-                type="password"
-                value={temporaryPassword}
-                onChange={(event) => setTemporaryPassword(event.target.value)}
-                required
-                helperText="Obligatoria en el formulario. El backend la ignora si el usuario ya existe."
-                fullWidth
-              />
-            </>
-          ) : (
-            <>
-              <TextField label="Nombre" value={name} fullWidth disabled />
-              <TextField label="Email" value={email} fullWidth disabled />
-            </>
-          )}
-
-          <FormControl fullWidth>
-            <InputLabel id="company-user-role-label">Rol en la empresa</InputLabel>
-            <Select
-              labelId="company-user-role-label"
-              label="Rol en la empresa"
-              value={role}
-              onChange={(event) => setRole(event.target.value as CompanyRole)}
-            >
-              {COMPANY_ROLES.map((companyRole) => (
-                <MenuItem key={companyRole} value={companyRole}>
-                  {companyRoleLabels[companyRole]}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {mode === "edit" ? (
-            <FormControl fullWidth>
-              <InputLabel id="company-user-status-label">Estado</InputLabel>
-              <Select
-                labelId="company-user-status-label"
-                label="Estado"
-                value={status}
-                onChange={(event) =>
-                  setStatus(event.target.value as CompanyUser["membershipStatus"])
-                }
-              >
-                <MenuItem value="ACTIVE">Activo</MenuItem>
-                <MenuItem value="INACTIVE">Inactivo</MenuItem>
-              </Select>
-            </FormControl>
-          ) : null}
-
-          <FormControlLabel
-            control={
-              <Switch checked={isDefault} onChange={(event) => setIsDefault(event.target.checked)} />
-            }
-            label="Empresa predeterminada para este usuario"
+    <Stack gap="md">
+      {mode === "create" ? (
+        <>
+          <TextInput
+            label="Email"
+            type="email"
+            value={email}
+            onChange={(event) => setEmail(event.currentTarget.value)}
+            required
           />
+          <TextInput
+            label="Nombre"
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+            required
+          />
+          <Text size="sm" c="dimmed">
+            Se usará solo si el usuario no existe todavía. Si el usuario ya existe, se agregará su
+            acceso a esta empresa.
+          </Text>
+          <TextInput
+            label="Contraseña temporal"
+            type="password"
+            value={temporaryPassword}
+            onChange={(event) => setTemporaryPassword(event.currentTarget.value)}
+            required
+            description="Obligatoria en el formulario. El backend la ignora si el usuario ya existe."
+          />
+        </>
+      ) : (
+        <>
+          <TextInput label="Nombre" value={name} disabled />
+          <TextInput label="Email" value={email} disabled />
+        </>
+      )}
 
-          {validationErrors.length > 0 ? (
-            <FormHelperText error>{validationErrors.join(" ")}</FormHelperText>
-          ) : null}
-          {errorMessage ? <FormHelperText error>{errorMessage}</FormHelperText> : null}
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
+      <Select
+        label="Rol en la empresa"
+        data={roleOptions}
+        value={role}
+        onChange={(value) => setRole((value ?? "ADMIN") as CompanyRole)}
+      />
+
+      {mode === "edit" ? (
+        <Select
+          label="Estado"
+          data={[
+            { value: "ACTIVE", label: "Activo" },
+            { value: "INACTIVE", label: "Inactivo" },
+          ]}
+          value={status}
+          onChange={(value) => setStatus((value ?? "ACTIVE") as CompanyUser["membershipStatus"])}
+        />
+      ) : null}
+
+      <Switch
+        label="Empresa predeterminada para este usuario"
+        checked={isDefault}
+        onChange={(event) => setIsDefault(event.currentTarget.checked)}
+      />
+
+      {validationErrors.length > 0 ? (
+        <Text size="sm" c="red">
+          {validationErrors.join(" ")}
+        </Text>
+      ) : null}
+      {errorMessage ? (
+        <Text size="sm" c="red">
+          {errorMessage}
+        </Text>
+      ) : null}
+
+      <Group justify="flex-end" gap="sm">
+        <Button variant="default" onClick={handleClose} disabled={loading}>
           Cancelar
         </Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={loading || !isValid}>
+        <Button onClick={handleSubmit} disabled={loading || !isValid} loading={loading}>
           Guardar
         </Button>
-      </DialogActions>
-    </>
+      </Group>
+    </Stack>
   );
 }
 
@@ -241,8 +219,14 @@ export function CompanyUserDialog({
         : "closed";
 
   return (
-    <Dialog open={open} onClose={loading ? undefined : onClose} fullWidth maxWidth="sm">
-      <DialogTitle>{mode === "create" ? "Agregar usuario" : "Editar usuario"}</DialogTitle>
+    <Modal
+      opened={open}
+      onClose={loading ? () => undefined : onClose}
+      title={mode === "create" ? "Agregar usuario" : "Editar usuario"}
+      centered
+      closeOnClickOutside={!loading}
+      closeOnEscape={!loading}
+    >
       {open ? (
         <CompanyUserDialogForm
           key={formKey}
@@ -254,6 +238,6 @@ export function CompanyUserDialog({
           onSubmit={onSubmit}
         />
       ) : null}
-    </Dialog>
+    </Modal>
   );
 }

@@ -12,6 +12,8 @@ export interface RHFNumberInputProps<T extends FieldValues> {
   min?: number;
   max?: number;
   step?: number;
+  allowDecimal?: boolean;
+  decimalScale?: number;
 }
 
 export function RHFNumberInput<T extends FieldValues>({
@@ -25,6 +27,8 @@ export function RHFNumberInput<T extends FieldValues>({
   min,
   max,
   step,
+  allowDecimal = false,
+  decimalScale,
 }: RHFNumberInputProps<T>) {
   return (
     <Controller
@@ -40,6 +44,8 @@ export function RHFNumberInput<T extends FieldValues>({
           min={min}
           max={max}
           step={step}
+          allowDecimal={allowDecimal}
+          decimalScale={decimalScale}
           error={fieldState.error?.message}
           value={typeof field.value === "number" ? field.value : undefined}
           onChange={(value) => {

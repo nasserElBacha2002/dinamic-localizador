@@ -2,34 +2,34 @@
 
 **Date:** 2026-06-23  
 **Status:** `IN_PROGRESS`  
-**Overall migration score:** 48/100  
-**Last updated:** PR 10 — form controls foundation + employee form sample migration  
+**Overall migration score:** 54/100  
+**Last updated after PR 11** (2026-06-23)  
 **Companion:** [frontend-mantine-migration-audit.json](./frontend-mantine-migration-audit.json)
 
 ---
 
 ## Executive summary
 
-The Mantine migration **foundation is solid** (providers, tokens, `AppLayout` shell, design-system primitives, main list tables, dashboard), but the **product remains visually hybrid**. Users see Mantine chrome around pages that still render MUI forms, cards, tables, filters, dialogs, and layout on create/edit flows, detail views, statistics, import, bot simulator, login, and settings.
+The Mantine migration **foundation is solid** (providers, tokens, `AppLayout` shell, design-system primitives, main list tables + filters, simple forms). The **product remains visually hybrid** on detail pages, statistics, import, bot simulator, store maps, settings, and legacy dialogs.
 
 | Metric | Count |
 |--------|------:|
 | Routes/screens audited | 24 |
-| Fully migrated (score 90–100) | 4 |
-| Mostly migrated (score 80–89) | 2 |
-| Hybrid (score 40–79) | 5 |
-| Legacy / mostly legacy (score 0–39) | 13 |
+| Fully migrated (score 90–100) | 5 |
+| Mostly migrated (score 80–89) | 8 |
+| Hybrid (score 40–79) | 6 |
+| Legacy / mostly legacy (score 0–39) | 5 |
 | Infrastructure (shell/design-system) at 100 | 1 |
 
 **Biggest blockers**
 
-1. **Form-control foundation created** — `EmployeeForm`, `StoreForm`, `InventoryForm`, settings, login still pending for full page migrations (PR 11).
+1. **Form-control + filter foundation exists** (PR 10–11). Remaining blockers: `StoreForm`/maps, `CompanySettingsPage`, statistics, import flow, bot simulator, detail page shells, form dialogs.
 2. **Detail pages** — inventory, attendance, and absence detail mix Mantine header actions with MUI cards, grids, and tables.
-3. **Complex flows untouched** — statistics (tabs + ECharts + tables), import preview, bot simulator, store maps/location picker.
-4. **Legacy shared primitives** — `PageHeader`, `DateRangeFilter`, lookup autocompletes, `FormActions`, and legacy `components/common/DataTable` still underpin many screens (including partially migrated lists).
-5. **Dual-library bundle** — 56 files still import `@mui/material`; MUI `ThemeProvider` remains in `main.tsx`.
+3. **Complex flows untouched** — statistics, import preview, bot simulator, store maps/location picker.
+4. **Legacy internals** — `DateRangeCalendar` (MUI) inside Mantine date filter popover; `EmployeeAbsenceBalanceCard` and review dialogs remain MUI.
+5. **Dual-library bundle** — reduced MUI usage; `ThemeProvider` remains in `main.tsx` until PR 19.
 
-**Recommended next PR:** **PR 11 — Simple Forms Migration** (remaining CRUD forms, filters, login, settings).
+**Recommended next PR:** **PR 12 — Complex Forms + Maps** (store create/edit, location picker, company settings).
 
 ---
 
@@ -61,24 +61,24 @@ Scores reflect **visual/UI migration only** (not business logic). A page inside 
 | Not found | `*` · `NotFoundPage.tsx` | 90 | Migrated | none | n/a | migrated | n/a | n/a | Low | — |
 | Platform companies | `/platform/companies` · `PlatformCompaniesPage.tsx` | 84 | Mostly migrated | create dialog | migrated | migrated + legacy create | legacy in dialog | `CreatePlatformCompanyDialog` | Medium | PR 17 |
 | Company users | `/settings/users` · `CompanyUsersPage.tsx` | 80 | Mostly migrated | user dialog | migrated | migrated + legacy dialog | legacy in dialog | `CompanyUserDialog` | Medium | PR 17 |
-| Inventories list | `/inventories` · `InventoriesListPage.tsx` | 76 | Hybrid | `DateRangeFilter`, store lookup | migrated | migrated | legacy filters | n/a | Medium | PR 10–11 |
-| Attendance list | `/attendance` · `AttendanceListPage.tsx` | 74 | Hybrid | date/employee/store filters | migrated | migrated | legacy filters | n/a | Medium | PR 10–11 |
-| Absences list | `/absences` · `AbsencesListPage.tsx` | 74 | Hybrid | date/employee filters | migrated | migrated | legacy filters | n/a | Medium | PR 10–11 |
+| Inventories list | `/inventories` · `InventoriesListPage.tsx` | 88 | Mostly migrated | none on filters | migrated | migrated | migrated filters | n/a | Low | Cleanup |
+| Attendance list | `/attendance` · `AttendanceListPage.tsx` | 88 | Mostly migrated | none on filters | migrated | migrated | migrated filters | n/a | Low | Cleanup |
+| Absences list | `/absences` · `AbsencesListPage.tsx` | 88 | Mostly migrated | none on filters | migrated | migrated | migrated filters | n/a | Low | Cleanup |
 | Inventory detail | `/inventories/:id` · `InventoryDetailPage.tsx` | 44 | Hybrid | Card, Typography, `PageHeader` | `InventoryOperationalSection` legacy table | Mantine header + legacy ops | `InventoryForm` | ConfirmDialog migrated | Critical | PR 13 |
 | Absence detail | `/absences/:id` · `AbsenceDetailPage.tsx` | 40 | Hybrid | Card, Grid, Typography | affected inventories MUI table | Mantine header actions | review modal inputs | review dialog | High | PR 13, PR 17 |
 | Attendance detail | `/attendance/:id` · `AttendanceDetailPage.tsx` | 38 | Hybrid | Card, DetailFieldGrid | review history MUI table | Mantine header actions | review dialog fields | `ReviewAttendanceDialog` | High | PR 13, PR 17 |
-| Employee edit | `/employees/:id` · `EmployeeEditPage.tsx` | 55 | Hybrid | legacy `PageHeader`, absence cards | legacy balance table | legacy page shell | **form migrated** (PR 10) | balance dialog | Medium | PR 11 |
-| Employee create | `/employees/new` · `EmployeeCreatePage.tsx` | 78 | Mostly migrated | none on page/form | n/a | migrated | migrated | n/a | Medium | PR 11 (shell cleanup) |
+| Employee edit | `/employees/:id` · `EmployeeEditPage.tsx` | 65 | Hybrid | absence MUI cards/dialog | legacy balance table | migrated form | migrated | balance dialog | Medium | PR 17 |
+| Employee create | `/employees/new` · `EmployeeCreatePage.tsx` | 85 | Mostly migrated | none | n/a | migrated | migrated | n/a | Low | Cleanup |
 | Store create | `/stores/new` · `StoreCreatePage.tsx` | 22 | Legacy | `PageHeader` | n/a | `FormActions` | `StoreForm` + map deps | n/a | High | PR 12 |
 | Store edit | `/stores/:id` · `StoreEditPage.tsx` | 22 | Legacy | `PageHeader`, map layout | n/a | `FormActions` | `StoreForm`, location picker | n/a | Critical | PR 12 |
-| Inventory create | `/inventories/new` · `InventoryCreatePage.tsx` | 22 | Legacy | `PageHeader` | n/a | `FormActions` | `InventoryForm` | n/a | Medium | PR 11 |
-| Attendance create | `/attendance/new` · `AttendanceCreatePage.tsx` | 20 | Legacy | `PageHeader` | n/a | `FormActions` | `AttendanceTestForm` | n/a | Medium | PR 11 |
-| Company selection | (gate) · `CompanySelector.tsx` | 18 | Legacy | full MUI page | n/a | MUI buttons | MUI layout | n/a | Low | PR 11 |
-| Company settings | `/settings/company` · `CompanySettingsPage.tsx` | 18 | Legacy | cards, switches, typography | n/a | MUI save actions | MUI form fields | n/a | Medium | PR 11 |
+| Inventory create | `/inventories/new` · `InventoryCreatePage.tsx` | 78 | Mostly migrated | none | n/a | migrated | migrated | n/a | Medium | Cleanup |
+| Attendance create | `/attendance/new` · `AttendanceCreatePage.tsx` | 75 | Mostly migrated | none | n/a | migrated | migrated | n/a | Medium | Cleanup |
+| Company selection | (gate) · `CompanySelector.tsx` | 78 | Mostly migrated | none | n/a | migrated | n/a | n/a | Low | Cleanup |
+| Company settings | `/settings/company` · `CompanySettingsPage.tsx` | 18 | Legacy | cards, switches, typography | n/a | MUI save actions | MUI form fields | n/a | Medium | PR 12 |
 | Statistics | `/statistics` · `StatisticsPage.tsx` | 14 | Legacy | Tabs, PageHeader, cards | 3 statistics tables | export partial (Mantine) | `StatisticsFiltersBar` | n/a | Critical | PR 14 |
 | Inventory import | `/inventories/import` · `InventoryImportPage.tsx` | 12 | Legacy | full MUI page | preview MUI table | MUI buttons | MUI file/upload UI | n/a | High | PR 16 |
 | Bot simulator | `/bot-simulator` · `BotSimulatorPage.tsx` | 10 | Legacy | full MUI layout | n/a | MUI actions | MUI inputs | `BotLocationDialog` | Critical | PR 15 |
-| Login | `/login` · `LoginPage.tsx` | 8 | Legacy | outside shell; full MUI | n/a | MUI buttons | MUI TextField | n/a | Medium | PR 11 |
+| Login | `/login` · `LoginPage.tsx` | 88 | Mostly migrated | outside shell | n/a | migrated | migrated | n/a | Medium | Cleanup |
 
 ### Nested / section components (non-route)
 
@@ -92,9 +92,9 @@ Scores reflect **visual/UI migration only** (not business logic). A page inside 
 | `CreatePlatformCompanyDialog` | Platform companies | 20 | Legacy | Full MUI form dialog | PR 17 |
 | `BotLocationDialog` | Bot simulator | 15 | Legacy | MUI dialog + map fields | PR 15 |
 | `ExportActionButtons` | Statistics | 70 | Hybrid | Mantine buttons; legacy context | PR 14 |
-| `DateRangeFilter` | List pages | 25 | Legacy | MUI date inputs | PR 10 |
-| `StoreLookupAutocomplete` / `EmployeeLookupAutocomplete` / `InventoryLookupAutocomplete` | Lists, statistics | 25 | Legacy | MUI Autocomplete | PR 10 |
-| `EmployeeSearchAutocomplete` | Filters | 25 | Legacy | MUI Autocomplete | PR 10 |
+| `DateRangeFilter` | List pages | 85 | Mostly migrated | Mantine shell; custom panel uses legacy `DateRangeCalendar` | Cleanup |
+| `EmployeeLookupAutocomplete` / `StoreLookupAutocomplete` / `InventoryLookupAutocomplete` | Lists, forms | 85 | Mostly migrated | Mantine via `FilterLookupInput` | Cleanup |
+| `EmployeeSearchAutocomplete` | Filters | 85 | Mostly migrated | Mantine via `FilterLookupInput` | Cleanup |
 | `StoreForm` + `StoreLocationPicker` + map sections | Store create/edit | 20 | Legacy | MUI + Google Maps | PR 12 |
 | Statistics tables / filters / charts | Statistics | 12 | Legacy | Full MUI + ECharts wrappers | PR 14 |
 | Import preview components | Import page | 12 | Legacy | MUI table/cards | PR 16 |
@@ -222,6 +222,20 @@ These gaps were explicitly verified in this audit:
 5. **Detail sections** — attendance, absence, and inventory detail pages still use MUI tables/cards/dialogs alongside partial Mantine migrations from PR 7–8.
 
 **Documentation accuracy:** PR 7 and PR 8 improved main lists and safe actions but did **not** complete tables/buttons/dialogs globally. See corrected roadmap below.
+
+---
+
+## PR 11 — Shared filter inputs + simple forms (2026-06-23)
+
+**Status:** IMPLEMENTED (partial — `CompanySettingsPage` deferred)
+
+**Created:** `design-system/filters/*` — `FilterSelect`, `FilterDateRangeInput`, `FilterLookupInput`, `FilterActions`.
+
+**Migrated:** list filters on attendance/inventories/absences; `SearchAutocomplete` + `DateRangeFilter` wrappers; `InventoryForm`, `AttendanceTestForm`, `LoginPage`, `CompanySelector`, `EmployeeEditPage` header.
+
+**Deferred:** `CompanySettingsPage`, `StoreForm`/maps, statistics filters, `DateRangeCalendar` internals (MUI).
+
+**Next:** PR 12 — Complex forms + maps.
 
 ---
 

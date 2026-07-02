@@ -1,4 +1,4 @@
-import { TextField, type SxProps, type Theme } from "@mui/material";
+import { TextInput } from "@mantine/core";
 import { useEffect, useRef, useState } from "react";
 import { useDebouncedValue } from "../../hooks/useDebouncedValue";
 
@@ -8,7 +8,6 @@ interface SearchFieldProps {
   onSearch: (value: string) => void;
   debounceMs?: number;
   fullWidth?: boolean;
-  sx?: SxProps<Theme>;
 }
 
 export function SearchField({
@@ -17,7 +16,6 @@ export function SearchField({
   onSearch,
   debounceMs = 300,
   fullWidth = false,
-  sx,
 }: SearchFieldProps) {
   const [value, setValue] = useState("");
   const debouncedValue = useDebouncedValue(value, debounceMs);
@@ -32,13 +30,12 @@ export function SearchField({
   }, [debouncedValue]);
 
   return (
-    <TextField
+    <TextInput
       label={label}
       placeholder={placeholder}
       value={value}
-      onChange={(event) => setValue(event.target.value)}
-      fullWidth={fullWidth}
-      sx={sx}
+      onChange={(event) => setValue(event.currentTarget.value)}
+      style={fullWidth ? { width: "100%" } : undefined}
     />
   );
 }

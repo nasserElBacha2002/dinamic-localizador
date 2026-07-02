@@ -1,4 +1,4 @@
-import { Alert, Stack } from "@mui/material";
+import { Alert, Stack } from "@mantine/core";
 import { ManualCoordinatesFields } from "./components/ManualCoordinatesFields";
 import { LocationMapSection, LocationPickerLayout } from "./components/LocationMapSection";
 import { useLocationPickerState } from "./hooks/useLocationPickerState";
@@ -8,11 +8,11 @@ export function StoreLocationPicker(props: StoreLocationPickerProps) {
   const picker = useLocationPickerState(props);
 
   return (
-    <Stack spacing={2} sx={{ width: "100%" }}>
-      {picker.errorMessage ? <Alert severity="warning">{picker.errorMessage}</Alert> : null}
+    <Stack gap="md" w="100%">
+      {picker.errorMessage ? <Alert color="yellow">{picker.errorMessage}</Alert> : null}
 
       <LocationPickerLayout>
-        <Stack spacing={2} sx={{ minWidth: 0, height: "100%" }}>
+        <Stack gap="md" style={{ minWidth: 0, height: "100%" }}>
           <LocationMapSection
             mapContainerRef={picker.mapContainerRef}
             autocompleteContainerRef={picker.autocompleteContainerRef}

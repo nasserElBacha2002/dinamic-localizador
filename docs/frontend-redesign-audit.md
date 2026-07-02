@@ -1,6 +1,6 @@
 # Frontend Redesign — Technical Audit
 
-**Status:** `IN_PROGRESS` — Mantine foundation + shell + base/list components implemented; **product still visually hybrid** (overall ~46/100). See [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).  
+**Status:** `IN_PROGRESS` — Mantine foundation + shell + filters + simple forms implemented; **product still visually hybrid** on detail/complex flows (~54/100). **Last updated after PR 11** (2026-06-23). See [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).  
 **Stage audited:** Frontend redesign integration (pre-implementation audit; updated post PR 9 audit)  
 **Date:** 2026-06-23 (updated — Mantine migration audit)  
 **Scope:** Read-only analysis of `frontend/` — architecture, multi-company, permissions, React Query, components, styling, page impact, migration plan.  
@@ -41,7 +41,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Design system (Mantine 9) | PR 1–9 done | Foundation + shell + lists; **product hybrid (~46/100)** — see [audit](./frontend-mantine-migration-audit-0-100.md) |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended next work:** **PR 10 — Form controls foundation** (Mantine inputs + RHF adapters), then PR 11 simple forms migration. Full scored audit and corrected roadmap: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md). **Do not claim full migration complete** until grep shows zero `@mui/material` in pages.
+**Recommended next work:** **PR 12 — Complex forms + maps** (store create/edit, location picker, company settings). Full scored audit: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).
 
 ---
 

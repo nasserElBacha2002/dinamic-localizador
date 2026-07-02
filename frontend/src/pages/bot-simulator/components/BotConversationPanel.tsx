@@ -1,4 +1,4 @@
-import { Box, Button, Chip, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Badge, Box, Button, Group, Paper, Text, TextInput } from "@mantine/core";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 import { BADGE_LABELS } from "../types";
 import { ChatBubble } from "./ChatBubble";
@@ -28,31 +28,31 @@ export function BotConversationPanel({
   setLocationDialogOpen,
 }: BotConversationPanelProps) {
   return (
-    <Paper sx={{ p: 2, minHeight: 480, display: "flex", flexDirection: "column" }}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
+    <Paper withBorder radius="md" p="md" style={{ minHeight: 480, display: "flex", flexDirection: "column" }}>
+      <Group gap="xs" mb="md">
         {sessionState?.statusBadges.map((badge) => (
-          <Chip key={badge} label={BADGE_LABELS[badge] ?? badge} size="small" color="primary" variant="outlined" />
+          <Badge key={badge} variant="light">
+            {BADGE_LABELS[badge] ?? badge}
+          </Badge>
         ))}
-      </Stack>
+      </Group>
 
       {!sessionState ? (
-        <Box sx={{ flex: 1, display: "grid", placeItems: "center" }}>
-          <Typography color="text.secondary">
-            Configurá el contexto y presioná &quot;Iniciar simulación&quot; para comenzar.
-          </Typography>
+        <Box style={{ flex: 1, display: "grid", placeItems: "center" }}>
+          <Text c="dimmed">Configurá el contexto y presioná &quot;Iniciar simulación&quot; para comenzar.</Text>
         </Box>
       ) : (
         <>
           <Box
-            sx={{
+            style={{
               flex: 1,
               overflowY: "auto",
               maxHeight: 420,
-              mb: 2,
-              pr: 1,
-              bgcolor: "grey.50",
-              borderRadius: 1,
-              p: 2,
+              marginBottom: 16,
+              paddingRight: 8,
+              backgroundColor: "var(--mantine-color-gray-0)",
+              borderRadius: "var(--mantine-radius-sm)",
+              padding: 16,
             }}
           >
             {sessionState.messages.map((message) => (
@@ -61,22 +61,22 @@ export function BotConversationPanel({
             <div ref={chatEndRef} />
           </Box>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Llegué")}>
+          <Group gap="xs" mb="md">
+            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Llegué")}>
               Enviar &quot;Llegué&quot;
             </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Terminé")}>
+            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Terminé")}>
               Enviar &quot;Terminé&quot;
             </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Hola")}>
+            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Hola")}>
               Enviar &quot;Hola&quot;
             </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Menú")}>
+            <Button size="xs" variant="default" disabled={isBusy} onClick={() => void handleSendText("Menú")}>
               Enviar &quot;Menú&quot;
             </Button>
             <Button
-              size="small"
-              variant="outlined"
+              size="xs"
+              variant="default"
               disabled={isBusy || !locationPresets?.storeLocation}
               onClick={() => {
                 if (locationPresets?.storeLocation) {
@@ -90,8 +90,8 @@ export function BotConversationPanel({
               Ubicación de tienda
             </Button>
             <Button
-              size="small"
-              variant="outlined"
+              size="xs"
+              variant="default"
               disabled={isBusy || !locationPresets?.outsideRadius}
               onClick={() => {
                 if (locationPresets?.outsideRadius) {
@@ -105,8 +105,8 @@ export function BotConversationPanel({
               Fuera del radio
             </Button>
             <Button
-              size="small"
-              variant="outlined"
+              size="xs"
+              variant="default"
               disabled={isBusy || !locationPresets?.nearRadiusLimit}
               onClick={() => {
                 if (locationPresets?.nearRadiusLimit) {
@@ -119,18 +119,17 @@ export function BotConversationPanel({
             >
               Cerca del límite
             </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => setLocationDialogOpen(true)}>
+            <Button size="xs" variant="default" disabled={isBusy} onClick={() => setLocationDialogOpen(true)}>
               Enviar ubicación
             </Button>
-          </Stack>
+          </Group>
 
-          <Stack direction="row" spacing={1}>
-            <TextField
-              fullWidth
-              size="small"
+          <Group gap="sm" align="flex-end">
+            <TextInput
+              style={{ flex: 1 }}
               placeholder="Escribí un mensaje..."
               value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
+              onChange={(event) => setDraftText(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -139,10 +138,10 @@ export function BotConversationPanel({
               }}
               disabled={isBusy}
             />
-            <Button variant="contained" onClick={() => void handleSendText(draftText)} disabled={isBusy || !draftText.trim()}>
+            <Button onClick={() => void handleSendText(draftText)} disabled={isBusy || !draftText.trim()}>
               Enviar
             </Button>
-          </Stack>
+          </Group>
         </>
       )}
     </Paper>

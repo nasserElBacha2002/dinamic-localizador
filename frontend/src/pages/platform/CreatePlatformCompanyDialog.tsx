@@ -1,16 +1,14 @@
 import {
   Button,
   Checkbox,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  FormControlLabel,
-  FormGroup,
-  FormHelperText,
+  Group,
+  Modal,
+  NumberInput,
   Stack,
-  TextField,
-} from "@mui/material";
+  Switch,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useMemo, useState } from "react";
 import type { CreatePlatformCompanyInput } from "../../types/platform-company";
 
@@ -166,136 +164,119 @@ export function CreatePlatformCompanyDialog({
   };
 
   return (
-    <Dialog
-      open={open}
-      onClose={loading ? undefined : handleClose}
-      fullWidth
-      maxWidth="md"
-      slotProps={{
-        transition: {
-          onExited: resetForm,
-        },
+    <Modal
+      opened={open}
+      onClose={loading ? () => undefined : handleClose}
+      title="Crear empresa"
+      size="lg"
+      centered
+      onExitTransitionEnd={() => {
+        if (!open) resetForm();
       }}
     >
-      <DialogTitle>Crear empresa</DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="Nombre de la empresa"
-            value={name}
-            onChange={(event) => setName(event.target.value)}
-            required
-            fullWidth
-          />
-          <TextField
-            label="Zona horaria"
-            value={defaultTimezone}
-            onChange={(event) => setDefaultTimezone(event.target.value)}
-            fullWidth
-          />
-          <TextField
-            label="Radio predeterminado (m)"
-            type="number"
-            value={defaultRadiusMeters}
-            onChange={(event) => setDefaultRadiusMeters(event.target.value)}
-            inputProps={{ min: 1, step: 1 }}
-            fullWidth
-          />
-          <TextField
-            label="Tolerancia de llegada (min)"
-            type="number"
-            value={lateGraceMinutes}
-            onChange={(event) => setLateGraceMinutes(event.target.value)}
-            inputProps={{ min: 0, step: 1 }}
-            fullWidth
-          />
-          <TextField
-            label="Tolerancia de salida anticipada (min)"
-            type="number"
-            value={earlyLeaveToleranceMinutes}
-            onChange={(event) => setEarlyLeaveToleranceMinutes(event.target.value)}
-            inputProps={{ min: 0, step: 1 }}
-            fullWidth
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={requireCheckoutLocation}
-                onChange={(event) => setRequireCheckoutLocation(event.target.checked)}
-              />
-            }
-            label="Requerir ubicación en checkout"
-          />
-          <FormControlLabel
-            control={
-              <Checkbox
-                checked={allowManualAttendanceCorrections}
-                onChange={(event) =>
-                  setAllowManualAttendanceCorrections(event.target.checked)
-                }
-              />
-            }
-            label="Permitir correcciones manuales de asistencia"
-          />
-          <FormGroup>
-            {MODULE_OPTIONS.map((moduleKey) => (
-              <FormControlLabel
-                key={moduleKey}
-                control={
-                  <Checkbox
-                    checked={modules?.includes(moduleKey) ?? false}
-                    onChange={(event) => {
-                      setModules((current) => {
-                        const next = new Set(current ?? []);
-                        if (event.target.checked) next.add(moduleKey);
-                        else next.delete(moduleKey);
-                        return [...next];
-                      });
-                    }}
-                  />
-                }
-                label={moduleKey}
-              />
-            ))}
-          </FormGroup>
-          <TextField
-            label="Nombre del owner"
-            value={ownerName}
-            onChange={(event) => setOwnerName(event.target.value)}
-            required
-            fullWidth
-          />
-          <TextField
-            label="Email del owner"
-            type="email"
-            value={ownerEmail}
-            onChange={(event) => setOwnerEmail(event.target.value)}
-            required
-            fullWidth
-          />
-          <TextField
-            label="Contraseña temporal del owner"
-            type="password"
-            value={ownerTemporaryPassword}
-            onChange={(event) => setOwnerTemporaryPassword(event.target.value)}
-            required
-            fullWidth
-            helperText="La contraseña se usará solo si el usuario owner no existe todavía. Si el usuario ya existe, el backend no cambiará su contraseña."
-          />
-          {validationErrors.length > 0 ? (
-            <FormHelperText error>{validationErrors.join(" ")}</FormHelperText>
-          ) : null}
-          {errorMessage ? <FormHelperText error>{errorMessage}</FormHelperText> : null}
+      <Stack gap="md">
+        <TextInput
+          label="Nombre de la empresa"
+          value={name}
+          onChange={(event) => setName(event.currentTarget.value)}
+          required
+        />
+        <TextInput
+          label="Zona horaria"
+          value={defaultTimezone}
+          onChange={(event) => setDefaultTimezone(event.currentTarget.value)}
+        />
+        <NumberInput
+          label="Radio predeterminado (m)"
+          value={defaultRadiusMeters === "" ? "" : Number(defaultRadiusMeters)}
+          onChange={(value) =>
+            setDefaultRadiusMeters(value === "" || value === undefined ? "" : String(value))
+          }
+          min={1}
+        />
+        <NumberInput
+          label="Tolerancia de llegada (min)"
+          value={lateGraceMinutes === "" ? "" : Number(lateGraceMinutes)}
+          onChange={(value) =>
+            setLateGraceMinutes(value === "" || value === undefined ? "" : String(value))
+          }
+          min={0}
+        />
+        <NumberInput
+          label="Tolerancia de salida anticipada (min)"
+          value={earlyLeaveToleranceMinutes === "" ? "" : Number(earlyLeaveToleranceMinutes)}
+          onChange={(value) =>
+            setEarlyLeaveToleranceMinutes(value === "" || value === undefined ? "" : String(value))
+          }
+          min={0}
+        />
+        <Switch
+          label="Requerir ubicación en checkout"
+          checked={requireCheckoutLocation}
+          onChange={(event) => setRequireCheckoutLocation(event.currentTarget.checked)}
+        />
+        <Switch
+          label="Permitir correcciones manuales de asistencia"
+          checked={allowManualAttendanceCorrections}
+          onChange={(event) => setAllowManualAttendanceCorrections(event.currentTarget.checked)}
+        />
+        <Stack gap="xs">
+          {MODULE_OPTIONS.map((moduleKey) => (
+            <Checkbox
+              key={moduleKey}
+              label={moduleKey}
+              checked={modules?.includes(moduleKey) ?? false}
+              onChange={(event) => {
+                setModules((current) => {
+                  const next = new Set(current ?? []);
+                  if (event.currentTarget.checked) next.add(moduleKey);
+                  else next.delete(moduleKey);
+                  return [...next];
+                });
+              }}
+            />
+          ))}
         </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose} disabled={loading}>
-          Cancelar
-        </Button>
-        <Button onClick={handleSubmit} variant="contained" disabled={loading || !isValid}>
-          Crear empresa
-        </Button>
-      </DialogActions>
-    </Dialog>
+        <TextInput
+          label="Nombre del owner"
+          value={ownerName}
+          onChange={(event) => setOwnerName(event.currentTarget.value)}
+          required
+        />
+        <TextInput
+          label="Email del owner"
+          type="email"
+          value={ownerEmail}
+          onChange={(event) => setOwnerEmail(event.currentTarget.value)}
+          required
+        />
+        <TextInput
+          label="Contraseña temporal del owner"
+          type="password"
+          value={ownerTemporaryPassword}
+          onChange={(event) => setOwnerTemporaryPassword(event.currentTarget.value)}
+          required
+          description="La contraseña se usará solo si el usuario owner no existe todavía. Si el usuario ya existe, el backend no cambiará su contraseña."
+        />
+        {validationErrors.length > 0 ? (
+          <Text size="sm" c="red">
+            {validationErrors.join(" ")}
+          </Text>
+        ) : null}
+        {errorMessage ? (
+          <Text size="sm" c="red">
+            {errorMessage}
+          </Text>
+        ) : null}
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={handleClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading || !isValid} loading={loading}>
+            Crear empresa
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 }

@@ -4,20 +4,16 @@ import {
   AccordionSummary,
   Card,
   CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
   Stack,
   TableCell,
   TableHead,
   TableRow,
-  TextField,
   Typography,
 } from "@mui/material";
 import { Button, Group } from "@mantine/core";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { ReviewAttendanceDialog } from "../../components/attendance/ReviewAttendanceDialog";
 import { DataTable } from "../../components/common/DataTable";
 import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
 import { ErrorState } from "../../components/common/ErrorState";
@@ -50,7 +46,6 @@ export function AttendanceDetailPage() {
 
   const [reviewDialogOpen, setReviewDialogOpen] = useState(false);
   const [reviewDecision, setReviewDecision] = useState<"APPROVE" | "REJECT">("APPROVE");
-  const [reviewReason, setReviewReason] = useState("");
   const [feedback, setFeedback] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
     open: false,
     message: "",
@@ -79,25 +74,6 @@ export function AttendanceDetailPage() {
   const canReview =
     !record.reviewedAt &&
     (record.validationStatus === "PENDING_REVIEW" || record.validationStatus === "REJECTED");
-
-  const handleReview = async () => {
-    if (!reviewReason.trim()) {
-      setFeedback({ open: true, message: "El motivo es obligatorio.", severity: "error" });
-      return;
-    }
-
-    try {
-      await reviewMutation.mutateAsync({
-        decision: reviewDecision,
-        reason: reviewReason.trim(),
-      });
-      setReviewDialogOpen(false);
-      setReviewReason("");
-      setFeedback({ open: true, message: "Revisión registrada correctamente.", severity: "success" });
-    } catch (error) {
-      setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
-    }
-  };
 
   const reviews = reviewsQuery.data?.data ?? [];
   const reviewsMeta = reviewsQuery.data?.meta;
@@ -284,29 +260,25 @@ export function AttendanceDetailPage() {
         </Accordion>
       </Stack>
 
-      <Dialog open={reviewDialogOpen} onClose={() => setReviewDialogOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>
-          {reviewDecision === "APPROVE" ? "Aprobar asistencia" : "Rechazar asistencia"}
-        </DialogTitle>
-        <DialogContent>
-          <TextField
-            label="Motivo"
-            required
-            fullWidth
-            multiline
-            minRows={3}
-            sx={{ mt: 1 }}
-            value={reviewReason}
-            onChange={(event) => setReviewReason(event.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setReviewDialogOpen(false)}>Cancelar</Button>
-          <Button variant="contained" onClick={handleReview} disabled={reviewMutation.isPending}>
-            Confirmar
-          </Button>
-        </DialogActions>
-      </Dialog>
+      <ReviewAttendanceDialog
+        open={reviewDialogOpen}
+        decision={reviewDecision}
+        loading={reviewMutation.isPending}
+        onClose={() => setReviewDialogOpen(false)}
+        onConfirm={async (input) => {
+          try {
+            await reviewMutation.mutateAsync(input);
+            setReviewDialogOpen(false);
+            setFeedback({
+              open: true,
+              message: "Revisión registrada correctamente.",
+              severity: "success",
+            });
+          } catch (error) {
+            setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
+          }
+        }}
+      />
 
       <FeedbackSnackbar
         open={feedback.open}

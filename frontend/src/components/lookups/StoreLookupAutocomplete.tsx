@@ -45,7 +45,7 @@ export function StoreLookupAutocomplete({
     async (search: string) =>
       getStoreLookups({
         search: search || undefined,
-        limit: 20,
+        limit: 10,
         active: activeOnly ? true : undefined,
       }),
     [activeOnly],

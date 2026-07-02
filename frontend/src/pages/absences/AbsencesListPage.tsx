@@ -19,6 +19,7 @@ import type { DateRangeValue } from "../../types/date-range";
 import { terminology } from "../../domain/terminology";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue } from "../../utils/date-range";
 import { formatDateTime } from "../../utils/dates";
+import { getRelatedName, safeText } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   absenceRequestedViaLabels,
@@ -77,13 +78,17 @@ export function AbsencesListPage() {
 
   const columns = useMemo<DataTableColumn<AbsenceRequestListItem>[]>(
     () => [
-      { key: "employee", header: terminology.worker.singular, getValue: (row) => row.employee.name },
+      {
+        key: "employee",
+        header: terminology.worker.singular,
+        getValue: (row) => getRelatedName(row.employee),
+      },
       {
         key: "type",
         header: "Tipo",
         getValue: (row) =>
-          absenceTypeLabels[row.absenceType.code as keyof typeof absenceTypeLabels] ??
-          row.absenceType.name,
+          absenceTypeLabels[row.absenceType?.code as keyof typeof absenceTypeLabels] ??
+          safeText(row.absenceType?.name ?? null),
       },
       { key: "startDate", header: "Inicio", getValue: (row) => formatAbsenceDate(row.startDate) },
       { key: "endDate", header: "Fin", getValue: (row) => formatAbsenceDate(row.endDate) },

@@ -25,6 +25,7 @@ import { terminology } from "../../domain/terminology";
 import { isModuleEnabled } from "../../utils/company-modules";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
+import { formatDistanceMeters, getRelatedName } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   locationStatusLabels,
@@ -94,19 +95,27 @@ export function AttendanceListPage() {
 
   const columns = useMemo<DataTableColumn<AttendanceRecordWithRelations>[]>(
     () => [
-      { key: "employee", header: terminology.worker.singular, getValue: (row) => row.employee.name },
-      { key: "store", header: terminology.location.singular, getValue: (row) => row.store.name },
+      {
+        key: "employee",
+        header: terminology.worker.singular,
+        getValue: (row) => getRelatedName(row.employee),
+      },
+      {
+        key: "store",
+        header: terminology.location.singular,
+        getValue: (row) => getRelatedName(row.store),
+      },
       {
         key: "inventory",
         header: terminology.operation.singular,
-        getValue: (row) => formatDateTime(row.inventory.scheduledStart),
+        getValue: (row) => formatDateTime(row.inventory?.scheduledStart),
       },
       { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
       { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
       {
         key: "distance",
         header: "Distancia",
-        getValue: (row) => `${row.distanceMeters.toFixed(1)} m`,
+        getValue: (row) => formatDistanceMeters(row.distanceMeters),
       },
       {
         key: "validationStatus",

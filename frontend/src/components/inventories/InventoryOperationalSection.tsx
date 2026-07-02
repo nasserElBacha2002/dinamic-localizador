@@ -20,6 +20,7 @@ import {
 import { usePaginationState } from "../../hooks/usePaginationState";
 import type { InventoryAttendanceSummaryEmployee } from "../../types/inventory-attendance-summary";
 import { formatDateTime } from "../../utils/dates";
+import { formatDistanceMeters, getRelatedName, safeText } from "../../utils/display-safe";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -128,12 +129,12 @@ export function InventoryOperationalSection({
       {
         key: "employee",
         header: terminology.worker.singular,
-        getValue: (row) => row.employee.name,
+        getValue: (row) => getRelatedName(row.employee),
       },
       {
         key: "phone",
         header: "Teléfono",
-        getValue: (row) => row.employee.phoneNumber,
+        getValue: (row) => safeText(row.employee?.phoneNumber ?? null),
       },
       {
         key: "expected",
@@ -150,7 +151,7 @@ export function InventoryOperationalSection({
         key: "distance",
         header: "Distancia",
         getValue: (row) =>
-          row.attendance ? `${row.attendance.distanceMeters.toFixed(1)} m` : "—",
+          row.attendance ? formatDistanceMeters(row.attendance.distanceMeters) : "—",
       },
       {
         key: "checkOut",

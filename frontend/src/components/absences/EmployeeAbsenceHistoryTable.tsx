@@ -11,6 +11,7 @@ import {
 import { useAbsenceRequests } from "../../hooks/useAbsences";
 import type { AbsenceRequestListItem } from "../../types/absence";
 import { absenceStatusLabels, formatAbsenceDate } from "../../utils/absence-labels";
+import { safeText } from "../../utils/display-safe";
 
 interface EmployeeAbsenceHistoryTableProps {
   employeeId: string;
@@ -30,7 +31,7 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
 
   const columns = useMemo<DataTableColumn<AbsenceRequestListItem>[]>(
     () => [
-      { key: "type", header: "Tipo", getValue: (row) => row.absenceType.name },
+      { key: "type", header: "Tipo", getValue: (row) => safeText(row.absenceType?.name ?? null) },
       {
         key: "period",
         header: "Período",

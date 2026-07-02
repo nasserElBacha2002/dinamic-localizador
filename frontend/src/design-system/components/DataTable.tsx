@@ -3,6 +3,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
+import { resolveDataTableCellValue } from "./data-table-cell";
 
 export type SortDirection = "asc" | "desc";
 
@@ -32,18 +33,6 @@ export interface DataTableProps<T> {
   sortDirection?: SortDirection;
   onSortChange?: (columnKey: string) => void;
   "aria-label"?: string;
-}
-
-function getCellValue<T>(row: T, column: DataTableColumn<T>): ReactNode {
-  if (column.render) {
-    return column.render(row);
-  }
-
-  if (column.getValue) {
-    return column.getValue(row);
-  }
-
-  return null;
 }
 
 function handleRowKeyDown<T>(
@@ -120,6 +109,8 @@ export function DataTable<T>({
   onSortChange,
   "aria-label": ariaLabel,
 }: DataTableProps<T>) {
+  const safeRows = Array.isArray(rows) ? rows : [];
+
   if (loading) {
     return (
       <Paper withBorder radius="md" p="md">
@@ -132,7 +123,7 @@ export function DataTable<T>({
     return <ErrorState message={error} />;
   }
 
-  if (rows.length === 0) {
+  if (safeRows.length === 0) {
     return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
@@ -174,7 +165,7 @@ export function DataTable<T>({
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
-              {rows.map((row) => {
+              {safeRows.map((row) => {
                 const rowKey = getRowKey(row);
                 const clickable = Boolean(onRowClick);
 
@@ -191,7 +182,7 @@ export function DataTable<T>({
                   >
                     {columns.map((column) => (
                       <Table.Td key={column.key} style={{ textAlign: column.align ?? "left" }}>
-                        {getCellValue(row, column)}
+                        {resolveDataTableCellValue(row, column)}
                       </Table.Td>
                     ))}
                     {rowActions ? (

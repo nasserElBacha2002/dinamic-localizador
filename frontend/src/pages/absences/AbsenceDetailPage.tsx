@@ -1,40 +1,27 @@
-import {
-  Alert,
-  Button,
-  Card,
-  CardContent,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TextField,
-  Typography,
-} from "@mui/material";
+import { Alert, Button, Group, Modal, Stack, Text, Textarea } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
-import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
-import { StatusChip } from "../../components/common/StatusChip";
+import {
+  DataTable,
+  DetailFieldGrid,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  SectionCard,
+  StatusBadge,
+  type DataTableColumn,
+} from "../../design-system";
 import {
   useAbsenceRequest,
   useApproveAbsenceRequest,
   useNeedsInfoAbsenceRequest,
   useRejectAbsenceRequest,
 } from "../../hooks/useAbsences";
-import { AdminLayout } from "../../layouts/AdminLayout";
+import type { AffectedInventoryWarning } from "../../types/absence";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -44,6 +31,33 @@ import {
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
+import { inventoryStatusLabels } from "../../utils/labels";
+
+const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
+  { key: "store", header: "Tienda", getValue: (row) => row.storeName },
+  { key: "start", header: "Inicio", getValue: (row) => formatDateTime(row.scheduledStart) },
+  {
+    key: "end",
+    header: "Fin",
+    getValue: (row) => (row.scheduledEnd ? formatDateTime(row.scheduledEnd) : "—"),
+  },
+  {
+    key: "status",
+    header: "Estado",
+    getValue: (row) =>
+      inventoryStatusLabels[row.status as keyof typeof inventoryStatusLabels] ?? row.status,
+  },
+  {
+    key: "action",
+    header: "Acción",
+    align: "right",
+    render: (row) => (
+      <Button component={RouterLink} to={`/inventories/${row.inventoryId}`} size="compact-xs" variant="light">
+        Ver inventario
+      </Button>
+    ),
+  },
+];
 
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -56,38 +70,17 @@ export function AbsenceDetailPage() {
   const [rejectOpen, setRejectOpen] = useState(false);
   const [needsInfoOpen, setNeedsInfoOpen] = useState(false);
   const [comment, setComment] = useState("");
-  const [feedback, setFeedback] = useState<{
-    open: boolean;
-    message: string;
-    severity: "success" | "error";
-  }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
 
   if (!id) {
-    return (
-      <AdminLayout>
-        <ErrorState message="Solicitud no encontrada." />
-      </AdminLayout>
-    );
+    return <ErrorState message="Solicitud no encontrada." />;
   }
 
   if (requestQuery.isLoading) {
-    return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
-    );
+    return <LoadingState />;
   }
 
   if (requestQuery.isError || !requestQuery.data) {
-    return (
-      <AdminLayout>
-        <ErrorState message={getApiErrorMessage(requestQuery.error, "Solicitud no encontrada.")} />
-      </AdminLayout>
-    );
+    return <ErrorState message={getApiErrorMessage(requestQuery.error, "Solicitud no encontrada.")} />;
   }
 
   const request = requestQuery.data;
@@ -98,291 +91,225 @@ export function AbsenceDetailPage() {
     request.balanceImpact?.deductsBalance === true &&
     request.balanceImpact.hasSufficientBalance === false;
 
+  const closeRejectModal = () => {
+    setRejectOpen(false);
+    setComment("");
+  };
+
+  const closeNeedsInfoModal = () => {
+    setNeedsInfoOpen(false);
+    setComment("");
+  };
+
+  const openRejectModal = () => {
+    setComment("");
+    setRejectOpen(true);
+  };
+
+  const openNeedsInfoModal = () => {
+    setComment("");
+    setNeedsInfoOpen(true);
+  };
+
+  const notify = (message: string, color: "green" | "red" = "green") => {
+    notifications.show({ color, message });
+  };
+
   const handleApprove = async () => {
     try {
       await approveMutation.mutateAsync();
-      setFeedback({ open: true, message: "Solicitud aprobada.", severity: "success" });
+      notify("Solicitud aprobada.");
     } catch (error) {
-      setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
+      notify(getApiErrorMessage(error), "red");
     }
   };
 
   const handleReject = async () => {
     if (!comment.trim()) {
-      setFeedback({ open: true, message: "El motivo del rechazo es obligatorio.", severity: "error" });
+      notify("El motivo del rechazo es obligatorio.", "red");
       return;
     }
 
     try {
       await rejectMutation.mutateAsync(comment.trim());
-      setRejectOpen(false);
-      setComment("");
-      setFeedback({ open: true, message: "Solicitud rechazada.", severity: "success" });
+      closeRejectModal();
+      notify("Solicitud rechazada.");
     } catch (error) {
-      setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
+      notify(getApiErrorMessage(error), "red");
     }
   };
 
   const handleNeedsInfo = async () => {
     if (!comment.trim()) {
-      setFeedback({
-        open: true,
-        message: "El comentario es obligatorio.",
-        severity: "error",
-      });
+      notify("El comentario es obligatorio.", "red");
       return;
     }
 
     try {
       await needsInfoMutation.mutateAsync(comment.trim());
-      setNeedsInfoOpen(false);
-      setComment("");
-      setFeedback({
-        open: true,
-        message:
-          "La solicitud quedó marcada como requiere información. En esta fase el empleado todavía no será notificado automáticamente.",
-        severity: "success",
-      });
+      closeNeedsInfoModal();
+      notify(
+        "La solicitud quedó marcada como requiere información. En esta fase el empleado todavía no será notificado automáticamente.",
+      );
     } catch (error) {
-      setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
+      notify(getApiErrorMessage(error), "red");
     }
   };
 
   return (
-    <AdminLayout>
+    <Stack gap="md">
       <PageHeader
         title="Detalle de solicitud de ausencia"
         description={`${request.employee.name} · ${formatAbsenceDate(request.startDate)} - ${formatAbsenceDate(request.endDate)}`}
         action={
-          <Stack direction="row" spacing={1}>
+          <Group gap="xs" align="center">
             {canReview ? (
               <>
                 {insufficientBalance ? (
-                  <Alert severity="info" sx={{ alignSelf: "center" }}>
+                  <Alert color="blue" py={4}>
                     Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
                   </Alert>
                 ) : null}
-                <Button
-                  variant="contained"
-                  onClick={handleApprove}
-                  disabled={approveMutation.isPending || insufficientBalance}
-                >
+                <Button onClick={() => void handleApprove()} disabled={approveMutation.isPending || insufficientBalance}>
                   Aprobar
                 </Button>
-                <Button
-                  color="warning"
-                  variant="outlined"
-                  onClick={() => {
-                    setComment("");
-                    setNeedsInfoOpen(true);
-                  }}
-                >
+                <Button color="yellow" variant="default" onClick={openNeedsInfoModal}>
                   Requiere información
                 </Button>
-                <Button
-                  color="error"
-                  variant="outlined"
-                  onClick={() => {
-                    setComment("");
-                    setRejectOpen(true);
-                  }}
-                >
+                <Button color="red" variant="default" onClick={openRejectModal}>
                   Rechazar
                 </Button>
               </>
             ) : null}
-            <Button component={RouterLink} to="/absences">
+            <Button component={RouterLink} to="/absences" variant="default">
               Volver al listado
             </Button>
-          </Stack>
+          </Group>
         }
       />
 
-      <Stack spacing={3}>
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Datos generales
-            </Typography>
-            <DetailFieldGrid
-              fields={[
-                { label: "Empleado", value: `${request.employee.name} (${request.employee.phoneNumber})` },
-                {
-                  label: "Tipo",
-                  value:
-                    absenceTypeLabels[
-                      request.absenceType.code as keyof typeof absenceTypeLabels
-                    ] ?? request.absenceType.name,
-                },
-                { label: "Inicio", value: formatAbsenceDate(request.startDate) },
-                { label: "Fin", value: formatAbsenceDate(request.endDate) },
-                { label: "Días", value: request.totalDays },
-                { label: "Motivo", value: request.reason },
-                {
-                  label: "Estado",
-                  value: <StatusChip label={absenceStatusLabels[request.status]} />,
-                },
-                { label: "Origen", value: absenceRequestedViaLabels[request.requestedVia] },
-                { label: "Creada", value: formatDateTime(request.createdAt) },
-                { label: "Revisada por", value: request.reviewerName ?? "—" },
-                { label: "Revisada el", value: request.reviewedAt ? formatDateTime(request.reviewedAt) : "—" },
-                { label: "Comentario de revisión", value: request.reviewComment ?? "—" },
-              ]}
+      <SectionCard title="Datos generales">
+        <DetailFieldGrid
+          fields={[
+            { label: "Empleado", value: `${request.employee.name} (${request.employee.phoneNumber})` },
+            {
+              label: "Tipo",
+              value:
+                absenceTypeLabels[request.absenceType.code as keyof typeof absenceTypeLabels] ??
+                request.absenceType.name,
+            },
+            { label: "Inicio", value: formatAbsenceDate(request.startDate) },
+            { label: "Fin", value: formatAbsenceDate(request.endDate) },
+            { label: "Días", value: request.totalDays },
+            { label: "Motivo", value: request.reason },
+            {
+              label: "Estado",
+              value: <StatusBadge label={absenceStatusLabels[request.status]} tone="neutral" />,
+            },
+            { label: "Origen", value: absenceRequestedViaLabels[request.requestedVia] },
+            { label: "Creada", value: formatDateTime(request.createdAt) },
+            { label: "Revisada por", value: request.reviewerName ?? "—" },
+            { label: "Revisada el", value: request.reviewedAt ? formatDateTime(request.reviewedAt) : "—" },
+            { label: "Comentario de revisión", value: request.reviewComment ?? "—" },
+          ]}
+        />
+      </SectionCard>
+
+      <SectionCard title="Saldo del empleado">
+        <EmployeeAbsenceBalanceCard
+          employeeId={request.employeeId}
+          year={balanceYear}
+          balanceImpact={request.balanceImpact}
+          onBalanceSaved={() => {
+            if (id) {
+              queryClient.invalidateQueries({ queryKey: ["absence-request", id] });
+            }
+          }}
+        />
+      </SectionCard>
+
+      <SectionCard title={`Historial del empleado (${balanceYear})`}>
+        <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
+      </SectionCard>
+
+      <SectionCard title="Inventarios afectados">
+        {request.affectedInventories.length === 0 ? (
+          <Text c="dimmed">
+            No se detectaron inventarios asignados que se superpongan con esta ausencia.
+          </Text>
+        ) : (
+          <Stack gap="md">
+            <Alert color="yellow">
+              Esta solicitud se superpone con {request.affectedInventories.length} inventario(s)
+              asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
+            </Alert>
+            <DataTable
+              rows={request.affectedInventories}
+              columns={affectedInventoryColumns}
+              getRowKey={(row) => row.inventoryId}
             />
-          </CardContent>
-        </Card>
+          </Stack>
+        )}
+      </SectionCard>
 
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Saldo del empleado
-            </Typography>
-            <EmployeeAbsenceBalanceCard
-              employeeId={request.employeeId}
-              year={balanceYear}
-              balanceImpact={request.balanceImpact}
-              onBalanceSaved={() => {
-                if (id) {
-                  queryClient.invalidateQueries({ queryKey: ["absence-request", id] });
-                }
-              }}
-            />
-          </CardContent>
-        </Card>
+      <SectionCard title="Historial">
+        <Stack gap="xs">
+          {request.events.map((event) => (
+            <Text key={event.id} size="sm">
+              {formatDateTime(event.createdAt)} ·{" "}
+              {absenceEventTypeLabels[event.eventType as keyof typeof absenceEventTypeLabels] ??
+                event.eventType}
+              {event.performerName ? ` · ${event.performerName}` : ""}
+              {event.comment ? ` · ${event.comment}` : ""}
+            </Text>
+          ))}
+        </Stack>
+      </SectionCard>
 
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Historial del empleado ({balanceYear})
-            </Typography>
-            <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
-          </CardContent>
-        </Card>
-
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Inventarios afectados
-            </Typography>
-            {request.affectedInventories.length === 0 ? (
-              <Typography color="text.secondary">
-                No se detectaron inventarios asignados que se superpongan con esta ausencia.
-              </Typography>
-            ) : (
-              <Alert severity="warning" sx={{ mb: 2 }}>
-                Esta solicitud se superpone con {request.affectedInventories.length} inventario(s)
-                asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
-              </Alert>
-            )}
-            {request.affectedInventories.length > 0 ? (
-              <TableContainer>
-                <Table size="small">
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Tienda</TableCell>
-                      <TableCell>Inicio</TableCell>
-                      <TableCell>Fin</TableCell>
-                      <TableCell>Estado</TableCell>
-                      <TableCell align="right">Acción</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {request.affectedInventories.map((inventory) => (
-                      <TableRow key={inventory.inventoryId}>
-                        <TableCell>{inventory.storeName}</TableCell>
-                        <TableCell>{formatDateTime(inventory.scheduledStart)}</TableCell>
-                        <TableCell>
-                          {inventory.scheduledEnd ? formatDateTime(inventory.scheduledEnd) : "—"}
-                        </TableCell>
-                        <TableCell>{inventory.status}</TableCell>
-                        <TableCell align="right">
-                          <Button
-                            component={RouterLink}
-                            to={`/inventories/${inventory.inventoryId}`}
-                            size="small"
-                          >
-                            Ver inventario
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-            ) : null}
-          </CardContent>
-        </Card>
-
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Historial
-            </Typography>
-            <Stack spacing={1}>
-              {request.events.map((event) => (
-                <Typography key={event.id} variant="body2">
-                  {formatDateTime(event.createdAt)} ·{" "}
-                  {absenceEventTypeLabels[event.eventType as keyof typeof absenceEventTypeLabels] ??
-                    event.eventType}
-                  {event.performerName ? ` · ${event.performerName}` : ""}
-                  {event.comment ? ` · ${event.comment}` : ""}
-                </Typography>
-              ))}
-            </Stack>
-          </CardContent>
-        </Card>
-      </Stack>
-
-      <Dialog open={rejectOpen} onClose={() => setRejectOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Rechazar solicitud</DialogTitle>
-        <DialogContent>
-          <TextField
-            autoFocus
-            margin="dense"
+      <Modal opened={rejectOpen} onClose={closeRejectModal} title="Rechazar solicitud" centered>
+        <Stack gap="md">
+          <Textarea
             label="Motivo del rechazo"
-            fullWidth
-            multiline
-            minRows={3}
             value={comment}
-            onChange={(event) => setComment(event.target.value)}
-          />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setRejectOpen(false)}>Cancelar</Button>
-          <Button color="error" onClick={handleReject} disabled={rejectMutation.isPending}>
-            Rechazar
-          </Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={needsInfoOpen} onClose={() => setNeedsInfoOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle>Solicitar más información</DialogTitle>
-        <DialogContent>
-          <TextField
+            onChange={(event) => setComment(event.currentTarget.value)}
+            minRows={3}
             autoFocus
-            margin="dense"
-            label="Comentario para el empleado"
-            fullWidth
-            multiline
-            minRows={3}
-            value={comment}
-            onChange={(event) => setComment(event.target.value)}
           />
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setNeedsInfoOpen(false)}>Cancelar</Button>
-          <Button onClick={handleNeedsInfo} disabled={needsInfoMutation.isPending}>
-            Guardar
-          </Button>
-        </DialogActions>
-      </Dialog>
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={closeRejectModal}>
+              Cancelar
+            </Button>
+            <Button color="red" onClick={() => void handleReject()} loading={rejectMutation.isPending}>
+              Rechazar
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
 
-      <FeedbackSnackbar
-        open={feedback.open}
-        message={feedback.message}
-        severity={feedback.severity}
-        onClose={() => setFeedback((current) => ({ ...current, open: false }))}
-      />
-    </AdminLayout>
+      <Modal
+        opened={needsInfoOpen}
+        onClose={closeNeedsInfoModal}
+        title="Solicitar más información"
+        centered
+      >
+        <Stack gap="md">
+          <Textarea
+            label="Comentario para el empleado"
+            value={comment}
+            onChange={(event) => setComment(event.currentTarget.value)}
+            minRows={3}
+            autoFocus
+          />
+          <Group justify="flex-end" gap="sm">
+            <Button variant="default" onClick={closeNeedsInfoModal}>
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleNeedsInfo()} loading={needsInfoMutation.isPending}>
+              Guardar
+            </Button>
+          </Group>
+        </Stack>
+      </Modal>
+    </Stack>
   );
 }

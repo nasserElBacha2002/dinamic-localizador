@@ -1,14 +1,6 @@
-import {
-  Box,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Typography,
-  type SelectChangeEvent,
-} from "@mui/material";
+import { Button, Group, Stack, Text, Title } from "@mantine/core";
 import { useNavigate } from "react-router-dom";
+import { FilterSelect } from "../../design-system";
 import { useCompany } from "../../hooks/useCompany";
 
 export function CompanySelector({ compact = false }: { compact?: boolean }) {
@@ -21,40 +13,34 @@ export function CompanySelector({ compact = false }: { compact?: boolean }) {
     }
 
     return (
-      <Typography variant={compact ? "body2" : "subtitle2"} color="inherit">
+      <Text size={compact ? "sm" : "md"} c="inherit">
         {activeCompany.companyName}
-      </Typography>
+      </Text>
     );
   }
 
-  const handleChange = (event: SelectChangeEvent<string>) => {
-    selectCompany(event.target.value);
-    navigate("/");
-  };
+  const companyOptions = companies.map((company) => ({
+    value: company.companyId,
+    label: company.companyName,
+  }));
 
   return (
-    <Stack direction="row" spacing={1} alignItems="center">
+    <Group gap="xs" align="flex-end" wrap="nowrap">
       {!compact ? (
-        <Typography variant="body2" color="inherit">
+        <Text size="sm" c="inherit">
           Empresa
-        </Typography>
+        </Text>
       ) : null}
-      <FormControl size="small" sx={{ minWidth: compact ? 160 : 220 }}>
-        <InputLabel id="active-company-label">Empresa activa</InputLabel>
-        <Select
-          labelId="active-company-label"
-          label="Empresa activa"
-          value={activeCompany?.companyId ?? ""}
-          onChange={handleChange}
-        >
-          {companies.map((company) => (
-            <MenuItem key={company.companyId} value={company.companyId}>
-              {company.companyName}
-            </MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-    </Stack>
+      <FilterSelect
+        label="Empresa activa"
+        value={activeCompany?.companyId ?? ""}
+        onChange={(companyId) => {
+          selectCompany(companyId);
+          navigate("/");
+        }}
+        data={companyOptions}
+      />
+    </Group>
   );
 }
 
@@ -63,39 +49,44 @@ export function CompanySelectionPage() {
   const navigate = useNavigate();
 
   return (
-    <Box sx={{ maxWidth: 480, mx: "auto", mt: 8, px: 2 }}>
-      <Typography variant="h5" gutterBottom>
-        Seleccioná una empresa
-      </Typography>
-      <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-        Tu usuario pertenece a más de una empresa. Elegí con cuál querés operar.
-      </Typography>
-      <Stack spacing={1}>
+    <Stack maw={480} mx="auto" mt="xl" px="md" gap="md">
+      <div>
+        <Title order={3}>Seleccioná una empresa</Title>
+        <Text c="dimmed" size="sm">
+          Tu usuario pertenece a más de una empresa. Elegí con cuál querés operar.
+        </Text>
+      </div>
+      <Stack gap="sm">
         {companies.map((company) => (
-          <Box
+          <Button
             key={company.companyId}
-            component="button"
+            variant="default"
             onClick={() => {
               selectCompany(company.companyId);
               navigate("/");
             }}
-            sx={{
-              textAlign: "left",
-              border: 1,
-              borderColor: "divider",
-              borderRadius: 1,
-              p: 2,
-              cursor: "pointer",
-              background: "background.paper",
+            styles={{
+              root: {
+                height: "auto",
+                padding: "var(--mantine-spacing-md)",
+              },
+              inner: {
+                justifyContent: "flex-start",
+              },
+              label: {
+                width: "100%",
+              },
             }}
           >
-            <Typography variant="subtitle1">{company.companyName}</Typography>
-            <Typography variant="body2" color="text.secondary">
-              Rol: {company.role}
-            </Typography>
-          </Box>
+            <Stack gap={2} align="flex-start">
+              <Text fw={600}>{company.companyName}</Text>
+              <Text size="sm" c="dimmed">
+                Rol: {company.role}
+              </Text>
+            </Stack>
+          </Button>
         ))}
       </Stack>
-    </Box>
+    </Stack>
   );
 }

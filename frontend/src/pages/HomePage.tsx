@@ -1,25 +1,118 @@
-import { Button, Card, CardActions, CardContent, Grid, Stack, Typography } from "@mui/material";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
-import { StatusCard } from "../components/StatusCard";
-import { ErrorState } from "../components/common/ErrorState";
-import { LoadingState } from "../components/common/LoadingState";
-import { PageHeader } from "../components/common/PageHeader";
-import { useCompanyModules } from "../hooks/useCompanyModules";
+import { Card, SimpleGrid, Stack, Text } from "@mantine/core";
+import type { KeyboardEvent } from "react";
+import { useNavigate } from "react-router-dom";
+import {
+  EmptyState,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  PageHeader,
+  SectionCard,
+  StatusBadge,
+} from "../design-system";
 import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
 import { useInventories } from "../hooks/useInventories";
-import { AdminLayout } from "../layouts/AdminLayout";
 import type { InventoryWithStore } from "../types/inventory";
 import { terminology } from "../domain/terminology";
-import { getHomeQuickLinks } from "../utils/company-modules";
 import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
+import { inventoryStatusLabels } from "../utils/labels";
+
+type HealthStatus = "loading" | "ok" | "error";
+
+function healthStatusLabel(status: HealthStatus): string {
+  if (status === "loading") {
+    return "Consultando";
+  }
+
+  if (status === "ok") {
+    return "Operativo";
+  }
+
+  return "Con error";
+}
+
+function healthStatusTone(status: HealthStatus): "success" | "warning" | "danger" {
+  if (status === "ok") {
+    return "success";
+  }
+
+  if (status === "loading") {
+    return "warning";
+  }
+
+  return "danger";
+}
+
+interface HealthMetricCardProps {
+  title: string;
+  status: HealthStatus;
+  details: string;
+}
+
+function HealthMetricCard({ title, status, details }: HealthMetricCardProps) {
+  return (
+    <MetricCard
+      title={title}
+      value={<StatusBadge label={healthStatusLabel(status)} tone={healthStatusTone(status)} />}
+      description={details}
+      loading={status === "loading"}
+    />
+  );
+}
+
+function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore }) {
+  const navigate = useNavigate();
+  const destination = `/inventories/${inventory.id}`;
+  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`;
+
+  const handleNavigate = () => {
+    navigate(destination);
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleNavigate();
+    }
+  };
+
+  const scheduleText = inventory.scheduledEnd
+    ? `${formatDateTime(inventory.scheduledStart)} – ${formatDateTime(inventory.scheduledEnd)}`
+    : formatDateTime(inventory.scheduledStart);
+
+  return (
+    <Card
+      withBorder
+      padding="md"
+      radius="md"
+      role="link"
+      tabIndex={0}
+      aria-label={ariaLabel}
+      onClick={handleNavigate}
+      onKeyDown={handleKeyDown}
+      style={{ cursor: "pointer" }}
+    >
+      <Stack gap={4}>
+        <Text fw={600}>{inventory.store.name}</Text>
+        <Text size="sm" c="dimmed">
+          {inventory.store.address ?? "—"} · {scheduleText}
+        </Text>
+        <StatusBadge
+          label={inventoryStatusLabels[inventory.status] ?? inventory.status}
+          tone="info"
+          variant="light"
+        />
+      </Stack>
+    </Card>
+  );
+}
 
 export function HomePage() {
   const apiHealth = useApiHealth();
   const databaseHealth = useDatabaseHealth();
   const permissionsQuery = useCompanyPermissions();
-  const modulesQuery = useCompanyModules();
   const healthReady = databaseHealth.data?.database === "connected";
 
   const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
@@ -32,165 +125,100 @@ export function HomePage() {
     healthReady && canReadInventories,
   );
 
-  const quickLinks = getHomeQuickLinks({
-    modules: modulesQuery.data,
-    permissions: permissionsQuery.data?.permissions,
-    isPlatformAdmin: Boolean(permissionsQuery.data?.isPlatformAdmin),
-    modulesLoading: permissionsQuery.isPending || modulesQuery.isPending,
-  });
+  const apiStatus: HealthStatus = apiHealth.isLoading
+    ? "loading"
+    : apiHealth.isError
+      ? "error"
+      : "ok";
+
+  const databaseStatus: HealthStatus = databaseHealth.isLoading
+    ? "loading"
+    : databaseHealth.data?.database === "connected"
+      ? "ok"
+      : "error";
+
+  const upcomingSummaryStatus: HealthStatus = upcomingInventoriesQuery.isLoading
+    ? "loading"
+    : upcomingInventoriesQuery.isError
+      ? "error"
+      : "ok";
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Dinamic Attendance"
         description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
       />
 
-      <Grid container spacing={3} sx={{ mb: 4 }}>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Backend"
-            status={apiHealth.isLoading ? "loading" : apiHealth.isError ? "error" : "ok"}
-            details={
-              apiHealth.data
-                ? `Servicio ${apiHealth.data.service} operativo`
-                : apiHealth.isError
-                  ? "No se pudo contactar al backend"
-                  : "Verificando..."
-            }
-          />
-        </Grid>
-        <Grid size={{ xs: 12, md: 6 }}>
-          <StatusCard
-            title="Base de datos"
-            status={
-              databaseHealth.isLoading
-                ? "loading"
-                : databaseHealth.data?.database === "connected"
-                  ? "ok"
-                  : "error"
-            }
-            details={
-              databaseHealth.data?.database === "connected"
-                ? "Conexión establecida"
-                : databaseHealth.data?.message ?? "Verificando conexión..."
-            }
-          />
-        </Grid>
+      <SimpleGrid cols={{ base: 1, md: 2, lg: canReadInventories ? 3 : 2 }} spacing="md" mb="xl">
+        <HealthMetricCard
+          title="Backend"
+          status={apiStatus}
+          details={
+            apiHealth.data
+              ? `Servicio ${apiHealth.data.service} operativo`
+              : apiHealth.isError
+                ? "No se pudo contactar al backend"
+                : "Verificando..."
+          }
+        />
+        <HealthMetricCard
+          title="Base de datos"
+          status={databaseStatus}
+          details={
+            databaseHealth.data?.database === "connected"
+              ? "Conexión establecida"
+              : databaseHealth.data?.message ?? "Verificando conexión..."
+          }
+        />
         {canReadInventories ? (
-          <Grid size={{ xs: 12, md: 6 }}>
-            <StatusCard
-              title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
-              status={
-                upcomingInventoriesQuery.isLoading
-                  ? "loading"
-                  : upcomingInventoriesQuery.isError
-                    ? "error"
-                    : "ok"
-              }
-              details={
-                upcomingInventoriesQuery.data
-                  ? `${upcomingInventoriesQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
-                  : "No disponible"
-              }
-            />
-          </Grid>
+          <HealthMetricCard
+            title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
+            status={upcomingSummaryStatus}
+            details={
+              upcomingInventoriesQuery.data
+                ? `${upcomingInventoriesQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
+                : "No disponible"
+            }
+          />
         ) : null}
-      </Grid>
-
-      {quickLinks.length > 0 ? (
-        <>
-          <Typography variant="h5" gutterBottom>
-            Accesos rápidos
-          </Typography>
-          <Grid container spacing={2} sx={{ mb: 4 }}>
-            {quickLinks.map((link) => (
-              <Grid key={link.path} size={{ xs: 12, sm: 6, md: 3 }}>
-                <Card variant="outlined" sx={{ height: "100%" }}>
-                  <CardContent>
-                    <Typography variant="h6">{link.label}</Typography>
-                    <Typography variant="body2" color="text.secondary">
-                      Ir a {link.label.toLowerCase()}
-                    </Typography>
-                  </CardContent>
-                  <CardActions>
-                    <Button component={RouterLink} to={link.path} size="small">
-                      Ir
-                    </Button>
-                  </CardActions>
-                </Card>
-              </Grid>
-            ))}
-          </Grid>
-        </>
-      ) : null}
+      </SimpleGrid>
 
       {canReadInventories ? (
-        <>
-          <Typography variant="h5" gutterBottom>
-            Próximas {terminology.operation.plural.toLowerCase()}
-          </Typography>
-          {upcomingInventoriesQuery.isLoading ? <LoadingState /> : null}
+        <SectionCard
+          title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
+          description={`${terminology.operation.plural} programadas a continuación.`}
+        >
+          {upcomingInventoriesQuery.isLoading ? <LoadingState height={160} /> : null}
           {upcomingInventoriesQuery.isError ? (
-            <ErrorState message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`} />
+            <ErrorState
+              message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`}
+            />
           ) : null}
-          {upcomingInventoriesQuery.data?.data.length === 0 ? (
-            <Typography color="text.secondary">No hay {terminology.operation.plural.toLowerCase()} programadas.</Typography>
+          {!upcomingInventoriesQuery.isLoading &&
+          !upcomingInventoriesQuery.isError &&
+          upcomingInventoriesQuery.data?.data.length === 0 ? (
+            <EmptyState
+              title={`No hay ${terminology.operation.plural.toLowerCase()} programadas`}
+              description={`Cuando programes ${terminology.operation.plural.toLowerCase()}, aparecerán aquí.`}
+            />
           ) : null}
           {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
-            <Stack spacing={1}>
+            <Stack gap="sm">
               {upcomingInventoriesQuery.data.data.map((inventory) => (
                 <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
               ))}
             </Stack>
           ) : null}
-        </>
-      ) : null}
-    </AdminLayout>
-  );
-}
-
-function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore }) {
-  const navigate = useNavigate();
-
-  return (
-    <Card
-      variant="outlined"
-      role="link"
-      tabIndex={0}
-      aria-label={`Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`}
-      onClick={() => navigate(`/inventories/${inventory.id}`)}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          navigate(`/inventories/${inventory.id}`);
-        }
-      }}
-      sx={{
-        cursor: "pointer",
-        transition: (theme) => theme.transitions.create("background-color"),
-        "&:hover": {
-          backgroundColor: "action.hover",
-        },
-      }}
-    >
-      <CardContent>
-        <BoxInfo
-          title={inventory.store.name}
-          subtitle={`${inventory.store.address ?? "—"} · ${formatDateTime(inventory.scheduledStart)}`}
-        />
-      </CardContent>
-    </Card>
-  );
-}
-
-function BoxInfo({ title, subtitle }: { title: string; subtitle: string }) {
-  return (
-    <div>
-      <Typography fontWeight={600}>{title}</Typography>
-      <Typography variant="body2" color="text.secondary">
-        {subtitle}
-      </Typography>
-    </div>
+        </SectionCard>
+      ) : (
+        <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
+          <Text size="sm" c="dimmed">
+            Conectá la base de datos y revisá el estado del backend para habilitar más información
+            operativa en el panel.
+          </Text>
+        </SectionCard>
+      )}
+    </>
   );
 }

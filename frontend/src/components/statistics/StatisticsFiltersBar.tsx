@@ -1,9 +1,8 @@
-import { FormControl, InputLabel, MenuItem, Select } from "@mui/material";
-import { DateRangeFilter } from "../common/DateRangeFilter";
-import { FilterItem, ListFilters } from "../common/ListFilters";
+import { useMemo } from "react";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import { InventorySearchAutocomplete } from "../inventories/InventorySearchAutocomplete";
 import { StoreSearchAutocomplete } from "../stores/StoreSearchAutocomplete";
+import { FilterBar, FilterDateRangeInput, FilterSelect } from "../../design-system";
 import type { DateRangeValue } from "../../types/date-range";
 import type { StatisticsValidationStatus } from "../../types/statistics";
 import {
@@ -47,10 +46,38 @@ export function StatisticsFiltersBar({
   onLocationStatusChange,
   onPunctualityStatusChange,
 }: StatisticsFiltersBarProps) {
+  const validationOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...(["VALID", "PENDING_REVIEW", "REJECTED"] as const).map((status) => ({
+        value: status,
+        label: validationStatusLabels[status],
+      })),
+      { value: "NO_CHECK_IN", label: "Sin asistencia" },
+    ],
+    [],
+  );
+
+  const locationOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(locationStatusLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
+  const punctualityOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(punctualityStatusLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
   return (
-    <ListFilters>
-      <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
-        <DateRangeFilter
+    <FilterBar>
+      <FilterBar.Item minWidth={280}>
+        <FilterDateRangeInput
           value={dateRange}
           onChange={onDateRangeChange}
           mode="past"
@@ -58,84 +85,53 @@ export function StatisticsFiltersBar({
           defaultValue={defaultDateRange}
           allowCustomRange
         />
-      </FilterItem>
-      <FilterItem>
+      </FilterBar.Item>
+      <FilterBar.Item>
         <InventorySearchAutocomplete
           value={inventoryId || null}
           onChange={(id) => onInventoryChange(id ?? "")}
           allowCreate={false}
         />
-      </FilterItem>
-      <FilterItem>
+      </FilterBar.Item>
+      <FilterBar.Item>
         <StoreSearchAutocomplete
           value={storeId || null}
           onChange={(id) => onStoreChange(id ?? "")}
           allowCreate={false}
         />
-      </FilterItem>
-      <FilterItem>
+      </FilterBar.Item>
+      <FilterBar.Item>
         <EmployeeSearchAutocomplete
           value={employeeId || null}
           onChange={(id) => onEmployeeChange(id ?? "")}
           activeOnly={false}
           allowCreate={false}
         />
-      </FilterItem>
-      <FilterItem>
-        <FormControl fullWidth>
-          <InputLabel id="statistics-validation-status-label">Estado validación</InputLabel>
-          <Select
-            labelId="statistics-validation-status-label"
-            label="Estado validación"
-            value={validationStatus}
-            onChange={(event) => onValidationStatusChange(event.target.value as StatisticsValidationStatus)}
-          >
-            <MenuItem value="">Todos</MenuItem>
-            {(["VALID", "PENDING_REVIEW", "REJECTED"] as const).map((status) => (
-              <MenuItem key={status} value={status}>
-                {validationStatusLabels[status]}
-              </MenuItem>
-            ))}
-            <MenuItem value="NO_CHECK_IN">Sin asistencia</MenuItem>
-          </Select>
-        </FormControl>
-      </FilterItem>
-      <FilterItem>
-        <FormControl fullWidth>
-          <InputLabel id="statistics-location-status-label">Estado ubicación</InputLabel>
-          <Select
-            labelId="statistics-location-status-label"
-            label="Estado ubicación"
-            value={locationStatus}
-            onChange={(event) => onLocationStatusChange(event.target.value)}
-          >
-            <MenuItem value="">Todos</MenuItem>
-            {Object.entries(locationStatusLabels).map(([value, label]) => (
-              <MenuItem key={value} value={value}>
-                {label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </FilterItem>
-      <FilterItem>
-        <FormControl fullWidth>
-          <InputLabel id="statistics-punctuality-status-label">Puntualidad</InputLabel>
-          <Select
-            labelId="statistics-punctuality-status-label"
-            label="Puntualidad"
-            value={punctualityStatus}
-            onChange={(event) => onPunctualityStatusChange(event.target.value)}
-          >
-            <MenuItem value="">Todos</MenuItem>
-            {Object.entries(punctualityStatusLabels).map(([value, label]) => (
-              <MenuItem key={value} value={value}>
-                {label}
-              </MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-      </FilterItem>
-    </ListFilters>
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Estado validación"
+          value={validationStatus}
+          onChange={(value) => onValidationStatusChange(value as StatisticsValidationStatus)}
+          data={validationOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Estado ubicación"
+          value={locationStatus}
+          onChange={onLocationStatusChange}
+          data={locationOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Puntualidad"
+          value={punctualityStatus}
+          onChange={onPunctualityStatusChange}
+          data={punctualityOptions}
+        />
+      </FilterBar.Item>
+    </FilterBar>
   );
 }

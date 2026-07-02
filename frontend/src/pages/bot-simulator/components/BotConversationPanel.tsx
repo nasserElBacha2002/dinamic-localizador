@@ -1,6 +1,8 @@
-import { Box, Button, Chip, Paper, Stack, TextField, Typography } from "@mui/material";
+import { Badge, Button, Group, ScrollArea, Stack, Textarea } from "@mantine/core";
+import { EmptyState, SectionCard } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 import { BADGE_LABELS } from "../types";
+import { BotQuickActions } from "./BotQuickActions";
 import { ChatBubble } from "./ChatBubble";
 
 type BotConversationPanelProps = Pick<
@@ -28,109 +30,60 @@ export function BotConversationPanel({
   setLocationDialogOpen,
 }: BotConversationPanelProps) {
   return (
-    <Paper sx={{ p: 2, minHeight: 480, display: "flex", flexDirection: "column" }}>
-      <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-        {sessionState?.statusBadges.map((badge) => (
-          <Chip key={badge} label={BADGE_LABELS[badge] ?? badge} size="small" color="primary" variant="outlined" />
-        ))}
-      </Stack>
-
+    <SectionCard
+      title="Conversación"
+      description="Simulá el intercambio de mensajes como en WhatsApp."
+      action={
+        sessionState ? (
+          <Group gap="xs">
+            {sessionState.statusBadges.map((badge) => (
+              <Badge key={badge} variant="light" size="sm">
+                {BADGE_LABELS[badge] ?? badge}
+              </Badge>
+            ))}
+          </Group>
+        ) : undefined
+      }
+    >
       {!sessionState ? (
-        <Box sx={{ flex: 1, display: "grid", placeItems: "center" }}>
-          <Typography color="text.secondary">
-            Configurá el contexto y presioná &quot;Iniciar simulación&quot; para comenzar.
-          </Typography>
-        </Box>
+        <EmptyState
+          title="Sin conversación activa"
+          description='Configurá el contexto y presioná "Iniciar simulación" para comenzar.'
+        />
       ) : (
-        <>
-          <Box
-            sx={{
+        <Stack gap="md" style={{ minHeight: 480 }}>
+          <ScrollArea
+            type="auto"
+            offsetScrollbars
+            style={{
               flex: 1,
-              overflowY: "auto",
-              maxHeight: 420,
-              mb: 2,
-              pr: 1,
-              bgcolor: "grey.50",
-              borderRadius: 1,
-              p: 2,
+              minHeight: 360,
+              maxHeight: 460,
+              backgroundColor: "var(--mantine-color-gray-0)",
+              borderRadius: "var(--mantine-radius-sm)",
             }}
+            p="sm"
           >
             {sessionState.messages.map((message) => (
               <ChatBubble key={message.id} message={message} />
             ))}
             <div ref={chatEndRef} />
-          </Box>
+          </ScrollArea>
 
-          <Stack direction="row" spacing={1} flexWrap="wrap" useFlexGap sx={{ mb: 2 }}>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Llegué")}>
-              Enviar &quot;Llegué&quot;
-            </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Terminé")}>
-              Enviar &quot;Terminé&quot;
-            </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Hola")}>
-              Enviar &quot;Hola&quot;
-            </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => void handleSendText("Menú")}>
-              Enviar &quot;Menú&quot;
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={isBusy || !locationPresets?.storeLocation}
-              onClick={() => {
-                if (locationPresets?.storeLocation) {
-                  void handleSendLocation(
-                    locationPresets.storeLocation.latitude,
-                    locationPresets.storeLocation.longitude,
-                  );
-                }
-              }}
-            >
-              Ubicación de tienda
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={isBusy || !locationPresets?.outsideRadius}
-              onClick={() => {
-                if (locationPresets?.outsideRadius) {
-                  void handleSendLocation(
-                    locationPresets.outsideRadius.latitude,
-                    locationPresets.outsideRadius.longitude,
-                  );
-                }
-              }}
-            >
-              Fuera del radio
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              disabled={isBusy || !locationPresets?.nearRadiusLimit}
-              onClick={() => {
-                if (locationPresets?.nearRadiusLimit) {
-                  void handleSendLocation(
-                    locationPresets.nearRadiusLimit.latitude,
-                    locationPresets.nearRadiusLimit.longitude,
-                  );
-                }
-              }}
-            >
-              Cerca del límite
-            </Button>
-            <Button size="small" variant="outlined" disabled={isBusy} onClick={() => setLocationDialogOpen(true)}>
-              Enviar ubicación
-            </Button>
-          </Stack>
+          <BotQuickActions
+            isBusy={isBusy}
+            locationPresets={locationPresets}
+            onSendText={(text) => void handleSendText(text)}
+            onSendLocation={(latitude, longitude) => void handleSendLocation(latitude, longitude)}
+            onOpenLocationDialog={() => setLocationDialogOpen(true)}
+          />
 
-          <Stack direction="row" spacing={1}>
-            <TextField
-              fullWidth
-              size="small"
+          <Group gap="sm" align="flex-end" wrap="nowrap">
+            <Textarea
+              style={{ flex: 1 }}
               placeholder="Escribí un mensaje..."
               value={draftText}
-              onChange={(event) => setDraftText(event.target.value)}
+              onChange={(event) => setDraftText(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter" && !event.shiftKey) {
                   event.preventDefault();
@@ -138,13 +91,16 @@ export function BotConversationPanel({
                 }
               }}
               disabled={isBusy}
+              autosize
+              minRows={1}
+              maxRows={4}
             />
-            <Button variant="contained" onClick={() => void handleSendText(draftText)} disabled={isBusy || !draftText.trim()}>
+            <Button onClick={() => void handleSendText(draftText)} disabled={isBusy || !draftText.trim()}>
               Enviar
             </Button>
-          </Stack>
-        </>
+          </Group>
+        </Stack>
       )}
-    </Paper>
+    </SectionCard>
   );
 }

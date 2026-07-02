@@ -1,22 +1,25 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Alert,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  TextField,
-} from "@mui/material";
+import { Alert, Stack } from "@mantine/core";
+import { useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { attendanceTestFormSchema, type AttendanceTestFormValues } from "../../schemas/attendance.schema";
+import {
+  FormActions,
+  FormErrorAlert,
+  FormGrid,
+  FormSection,
+  RHFDateTimeInput,
+  RHFNumberInput,
+  RHFSelect,
+  RHFTextarea,
+  RHFTextInput,
+} from "../../design-system";
 import {
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
-import { FormActions } from "../common/FormActions";
 import { InventorySearchAutocomplete } from "../inventories/InventorySearchAutocomplete";
 
 interface AttendanceTestFormProps {
@@ -36,168 +39,128 @@ export function AttendanceTestForm({
   errorMessage,
   onSubmit,
 }: AttendanceTestFormProps) {
-  const {
-    register,
-    control,
-    handleSubmit,
-    formState: { errors },
-  } = useForm<AttendanceTestFormValues>({
+  const { control, handleSubmit } = useForm<AttendanceTestFormValues>({
     resolver: zodResolver(attendanceTestFormSchema),
     defaultValues,
   });
 
+  const validationOptions = useMemo(
+    () => Object.entries(validationStatusLabels).map(([value, label]) => ({ value, label })),
+    [],
+  );
+  const locationOptions = useMemo(
+    () => Object.entries(locationStatusLabels).map(([value, label]) => ({ value, label })),
+    [],
+  );
+  const punctualityOptions = useMemo(
+    () => Object.entries(punctualityStatusLabels).map(([value, label]) => ({ value, label })),
+    [],
+  );
+
   return (
     <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Stack spacing={2} maxWidth={640}>
-        <Alert severity="warning">
-          Esta función es temporal y se utiliza únicamente para validar el modelo antes de integrar WhatsApp y Twilio.
-        </Alert>
+      <FormSection>
+        <Stack gap="md">
+          <Alert color="yellow" title="Herramienta temporal">
+            Esta función es temporal y se utiliza únicamente para validar el modelo antes de integrar
+            WhatsApp y Twilio.
+          </Alert>
 
-        {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+          <FormErrorAlert message={errorMessage} />
 
-        <Controller
-          name="inventoryId"
-          control={control}
-          render={({ field }) => (
-            <InventorySearchAutocomplete
-              value={field.value || null}
-              onChange={(inventoryId) => field.onChange(inventoryId ?? "")}
-              error={Boolean(errors.inventoryId)}
-              helperText={errors.inventoryId?.message}
+          <Controller
+            name="inventoryId"
+            control={control}
+            render={({ field, fieldState }) => (
+              <InventorySearchAutocomplete
+                value={field.value || null}
+                onChange={(inventoryId) => field.onChange(inventoryId ?? "")}
+                error={Boolean(fieldState.error)}
+                helperText={fieldState.error?.message}
+                required
+              />
+            )}
+          />
+
+          <Controller
+            name="employeeId"
+            control={control}
+            render={({ field, fieldState }) => (
+              <EmployeeSearchAutocomplete
+                value={field.value || null}
+                onChange={(employeeId) => field.onChange(employeeId ?? "")}
+                error={Boolean(fieldState.error)}
+                helperText={fieldState.error?.message ?? "Buscá por nombre o teléfono"}
+                required
+              />
+            )}
+          />
+
+          <FormGrid>
+            <RHFNumberInput
+              control={control}
+              name="receivedLatitude"
+              label="Latitud recibida"
+              required
+              allowDecimal
+              decimalScale={8}
+              min={-90}
+              max={90}
+            />
+            <RHFNumberInput
+              control={control}
+              name="receivedLongitude"
+              label="Longitud recibida"
+              required
+              allowDecimal
+              decimalScale={8}
+              min={-180}
+              max={180}
+            />
+            <RHFNumberInput
+              control={control}
+              name="distanceMeters"
+              label="Distancia (metros)"
+              required
+              allowDecimal
+              decimalScale={2}
+              min={0}
+            />
+            <RHFSelect
+              control={control}
+              name="validationStatus"
+              label="Validación"
+              data={validationOptions}
               required
             />
-          )}
-        />
-
-        <Controller
-          name="employeeId"
-          control={control}
-          render={({ field }) => (
-            <EmployeeSearchAutocomplete
-              value={field.value || null}
-              onChange={(employeeId) => field.onChange(employeeId ?? "")}
-              error={Boolean(errors.employeeId)}
-              helperText={errors.employeeId?.message ?? "Buscá por nombre o teléfono"}
+            <RHFSelect
+              control={control}
+              name="locationStatus"
+              label="Ubicación"
+              data={locationOptions}
               required
             />
-          )}
-        />
+            <RHFSelect
+              control={control}
+              name="punctualityStatus"
+              label="Puntualidad"
+              data={punctualityOptions}
+              required
+            />
+          </FormGrid>
 
-        <TextField
-          label="Latitud recibida"
-          type="number"
-          required
-          fullWidth
-          inputProps={{ step: "any" }}
-          error={Boolean(errors.receivedLatitude)}
-          helperText={errors.receivedLatitude?.message}
-          {...register("receivedLatitude", { valueAsNumber: true })}
-        />
+          <RHFDateTimeInput control={control} name="receivedAt" label="Fecha y hora recibida" required />
+          <RHFTextInput control={control} name="sourceMessageSid" label="MessageSid (opcional)" />
+          <RHFTextarea
+            control={control}
+            name="validationReason"
+            label="Motivo de validación (opcional)"
+            minRows={2}
+          />
 
-        <TextField
-          label="Longitud recibida"
-          type="number"
-          required
-          fullWidth
-          inputProps={{ step: "any" }}
-          error={Boolean(errors.receivedLongitude)}
-          helperText={errors.receivedLongitude?.message}
-          {...register("receivedLongitude", { valueAsNumber: true })}
-        />
-
-        <TextField
-          label="Distancia (metros)"
-          type="number"
-          required
-          fullWidth
-          inputProps={{ step: "any" }}
-          error={Boolean(errors.distanceMeters)}
-          helperText={errors.distanceMeters?.message}
-          {...register("distanceMeters", { valueAsNumber: true })}
-        />
-
-        <Controller
-          name="validationStatus"
-          control={control}
-          render={({ field }) => (
-            <FormControl fullWidth>
-              <InputLabel id="validation-status-label">Validación</InputLabel>
-              <Select {...field} labelId="validation-status-label" label="Validación">
-                {Object.entries(validationStatusLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        />
-
-        <Controller
-          name="locationStatus"
-          control={control}
-          render={({ field }) => (
-            <FormControl fullWidth>
-              <InputLabel id="location-status-label">Ubicación</InputLabel>
-              <Select {...field} labelId="location-status-label" label="Ubicación">
-                {Object.entries(locationStatusLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        />
-
-        <Controller
-          name="punctualityStatus"
-          control={control}
-          render={({ field }) => (
-            <FormControl fullWidth>
-              <InputLabel id="punctuality-status-label">Puntualidad</InputLabel>
-              <Select {...field} labelId="punctuality-status-label" label="Puntualidad">
-                {Object.entries(punctualityStatusLabels).map(([value, label]) => (
-                  <MenuItem key={value} value={value}>
-                    {label}
-                  </MenuItem>
-                ))}
-              </Select>
-            </FormControl>
-          )}
-        />
-
-        <TextField
-          label="Fecha y hora recibida"
-          type="datetime-local"
-          required
-          fullWidth
-          InputLabelProps={{ shrink: true }}
-          error={Boolean(errors.receivedAt)}
-          helperText={errors.receivedAt?.message}
-          {...register("receivedAt")}
-        />
-
-        <TextField
-          label="MessageSid (opcional)"
-          fullWidth
-          error={Boolean(errors.sourceMessageSid)}
-          helperText={errors.sourceMessageSid?.message}
-          {...register("sourceMessageSid")}
-        />
-
-        <TextField
-          label="Motivo de validación (opcional)"
-          fullWidth
-          multiline
-          minRows={2}
-          error={Boolean(errors.validationReason)}
-          helperText={errors.validationReason?.message}
-          {...register("validationReason")}
-        />
-
-        <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
-      </Stack>
+          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+        </Stack>
+      </FormSection>
     </form>
   );
 }

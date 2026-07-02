@@ -1,34 +1,48 @@
-import {
-  Button,
-  Card,
-  CardContent,
-  Link,
-  Stack,
-  Typography,
-} from "@mui/material";
+import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
-import { ConfirmDialog } from "../../components/common/ConfirmDialog";
-import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
-import { StatusChip } from "../../components/common/StatusChip";
-import { InventoryForm } from "../../components/inventories/InventoryForm";
+import {
+  ConfirmDialog,
+  ErrorState,
+  LoadingState,
+  MetricCard,
+  PageHeader,
+  SectionCard,
+  StatusBadge,
+  type StatusBadgeTone,
+} from "../../design-system";
+import { InventoryDetailFieldGrid } from "../../components/inventories/InventoryDetailFieldGrid";
+import { InventoryForm, INVENTORY_DETAIL_FORM_ID } from "../../components/inventories/InventoryForm";
 import { InventoryOperationalSection } from "../../components/inventories/InventoryOperationalSection";
+import layoutClasses from "../../components/inventories/inventory-detail-layout.module.css";
 import {
   useCancelInventory,
   useInventory,
   useUpdateInventory,
 } from "../../hooks/useInventories";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
+import type { InventoryStatus } from "../../types/inventory";
 import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { isInventoryAssignable, isInventoryEditable } from "../../utils/inventory-status";
 import { inventoryStatusLabels } from "../../utils/labels";
+
+function inventoryStatusTone(status: InventoryStatus): StatusBadgeTone {
+  switch (status) {
+    case "SCHEDULED":
+      return "info";
+    case "IN_PROGRESS":
+      return "warning";
+    case "COMPLETED":
+      return "success";
+    case "CANCELLED":
+      return "danger";
+    default:
+      return "neutral";
+  }
+}
 
 export function InventoryDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -39,11 +53,10 @@ export function InventoryDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [feedback, setFeedback] = useState<{ open: boolean; message: string; severity: "success" | "error" }>({
-    open: false,
-    message: "",
-    severity: "success",
-  });
+
+  const showFeedback = (message: string, severity: "success" | "error" = "success") => {
+    notifications.show({ color: severity === "error" ? "red" : "green", message });
+  };
 
   const inventory = inventoryQuery.data;
 
@@ -53,31 +66,21 @@ export function InventoryDetailPage() {
   );
 
   if (!id) {
-    return (
-      <AdminLayout>
-        <ErrorState message={`${terminology.operation.singular} no encontrada.`} />
-      </AdminLayout>
-    );
+    return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
   }
 
   if (inventoryQuery.isLoading) {
-    return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
-    );
+    return <LoadingState />;
   }
 
   if (inventoryQuery.isError || !inventory) {
     return (
-      <AdminLayout>
-        <ErrorState
-          message={getApiErrorMessage(
-            inventoryQuery.error,
-            `${terminology.operation.singular} no encontrada.`,
-          )}
-        />
-      </AdminLayout>
+      <ErrorState
+        message={getApiErrorMessage(
+          inventoryQuery.error,
+          `${terminology.operation.singular} no encontrada.`,
+        )}
+      />
     );
   }
 
@@ -87,18 +90,16 @@ export function InventoryDetailPage() {
   const storeDetailId = inventory.storeId || inventory.store?.id;
   const storeFieldValue =
     storeDetailId && storeDisplayName !== "—" ? (
-      <Link
-        component={RouterLink}
-        to={`/stores/${storeDetailId}`}
-        title={`Ver ${terminology.location.singular.toLowerCase()}`}
-        underline="hover"
-        color="primary"
-      >
+      <Anchor component={RouterLink} to={`/stores/${storeDetailId}`} size="sm">
         {storeDisplayName}
-      </Link>
+      </Anchor>
     ) : (
       storeDisplayName
     );
+
+  const geofenceSummary = inventory.store?.allowedRadiusMeters
+    ? `${inventory.store.allowedRadiusMeters} m · tolerancias ${inventory.earlyToleranceMinutes}/${inventory.lateToleranceMinutes} min`
+    : `Tolerancias ${inventory.earlyToleranceMinutes}/${inventory.lateToleranceMinutes} min`;
 
   const handleUpdate = async (values: InventoryFormValues) => {
     setErrorMessage(null);
@@ -114,11 +115,7 @@ export function InventoryDetailPage() {
         status: values.status,
       });
       setEditing(false);
-      setFeedback({
-        open: true,
-        message: `${terminology.operation.singular} actualizada correctamente.`,
-        severity: "success",
-      });
+      showFeedback(`${terminology.operation.singular} actualizada correctamente.`);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -128,100 +125,147 @@ export function InventoryDetailPage() {
     try {
       await cancelMutation.mutateAsync(id);
       setConfirmCancelOpen(false);
-      setFeedback({
-        open: true,
-        message: `${terminology.operation.singular} cancelada.`,
-        severity: "success",
-      });
+      showFeedback(`${terminology.operation.singular} cancelada.`);
     } catch (error) {
-      setFeedback({ open: true, message: getApiErrorMessage(error), severity: "error" });
+      showFeedback(getApiErrorMessage(error), "error");
     }
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
         description={`${inventory.store.name} · ${formatDateTime(inventory.scheduledStart)}`}
         action={
-          <Stack direction="row" spacing={1}>
+          <Group gap="sm" wrap="wrap">
+            {editing && canEdit ? (
+              <Button
+                type="submit"
+                form={INVENTORY_DETAIL_FORM_ID}
+                loading={updateMutation.isPending}
+              >
+                Guardar cambios
+              </Button>
+            ) : null}
             {canEdit ? (
-              <Button variant="outlined" onClick={() => setEditing((current) => !current)}>
+              <Button
+                variant="default"
+                onClick={() => {
+                  setEditing((current) => !current);
+                  setErrorMessage(null);
+                }}
+              >
                 {editing ? "Cancelar edición" : `Editar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
             {canEdit ? (
-              <Button color="error" variant="outlined" onClick={() => setConfirmCancelOpen(true)}>
+              <Button variant="default" color="danger" onClick={() => setConfirmCancelOpen(true)}>
                 {`Cancelar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
-            <Button component={RouterLink} to="/inventories">
+            <Button component={RouterLink} to="/inventories" variant="default">
               Volver al listado
             </Button>
-          </Stack>
+          </Group>
         }
       />
 
-      <Stack spacing={3}>
-        <Card variant="outlined">
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Datos generales
-            </Typography>
-            <DetailFieldGrid
-              fields={[
-                {
-                  label: "Estado",
-                  value: <StatusChip label={inventoryStatusLabels[inventory.status]} />,
-                },
-                { label: terminology.location.singular, value: storeFieldValue },
-                { label: "Dirección", value: inventory.store?.address ?? "—" },
-                { label: operationScheduleLabel, value: formatDateTime(inventory.scheduledStart) },
-                { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
-                { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },
-                { label: "Tolerancia tardía", value: `${inventory.lateToleranceMinutes} min` },
-                { label: "Asistencias registradas", value: inventory.attendanceRecordsCount },
-                { label: "Notas", value: inventory.notes ?? "—" },
-              ]}
-            />
-          </CardContent>
-        </Card>
-
-        {editing && canEdit ? (
-          <Card variant="outlined">
-            <CardContent>
-              <Typography variant="h6" gutterBottom>
-                {`Editar ${terminology.operation.singular.toLowerCase()}`}
-              </Typography>
-              <InventoryForm
-                mode="edit"
-                currentStatus={inventory.status}
-                defaultValues={{
-                  storeId: inventory.storeId,
-                  scheduledStart: isoToDatetimeLocal(inventory.scheduledStart),
-                  scheduledEnd: inventory.scheduledEnd ? isoToDatetimeLocal(inventory.scheduledEnd) : "",
-                  earlyToleranceMinutes: inventory.earlyToleranceMinutes,
-                  lateToleranceMinutes: inventory.lateToleranceMinutes,
-                  notes: inventory.notes ?? "",
-                  status: inventory.status,
-                }}
-                submitLabel="Guardar cambios"
-                cancelTo={`/inventories/${inventory.id}`}
-                loading={updateMutation.isPending}
-                errorMessage={errorMessage}
-                onSubmit={handleUpdate}
+      <Stack gap="lg">
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 4 }} spacing="md">
+          <MetricCard
+            title="Estado"
+            value={
+              <StatusBadge
+                label={inventoryStatusLabels[inventory.status]}
+                tone={inventoryStatusTone(inventory.status)}
               />
-            </CardContent>
-          </Card>
-        ) : null}
+            }
+          />
+          <MetricCard
+            title="Asistencias registradas"
+            value={inventory.attendanceRecordsCount}
+            description="Registros vinculados a esta operación"
+          />
+          <MetricCard
+            title="Horario de operación"
+            value={formatDateTime(inventory.scheduledStart)}
+            description={
+              inventory.scheduledEnd
+                ? `Fin: ${formatDateTime(inventory.scheduledEnd)}`
+                : "Sin horario de fin"
+            }
+          />
+          <MetricCard title="Geocerca" value={geofenceSummary} description="Radio y tolerancias horarias" />
+        </SimpleGrid>
 
-        <InventoryOperationalSection
-          inventoryId={inventory.id}
-          canAssign={canAssign}
-          scheduledStart={inventory.scheduledStart}
-          assignedEmployeeIds={assignedEmployeeIds}
-          onFeedback={(message, severity) => setFeedback({ open: true, message, severity })}
-        />
+        <Box className={layoutClasses.inventoryDetailLayout}>
+          <Box className={layoutClasses.operationalSection}>
+            <InventoryOperationalSection
+              inventoryId={inventory.id}
+              canAssign={canAssign}
+              scheduledStart={inventory.scheduledStart}
+              assignedEmployeeIds={assignedEmployeeIds}
+              onFeedback={(message, severity) => showFeedback(message, severity)}
+            />
+          </Box>
+
+          <Box className={layoutClasses.dataSection}>
+            <SectionCard
+              title="Datos de operación"
+              description="Información general, ubicación y parámetros de validación."
+            >
+              <InventoryDetailFieldGrid
+                fields={[
+                  {
+                    label: "Estado",
+                    value: (
+                      <StatusBadge
+                        label={inventoryStatusLabels[inventory.status]}
+                        tone={inventoryStatusTone(inventory.status)}
+                      />
+                    ),
+                  },
+                  { label: terminology.location.singular, value: storeFieldValue },
+                  { label: "Dirección", value: inventory.store?.address ?? "—" },
+                  { label: operationScheduleLabel, value: formatDateTime(inventory.scheduledStart) },
+                  { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
+                  { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },
+                  { label: "Tolerancia tardía", value: `${inventory.lateToleranceMinutes} min` },
+                  { label: "Asistencias registradas", value: inventory.attendanceRecordsCount },
+                  { label: "Notas", value: inventory.notes ?? "—" },
+                ]}
+              />
+            </SectionCard>
+          </Box>
+
+          {editing && canEdit ? (
+            <Box className={layoutClasses.editSection}>
+              <SectionCard title={`Editar ${terminology.operation.singular.toLowerCase()}`}>
+                <InventoryForm
+                  mode="edit"
+                  currentStatus={inventory.status}
+                  defaultValues={{
+                    storeId: inventory.storeId,
+                    scheduledStart: isoToDatetimeLocal(inventory.scheduledStart),
+                    scheduledEnd: inventory.scheduledEnd ? isoToDatetimeLocal(inventory.scheduledEnd) : "",
+                    earlyToleranceMinutes: inventory.earlyToleranceMinutes,
+                    lateToleranceMinutes: inventory.lateToleranceMinutes,
+                    notes: inventory.notes ?? "",
+                    status: inventory.status,
+                  }}
+                  submitLabel="Guardar cambios"
+                  cancelTo={`/inventories/${inventory.id}`}
+                  loading={updateMutation.isPending}
+                  errorMessage={errorMessage}
+                  onSubmit={handleUpdate}
+                  embedded
+                  formId={INVENTORY_DETAIL_FORM_ID}
+                  hideActions
+                />
+              </SectionCard>
+            </Box>
+          ) : null}
+        </Box>
       </Stack>
 
       <ConfirmDialog
@@ -229,17 +273,11 @@ export function InventoryDetailPage() {
         title={`Cancelar ${terminology.operation.singular.toLowerCase()}`}
         description={`¿Confirmás cancelar esta ${terminology.operation.singular.toLowerCase()}? No podrá editarse luego.`}
         confirmLabel={`Cancelar ${terminology.operation.singular.toLowerCase()}`}
+        destructive
         loading={cancelMutation.isPending}
         onCancel={() => setConfirmCancelOpen(false)}
-        onConfirm={handleCancel}
+        onConfirm={() => void handleCancel()}
       />
-
-      <FeedbackSnackbar
-        open={feedback.open}
-        message={feedback.message}
-        severity={feedback.severity}
-        onClose={() => setFeedback((current) => ({ ...current, open: false }))}
-      />
-    </AdminLayout>
+    </>
   );
 }

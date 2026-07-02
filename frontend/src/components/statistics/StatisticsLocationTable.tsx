@@ -1,19 +1,13 @@
-import {
-  Paper,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  TableSortLabel,
-} from "@mui/material";
+import { Group, Stack } from "@mantine/core";
 import { useMemo } from "react";
-import { EmptyState } from "../common/EmptyState";
-import { ErrorState } from "../common/ErrorState";
-import { LoadingState } from "../common/LoadingState";
-import { PaginationControls } from "../common/PaginationControls";
+import {
+  DataTable,
+  ErrorState,
+  LoadingState,
+  PaginationControls,
+  mapApiPaginationMeta,
+  type DataTableColumn,
+} from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByLocationRow } from "../../types/statistics";
 import { formatPercent } from "../../utils/export";
@@ -99,6 +93,71 @@ export function StatisticsLocationTable({
 }: StatisticsLocationTableProps) {
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
+  const columns = useMemo<DataTableColumn<AttendanceByLocationRow>[]>(
+    () => [
+      {
+        key: "storeName",
+        header: terminology.location.singular,
+        getValue: (row) => row.storeName,
+        sortable: true,
+      },
+      {
+        key: "address",
+        header: "Dirección",
+        getValue: (row) => row.address ?? "—",
+      },
+      {
+        key: "totalInventories",
+        header: terminology.operation.plural,
+        getValue: (row) => row.totalInventories,
+        align: "right",
+      },
+      {
+        key: "averageAttendancePercentage",
+        header: "% promedio",
+        getValue: (row) => formatPercent(row.averageAttendancePercentage),
+        align: "right",
+      },
+      {
+        key: "totalAssignedEmployees",
+        header: "Asignados",
+        getValue: (row) => row.totalAssignedEmployees,
+        align: "right",
+      },
+      {
+        key: "totalConfirmedAttendances",
+        header: "Confirmadas",
+        getValue: (row) => row.totalConfirmedAttendances,
+        align: "right",
+      },
+      {
+        key: "totalNoShows",
+        header: "Sin asistencia",
+        getValue: (row) => row.totalNoShows,
+        align: "right",
+      },
+      {
+        key: "totalLateRecords",
+        header: "Tarde",
+        getValue: (row) => row.totalLateRecords,
+        align: "right",
+      },
+      {
+        key: "totalOutsideGeofenceRecords",
+        header: "Fuera geocerca",
+        getValue: (row) => row.totalOutsideGeofenceRecords,
+        align: "right",
+      },
+      {
+        key: "totalManualReviews",
+        header: "Revisiones",
+        getValue: (row) => row.totalManualReviews,
+        align: "right",
+      },
+    ],
+    [],
+  );
+
   if (isLoading) {
     return <LoadingState message={`Cargando estadísticas por ${terminology.location.singular.toLowerCase()}...`} />;
   }
@@ -107,11 +166,9 @@ export function StatisticsLocationTable({
     return <ErrorState message={getApiErrorMessage(error)} />;
   }
 
-  const createSortHandler = (field: SortableField) => () => onSortChange(field);
-
   return (
-    <Stack spacing={2}>
-      <Stack direction="row" justifyContent="flex-end">
+    <Stack gap="md">
+      <Group justify="flex-end">
         <ExportActionButtons
           baseName="attendance-by-location"
           headers={EXPORT_HEADERS}
@@ -121,65 +178,26 @@ export function StatisticsLocationTable({
           sheetName="Por tienda"
           disabled={exportsDisabled}
         />
-      </Stack>
+      </Group>
 
-      {rows.length === 0 ? (
-        <EmptyState
-          title="Sin resultados"
-          description={`No hay datos de ${terminology.location.plural.toLowerCase()} para los filtros seleccionados.`}
-        />
-      ) : (
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell sortDirection={sortBy === "storeName" ? sortDirection : false}>
-                  <TableSortLabel
-                    active={sortBy === "storeName"}
-                    direction={sortBy === "storeName" ? sortDirection : "asc"}
-                    onClick={createSortHandler("storeName")}
-                  >
-                    {terminology.location.singular}
-                  </TableSortLabel>
-                </TableCell>
-                <TableCell>Dirección</TableCell>
-                <TableCell align="right">{terminology.operation.plural}</TableCell>
-                <TableCell align="right">% promedio</TableCell>
-                <TableCell align="right">Asignados</TableCell>
-                <TableCell align="right">Confirmadas</TableCell>
-                <TableCell align="right">Sin asistencia</TableCell>
-                <TableCell align="right">Tarde</TableCell>
-                <TableCell align="right">Fuera geocerca</TableCell>
-                <TableCell align="right">Revisiones</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {rows.map((row) => (
-                <TableRow key={row.storeId} hover>
-                  <TableCell>{row.storeName}</TableCell>
-                  <TableCell>{row.address ?? "—"}</TableCell>
-                  <TableCell align="right">{row.totalInventories}</TableCell>
-                  <TableCell align="right">{formatPercent(row.averageAttendancePercentage)}</TableCell>
-                  <TableCell align="right">{row.totalAssignedEmployees}</TableCell>
-                  <TableCell align="right">{row.totalConfirmedAttendances}</TableCell>
-                  <TableCell align="right">{row.totalNoShows}</TableCell>
-                  <TableCell align="right">{row.totalLateRecords}</TableCell>
-                  <TableCell align="right">{row.totalOutsideGeofenceRecords}</TableCell>
-                  <TableCell align="right">{row.totalManualReviews}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
-      )}
+      <DataTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.storeId}
+        sortBy={sortBy}
+        sortDirection={sortDirection}
+        onSortChange={(key) => onSortChange(key as SortableField)}
+        emptyTitle="Sin resultados"
+        emptyDescription={`No hay datos de ${terminology.location.plural.toLowerCase()} para los filtros seleccionados.`}
+      />
 
       <PaginationControls
-        meta={{
+        meta={mapApiPaginationMeta({
           page,
           limit: pageSize,
           total,
           totalPages: total === 0 ? 0 : Math.ceil(total / pageSize),
-        }}
+        })}
         onPageChange={onPageChange}
         pageSize={pageSize}
         onPageSizeChange={onPageSizeChange}

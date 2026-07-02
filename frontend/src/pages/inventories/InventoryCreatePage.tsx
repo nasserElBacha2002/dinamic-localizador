@@ -1,9 +1,8 @@
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { InventoryForm } from "../../components/inventories/InventoryForm";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useCreateInventory } from "../../hooks/useInventories";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso } from "../../utils/dates";
 import { terminology } from "../../domain/terminology";
@@ -33,7 +32,7 @@ export function InventoryCreatePage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Nueva ${terminology.operation.singular.toLowerCase()}`}
         description={`Programá una ${terminology.operation.singular.toLowerCase()}.`}
@@ -54,6 +53,6 @@ export function InventoryCreatePage() {
         errorMessage={errorMessage}
         onSubmit={handleSubmit}
       />
-    </AdminLayout>
+    </>
   );
 }

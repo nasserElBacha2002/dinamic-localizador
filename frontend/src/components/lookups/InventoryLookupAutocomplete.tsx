@@ -44,7 +44,7 @@ export function InventoryLookupAutocomplete({
     async (search: string) =>
       getInventoryLookups({
         search: search || undefined,
-        limit: 20,
+        limit: 10,
       }),
     [],
   );

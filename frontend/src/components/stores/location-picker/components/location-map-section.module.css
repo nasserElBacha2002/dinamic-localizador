@@ -1,0 +1,35 @@
+.searchHost {
+  width: 100%;
+  min-height: 2.25rem;
+}
+
+.searchHost :global(gmp-place-autocomplete) {
+  width: 100%;
+  color-scheme: light;
+}
+
+.mapPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  height: 100%;
+  min-height: 320px;
+}
+
+.mapCanvas {
+  width: 100%;
+  flex: 1;
+  min-height: 320px;
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+}
+
+@media (min-width: 62em) {
+  .mapPanel {
+    min-height: 520px;
+  }
+
+  .mapCanvas {
+    min-height: 520px;
+  }
+}

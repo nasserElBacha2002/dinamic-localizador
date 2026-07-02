@@ -1,26 +1,23 @@
-import { Alert, Stack } from "@mui/material";
+import { Alert } from "@mantine/core";
+import { FormSection } from "../../../design-system";
 import { ManualCoordinatesFields } from "./components/ManualCoordinatesFields";
-import { LocationMapSection, LocationPickerLayout } from "./components/LocationMapSection";
+import { StoreInteractiveMapPanel } from "./components/LocationMapSection";
 import { useLocationPickerState } from "./hooks/useLocationPickerState";
 import type { StoreLocationPickerProps } from "./types";
 
+/**
+ * @deprecated Prefer composing `useStoreLocationPicker` with `StoreForm` two-column layout.
+ * Kept for backward compatibility if imported elsewhere.
+ */
 export function StoreLocationPicker(props: StoreLocationPickerProps) {
   const picker = useLocationPickerState(props);
 
   return (
-    <Stack spacing={2} sx={{ width: "100%" }}>
-      {picker.errorMessage ? <Alert severity="warning">{picker.errorMessage}</Alert> : null}
-
-      <LocationPickerLayout>
-        <Stack spacing={2} sx={{ minWidth: 0, height: "100%" }}>
-          <LocationMapSection
-            mapContainerRef={picker.mapContainerRef}
-            autocompleteContainerRef={picker.autocompleteContainerRef}
-            mapsLoadState={picker.mapsLoadState}
-            locationState={picker.locationState}
-          />
-        </Stack>
-
+    <>
+      <FormSection
+        title="Geolocalización"
+        description="Coordenadas y radio usados para validar la asistencia por WhatsApp."
+      >
         <ManualCoordinatesFields
           address={picker.address}
           neighborhood={picker.neighborhood}
@@ -35,7 +32,19 @@ export function StoreLocationPicker(props: StoreLocationPickerProps) {
           onLongitudeChange={picker.handleManualLongitudeChange}
           onRadiusChange={picker.handleRadiusChange}
         />
-      </LocationPickerLayout>
-    </Stack>
+        {picker.errorMessage ? (
+          <Alert color="yellow" mt="md">
+            {picker.errorMessage}
+          </Alert>
+        ) : null}
+      </FormSection>
+
+      <StoreInteractiveMapPanel
+        autocompleteContainerRef={picker.autocompleteContainerRef}
+        mapContainerRef={picker.mapContainerRef}
+        mapsLoadState={picker.mapsLoadState}
+        locationState={picker.locationState}
+      />
+    </>
   );
 }

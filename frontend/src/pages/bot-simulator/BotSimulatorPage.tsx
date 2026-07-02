@@ -1,6 +1,6 @@
-import { Alert, Button, Grid, Stack } from "@mui/material";
-import { PageHeader } from "../../components/common/PageHeader";
-import { AdminLayout } from "../../layouts/AdminLayout";
+import { Alert, Button, Group, Stack } from "@mantine/core";
+import { PageHeader } from "../../design-system";
+import classes from "./bot-simulator-console.module.css";
 import { BotConversationPanel } from "./components/BotConversationPanel";
 import { BotLocationDialog } from "./components/BotLocationDialog";
 import { BotSessionPanel } from "./components/BotSessionPanel";
@@ -11,47 +11,46 @@ export function BotSimulatorPage() {
   const session = useBotSimulatorSession();
 
   return (
-    <AdminLayout>
+    <Stack gap="md">
       <PageHeader
         title="Simulador de Bot"
-        description="Probá flujos conversacionales del bot de WhatsApp sin depender del webhook de Twilio."
+        description="Probá flujos de WhatsApp sin enviar mensajes reales."
         action={
-          <Stack direction="row" spacing={1}>
-            {session.sessionState ? (
-              <>
-                <Button variant="outlined" onClick={session.handleNewSimulation} disabled={session.isBusy}>
-                  Nueva simulación
-                </Button>
-                <Button variant="outlined" onClick={session.handleExportJson}>
-                  Exportar JSON
-                </Button>
-                <Button variant="outlined" onClick={() => void session.handleRestart()} disabled={session.isBusy}>
-                  Reiniciar conversación
-                </Button>
-              </>
-            ) : null}
-          </Stack>
+          session.sessionState ? (
+            <Group gap="sm">
+              <Button variant="default" onClick={session.handleNewSimulation} disabled={session.isBusy}>
+                Nueva simulación
+              </Button>
+              <Button variant="default" onClick={session.handleExportJson}>
+                Exportar JSON
+              </Button>
+              <Button variant="default" onClick={() => void session.handleRestart()} disabled={session.isBusy}>
+                Reiniciar conversación
+              </Button>
+            </Group>
+          ) : null
         }
       />
 
       {session.actionError ? (
-        <Alert severity="error" sx={{ mb: 2 }}>
-          {session.actionError}
-        </Alert>
+        <Alert color="red">{session.actionError}</Alert>
       ) : null}
 
-      <Grid container spacing={3}>
-        <Grid size={{ xs: 12, lg: 4 }}>
+      <div className={classes.console}>
+        <div>
           <BotSessionPanel {...session} />
-        </Grid>
-        <Grid size={{ xs: 12, lg: 8 }}>
-          <BotConversationPanel {...session} />
-        </Grid>
-      </Grid>
+        </div>
 
-      {session.sessionState ? <BotTechnicalDetails entries={session.technicalEntries} /> : null}
+        <div>
+          <BotConversationPanel {...session} />
+        </div>
+
+        <div className={classes.technical}>
+          <BotTechnicalDetails entries={session.technicalEntries} />
+        </div>
+      </div>
 
       <BotLocationDialog {...session} />
-    </AdminLayout>
+    </Stack>
   );
 }

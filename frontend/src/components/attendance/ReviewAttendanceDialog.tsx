@@ -1,12 +1,4 @@
-import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogTitle,
-  Stack,
-  TextField,
-} from "@mui/material";
+import { Button, Group, Modal, Stack, Textarea } from "@mantine/core";
 import { useState } from "react";
 import type { ReviewAttendanceInput } from "../../types/attendance";
 
@@ -46,31 +38,30 @@ export function ReviewAttendanceDialog({
   };
 
   return (
-    <Dialog open={open} onClose={handleClose} fullWidth maxWidth="sm">
-      <DialogTitle>
-        {decision === "APPROVE" ? "Aprobar asistencia" : "Rechazar asistencia"}
-      </DialogTitle>
-      <DialogContent>
-        <Stack spacing={2} sx={{ mt: 1 }}>
-          <TextField
-            label="Motivo"
-            required
-            fullWidth
-            multiline
-            minRows={3}
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            error={Boolean(errorMessage)}
-            helperText={errorMessage}
-          />
-        </Stack>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={handleClose}>Cancelar</Button>
-        <Button variant="contained" onClick={handleConfirm} disabled={loading}>
-          Confirmar
-        </Button>
-      </DialogActions>
-    </Dialog>
+    <Modal
+      opened={open}
+      onClose={handleClose}
+      title={decision === "APPROVE" ? "Aprobar asistencia" : "Rechazar asistencia"}
+      centered
+    >
+      <Stack gap="md">
+        <Textarea
+          label="Motivo"
+          required
+          minRows={3}
+          value={reason}
+          onChange={(event) => setReason(event.currentTarget.value)}
+          error={errorMessage ?? undefined}
+        />
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={handleClose}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void handleConfirm()} loading={loading}>
+            Confirmar
+          </Button>
+        </Group>
+      </Stack>
+    </Modal>
   );
 }

@@ -1,42 +1,30 @@
-import {
-  Button,
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from "@mui/material";
-import { useState } from "react";
-import { ClickableTableRow } from "../../components/common/ClickableTableRow";
-import { DateRangeFilter } from "../../components/common/DateRangeFilter";
-import { EmptyState } from "../../components/common/EmptyState";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FilterItem, ListFilters } from "../../components/common/ListFilters";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHeader";
-import { PaginationControls } from "../../components/common/PaginationControls";
-import { StatusChip } from "../../components/common/StatusChip";
+import { Button, Group, Text } from "@mantine/core";
+import { useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { EmployeeLookupAutocomplete } from "../../components/lookups/EmployeeLookupAutocomplete";
 import { InventoryLookupAutocomplete } from "../../components/lookups/InventoryLookupAutocomplete";
 import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
+import {
+  DataTable,
+  FilterBar,
+  FilterDateRangeInput,
+  FilterSelect,
+  mapApiPaginationMeta,
+  PageHeader,
+  PaginationControls,
+  StatusBadge,
+  type DataTableColumn,
+} from "../../design-system";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
-import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
+import type { AttendanceRecordWithRelations, LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
 import type { DateRangeValue } from "../../types/date-range";
+import { terminology } from "../../domain/terminology";
+import { isModuleEnabled } from "../../utils/company-modules";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
-import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   locationStatusLabels,
@@ -44,9 +32,9 @@ import {
   validationStatusLabels,
 } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
-import { isModuleEnabled } from "../../utils/company-modules";
 
 export function AttendanceListPage() {
+  const navigate = useNavigate();
   const permissionsQuery = useCompanyPermissions();
   const modulesQuery = useCompanyModules();
   const permissions = permissionsQuery.data?.permissions;
@@ -56,6 +44,7 @@ export function AttendanceListPage() {
     hasPermission(permissions, "bot_simulator:use");
 
   const pagination = usePaginationState(10);
+  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
   const [inventoryId, setInventoryId] = useState("");
   const [employeeId, setEmployeeId] = useState("");
   const [storeId, setStoreId] = useState("");
@@ -69,8 +58,8 @@ export function AttendanceListPage() {
   const dateQuery = getDateRangeQueryValue(dateRange);
   const exportsDisabled = isInvalidCustomDateRange(dateRange);
   const filters = {
-    page: pagination.page,
-    limit: pagination.pageSize,
+    page,
+    limit: pageSize,
     inventoryId: inventoryId || undefined,
     employeeId: employeeId || undefined,
     storeId: storeId || undefined,
@@ -103,18 +92,69 @@ export function AttendanceListPage() {
     }
   };
 
+  const columns = useMemo<DataTableColumn<AttendanceRecordWithRelations>[]>(
+    () => [
+      { key: "employee", header: terminology.worker.singular, getValue: (row) => row.employee.name },
+      { key: "store", header: terminology.location.singular, getValue: (row) => row.store.name },
+      {
+        key: "inventory",
+        header: terminology.operation.singular,
+        getValue: (row) => formatDateTime(row.inventory.scheduledStart),
+      },
+      { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
+      { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
+      {
+        key: "distance",
+        header: "Distancia",
+        getValue: (row) => `${row.distanceMeters.toFixed(1)} m`,
+      },
+      {
+        key: "validationStatus",
+        header: "Validación",
+        render: (row) => (
+          <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
+        ),
+      },
+      {
+        key: "locationStatus",
+        header: "Ubicación",
+        render: (row) => (
+          <StatusBadge label={locationStatusLabels[row.locationStatus]} tone="neutral" />
+        ),
+      },
+      {
+        key: "punctualityStatus",
+        header: "Puntualidad",
+        render: (row) => (
+          <StatusBadge label={punctualityStatusLabels[row.punctualityStatus]} tone="neutral" />
+        ),
+      },
+      {
+        key: "recordType",
+        header: "Tipo",
+        render: (row) =>
+          row.isSimulation ? (
+            <StatusBadge label="Simulación" tone="info" variant="light" />
+          ) : (
+            "Real"
+          ),
+      },
+    ],
+    [],
+  );
+
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Asistencias"
         description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canExport || canUseBotSimulator ? (
-            <Stack direction="row" spacing={1} alignItems="center">
+            <Group gap="xs" align="center">
               {canExport ? (
                 <>
                   <Button
-                    variant="outlined"
+                    variant="default"
                     onClick={handleExport}
                     disabled={exportMutation.isPending || exportsDisabled}
                     title={
@@ -126,213 +166,152 @@ export function AttendanceListPage() {
                     Exportar CSV
                   </Button>
                   {exportsDisabled ? (
-                    <Typography variant="caption" color="error">
+                    <Text size="xs" c="red">
                       Completá un rango de fechas válido antes de exportar.
-                    </Typography>
+                    </Text>
                   ) : null}
                 </>
               ) : null}
               {canUseBotSimulator ? (
-                <PageHeaderLinkAction to="/bot-simulator" label="Probar flujo del bot" />
+                <Button component={Link} to="/bot-simulator" variant="default">
+                  Probar flujo del bot
+                </Button>
               ) : null}
-            </Stack>
+            </Group>
           ) : undefined
         }
       />
 
-      <ListFilters>
-        <FilterItem>
+      <FilterBar>
+        <FilterBar.Item>
           <InventoryLookupAutocomplete
             value={inventoryId || null}
             onChange={(id) => {
-              pagination.resetPage();
+              resetPage();
               setInventoryId(id ?? "");
             }}
           />
-        </FilterItem>
+        </FilterBar.Item>
 
-        <FilterItem>
+        <FilterBar.Item>
           <EmployeeLookupAutocomplete
             value={employeeId || null}
             onChange={(id) => {
-              pagination.resetPage();
+              resetPage();
               setEmployeeId(id ?? "");
             }}
             activeOnly={false}
           />
-        </FilterItem>
+        </FilterBar.Item>
 
-        <FilterItem>
+        <FilterBar.Item>
           <StoreLookupAutocomplete
             value={storeId || null}
             onChange={(id) => {
-              pagination.resetPage();
+              resetPage();
               setStoreId(id ?? "");
             }}
             activeOnly={false}
           />
-        </FilterItem>
+        </FilterBar.Item>
 
-        <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-validation-filter">Validación</InputLabel>
-            <Select
-              labelId="attendance-validation-filter"
-              label="Validación"
-              value={validationStatus}
-              onChange={(event) => {
-                pagination.resetPage();
-                setValidationStatus(event.target.value as ValidationStatus | "");
-              }}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {Object.entries(validationStatusLabels).map(([value, label]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </FilterItem>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Validación"
+            value={validationStatus}
+            onChange={(nextValue) => {
+              resetPage();
+              setValidationStatus(nextValue as ValidationStatus | "");
+            }}
+            data={[
+              { value: "", label: "Todas" },
+              ...Object.entries(validationStatusLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+        </FilterBar.Item>
 
-        <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-location-filter">Ubicación</InputLabel>
-            <Select
-              labelId="attendance-location-filter"
-              label="Ubicación"
-              value={locationStatus}
-              onChange={(event) => {
-                pagination.resetPage();
-                setLocationStatus(event.target.value as LocationStatus | "");
-              }}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {Object.entries(locationStatusLabels).map(([value, label]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </FilterItem>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Ubicación"
+            value={locationStatus}
+            onChange={(nextValue) => {
+              resetPage();
+              setLocationStatus(nextValue as LocationStatus | "");
+            }}
+            data={[
+              { value: "", label: "Todas" },
+              ...Object.entries(locationStatusLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+        </FilterBar.Item>
 
-        <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-punctuality-filter">Puntualidad</InputLabel>
-            <Select
-              labelId="attendance-punctuality-filter"
-              label="Puntualidad"
-              value={punctualityStatus}
-              onChange={(event) => {
-                pagination.resetPage();
-                setPunctualityStatus(event.target.value as PunctualityStatus | "");
-              }}
-            >
-              <MenuItem value="">Todas</MenuItem>
-              {Object.entries(punctualityStatusLabels).map(([value, label]) => (
-                <MenuItem key={value} value={value}>
-                  {label}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-        </FilterItem>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Puntualidad"
+            value={punctualityStatus}
+            onChange={(nextValue) => {
+              resetPage();
+              setPunctualityStatus(nextValue as PunctualityStatus | "");
+            }}
+            data={[
+              { value: "", label: "Todas" },
+              ...Object.entries(punctualityStatusLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+        </FilterBar.Item>
 
-        <FilterItem>
-          <FormControl fullWidth>
-            <InputLabel id="attendance-record-type-filter">Tipo de registro</InputLabel>
-            <Select
-              labelId="attendance-record-type-filter"
-              label="Tipo de registro"
-              value={recordType}
-              onChange={(event) => {
-                pagination.resetPage();
-                setRecordType(event.target.value as "real" | "simulation" | "all");
-              }}
-            >
-              <MenuItem value="real">Registros reales</MenuItem>
-              <MenuItem value="simulation">Registros simulados</MenuItem>
-              <MenuItem value="all">Todos los registros</MenuItem>
-            </Select>
-          </FormControl>
-        </FilterItem>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Tipo de registro"
+            value={recordType}
+            onChange={(nextValue) => {
+              resetPage();
+              setRecordType((nextValue || "real") as "real" | "simulation" | "all");
+            }}
+            data={[
+              { value: "real", label: "Registros reales" },
+              { value: "simulation", label: "Registros simulados" },
+              { value: "all", label: "Todos los registros" },
+            ]}
+          />
+        </FilterBar.Item>
 
-        <FilterItem size={{ xs: 12, sm: 12, md: 6, lg: 4 }}>
-          <DateRangeFilter
+        <FilterBar.Item minWidth={280}>
+          <FilterDateRangeInput
             value={dateRange}
             onChange={(nextDateRange) => {
-              pagination.resetPage();
+              resetPage();
               setDateRange(nextDateRange);
             }}
             mode="past"
             label="Fecha"
             allowCustomRange
           />
-        </FilterItem>
-      </ListFilters>
+        </FilterBar.Item>
+      </FilterBar>
 
-      {isPending ? <LoadingState /> : null}
-      {isError ? <ErrorState message={getApiErrorMessage(error)} /> : null}
-      {data && !isError && data.data.length === 0 ? <EmptyState title="No hay asistencias registradas" /> : null}
-
-      {data && data.data.length > 0 ? (
-        <>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small" aria-label="Listado de asistencias">
-              <TableHead>
-                <TableRow>
-                  <TableCell>{terminology.worker.singular}</TableCell>
-                  <TableCell>{terminology.location.singular}</TableCell>
-                  <TableCell>{terminology.operation.singular}</TableCell>
-                  <TableCell>Llegada</TableCell>
-                  <TableCell>Salida</TableCell>
-                  <TableCell>Distancia</TableCell>
-                  <TableCell>Validación</TableCell>
-                  <TableCell>Ubicación</TableCell>
-                  <TableCell>Puntualidad</TableCell>
-                  <TableCell>Tipo</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.data.map((record) => (
-                  <ClickableTableRow
-                    key={record.id}
-                    to={`/attendance/${record.id}`}
-                    ariaLabel={`Ver asistencia de ${record.employee.name}`}
-                  >
-                    <TableCell>{record.employee.name}</TableCell>
-                    <TableCell>{record.store.name}</TableCell>
-                    <TableCell>{formatDateTime(record.inventory.scheduledStart)}</TableCell>
-                    <TableCell>{formatDateTime(record.receivedAt)}</TableCell>
-                    <TableCell>{formatDateTime(record.checkoutAt)}</TableCell>
-                    <TableCell>{record.distanceMeters.toFixed(1)} m</TableCell>
-                    <TableCell>
-                      <StatusChip label={validationStatusLabels[record.validationStatus]} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusChip label={locationStatusLabels[record.locationStatus]} />
-                    </TableCell>
-                    <TableCell>
-                      <StatusChip label={punctualityStatusLabels[record.punctualityStatus]} />
-                    </TableCell>
-                    <TableCell>
-                      {record.isSimulation ? <StatusChip label="Simulación" /> : "Real"}
-                    </TableCell>
-                  </ClickableTableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <PaginationControls
-            meta={data.meta}
-            onPageChange={pagination.onPageChange}
-            pageSize={pagination.pageSize}
-            onPageSizeChange={pagination.onPageSizeChange}
-            showPageSizeSelector
-          />
-        </>
-      ) : null}
-    </AdminLayout>
+      <DataTable
+        rows={data?.data ?? []}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        loading={isPending}
+        error={isError ? getApiErrorMessage(error) : undefined}
+        emptyTitle="No hay asistencias registradas"
+        emptyDescription="Ajustá los filtros o esperá nuevos registros de asistencia."
+        onRowClick={(row) => navigate(`/attendance/${row.id}`)}
+        aria-label="Listado de asistencias"
+        pagination={
+          data && data.data.length > 0 ? (
+            <PaginationControls
+              meta={mapApiPaginationMeta(data.meta)}
+              onPageChange={onPageChange}
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
+              showPageSizeSelector
+            />
+          ) : undefined
+        }
+      />
+    </>
   );
 }

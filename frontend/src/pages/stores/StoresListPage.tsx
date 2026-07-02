@@ -1,155 +1,163 @@
+import { Button, Select } from "@mantine/core";
+import { useCallback, useMemo, useState } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import {
-  FormControl,
-  InputLabel,
-  MenuItem,
-  Paper,
-  Select,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-} from "@mui/material";
-import { useCallback, useState } from "react";
-import { ClickableTableRow } from "../../components/common/ClickableTableRow";
-import { EmptyState } from "../../components/common/EmptyState";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FilterItem, ListFilters } from "../../components/common/ListFilters";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader, PageHeaderLinkAction } from "../../components/common/PageHeader";
-import { PaginationControls } from "../../components/common/PaginationControls";
-import { SearchField } from "../../components/common/SearchField";
-import { StatusChip } from "../../components/common/StatusChip";
+  DataTable,
+  FilterBar,
+  mapApiPaginationMeta,
+  PageHeader,
+  PaginationControls,
+  SearchInput,
+  StatusBadge,
+  type DataTableColumn,
+} from "../../design-system";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useStores } from "../../hooks/useStores";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { terminology } from "../../domain/terminology";
+import type { Store } from "../../types/store";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 
 export function StoresListPage() {
+  const navigate = useNavigate();
   const permissionsQuery = useCompanyPermissions();
   const canManageStores = hasPermission(permissionsQuery.data?.permissions, "stores:manage");
   const pagination = usePaginationState(10);
+  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
+  const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
 
+  const handleSearch = useCallback(
+    (value: string) => {
+      resetPage();
+      const nextSearch = value.trim();
+      setSearchInput(nextSearch);
+      setSearch(nextSearch);
+    },
+    [resetPage],
+  );
+
+  const handleSearchChange = useCallback(
+    (value: string) => {
+      setSearchInput(value);
+      if (!value) {
+        resetPage();
+        setSearch("");
+      }
+    },
+    [resetPage],
+  );
+
   const { data, isPending, isError, error } = useStores({
-    page: pagination.page,
-    limit: pagination.pageSize,
+    page,
+    limit: pageSize,
     search: search || undefined,
     active: activeFilter === "all" ? undefined : activeFilter === "true",
   });
 
-  const handleSearch = useCallback((value: string) => {
-    pagination.resetPage();
-    setSearch(value);
-  }, [pagination]);
+  const columns = useMemo<DataTableColumn<Store>[]>(
+    () => [
+      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      { key: "neighborhood", header: "Barrio", getValue: (row) => row.neighborhood ?? "—" },
+      { key: "locality", header: "Localidad", getValue: (row) => row.locality ?? "—" },
+      { key: "storeFormat", header: "Formato", getValue: (row) => row.storeFormat ?? "—" },
+      { key: "address", header: "Dirección", getValue: (row) => row.address ?? "—" },
+      { key: "latitude", header: "Latitud", getValue: (row) => row.latitude },
+      { key: "longitude", header: "Longitud", getValue: (row) => row.longitude },
+      {
+        key: "allowedRadiusMeters",
+        header: "Radio permitido",
+        getValue: (row) => `${row.allowedRadiusMeters} m`,
+      },
+      {
+        key: "active",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge
+            label={activeStatusLabel(row.active)}
+            tone={row.active ? "success" : "neutral"}
+          />
+        ),
+      },
+    ],
+    [],
+  );
+
+  const handleActiveFilterChange = useCallback(
+    (value: string | null) => {
+      if (!value) {
+        return;
+      }
+
+      resetPage();
+      setActiveFilter(value as "all" | "true" | "false");
+    },
+    [resetPage],
+  );
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={terminology.location.plural}
         description="Configurá ubicaciones y radios permitidos."
         action={
           canManageStores ? (
-            <PageHeaderLinkAction
-              to="/stores/new"
-              label={`Nueva ${terminology.location.singular.toLowerCase()}`}
-            />
+            <Button component={Link} to="/stores/new">
+              {`Nueva ${terminology.location.singular.toLowerCase()}`}
+            </Button>
           ) : undefined
         }
       />
 
-      <ListFilters>
-        <FilterItem size={{ xs: 12, sm: 6, md: 4 }}>
-          <SearchField
-            placeholder="Nombre, dirección, barrio o localidad"
+      <FilterBar>
+        <FilterBar.Item>
+          <SearchInput
+            value={searchInput}
+            onChange={handleSearchChange}
             onSearch={handleSearch}
-            fullWidth
+            placeholder="Nombre, dirección, barrio o localidad"
+            label="Buscar"
           />
-        </FilterItem>
-        <FilterItem size={{ xs: 12, sm: 6, md: 4 }}>
-          <FormControl fullWidth>
-            <InputLabel id="store-active-filter">Estado</InputLabel>
-            <Select
-              labelId="store-active-filter"
-              label="Estado"
-              value={activeFilter}
-              onChange={(event) => {
-                pagination.resetPage();
-                setActiveFilter(event.target.value as "all" | "true" | "false");
-              }}
-            >
-              <MenuItem value="all">Todas</MenuItem>
-              <MenuItem value="true">Activas</MenuItem>
-              <MenuItem value="false">Inactivas</MenuItem>
-            </Select>
-          </FormControl>
-        </FilterItem>
-      </ListFilters>
-
-      {isPending ? <LoadingState /> : null}
-      {isError ? <ErrorState message={getApiErrorMessage(error)} /> : null}
-      {data && !isError && data.data.length === 0 ? (
-        <EmptyState title={`No hay ${terminology.location.plural.toLowerCase()}`} />
-      ) : null}
-
-      {data && data.data.length > 0 ? (
-        <>
-          <TableContainer component={Paper} variant="outlined">
-            <Table size="small" aria-label={`Listado de ${terminology.location.plural.toLowerCase()}`}>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Nombre</TableCell>
-                  <TableCell>Barrio</TableCell>
-                  <TableCell>Localidad</TableCell>
-                  <TableCell>Formato</TableCell>
-                  <TableCell>Dirección</TableCell>
-                  <TableCell>Latitud</TableCell>
-                  <TableCell>Longitud</TableCell>
-                  <TableCell>Radio permitido</TableCell>
-                  <TableCell>Estado</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {data.data.map((store) => (
-                  <ClickableTableRow
-                    key={store.id}
-                    to={`/stores/${store.id}`}
-                    ariaLabel={`Ver ${terminology.location.singular.toLowerCase()} ${store.name}`}
-                  >
-                    <TableCell>{store.name}</TableCell>
-                    <TableCell>{store.neighborhood ?? "—"}</TableCell>
-                    <TableCell>{store.locality ?? "—"}</TableCell>
-                    <TableCell>{store.storeFormat ?? "—"}</TableCell>
-                    <TableCell>{store.address ?? "—"}</TableCell>
-                    <TableCell>{store.latitude}</TableCell>
-                    <TableCell>{store.longitude}</TableCell>
-                    <TableCell>{store.allowedRadiusMeters} m</TableCell>
-                    <TableCell>
-                      <StatusChip
-                        label={activeStatusLabel(store.active)}
-                        color={store.active ? "success" : "default"}
-                      />
-                    </TableCell>
-                  </ClickableTableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </TableContainer>
-          <PaginationControls
-            meta={data.meta}
-            onPageChange={pagination.onPageChange}
-            pageSize={pagination.pageSize}
-            onPageSizeChange={pagination.onPageSizeChange}
-            showPageSizeSelector
+        </FilterBar.Item>
+        <FilterBar.Item>
+          <Select
+            label="Estado"
+            value={activeFilter}
+            onChange={handleActiveFilterChange}
+            data={[
+              { value: "all", label: "Todas" },
+              { value: "true", label: "Activas" },
+              { value: "false", label: "Inactivas" },
+            ]}
           />
-        </>
-      ) : null}
-    </AdminLayout>
+        </FilterBar.Item>
+      </FilterBar>
+
+      <DataTable
+        rows={data?.data ?? []}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        loading={isPending}
+        error={isError ? getApiErrorMessage(error) : undefined}
+        emptyTitle={`No hay ${terminology.location.plural.toLowerCase()}`}
+        emptyDescription={`Creá la primera ${terminology.location.singular.toLowerCase()} para comenzar.`}
+        onRowClick={(row) => navigate(`/stores/${row.id}`)}
+        aria-label={`Listado de ${terminology.location.plural.toLowerCase()}`}
+        pagination={
+          data && data.data.length > 0 ? (
+            <PaginationControls
+              meta={mapApiPaginationMeta(data.meta)}
+              onPageChange={onPageChange}
+              pageSize={pageSize}
+              onPageSizeChange={onPageSizeChange}
+              showPageSizeSelector
+            />
+          ) : undefined
+        }
+      />
+    </>
   );
 }

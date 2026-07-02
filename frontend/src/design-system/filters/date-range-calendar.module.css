@@ -1,0 +1,25 @@
+.root {
+  width: 100%;
+}
+
+.day {
+  height: 32px;
+  border-radius: var(--mantine-radius-sm);
+  font-size: 0.8125rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.day:not(:disabled):hover {
+  background-color: var(--mantine-color-gray-1);
+}
+
+.day[data-selected]:not(:disabled):hover {
+  filter: brightness(0.95);
+}
+
+.day:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}

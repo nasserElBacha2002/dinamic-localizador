@@ -191,9 +191,9 @@ describe("company modules frontend module", () => {
     assert.doesNotMatch(attendancePage, /StoreSearchAutocomplete/);
   });
 
-  it("builds HomePage quick links without forbidden employee APIs", () => {
+  it("does not use forbidden employee APIs on HomePage", () => {
     const homePage = readFileSync(join(process.cwd(), "src/pages/HomePage.tsx"), "utf8");
-    assert.match(homePage, /getHomeQuickLinks/);
+    assert.doesNotMatch(homePage, /getHomeQuickLinks/);
     assert.doesNotMatch(homePage, /useEmployees/);
   });
 });

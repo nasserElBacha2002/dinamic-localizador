@@ -1,24 +1,10 @@
-import {
-  Alert,
-  Box,
-  Button,
-  FormControlLabel,
-  FormHelperText,
-  Paper,
-  Stack,
-  Switch,
-  TextField,
-  Typography,
-} from "@mui/material";
-import { useMemo, useState } from "react";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
+import { Alert, Button, Group, NumberInput, Stack, Switch, Text, TextInput } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
+import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { ErrorState, FormErrorAlert, LoadingState, PageHeader, SectionCard } from "../../design-system";
 import { useCompanySettings, useUpdateCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyModules, useUpdateCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { CompanySettings, CompanySettingsFormValues } from "../../types/company-settings";
 import type { CompanyModule, CompanyModuleKey } from "../../types/company-module";
 import {
@@ -52,6 +38,7 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
   const hasChanges = !formValuesEqual(formValues, baselineValues);
   const isValid = validationErrors.length === 0;
   const isReadOnly = !canUpdate;
+  const disabled = isReadOnly || updateMutation.isPending;
 
   const handleReset = () => {
     setFormValues(baselineValues);
@@ -80,149 +67,196 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 3 }}>
-      <Stack spacing={3}>
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            General
-          </Typography>
-          <TextField
-            label="Zona horaria operativa"
-            value={formValues.operationTimezone}
-            onChange={(event) =>
-              setFormValues((current) => ({ ...current, operationTimezone: event.target.value }))
-            }
-            fullWidth
-            disabled={isReadOnly || updateMutation.isPending}
-          />
-        </Box>
+    <Stack gap="md">
+      <SectionCard title="Datos generales" description="Zona horaria operativa de la empresa.">
+        <TextInput
+          label="Zona horaria operativa"
+          value={formValues.operationTimezone}
+          onChange={(event) =>
+            setFormValues((current) => ({ ...current, operationTimezone: event.currentTarget.value }))
+          }
+          disabled={disabled}
+        />
+      </SectionCard>
 
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Geolocalización
-          </Typography>
-          <TextField
-            label="Radio predeterminado de validación (m)"
-            type="number"
-            value={formValues.defaultRadiusMeters}
-            onChange={(event) =>
-              setFormValues((current) => ({ ...current, defaultRadiusMeters: event.target.value }))
-            }
-            helperText="Se usa para validar la ubicación enviada por WhatsApp en Llegué y Terminé."
-            inputProps={{ min: 10, max: 5000, step: 1 }}
-            fullWidth
-            disabled={isReadOnly || updateMutation.isPending}
-          />
-        </Box>
+      <CompanySettingsGeofenceSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
+      <CompanySettingsTolerancesSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
+      <CompanySettingsCheckoutSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
+      <CompanySettingsCorrectionsSection
+        formValues={formValues}
+        setFormValues={setFormValues}
+        disabled={disabled}
+      />
 
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Tolerancias horarias
-          </Typography>
-          <Stack spacing={2}>
-            <TextField
-              label="Tolerancia de llegada tarde (min)"
-              type="number"
-              value={formValues.lateGraceMinutes}
-              onChange={(event) =>
-                setFormValues((current) => ({ ...current, lateGraceMinutes: event.target.value }))
-              }
-              helperText="Define cuántos minutos después del inicio se considera llegada a tiempo."
-              inputProps={{ min: 0, max: 240, step: 1 }}
-              fullWidth
-              disabled={isReadOnly || updateMutation.isPending}
-            />
-            <TextField
-              label="Tolerancia de salida anticipada (min)"
-              type="number"
-              value={formValues.earlyLeaveToleranceMinutes}
-              onChange={(event) =>
-                setFormValues((current) => ({
-                  ...current,
-                  earlyLeaveToleranceMinutes: event.target.value,
-                }))
-              }
-              helperText="Define cuántos minutos antes del horario de finalización se permite terminar sin marcar salida anticipada."
-              inputProps={{ min: 0, max: 240, step: 1 }}
-              fullWidth
-              disabled={isReadOnly || updateMutation.isPending}
-            />
-          </Stack>
-        </Box>
+      {validationErrors.length > 0 ? (
+        <Text size="sm" c="red">
+          {validationErrors.join(" ")}
+        </Text>
+      ) : null}
+      <FormErrorAlert message={submitError} />
 
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Check-out
-          </Typography>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formValues.requireCheckoutLocation}
-                onChange={(event) =>
-                  setFormValues((current) => ({
-                    ...current,
-                    requireCheckoutLocation: event.target.checked,
-                  }))
-                }
-                disabled={isReadOnly || updateMutation.isPending}
-              />
-            }
-            label="Requerir ubicación al finalizar"
-          />
-          <FormHelperText>
-            Si está activo, el empleado deberá compartir ubicación al enviar &apos;Terminé&apos;.
-          </FormHelperText>
-        </Box>
+      {canUpdate ? (
+        <Group gap="sm">
+          <Button
+            onClick={() => void handleSave()}
+            disabled={!hasChanges || !isValid || updateMutation.isPending}
+            loading={updateMutation.isPending}
+          >
+            Guardar cambios
+          </Button>
+          <Button variant="default" onClick={handleReset} disabled={!hasChanges || updateMutation.isPending}>
+            Descartar cambios
+          </Button>
+        </Group>
+      ) : null}
+    </Stack>
+  );
+}
 
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Correcciones manuales
-          </Typography>
-          <FormControlLabel
-            control={
-              <Switch
-                checked={formValues.allowManualAttendanceCorrections}
-                onChange={(event) =>
-                  setFormValues((current) => ({
-                    ...current,
-                    allowManualAttendanceCorrections: event.target.checked,
-                  }))
-                }
-                disabled={isReadOnly || updateMutation.isPending}
-              />
-            }
-            label="Permitir correcciones manuales de asistencia"
-          />
-          <FormHelperText>
-            Permite que usuarios autorizados registren o ajusten asistencias desde el panel.
-          </FormHelperText>
-        </Box>
+function CompanySettingsGeofenceSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard
+      title="Asistencia y geocerca"
+      description="Parámetros usados para validar ubicación en llegada y salida."
+    >
+      <NumberInput
+        label="Radio predeterminado de validación (m)"
+        description="Se usa para validar la ubicación enviada por WhatsApp en Llegué y Terminé."
+        value={formValues.defaultRadiusMeters === "" ? "" : Number(formValues.defaultRadiusMeters)}
+        onChange={(value) =>
+          setFormValues((current) => ({
+            ...current,
+            defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
+          }))
+        }
+        min={10}
+        max={5000}
+        disabled={disabled}
+      />
+    </SectionCard>
+  );
+}
 
-        {validationErrors.length > 0 ? (
-          <FormHelperText error>{validationErrors.join(" ")}</FormHelperText>
-        ) : null}
-        {submitError ? <FormHelperText error>{submitError}</FormHelperText> : null}
-
-        {canUpdate ? (
-          <Stack direction="row" spacing={1}>
-            <Button
-              variant="contained"
-              onClick={() => void handleSave()}
-              disabled={!hasChanges || !isValid || updateMutation.isPending}
-            >
-              Guardar cambios
-            </Button>
-            <Button
-              variant="outlined"
-              onClick={handleReset}
-              disabled={!hasChanges || updateMutation.isPending}
-            >
-              Descartar cambios
-            </Button>
-          </Stack>
-        ) : null}
+function CompanySettingsTolerancesSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard title="Tolerancias horarias">
+      <Stack gap="md">
+        <NumberInput
+          label="Tolerancia de llegada tarde (min)"
+          description="Define cuántos minutos después del inicio se considera llegada a tiempo."
+          value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
+          onChange={(value) =>
+            setFormValues((current) => ({
+              ...current,
+              lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
+            }))
+          }
+          min={0}
+          max={240}
+          disabled={disabled}
+        />
+        <NumberInput
+          label="Tolerancia de salida anticipada (min)"
+          description="Define cuántos minutos antes del horario de finalización se permite terminar sin marcar salida anticipada."
+          value={
+            formValues.earlyLeaveToleranceMinutes === ""
+              ? ""
+              : Number(formValues.earlyLeaveToleranceMinutes)
+          }
+          onChange={(value) =>
+            setFormValues((current) => ({
+              ...current,
+              earlyLeaveToleranceMinutes: value === "" || value === undefined ? "" : String(value),
+            }))
+          }
+          min={0}
+          max={240}
+          disabled={disabled}
+        />
       </Stack>
-    </Paper>
+    </SectionCard>
+  );
+}
+
+function CompanySettingsCheckoutSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard title="Check-out">
+      <Switch
+        label="Requerir ubicación al finalizar"
+        description="Si está activo, el empleado deberá compartir ubicación al enviar 'Terminé'."
+        checked={formValues.requireCheckoutLocation}
+        onChange={(event) =>
+          setFormValues((current) => ({
+            ...current,
+            requireCheckoutLocation: event.currentTarget.checked,
+          }))
+        }
+        disabled={disabled}
+      />
+    </SectionCard>
+  );
+}
+
+function CompanySettingsCorrectionsSection({
+  formValues,
+  setFormValues,
+  disabled,
+}: {
+  formValues: CompanySettingsFormValues;
+  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
+  disabled: boolean;
+}) {
+  return (
+    <SectionCard title="Correcciones manuales">
+      <Switch
+        label="Permitir correcciones manuales de asistencia"
+        description="Permite que usuarios autorizados registren o ajusten asistencias desde el panel."
+        checked={formValues.allowManualAttendanceCorrections}
+        onChange={(event) =>
+          setFormValues((current) => ({
+            ...current,
+            allowManualAttendanceCorrections: event.currentTarget.checked,
+          }))
+        }
+        disabled={disabled}
+      />
+    </SectionCard>
   );
 }
 
@@ -248,6 +282,7 @@ function CompanyModulesForm({ modules, canUpdate, onSaved }: CompanyModulesFormP
   const hasChanges = !moduleStatesEqual(draftModules, modules);
   const validationError = validateCompanyModulesUpdate(draftModules);
   const isReadOnly = !canUpdate;
+  const disabled = isReadOnly || updateMutation.isPending;
 
   const handleToggle = (moduleKey: CompanyModuleKey, isEnabled: boolean) => {
     setDraftModules((current) =>
@@ -283,59 +318,48 @@ function CompanyModulesForm({ modules, canUpdate, onSaved }: CompanyModulesFormP
   };
 
   return (
-    <Paper variant="outlined" sx={{ p: 3, mt: 3 }}>
-      <Stack spacing={3}>
-        <Box>
-          <Typography variant="h6" gutterBottom>
-            Módulos habilitados
-          </Typography>
-          <Typography variant="body2" color="text.secondary">
-            Controlá qué áreas del producto están disponibles para esta empresa.
-          </Typography>
-        </Box>
-
+    <SectionCard
+      title="Módulos habilitados"
+      description="Controlá qué áreas del producto están disponibles para esta empresa."
+    >
+      <Stack gap="lg">
         {ALL_MODULE_KEYS.map((moduleKey) => {
           const moduleState = draftModules.find((module) => module.moduleKey === moduleKey);
           return (
-            <Box key={moduleKey}>
-              <FormControlLabel
-                control={
-                  <Switch
-                    checked={moduleState?.isEnabled ?? false}
-                    onChange={(event) => handleToggle(moduleKey, event.target.checked)}
-                    disabled={isReadOnly || updateMutation.isPending}
-                  />
-                }
-                label={COMPANY_MODULE_LABELS[moduleKey]}
-              />
-              <FormHelperText>{COMPANY_MODULE_DESCRIPTIONS[moduleKey]}</FormHelperText>
-            </Box>
+            <Switch
+              key={moduleKey}
+              label={COMPANY_MODULE_LABELS[moduleKey]}
+              description={COMPANY_MODULE_DESCRIPTIONS[moduleKey]}
+              checked={moduleState?.isEnabled ?? false}
+              onChange={(event) => handleToggle(moduleKey, event.currentTarget.checked)}
+              disabled={disabled}
+            />
           );
         })}
 
-        {validationError ? <FormHelperText error>{validationError}</FormHelperText> : null}
-        {submitError ? <FormHelperText error>{submitError}</FormHelperText> : null}
+        {validationError ? (
+          <Text size="sm" c="red">
+            {validationError}
+          </Text>
+        ) : null}
+        <FormErrorAlert message={submitError} />
 
         {canUpdate ? (
-          <Stack direction="row" spacing={1}>
+          <Group gap="sm">
             <Button
-              variant="contained"
               onClick={() => void handleSave()}
               disabled={!hasChanges || Boolean(validationError) || updateMutation.isPending}
+              loading={updateMutation.isPending}
             >
               Guardar módulos
             </Button>
-            <Button
-              variant="outlined"
-              onClick={handleReset}
-              disabled={!hasChanges || updateMutation.isPending}
-            >
+            <Button variant="default" onClick={handleReset} disabled={!hasChanges || updateMutation.isPending}>
               Descartar cambios
             </Button>
-          </Stack>
+          </Group>
         ) : null}
       </Stack>
-    </Paper>
+    </SectionCard>
   );
 }
 
@@ -347,58 +371,43 @@ export function CompanySettingsPage() {
 
   const settingsQuery = useCompanySettings(canRead);
   const modulesQuery = useCompanyModules(canRead);
-  const [successMessage, setSuccessMessage] = useState<string | null>(null);
+
+  const handleSaved = (message: string) => {
+    notifications.show({ color: "green", message });
+  };
 
   if (permissionsQuery.isPending) {
-    return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
-    );
+    return <LoadingState />;
   }
 
   if (!canRead) {
-    return (
-      <AdminLayout>
-        <ErrorState message="No tenés permisos para ver la configuración de esta empresa." />
-      </AdminLayout>
-    );
+    return <ErrorState message="No tenés permisos para ver la configuración de esta empresa." />;
   }
 
   if (settingsQuery.isPending || modulesQuery.isPending) {
-    return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
-    );
+    return <LoadingState />;
   }
 
   if (settingsQuery.isError || !settingsQuery.data) {
-    return (
-      <AdminLayout>
-        <ErrorState message={getApiErrorMessage(settingsQuery.error)} />
-      </AdminLayout>
-    );
+    return <ErrorState message={getApiErrorMessage(settingsQuery.error)} />;
   }
 
   return (
-    <AdminLayout>
+    <Stack gap="md">
       <PageHeader
         title="Configuración de empresa"
         description="Definí los parámetros operativos que aplican a esta empresa."
       />
 
       {!canUpdate ? (
-        <Alert severity="info" sx={{ mb: 2 }}>
-          No tenés permisos para editar esta configuración.
-        </Alert>
+        <Alert color="blue">No tenés permisos para editar esta configuración.</Alert>
       ) : null}
 
       <CompanySettingsForm
         key={`${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
         settings={settingsQuery.data}
         canUpdate={canUpdate}
-        onSaved={setSuccessMessage}
+        onSaved={handleSaved}
       />
 
       {modulesQuery.data ? (
@@ -406,17 +415,11 @@ export function CompanySettingsPage() {
           key={`${settingsQuery.data.companyId}-modules-${modulesQuery.dataUpdatedAt}`}
           modules={modulesQuery.data}
           canUpdate={canUpdate}
-          onSaved={setSuccessMessage}
+          onSaved={handleSaved}
         />
       ) : modulesQuery.isError ? (
         <ErrorState message={getApiErrorMessage(modulesQuery.error)} />
       ) : null}
-
-      <FeedbackSnackbar
-        open={Boolean(successMessage)}
-        message={successMessage ?? ""}
-        onClose={() => setSuccessMessage(null)}
-      />
-    </AdminLayout>
+    </Stack>
   );
 }

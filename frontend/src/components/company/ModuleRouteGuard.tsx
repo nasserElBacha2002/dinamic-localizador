@@ -1,7 +1,7 @@
-import { Button, Paper, Stack, Typography } from "@mui/material";
+import { Button, Stack, Text, Title } from "@mantine/core";
 import type { PropsWithChildren } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import { LoadingState } from "../common/LoadingState";
+import { LoadingState, SectionCard } from "../../design-system";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import type { CompanyModuleKey } from "../../types/company-module";
 import { isAnyModuleEnabled, isModuleEnabled } from "../../utils/company-modules";
@@ -13,19 +13,17 @@ interface ModuleRouteGuardProps extends PropsWithChildren {
 
 function DisabledModuleState() {
   return (
-    <Paper variant="outlined" sx={{ p: 4, textAlign: "center" }}>
-      <Stack spacing={2} alignItems="center">
-        <Typography variant="h5" component="h1">
-          Módulo no habilitado
-        </Typography>
-        <Typography color="text.secondary">
+    <SectionCard>
+      <Stack gap="md" align="center" py="xl">
+        <Title order={3}>Módulo no habilitado</Title>
+        <Text c="dimmed" ta="center">
           Este módulo no está habilitado para esta empresa.
-        </Typography>
-        <Button component={RouterLink} to="/" variant="contained">
+        </Text>
+        <Button component={RouterLink} to="/">
           Volver al inicio
         </Button>
       </Stack>
-    </Paper>
+    </SectionCard>
   );
 }
 

@@ -1,21 +1,24 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import {
-  Alert,
-  Box,
-  FormControl,
-  FormControlLabel,
-  InputLabel,
-  MenuItem,
-  Select,
-  Stack,
-  Switch,
-  TextField,
-} from "@mui/material";
-import { Controller, useForm, useWatch } from "react-hook-form";
+import { Alert, Box } from "@mantine/core";
+import { useMemo } from "react";
+import { useForm, useWatch } from "react-hook-form";
 import { STORE_FORMATS } from "../../constants/store-formats";
+import {
+  FormActions,
+  FormErrorAlert,
+  FormGrid,
+  FormSection,
+  RHFSelect,
+  RHFSwitch,
+  RHFTextInput,
+} from "../../design-system";
 import { storeFormSchema, type StoreFormValues } from "../../schemas/store.schema";
-import { FormActions } from "../common/FormActions";
-import { StoreLocationPicker } from "./StoreLocationPicker";
+import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
+import { StoreInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
+import { useLocationPickerState } from "./location-picker/hooks/useLocationPickerState";
+import classes from "./store-form-layout.module.css";
+
+export const STORE_FORM_ID = "store-form";
 
 interface StoreFormProps {
   defaultValues: StoreFormValues;
@@ -25,6 +28,8 @@ interface StoreFormProps {
   errorMessage?: string | null;
   isEditMode?: boolean;
   onSubmit: (values: StoreFormValues) => Promise<void>;
+  formId?: string;
+  showBottomActions?: boolean;
 }
 
 export function StoreForm({
@@ -35,104 +40,113 @@ export function StoreForm({
   errorMessage,
   isEditMode = false,
   onSubmit,
+  formId = STORE_FORM_ID,
+  showBottomActions = true,
 }: StoreFormProps) {
-  const {
-    control,
-    handleSubmit,
-    setValue,
-    trigger,
-    formState: { errors },
-  } = useForm<StoreFormValues>({
+  const { control, handleSubmit, setValue, trigger } = useForm<StoreFormValues>({
     resolver: zodResolver(storeFormSchema),
     defaultValues,
   });
 
   const watchedValues = useWatch({ control });
 
+  const picker = useLocationPickerState({
+    isEditMode,
+    currentName: watchedValues.name,
+    latitude: watchedValues.latitude ?? defaultValues.latitude,
+    longitude: watchedValues.longitude ?? defaultValues.longitude,
+    address: watchedValues.address ?? "",
+    neighborhood: watchedValues.neighborhood ?? "",
+    locality: watchedValues.locality ?? "",
+    googlePlaceId: watchedValues.googlePlaceId ?? null,
+    allowedRadiusMeters: watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters,
+    setValue,
+    trigger,
+  });
+
+  const storeFormatOptions = useMemo(
+    () => [
+      { value: "", label: "Sin formato" },
+      ...STORE_FORMATS.map((format) => ({ value: format, label: format })),
+    ],
+    [],
+  );
+
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <Stack spacing={3} sx={{ width: "100%" }}>
-        {errorMessage ? <Alert severity="error">{errorMessage}</Alert> : null}
+    <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
+      <FormErrorAlert message={errorMessage} />
 
-        <Box
-          sx={{
-            display: "grid",
-            gridTemplateColumns: { xs: "1fr", md: "1fr 1fr" },
-            gap: 2,
-            alignItems: "start",
-          }}
-        >
-          <Controller
-            name="name"
-            control={control}
-            render={({ field }) => (
-              <TextField
-                {...field}
-                label="Nombre"
+      <Box className={classes.storeFormLayout} mt="md">
+        <Box className={classes.infoSection}>
+          <FormSection
+            title="Información general"
+            description="Datos principales de la ubicación."
+          >
+            <FormGrid>
+              <RHFTextInput
+                control={control}
+                name="name"
+                label="Nombre de la ubicación"
                 required
-                fullWidth
-                value={field.value ?? ""}
-                error={Boolean(errors.name)}
-                helperText={errors.name?.message}
-                InputLabelProps={{ shrink: Boolean(field.value) }}
               />
-            )}
-          />
+              <RHFSelect
+                control={control}
+                name="storeFormat"
+                label="Formato de tienda"
+                data={storeFormatOptions}
+                clearable
+              />
+            </FormGrid>
+            <Box mt="md">
+              <RHFSwitch control={control} name="active" label="Activa" />
+            </Box>
+          </FormSection>
+        </Box>
 
-          <Controller
-            name="storeFormat"
-            control={control}
-            render={({ field }) => (
-              <FormControl fullWidth error={Boolean(errors.storeFormat)}>
-                <InputLabel id="store-format-label">Formato</InputLabel>
-                <Select
-                  labelId="store-format-label"
-                  label="Formato"
-                  value={field.value ?? ""}
-                  onChange={field.onChange}
-                  inputRef={field.ref}
-                >
-                  <MenuItem value="">
-                    <em>Sin formato</em>
-                  </MenuItem>
-                  {STORE_FORMATS.map((format) => (
-                    <MenuItem key={format} value={format}>
-                      {format}
-                    </MenuItem>
-                  ))}
-                </Select>
-              </FormControl>
-            )}
+        <Box className={classes.mapSection}>
+          <StoreInteractiveMapPanel
+            autocompleteContainerRef={picker.autocompleteContainerRef}
+            mapContainerRef={picker.mapContainerRef}
+            mapsLoadState={picker.mapsLoadState}
+            locationState={picker.locationState}
           />
         </Box>
 
-        <Controller
-          name="active"
-          control={control}
-          render={({ field }) => (
-            <FormControlLabel
-              control={<Switch checked={field.value} onChange={field.onChange} inputRef={field.ref} />}
-              label="Activa"
+        <Box className={classes.geoSection}>
+          <FormSection
+            title="Geolocalización"
+            description="Coordenadas y radio usados para validar la asistencia por WhatsApp."
+          >
+            <ManualCoordinatesFields
+              address={picker.address}
+              neighborhood={picker.neighborhood}
+              locality={picker.locality}
+              latitude={picker.latitude}
+              longitude={picker.longitude}
+              allowedRadiusMeters={picker.allowedRadiusMeters}
+              onAddressChange={(value) => picker.handleManualFieldChange({ address: value })}
+              onNeighborhoodChange={(value) =>
+                picker.handleManualFieldChange({ neighborhood: value })
+              }
+              onLocalityChange={(value) => picker.handleManualFieldChange({ locality: value })}
+              onLatitudeChange={picker.handleManualLatitudeChange}
+              onLongitudeChange={picker.handleManualLongitudeChange}
+              onRadiusChange={picker.handleRadiusChange}
             />
-          )}
-        />
+            {picker.errorMessage ? (
+              <Alert color="yellow" mt="md">
+                {picker.errorMessage}
+              </Alert>
+            ) : null}
+          </FormSection>
+        </Box>
 
-        <StoreLocationPicker
-          isEditMode={isEditMode}
-          currentName={watchedValues.name}
-          latitude={watchedValues.latitude ?? defaultValues.latitude}
-          longitude={watchedValues.longitude ?? defaultValues.longitude}
-          address={watchedValues.address ?? ""}
-          neighborhood={watchedValues.neighborhood ?? ""}
-          locality={watchedValues.locality ?? ""}
-          googlePlaceId={watchedValues.googlePlaceId ?? null}
-          allowedRadiusMeters={watchedValues.allowedRadiusMeters ?? defaultValues.allowedRadiusMeters}
-          setValue={setValue}
-          trigger={trigger}
-        />
-      </Stack>
-
-      <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+        {showBottomActions ? (
+          <Box className={classes.actionsSection} hiddenFrom="lg">
+            <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+          </Box>
+        ) : null}
+      </Box>
     </form>
   );
 }

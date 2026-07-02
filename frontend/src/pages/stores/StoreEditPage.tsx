@@ -1,12 +1,10 @@
+import { Button, Group } from "@mantine/core";
+import { notifications } from "@mantine/notifications";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { StoreForm } from "../../components/stores/StoreForm";
-import { ErrorState } from "../../components/common/ErrorState";
-import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
+import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
+import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useStore, useUpdateStore } from "../../hooks/useStores";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
 import { terminology } from "../../domain/terminology";
@@ -18,34 +16,23 @@ export function StoreEditPage() {
   const storeQuery = useStore(id);
   const updateMutation = useUpdateStore(id ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [successOpen, setSuccessOpen] = useState(false);
 
   if (!id) {
-    return (
-      <AdminLayout>
-        <ErrorState message={`${terminology.location.singular} no encontrada.`} />
-      </AdminLayout>
-    );
+    return <ErrorState message={`${terminology.location.singular} no encontrada.`} />;
   }
 
   if (storeQuery.isLoading) {
-    return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
-    );
+    return <LoadingState />;
   }
 
   if (storeQuery.isError || !storeQuery.data) {
     return (
-      <AdminLayout>
-        <ErrorState
-          message={getApiErrorMessage(
-            storeQuery.error,
-            `${terminology.location.singular} no encontrada.`,
-          )}
-        />
-      </AdminLayout>
+      <ErrorState
+        message={getApiErrorMessage(
+          storeQuery.error,
+          `${terminology.location.singular} no encontrada.`,
+        )}
+      />
     );
   }
 
@@ -67,7 +54,10 @@ export function StoreEditPage() {
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
         active: values.active,
       });
-      setSuccessOpen(true);
+      notifications.show({
+        color: "green",
+        message: `${terminology.location.singular} actualizada correctamente.`,
+      });
       navigate("/stores");
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
@@ -75,10 +65,20 @@ export function StoreEditPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Editar ${terminology.location.singular.toLowerCase()}`}
-        description={store.name}
+        description="Actualizá la información y el perímetro de validación de la ubicación."
+        action={
+          <Group gap="sm" visibleFrom="lg">
+            <Button component={RouterLink} to="/stores" variant="default">
+              Cancelar
+            </Button>
+            <Button type="submit" form={STORE_FORM_ID} loading={updateMutation.isPending}>
+              Guardar cambios
+            </Button>
+          </Group>
+        }
       />
       <StoreForm
         defaultValues={{
@@ -100,11 +100,6 @@ export function StoreEditPage() {
         isEditMode
         onSubmit={handleSubmit}
       />
-      <FeedbackSnackbar
-        open={successOpen}
-        message={`${terminology.location.singular} actualizada correctamente.`}
-        onClose={() => setSuccessOpen(false)}
-      />
-    </AdminLayout>
+    </>
   );
 }

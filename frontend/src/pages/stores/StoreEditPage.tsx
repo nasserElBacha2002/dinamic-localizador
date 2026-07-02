@@ -6,7 +6,6 @@ import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useStore, useUpdateStore } from "../../hooks/useStores";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
 import { terminology } from "../../domain/terminology";
@@ -22,30 +21,24 @@ export function StoreEditPage() {
 
   if (!id) {
     return (
-      <AdminLayout>
-        <ErrorState message={`${terminology.location.singular} no encontrada.`} />
-      </AdminLayout>
+      <ErrorState message={`${terminology.location.singular} no encontrada.`} />
     );
   }
 
   if (storeQuery.isLoading) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (storeQuery.isError || !storeQuery.data) {
     return (
-      <AdminLayout>
-        <ErrorState
+      <ErrorState
           message={getApiErrorMessage(
             storeQuery.error,
             `${terminology.location.singular} no encontrada.`,
           )}
         />
-      </AdminLayout>
     );
   }
 
@@ -75,7 +68,7 @@ export function StoreEditPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Editar ${terminology.location.singular.toLowerCase()}`}
         description={store.name}
@@ -105,6 +98,6 @@ export function StoreEditPage() {
         message={`${terminology.location.singular} actualizada correctamente.`}
         onClose={() => setSuccessOpen(false)}
       />
-    </AdminLayout>
+    </>
   );
 }

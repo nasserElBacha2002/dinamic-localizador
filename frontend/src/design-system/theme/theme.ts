@@ -67,6 +67,14 @@ export const mantineTheme = createTheme({
     fontWeight: "600",
   },
   defaultRadius: "md",
+  spacing: designTokens.spacing,
+  shadows: {
+    xs: designTokens.shadows.sm,
+    sm: designTokens.shadows.sm,
+    md: designTokens.shadows.md,
+    lg: designTokens.shadows.md,
+    xl: designTokens.shadows.md,
+  },
   white: designTokens.colors.surface,
   black: designTokens.colors.textPrimary,
   components: {
@@ -114,6 +122,13 @@ export const mantineTheme = createTheme({
       styles: {
         main: {
           backgroundColor: designTokens.colors.background,
+        },
+        navbar: {
+          borderRight: `1px solid ${designTokens.colors.border}`,
+        },
+        header: {
+          borderBottom: `1px solid ${designTokens.colors.border}`,
+          backgroundColor: designTokens.colors.surface,
         },
       },
     },

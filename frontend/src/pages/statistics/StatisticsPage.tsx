@@ -4,7 +4,6 @@ import { StatisticsEmployeeTable } from "../../components/statistics/StatisticsE
 import { StatisticsFiltersBar } from "../../components/statistics/StatisticsFiltersBar";
 import { StatisticsInventoryTable } from "../../components/statistics/StatisticsInventoryTable";
 import { StatisticsLocationTable } from "../../components/statistics/StatisticsLocationTable";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { StatisticsGeneralTab } from "./components/StatisticsGeneralTab";
 import { useStatisticsPageData } from "./hooks/useStatisticsPageData";
 
@@ -12,7 +11,7 @@ export function StatisticsPage() {
   const data = useStatisticsPageData();
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Estadísticas de asistencia"
         description="Panel analítico de asistencias por empleado, inventario y tienda con filtros globales y exportación."
@@ -141,6 +140,6 @@ export function StatisticsPage() {
           exportsDisabled={data.exportsDisabled}
         />
       ) : null}
-    </AdminLayout>
+    </>
   );
 }

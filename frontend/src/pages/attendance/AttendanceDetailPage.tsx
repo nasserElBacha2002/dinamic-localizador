@@ -31,7 +31,6 @@ import {
   useReviewAttendanceRecord,
 } from "../../hooks/useAttendance";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { formatDateTime } from "../../utils/dates";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -60,25 +59,19 @@ export function AttendanceDetailPage() {
 
   if (!id) {
     return (
-      <AdminLayout>
-        <ErrorState message="Registro no encontrado." />
-      </AdminLayout>
+      <ErrorState message="Registro no encontrado." />
     );
   }
 
   if (attendanceQuery.isLoading) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (attendanceQuery.isError || !attendanceQuery.data) {
     return (
-      <AdminLayout>
-        <ErrorState message={getApiErrorMessage(attendanceQuery.error, "Registro no encontrado.")} />
-      </AdminLayout>
+      <ErrorState message={getApiErrorMessage(attendanceQuery.error, "Registro no encontrado.")} />
     );
   }
 
@@ -110,7 +103,7 @@ export function AttendanceDetailPage() {
   const reviewsMeta = reviewsQuery.data?.meta;
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Detalle de asistencia"
         description={`${record.employee.name} · Llegada ${formatDateTime(record.receivedAt)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
@@ -322,6 +315,6 @@ export function AttendanceDetailPage() {
         severity={feedback.severity}
         onClose={() => setFeedback((current) => ({ ...current, open: false }))}
       />
-    </AdminLayout>
+    </>
   );
 }

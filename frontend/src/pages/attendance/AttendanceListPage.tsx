@@ -31,7 +31,6 @@ import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAtt
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
 import type { DateRangeValue } from "../../types/date-range";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
@@ -104,7 +103,7 @@ export function AttendanceListPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Asistencias"
         description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
@@ -333,6 +332,6 @@ export function AttendanceListPage() {
           />
         </>
       ) : null}
-    </AdminLayout>
+    </>
   );
 }

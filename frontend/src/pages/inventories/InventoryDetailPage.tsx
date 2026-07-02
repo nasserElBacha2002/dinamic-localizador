@@ -22,7 +22,6 @@ import {
   useInventory,
   useUpdateInventory,
 } from "../../hooks/useInventories";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
@@ -54,30 +53,24 @@ export function InventoryDetailPage() {
 
   if (!id) {
     return (
-      <AdminLayout>
-        <ErrorState message={`${terminology.operation.singular} no encontrada.`} />
-      </AdminLayout>
+      <ErrorState message={`${terminology.operation.singular} no encontrada.`} />
     );
   }
 
   if (inventoryQuery.isLoading) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (inventoryQuery.isError || !inventory) {
     return (
-      <AdminLayout>
-        <ErrorState
+      <ErrorState
           message={getApiErrorMessage(
             inventoryQuery.error,
             `${terminology.operation.singular} no encontrada.`,
           )}
         />
-      </AdminLayout>
     );
   }
 
@@ -139,7 +132,7 @@ export function InventoryDetailPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
         description={`${inventory.store.name} · ${formatDateTime(inventory.scheduledStart)}`}
@@ -240,6 +233,6 @@ export function InventoryDetailPage() {
         severity={feedback.severity}
         onClose={() => setFeedback((current) => ({ ...current, open: false }))}
       />
-    </AdminLayout>
+    </>
   );
 }

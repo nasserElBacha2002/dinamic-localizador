@@ -1,11 +1,9 @@
 import { Button, Stack, Typography } from "@mui/material";
 import { Link as RouterLink } from "react-router-dom";
-import { AdminLayout } from "../layouts/AdminLayout";
 
 export function NotFoundPage() {
   return (
-    <AdminLayout>
-      <Stack spacing={2} alignItems="flex-start">
+    <Stack spacing={2} alignItems="flex-start">
         <Typography variant="h4" component="h1">
           Página no encontrada
         </Typography>
@@ -16,6 +14,5 @@ export function NotFoundPage() {
           Volver al inicio
         </Button>
       </Stack>
-    </AdminLayout>
   );
 }

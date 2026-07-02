@@ -1,3 +1,4 @@
+/** @deprecated Replaced by `design-system/layout/AppLayout` (PR 2). Kept for reference until cleanup PR. */
 import {
   AppBar,
   Box,

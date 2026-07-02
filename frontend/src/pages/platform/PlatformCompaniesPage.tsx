@@ -8,7 +8,6 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompany } from "../../hooks/useCompany";
 import { useCreatePlatformCompany, usePlatformCompanies } from "../../hooks/usePlatformCompanies";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { CreatePlatformCompanyInput } from "../../types/platform-company";
 import { getApiErrorMessage } from "../../utils/errors";
 import { CreatePlatformCompanyDialog } from "./CreatePlatformCompanyDialog";
@@ -40,14 +39,12 @@ export function PlatformCompaniesPage() {
 
   if (!isPlatformAdmin) {
     return (
-      <AdminLayout>
-        <ErrorState message="Solo un superadministrador de plataforma puede gestionar empresas." />
-      </AdminLayout>
+      <ErrorState message="Solo un superadministrador de plataforma puede gestionar empresas." />
     );
   }
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Empresas de plataforma"
         description="Creá empresas nuevas y asigná el usuario owner inicial."
@@ -97,6 +94,6 @@ export function PlatformCompaniesPage() {
       />
 
       <FeedbackSnackbar open={Boolean(successMessage)} message={successMessage ?? ""} onClose={() => setSuccessMessage(null)} />
-    </AdminLayout>
+    </>
   );
 }

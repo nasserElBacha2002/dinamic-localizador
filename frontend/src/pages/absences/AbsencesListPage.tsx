@@ -27,7 +27,6 @@ import { StatusChip } from "../../components/common/StatusChip";
 import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
 import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { AbsenceRequestStatus } from "../../types/absence";
 import type { DateRangeValue } from "../../types/date-range";
 import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue } from "../../utils/date-range";
@@ -68,7 +67,7 @@ export function AbsencesListPage() {
   });
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Solicitudes de ausencia"
         description="Revisá y gestioná las solicitudes enviadas por WhatsApp o administración."
@@ -200,6 +199,6 @@ export function AbsencesListPage() {
           />
         </Stack>
       ) : null}
-    </AdminLayout>
+    </>
   );
 }

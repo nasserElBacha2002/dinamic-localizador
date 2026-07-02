@@ -32,7 +32,6 @@ import {
   useUpdateCompanyUser,
 } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
 import { getApiErrorMessage } from "../../utils/errors";
 import { companyRoleLabels, membershipStatusLabels } from "../../utils/labels";
@@ -143,22 +142,18 @@ export function CompanyUsersPage() {
 
   if (permissionsQuery.isPending) {
     return (
-      <AdminLayout>
-        <LoadingState message="Verificando permisos..." />
-      </AdminLayout>
+      <LoadingState message="Verificando permisos..." />
     );
   }
 
   if (!canManageUsers) {
     return (
-      <AdminLayout>
-        <ErrorState message="No tenés permisos para gestionar usuarios de esta empresa." />
-      </AdminLayout>
+      <ErrorState message="No tenés permisos para gestionar usuarios de esta empresa." />
     );
   }
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Usuarios de empresa"
         description="Gestioná los usuarios que tienen acceso al panel para esta empresa."
@@ -314,6 +309,6 @@ export function CompanyUsersPage() {
         message={successMessage ?? ""}
         onClose={() => setSuccessMessage(null)}
       />
-    </AdminLayout>
+    </>
   );
 }

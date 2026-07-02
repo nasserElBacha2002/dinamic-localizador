@@ -9,7 +9,6 @@ import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
 import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useEmployee, useUpdateEmployee } from "../../hooks/useEmployees";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -24,30 +23,24 @@ export function EmployeeEditPage() {
 
   if (!id) {
     return (
-      <AdminLayout>
-        <ErrorState message={`${terminology.worker.singular} no encontrado.`} />
-      </AdminLayout>
+      <ErrorState message={`${terminology.worker.singular} no encontrado.`} />
     );
   }
 
   if (employeeQuery.isLoading) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (employeeQuery.isError || !employeeQuery.data) {
     return (
-      <AdminLayout>
-        <ErrorState
+      <ErrorState
           message={getApiErrorMessage(
             employeeQuery.error,
             `${terminology.worker.singular} no encontrado.`,
           )}
         />
-      </AdminLayout>
     );
   }
 
@@ -73,7 +66,7 @@ export function EmployeeEditPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Editar ${terminology.worker.singular.toLowerCase()}`}
         description={employee.name}
@@ -113,6 +106,6 @@ export function EmployeeEditPage() {
         message={`${terminology.worker.singular} actualizado correctamente.`}
         onClose={() => setSuccessOpen(false)}
       />
-    </AdminLayout>
+    </>
   );
 }

@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useCreateEmployee } from "../../hooks/useEmployees";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -32,7 +31,7 @@ export function EmployeeCreatePage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Nuevo ${terminology.worker.singular.toLowerCase()}`}
         description={`Registrá un ${terminology.worker.singular.toLowerCase()} habilitado para ${terminology.operation.plural.toLowerCase()}.`}
@@ -45,6 +44,6 @@ export function EmployeeCreatePage() {
         errorMessage={errorMessage}
         onSubmit={handleSubmit}
       />
-    </AdminLayout>
+    </>
   );
 }

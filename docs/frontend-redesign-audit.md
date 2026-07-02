@@ -1,6 +1,6 @@
 # Frontend Redesign — Technical Audit
 
-**Status:** `READY_TO_IMPLEMENT` (Mantine foundation + shell PRs)  
+**Status:** `READY_TO_IMPLEMENT` (PR 1–2 complete; PR 3+ components and page migration)  
 **Stage audited:** Frontend redesign integration (pre-implementation audit)  
 **Date:** 2026-07-01 (updated 2026-07-01 — Mantine decision)  
 **Scope:** Read-only analysis of `frontend/` — architecture, multi-company, permissions, React Query, components, styling, page impact, migration plan.  
@@ -21,7 +21,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 ### Main findings
 
 - **Architecture is sound for incremental migration.** Domain hooks, API modules, Zod schemas, and route guards can remain unchanged while the shell and shared UI are refactored.
-- **MUI 7 is the current UI library; Mantine is mandatory for the redesign.** Mantine is **not installed yet**. Adoption follows a **dual-library strangler pattern** documented in [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
+- **MUI 7 is the current page UI library; Mantine 9 is installed** as the redesign foundation. Adoption follows a **dual-library strangler pattern** documented in [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). **PR 1 (foundation) and PR 2 (route-level AppLayout shell) are implemented.** MUI remains on unmigrated page content.
 - **Multi-company foundations exist** (active company in context + localStorage, scoped APIs, `queryClient.clear()` on switch). Gaps remain around **route validation after company switch** and **avoiding stale UI during reload**.
 - **Module fetching was recently stabilized** (`company-modules-query.ts`: 10 min `staleTime`, company-scoped key). Repeated `useCompanyModules()` calls share cache; network refetch on every navigation is **no longer the primary risk**, but **duplicate hook subscriptions** in layout + guards + pages still add coordination complexity.
 - **Layout is per-page, not route-level.** Every protected page wraps itself in `<AdminLayout>`. A new `AppLayout` should become a **route layout** to avoid drift.
@@ -38,10 +38,10 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Route guards | Yes | `FeatureRouteGuard` on all feature routes |
 | API scoping | Yes | `scopedApiClient` + `company-path.ts` |
 | Shared UI primitives | Partial | Exist but underused / MUI-coupled |
-| Design system (Mantine) | Planned | Mandatory; see adoption plan PR 1–2 |
+| Design system (Mantine 9) | PR 1–2 done | Foundation + route-level AppShell; see adoption plan PR 3+ |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended first work:** PR 1 Mantine foundation → PR 2 Mantine `AppLayout` at route level → PR 3 base components → PR 4 DataTable/FilterBar. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
+**Recommended next work:** PR 3 base Mantine components → PR 4 DataTable/FilterBar → PR 5+ page migration. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
 
 ---
 
@@ -238,13 +238,13 @@ Optional: `CompanyAccessContext` providing `{ modules, permissions, isLoading }`
 | Theme | `theme/theme.ts` — primary `#1565c0`, secondary `#00897b`, bg `#f7f9fc` |
 | Design tokens | Embedded in MUI theme only; no CSS variables |
 | Global CSS | `index.css`, `App.css` exist but **not imported** |
-| Mantine | Not installed |
+| Mantine 9 | Installed (`@mantine/core`, `@mantine/hooks`, `@mantine/notifications` ^9.4.1) |
 | Responsiveness | MUI Grid v2 (`size={{ xs, md }}`), `useMediaQuery` in layout |
 
-**Mantine adoption (decided):** Mantine is mandatory. Use the **shell-first strangler pattern**:
+**Mantine adoption (decided):** Mantine 9 is mandatory and installed. Use the **shell-first strangler pattern**:
 
-1. **PR 1** — `MantineProvider` + tokens (MUI nested inside, no page changes)
-2. **PR 2** — Mantine `AppShell` at route level; legacy MUI pages in `<Outlet />`
+1. **PR 1** — ✅ `MantineProvider` + tokens (MUI nested inside)
+2. **PR 2** — ✅ Mantine `AppShell` at route level; legacy MUI pages in `<Outlet />`
 3. **PR 3+** — `src/design-system/` components; migrate pages progressively
 4. **Final PR** — Remove MUI after all usages gone
 
@@ -645,7 +645,7 @@ Every redesign PR must pass:
 | Tables/filters/forms | PARTIAL | Primitives exist; inconsistent adoption |
 | Business flows intact | OK | All major pages implemented |
 | Redesign spec available | GAP | Not in repository |
-| Mantine design system | GAP | Not installed; MUI only |
+| Mantine design system | PR 1–2 done | Installed; route-level AppShell; MUI on page content |
 | AppLayout route shell | GAP | `AdminLayout` per-page |
 | Company switch route safety | RISK | Navigates `/` only from selector |
 | No stale company data | RISK | Cache clear OK; no switching overlay |
@@ -685,7 +685,7 @@ Existing patterns to preserve:
 
 ## Suggested next command
 
-**`/implement-dinamic-stage`** — start with **PR 1 (Mantine foundation)** per [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). Then PR 2 (AppLayout shell). Import redesign Figma/spec before PR 3.
+**`/implement-dinamic-stage`** — continue with **PR 3 (Mantine base components)** per [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). Import redesign Figma/spec before large page migrations.
 
 ---
 

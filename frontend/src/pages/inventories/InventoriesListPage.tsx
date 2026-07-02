@@ -29,7 +29,6 @@ import { useInventories } from "../../hooks/useInventories";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useTableSort } from "../../hooks/useTableSort";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { InventoryListSortField, InventoryStatus } from "../../types/inventory";
 import type { DateRangeValue } from "../../types/date-range";
 import { getDefaultInventoryDateRange, getDateRangeQueryValue } from "../../utils/date-range";
@@ -93,7 +92,7 @@ export function InventoriesListPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={terminology.operation.plural}
         description={`Planificá ${terminology.operation.plural.toLowerCase()} y asigná ${terminology.worker.plural.toLowerCase()}.`}
@@ -203,6 +202,6 @@ export function InventoriesListPage() {
           />
         </>
       ) : null}
-    </AdminLayout>
+    </>
   );
 }

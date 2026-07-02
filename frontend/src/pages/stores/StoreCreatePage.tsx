@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { StoreForm } from "../../components/stores/StoreForm";
 import { PageHeader } from "../../components/common/PageHeader";
 import { useCreateStore } from "../../hooks/useStores";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
 import { terminology } from "../../domain/terminology";
@@ -38,7 +37,7 @@ export function StoreCreatePage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={`Nueva ${terminology.location.singular.toLowerCase()}`}
         description="Definí la ubicación y el radio permitido."
@@ -63,6 +62,6 @@ export function StoreCreatePage() {
         isEditMode={false}
         onSubmit={handleSubmit}
       />
-    </AdminLayout>
+    </>
   );
 }

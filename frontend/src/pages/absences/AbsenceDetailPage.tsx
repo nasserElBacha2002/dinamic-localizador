@@ -34,7 +34,6 @@ import {
   useNeedsInfoAbsenceRequest,
   useRejectAbsenceRequest,
 } from "../../hooks/useAbsences";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -68,25 +67,19 @@ export function AbsenceDetailPage() {
 
   if (!id) {
     return (
-      <AdminLayout>
-        <ErrorState message="Solicitud no encontrada." />
-      </AdminLayout>
+      <ErrorState message="Solicitud no encontrada." />
     );
   }
 
   if (requestQuery.isLoading) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (requestQuery.isError || !requestQuery.data) {
     return (
-      <AdminLayout>
-        <ErrorState message={getApiErrorMessage(requestQuery.error, "Solicitud no encontrada.")} />
-      </AdminLayout>
+      <ErrorState message={getApiErrorMessage(requestQuery.error, "Solicitud no encontrada.")} />
     );
   }
 
@@ -149,7 +142,7 @@ export function AbsenceDetailPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Detalle de solicitud de ausencia"
         description={`${request.employee.name} · ${formatAbsenceDate(request.startDate)} - ${formatAbsenceDate(request.endDate)}`}
@@ -383,6 +376,6 @@ export function AbsenceDetailPage() {
         severity={feedback.severity}
         onClose={() => setFeedback((current) => ({ ...current, open: false }))}
       />
-    </AdminLayout>
+    </>
   );
 }

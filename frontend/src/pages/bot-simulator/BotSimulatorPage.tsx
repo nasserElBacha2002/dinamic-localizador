@@ -1,6 +1,5 @@
 import { Alert, Button, Grid, Stack } from "@mui/material";
 import { PageHeader } from "../../components/common/PageHeader";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { BotConversationPanel } from "./components/BotConversationPanel";
 import { BotLocationDialog } from "./components/BotLocationDialog";
 import { BotSessionPanel } from "./components/BotSessionPanel";
@@ -11,7 +10,7 @@ export function BotSimulatorPage() {
   const session = useBotSimulatorSession();
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Simulador de Bot"
         description="Probá flujos conversacionales del bot de WhatsApp sin depender del webhook de Twilio."
@@ -52,6 +51,6 @@ export function BotSimulatorPage() {
       {session.sessionState ? <BotTechnicalDetails entries={session.technicalEntries} /> : null}
 
       <BotLocationDialog {...session} />
-    </AdminLayout>
+    </>
   );
 }

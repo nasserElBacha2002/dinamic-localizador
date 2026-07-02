@@ -8,7 +8,6 @@ import { useCompanyModules } from "../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
 import { useInventories } from "../hooks/useInventories";
-import { AdminLayout } from "../layouts/AdminLayout";
 import type { InventoryWithStore } from "../types/inventory";
 import { terminology } from "../domain/terminology";
 import { getHomeQuickLinks } from "../utils/company-modules";
@@ -40,7 +39,7 @@ export function HomePage() {
   });
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Dinamic Attendance"
         description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
@@ -146,7 +145,7 @@ export function HomePage() {
           ) : null}
         </>
       ) : null}
-    </AdminLayout>
+    </>
   );
 }
 

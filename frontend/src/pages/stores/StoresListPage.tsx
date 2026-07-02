@@ -24,7 +24,6 @@ import { StatusChip } from "../../components/common/StatusChip";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { useStores } from "../../hooks/useStores";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
@@ -50,7 +49,7 @@ export function StoresListPage() {
   }, [pagination]);
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={terminology.location.plural}
         description="Configurá ubicaciones y radios permitidos."
@@ -150,6 +149,6 @@ export function StoresListPage() {
           />
         </>
       ) : null}
-    </AdminLayout>
+    </>
   );
 }

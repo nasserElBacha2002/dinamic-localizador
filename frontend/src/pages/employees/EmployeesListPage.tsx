@@ -24,7 +24,6 @@ import { StatusChip } from "../../components/common/StatusChip";
 import { useEmployees } from "../../hooks/useEmployees";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { usePaginationState } from "../../hooks/usePaginationState";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
@@ -55,7 +54,7 @@ export function EmployeesListPage() {
   }, [pagination]);
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title={terminology.worker.plural}
         description={`Administrá el personal habilitado para ${terminology.operation.plural.toLowerCase()}.`}
@@ -151,6 +150,6 @@ export function EmployeesListPage() {
           />
         </>
       ) : null}
-    </AdminLayout>
+    </>
   );
 }

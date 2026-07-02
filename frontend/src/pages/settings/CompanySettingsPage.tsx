@@ -18,7 +18,6 @@ import { PageHeader } from "../../components/common/PageHeader";
 import { useCompanySettings, useUpdateCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyModules, useUpdateCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type { CompanySettings, CompanySettingsFormValues } from "../../types/company-settings";
 import type { CompanyModule, CompanyModuleKey } from "../../types/company-module";
 import {
@@ -351,38 +350,30 @@ export function CompanySettingsPage() {
 
   if (permissionsQuery.isPending) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (!canRead) {
     return (
-      <AdminLayout>
-        <ErrorState message="No tenés permisos para ver la configuración de esta empresa." />
-      </AdminLayout>
+      <ErrorState message="No tenés permisos para ver la configuración de esta empresa." />
     );
   }
 
   if (settingsQuery.isPending || modulesQuery.isPending) {
     return (
-      <AdminLayout>
-        <LoadingState />
-      </AdminLayout>
+      <LoadingState />
     );
   }
 
   if (settingsQuery.isError || !settingsQuery.data) {
     return (
-      <AdminLayout>
-        <ErrorState message={getApiErrorMessage(settingsQuery.error)} />
-      </AdminLayout>
+      <ErrorState message={getApiErrorMessage(settingsQuery.error)} />
     );
   }
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Configuración de empresa"
         description="Definí los parámetros operativos que aplican a esta empresa."
@@ -417,6 +408,6 @@ export function CompanySettingsPage() {
         message={successMessage ?? ""}
         onClose={() => setSuccessMessage(null)}
       />
-    </AdminLayout>
+    </>
   );
 }

@@ -3,6 +3,7 @@ import { Outlet, Route, Routes } from "react-router-dom";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
+import { AppLayout } from "../design-system";
 import { LoadingState } from "../components/common/LoadingState";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
@@ -72,7 +73,9 @@ function ProtectedLayout() {
   return (
     <ProtectedRoute>
       <CompanyGate>
-        <Outlet />
+        <AppLayout>
+          <Outlet />
+        </AppLayout>
       </CompanyGate>
     </ProtectedRoute>
   );

@@ -18,4 +18,15 @@ export const designTokens = {
     md: "8px",
     lg: "12px",
   },
+  spacing: {
+    xs: "0.5rem",
+    sm: "0.75rem",
+    md: "1rem",
+    lg: "1.5rem",
+    xl: "2rem",
+  },
+  shadows: {
+    sm: "0 1px 2px rgba(15, 23, 42, 0.06)",
+    md: "0 4px 12px rgba(15, 23, 42, 0.08)",
+  },
 } as const;

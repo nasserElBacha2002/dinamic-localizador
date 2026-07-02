@@ -21,7 +21,6 @@ import { LoadingState } from "../../components/common/LoadingState";
 import { PageHeader } from "../../components/common/PageHeader";
 import { StatusChip } from "../../components/common/StatusChip";
 import { useInventoryImportConfirm, useInventoryImportPreview } from "../../hooks/useInventoryImport";
-import { AdminLayout } from "../../layouts/AdminLayout";
 import type {
   InventoryImportConfirmRow,
   InventoryImportPreviewResult,
@@ -142,7 +141,7 @@ export function InventoryImportPage() {
   };
 
   return (
-    <AdminLayout>
+    <>
       <PageHeader
         title="Importar inventarios"
         description="Cargá un CSV o XLSX, revisá la vista previa y confirmá la importación."
@@ -319,6 +318,6 @@ export function InventoryImportPage() {
         severity={feedback.severity}
         onClose={() => setFeedback((current) => ({ ...current, open: false }))}
       />
-    </AdminLayout>
+    </>
   );
 }

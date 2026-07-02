@@ -1,6 +1,6 @@
 # Frontend Mantine Adoption Plan
 
-**Status:** `READY_TO_IMPLEMENT` (foundation PRs only)  
+**Status:** `READY_TO_IMPLEMENT` (PR 1 complete; PR 2+ shell and components)  
 **Date:** 2026-07-01  
 **Related:** [frontend-redesign-audit.md](./frontend-redesign-audit.md)  
 **Scope:** Safe, progressive introduction of Mantine as the mandatory design-system layer while MUI 7 remains operational during migration. **No full page migrations in this plan phase.**
@@ -13,8 +13,8 @@ Mantine is **mandatory** for the Dinamic Attendance frontend redesign. The curre
 
 **First implementation steps (no page redesign yet):**
 
-1. **PR 1** — Install Mantine, `MantineProvider`, CSS imports, `src/design-system/theme/` tokens (no page changes).
-2. **PR 2** — Mantine `AppLayout` (AppShell) at **route level**; legacy MUI pages render inside `<Outlet />`.
+1. **PR 1** — ✅ **Done** — Install Mantine 9, `MantineProvider`, CSS imports, `src/design-system/theme/` tokens (no page changes).
+2. **PR 2** — ✅ **Done** — Mantine `AppLayout` (AppShell) at **route level**; legacy MUI pages render inside `<Outlet />`.
 3. **PR 3+** — Mantine UI-only primitives, then progressive page migration.
 
 **What stays legacy for now:** All page content, domain forms, tables, bot simulator, statistics, import flow, Google Maps picker, and all MUI `components/common/*` until explicitly migrated.
@@ -211,29 +211,35 @@ import "@mantine/notifications/styles.css";
 // import "@mantine/dates/styles.css";
 ```
 
-### 5.4 Vite / PostCSS (PR 1)
+### 5.4 Vite / PostCSS (PR 1 — implemented)
 
-Per Mantine 7 docs, add to `frontend/`:
+Per [Mantine 9 Vite guide](https://mantine.dev/guides/vite/), `frontend/postcss.config.cjs` uses:
 
-- `postcss.config.cjs` with `postcss-preset-mantine`, `postcss-simple-vars`
-- Dev dependencies: `postcss`, `postcss-preset-mantine`, `postcss-simple-vars`
+- `postcss-preset-mantine`
+- `postcss-simple-vars` (breakpoint variables)
 
-### 5.5 NPM packages (PR 1)
+Dev dependencies: `postcss`, `postcss-preset-mantine`, `postcss-simple-vars`.
+
+**Status:** Config is present and validated with `npm run build` on Mantine `^9.4.1`. No changes required for Mantine 9.
+
+### 5.5 NPM packages (PR 1 — implemented)
 
 ```json
-"@mantine/core": "^7.x",
-"@mantine/hooks": "^7.x",
-"@mantine/notifications": "^7.x"
+"@mantine/core": "^9.x",
+"@mantine/hooks": "^9.x",
+"@mantine/notifications": "^9.x"
 ```
+
+Current installed versions: `^9.4.1` (see `frontend/package.json`).
 
 Defer until filter/date migration:
 
 ```json
-"@mantine/dates": "^7.x",
+"@mantine/dates": "^9.x",
 "dayjs": "^1.x"
 ```
 
-**Do not remove:** `@mui/material`, `@emotion/react`, `@emotion/styled`.
+**Do not remove:** `@mui/material`, `@emotion/react`, `@emotion/styled`. MUI remains active for all unmigrated pages during the strangler migration.
 
 ### 5.6 Files to create (PR 1 — no page usage yet)
 
@@ -604,37 +610,37 @@ function ProtectedLayout() {
 
 ## 12. Suggested PR breakdown
 
-### PR 1 — Mantine foundation only
+### PR 1 — Mantine foundation only ✅ IMPLEMENTED
 
-**Goal:** Install Mantine; wire provider + theme; zero page migration.
+**Goal:** Install Mantine 9; wire provider + theme; zero page migration.
 
-**Changes:**
+**Changes (done):**
 
-- Add `@mantine/core`, `@mantine/hooks`, `@mantine/notifications`
-- PostCSS config for Mantine
+- Add `@mantine/core`, `@mantine/hooks`, `@mantine/notifications` (`^9.4.1`)
+- PostCSS config for Mantine 9 (`postcss-preset-mantine`, `postcss-simple-vars`)
 - CSS imports in `main.tsx`
-- `src/design-system/theme/tokens.ts`, `theme.ts`
+- `src/design-system/theme/tokens.ts`, `theme.ts` (colors, spacing, shadows)
 - Wrap app with `MantineProvider` + `Notifications`
-- Keep MUI `ThemeProvider` nested inside
+- Keep MUI `ThemeProvider` nested inside (MUI remains active)
 - Inter font loading
 
-**Validation:** `npm run build`, `npm run lint`, login works, existing pages visually unchanged (minor CSS baseline differences acceptable if documented).
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
 
 ---
 
-### PR 2 — Mantine AppLayout shell
+### PR 2 — Mantine AppLayout shell ✅ IMPLEMENTED
 
 **Goal:** Route-level AppShell; functional nav + company selector.
 
-**Changes:**
+**Changes (done):**
 
 - `design-system/layout/AppLayout`, `AppSidebar`, `AppTopbar`, `AppNavLink`
 - Update `ProtectedLayout` in `AppRoutes.tsx`
-- Remove per-page `AdminLayout` wrappers (all pages)
-- Mantine company `Select` in topbar (same behavior as today)
-- Deprecate `layouts/AdminLayout.tsx` (file remains until Phase 6)
+- Remove per-page `AdminLayout` wrappers (all protected pages)
+- Mantine company `Select` in topbar (same `selectCompany()` + `navigate("/")` behavior)
+- `layouts/AdminLayout.tsx` retained but unused (delete in cleanup PR)
 
-**Validation:** Navigation, company switch, module visibility, guards, no extra module fetches, mobile drawer.
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass. Manual: navigation, company switch, guards, mobile drawer.
 
 ---
 

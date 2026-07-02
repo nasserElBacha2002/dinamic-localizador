@@ -41,7 +41,7 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Design system (Mantine 9) | PR 1–2 done | Foundation + route-level AppShell; see adoption plan PR 3+ |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended next work:** PR 4 Mantine DataTable/FilterBar → PR 5+ page migration. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
+**Recommended next work:** PR 6 StoresListPage migration → progressive list/form migrations. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
 
 ---
 
@@ -645,7 +645,7 @@ Every redesign PR must pass:
 | Tables/filters/forms | PARTIAL | Primitives exist; inconsistent adoption |
 | Business flows intact | OK | All major pages implemented |
 | Redesign spec available | GAP | Not in repository |
-| Mantine design system | PR 1–3 done | Shell + UI-only base components; MUI on page content |
+| Mantine design system | PR 1–5 done | Shell + base + list + HomePage migrated |
 | AppLayout route shell | OK | Mantine `AppLayout` route-level; `AdminLayout` deprecated/unused |
 | Company switch route safety | RISK | Navigates `/` only from selector |
 | No stale company data | RISK | Cache clear OK; no switching overlay |

@@ -1,6 +1,6 @@
 # Frontend Mantine Adoption Plan
 
-**Status:** `READY_TO_IMPLEMENT` (PR 1 complete; PR 2+ shell and components)  
+**Status:** `READY_TO_IMPLEMENT` (PR 1–5 complete; PR 6+ progressive migration)  
 **Date:** 2026-07-01  
 **Related:** [frontend-redesign-audit.md](./frontend-redesign-audit.md)  
 **Scope:** Safe, progressive introduction of Mantine as the mandatory design-system layer while MUI 7 remains operational during migration. **No full page migrations in this plan phase.**
@@ -15,7 +15,7 @@ Mantine is **mandatory** for the Dinamic Attendance frontend redesign. The curre
 
 1. **PR 1** — ✅ **Done** — Install Mantine 9, `MantineProvider`, CSS imports, `src/design-system/theme/` tokens (no page changes).
 2. **PR 2** — ✅ **Done** — Mantine `AppLayout` (AppShell) at **route level**; legacy MUI pages render inside `<Outlet />`.
-3. **PR 3+** — ✅ **Done (PR 3)** — Mantine UI-only primitives; progressive page migration from PR 5+.
+3. **PR 3+** — ✅ **Done (PR 3–4)** — Mantine UI primitives + list infrastructure; first list page migrated.
 
 **What stays legacy for now:** All page content, domain forms, tables, bot simulator, statistics, import flow, Google Maps picker, and all MUI `components/common/*` until explicitly migrated.
 
@@ -659,25 +659,52 @@ function ProtectedLayout() {
 - Design-system components are UI-only: no API clients, React Query hooks, or business logic.
 - Legacy `components/common/*` remains until pages are migrated.
 
-**Next:** PR 4 — Mantine DataTable and FilterBar.
+**Next:** PR 5 — Dashboard/HomePage migration.
 
 **Validation:** `npm run build`, `npm run lint`, `npm test` pass; no page migrations in this PR.
 
 ---
 
-### PR 4 — Mantine DataTable and FilterBar
+### PR 4 — Mantine DataTable and FilterBar ✅ IMPLEMENTED
 
-**Goal:** List infrastructure; migrate **one** low-risk list if safe (employees recommended).
+**Goal:** List infrastructure; migrate one low-risk list page.
 
-**Validation:** Pagination, search, loading/error/empty, sort if applicable.
+**Components created:**
+
+- `DataTable`, `FilterBar`, `PaginationControls`, `SearchInput`
+- `mapApiPaginationMeta()` helper for backend pagination shape (`limit`/`total`)
+
+**Deferred:**
+
+- Column sorting → later PR
+- `RowActionsMenu` → later PR
+
+**Page migration:**
+
+- `EmployeesListPage` migrated as first low-risk list (hooks/permissions/API unchanged)
+- **Search behavior:** explicit commit on Enter/clear (matches legacy `SearchField` intent; not debounced auto-search)
+
+**Next:** PR 5 — Dashboard/HomePage migration.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
 
 ---
 
-### PR 5 — First page migration (Dashboard)
+### PR 5 — Dashboard/HomePage migration ✅ IMPLEMENTED
 
-**Goal:** `HomePage` on Mantine components; hooks unchanged.
+**Goal:** Migrate `HomePage.tsx` to Mantine design-system components; hooks and data behavior unchanged.
 
-**Validation:** Health cards, quick links, upcoming operations match behavior.
+**Changes:**
+
+- `PageHeader`, `MetricCard`, `SectionCard`, `StatusBadge`, `LoadingState`, `ErrorState`, `EmptyState`
+- Health cards (backend, database, upcoming summary), quick links, upcoming operations list
+- No MUI imports in `HomePage.tsx`
+
+**Hooks preserved:** `useApiHealth`, `useDatabaseHealth`, `useCompanyModules`, `useCompanyPermissions`, `useInventories`
+
+**Next:** PR 6 — `StoresListPage` migration (recommended next low-risk list).
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
 
 ---
 

@@ -1,6 +1,5 @@
 import {
   Alert,
-  Button,
   Card,
   CardContent,
   Stack,
@@ -9,6 +8,7 @@ import {
   TableRow,
   Typography,
 } from "@mui/material";
+import { Button, Group } from "@mantine/core";
 import { useState } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
@@ -125,7 +125,12 @@ export function InventoryOperationalSection({
       <CardContent>
         <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" sx={{ mb: 2 }}>
           <Typography variant="h6">Vista operativa</Typography>
-          <Button onClick={() => summaryQuery.refetch()} disabled={summaryQuery.isFetching}>
+          <Button
+            variant="default"
+            size="compact-sm"
+            onClick={() => summaryQuery.refetch()}
+            loading={summaryQuery.isFetching}
+          >
             Actualizar
           </Button>
         </Stack>
@@ -152,10 +157,10 @@ export function InventoryOperationalSection({
               helperText="Buscá por nombre. Verás tipo y último día trabajado."
             />
             <Button
-              variant="contained"
               onClick={handleAssign}
               disabled={!selectedEmployeeId || assignMutation.isPending}
-              sx={{ alignSelf: { sm: "center" }, minWidth: 120 }}
+              loading={assignMutation.isPending}
+              style={{ alignSelf: "center", minWidth: 120 }}
             >
               Asignar
             </Button>
@@ -252,12 +257,13 @@ export function InventoryOperationalSection({
                 <StatusChip label={operationalStatusLabels[row.operationalStatus]} />
               </TableCell>
               <TableCell align="right">
-                <Stack direction="row" spacing={1} justifyContent="flex-end" flexWrap="wrap" useFlexGap>
+                <Group gap="xs" justify="flex-end" wrap="wrap">
                   {row.attendance ? (
                     <Button
                       component={RouterLink}
                       to={`/attendance/${row.attendance.id}`}
-                      size="small"
+                      size="compact-sm"
+                      variant="light"
                     >
                       Ver
                     </Button>
@@ -265,8 +271,7 @@ export function InventoryOperationalSection({
                   {canReviewAttendance(row) ? (
                     <>
                       <Button
-                        size="small"
-                        variant="contained"
+                        size="compact-sm"
                         onClick={() =>
                           setReviewTarget({
                             attendanceId: row.attendance!.id,
@@ -277,9 +282,9 @@ export function InventoryOperationalSection({
                         Aprobar
                       </Button>
                       <Button
-                        size="small"
-                        color="error"
-                        variant="outlined"
+                        size="compact-sm"
+                        color="danger"
+                        variant="default"
                         onClick={() =>
                           setReviewTarget({
                             attendanceId: row.attendance!.id,
@@ -293,15 +298,17 @@ export function InventoryOperationalSection({
                   ) : null}
                   {canAssign && !row.attendance ? (
                     <Button
-                      size="small"
-                      color="error"
+                      size="compact-sm"
+                      color="danger"
+                      variant="light"
                       disabled={unassignMutation.isPending}
+                      loading={unassignMutation.isPending}
                       onClick={() => handleUnassign(row.employee.id)}
                     >
                       Desasignar
                     </Button>
                   ) : null}
-                </Stack>
+                </Group>
               </TableCell>
             </TableRow>
           ))}

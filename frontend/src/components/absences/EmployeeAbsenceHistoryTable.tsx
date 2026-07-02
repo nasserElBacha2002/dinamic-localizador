@@ -1,18 +1,15 @@
-import {
-  Button,
-  Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
-  Typography,
-} from "@mui/material";
+import { Button } from "@mantine/core";
+import { Stack, Text } from "@mantine/core";
+import { useMemo } from "react";
 import { Link as RouterLink } from "react-router-dom";
-import { LoadingState } from "../common/LoadingState";
-import { StatusChip } from "../common/StatusChip";
+import {
+  DataTable,
+  LoadingState,
+  StatusBadge,
+  type DataTableColumn,
+} from "../../design-system";
 import { useAbsenceRequests } from "../../hooks/useAbsences";
+import type { AbsenceRequestListItem } from "../../types/absence";
 import { absenceStatusLabels, formatAbsenceDate } from "../../utils/absence-labels";
 
 interface EmployeeAbsenceHistoryTableProps {
@@ -29,57 +26,54 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
     limit: 10,
   });
 
+  const listHref = `/absences?employeeId=${employeeId}&dateFrom=${year}-01-01&dateTo=${year}-12-31`;
+
+  const columns = useMemo<DataTableColumn<AbsenceRequestListItem>[]>(
+    () => [
+      { key: "type", header: "Tipo", getValue: (row) => row.absenceType.name },
+      {
+        key: "period",
+        header: "Período",
+        getValue: (row) => `${formatAbsenceDate(row.startDate)} - ${formatAbsenceDate(row.endDate)}`,
+      },
+      { key: "totalDays", header: "Días", align: "right", getValue: (row) => row.totalDays },
+      {
+        key: "status",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+        ),
+      },
+    ],
+    [],
+  );
+
   if (historyQuery.isLoading) {
     return <LoadingState />;
   }
 
   const rows = historyQuery.data?.data ?? [];
-  const listHref = `/absences?employeeId=${employeeId}&dateFrom=${year}-01-01&dateTo=${year}-12-31`;
 
   if (rows.length === 0) {
-    return (
-      <Typography color="text.secondary">
-        No hay solicitudes de ausencia registradas para {year}.
-      </Typography>
-    );
+    return <Text c="dimmed">No hay solicitudes de ausencia registradas para {year}.</Text>;
   }
 
   return (
-    <Stack spacing={1}>
-      <Typography variant="body2" color="text.secondary">
+    <Stack gap="xs">
+      <Text size="sm" c="dimmed">
         Mostrando las últimas 10 solicitudes del año.
-      </Typography>
-      <TableContainer>
-        <Table size="small">
-          <TableHead>
-            <TableRow>
-              <TableCell>Tipo</TableCell>
-              <TableCell>Período</TableCell>
-              <TableCell align="right">Días</TableCell>
-              <TableCell>Estado</TableCell>
-              <TableCell align="right">Detalle</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {rows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell>{row.absenceType.name}</TableCell>
-                <TableCell>
-                  {formatAbsenceDate(row.startDate)} - {formatAbsenceDate(row.endDate)}
-                </TableCell>
-                <TableCell align="right">{row.totalDays}</TableCell>
-                <TableCell>
-                  <StatusChip label={absenceStatusLabels[row.status]} />
-                </TableCell>
-                <TableCell align="right">
-                  <RouterLink to={`/absences/${row.id}`}>Ver</RouterLink>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </TableContainer>
-      <Button component={RouterLink} to={listHref} size="small" sx={{ alignSelf: "flex-start" }}>
+      </Text>
+      <DataTable
+        rows={rows}
+        columns={columns}
+        getRowKey={(row) => row.id}
+        aria-label="Historial de ausencias del empleado"
+        rowActions={(row) => (
+          <RouterLink to={`/absences/${row.id}`}>Ver</RouterLink>
+        )}
+        rowActionsHeader="Detalle"
+      />
+      <Button component={RouterLink} to={listHref} size="compact-sm" variant="light" style={{ alignSelf: "flex-start" }}>
         Ver todas las solicitudes
       </Button>
     </Stack>

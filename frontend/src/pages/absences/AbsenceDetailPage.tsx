@@ -1,6 +1,5 @@
 import {
   Alert,
-  Button,
   Card,
   CardContent,
   Dialog,
@@ -17,6 +16,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Button, Group } from "@mantine/core";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { useQueryClient } from "@tanstack/react-query";
@@ -147,7 +147,7 @@ export function AbsenceDetailPage() {
         title="Detalle de solicitud de ausencia"
         description={`${request.employee.name} · ${formatAbsenceDate(request.startDate)} - ${formatAbsenceDate(request.endDate)}`}
         action={
-          <Stack direction="row" spacing={1}>
+          <Group gap="xs" align="center">
             {canReview ? (
               <>
                 {insufficientBalance ? (
@@ -155,16 +155,12 @@ export function AbsenceDetailPage() {
                     Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
                   </Alert>
                 ) : null}
-                <Button
-                  variant="contained"
-                  onClick={handleApprove}
-                  disabled={approveMutation.isPending || insufficientBalance}
-                >
+                <Button onClick={handleApprove} disabled={approveMutation.isPending || insufficientBalance}>
                   Aprobar
                 </Button>
                 <Button
-                  color="warning"
-                  variant="outlined"
+                  color="yellow"
+                  variant="default"
                   onClick={() => {
                     setComment("");
                     setNeedsInfoOpen(true);
@@ -173,8 +169,8 @@ export function AbsenceDetailPage() {
                   Requiere información
                 </Button>
                 <Button
-                  color="error"
-                  variant="outlined"
+                  color="danger"
+                  variant="default"
                   onClick={() => {
                     setComment("");
                     setRejectOpen(true);
@@ -184,10 +180,10 @@ export function AbsenceDetailPage() {
                 </Button>
               </>
             ) : null}
-            <Button component={RouterLink} to="/absences">
+            <Button component={RouterLink} to="/absences" variant="default">
               Volver al listado
             </Button>
-          </Stack>
+          </Group>
         }
       />
 
@@ -292,7 +288,8 @@ export function AbsenceDetailPage() {
                           <Button
                             component={RouterLink}
                             to={`/inventories/${inventory.inventoryId}`}
-                            size="small"
+                            size="compact-sm"
+                            variant="light"
                           >
                             Ver inventario
                           </Button>

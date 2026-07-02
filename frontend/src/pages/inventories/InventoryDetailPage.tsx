@@ -1,14 +1,14 @@
 import {
-  Button,
   Card,
   CardContent,
   Link,
   Stack,
   Typography,
 } from "@mui/material";
+import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
-import { ConfirmDialog } from "../../components/common/ConfirmDialog";
+import { ConfirmDialog } from "../../design-system";
 import { DetailFieldGrid } from "../../components/common/DetailFieldGrid";
 import { ErrorState } from "../../components/common/ErrorState";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
@@ -137,21 +137,21 @@ export function InventoryDetailPage() {
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
         description={`${inventory.store.name} · ${formatDateTime(inventory.scheduledStart)}`}
         action={
-          <Stack direction="row" spacing={1}>
+          <Group gap="xs">
             {canEdit ? (
-              <Button variant="outlined" onClick={() => setEditing((current) => !current)}>
+              <Button variant="default" onClick={() => setEditing((current) => !current)}>
                 {editing ? "Cancelar edición" : `Editar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
             {canEdit ? (
-              <Button color="error" variant="outlined" onClick={() => setConfirmCancelOpen(true)}>
+              <Button variant="default" color="danger" onClick={() => setConfirmCancelOpen(true)}>
                 {`Cancelar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
-            <Button component={RouterLink} to="/inventories">
+            <Button component={RouterLink} to="/inventories" variant="default">
               Volver al listado
             </Button>
-          </Stack>
+          </Group>
         }
       />
 
@@ -222,6 +222,7 @@ export function InventoryDetailPage() {
         title={`Cancelar ${terminology.operation.singular.toLowerCase()}`}
         description={`¿Confirmás cancelar esta ${terminology.operation.singular.toLowerCase()}? No podrá editarse luego.`}
         confirmLabel={`Cancelar ${terminology.operation.singular.toLowerCase()}`}
+        destructive
         loading={cancelMutation.isPending}
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={handleCancel}

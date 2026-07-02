@@ -2,7 +2,6 @@ import {
   Accordion,
   AccordionDetails,
   AccordionSummary,
-  Button,
   Card,
   CardContent,
   Dialog,
@@ -16,6 +15,7 @@ import {
   TextField,
   Typography,
 } from "@mui/material";
+import { Button, Group } from "@mantine/core";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { DataTable } from "../../components/common/DataTable";
@@ -108,11 +108,10 @@ export function AttendanceDetailPage() {
         title="Detalle de asistencia"
         description={`${record.employee.name} · Llegada ${formatDateTime(record.receivedAt)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
         action={
-          <Stack direction="row" spacing={1}>
+          <Group gap="xs">
             {canReview ? (
               <>
                 <Button
-                  variant="contained"
                   onClick={() => {
                     setReviewDecision("APPROVE");
                     setReviewDialogOpen(true);
@@ -121,8 +120,8 @@ export function AttendanceDetailPage() {
                   Aprobar asistencia
                 </Button>
                 <Button
-                  color="error"
-                  variant="outlined"
+                  color="danger"
+                  variant="default"
                   onClick={() => {
                     setReviewDecision("REJECT");
                     setReviewDialogOpen(true);
@@ -132,10 +131,10 @@ export function AttendanceDetailPage() {
                 </Button>
               </>
             ) : null}
-            <Button component={RouterLink} to="/attendance">
+            <Button component={RouterLink} to="/attendance" variant="default">
               Volver
             </Button>
-          </Stack>
+          </Group>
         }
       />
 

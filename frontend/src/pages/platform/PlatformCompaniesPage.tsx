@@ -1,14 +1,17 @@
-import { Button, Paper, Table, TableBody, TableCell, TableContainer, TableHead, TableRow } from "@mui/material";
-import { useState } from "react";
-import { EmptyState } from "../../components/common/EmptyState";
-import { ErrorState } from "../../components/common/ErrorState";
+import { Button } from "@mantine/core";
+import { useMemo, useState } from "react";
 import { FeedbackSnackbar } from "../../components/common/FeedbackSnackbar";
-import { LoadingState } from "../../components/common/LoadingState";
-import { PageHeader } from "../../components/common/PageHeader";
+import {
+  DataTable,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  type DataTableColumn,
+} from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompany } from "../../hooks/useCompany";
 import { useCreatePlatformCompany, usePlatformCompanies } from "../../hooks/usePlatformCompanies";
-import type { CreatePlatformCompanyInput } from "../../types/platform-company";
+import type { CreatePlatformCompanyInput, PlatformCompany } from "../../types/platform-company";
 import { getApiErrorMessage } from "../../utils/errors";
 import { CreatePlatformCompanyDialog } from "./CreatePlatformCompanyDialog";
 
@@ -37,6 +40,15 @@ export function PlatformCompaniesPage() {
     }
   };
 
+  const columns = useMemo<DataTableColumn<PlatformCompany>[]>(
+    () => [
+      { key: "name", header: "Nombre", getValue: (row) => row.name },
+      { key: "status", header: "Estado", getValue: (row) => row.status },
+      { key: "defaultTimezone", header: "Zona horaria", getValue: (row) => row.defaultTimezone },
+    ],
+    [],
+  );
+
   if (!isPlatformAdmin) {
     return (
       <ErrorState message="Solo un superadministrador de plataforma puede gestionar empresas." />
@@ -49,40 +61,29 @@ export function PlatformCompaniesPage() {
         title="Empresas de plataforma"
         description="Creá empresas nuevas y asigná el usuario owner inicial."
         action={
-          <Button variant="contained" onClick={() => { setDialogError(null); setDialogOpen(true); }}>
+          <Button
+            onClick={() => {
+              setDialogError(null);
+              setDialogOpen(true);
+            }}
+          >
             Crear empresa
           </Button>
         }
       />
 
       {companiesQuery.isPending ? <LoadingState /> : null}
-      {companiesQuery.isError ? <ErrorState message={getApiErrorMessage(companiesQuery.error)} /> : null}
 
-      {companiesQuery.data && companiesQuery.data.length === 0 ? (
-        <EmptyState title="No hay empresas activas" description="Creá la primera empresa de la plataforma." />
-      ) : null}
-
-      {companiesQuery.data && companiesQuery.data.length > 0 ? (
-        <TableContainer component={Paper} variant="outlined">
-          <Table size="small" aria-label="Empresas de plataforma">
-            <TableHead>
-              <TableRow>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Estado</TableCell>
-                <TableCell>Zona horaria</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {companiesQuery.data.map((company) => (
-                <TableRow key={company.id}>
-                  <TableCell>{company.name}</TableCell>
-                  <TableCell>{company.status}</TableCell>
-                  <TableCell>{company.defaultTimezone}</TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </TableContainer>
+      {!companiesQuery.isPending ? (
+        <DataTable
+          rows={companiesQuery.data ?? []}
+          columns={columns}
+          getRowKey={(row) => row.id}
+          error={companiesQuery.isError ? getApiErrorMessage(companiesQuery.error) : undefined}
+          emptyTitle="No hay empresas activas"
+          emptyDescription="Creá la primera empresa de la plataforma."
+          aria-label="Empresas de plataforma"
+        />
       ) : null}
 
       <CreatePlatformCompanyDialog
@@ -93,7 +94,11 @@ export function PlatformCompaniesPage() {
         onSubmit={handleCreate}
       />
 
-      <FeedbackSnackbar open={Boolean(successMessage)} message={successMessage ?? ""} onClose={() => setSuccessMessage(null)} />
+      <FeedbackSnackbar
+        open={Boolean(successMessage)}
+        message={successMessage ?? ""}
+        onClose={() => setSuccessMessage(null)}
+      />
     </>
   );
 }

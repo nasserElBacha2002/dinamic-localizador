@@ -1,18 +1,16 @@
 import {
-  Button,
-  Dialog,
-  DialogActions,
-  DialogContent,
-  DialogContentText,
-  DialogTitle,
-} from "@mui/material";
+  ConfirmDialog as DesignSystemConfirmDialog,
+  type ConfirmDialogProps as DesignSystemConfirmDialogProps,
+} from "../../design-system";
 
-interface ConfirmDialogProps {
+export interface ConfirmDialogProps {
   open: boolean;
   title: string;
   description: string;
   confirmLabel?: string;
+  cancelLabel?: string;
   loading?: boolean;
+  destructive?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }
@@ -22,24 +20,23 @@ export function ConfirmDialog({
   title,
   description,
   confirmLabel = "Confirmar",
+  cancelLabel = "Cancelar",
   loading = false,
+  destructive = true,
   onConfirm,
   onCancel,
 }: ConfirmDialogProps) {
-  return (
-    <Dialog open={open} onClose={loading ? undefined : onCancel} aria-labelledby="confirm-dialog-title">
-      <DialogTitle id="confirm-dialog-title">{title}</DialogTitle>
-      <DialogContent>
-        <DialogContentText>{description}</DialogContentText>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={onCancel} disabled={loading}>
-          Cancelar
-        </Button>
-        <Button onClick={onConfirm} color="error" variant="contained" disabled={loading}>
-          {confirmLabel}
-        </Button>
-      </DialogActions>
-    </Dialog>
-  );
+  const props: DesignSystemConfirmDialogProps = {
+    open,
+    title,
+    description,
+    confirmLabel,
+    cancelLabel,
+    loading,
+    destructive,
+    onConfirm,
+    onCancel,
+  };
+
+  return <DesignSystemConfirmDialog {...props} />;
 }

@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
-import { PageHeader } from "../../components/common/PageHeader";
+import { PageHeader } from "../../design-system";
 import { useCreateEmployee } from "../../hooks/useEmployees";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import { terminology } from "../../domain/terminology";

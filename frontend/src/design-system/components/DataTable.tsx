@@ -1,14 +1,17 @@
-import { Paper, ScrollArea, Table } from "@mantine/core";
+import { Group, Paper, ScrollArea, Table, Text, UnstyledButton } from "@mantine/core";
 import type { KeyboardEvent, ReactNode } from "react";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
+
+export type SortDirection = "asc" | "desc";
 
 export interface DataTableColumn<T> {
   key: string;
   header: ReactNode;
   width?: number | string;
   align?: "left" | "center" | "right";
+  sortable?: boolean;
   render?: (row: T) => ReactNode;
   getValue?: (row: T) => ReactNode;
 }
@@ -23,7 +26,11 @@ export interface DataTableProps<T> {
   emptyDescription?: ReactNode;
   onRowClick?: (row: T) => void;
   rowActions?: (row: T) => ReactNode;
+  rowActionsHeader?: ReactNode;
   pagination?: ReactNode;
+  sortBy?: string;
+  sortDirection?: SortDirection;
+  onSortChange?: (columnKey: string) => void;
   "aria-label"?: string;
 }
 
@@ -54,6 +61,48 @@ function handleRowKeyDown<T>(
   }
 }
 
+interface SortableHeaderProps {
+  label: ReactNode;
+  columnKey: string;
+  sortable?: boolean;
+  sortBy?: string;
+  sortDirection?: SortDirection;
+  onSortChange?: (columnKey: string) => void;
+}
+
+function SortableHeader({
+  label,
+  columnKey,
+  sortable,
+  sortBy,
+  sortDirection,
+  onSortChange,
+}: SortableHeaderProps) {
+  if (!sortable || !onSortChange) {
+    return <>{label}</>;
+  }
+
+  const isActive = sortBy === columnKey;
+  const indicator = isActive ? (sortDirection === "asc" ? "↑" : "↓") : "↕";
+
+  return (
+    <UnstyledButton
+      onClick={() => onSortChange(columnKey)}
+      aria-label={`Ordenar por ${typeof label === "string" ? label : columnKey}`}
+      style={{ width: "100%" }}
+    >
+      <Group gap={4} wrap="nowrap" justify="flex-start">
+        <Text span size="sm" fw={isActive ? 600 : 500}>
+          {label}
+        </Text>
+        <Text span size="xs" c={isActive ? "brand" : "dimmed"} aria-hidden>
+          {indicator}
+        </Text>
+      </Group>
+    </UnstyledButton>
+  );
+}
+
 export function DataTable<T>({
   rows,
   columns,
@@ -64,7 +113,11 @@ export function DataTable<T>({
   emptyDescription = "No hay datos para mostrar.",
   onRowClick,
   rowActions,
+  rowActionsHeader = "Acciones",
   pagination,
+  sortBy,
+  sortDirection,
+  onSortChange,
   "aria-label": ariaLabel,
 }: DataTableProps<T>) {
   if (loading) {
@@ -105,10 +158,19 @@ export function DataTable<T>({
                       textAlign: column.align ?? "left",
                     }}
                   >
-                    {column.header}
+                    <SortableHeader
+                      label={column.header}
+                      columnKey={column.key}
+                      sortable={column.sortable}
+                      sortBy={sortBy}
+                      sortDirection={sortDirection}
+                      onSortChange={onSortChange}
+                    />
                   </Table.Th>
                 ))}
-                {rowActions ? <Table.Th style={{ textAlign: "right" }} /> : null}
+                {rowActions ? (
+                  <Table.Th style={{ textAlign: "right" }}>{rowActionsHeader}</Table.Th>
+                ) : null}
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>

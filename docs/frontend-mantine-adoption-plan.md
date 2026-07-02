@@ -1,7 +1,7 @@
 # Frontend Mantine Adoption Plan
 
-**Status:** `READY_TO_IMPLEMENT` (PR 1–5 complete; PR 6+ progressive migration)  
-**Date:** 2026-07-01  
+**Status:** `IN_PROGRESS` (PR 1–10 complete for foundation/lists/forms infra; product visually hybrid — see [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md))  
+**Date:** 2026-06-23  
 **Related:** [frontend-redesign-audit.md](./frontend-redesign-audit.md)  
 **Scope:** Safe, progressive introduction of Mantine as the mandatory design-system layer while MUI 7 remains operational during migration. **No full page migrations in this plan phase.**
 
@@ -697,39 +697,167 @@ function ProtectedLayout() {
 **Changes:**
 
 - `PageHeader`, `MetricCard`, `SectionCard`, `StatusBadge`, `LoadingState`, `ErrorState`, `EmptyState`
-- Health cards (backend, database, upcoming summary), quick links, upcoming operations list
+- Health cards (backend, database, upcoming summary) and upcoming operations list
+- Quick links intentionally removed because navigation already exists in the sidebar
 - No MUI imports in `HomePage.tsx`
 
-**Hooks preserved:** `useApiHealth`, `useDatabaseHealth`, `useCompanyModules`, `useCompanyPermissions`, `useInventories`
+**Hooks preserved:** `useApiHealth`, `useDatabaseHealth`, `useCompanyPermissions`, `useInventories`
 
-**Next:** PR 6 — `StoresListPage` migration (recommended next low-risk list).
+**Next:** PR 6 — `StoresListPage` migration.
 
 **Validation:** `npm run build`, `npm run lint`, `npm test` pass.
 
 ---
 
-### PR 6+ — Progressive module migration
+### PR 6 — StoresListPage migration ✅ IMPLEMENTED
 
-One module area per PR where possible:
+**Goal:** Migrate `StoresListPage.tsx` to Mantine DataTable/FilterBar; hooks and API behavior unchanged.
 
-- PR 6: Employees list + CRUD forms (inputs Mantine + same RHF)
-- PR 7: Stores list
-- PR 8: Inventories list + create
-- PR 9: Attendance list
-- PR 10: Absences
-- PR 11: Settings / users
-- PR 12: Inventory detail
-- PR 13: Import
-- PR 14: Bot simulator
-- PR 15: Statistics
-- PR 16: Store edit / maps
+**Changes:**
 
-### PR 17 — Remove MUI (final)
+- `PageHeader`, `FilterBar`, `SearchInput`, `DataTable`, `PaginationControls`, `StatusBadge`
+- Explicit search commit (Enter/clear), same pattern as `EmployeesListPage`
+- Store create/edit and maps remain legacy (MUI)
 
-- Remove all `@mui/*` imports
-- Remove MUI `ThemeProvider` from `main.tsx`
-- Delete `theme/theme.ts`, `layouts/AdminLayout.tsx`, unused `components/common/*`
-- Remove `@mui/material`, `@emotion/*` from package.json
+**No API/hooks/schema changes.**
+
+**Next:** PR 7 — All remaining list tables migration.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
+
+---
+
+### PR 7 — Primary list tables migration ⚠️ PARTIAL / IMPLEMENTED FOR MAIN LISTS
+
+**Status:** PARTIAL — main operational list pages migrated; complex/detail/import/statistics tables remain.
+
+**Goal:** Migrate remaining operational list pages to Mantine `DataTable` / `FilterBar`.
+
+**Pages migrated:**
+
+- `InventoriesListPage` (server-side sorting preserved via extended `DataTable`)
+- `AttendanceListPage`
+- `AbsencesListPage`
+- `CompanyUsersPage` (table only; dialogs remain legacy)
+- `PlatformCompaniesPage` (table only; create dialog remains legacy)
+- `EmployeeAbsenceHistoryTable` (read-only detail section)
+
+**Already migrated in PR 4/6:** `EmployeesListPage`, `StoresListPage`, `HomePage`
+
+**Deferred (complex/non-list):**
+
+- `InventoryImportPage` preview table
+- `StatisticsPage` / statistics table components
+- `InventoryOperationalSection` assignment/action table
+- `AbsenceDetailPage` affected inventories table (row actions)
+- `AttendanceDetailPage` review history (legacy wrapper + pagination)
+- `EmployeeAbsenceBalanceCard` balance table (edit actions)
+
+**DataTable extended:** optional `sortable` columns, `sortBy`, `sortDirection`, `onSortChange`, `rowActionsHeader`.
+
+**Remaining MUI usage:** forms, dialogs, complex flows, maps, import, bot simulator, statistics, cleanup.
+
+**Next:** PR 8 — Buttons, actions and dialogs migration.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
+
+---
+
+### PR 8 — Simple buttons/actions/dialogs migration ⚠️ PARTIAL / IMPLEMENTED FOR SAFE ACTIONS
+
+**Status:** PARTIAL — simple header/row actions and confirm dialogs migrated; form-heavy dialogs, detail page actions, review modals and settings actions remain.
+
+**Goal:** Standardize action UI (buttons, confirmations) on Mantine/design-system without changing business logic.
+
+**Migrated:**
+
+- Design-system `ConfirmDialog` adopted in `CompanyUsersPage`, `InventoryDetailPage`
+- Legacy `components/common/ConfirmDialog` now wraps design-system (backward compatible)
+- Header/row action buttons on detail pages: `InventoryDetailPage`, `AttendanceDetailPage`, `AbsenceDetailPage`
+- Operational actions in `InventoryOperationalSection` (assign/review/unassign/refresh)
+- `ExportActionButtons`, `EmployeeAbsenceHistoryTable`, `NotFoundPage`
+
+**Deferred (form/input-heavy dialogs):**
+
+- `CompanyUserDialog`, `CreatePlatformCompanyDialog`
+- `ReviewAttendanceDialog`, attendance/absence review modals with `TextField`
+- `EmployeeAbsenceBalanceCard` edit dialog
+- `BotLocationDialog`, import flow, login forms
+- `FormActions` (form submit — PR 9)
+- `CompanySettingsPage` save buttons (tied to settings forms — PR 9)
+
+**No API/hooks/schemas/routes changed.**
+
+**Next:** PR 9 — Full UI migration audit 0–100 + roadmap correction.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
+
+---
+
+### PR 9 — Full UI migration audit 0–100 + roadmap correction ✅ IMPLEMENTED
+
+**Goal:** Inspect entire frontend, score every route/screen 0–100, document remaining legacy/hybrid areas, correct roadmap — **no new page migrations**.
+
+**Deliverables:**
+
+- [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md) — human-readable audit
+- [frontend-mantine-migration-audit.json](./frontend-mantine-migration-audit.json) — machine-readable scores
+- Corrected PR 7/8 status in this doc (partial, not complete)
+- Honest hybrid status in [frontend-redesign-audit.md](./frontend-redesign-audit.md)
+
+**Overall migration score (2026-06-23):** 46/100 — foundation + main lists migrated; forms, detail pages, statistics, import, bot, maps remain legacy.
+
+**No API/hooks/schemas/routes changed.**
+
+**Next:** PR 10 — Form controls foundation.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
+
+---
+
+### PR 10 — Form controls foundation ✅ IMPLEMENTED
+
+**Goal:** Create reusable Mantine + React Hook Form field components in `design-system/forms/` for predictable future form migrations.
+
+**Components created:**
+
+- Layout: `FormSection`, `FormGrid`, `FormActions`, `FormErrorAlert`
+- Fields: `RHFTextInput`, `RHFTextarea`, `RHFNumberInput`, `RHFSelect`, `RHFSwitch`, `RHFDateTimeInput`, `RHFPhoneInput`
+- Exported from `design-system/index.ts`
+
+**`@mantine/dates`:** **Deferred.** `RHFDateTimeInput` uses native `datetime-local` via Mantine `TextInput` to preserve existing string contracts (`scheduledStart`, etc.) without adding a dependency. Full date-picker migration planned for PR 11+.
+
+**Sample migration (low-risk):**
+
+- `EmployeeForm` migrated to design-system form components (shared by create + edit)
+- `EmployeeCreatePage` uses design-system `PageHeader`
+- Schemas, RHF resolver, API payloads, submit handlers unchanged
+
+**Still pending (PR 11+):** `StoreForm`, `InventoryForm`, `AttendanceTestForm`, `CompanySettingsPage`, login, filters (`DateRangeFilter`, lookups), form dialogs, store maps.
+
+**No API/hooks/schemas/routes changed.**
+
+**Next:** PR 11 — Simple forms migration.
+
+**Validation:** `npm run build`, `npm run lint`, `npm test` pass.
+
+---
+
+### PR 11+ — Corrected progressive migration roadmap
+
+One module area per PR. **Do not duplicate PR numbers** (obsolete entries like “PR 9 Attendance list” removed — those lists migrated in PR 7).
+
+| PR | Title |
+|----|-------|
+| PR 11 | Simple forms migration (inventory create, attendance create, settings, login; employee edit page shell) |
+| PR 12 | Complex forms + maps (store create/edit, location picker) |
+| PR 13 | Inventory detail / operational command center (+ attendance/absence detail shells) |
+| PR 14 | Statistics migration |
+| PR 15 | Bot simulator migration |
+| PR 16 | Import flow migration |
+| PR 17 | Complex dialogs / review flows |
+| PR 18 | MUI cleanup (legacy `components/common/*`, AdminLayout) |
+| PR 19 | Remove MUI (final) — drop `@mui/*`, remove `ThemeProvider`, verify zero imports |
 
 ---
 

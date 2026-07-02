@@ -1,6 +1,6 @@
-import { Button, Card, SimpleGrid, Stack, Text, Title } from "@mantine/core";
+import { Card, SimpleGrid, Stack, Text } from "@mantine/core";
 import type { KeyboardEvent } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import {
   EmptyState,
   ErrorState,
@@ -10,13 +10,11 @@ import {
   SectionCard,
   StatusBadge,
 } from "../design-system";
-import { useCompanyModules } from "../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
 import { useInventories } from "../hooks/useInventories";
 import type { InventoryWithStore } from "../types/inventory";
 import { terminology } from "../domain/terminology";
-import { getHomeQuickLinks } from "../utils/company-modules";
 import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
 import { inventoryStatusLabels } from "../utils/labels";
@@ -61,29 +59,6 @@ function HealthMetricCard({ title, status, details }: HealthMetricCardProps) {
       description={details}
       loading={status === "loading"}
     />
-  );
-}
-
-interface QuickLinkCardProps {
-  label: string;
-  path: string;
-}
-
-function QuickLinkCard({ label, path }: QuickLinkCardProps) {
-  return (
-    <Card withBorder padding="md" radius="md" h="100%">
-      <Stack gap="xs" justify="space-between" h="100%">
-        <div>
-          <Title order={5}>{label}</Title>
-          <Text size="sm" c="dimmed">
-            Ir a {label.toLowerCase()}
-          </Text>
-        </div>
-        <Button component={Link} to={path} size="compact-sm" variant="light">
-          Ir
-        </Button>
-      </Stack>
-    </Card>
   );
 }
 
@@ -138,7 +113,6 @@ export function HomePage() {
   const apiHealth = useApiHealth();
   const databaseHealth = useDatabaseHealth();
   const permissionsQuery = useCompanyPermissions();
-  const modulesQuery = useCompanyModules();
   const healthReady = databaseHealth.data?.database === "connected";
 
   const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
@@ -150,13 +124,6 @@ export function HomePage() {
     { status: "SCHEDULED", page: 1, limit: 5 },
     healthReady && canReadInventories,
   );
-
-  const quickLinks = getHomeQuickLinks({
-    modules: modulesQuery.data,
-    permissions: permissionsQuery.data?.permissions,
-    isPlatformAdmin: Boolean(permissionsQuery.data?.isPlatformAdmin),
-    modulesLoading: permissionsQuery.isPending || modulesQuery.isPending,
-  });
 
   const apiStatus: HealthStatus = apiHealth.isLoading
     ? "loading"
@@ -217,60 +184,41 @@ export function HomePage() {
         ) : null}
       </SimpleGrid>
 
-      <SimpleGrid cols={{ base: 1, lg: 3 }} spacing="lg">
-        <div style={{ gridColumn: canReadInventories ? "span 2" : "span 1" }}>
-          {canReadInventories ? (
-            <SectionCard
-              title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
-              description={`${terminology.operation.plural} programadas a continuación.`}
-            >
-              {upcomingInventoriesQuery.isLoading ? <LoadingState height={160} /> : null}
-              {upcomingInventoriesQuery.isError ? (
-                <ErrorState
-                  message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`}
-                />
-              ) : null}
-              {!upcomingInventoriesQuery.isLoading &&
-              !upcomingInventoriesQuery.isError &&
-              upcomingInventoriesQuery.data?.data.length === 0 ? (
-                <EmptyState
-                  title={`No hay ${terminology.operation.plural.toLowerCase()} programadas`}
-                  description={`Cuando programes ${terminology.operation.plural.toLowerCase()}, aparecerán aquí.`}
-                />
-              ) : null}
-              {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
-                <Stack gap="sm">
-                  {upcomingInventoriesQuery.data.data.map((inventory) => (
-                    <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
-                  ))}
-                </Stack>
-              ) : null}
-            </SectionCard>
-          ) : (
-            <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
-              <Text size="sm" c="dimmed">
-                Conectá la base de datos y revisá el estado del backend para habilitar más
-                información operativa en el panel.
-              </Text>
-            </SectionCard>
-          )}
-        </div>
-
-        <SectionCard title="Accesos rápidos" description="Atajos según módulos y permisos activos.">
-          {quickLinks.length === 0 ? (
-            <EmptyState
-              title="Sin accesos rápidos"
-              description="No hay secciones disponibles con los módulos y permisos actuales."
+      {canReadInventories ? (
+        <SectionCard
+          title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
+          description={`${terminology.operation.plural} programadas a continuación.`}
+        >
+          {upcomingInventoriesQuery.isLoading ? <LoadingState height={160} /> : null}
+          {upcomingInventoriesQuery.isError ? (
+            <ErrorState
+              message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`}
             />
-          ) : (
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md">
-              {quickLinks.map((link) => (
-                <QuickLinkCard key={link.path} label={link.label} path={link.path} />
+          ) : null}
+          {!upcomingInventoriesQuery.isLoading &&
+          !upcomingInventoriesQuery.isError &&
+          upcomingInventoriesQuery.data?.data.length === 0 ? (
+            <EmptyState
+              title={`No hay ${terminology.operation.plural.toLowerCase()} programadas`}
+              description={`Cuando programes ${terminology.operation.plural.toLowerCase()}, aparecerán aquí.`}
+            />
+          ) : null}
+          {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
+            <Stack gap="sm">
+              {upcomingInventoriesQuery.data.data.map((inventory) => (
+                <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
               ))}
-            </SimpleGrid>
-          )}
+            </Stack>
+          ) : null}
         </SectionCard>
-      </SimpleGrid>
+      ) : (
+        <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
+          <Text size="sm" c="dimmed">
+            Conectá la base de datos y revisá el estado del backend para habilitar más información
+            operativa en el panel.
+          </Text>
+        </SectionCard>
+      )}
     </>
   );
 }

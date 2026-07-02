@@ -1,18 +1,14 @@
-import { Button, Stack, Typography } from "@mui/material";
+import { Button, Stack, Text, Title } from "@mantine/core";
 import { Link as RouterLink } from "react-router-dom";
 
 export function NotFoundPage() {
   return (
-    <Stack spacing={2} alignItems="flex-start">
-        <Typography variant="h4" component="h1">
-          Página no encontrada
-        </Typography>
-        <Typography color="text.secondary">
-          La ruta solicitada no existe en el panel administrativo.
-        </Typography>
-        <Button component={RouterLink} to="/" variant="contained">
-          Volver al inicio
-        </Button>
-      </Stack>
+    <Stack gap="md" align="flex-start">
+      <Title order={2}>Página no encontrada</Title>
+      <Text c="dimmed">La ruta solicitada no existe en el panel administrativo.</Text>
+      <Button component={RouterLink} to="/">
+        Volver al inicio
+      </Button>
+    </Stack>
   );
 }

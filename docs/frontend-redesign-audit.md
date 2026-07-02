@@ -1,8 +1,8 @@
 # Frontend Redesign — Technical Audit
 
-**Status:** `READY_TO_IMPLEMENT` (PR 1–3 complete; PR 4+ DataTable and page migration)  
-**Stage audited:** Frontend redesign integration (pre-implementation audit)  
-**Date:** 2026-07-01 (updated 2026-07-01 — Mantine decision)  
+**Status:** `IN_PROGRESS` — Mantine foundation + shell + base/list components implemented; **product still visually hybrid** (overall ~46/100). See [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).  
+**Stage audited:** Frontend redesign integration (pre-implementation audit; updated post PR 9 audit)  
+**Date:** 2026-06-23 (updated — Mantine migration audit)  
 **Scope:** Read-only analysis of `frontend/` — architecture, multi-company, permissions, React Query, components, styling, page impact, migration plan.  
 **Companion doc:** [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md) — **mandatory Mantine adoption strategy**.
 
@@ -21,11 +21,11 @@ The codebase already contains **many primitives that overlap** with the proposed
 ### Main findings
 
 - **Architecture is sound for incremental migration.** Domain hooks, API modules, Zod schemas, and route guards can remain unchanged while the shell and shared UI are refactored.
-- **MUI 7 is the current page UI library; Mantine 9 is installed** as the redesign foundation. Adoption follows a **dual-library strangler pattern** documented in [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). **PR 1 (foundation) and PR 2 (route-level AppLayout shell) are implemented.** MUI remains on unmigrated page content.
+- **MUI 7 is the current page UI library; Mantine 9 is installed** as the redesign foundation. Adoption follows a **dual-library strangler pattern** documented in [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). **PR 1–9 implemented** (foundation, shell, design-system, main list tables, partial actions, full 0–100 audit). MUI remains on forms, detail pages, statistics, import, bot, maps, and login.
 - **Multi-company foundations exist** (active company in context + localStorage, scoped APIs, `queryClient.clear()` on switch). Gaps remain around **route validation after company switch** and **avoiding stale UI during reload**.
 - **Module fetching was recently stabilized** (`company-modules-query.ts`: 10 min `staleTime`, company-scoped key). Repeated `useCompanyModules()` calls share cache; network refetch on every navigation is **no longer the primary risk**, but **duplicate hook subscriptions** in layout + guards + pages still add coordination complexity.
 - **Layout uses route-level Mantine `AppLayout`.** Protected routes render inside `design-system/layout/AppLayout`; legacy `AdminLayout` is deprecated and unused.
-- **Table/filter patterns are inconsistent.** `DataTable` exists but is used in only 2 places; most list pages hand-roll MUI `Table` + `PaginationControls`.
+- **Table/filter patterns are partially consolidated.** Design-system `DataTable` / `FilterBar` power main list pages (employees, stores, inventories, attendance, absences, users, platform). Legacy MUI tables remain on detail sections, statistics, import, and inventory operational UI. List filters still use legacy `DateRangeFilter` and lookup autocompletes.
 - **No redesign specification file** was found in the repository (`docs/` has operational/permissions docs only). Visual targets, Mantine component mapping, and token definitions must be confirmed before Phase 1.
 
 ### Readiness verdict
@@ -38,10 +38,10 @@ The codebase already contains **many primitives that overlap** with the proposed
 | Route guards | Yes | `FeatureRouteGuard` on all feature routes |
 | API scoping | Yes | `scopedApiClient` + `company-path.ts` |
 | Shared UI primitives | Partial | Exist but underused / MUI-coupled |
-| Design system (Mantine 9) | PR 1–2 done | Foundation + route-level AppShell; see adoption plan PR 3+ |
+| Design system (Mantine 9) | PR 1–9 done | Foundation + shell + lists; **product hybrid (~46/100)** — see [audit](./frontend-mantine-migration-audit-0-100.md) |
 | Responsive shell | Partial | Mobile drawer exists; tables/filters vary by page |
 
-**Recommended next work:** PR 6 StoresListPage migration → progressive list/form migrations. **Do not migrate bot simulator, import, or inventory detail until Phase 4.** Full sequence: [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md).
+**Recommended next work:** **PR 10 — Form controls foundation** (Mantine inputs + RHF adapters), then PR 11 simple forms migration. Full scored audit and corrected roadmap: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md). **Do not claim full migration complete** until grep shows zero `@mui/material` in pages.
 
 ---
 
@@ -645,7 +645,7 @@ Every redesign PR must pass:
 | Tables/filters/forms | PARTIAL | Primitives exist; inconsistent adoption |
 | Business flows intact | OK | All major pages implemented |
 | Redesign spec available | GAP | Not in repository |
-| Mantine design system | PR 1–5 done | Shell + base + list + HomePage migrated |
+| Mantine design system | PR 1–9 done | Foundation + shell + main lists; **hybrid product** — forms/detail/statistics/import/bot legacy |
 | AppLayout route shell | OK | Mantine `AppLayout` route-level; `AdminLayout` deprecated/unused |
 | Company switch route safety | RISK | Navigates `/` only from selector |
 | No stale company data | RISK | Cache clear OK; no switching overlay |
@@ -685,7 +685,7 @@ Existing patterns to preserve:
 
 ## Suggested next command
 
-**`/implement-dinamic-stage`** — continue with **PR 3 (Mantine base components)** per [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). Import redesign Figma/spec before large page migrations.
+**`/implement-dinamic-stage`** — continue with **PR 10 (Form controls foundation)** per [frontend-mantine-adoption-plan.md](./frontend-mantine-adoption-plan.md). Migration scores and gaps: [frontend-mantine-migration-audit-0-100.md](./frontend-mantine-migration-audit-0-100.md).
 
 ---
 

@@ -28,7 +28,8 @@ cd "${DEPLOY_PATH}"
 assert_deploy_env_file
 assert_env_keys_nonempty \
   TWILIO_ARRIVAL_REMINDER_CONTENT_SID \
-  TWILIO_EXIT_REMINDER_CONTENT_SID
+  TWILIO_EXIT_REMINDER_CONTENT_SID \
+  TWILIO_TEMPLATE_NO_CHECKIN_SID
 
 print_backend_diagnostics() {
   print_compose_status

@@ -1,24 +1,53 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ATTENDANCE_REMINDER_LEAD_MINUTES } from "../constants/attendance-notification";
-import { buildReminderDueWindow } from "./reminder-time-window";
+import {
+  ATTENDANCE_REMINDER_LEAD_MINUTES,
+  NO_CHECKIN_AT_START_WINDOW_MINUTES,
+} from "../constants/attendance-notification";
+import { buildInventoryStartDueWindow, buildReminderDueWindow } from "./reminder-time-window";
 
 describe("buildReminderDueWindow", () => {
   it("builds a due window from now through the next 15 minutes", () => {
-    const referenceAt = new Date("2026-06-23T13:00:00.000Z");
+    const referenceAt = new Date("2026-06-23T14:00:00.000Z");
     const window = buildReminderDueWindow(referenceAt, ATTENDANCE_REMINDER_LEAD_MINUTES);
 
     assert.equal(window.referenceAt.toISOString(), referenceAt.toISOString());
-    assert.equal(window.windowStart.toISOString(), "2026-06-23T13:00:00.000Z");
-    assert.equal(window.windowEnd.toISOString(), "2026-06-23T13:15:00.000Z");
+    assert.equal(window.windowStart.toISOString(), referenceAt.toISOString());
+    assert.equal(
+      window.windowEnd.toISOString(),
+      new Date(referenceAt.getTime() + ATTENDANCE_REMINDER_LEAD_MINUTES * 60_000).toISOString(),
+    );
   });
 
-  it("includes inventories starting in 10 minutes when the job runs late", () => {
-    const referenceAt = new Date("2026-06-23T13:05:00.000Z");
-    const inventoryStart = new Date("2026-06-23T13:15:00.000Z");
+  it("allows a late worker tick to still catch inventories near the window edge", () => {
+    const referenceAt = new Date("2026-06-23T14:00:00.000Z");
     const window = buildReminderDueWindow(referenceAt, ATTENDANCE_REMINDER_LEAD_MINUTES);
+    const inventoryStart = new Date(referenceAt.getTime() + 14 * 60_000 + 30_000);
 
-    assert.equal(inventoryStart >= window.windowStart, true);
-    assert.equal(inventoryStart <= window.windowEnd, true);
+    assert.ok(inventoryStart >= window.windowStart);
+    assert.ok(inventoryStart <= window.windowEnd);
+  });
+});
+
+describe("buildInventoryStartDueWindow", () => {
+  it("builds a backward-looking window ending at referenceAt", () => {
+    const referenceAt = new Date("2026-06-23T14:00:00.000Z");
+    const window = buildInventoryStartDueWindow(referenceAt, NO_CHECKIN_AT_START_WINDOW_MINUTES);
+
+    assert.equal(window.referenceAt.toISOString(), referenceAt.toISOString());
+    assert.equal(
+      window.windowStart.toISOString(),
+      new Date(referenceAt.getTime() - 60_000).toISOString(),
+    );
+    assert.equal(window.windowEnd.toISOString(), referenceAt.toISOString());
+  });
+
+  it("does not include inventories scheduled in the future", () => {
+    const referenceAt = new Date("2026-06-23T14:00:00.000Z");
+    const window = buildInventoryStartDueWindow(referenceAt, NO_CHECKIN_AT_START_WINDOW_MINUTES);
+    const futureInventoryStart = new Date(referenceAt.getTime() + 30_000);
+
+    assert.ok(futureInventoryStart > window.windowEnd);
+    assert.ok(futureInventoryStart > window.referenceAt);
   });
 });

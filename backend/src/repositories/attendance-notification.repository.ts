@@ -145,6 +145,88 @@ export const attendanceNotificationRepository = {
     return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
   },
 
+  async findNoCheckInAtStartCandidates(
+    companyId: string,
+    input: {
+      windowStart: Date;
+      windowEnd: Date;
+    },
+  ): Promise<AttendanceReminderCandidate[]> {
+    const pool = getPool();
+    const { staleBefore, maxAttempts } = getRetryThresholds();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("windowStart", sql.DateTime2, input.windowStart)
+      .input("windowEnd", sql.DateTime2, input.windowEnd)
+      .input("staleBefore", sql.DateTime2, staleBefore)
+      .input("maxAttempts", sql.Int, maxAttempts)
+      .query(`
+        SELECT
+          i.id AS inventory_id,
+          i.scheduled_start,
+          i.scheduled_end,
+          s.name AS store_name,
+          e.id AS employee_id,
+          e.name AS employee_name,
+          e.phone_number AS employee_phone_number
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN operation_assignments ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        LEFT JOIN attendance_records ar
+          ON ar.inventory_id = i.id
+          AND ar.employee_id = e.id
+          AND ar.company_id = @companyId
+        LEFT JOIN whatsapp_attendance_notifications wan
+          ON wan.inventory_id = i.id
+          AND wan.employee_id = e.id
+          AND wan.notification_type = 'NO_CHECKIN_AT_START'
+          AND wan.company_id = @companyId
+        WHERE i.company_id = @companyId
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND s.active = 1
+          AND e.active = 1
+          AND ar.id IS NULL
+          AND i.scheduled_start >= @windowStart
+          AND i.scheduled_start <= @windowEnd
+          ${buildNotificationEligibilitySql()}
+      `);
+
+    return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
+  },
+
+  async isNoCheckInAtStartEligible(
+    companyId: string,
+    inventoryId: string,
+    employeeId: string,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        LEFT JOIN attendance_records ar
+          ON ar.inventory_id = ie.inventory_id
+          AND ar.employee_id = ie.employee_id
+          AND ar.company_id = @companyId
+        WHERE ie.inventory_id = @inventoryId
+          AND ie.employee_id = @employeeId
+          AND ie.company_id = @companyId
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND e.active = 1
+          AND ar.id IS NULL
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
   async findExitReminderCandidates(
     companyId: string,
     input: {
@@ -239,7 +321,7 @@ export const attendanceNotificationRepository = {
   ): Promise<AttendanceReminderCandidate | null> {
     const pool = getPool();
     const scheduledColumn =
-      input.notificationType === "ARRIVAL_REMINDER_15_MIN" ? "i.scheduled_start" : "i.scheduled_end";
+      input.notificationType === "EXIT_REMINDER_15_MIN" ? "i.scheduled_end" : "i.scheduled_start";
 
     const result = await pool
       .request()

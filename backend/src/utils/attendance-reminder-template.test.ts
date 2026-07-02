@@ -37,6 +37,18 @@ describe("buildAttendanceReminderTemplateVariables", () => {
     assert.match(variables["3"], /^\d{2}:\d{2}$/);
   });
 
+  it("maps no-check-in-at-start variables without schedule time", () => {
+    const variables = buildAttendanceReminderTemplateVariables(
+      candidate,
+      "NO_CHECKIN_AT_START",
+      "America/Argentina/Buenos_Aires",
+    );
+
+    assert.equal(variables["1"], "Ana Pérez");
+    assert.equal(variables["2"], "Sucursal Centro");
+    assert.equal(variables["3"], undefined);
+  });
+
   it("throws when exit reminder has no scheduled end", () => {
     assert.throws(
       () =>

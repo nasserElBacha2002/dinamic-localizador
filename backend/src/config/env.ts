@@ -25,6 +25,7 @@ const envSchema = z
     TWILIO_VALIDATE_SIGNATURE: z.stringbool().optional(),
     TWILIO_ARRIVAL_REMINDER_CONTENT_SID: z.string().optional(),
     TWILIO_EXIT_REMINDER_CONTENT_SID: z.string().optional(),
+    TWILIO_TEMPLATE_NO_CHECKIN_SID: z.string().optional(),
     ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
     BOT_OPERATION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
@@ -124,6 +125,15 @@ const envSchema = z
           message:
             "TWILIO_EXIT_REMINDER_CONTENT_SID is required in production when attendance reminders are enabled",
           path: ["TWILIO_EXIT_REMINDER_CONTENT_SID"],
+        });
+      }
+
+      if (!data.TWILIO_TEMPLATE_NO_CHECKIN_SID) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "TWILIO_TEMPLATE_NO_CHECKIN_SID is required in production when attendance reminders are enabled",
+          path: ["TWILIO_TEMPLATE_NO_CHECKIN_SID"],
         });
       }
     }

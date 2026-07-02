@@ -12,6 +12,7 @@ import {
 } from "../../hooks/useAbsences";
 import type { AbsenceBalanceImpact, EmployeeAbsenceBalanceSummary } from "../../types/absence";
 import { getApiErrorMessage } from "../../utils/errors";
+import { safeText } from "../../utils/display-safe";
 
 interface EmployeeAbsenceBalanceCardProps {
   employeeId: string;
@@ -43,7 +44,7 @@ export function EmployeeAbsenceBalanceCard({
 
     return rows.filter(
       (row) =>
-        row.absenceType.deductsBalance ||
+        row.absenceType?.deductsBalance ||
         row.assignedDays > 0 ||
         row.approvedDays > 0 ||
         row.pendingDays > 0,
@@ -63,7 +64,7 @@ export function EmployeeAbsenceBalanceCard({
 
   const columns = useMemo<DataTableColumn<EmployeeAbsenceBalanceSummary>[]>(
     () => [
-      { key: "type", header: "Tipo", getValue: (row) => row.absenceType.name },
+      { key: "type", header: "Tipo", getValue: (row) => safeText(row.absenceType?.name ?? null) },
       { key: "assigned", header: "Asignados", getValue: (row) => row.assignedDays, align: "right" },
       { key: "approved", header: "Aprobados", getValue: (row) => row.approvedDays, align: "right" },
       { key: "pending", header: "Pendientes", getValue: (row) => row.pendingDays, align: "right" },

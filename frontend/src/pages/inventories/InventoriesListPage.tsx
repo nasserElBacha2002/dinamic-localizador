@@ -27,6 +27,7 @@ import {
   formatDateTime,
 } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
+import { getInventoryStoreAddress, getInventoryStoreName } from "./inventories-list-columns";
 import { inventoryStatusLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 
@@ -85,13 +86,13 @@ export function InventoriesListPage() {
         key: "storeName",
         header: terminology.location.singular,
         sortable: true,
-        getValue: (row) => row.store.name,
+        getValue: (row) => getInventoryStoreName(row),
       },
       {
         key: "storeAddress",
         header: "Dirección",
         sortable: true,
-        getValue: (row) => row.store.address ?? "—",
+        getValue: (row) => getInventoryStoreAddress(row),
       },
       {
         key: "scheduledStart",

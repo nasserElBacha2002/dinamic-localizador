@@ -127,7 +127,7 @@ function buildPreviewColumns(isClientFormat: boolean): DataTableColumn<Inventory
     {
       key: "errors",
       header: "Errores",
-      getValue: (row) => (row.errors.length > 0 ? row.errors.join(" · ") : "—"),
+      getValue: (row) => ((row.errors?.length ?? 0) > 0 ? row.errors.join(" · ") : "—"),
     },
   );
 
@@ -305,7 +305,7 @@ export function InventoryImportPage() {
                   </Group>
 
                   <DataTable
-                    rows={preview.rows}
+                    rows={preview.rows ?? []}
                     columns={previewColumns}
                     getRowKey={(row) => String(row.rowNumber)}
                     aria-label="Vista previa de importación de inventarios"

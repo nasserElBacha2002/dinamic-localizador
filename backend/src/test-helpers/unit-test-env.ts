@@ -9,6 +9,12 @@ const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   DB_PASSWORD: "unit-test-db-password",
   JWT_SECRET: "unit-test-jwt-secret",
   TWILIO_VALIDATE_SIGNATURE: "false",
+  TWILIO_ACCOUNT_SID: "AC_UNIT_TEST",
+  TWILIO_AUTH_TOKEN: "unit-test-twilio-auth-token",
+  TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000",
+  TWILIO_ARRIVAL_REMINDER_CONTENT_SID: "HX_UNIT_TEST_ARRIVAL",
+  TWILIO_EXIT_REMINDER_CONTENT_SID: "HX_UNIT_TEST_EXIT",
+  TWILIO_TEMPLATE_NO_CHECKIN_SID: "HX_UNIT_TEST_NO_CHECKIN",
 };
 
 export const setupUnitTestEnv = (): void => {

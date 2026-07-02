@@ -20,6 +20,7 @@ const printUsage = (): void => {
 
   npm run reminders:test -- --type=ARRIVAL_REMINDER_15_MIN --inventory-id=UUID --employee-id=UUID
   npm run reminders:test -- --type=EXIT_REMINDER_15_MIN --inventory-id=UUID --employee-id=UUID
+  npm run reminders:test -- --type=NO_CHECKIN_AT_START --inventory-id=UUID --employee-id=UUID
 
 Supported types: ${ATTENDANCE_NOTIFICATION_TYPES.join(", ")}`);
 };

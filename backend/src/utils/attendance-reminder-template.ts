@@ -7,6 +7,13 @@ export const buildAttendanceReminderTemplateVariables = (
   notificationType: AttendanceNotificationType,
   timeZone: string,
 ): Record<string, string> => {
+  if (notificationType === "NO_CHECKIN_AT_START") {
+    return {
+      "1": candidate.employeeName,
+      "2": candidate.storeName,
+    };
+  }
+
   const scheduleIso =
     notificationType === "ARRIVAL_REMINDER_15_MIN"
       ? candidate.scheduledStart

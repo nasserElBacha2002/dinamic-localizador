@@ -1,6 +1,6 @@
 import { Button, Select } from "@mantine/core";
-import { useCallback, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useMemo } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   DataTable,
   FilterBar,
@@ -11,51 +11,47 @@ import {
   StatusBadge,
   type DataTableColumn,
 } from "../../design-system";
-import { usePaginationState } from "../../hooks/usePaginationState";
+import { useTableUrlState } from "../../hooks/useTableUrlState";
+import { useListNavigationState } from "../../hooks/useListNavigationState";
 import { useStores } from "../../hooks/useStores";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { terminology } from "../../domain/terminology";
 import type { Store } from "../../types/store";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
+import { navigateWithListContext } from "../../utils/list-navigation";
 import { hasPermission } from "../../utils/permissions";
+
+const STORES_LIST_PATH = "/stores";
+
+const STORE_TABLE_DEFAULTS = {
+  page: 1,
+  pageSize: 10,
+  search: "",
+  active: "all" as "all" | "true" | "false",
+};
+
+const STORE_TABLE_FIELDS = {
+  active: { type: "enum", values: ["all", "true", "false"] },
+} as const;
 
 export function StoresListPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const listNav = useListNavigationState(STORES_LIST_PATH);
   const permissionsQuery = useCompanyPermissions();
   const canManageStores = hasPermission(permissionsQuery.data?.permissions, "stores:manage");
-  const pagination = usePaginationState(10);
-  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
 
-  const handleSearch = useCallback(
-    (value: string) => {
-      resetPage();
-      const nextSearch = value.trim();
-      setSearchInput(nextSearch);
-      setSearch(nextSearch);
-    },
-    [resetPage],
-  );
-
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setSearchInput(value);
-      if (!value) {
-        resetPage();
-        setSearch("");
-      }
-    },
-    [resetPage],
-  );
+  const table = useTableUrlState({
+    defaults: STORE_TABLE_DEFAULTS,
+    fields: STORE_TABLE_FIELDS,
+  });
 
   const { data, isPending, isError, error } = useStores({
-    page,
-    limit: pageSize,
-    search: search || undefined,
-    active: activeFilter === "all" ? undefined : activeFilter === "true",
+    page: table.page,
+    limit: table.pageSize,
+    search: table.state.search || undefined,
+    active: table.state.active === "all" ? undefined : table.state.active === "true",
   });
 
   const columns = useMemo<DataTableColumn<Store>[]>(
@@ -92,10 +88,9 @@ export function StoresListPage() {
         return;
       }
 
-      resetPage();
-      setActiveFilter(value as "all" | "true" | "false");
+      table.setField("active", value as "all" | "true" | "false");
     },
-    [resetPage],
+    [table],
   );
 
   return (
@@ -105,7 +100,7 @@ export function StoresListPage() {
         description="Configurá ubicaciones y radios permitidos."
         action={
           canManageStores ? (
-            <Button component={Link} to="/stores/new">
+            <Button component={Link} to="/stores/new" state={listNav}>
               {`Nueva ${terminology.location.singular.toLowerCase()}`}
             </Button>
           ) : undefined
@@ -115,9 +110,9 @@ export function StoresListPage() {
       <FilterBar>
         <FilterBar.Item>
           <SearchInput
-            value={searchInput}
-            onChange={handleSearchChange}
-            onSearch={handleSearch}
+            value={table.searchInput}
+            onChange={table.setSearch}
+            onSearch={table.commitSearch}
             placeholder="Nombre, dirección, barrio o localidad"
             label="Buscar"
           />
@@ -125,7 +120,7 @@ export function StoresListPage() {
         <FilterBar.Item>
           <Select
             label="Estado"
-            value={activeFilter}
+            value={table.state.active}
             onChange={handleActiveFilterChange}
             data={[
               { value: "all", label: "Todas" },
@@ -144,15 +139,17 @@ export function StoresListPage() {
         error={isError ? getApiErrorMessage(error) : undefined}
         emptyTitle={`No hay ${terminology.location.plural.toLowerCase()}`}
         emptyDescription={`Creá la primera ${terminology.location.singular.toLowerCase()} para comenzar.`}
-        onRowClick={(row) => navigate(`/stores/${row.id}`)}
+        onRowClick={(row) =>
+          navigateWithListContext(navigate, `/stores/${row.id}`, STORES_LIST_PATH, location)
+        }
         aria-label={`Listado de ${terminology.location.plural.toLowerCase()}`}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls
               meta={mapApiPaginationMeta(data.meta)}
-              onPageChange={onPageChange}
-              pageSize={pageSize}
-              onPageSizeChange={onPageSizeChange}
+              onPageChange={table.onPageChange}
+              pageSize={table.pageSize}
+              onPageSizeChange={table.onPageSizeChange}
               showPageSizeSelector
             />
           ) : undefined

@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { InventoryForm } from "../../components/inventories/InventoryForm";
 import { PageHeader } from "../../design-system";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCreateInventory } from "../../hooks/useInventories";
 import type { InventoryFormValues } from "../../schemas/inventory.schema";
 import { datetimeLocalToIso } from "../../utils/dates";
@@ -9,7 +9,7 @@ import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function InventoryCreatePage() {
-  const navigate = useNavigate();
+  const { goBackToList } = useListBackNavigation("/inventories");
   const createMutation = useCreateInventory();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -17,7 +17,7 @@ export function InventoryCreatePage() {
     setErrorMessage(null);
 
     try {
-      const inventory = await createMutation.mutateAsync({
+      await createMutation.mutateAsync({
         storeId: values.storeId,
         scheduledStart: datetimeLocalToIso(values.scheduledStart),
         scheduledEnd: values.scheduledEnd ? datetimeLocalToIso(values.scheduledEnd) : null,
@@ -25,7 +25,7 @@ export function InventoryCreatePage() {
         lateToleranceMinutes: values.lateToleranceMinutes,
         notes: values.notes?.trim() ? values.notes.trim() : null,
       });
-      navigate(`/inventories/${inventory.id}`);
+      goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -49,6 +49,7 @@ export function InventoryCreatePage() {
         }}
         submitLabel={`Crear ${terminology.operation.singular.toLowerCase()}`}
         cancelTo="/inventories"
+        onCancel={goBackToList}
         loading={createMutation.isPending}
         errorMessage={errorMessage}
         onSubmit={handleSubmit}

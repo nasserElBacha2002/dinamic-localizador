@@ -1,7 +1,8 @@
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
 import { Stack } from "@mantine/core";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
@@ -12,7 +13,7 @@ import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function EmployeeEditPage() {
-  const navigate = useNavigate();
+  const { goBackToList } = useListBackNavigation("/employees");
   const { id } = useParams<{ id: string }>();
   const employeeQuery = useEmployee(id);
   const updateMutation = useUpdateEmployee(id ?? "");
@@ -55,7 +56,7 @@ export function EmployeeEditPage() {
         color: "green",
         message: `${terminology.worker.singular} actualizado correctamente.`,
       });
-      navigate("/employees");
+      goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -77,6 +78,7 @@ export function EmployeeEditPage() {
         }}
         submitLabel="Guardar cambios"
         cancelTo="/employees"
+        onCancel={goBackToList}
         loading={updateMutation.isPending}
         errorMessage={errorMessage}
         onSubmit={handleSubmit}

@@ -21,6 +21,7 @@ interface EmployeeFormProps {
   defaultValues: EmployeeFormInputValues;
   submitLabel: string;
   cancelTo: string;
+  onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
   onSubmit: (values: EmployeeFormValues) => Promise<void>;
@@ -30,6 +31,7 @@ export function EmployeeForm({
   defaultValues,
   submitLabel,
   cancelTo,
+  onCancel,
   loading = false,
   errorMessage,
   onSubmit,
@@ -79,7 +81,7 @@ export function EmployeeForm({
 
           <RHFSwitch control={control} name="active" label="Activo" />
 
-          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
         </Stack>
       </FormSection>
     </form>

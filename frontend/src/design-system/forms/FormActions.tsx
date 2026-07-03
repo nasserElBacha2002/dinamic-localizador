@@ -8,6 +8,7 @@ export interface FormActionsProps {
   disabled?: boolean;
   onCancel?: () => void;
   cancelTo?: string;
+  cancelState?: unknown;
   align?: "left" | "right";
 }
 
@@ -18,6 +19,7 @@ export function FormActions({
   disabled = false,
   onCancel,
   cancelTo,
+  cancelState,
   align = "left",
 }: FormActionsProps) {
   const isDisabled = loading || disabled;
@@ -32,7 +34,13 @@ export function FormActions({
           {cancelLabel}
         </Button>
       ) : cancelTo ? (
-        <Button component={RouterLink} to={cancelTo} variant="default" disabled={isDisabled}>
+        <Button
+          component={RouterLink}
+          to={cancelTo}
+          state={cancelState}
+          variant="default"
+          disabled={isDisabled}
+        >
           {cancelLabel}
         </Button>
       ) : null}

@@ -1,7 +1,7 @@
 import { Alert, Badge, Button, Group, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useRef, useState } from "react";
-import { Link as RouterLink, useNavigate } from "react-router-dom";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import {
   DataTable,
   EmptyState,
@@ -135,7 +135,7 @@ function buildPreviewColumns(isClientFormat: boolean): DataTableColumn<Inventory
 }
 
 export function InventoryImportPage() {
-  const navigate = useNavigate();
+  const { goBackToList } = useListBackNavigation("/inventories");
   const fileInputRef = useRef<HTMLInputElement>(null);
   const previewMutation = useInventoryImportPreview();
   const confirmMutation = useInventoryImportConfirm();
@@ -187,7 +187,7 @@ export function InventoryImportPage() {
         title: "Importación completada",
         message: "Inventarios importados correctamente.",
       });
-      navigate("/inventories");
+      goBackToList();
     } catch (error) {
       notifications.show({
         color: "red",
@@ -222,7 +222,7 @@ export function InventoryImportPage() {
         title="Importar operaciones"
         description="Cargá un CSV o XLSX, revisá la vista previa y confirmá la importación."
         action={
-          <Button component={RouterLink} to="/inventories" variant="default">
+          <Button variant="default" onClick={goBackToList}>
             Volver al listado
           </Button>
         }

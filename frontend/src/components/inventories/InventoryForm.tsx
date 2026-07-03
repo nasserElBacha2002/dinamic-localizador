@@ -31,6 +31,7 @@ interface InventoryFormProps {
   currentStatus?: InventoryStatus;
   submitLabel: string;
   cancelTo: string;
+  onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
   onSubmit: (values: InventoryFormValues) => Promise<void>;
@@ -45,6 +46,7 @@ export function InventoryForm({
   currentStatus = "SCHEDULED",
   submitLabel,
   cancelTo,
+  onCancel,
   loading = false,
   errorMessage,
   onSubmit,
@@ -149,7 +151,7 @@ export function InventoryForm({
       ) : null}
 
       {!hideActions ? (
-        <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+        <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
       ) : null}
     </Stack>
   );

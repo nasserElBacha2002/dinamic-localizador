@@ -1,14 +1,15 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { PageHeader } from "../../design-system";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCreateEmployee } from "../../hooks/useEmployees";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function EmployeeCreatePage() {
-  const navigate = useNavigate();
+  const { goBackToList } = useListBackNavigation("/employees");
   const [searchParams] = useSearchParams();
   const createMutation = useCreateEmployee();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -18,13 +19,13 @@ export function EmployeeCreatePage() {
     setErrorMessage(null);
 
     try {
-      const employee = await createMutation.mutateAsync({
+      await createMutation.mutateAsync({
         name: values.name,
         documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
         phoneNumber: values.phoneNumber,
         employeeType: values.employeeType,
       });
-      navigate(`/employees/${employee.id}`);
+      goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -40,6 +41,7 @@ export function EmployeeCreatePage() {
         defaultValues={{ name: defaultName, documentNumber: "", phoneNumber: "", employeeType: "", active: true }}
         submitLabel={`Crear ${terminology.worker.singular.toLowerCase()}`}
         cancelTo="/employees"
+        onCancel={goBackToList}
         loading={createMutation.isPending}
         errorMessage={errorMessage}
         onSubmit={handleSubmit}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useCallback, useState } from "react";
 import {
   useStatisticsByEmployee,
   useStatisticsByInventory,
@@ -7,10 +7,24 @@ import {
   useStatisticsSummary,
   useStatisticsTimeline,
 } from "../../../hooks/useStatistics";
-import { usePaginationState } from "../../../hooks/usePaginationState";
+import { useTableUrlState } from "../../../hooks/useTableUrlState";
 import type { StatisticsFilters, StatisticsValidationStatus } from "../../../types/statistics";
+import type { StatisticsTabKey } from "../statistics-table-state";
 import type { DateRangeValue } from "../../../types/date-range";
-import { getDefaultStatisticsDateRange, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../../utils/date-range";
+import {
+  buildStatisticsTableDefaults,
+  STATISTICS_TABLE_FIELDS,
+} from "../statistics-table-state";
+import {
+  areDateRangeUrlFieldsEqual,
+  dateRangeToUrlFields,
+  urlFieldsToDateRange,
+} from "../../../utils/date-range-url";
+import {
+  getDefaultStatisticsDateRange,
+  getDateRangeQueryValue,
+  isInvalidCustomDateRange,
+} from "../../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart } from "../../../utils/dates";
 import { formatPercent } from "../../../utils/export";
 import {
@@ -18,31 +32,58 @@ import {
   buildTimelineChartOption,
 } from "../../../components/statistics/statistics-chart-options";
 
-export type StatisticsTabKey = "general" | "employee" | "inventory" | "location";
+export type { StatisticsTabKey } from "../statistics-table-state";
 
 const SUMMARY_HEADERS = ["Métrica", "Valor"];
 
 export function useStatisticsPageData() {
-  const [activeTab, setActiveTab] = useState<StatisticsTabKey>("general");
   const [defaultDateRange] = useState<DateRangeValue>(() => getDefaultStatisticsDateRange());
-  const [dateRange, setDateRange] = useState<DateRangeValue>(() => defaultDateRange);
-  const [inventoryId, setInventoryId] = useState("");
-  const [storeId, setStoreId] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [validationStatus, setValidationStatus] = useState<StatisticsValidationStatus>("");
-  const [locationStatus, setLocationStatus] = useState("");
-  const [punctualityStatus, setPunctualityStatus] = useState("");
+  const defaultDateFields = useMemo(
+    () => dateRangeToUrlFields(defaultDateRange),
+    [defaultDateRange],
+  );
+  const tableDefaults = useMemo(
+    () => buildStatisticsTableDefaults(defaultDateFields),
+    [defaultDateFields],
+  );
+  const shouldOmitFromUrl = useCallback(
+    (
+      key: keyof typeof tableDefaults,
+      value: (typeof tableDefaults)[keyof typeof tableDefaults],
+      defaults: typeof tableDefaults,
+      state: typeof tableDefaults,
+    ) => {
+      if (key === "datePreset" || key === "dateFrom" || key === "dateTo") {
+        return areDateRangeUrlFieldsEqual(
+          {
+            datePreset: String(state.datePreset),
+            dateFrom: String(state.dateFrom),
+            dateTo: String(state.dateTo),
+          },
+          defaultDateFields,
+        );
+      }
 
-  const employeePagination = usePaginationState(10);
-  const inventoryPagination = usePaginationState(10);
-  const locationPagination = usePaginationState(10);
+      return value === defaults[key] || value === "";
+    },
+    [defaultDateFields],
+  );
 
-  const [employeeSortBy, setEmployeeSortBy] = useState("attendancePercentage");
-  const [employeeSortDirection, setEmployeeSortDirection] = useState<"asc" | "desc">("desc");
-  const [inventorySortBy, setInventorySortBy] = useState("scheduledStart");
-  const [inventorySortDirection, setInventorySortDirection] = useState<"asc" | "desc">("desc");
-  const [locationSortBy, setLocationSortBy] = useState("averageAttendancePercentage");
-  const [locationSortDirection, setLocationSortDirection] = useState<"asc" | "desc">("desc");
+  const table = useTableUrlState({
+    defaults: tableDefaults,
+    fields: STATISTICS_TABLE_FIELDS,
+    shouldOmitFromUrl,
+  });
+
+  const dateRange = useMemo(
+    () =>
+      urlFieldsToDateRange({
+        datePreset: table.state.datePreset,
+        dateFrom: table.state.dateFrom,
+        dateTo: table.state.dateTo,
+      }),
+    [table.state.dateFrom, table.state.datePreset, table.state.dateTo],
+  );
 
   const dateQuery = getDateRangeQueryValue(dateRange);
   const isoDateFrom = dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined;
@@ -53,92 +94,91 @@ export function useStatisticsPageData() {
     () => ({
       dateFrom: isoDateFrom,
       dateTo: isoDateTo,
-      inventoryId: inventoryId || undefined,
-      storeId: storeId || undefined,
-      employeeId: employeeId || undefined,
-      validationStatus: validationStatus || undefined,
-      locationStatus: locationStatus || undefined,
-      punctualityStatus: punctualityStatus || undefined,
+      inventoryId: table.state.inventoryId || undefined,
+      storeId: table.state.storeId || undefined,
+      employeeId: table.state.employeeId || undefined,
+      validationStatus: (table.state.validationStatus as StatisticsValidationStatus) || undefined,
+      locationStatus: table.state.locationStatus || undefined,
+      punctualityStatus: table.state.punctualityStatus || undefined,
     }),
     [
       isoDateFrom,
       isoDateTo,
-      inventoryId,
-      storeId,
-      employeeId,
-      validationStatus,
-      locationStatus,
-      punctualityStatus,
+      table.state.employeeId,
+      table.state.inventoryId,
+      table.state.locationStatus,
+      table.state.punctualityStatus,
+      table.state.storeId,
+      table.state.validationStatus,
     ],
   );
-
-  const summaryQuery = useStatisticsSummary(baseFilters);
-  const timelineQuery = useStatisticsTimeline(baseFilters);
-  const distributionQuery = useStatisticsStatusDistribution(baseFilters);
 
   const employeeFilters = useMemo(
     () => ({
       ...baseFilters,
-      page: employeePagination.page,
-      limit: employeePagination.pageSize,
-      sortBy: employeeSortBy,
-      sortDirection: employeeSortDirection,
+      page: table.state.empPage,
+      limit: table.state.empPageSize,
+      sortBy: table.state.empSortBy,
+      sortDirection: table.state.empSortOrder,
     }),
-    [baseFilters, employeePagination.page, employeePagination.pageSize, employeeSortBy, employeeSortDirection],
+    [baseFilters, table.state.empPage, table.state.empPageSize, table.state.empSortBy, table.state.empSortOrder],
   );
 
   const employeeExportFilters = useMemo(
     () => ({
       ...baseFilters,
       export: true,
-      sortBy: employeeSortBy,
-      sortDirection: employeeSortDirection,
+      sortBy: table.state.empSortBy,
+      sortDirection: table.state.empSortOrder,
     }),
-    [baseFilters, employeeSortBy, employeeSortDirection],
+    [baseFilters, table.state.empSortBy, table.state.empSortOrder],
   );
 
   const inventoryFilters = useMemo(
     () => ({
       ...baseFilters,
-      page: inventoryPagination.page,
-      limit: inventoryPagination.pageSize,
-      sortBy: inventorySortBy,
-      sortDirection: inventorySortDirection,
+      page: table.state.invPage,
+      limit: table.state.invPageSize,
+      sortBy: table.state.invSortBy,
+      sortDirection: table.state.invSortOrder,
     }),
-    [baseFilters, inventoryPagination.page, inventoryPagination.pageSize, inventorySortBy, inventorySortDirection],
+    [baseFilters, table.state.invPage, table.state.invPageSize, table.state.invSortBy, table.state.invSortOrder],
   );
 
   const inventoryExportFilters = useMemo(
     () => ({
       ...baseFilters,
       export: true,
-      sortBy: inventorySortBy,
-      sortDirection: inventorySortDirection,
+      sortBy: table.state.invSortBy,
+      sortDirection: table.state.invSortOrder,
     }),
-    [baseFilters, inventorySortBy, inventorySortDirection],
+    [baseFilters, table.state.invSortBy, table.state.invSortOrder],
   );
 
   const locationFilters = useMemo(
     () => ({
       ...baseFilters,
-      page: locationPagination.page,
-      limit: locationPagination.pageSize,
-      sortBy: locationSortBy,
-      sortDirection: locationSortDirection,
+      page: table.state.locPage,
+      limit: table.state.locPageSize,
+      sortBy: table.state.locSortBy,
+      sortDirection: table.state.locSortOrder,
     }),
-    [baseFilters, locationPagination.page, locationPagination.pageSize, locationSortBy, locationSortDirection],
+    [baseFilters, table.state.locPage, table.state.locPageSize, table.state.locSortBy, table.state.locSortOrder],
   );
 
   const locationExportFilters = useMemo(
     () => ({
       ...baseFilters,
       export: true,
-      sortBy: locationSortBy,
-      sortDirection: locationSortDirection,
+      sortBy: table.state.locSortBy,
+      sortDirection: table.state.locSortOrder,
     }),
-    [baseFilters, locationSortBy, locationSortDirection],
+    [baseFilters, table.state.locSortBy, table.state.locSortOrder],
   );
 
+  const summaryQuery = useStatisticsSummary(baseFilters);
+  const timelineQuery = useStatisticsTimeline(baseFilters);
+  const distributionQuery = useStatisticsStatusDistribution(baseFilters);
   const employeeQuery = useStatisticsByEmployee(employeeFilters);
   const employeeExportQuery = useStatisticsByEmployee(employeeExportFilters);
   const inventoryQuery = useStatisticsByInventory(inventoryFilters);
@@ -211,59 +251,100 @@ export function useStatisticsPageData() {
     : [];
 
   const resetAllPages = () => {
-    employeePagination.resetPage();
-    inventoryPagination.resetPage();
-    locationPagination.resetPage();
+    table.setState(
+      {
+        empPage: 1,
+        invPage: 1,
+        locPage: 1,
+      },
+      { resetPage: false },
+    );
   };
 
   const handleEmployeeSort = (field: string) => {
-    employeePagination.resetPage();
-    if (employeeSortBy === field) {
-      setEmployeeSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    if (table.state.empSortBy === field) {
+      table.setState({
+        empSortBy: field,
+        empSortOrder: table.state.empSortOrder === "asc" ? "desc" : "asc",
+        empPage: 1,
+      });
       return;
     }
-    setEmployeeSortBy(field);
-    setEmployeeSortDirection("desc");
+
+    table.setState({ empSortBy: field, empSortOrder: "desc", empPage: 1 });
   };
 
   const handleInventorySort = (field: string) => {
-    inventoryPagination.resetPage();
-    if (inventorySortBy === field) {
-      setInventorySortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    if (table.state.invSortBy === field) {
+      table.setState({
+        invSortBy: field,
+        invSortOrder: table.state.invSortOrder === "asc" ? "desc" : "asc",
+        invPage: 1,
+      });
       return;
     }
-    setInventorySortBy(field);
-    setInventorySortDirection("desc");
+
+    table.setState({ invSortBy: field, invSortOrder: "desc", invPage: 1 });
   };
 
   const handleLocationSort = (field: string) => {
-    locationPagination.resetPage();
-    if (locationSortBy === field) {
-      setLocationSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    if (table.state.locSortBy === field) {
+      table.setState({
+        locSortBy: field,
+        locSortOrder: table.state.locSortOrder === "asc" ? "desc" : "asc",
+        locPage: 1,
+      });
       return;
     }
-    setLocationSortBy(field);
-    setLocationSortDirection("desc");
+
+    table.setState({ locSortBy: field, locSortOrder: "desc", locPage: 1 });
+  };
+
+  const employeePagination = {
+    page: table.state.empPage,
+    pageSize: table.state.empPageSize,
+    onPageChange: (page: number) => table.setField("empPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ empPageSize: pageSize, empPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("empPage", 1, { resetPage: false }),
+  };
+
+  const inventoryPagination = {
+    page: table.state.invPage,
+    pageSize: table.state.invPageSize,
+    onPageChange: (page: number) => table.setField("invPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ invPageSize: pageSize, invPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("invPage", 1, { resetPage: false }),
+  };
+
+  const locationPagination = {
+    page: table.state.locPage,
+    pageSize: table.state.locPageSize,
+    onPageChange: (page: number) => table.setField("locPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ locPageSize: pageSize, locPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("locPage", 1, { resetPage: false }),
   };
 
   return {
-    activeTab,
-    setActiveTab,
+    activeTab: table.state.tab,
+    setActiveTab: (tab: StatisticsTabKey) => table.setField("tab", tab, { resetPage: false }),
     defaultDateRange,
     dateRange,
-    setDateRange,
-    inventoryId,
-    setInventoryId,
-    storeId,
-    setStoreId,
-    employeeId,
-    setEmployeeId,
-    validationStatus,
-    setValidationStatus,
-    locationStatus,
-    setLocationStatus,
-    punctualityStatus,
-    setPunctualityStatus,
+    setDateRange: (value: DateRangeValue) => table.setState(dateRangeToUrlFields(value)),
+    inventoryId: table.state.inventoryId,
+    setInventoryId: (value: string) => table.setField("inventoryId", value),
+    storeId: table.state.storeId,
+    setStoreId: (value: string) => table.setField("storeId", value),
+    employeeId: table.state.employeeId,
+    setEmployeeId: (value: string) => table.setField("employeeId", value),
+    validationStatus: table.state.validationStatus as StatisticsValidationStatus,
+    setValidationStatus: (value: string) => table.setField("validationStatus", value),
+    locationStatus: table.state.locationStatus,
+    setLocationStatus: (value: string) => table.setField("locationStatus", value),
+    punctualityStatus: table.state.punctualityStatus,
+    setPunctualityStatus: (value: string) => table.setField("punctualityStatus", value),
     exportsDisabled,
     isoDateFrom,
     isoDateTo,
@@ -280,12 +361,12 @@ export function useStatisticsPageData() {
     employeePagination,
     inventoryPagination,
     locationPagination,
-    employeeSortBy,
-    employeeSortDirection,
-    inventorySortBy,
-    inventorySortDirection,
-    locationSortBy,
-    locationSortDirection,
+    employeeSortBy: table.state.empSortBy,
+    employeeSortDirection: table.state.empSortOrder,
+    inventorySortBy: table.state.invSortBy,
+    inventorySortDirection: table.state.invSortOrder,
+    locationSortBy: table.state.locSortBy,
+    locationSortDirection: table.state.locSortOrder,
     handleEmployeeSort,
     handleInventorySort,
     handleLocationSort,

@@ -1,7 +1,12 @@
 import { z } from "zod";
-import { STORE_FORMATS, type StoreFormat } from "../constants/store-formats";
 
-const storeFormatSchema = z.enum(STORE_FORMATS);
+const storeFormatSchema = z
+  .string()
+  .trim()
+  .min(1, "Seleccioná un tipo de ubicación/servicio.")
+  .max(80)
+  .optional()
+  .or(z.literal(""));
 
 export const storeFormSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio"),
@@ -22,7 +27,7 @@ export function toNullableStoreText(value: string | undefined): string | null {
   return value?.trim() ? value.trim() : null;
 }
 
-export function toNullableStoreFormat(value: StoreFormValues["storeFormat"]): StoreFormat | null {
+export function toNullableStoreFormat(value: StoreFormValues["storeFormat"]): string | null {
   if (!value) {
     return null;
   }

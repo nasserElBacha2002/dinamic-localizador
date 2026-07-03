@@ -24,6 +24,11 @@ const existingSettings = {
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
+  defaultEarlyArrivalToleranceMinutes: 60,
+  defaultLateArrivalToleranceMinutes: 90,
+  defaultOperationStartTime: "20:30",
+  defaultOperationEndTime: "03:00",
+  geofenceReviewMarginMeters: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

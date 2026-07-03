@@ -1,10 +1,9 @@
 import sql from "mssql";
 import {
-  DEFAULT_EARLY_TOLERANCE_MINUTES,
-  DEFAULT_LATE_TOLERANCE_MINUTES,
   IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
   IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
   IMPORT_LOCATION_NOT_FOUND_MESSAGE,
+  IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE,
   UNSUPPORTED_FILE_TYPE_MESSAGE,
 } from "../constants/inventory-import";
 import { getPool } from "../database/connection";
@@ -20,10 +19,7 @@ import type {
   InventoryImportPreviewRow,
 } from "../types/inventory-import";
 import { mapImportHeaders } from "../utils/inventory-import-headers";
-import {
-  buildClientInventorySchedule,
-  parseInventoryImportDateTime,
-} from "../utils/inventory-import-datetime";
+import { createInventoryImportDateTimeUtils } from "../utils/inventory-import-datetime";
 import { isInventoryStartInPast } from "../utils/inventory-lifecycle";
 import {
   detectSpreadsheetFileType,
@@ -31,6 +27,11 @@ import {
   parseSpreadsheetBuffer,
   type SpreadsheetFileType,
 } from "../utils/spreadsheet-parse";
+import {
+  companyOperationalDefaultsResolver,
+  type ImportOperationalDefaults,
+} from "./company-operational-defaults.resolver";
+import { companyLocationTypesService } from "./company-location-types.service";
 
 const normalizeStoreKey = (value: string): string => {
   const trimmed = value.trim();
@@ -39,6 +40,28 @@ const normalizeStoreKey = (value: string): string => {
   }
 
   return trimmed.toLowerCase();
+};
+
+type ImportNormalizationContext = {
+  importDefaults: ImportOperationalDefaults;
+  dateTimeUtils: ReturnType<typeof createInventoryImportDateTimeUtils>;
+  activeLocationTypes: Set<string>;
+};
+
+const validateOptionalLocationType = (
+  rawValue: string,
+  activeLocationTypes: Set<string>,
+): string[] => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  if (!activeLocationTypes.has(trimmed.toLowerCase())) {
+    return [IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE];
+  }
+
+  return [];
 };
 
 const buildStoreLookup = (stores: Store[]): Map<string, Store[]> => {
@@ -155,14 +178,17 @@ const validateClientRow = (
   headers: string[],
   storeLookup: Map<string, Store[]>,
   seenKeys: Set<string>,
+  normalization: ImportNormalizationContext,
 ): InventoryImportPreviewRow => {
   const locationValue = getCell(row, headers, "location").trim();
   const rawFecha = getCell(row, headers, "fecha").trim();
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
   const notas = getCell(row, headers, "notas").trim();
+  const locationTypeRaw = getCell(row, headers, "location_type");
 
   const errors: string[] = [];
+  errors.push(...validateOptionalLocationType(locationTypeRaw, normalization.activeLocationTypes));
 
   const storeResolution = resolveStore(
     locationValue,
@@ -180,12 +206,12 @@ const validateClientRow = (
   const earlyTolerance = parseTolerance(
     toleranciaTempranaRaw,
     "Tolerancia temprana",
-    DEFAULT_EARLY_TOLERANCE_MINUTES,
+    normalization.importDefaults.earlyToleranceMinutes,
   );
   const lateTolerance = parseTolerance(
     toleranciaTardiaRaw,
     "Tolerancia tardía",
-    DEFAULT_LATE_TOLERANCE_MINUTES,
+    normalization.importDefaults.lateToleranceMinutes,
   );
   errors.push(...earlyTolerance.errors, ...lateTolerance.errors);
 
@@ -196,7 +222,7 @@ const validateClientRow = (
   let scheduledEndDisplay = "";
 
   if (rawFecha) {
-    const schedule = buildClientInventorySchedule(rawFecha);
+    const schedule = normalization.dateTimeUtils.buildClientInventorySchedule(rawFecha);
     if ("error" in schedule) {
       errors.push(schedule.error);
     } else {
@@ -257,6 +283,7 @@ const validateLegacyRow = (
   headers: string[],
   storeLookup: Map<string, Store[]>,
   seenKeys: Set<string>,
+  normalization: ImportNormalizationContext,
 ): InventoryImportPreviewRow => {
   const locationValue = getCell(row, headers, "location").trim();
   const fechaInicio = getCell(row, headers, "fecha_inicio").trim();
@@ -264,8 +291,10 @@ const validateLegacyRow = (
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
   const notas = getCell(row, headers, "notas").trim();
+  const locationTypeRaw = getCell(row, headers, "location_type");
 
   const errors: string[] = [];
+  errors.push(...validateOptionalLocationType(locationTypeRaw, normalization.activeLocationTypes));
 
   const storeResolution = resolveStore(
     locationValue,
@@ -286,12 +315,12 @@ const validateLegacyRow = (
   const earlyTolerance = parseTolerance(
     toleranciaTempranaRaw,
     "Tolerancia temprana",
-    DEFAULT_EARLY_TOLERANCE_MINUTES,
+    normalization.importDefaults.earlyToleranceMinutes,
   );
   const lateTolerance = parseTolerance(
     toleranciaTardiaRaw,
     "Tolerancia tardía",
-    DEFAULT_LATE_TOLERANCE_MINUTES,
+    normalization.importDefaults.lateToleranceMinutes,
   );
   errors.push(...earlyTolerance.errors, ...lateTolerance.errors);
 
@@ -299,7 +328,7 @@ const validateLegacyRow = (
   let scheduledEnd: string | null = null;
 
   if (fechaInicio) {
-    const parsedStart = parseInventoryImportDateTime(fechaInicio);
+    const parsedStart = normalization.dateTimeUtils.parseInventoryImportDateTime(fechaInicio);
     if ("error" in parsedStart) {
       errors.push(`Fecha de inicio: ${parsedStart.error}`);
     } else {
@@ -311,7 +340,7 @@ const validateLegacyRow = (
   }
 
   if (fechaFin) {
-    const parsedEnd = parseInventoryImportDateTime(fechaFin);
+    const parsedEnd = normalization.dateTimeUtils.parseInventoryImportDateTime(fechaFin);
     if ("error" in parsedEnd) {
       errors.push(`Fecha de fin: ${parsedEnd.error}`);
     } else {
@@ -401,7 +430,21 @@ export const inventoryImportService = {
       return emptyPreview([UNSUPPORTED_FILE_TYPE_MESSAGE], fileType);
     }
 
-    const parsed = parseSpreadsheetBuffer(buffer, fileType);
+    const importDefaults = await companyOperationalDefaultsResolver.getImportDefaults(companyId);
+    const activeLocationTypes = companyLocationTypesService.buildActiveTypeLookup(
+      await companyLocationTypesService.listLocationTypes(companyId, true),
+    );
+    const normalization: ImportNormalizationContext = {
+      importDefaults,
+      dateTimeUtils: createInventoryImportDateTimeUtils({
+        operationTimezone: importDefaults.operationTimezone,
+        defaultOperationStartTime: importDefaults.defaultOperationStartTime,
+        defaultOperationEndTime: importDefaults.defaultOperationEndTime,
+      }),
+      activeLocationTypes,
+    };
+
+    const parsed = parseSpreadsheetBuffer(buffer, fileType, importDefaults.operationTimezone);
     if (parsed.headers.length === 0) {
       return emptyPreview(["El archivo está vacío o no contiene encabezados"], fileType);
     }
@@ -429,8 +472,8 @@ export const inventoryImportService = {
 
       const previewRow =
         format === "client"
-          ? validateClientRow(index + 2, row, mapped, storeLookup, seenKeys)
-          : validateLegacyRow(index + 2, row, mapped, storeLookup, seenKeys);
+          ? validateClientRow(index + 2, row, mapped, storeLookup, seenKeys, normalization)
+          : validateLegacyRow(index + 2, row, mapped, storeLookup, seenKeys, normalization);
       rows.push(previewRow);
     }
 

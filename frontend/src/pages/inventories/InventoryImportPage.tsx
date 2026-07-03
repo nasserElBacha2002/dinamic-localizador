@@ -228,6 +228,11 @@ export function InventoryImportPage() {
         }
       />
 
+      <Alert color="blue" variant="light">
+        Los horarios y tolerancias faltantes se completan usando la configuración de inventarios de
+        la empresa.
+      </Alert>
+
       <SectionCard title="Archivo" description="Paso 1 · Subí el archivo o descargá la plantilla recomendada.">
         <Stack gap="md">
           <Text size="sm" c="dimmed">

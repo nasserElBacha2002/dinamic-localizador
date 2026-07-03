@@ -3,6 +3,17 @@ import {
   COMPANY_SETTINGS_LIMITS,
   isValidOperationTimezone,
 } from "../constants/company-settings";
+import { isValidHHmm } from "../utils/sql-time";
+
+const optionalHHmmField = (label: string) =>
+  z
+    .union([
+      z.string().trim().refine(isValidHHmm, {
+        message: `${label} debe tener formato HH:mm válido.`,
+      }),
+      z.null(),
+    ])
+    .optional();
 
 export const companyIdParamSchema = z.object({
   companyId: z.string().uuid("ID de empresa inválido"),
@@ -57,6 +68,45 @@ export const updateCompanySettingsSchema = z
       .optional(),
     requireCheckoutLocation: z.boolean().optional(),
     allowManualAttendanceCorrections: z.boolean().optional(),
+    defaultEarlyArrivalToleranceMinutes: z.coerce
+      .number()
+      .int("La tolerancia de llegada anticipada debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.defaultEarlyArrivalToleranceMinutes.min,
+        "La tolerancia de llegada anticipada no puede ser negativa.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.defaultEarlyArrivalToleranceMinutes.max,
+        "La tolerancia de llegada anticipada no puede superar 240 minutos.",
+      )
+      .optional(),
+    defaultLateArrivalToleranceMinutes: z.coerce
+      .number()
+      .int("La tolerancia de llegada tardía debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.defaultLateArrivalToleranceMinutes.min,
+        "La tolerancia de llegada tardía no puede ser negativa.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.defaultLateArrivalToleranceMinutes.max,
+        "La tolerancia de llegada tardía no puede superar 240 minutos.",
+      )
+      .optional(),
+    defaultOperationStartTime: optionalHHmmField("El horario de inicio"),
+    defaultOperationEndTime: optionalHHmmField("El horario de fin"),
+    geofenceReviewMarginMeters: z.coerce
+      .number()
+      .int("El margen de revisión debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.geofenceReviewMarginMeters.min,
+        "El margen de revisión no puede ser negativo.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.geofenceReviewMarginMeters.max,
+        "El margen de revisión no puede superar 5000 metros.",
+      )
+      .optional()
+      .nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

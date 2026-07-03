@@ -1,4 +1,4 @@
-import type { StoreFormat } from "../constants/store-formats";
+export type StoreFormat = string;
 
 export interface Store {
   id: string;

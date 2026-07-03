@@ -1,10 +1,13 @@
+import sql from "mssql";
 import { AppError } from "../errors/app-error";
 import type {
   CreateEmployeeInput,
   ListEmployeesQuery,
   UpdateEmployeeInput,
 } from "../schemas/employee.schema";
+import { getPool } from "../database/connection";
 import { employeeRepository } from "../repositories/employee.repository";
+import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { normalizePhoneNumber } from "../utils/phone";
 import { buildPaginationMeta } from "../utils/pagination";
 
@@ -16,12 +19,38 @@ export const employeeService = {
       throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
     }
 
-    return employeeRepository.create(companyId, {
-      name: input.name.trim(),
-      documentNumber: input.documentNumber?.trim() ?? null,
-      phoneNumber,
-      employeeType: input.employeeType,
-    });
+    await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
+
+    // Catalog/settings are ensured before the transaction. Balance inserts share the
+    // employee creation transaction; reads during init use committed catalog data.
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const employee = await employeeRepository.create(
+        companyId,
+        {
+          name: input.name.trim(),
+          documentNumber: input.documentNumber?.trim() ?? null,
+          phoneNumber,
+          employeeType: input.employeeType,
+        },
+        transaction,
+      );
+
+      await companyAbsenceSettingsService.initializeEmployeeAbsenceBalances(
+        companyId,
+        employee.id,
+        transaction,
+      );
+
+      await transaction.commit();
+      return employee;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   },
 
   async list(companyId: string, query: ListEmployeesQuery) {

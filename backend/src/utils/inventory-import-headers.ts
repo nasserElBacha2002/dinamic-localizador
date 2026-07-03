@@ -28,6 +28,10 @@ const EXTENDED_END_DATE_ALIASES = new Set(
   INVENTORY_IMPORT_COLUMN_ALIASES.endDate.map((header) => normalizeImportColumnName(header)),
 );
 
+const LOCATION_TYPE_ALIASES = new Set(
+  INVENTORY_IMPORT_COLUMN_ALIASES.locationType.map((header) => normalizeImportColumnName(header)),
+);
+
 const OPTIONAL_HEADER_ALIASES = new Set([
   "tolerancia_temprana",
   "tolerancia_tardia",
@@ -52,6 +56,10 @@ export const resolveImportHeaderColumn = (header: string): string => {
 
   if (LOCATION_ALIASES.has(normalized)) {
     return "location";
+  }
+
+  if (LOCATION_TYPE_ALIASES.has(normalized)) {
+    return "location_type";
   }
 
   if (OPTIONAL_HEADER_ALIASES.has(normalized)) {

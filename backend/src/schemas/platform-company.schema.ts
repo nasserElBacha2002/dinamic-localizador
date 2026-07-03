@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import { COMPANY_STATUSES } from "../types/company";
+import { isValidHHmm } from "../utils/sql-time";
+
+const optionalHHmmField = () =>
+  z
+    .union([z.string().trim().refine(isValidHHmm), z.null()])
+    .optional();
 
 const companySettingsInputSchema = z.object({
   operationTimezone: z.string().trim().min(1).optional(),
@@ -9,6 +15,11 @@ const companySettingsInputSchema = z.object({
   earlyLeaveToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
   requireCheckoutLocation: z.boolean().optional(),
   allowManualAttendanceCorrections: z.boolean().optional(),
+  defaultEarlyArrivalToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
+  defaultLateArrivalToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
+  defaultOperationStartTime: optionalHHmmField(),
+  defaultOperationEndTime: optionalHHmmField(),
+  geofenceReviewMarginMeters: z.coerce.number().int().nonnegative().optional().nullable(),
 });
 
 const ownerInputSchema = z.object({

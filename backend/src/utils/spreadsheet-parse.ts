@@ -1,6 +1,11 @@
 import * as XLSX from "xlsx";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { parseCsvContent, type ParsedCsv } from "./csv-parse";
-import { formatInventoryDateParts, parseExcelSerialNumber, dateToInventoryDateParts } from "./inventory-import-datetime";
+import {
+  createInventoryImportDateTimeUtils,
+  formatInventoryDateParts,
+  parseExcelSerialNumber,
+} from "./inventory-import-datetime";
 
 export type SpreadsheetFileType = "csv" | "xlsx";
 
@@ -24,34 +29,40 @@ export const detectSpreadsheetFileType = (fileName: string): SpreadsheetFileType
 
 const isFechaColumn = (header: string): boolean => header.toLowerCase() === "fecha";
 
-const cellToImportString = (value: unknown, header: string): string => {
-  if (value === null || value === undefined) {
-    return "";
-  }
+const parseXlsxBuffer = (buffer: Buffer, operationTimezone: string): ParsedSpreadsheet => {
+  const { dateToInventoryDateParts } = createInventoryImportDateTimeUtils({
+    operationTimezone,
+    defaultOperationStartTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
+    defaultOperationEndTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
+  });
 
-  if (value instanceof Date) {
-    return formatInventoryDateParts(dateToInventoryDateParts(value));
-  }
-
-  if (typeof value === "number") {
-    if (isFechaColumn(header)) {
-      const serial = parseExcelSerialNumber(value);
-      if (serial) {
-        return formatInventoryDateParts(serial);
-      }
+  const cellToImportString = (value: unknown, header: string): string => {
+    if (value === null || value === undefined) {
+      return "";
     }
 
-    if (Number.isFinite(value) && Math.trunc(value) === value) {
-      return String(Math.trunc(value));
+    if (value instanceof Date) {
+      return formatInventoryDateParts(dateToInventoryDateParts(value));
+    }
+
+    if (typeof value === "number") {
+      if (isFechaColumn(header)) {
+        const serial = parseExcelSerialNumber(value);
+        if (serial) {
+          return formatInventoryDateParts(serial);
+        }
+      }
+
+      if (Number.isFinite(value) && Math.trunc(value) === value) {
+        return String(Math.trunc(value));
+      }
+
+      return String(value).trim();
     }
 
     return String(value).trim();
-  }
+  };
 
-  return String(value).trim();
-};
-
-const parseXlsxBuffer = (buffer: Buffer): ParsedSpreadsheet => {
   const workbook = XLSX.read(buffer, { type: "buffer", cellDates: true });
   const sheetName = workbook.SheetNames[0];
   if (!sheetName) {
@@ -79,13 +90,17 @@ const parseXlsxBuffer = (buffer: Buffer): ParsedSpreadsheet => {
   return { headers, rows };
 };
 
-export const parseSpreadsheetBuffer = (buffer: Buffer, fileType: SpreadsheetFileType): ParsedSpreadsheet => {
+export const parseSpreadsheetBuffer = (
+  buffer: Buffer,
+  fileType: SpreadsheetFileType,
+  operationTimezone: string = DEFAULT_COMPANY_OPERATIONAL_SETTINGS.operationTimezone,
+): ParsedSpreadsheet => {
   if (fileType === "csv") {
     const parsed: ParsedCsv = parseCsvContent(buffer.toString("utf8"));
     return parsed;
   }
 
-  return parseXlsxBuffer(buffer);
+  return parseXlsxBuffer(buffer, operationTimezone);
 };
 
 export const isLikelyBinaryUpload = (buffer: Buffer): boolean => {

@@ -1,8 +1,15 @@
 import { Window } from "happy-dom";
+import React from "react";
 
 export function setupDomEnvironment(): void {
   const window = new Window({ url: "http://localhost/" });
   const document = window.document;
+
+  Object.defineProperty(globalThis, "React", {
+    configurable: true,
+    writable: true,
+    value: React,
+  });
 
   Object.defineProperty(globalThis, "window", {
     configurable: true,

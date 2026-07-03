@@ -13,8 +13,8 @@ export const createInventorySchema = z
     storeId: z.string().uuid("UUID de tienda inválido"),
     scheduledStart: z.string().datetime({ offset: true }),
     scheduledEnd: z.string().datetime({ offset: true }).optional().nullable(),
-    earlyToleranceMinutes: z.number().int().min(0).default(60),
-    lateToleranceMinutes: z.number().int().min(0).default(90),
+    earlyToleranceMinutes: z.number().int().min(0).optional(),
+    lateToleranceMinutes: z.number().int().min(0).optional(),
     notes: z.string().trim().max(1000).optional().nullable(),
   })
   .refine(

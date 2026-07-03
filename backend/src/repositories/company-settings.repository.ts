@@ -2,6 +2,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { CompanySettings } from "../types/company";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
+import { parseSqlTimeToHHmm, toSqlTimeValue } from "../utils/sql-time";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -13,6 +14,11 @@ export type CompanySettingsInput = {
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;
+  defaultEarlyArrivalToleranceMinutes: number;
+  defaultLateArrivalToleranceMinutes: number;
+  defaultOperationStartTime?: string | null;
+  defaultOperationEndTime?: string | null;
+  geofenceReviewMarginMeters?: number | null;
 };
 
 const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
@@ -24,6 +30,14 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   earlyLeaveToleranceMinutes: Number(row.early_leave_tolerance_minutes),
   requireCheckoutLocation: Boolean(row.require_checkout_location),
   allowManualAttendanceCorrections: Boolean(row.allow_manual_attendance_corrections),
+  defaultEarlyArrivalToleranceMinutes: Number(row.default_early_arrival_tolerance_minutes ?? 60),
+  defaultLateArrivalToleranceMinutes: Number(row.default_late_arrival_tolerance_minutes ?? 90),
+  defaultOperationStartTime: parseSqlTimeToHHmm(row.default_operation_start_time),
+  defaultOperationEndTime: parseSqlTimeToHHmm(row.default_operation_end_time),
+  geofenceReviewMarginMeters:
+    row.geofence_review_margin_meters == null
+      ? null
+      : Number(row.geofence_review_margin_meters),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -61,17 +75,36 @@ export const companySettingsRepository = {
         sql.Bit,
         input.allowManualAttendanceCorrections ? 1 : 0,
       )
+      .input(
+        "defaultEarlyArrivalToleranceMinutes",
+        sql.Int,
+        input.defaultEarlyArrivalToleranceMinutes,
+      )
+      .input("defaultLateArrivalToleranceMinutes", sql.Int, input.defaultLateArrivalToleranceMinutes)
+      .input(
+        "defaultOperationStartTime",
+        sql.VarChar(8),
+        toSqlTimeValue(input.defaultOperationStartTime),
+      )
+      .input("defaultOperationEndTime", sql.VarChar(8), toSqlTimeValue(input.defaultOperationEndTime))
+      .input("geofenceReviewMarginMeters", sql.Int, input.geofenceReviewMarginMeters ?? null)
       .query(`
         INSERT INTO company_settings (
           company_id, operation_timezone, default_radius_meters,
           late_grace_minutes, early_leave_tolerance_minutes,
-          require_checkout_location, allow_manual_attendance_corrections
+          require_checkout_location, allow_manual_attendance_corrections,
+          default_early_arrival_tolerance_minutes, default_late_arrival_tolerance_minutes,
+          default_operation_start_time, default_operation_end_time,
+          geofence_review_margin_meters
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @operationTimezone, @defaultRadiusMeters,
           @lateGraceMinutes, @earlyLeaveToleranceMinutes,
-          @requireCheckoutLocation, @allowManualAttendanceCorrections
+          @requireCheckoutLocation, @allowManualAttendanceCorrections,
+          @defaultEarlyArrivalToleranceMinutes, @defaultLateArrivalToleranceMinutes,
+          @defaultOperationStartTime, @defaultOperationEndTime,
+          @geofenceReviewMarginMeters
         )
       `);
 
@@ -114,6 +147,11 @@ export const companySettingsRepository = {
         | "earlyLeaveToleranceMinutes"
         | "requireCheckoutLocation"
         | "allowManualAttendanceCorrections"
+        | "defaultEarlyArrivalToleranceMinutes"
+        | "defaultLateArrivalToleranceMinutes"
+        | "defaultOperationStartTime"
+        | "defaultOperationEndTime"
+        | "geofenceReviewMarginMeters"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -152,6 +190,42 @@ export const companySettingsRepository = {
         input.allowManualAttendanceCorrections ? 1 : 0,
       );
       fields.push("allow_manual_attendance_corrections = @allowManualAttendanceCorrections");
+    }
+    if (input.defaultEarlyArrivalToleranceMinutes !== undefined) {
+      request.input(
+        "defaultEarlyArrivalToleranceMinutes",
+        sql.Int,
+        input.defaultEarlyArrivalToleranceMinutes,
+      );
+      fields.push("default_early_arrival_tolerance_minutes = @defaultEarlyArrivalToleranceMinutes");
+    }
+    if (input.defaultLateArrivalToleranceMinutes !== undefined) {
+      request.input(
+        "defaultLateArrivalToleranceMinutes",
+        sql.Int,
+        input.defaultLateArrivalToleranceMinutes,
+      );
+      fields.push("default_late_arrival_tolerance_minutes = @defaultLateArrivalToleranceMinutes");
+    }
+    if (input.defaultOperationStartTime !== undefined) {
+      request.input(
+        "defaultOperationStartTime",
+        sql.VarChar(8),
+        toSqlTimeValue(input.defaultOperationStartTime),
+      );
+      fields.push("default_operation_start_time = @defaultOperationStartTime");
+    }
+    if (input.defaultOperationEndTime !== undefined) {
+      request.input(
+        "defaultOperationEndTime",
+        sql.VarChar(8),
+        toSqlTimeValue(input.defaultOperationEndTime),
+      );
+      fields.push("default_operation_end_time = @defaultOperationEndTime");
+    }
+    if (input.geofenceReviewMarginMeters !== undefined) {
+      request.input("geofenceReviewMarginMeters", sql.Int, input.geofenceReviewMarginMeters);
+      fields.push("geofence_review_margin_meters = @geofenceReviewMarginMeters");
     }
 
     if (fields.length === 0) {

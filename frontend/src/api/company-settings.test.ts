@@ -39,20 +39,34 @@ describe("company settings frontend module", () => {
     assert.match(navFile, /Configuración de empresa/);
   });
 
-  it("disables save when user lacks company:settings:update", () => {
+  it("uses inline operational section for core company settings", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
+    const sectionFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+      "utf8",
+    );
+
     assert.match(pageFile, /company:settings:update/);
-    assert.match(pageFile, /Guardar cambios/);
-    assert.match(pageFile, /!hasChanges \|\| !isValid/);
+    assert.match(pageFile, /CompanyOperationalSettingsSection/);
+    assert.match(sectionFile, /updateMutation\.mutateAsync/);
+    assert.match(sectionFile, /toOperationalSettingsUpdateInput/);
+    assert.match(sectionFile, /defaultEarlyArrivalToleranceMinutes/);
+    assert.match(sectionFile, /lateGraceMinutes/);
+    assert.match(sectionFile, /Guardar configuración/);
   });
 
   it("validates invalid radius and minutes", () => {
     const errors = validateCompanySettingsForm({
       operationTimezone: "America/Argentina/Buenos_Aires",
       defaultRadiusMeters: "5",
+      geofenceReviewMarginMeters: "",
+      defaultOperationStartTime: "20:30",
+      defaultOperationEndTime: "03:00",
+      defaultEarlyArrivalToleranceMinutes: "60",
+      defaultLateArrivalToleranceMinutes: "90",
       lateGraceMinutes: "300",
       earlyLeaveToleranceMinutes: "-1",
       requireCheckoutLocation: true,
@@ -61,11 +75,24 @@ describe("company settings frontend module", () => {
     assert.ok(errors.length >= 3);
   });
 
-  it("calls updateCompanySettings on save", () => {
-    const pageFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
+  it("includes inventory default fields in operational save payload", () => {
+    const validationFile = readFileSync(
+      join(process.cwd(), "src/utils/company-settings-validation.ts"),
       "utf8",
     );
-    assert.match(pageFile, /updateMutation\.mutateAsync/);
+    assert.match(validationFile, /toOperationalSettingsUpdateInput/);
+    assert.match(validationFile, /defaultEarlyArrivalToleranceMinutes/);
+    assert.match(validationFile, /defaultLateArrivalToleranceMinutes/);
+    assert.match(validationFile, /defaultOperationStartTime/);
+    assert.match(validationFile, /defaultOperationEndTime/);
+  });
+
+  it("calls updateCompanySettings from operational section", () => {
+    const sectionFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+      "utf8",
+    );
+    assert.match(sectionFile, /useUpdateCompanySettings/);
+    assert.match(sectionFile, /updateMutation\.mutateAsync/);
   });
 });

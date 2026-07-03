@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Stack, Text } from "@mantine/core";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
   FormActions,
@@ -59,10 +59,14 @@ export function InventoryForm({
     [mode],
   );
 
-  const { control, handleSubmit } = useForm<InventoryFormValues>({
+  const { control, handleSubmit, reset } = useForm<InventoryFormValues>({
     resolver: zodResolver(validationSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    reset(defaultValues);
+  }, [defaultValues, reset]);
 
   const statusOptions = useMemo(
     () =>

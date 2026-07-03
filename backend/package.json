@@ -19,6 +19,7 @@
     "export:stores": "tsx src/scripts/export-database-stores.ts",
     "fix:stores": "tsx src/scripts/fix-stores-from-reconciliation.ts",
     "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",
+    "backfill:absence-balances": "tsx src/scripts/backfill-employee-absence-balances.ts",
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
     "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts"

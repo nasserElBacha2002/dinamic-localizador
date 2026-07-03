@@ -31,10 +31,10 @@ export const employeeRepository = {
       phoneNumber: string;
       employeeType: Employee["employeeType"];
     },
+    transaction?: sql.Transaction,
   ): Promise<Employee> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(150), input.name)
       .input("documentNumber", sql.NVarChar(50), input.documentNumber)
@@ -101,6 +101,22 @@ export const employeeRepository = {
       ...mapEmployeeRow(row as Record<string, unknown>),
       companyId: String((row as Record<string, unknown>).company_id),
     }));
+  },
+
+  async listActiveByCompanyId(companyId: string): Promise<Employee[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT *
+        FROM employees
+        WHERE company_id = @companyId
+          AND active = 1
+        ORDER BY name ASC, created_at ASC
+      `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
   },
 
   async list(

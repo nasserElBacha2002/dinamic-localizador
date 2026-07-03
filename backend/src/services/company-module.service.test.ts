@@ -69,7 +69,7 @@ describe("companyModuleService", () => {
     assert.equal(reports.isEnabled, true);
   });
 
-  it("updates modules when requester has permission", async () => {
+  it("updates modules when requester is platform admin", async () => {
     setupUnitTestEnv();
     const { companyRepository } = await import("../repositories/company.repository");
     const { companyModuleRepository } = await import("../repositories/company-module.repository");
@@ -84,7 +84,7 @@ describe("companyModuleService", () => {
       ),
     );
 
-    const modules = await companyModuleService.updateModules("company-1", "OWNER", {
+    const modules = await companyModuleService.updateModules("company-1", true, {
       modules: [{ moduleKey: "absences", isEnabled: false }],
     });
     assert.equal(modules.find((module) => module.moduleKey === "absences")?.isEnabled, false);
@@ -102,7 +102,7 @@ describe("companyModuleService", () => {
 
     await assert.rejects(
       () =>
-        companyModuleService.updateModules("company-1", "OWNER", {
+        companyModuleService.updateModules("company-1", true, {
           modules: [
             { moduleKey: "attendance", isEnabled: false },
             { moduleKey: "inventory_operations", isEnabled: false },
@@ -117,7 +117,7 @@ describe("companyModuleService", () => {
     );
   });
 
-  it("rejects update without company:settings:update permission", async () => {
+  it("rejects update when requester is not platform admin", async () => {
     setupUnitTestEnv();
     const { companyRepository } = await import("../repositories/company.repository");
     const { companyModuleService } = await import("./company-module.service");
@@ -126,12 +126,13 @@ describe("companyModuleService", () => {
 
     await assert.rejects(
       () =>
-        companyModuleService.updateModules("company-1", "READ_ONLY", {
+        companyModuleService.updateModules("company-1", false, {
           modules: [{ moduleKey: "reports", isEnabled: false }],
         }),
       (error: unknown) => {
         assert.ok(error instanceof AppError);
         assert.equal(error.statusCode, 403);
+        assert.equal(error.code, "PLATFORM_ADMIN_REQUIRED");
         return true;
       },
     );

@@ -1,5 +1,6 @@
-import { Button, Group, NumberInput, Stack, Text, TextInput } from "@mantine/core";
+import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
+import { getCanonicalOperationTimezone, getOperationTimezoneOptions } from "../../../constants/operation-timezones";
 import { FormErrorAlert, FormGrid, SectionCard } from "../../../design-system";
 import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
 import type { CompanySettings } from "../../../types/company-settings";
@@ -12,6 +13,7 @@ import {
 } from "../../../utils/company-settings-validation";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { SettingsFormField } from "./SettingsFormField";
+import { OperationTimeInput } from "./OperationTimeInput";
 
 interface CompanyOperationalSettingsSectionProps {
   settings: CompanySettings;
@@ -43,6 +45,11 @@ export function CompanyOperationalSettingsSection({
   const hasChanges = !operationalSettingsEqual(formValues, baseline);
   const isValid = validationErrors.length === 0;
   const disabled = !canUpdate || updateMutation.isPending;
+  const timezoneOptions = useMemo(
+    () => getOperationTimezoneOptions(formValues.operationTimezone),
+    [formValues.operationTimezone],
+  );
+  const selectedTimezone = getCanonicalOperationTimezone(formValues.operationTimezone);
 
   const handleReset = () => {
     setFormValues(baseline);
@@ -74,15 +81,22 @@ export function CompanyOperationalSettingsSection({
             label="Zona horaria operativa"
             description="Zona horaria usada por operaciones y reportes."
           >
-            <TextInput
-              value={formValues.operationTimezone}
-              onChange={(event) =>
+            <Select
+              searchable
+              data={timezoneOptions}
+              value={selectedTimezone}
+              onChange={(value) => {
+                if (!value) {
+                  return;
+                }
                 setFormValues((current) => ({
                   ...current,
-                  operationTimezone: event.currentTarget.value,
-                }))
-              }
+                  operationTimezone: value,
+                }));
+              }}
+              nothingFoundMessage="No se encontraron zonas horarias"
               disabled={disabled}
+              aria-label="Zona horaria operativa"
             />
           </SettingsFormField>
 
@@ -110,16 +124,16 @@ export function CompanyOperationalSettingsSection({
             label="Horario de inicio por defecto"
             description="Default para operaciones e importaciones."
           >
-            <TextInput
-              placeholder="20:30"
+            <OperationTimeInput
               value={formValues.defaultOperationStartTime}
-              onChange={(event) =>
+              onChange={(value) =>
                 setFormValues((current) => ({
                   ...current,
-                  defaultOperationStartTime: event.currentTarget.value,
+                  defaultOperationStartTime: value,
                 }))
               }
               disabled={disabled}
+              aria-label="Horario de inicio por defecto"
             />
           </SettingsFormField>
 
@@ -127,16 +141,16 @@ export function CompanyOperationalSettingsSection({
             label="Horario de fin por defecto"
             description="Default para operaciones e importaciones."
           >
-            <TextInput
-              placeholder="03:00"
+            <OperationTimeInput
               value={formValues.defaultOperationEndTime}
-              onChange={(event) =>
+              onChange={(value) =>
                 setFormValues((current) => ({
                   ...current,
-                  defaultOperationEndTime: event.currentTarget.value,
+                  defaultOperationEndTime: value,
                 }))
               }
               disabled={disabled}
+              aria-label="Horario de fin por defecto"
             />
           </SettingsFormField>
 

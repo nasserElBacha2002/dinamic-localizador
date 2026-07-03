@@ -63,6 +63,9 @@ describe("CompanyOperationalSettingsSection", () => {
     assert.match(sectionFile, /description="Zona horaria usada por operaciones y reportes\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
+    assert.match(sectionFile, /getOperationTimezoneOptions/);
+    assert.match(sectionFile, /OperationTimeInput/);
+    assert.match(sectionFile, /searchable/);
     assert.match(sectionFile, /hideControls/);
   });
 

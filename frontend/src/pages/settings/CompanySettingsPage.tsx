@@ -1,6 +1,6 @@
-import { Alert, Button, Group, NumberInput, Stack, Switch, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useMemo, useState, type Dispatch, type SetStateAction } from "react";
+import { useMemo, useState } from "react";
 import { ErrorState, FormErrorAlert, LoadingState, PageHeader, SectionCard } from "../../design-system";
 import { useCompanySettings, useUpdateCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyModules, useUpdateCompanyModules } from "../../hooks/useCompanyModules";
@@ -16,9 +16,16 @@ import {
 import {
   formValuesEqual,
   toCompanySettingsFormValues,
+  toCompanySettingsUpdateInput,
   validateCompanySettingsForm,
 } from "../../utils/company-settings-validation";
 import { getApiErrorMessage } from "../../utils/errors";
+import {
+  CompanyAttendanceWhatsAppSettingsSection,
+  CompanyInventoryOperationSettingsSection,
+  CompanySettingsCheckoutSection,
+  CompanySettingsCorrectionsSection,
+} from "./company-settings-form-sections";
 
 interface CompanySettingsFormProps {
   settings: CompanySettings;
@@ -52,14 +59,7 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
 
     setSubmitError(null);
     try {
-      await updateMutation.mutateAsync({
-        operationTimezone: formValues.operationTimezone.trim(),
-        defaultRadiusMeters: Number(formValues.defaultRadiusMeters),
-        lateGraceMinutes: Number(formValues.lateGraceMinutes),
-        earlyLeaveToleranceMinutes: Number(formValues.earlyLeaveToleranceMinutes),
-        requireCheckoutLocation: formValues.requireCheckoutLocation,
-        allowManualAttendanceCorrections: formValues.allowManualAttendanceCorrections,
-      });
+      await updateMutation.mutateAsync(toCompanySettingsUpdateInput(formValues));
       onSaved("Configuración guardada correctamente.");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
@@ -79,12 +79,12 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
         />
       </SectionCard>
 
-      <CompanySettingsGeofenceSection
+      <CompanyInventoryOperationSettingsSection
         formValues={formValues}
         setFormValues={setFormValues}
         disabled={disabled}
       />
-      <CompanySettingsTolerancesSection
+      <CompanyAttendanceWhatsAppSettingsSection
         formValues={formValues}
         setFormValues={setFormValues}
         disabled={disabled}
@@ -122,141 +122,6 @@ function CompanySettingsForm({ settings, canUpdate, onSaved }: CompanySettingsFo
         </Group>
       ) : null}
     </Stack>
-  );
-}
-
-function CompanySettingsGeofenceSection({
-  formValues,
-  setFormValues,
-  disabled,
-}: {
-  formValues: CompanySettingsFormValues;
-  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
-  disabled: boolean;
-}) {
-  return (
-    <SectionCard
-      title="Asistencia y geocerca"
-      description="Parámetros usados para validar ubicación en llegada y salida."
-    >
-      <NumberInput
-        label="Radio predeterminado de validación (m)"
-        description="Se usa para validar la ubicación enviada por WhatsApp en Llegué y Terminé."
-        value={formValues.defaultRadiusMeters === "" ? "" : Number(formValues.defaultRadiusMeters)}
-        onChange={(value) =>
-          setFormValues((current) => ({
-            ...current,
-            defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
-          }))
-        }
-        min={10}
-        max={5000}
-        disabled={disabled}
-      />
-    </SectionCard>
-  );
-}
-
-function CompanySettingsTolerancesSection({
-  formValues,
-  setFormValues,
-  disabled,
-}: {
-  formValues: CompanySettingsFormValues;
-  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
-  disabled: boolean;
-}) {
-  return (
-    <SectionCard title="Tolerancias horarias">
-      <Stack gap="md">
-        <NumberInput
-          label="Tolerancia de llegada tarde (min)"
-          description="Define cuántos minutos después del inicio se considera llegada a tiempo."
-          value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
-          onChange={(value) =>
-            setFormValues((current) => ({
-              ...current,
-              lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
-            }))
-          }
-          min={0}
-          max={240}
-          disabled={disabled}
-        />
-        <NumberInput
-          label="Tolerancia de salida anticipada (min)"
-          description="Define cuántos minutos antes del horario de finalización se permite terminar sin marcar salida anticipada."
-          value={
-            formValues.earlyLeaveToleranceMinutes === ""
-              ? ""
-              : Number(formValues.earlyLeaveToleranceMinutes)
-          }
-          onChange={(value) =>
-            setFormValues((current) => ({
-              ...current,
-              earlyLeaveToleranceMinutes: value === "" || value === undefined ? "" : String(value),
-            }))
-          }
-          min={0}
-          max={240}
-          disabled={disabled}
-        />
-      </Stack>
-    </SectionCard>
-  );
-}
-
-function CompanySettingsCheckoutSection({
-  formValues,
-  setFormValues,
-  disabled,
-}: {
-  formValues: CompanySettingsFormValues;
-  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
-  disabled: boolean;
-}) {
-  return (
-    <SectionCard title="Check-out">
-      <Switch
-        label="Requerir ubicación al finalizar"
-        description="Si está activo, el empleado deberá compartir ubicación al enviar 'Terminé'."
-        checked={formValues.requireCheckoutLocation}
-        onChange={(event) =>
-          setFormValues((current) => ({
-            ...current,
-            requireCheckoutLocation: event.currentTarget.checked,
-          }))
-        }
-        disabled={disabled}
-      />
-    </SectionCard>
-  );
-}
-
-function CompanySettingsCorrectionsSection({
-  formValues,
-  setFormValues,
-  disabled,
-}: {
-  formValues: CompanySettingsFormValues;
-  setFormValues: Dispatch<SetStateAction<CompanySettingsFormValues>>;
-  disabled: boolean;
-}) {
-  return (
-    <SectionCard title="Correcciones manuales">
-      <Switch
-        label="Permitir correcciones manuales de asistencia"
-        description="Permite que usuarios autorizados registren o ajusten asistencias desde el panel."
-        checked={formValues.allowManualAttendanceCorrections}
-        onChange={(event) =>
-          setFormValues((current) => ({
-            ...current,
-            allowManualAttendanceCorrections: event.currentTarget.checked,
-          }))
-        }
-        disabled={disabled}
-      />
-    </SectionCard>
   );
 }
 

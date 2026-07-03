@@ -51,13 +51,15 @@ export const platformCompanyService = {
         transaction,
       );
 
+      const defaultSettings = toCompanySettingsInput();
+
       const settingsInput = {
-        ...toCompanySettingsInput(),
+        ...defaultSettings,
         ...input.settings,
         operationTimezone:
           input.settings?.operationTimezone ??
           input.defaultTimezone ??
-          toCompanySettingsInput().operationTimezone,
+          defaultSettings.operationTimezone,
       };
 
       await companySettingsRepository.create(company.id, settingsInput, transaction);

@@ -3,6 +3,17 @@ import {
   COMPANY_SETTINGS_LIMITS,
   isValidOperationTimezone,
 } from "../constants/company-settings";
+import { isValidHHmm } from "../utils/sql-time";
+
+const optionalHHmmField = (label: string) =>
+  z
+    .union([
+      z.string().trim().refine(isValidHHmm, {
+        message: `${label} debe tener formato HH:mm válido.`,
+      }),
+      z.null(),
+    ])
+    .optional();
 
 export const companyIdParamSchema = z.object({
   companyId: z.string().uuid("ID de empresa inválido"),
@@ -81,18 +92,8 @@ export const updateCompanySettingsSchema = z
         "La tolerancia de llegada tardía no puede superar 240 minutos.",
       )
       .optional(),
-    defaultOperationStartTime: z
-      .string()
-      .trim()
-      .regex(/^\d{1,2}:\d{2}$/, "El horario de inicio debe tener formato HH:mm.")
-      .optional()
-      .nullable(),
-    defaultOperationEndTime: z
-      .string()
-      .trim()
-      .regex(/^\d{1,2}:\d{2}$/, "El horario de fin debe tener formato HH:mm.")
-      .optional()
-      .nullable(),
+    defaultOperationStartTime: optionalHHmmField("El horario de inicio"),
+    defaultOperationEndTime: optionalHHmmField("El horario de fin"),
     geofenceReviewMarginMeters: z.coerce
       .number()
       .int("El margen de revisión debe ser un número entero.")

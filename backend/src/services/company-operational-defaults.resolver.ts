@@ -6,7 +6,7 @@ import {
 import { companyAbsenceSettingsRepository } from "../repositories/company-absence-settings.repository";
 import { companyLocationTypesRepository } from "../repositories/company-location-types.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
-import type { CompanyAbsenceSetting, CompanyLocationType } from "../types/company";
+import type { CompanyAbsenceSetting, CompanyLocationType, CompanySettings } from "../types/company";
 import { companyOperationalSettingsService } from "./company-operational-settings.service";
 
 export type OperationalDefaultsSource = "company_settings" | "operational_defaults" | "environment";
@@ -37,6 +37,28 @@ export type CompanyAbsenceDefault = Pick<
   CompanyAbsenceSetting,
   "absenceTypeCode" | "defaultAnnualDays" | "autoAssignOnEmployeeCreate"
 >;
+
+const buildInventoryDefaults = (
+  companyId: string,
+  settings: CompanySettings | null,
+): InventoryOperationalDefaults => {
+  if (settings) {
+    return {
+      companyId,
+      earlyToleranceMinutes: settings.defaultEarlyArrivalToleranceMinutes,
+      lateToleranceMinutes: settings.defaultLateArrivalToleranceMinutes,
+      source: "company_settings",
+    };
+  }
+
+  return {
+    companyId,
+    earlyToleranceMinutes:
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultEarlyArrivalToleranceMinutes,
+    lateToleranceMinutes: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultLateArrivalToleranceMinutes,
+    source: "operational_defaults",
+  };
+};
 
 const resolveTimeDefault = (
   companyValue: string | null | undefined,
@@ -76,52 +98,42 @@ const resolveOperationTimezone = (
   };
 };
 
+const buildImportDefaults = (
+  companyId: string,
+  settings: CompanySettings | null,
+): ImportOperationalDefaults => {
+  const inventoryDefaults = buildInventoryDefaults(companyId, settings);
+  const timezone = resolveOperationTimezone(settings?.operationTimezone);
+  const startTime = resolveTimeDefault(
+    settings?.defaultOperationStartTime,
+    DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
+  );
+  const endTime = resolveTimeDefault(
+    settings?.defaultOperationEndTime,
+    DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
+  );
+  const reviewMargin = resolveGeofenceReviewMargin(settings?.geofenceReviewMarginMeters);
+
+  return {
+    ...inventoryDefaults,
+    operationTimezone: timezone.value,
+    timezoneSource: timezone.source,
+    defaultOperationStartTime: startTime.value,
+    defaultOperationEndTime: endTime.value,
+    geofenceReviewMarginMeters: reviewMargin.value,
+    geofenceReviewMarginSource: reviewMargin.source,
+  };
+};
+
 export const companyOperationalDefaultsResolver = {
   async getInventoryDefaults(companyId: string): Promise<InventoryOperationalDefaults> {
     const settings = await companySettingsRepository.findByCompanyId(companyId);
-
-    if (settings) {
-      return {
-        companyId,
-        earlyToleranceMinutes: settings.defaultEarlyArrivalToleranceMinutes,
-        lateToleranceMinutes: settings.defaultLateArrivalToleranceMinutes,
-        source: "company_settings",
-      };
-    }
-
-    return {
-      companyId,
-      earlyToleranceMinutes:
-        DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultEarlyArrivalToleranceMinutes,
-      lateToleranceMinutes: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultLateArrivalToleranceMinutes,
-      source: "operational_defaults",
-    };
+    return buildInventoryDefaults(companyId, settings);
   },
 
   async getImportDefaults(companyId: string): Promise<ImportOperationalDefaults> {
-    const inventoryDefaults = await this.getInventoryDefaults(companyId);
     const settings = await companySettingsRepository.findByCompanyId(companyId);
-
-    const timezone = resolveOperationTimezone(settings?.operationTimezone);
-    const startTime = resolveTimeDefault(
-      settings?.defaultOperationStartTime,
-      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
-    );
-    const endTime = resolveTimeDefault(
-      settings?.defaultOperationEndTime,
-      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
-    );
-    const reviewMargin = resolveGeofenceReviewMargin(settings?.geofenceReviewMarginMeters);
-
-    return {
-      ...inventoryDefaults,
-      operationTimezone: timezone.value,
-      timezoneSource: timezone.source,
-      defaultOperationStartTime: startTime.value,
-      defaultOperationEndTime: endTime.value,
-      geofenceReviewMarginMeters: reviewMargin.value,
-      geofenceReviewMarginSource: reviewMargin.source,
-    };
+    return buildImportDefaults(companyId, settings);
   },
 
   async getStoreDefaults(companyId: string): Promise<StoreOperationalDefaults> {

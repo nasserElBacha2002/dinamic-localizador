@@ -10,6 +10,7 @@ import type {
   UpdateInventoryInput,
 } from "../schemas/inventory.schema";
 import { auditService } from "./audit.service";
+import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
 import { canTransitionInventoryStatus, isInventoryEditable } from "../utils/inventory-status";
 import {
   isInventoryStartInPast,
@@ -58,6 +59,26 @@ const syncLifecycleStatus = async (
   return updated ?? inventory;
 };
 
+type ResolvedCreateInventoryInput = CreateInventoryInput & {
+  earlyToleranceMinutes: number;
+  lateToleranceMinutes: number;
+};
+
+const resolveCreateInventoryInput = async (
+  companyId: string,
+  input: CreateInventoryInput,
+): Promise<ResolvedCreateInventoryInput> => {
+  const inventoryDefaults =
+    await companyOperationalDefaultsResolver.getInventoryDefaults(companyId);
+
+  return {
+    ...input,
+    earlyToleranceMinutes:
+      input.earlyToleranceMinutes ?? inventoryDefaults.earlyToleranceMinutes,
+    lateToleranceMinutes: input.lateToleranceMinutes ?? inventoryDefaults.lateToleranceMinutes,
+  };
+};
+
 export const inventoryService = {
   async create(companyId: string, input: CreateInventoryInput) {
     const store = await storeRepository.findById(companyId, input.storeId);
@@ -70,7 +91,9 @@ export const inventoryService = {
 
     validateInventoryDates(input.scheduledStart, input.scheduledEnd);
     validateInventoryStartNotInPast(input.scheduledStart);
-    return inventoryRepository.create(companyId, input);
+
+    const resolvedInput = await resolveCreateInventoryInput(companyId, input);
+    return inventoryRepository.create(companyId, resolvedInput);
   },
 
   async list(companyId: string, query: ListInventoriesQuery) {

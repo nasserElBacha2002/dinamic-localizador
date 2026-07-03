@@ -71,9 +71,16 @@ describe("companyOperationalDefaultsResolver", () => {
       "./company-operational-defaults.resolver"
     );
 
-    mock.method(companySettingsRepository, "findByCompanyId", async () => fullSettings);
+    let findCalls = 0;
+    mock.method(companySettingsRepository, "findByCompanyId", async () => {
+      findCalls += 1;
+      return fullSettings;
+    });
 
     const defaults = await companyOperationalDefaultsResolver.getImportDefaults(companyId);
+    assert.equal(findCalls, 1);
+    assert.equal(defaults.earlyToleranceMinutes, 45);
+    assert.equal(defaults.lateToleranceMinutes, 75);
     assert.equal(defaults.operationTimezone, "America/Argentina/Buenos_Aires");
     assert.equal(defaults.timezoneSource, "company_settings");
     assert.equal(defaults.defaultOperationStartTime, "21:00");

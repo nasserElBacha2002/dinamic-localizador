@@ -53,12 +53,32 @@ describe("company settings frontend module", () => {
     const errors = validateCompanySettingsForm({
       operationTimezone: "America/Argentina/Buenos_Aires",
       defaultRadiusMeters: "5",
+      defaultOperationStartTime: "20:30",
+      defaultOperationEndTime: "03:00",
+      defaultEarlyArrivalToleranceMinutes: "60",
+      defaultLateArrivalToleranceMinutes: "90",
       lateGraceMinutes: "300",
       earlyLeaveToleranceMinutes: "-1",
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
     });
     assert.ok(errors.length >= 3);
+  });
+
+  it("includes inventory default fields in settings save payload", () => {
+    const pageFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
+      "utf8",
+    );
+    assert.match(pageFile, /toCompanySettingsUpdateInput/);
+    const validationFile = readFileSync(
+      join(process.cwd(), "src/utils/company-settings-validation.ts"),
+      "utf8",
+    );
+    assert.match(validationFile, /defaultEarlyArrivalToleranceMinutes/);
+    assert.match(validationFile, /defaultLateArrivalToleranceMinutes/);
+    assert.match(validationFile, /defaultOperationStartTime/);
+    assert.match(validationFile, /defaultOperationEndTime/);
   });
 
   it("calls updateCompanySettings on save", () => {

@@ -1,14 +1,15 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { normalizeCsvHeader, parseCsvContent } from "../utils/csv-parse";
-import {
-  buildClientInventorySchedule,
-  localPartsToIso,
-  parseExcelSerialNumber,
-  parseInventoryImportDateTime,
-  parseInventoryImportDateValue,
-} from "../utils/inventory-import-datetime";
+import { createInventoryImportDateTimeUtils } from "../utils/inventory-import-datetime";
 import { detectSpreadsheetFileType } from "../utils/spreadsheet-parse";
+
+const defaultDateTimeUtils = createInventoryImportDateTimeUtils({
+  operationTimezone: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.operationTimezone,
+  defaultOperationStartTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
+  defaultOperationEndTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
+});
 
 describe("parseCsvContent", () => {
   it("parses comma-separated csv", () => {
@@ -41,31 +42,37 @@ describe("normalizeCsvHeader", () => {
 
 describe("parseInventoryImportDateValue", () => {
   it("parses latin date-only format", () => {
-    const result = parseInventoryImportDateValue("01/06/2026");
+    const result = defaultDateTimeUtils.parseInventoryImportDateValue("01/06/2026");
     assert.ok("parts" in result);
     assert.equal(result.parts.day, 1);
     assert.equal(result.parts.month, 6);
     assert.equal(result.parts.hasTime, false);
   });
-
-  it("parses excel serial number", () => {
-    const serial = parseExcelSerialNumber(45809);
-    assert.ok(serial);
-    assert.equal(serial.hasTime, false);
-  });
 });
 
 describe("buildClientInventorySchedule", () => {
   it("uses default start and next-day end for date-only values", () => {
-    const result = buildClientInventorySchedule("01/06/2026");
+    const result = defaultDateTimeUtils.buildClientInventorySchedule("01/06/2026");
     assert.ok(!("error" in result));
     assert.match(result.scheduledStartDisplay, /20:30 \(default\)/);
     assert.match(result.scheduledEndDisplay, /03:00 día siguiente \(default\)/);
     assert.ok(new Date(result.scheduledEnd) > new Date(result.scheduledStart));
   });
 
+  it("uses company-specific default start time when configured", () => {
+    const customUtils = createInventoryImportDateTimeUtils({
+      operationTimezone: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.operationTimezone,
+      defaultOperationStartTime: "21:15",
+      defaultOperationEndTime: "04:30",
+    });
+    const result = customUtils.buildClientInventorySchedule("01/06/2026");
+    assert.ok(!("error" in result));
+    assert.match(result.scheduledStartDisplay, /21:15 \(default\)/);
+    assert.match(result.scheduledEndDisplay, /04:30 día siguiente \(default\)/);
+  });
+
   it("treats excel midnight as date-only and applies default start time", () => {
-    const result = buildClientInventorySchedule("01/06/2026 00:00");
+    const result = defaultDateTimeUtils.buildClientInventorySchedule("01/06/2026 00:00");
     assert.ok(!("error" in result));
     assert.match(result.scheduledStartDisplay, /20:30 \(default\)/);
   });
@@ -73,24 +80,24 @@ describe("buildClientInventorySchedule", () => {
 
 describe("localPartsToIso", () => {
   it("converts argentina local midnight without timezone error", () => {
-    const result = localPartsToIso(2026, 6, 1, 20, 30);
+    const result = defaultDateTimeUtils.localPartsToIso(2026, 6, 1, 20, 30);
     assert.ok("iso" in result);
   });
 
   it("converts next-day end time for overnight inventories", () => {
-    const result = localPartsToIso(2026, 6, 2, 3, 0);
+    const result = defaultDateTimeUtils.localPartsToIso(2026, 6, 2, 3, 0);
     assert.ok("iso" in result);
   });
 });
 
 describe("parseInventoryImportDateTime", () => {
   it("parses latin datetime format", () => {
-    const result = parseInventoryImportDateTime("25/06/2026 08:00");
+    const result = defaultDateTimeUtils.parseInventoryImportDateTime("25/06/2026 08:00");
     assert.ok("iso" in result);
   });
 
   it("rejects invalid format", () => {
-    const result = parseInventoryImportDateTime("fecha-invalida");
+    const result = defaultDateTimeUtils.parseInventoryImportDateTime("fecha-invalida");
     assert.ok("error" in result);
   });
 });

@@ -6,6 +6,10 @@ import { validateCompanySettingsForm } from "./company-settings-validation";
 const validForm = (): CompanySettingsFormValues => ({
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: "150",
+  defaultOperationStartTime: "20:30",
+  defaultOperationEndTime: "03:00",
+  defaultEarlyArrivalToleranceMinutes: "60",
+  defaultLateArrivalToleranceMinutes: "90",
   lateGraceMinutes: "15",
   earlyLeaveToleranceMinutes: "15",
   requireCheckoutLocation: true,
@@ -81,12 +85,45 @@ describe("validateCompanySettingsForm", () => {
     assert.equal(errors.some((error) => error.includes("radio predeterminado")), false);
   });
 
+  it("rejects invalid default operation start time", () => {
+    const errors = validateCompanySettingsForm({
+      ...validForm(),
+      defaultOperationStartTime: "25:00",
+    });
+    assert.ok(errors.some((error) => error.includes("horario de inicio por defecto")));
+  });
+
+  it("accepts empty default operation times", () => {
+    const errors = validateCompanySettingsForm({
+      ...validForm(),
+      defaultOperationStartTime: "",
+      defaultOperationEndTime: "",
+    });
+    assert.equal(errors.some((error) => error.includes("horario de")), false);
+  });
+
+  it("rejects empty defaultEarlyArrivalToleranceMinutes", () => {
+    const errors = validateCompanySettingsForm({
+      ...validForm(),
+      defaultEarlyArrivalToleranceMinutes: "",
+    });
+    assert.ok(errors.some((error) => error.includes("llegada temprana para operaciones")));
+  });
+
+  it("rejects empty defaultLateArrivalToleranceMinutes", () => {
+    const errors = validateCompanySettingsForm({
+      ...validForm(),
+      defaultLateArrivalToleranceMinutes: "",
+    });
+    assert.ok(errors.some((error) => error.includes("llegada tardía para operaciones")));
+  });
+
   it("rejects empty lateGraceMinutes", () => {
     const errors = validateCompanySettingsForm({
       ...validForm(),
       lateGraceMinutes: "",
     });
-    assert.ok(errors.some((error) => error.includes("tolerancia de llegada")));
+    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
   });
 
   it("rejects non-numeric lateGraceMinutes", () => {
@@ -94,7 +131,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       lateGraceMinutes: "abc",
     });
-    assert.ok(errors.some((error) => error.includes("tolerancia de llegada")));
+    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
   });
 
   it("rejects lateGraceMinutes below 0", () => {
@@ -102,7 +139,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       lateGraceMinutes: "-1",
     });
-    assert.ok(errors.some((error) => error.includes("tolerancia de llegada")));
+    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
   });
 
   it("rejects lateGraceMinutes above 240", () => {
@@ -110,7 +147,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       lateGraceMinutes: "241",
     });
-    assert.ok(errors.some((error) => error.includes("tolerancia de llegada")));
+    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
   });
 
   it("accepts valid lateGraceMinutes", () => {
@@ -118,7 +155,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       lateGraceMinutes: "240",
     });
-    assert.equal(errors.some((error) => error.includes("tolerancia de llegada")), false);
+    assert.equal(errors.some((error) => error.includes("puntualidad WhatsApp")), false);
   });
 
   it("rejects empty earlyLeaveToleranceMinutes", () => {
@@ -126,7 +163,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
   });
 
   it("rejects non-numeric earlyLeaveToleranceMinutes", () => {
@@ -134,7 +171,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "abc",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
   });
 
   it("rejects earlyLeaveToleranceMinutes below 0", () => {
@@ -142,7 +179,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "-1",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
   });
 
   it("rejects earlyLeaveToleranceMinutes above 240", () => {
@@ -150,7 +187,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "241",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
   });
 
   it("accepts valid earlyLeaveToleranceMinutes", () => {
@@ -158,6 +195,6 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "0",
     });
-    assert.equal(errors.some((error) => error.includes("salida anticipada")), false);
+    assert.equal(errors.some((error) => error.includes("salida anticipada WhatsApp")), false);
   });
 });

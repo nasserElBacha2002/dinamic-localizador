@@ -89,7 +89,8 @@ BEGIN
 END;
 GO
 
--- Optional explicit import schedule defaults (NULL => application resolver defaults 20:30 / 03:00)
+-- Backfill existing companies with the current operational schedule defaults.
+-- New rows can still rely on application defaults through the resolver if values are omitted.
 UPDATE company_settings
 SET default_operation_start_time = CAST(N'20:30:00' AS TIME)
 WHERE default_operation_start_time IS NULL;

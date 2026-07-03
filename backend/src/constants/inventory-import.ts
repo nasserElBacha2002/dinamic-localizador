@@ -1,11 +1,3 @@
-export const DEFAULT_EARLY_TOLERANCE_MINUTES = 60;
-export const DEFAULT_LATE_TOLERANCE_MINUTES = 90;
-
-export const CLIENT_DEFAULT_START_HOUR = 20;
-export const CLIENT_DEFAULT_START_MINUTE = 30;
-export const CLIENT_DEFAULT_END_HOUR = 3;
-export const CLIENT_DEFAULT_END_MINUTE = 0;
-
 export const LEGACY_IMPORT_REQUIRED_HEADERS = [
   "tienda",
   "fecha_inicio",

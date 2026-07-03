@@ -42,18 +42,18 @@ export const employeeAssignmentQueryRepository = {
     at: Date,
     operationTimezone: string,
   ): Promise<EmployeeAssignedInventory[]> {
-    const { dayStartUtc, dayEndUtc } = getOperationDayUtcBounds(at, operationTimezone);
+    const { dayStartUtc, nextDayStartUtc } = getOperationDayUtcBounds(at, operationTimezone);
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("dayStartUtc", sql.DateTime2, dayStartUtc)
-      .input("dayEndUtc", sql.DateTime2, dayEndUtc)
+      .input("nextDayStartUtc", sql.DateTime2, nextDayStartUtc)
       .query(`
         ${ASSIGNED_INVENTORY_SELECT}
           AND i.scheduled_start >= @dayStartUtc
-          AND i.scheduled_start <= @dayEndUtc
+          AND i.scheduled_start < @nextDayStartUtc
         ORDER BY i.scheduled_start ASC
       `);
 

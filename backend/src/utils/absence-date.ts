@@ -92,11 +92,19 @@ export const getDateIsoInTimezone = (at: Date, timezone: string): string => {
   return `${year}-${month}-${day}`;
 };
 
-/** UTC bounds for the calendar day of `at` in the given IANA timezone. */
+/**
+ * UTC bounds for the calendar day of `at` in the given IANA timezone.
+ *
+ * Uses a half-open interval [dayStartUtc, nextDayStartUtc) for SQL range filters.
+ *
+ * Current implementation is sufficient for BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires.
+ * If companies use DST-changing timezones in the future, compute local day boundaries with a
+ * timezone-aware library.
+ */
 export const getOperationDayUtcBounds = (
   at: Date,
   timezone: string,
-): { dayStartUtc: Date; dayEndUtc: Date } => {
+): { dayStartUtc: Date; nextDayStartUtc: Date; dayEndUtc: Date } => {
   const parsed = parseAbsenceDateInput(getDateIsoInTimezone(at, timezone));
   if (!parsed) {
     throw new Error("Invalid operation timezone date");
@@ -107,11 +115,12 @@ export const getOperationDayUtcBounds = (
   const dayStartUtc = new Date(
     Date.UTC(parsed.year, parsed.month - 1, parsed.day, utcStartHour, 0, 0, 0),
   );
-  const dayEndUtc = new Date(
-    Date.UTC(parsed.year, parsed.month - 1, parsed.day + 1, utcStartHour, 0, 0, 0) - 1,
+  const nextDayStartUtc = new Date(
+    Date.UTC(parsed.year, parsed.month - 1, parsed.day + 1, utcStartHour, 0, 0, 0),
   );
+  const dayEndUtc = new Date(nextDayStartUtc.getTime() - 1);
 
-  return { dayStartUtc, dayEndUtc };
+  return { dayStartUtc, nextDayStartUtc, dayEndUtc };
 };
 
 export const calculateTotalAbsenceDays = (input: {

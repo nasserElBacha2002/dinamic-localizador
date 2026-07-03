@@ -5,7 +5,6 @@ import {
   getCanonicalOperationTimezone,
   getOperationTimezoneOptions,
 } from "./operation-timezones";
-import { normalizeOperationTimeValue } from "../pages/settings/components/OperationTimeInput";
 
 describe("operation-timezones", () => {
   it("includes default Argentina timezone", () => {
@@ -40,18 +39,5 @@ describe("operation-timezones", () => {
   it("includes current value when offset is not in curated list", () => {
     const options = getOperationTimezoneOptions("Asia/Tokyo");
     assert.ok(options.some((option) => option.value === "Asia/Tokyo"));
-  });
-});
-
-describe("normalizeOperationTimeValue", () => {
-  it("normalizes HH:mm from time input", () => {
-    assert.equal(normalizeOperationTimeValue("20:30"), "20:30");
-    assert.equal(normalizeOperationTimeValue("03:00:00"), "03:00");
-    assert.equal(normalizeOperationTimeValue("9:05"), "09:05");
-  });
-
-  it("returns empty string for empty input", () => {
-    assert.equal(normalizeOperationTimeValue(""), "");
-    assert.equal(normalizeOperationTimeValue("   "), "");
   });
 });

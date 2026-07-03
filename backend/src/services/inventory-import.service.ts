@@ -3,6 +3,7 @@ import {
   IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
   IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
   IMPORT_LOCATION_NOT_FOUND_MESSAGE,
+  IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE,
   UNSUPPORTED_FILE_TYPE_MESSAGE,
 } from "../constants/inventory-import";
 import { getPool } from "../database/connection";
@@ -30,6 +31,7 @@ import {
   companyOperationalDefaultsResolver,
   type ImportOperationalDefaults,
 } from "./company-operational-defaults.resolver";
+import { companyLocationTypesService } from "./company-location-types.service";
 
 const normalizeStoreKey = (value: string): string => {
   const trimmed = value.trim();
@@ -43,6 +45,23 @@ const normalizeStoreKey = (value: string): string => {
 type ImportNormalizationContext = {
   importDefaults: ImportOperationalDefaults;
   dateTimeUtils: ReturnType<typeof createInventoryImportDateTimeUtils>;
+  activeLocationTypes: Set<string>;
+};
+
+const validateOptionalLocationType = (
+  rawValue: string,
+  activeLocationTypes: Set<string>,
+): string[] => {
+  const trimmed = rawValue.trim();
+  if (!trimmed) {
+    return [];
+  }
+
+  if (!activeLocationTypes.has(trimmed.toLowerCase())) {
+    return [IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE];
+  }
+
+  return [];
 };
 
 const buildStoreLookup = (stores: Store[]): Map<string, Store[]> => {
@@ -166,8 +185,10 @@ const validateClientRow = (
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
   const notas = getCell(row, headers, "notas").trim();
+  const locationTypeRaw = getCell(row, headers, "location_type");
 
   const errors: string[] = [];
+  errors.push(...validateOptionalLocationType(locationTypeRaw, normalization.activeLocationTypes));
 
   const storeResolution = resolveStore(
     locationValue,
@@ -270,8 +291,10 @@ const validateLegacyRow = (
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
   const notas = getCell(row, headers, "notas").trim();
+  const locationTypeRaw = getCell(row, headers, "location_type");
 
   const errors: string[] = [];
+  errors.push(...validateOptionalLocationType(locationTypeRaw, normalization.activeLocationTypes));
 
   const storeResolution = resolveStore(
     locationValue,
@@ -408,6 +431,9 @@ export const inventoryImportService = {
     }
 
     const importDefaults = await companyOperationalDefaultsResolver.getImportDefaults(companyId);
+    const activeLocationTypes = companyLocationTypesService.buildActiveTypeLookup(
+      await companyLocationTypesService.listLocationTypes(companyId, true),
+    );
     const normalization: ImportNormalizationContext = {
       importDefaults,
       dateTimeUtils: createInventoryImportDateTimeUtils({
@@ -415,6 +441,7 @@ export const inventoryImportService = {
         defaultOperationStartTime: importDefaults.defaultOperationStartTime,
         defaultOperationEndTime: importDefaults.defaultOperationEndTime,
       }),
+      activeLocationTypes,
     };
 
     const parsed = parseSpreadsheetBuffer(buffer, fileType, importDefaults.operationTimezone);

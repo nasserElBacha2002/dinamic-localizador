@@ -6,4 +6,4 @@ export const STORE_FORMATS = [
   "Market Bs As",
 ] as const;
 
-export type StoreFormat = (typeof STORE_FORMATS)[number];
+export type StoreFormat = string;

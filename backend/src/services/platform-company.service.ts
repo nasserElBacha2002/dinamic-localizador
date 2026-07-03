@@ -9,6 +9,8 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { userRepository } from "../repositories/user.repository";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
+import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+import { companyLocationTypesService } from "./company-location-types.service";
 import { hashPassword, normalizeEmail } from "../utils/password";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
@@ -63,6 +65,9 @@ export const platformCompanyService = {
       };
 
       await companySettingsRepository.create(company.id, settingsInput, transaction);
+
+      await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(company.id, transaction);
+      await companyLocationTypesService.ensureLocationTypesCatalogForCompany(company.id, transaction);
 
       const moduleKeys = [
         ...new Set(input.modules?.length ? input.modules : DEFAULT_COMPANY_MODULE_KEYS),

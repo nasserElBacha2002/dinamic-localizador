@@ -1,3 +1,4 @@
+/** @deprecated Use company location types API instead of this static list. */
 export const STORE_FORMATS = [
   "Express",
   "Express Interior MZA",
@@ -6,4 +7,4 @@ export const STORE_FORMATS = [
   "Market Bs As",
 ] as const;
 
-export type StoreFormat = (typeof STORE_FORMATS)[number];
+export type StoreFormat = string;

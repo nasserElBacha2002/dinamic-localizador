@@ -10,6 +10,7 @@ import {
 import { inventoryRepository } from "../repositories/inventory.repository";
 import { storeRepository } from "../repositories/store.repository";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
+import { companyLocationTypesService } from "./company-location-types.service";
 import { inventoryImportService } from "./inventory-import.service";
 
 const COMPANY_ID = "company-1";
@@ -61,9 +62,25 @@ describe("inventoryImportService preview", () => {
     mock.restoreAll();
   });
 
+  const mockLocationTypes = (codes: string[] = ["Express"]) => {
+    mock.method(companyLocationTypesService, "listLocationTypes", async () =>
+      codes.map((code, index) => ({
+        id: `type-${index}`,
+        companyId: COMPANY_ID,
+        code,
+        name: code,
+        isActive: true,
+        sortOrder: index + 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      })),
+    );
+  };
+
   const mockStores = () => {
     mock.method(storeRepository, "listAllActive", async () => [sampleStore]);
     mock.method(inventoryRepository, "findExistingActiveKeys", async () => new Set());
+    mockLocationTypes();
   };
 
   const mockImportDefaults = (
@@ -229,18 +246,28 @@ describe("inventoryImportService preview", () => {
     assert.equal(result.rows[0]?.status, "valid");
   });
 
-  it("ignores LOCAL, Formato and PROVEEDOR columns", async () => {
+  it("accepts optional Formato when it matches an active company location type", async () => {
     mockStores();
     mockImportDefaults();
     const minimal = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
-    const withIgnored = await previewCsv(
-      ["PUNTO", "Fecha", "LOCAL", "Formato", "PROVEEDOR"],
-      ["213", FUTURE_DATE, "Local X", "Express", "Proveedor Y"],
+    const withFormat = await previewCsv(
+      ["PUNTO", "Fecha", "Formato"],
+      ["213", FUTURE_DATE, "Express"],
     );
 
-    assert.deepEqual(withIgnored.rows[0]?.scheduledStart, minimal.rows[0]?.scheduledStart);
-    assert.deepEqual(withIgnored.rows[0]?.scheduledEnd, minimal.rows[0]?.scheduledEnd);
-    assert.deepEqual(withIgnored.rows[0]?.storeId, minimal.rows[0]?.storeId);
+    assert.deepEqual(withFormat.rows[0]?.scheduledStart, minimal.rows[0]?.scheduledStart);
+    assert.equal(withFormat.rows[0]?.status, "valid");
+  });
+
+  it("rejects unknown Formato values", async () => {
+    mockStores();
+    mockImportDefaults();
+    const result = await previewCsv(
+      ["PUNTO", "Fecha", "Formato"],
+      ["213", FUTURE_DATE, "Unknown Type"],
+    );
+
+    assert.equal(result.rows[0]?.status, "invalid");
   });
 
   it("fails when location column is missing", async () => {
@@ -273,9 +300,25 @@ describe("inventoryImportService confirm", () => {
     mock.restoreAll();
   });
 
+  const mockLocationTypes = () => {
+    mock.method(companyLocationTypesService, "listLocationTypes", async () => [
+      {
+        id: "type-1",
+        companyId: COMPANY_ID,
+        code: "Express",
+        name: "Express",
+        isActive: true,
+        sortOrder: 1,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ]);
+  };
+
   const mockStores = () => {
     mock.method(storeRepository, "listAllActive", async () => [sampleStore]);
     mock.method(inventoryRepository, "findExistingActiveKeys", async () => new Set());
+    mockLocationTypes();
   };
 
   const mockImportDefaults = (

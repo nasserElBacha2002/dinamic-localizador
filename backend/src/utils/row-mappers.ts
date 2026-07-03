@@ -1,5 +1,4 @@
 import { EMPLOYEE_TYPES, type EmployeeType } from "../constants/employee-types";
-import { STORE_FORMATS, type StoreFormat } from "../constants/store-formats";
 import type {
   AttendanceRecord,
   AttendanceRecordWithRelations,
@@ -34,13 +33,13 @@ export const mapEmployeeRow = (row: Record<string, unknown>): Employee => ({
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
 
-const parseStoreFormat = (value: unknown): StoreFormat | null => {
+const parseStoreFormat = (value: unknown): string | null => {
   if (!value) {
     return null;
   }
 
-  const storeFormat = String(value);
-  return (STORE_FORMATS as readonly string[]).includes(storeFormat) ? (storeFormat as StoreFormat) : null;
+  const storeFormat = String(value).trim();
+  return storeFormat.length > 0 ? storeFormat : null;
 };
 
 export const mapStoreRow = (row: Record<string, unknown>): Store => ({

@@ -6,7 +6,7 @@ export const LEGACY_IMPORT_REQUIRED_HEADERS = [
 
 export const CLIENT_IMPORT_REQUIRED_HEADERS = ["punto", "fecha"] as const;
 
-export const CLIENT_IMPORT_IGNORED_HEADERS = ["local", "formato", "proveedor"] as const;
+export const CLIENT_IMPORT_IGNORED_HEADERS = ["local", "proveedor"] as const;
 
 export const LEGACY_IMPORT_OPTIONAL_HEADERS = [
   "tolerancia_temprana",
@@ -46,7 +46,20 @@ export const INVENTORY_IMPORT_COLUMN_ALIASES = {
     "fecha_de_inicio",
   ],
   endDate: ["fecha_fin", "Fecha Fin", "Fecha de fin", "fecha de fin", "fecha_de_fin"],
+  locationType: [
+    "Formato",
+    "formato",
+    "Tipo",
+    "tipo",
+    "Tipo de ubicación",
+    "tipo de ubicacion",
+    "Tipo de ubicacion",
+    "tipo de ubicación",
+  ],
 } as const;
+
+export const IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE =
+  "El tipo de ubicación/servicio informado no es válido para esta empresa.";
 
 export const IMPORT_LOCATION_COLUMN_ACCEPTED_LABELS =
   "PUNTO, Sucursal, Ubicación o tienda";

@@ -26,6 +26,7 @@ import {
   CompanySettingsCheckoutSection,
   CompanySettingsCorrectionsSection,
 } from "./company-settings-form-sections";
+import { CompanyLocationTypesSettingsSection } from "./company-location-types-section";
 
 interface CompanySettingsFormProps {
   settings: CompanySettings;
@@ -274,6 +275,8 @@ export function CompanySettingsPage() {
         canUpdate={canUpdate}
         onSaved={handleSaved}
       />
+
+      <CompanyLocationTypesSettingsSection canUpdate={canUpdate} onSaved={handleSaved} />
 
       {modulesQuery.data ? (
         <CompanyModulesForm

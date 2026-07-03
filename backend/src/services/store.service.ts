@@ -2,13 +2,17 @@ import { AppError } from "../errors/app-error";
 import { storeRepository } from "../repositories/store.repository";
 import type { CreateStoreInput, ListStoresQuery, UpdateStoreInput } from "../schemas/store.schema";
 import { buildPaginationMeta } from "../utils/pagination";
+import { companyLocationTypesService } from "./company-location-types.service";
 
 export const storeService = {
   async create(companyId: string, input: CreateStoreInput) {
+    await companyLocationTypesService.assertActiveStoreFormat(companyId, input.storeFormat);
+
     return storeRepository.create(companyId, {
       ...input,
       name: input.name.trim(),
       address: input.address?.trim() ?? null,
+      storeFormat: input.storeFormat?.trim() ?? null,
     });
   },
 
@@ -31,6 +35,10 @@ export const storeService = {
   async update(companyId: string, id: string, input: UpdateStoreInput) {
     await this.getById(companyId, id);
 
+    if (input.storeFormat !== undefined) {
+      await companyLocationTypesService.assertActiveStoreFormat(companyId, input.storeFormat);
+    }
+
     if (input.active === false) {
       const hasSchedules = await storeRepository.hasActiveOrScheduledInventories(companyId, id);
       if (hasSchedules) {
@@ -42,7 +50,11 @@ export const storeService = {
       }
     }
 
-    const updated = await storeRepository.update(companyId, id, input);
+    const updated = await storeRepository.update(companyId, id, {
+      ...input,
+      storeFormat:
+        input.storeFormat !== undefined ? input.storeFormat?.trim() ?? null : undefined,
+    });
     if (!updated) {
       throw new AppError(404, "STORE_NOT_FOUND", "Tienda no encontrada");
     }

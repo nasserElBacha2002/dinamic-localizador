@@ -3,9 +3,16 @@ import { roleHasPermission } from "../constants/company-permissions";
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
 import { companyModuleService } from "./company-module.service";
+import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+import { companyLocationTypesService } from "./company-location-types.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
+import type { UpdateCompanyAbsenceSettingsInput } from "../schemas/company-absence-settings.schema";
+import type {
+  CreateCompanyLocationTypeInput,
+  UpdateCompanyLocationTypeInput,
+} from "../schemas/company-location-type.schema";
 import type {
   Company,
   CompanyMembershipSummary,
@@ -95,6 +102,58 @@ export const companyService = {
     }
 
     return toCompanySettingsDto(updated);
+  },
+
+  async getAbsenceSettings(companyId: string) {
+    await this.getCompanyOrThrow(companyId);
+    return companyAbsenceSettingsService.getCompanyAbsenceSettings(companyId);
+  },
+
+  async updateAbsenceSettings(
+    companyId: string,
+    role: CompanyMembershipSummary["role"],
+    input: UpdateCompanyAbsenceSettingsInput,
+  ) {
+    await this.getCompanyOrThrow(companyId);
+    return companyAbsenceSettingsService.updateCompanyAbsenceSettings(companyId, role, input);
+  },
+
+  async listLocationTypes(companyId: string, activeOnly = false) {
+    await this.getCompanyOrThrow(companyId);
+    return companyLocationTypesService.listLocationTypes(companyId, activeOnly);
+  },
+
+  async createLocationType(
+    companyId: string,
+    role: CompanyMembershipSummary["role"],
+    input: CreateCompanyLocationTypeInput,
+  ) {
+    await this.getCompanyOrThrow(companyId);
+    return companyLocationTypesService.createLocationType(companyId, role, input);
+  },
+
+  async updateLocationType(
+    companyId: string,
+    role: CompanyMembershipSummary["role"],
+    locationTypeId: string,
+    input: UpdateCompanyLocationTypeInput,
+  ) {
+    await this.getCompanyOrThrow(companyId);
+    return companyLocationTypesService.updateLocationType(
+      companyId,
+      role,
+      locationTypeId,
+      input,
+    );
+  },
+
+  async disableLocationType(
+    companyId: string,
+    role: CompanyMembershipSummary["role"],
+    locationTypeId: string,
+  ) {
+    await this.getCompanyOrThrow(companyId);
+    return companyLocationTypesService.disableLocationType(companyId, role, locationTypeId);
   },
 
   async getCompanyOrThrow(companyId: string): Promise<Company> {

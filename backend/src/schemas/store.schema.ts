@@ -1,8 +1,11 @@
 import { z } from "zod";
-import { STORE_FORMATS } from "../constants/store-formats";
 import { activeFilterSchema, paginationQuerySchema, searchFilterSchema } from "./common.schema";
 
-const storeFormatSchema = z.enum(STORE_FORMATS);
+const storeFormatSchema = z
+  .string()
+  .trim()
+  .min(1, "El tipo de ubicación/servicio no puede estar vacío.")
+  .max(80, "El tipo de ubicación/servicio no puede superar 80 caracteres.");
 
 export const createStoreSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(150),

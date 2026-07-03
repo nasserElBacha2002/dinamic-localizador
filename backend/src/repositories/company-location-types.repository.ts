@@ -1,6 +1,8 @@
 import sql from "mssql";
+import { STANDARD_COMPANY_LOCATION_TYPE_SEEDS } from "../constants/company-location-types";
 import { getPool } from "../database/connection";
 import type { CompanyLocationType } from "../types/company";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -31,5 +33,155 @@ export const companyLocationTypesRepository = {
       `);
 
     return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
+  },
+
+  async findById(companyId: string, id: string): Promise<CompanyLocationType | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        SELECT TOP 1 *
+        FROM company_location_types
+        WHERE company_id = @companyId AND id = @id
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findByCode(companyId: string, code: string): Promise<CompanyLocationType | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("code", sql.NVarChar(80), code)
+      .query(`
+        SELECT TOP 1 *
+        FROM company_location_types
+        WHERE company_id = @companyId AND code = @code
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async create(
+    companyId: string,
+    input: {
+      code: string;
+      name: string;
+      sortOrder: number;
+      isActive: boolean;
+    },
+  ): Promise<CompanyLocationType> {
+    const pool = getPool();
+    try {
+      const result = await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("code", sql.NVarChar(80), input.code)
+        .input("name", sql.NVarChar(200), input.name)
+        .input("sortOrder", sql.Int, input.sortOrder)
+        .input("isActive", sql.Bit, input.isActive ? 1 : 0)
+        .query(`
+          INSERT INTO company_location_types (company_id, code, name, sort_order, is_active)
+          OUTPUT INSERTED.*
+          VALUES (@companyId, @code, @name, @sortOrder, @isActive)
+        `);
+
+      return mapRow(result.recordset[0] as Record<string, unknown>);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        throw error;
+      }
+      throw error;
+    }
+  },
+
+  async update(
+    companyId: string,
+    id: string,
+    input: {
+      code?: string;
+      name?: string;
+      sortOrder?: number;
+      isActive?: boolean;
+    },
+  ): Promise<CompanyLocationType | null> {
+    const fields: string[] = [];
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id);
+
+    if (input.code !== undefined) {
+      request.input("code", sql.NVarChar(80), input.code);
+      fields.push("code = @code");
+    }
+    if (input.name !== undefined) {
+      request.input("name", sql.NVarChar(200), input.name);
+      fields.push("name = @name");
+    }
+    if (input.sortOrder !== undefined) {
+      request.input("sortOrder", sql.Int, input.sortOrder);
+      fields.push("sort_order = @sortOrder");
+    }
+    if (input.isActive !== undefined) {
+      request.input("isActive", sql.Bit, input.isActive ? 1 : 0);
+      fields.push("is_active = @isActive");
+    }
+
+    if (fields.length === 0) {
+      return this.findById(companyId, id);
+    }
+
+    fields.push("updated_at = SYSUTCDATETIME()");
+
+    const result = await request.query(`
+      UPDATE company_location_types
+      SET ${fields.join(", ")}
+      OUTPUT INSERTED.*
+      WHERE company_id = @companyId AND id = @id
+    `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async ensureStandardTypesForCompany(
+    companyId: string,
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    for (const seed of STANDARD_COMPANY_LOCATION_TYPE_SEEDS) {
+      const request = transaction ? new sql.Request(transaction) : getPool().request();
+      await request
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("code", sql.NVarChar(80), seed.code)
+        .input("name", sql.NVarChar(200), seed.name)
+        .input("sortOrder", sql.Int, seed.sortOrder)
+        .query(`
+          IF NOT EXISTS (
+            SELECT 1
+            FROM company_location_types
+            WHERE company_id = @companyId AND code = @code
+          )
+          BEGIN
+            INSERT INTO company_location_types (company_id, code, name, sort_order, is_active)
+            VALUES (@companyId, @code, @name, @sortOrder, 1);
+          END
+        `);
+    }
   },
 };

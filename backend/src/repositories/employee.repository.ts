@@ -31,10 +31,10 @@ export const employeeRepository = {
       phoneNumber: string;
       employeeType: Employee["employeeType"];
     },
+    transaction?: sql.Transaction,
   ): Promise<Employee> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(150), input.name)
       .input("documentNumber", sql.NVarChar(50), input.documentNumber)

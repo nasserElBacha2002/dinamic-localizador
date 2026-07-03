@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { STANDARD_ABSENCE_TYPE_SEEDS } from "../constants/company-absence";
 import { getPool } from "../database/connection";
 import type { AbsenceType } from "../types/absence";
 import { mapAbsenceTypeRow } from "../utils/row-mappers";
@@ -63,5 +64,45 @@ export const absenceTypeRepository = {
     }
 
     return mapAbsenceTypeRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async ensureStandardTypesForCompany(
+    companyId: string,
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    for (const seed of STANDARD_ABSENCE_TYPE_SEEDS) {
+      const request = transaction ? new sql.Request(transaction) : getPool().request();
+      await request
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("code", sql.NVarChar(40), seed.code)
+        .input("name", sql.NVarChar(120), seed.name)
+        .input("description", sql.NVarChar(500), seed.description)
+        .input("requiresApproval", sql.Bit, seed.requiresApproval ? 1 : 0)
+        .input("requiresAttachment", sql.Bit, seed.requiresAttachment ? 1 : 0)
+        .input("deductsBalance", sql.Bit, seed.deductsBalance ? 1 : 0)
+        .input("allowsHalfDay", sql.Bit, seed.allowsHalfDay ? 1 : 0)
+        .query(`
+          IF NOT EXISTS (
+            SELECT 1
+            FROM absence_types
+            WHERE company_id = @companyId AND code = @code
+          )
+          BEGIN
+            INSERT INTO absence_types (
+              company_id, code, name, description,
+              requires_approval, requires_attachment, deducts_balance, allows_half_day
+            )
+            VALUES (
+              @companyId, @code, @name, @description,
+              @requiresApproval, @requiresAttachment, @deductsBalance, @allowsHalfDay
+            );
+          END
+        `);
+    }
+  },
+
+  async listCodesForCompany(companyId: string): Promise<string[]> {
+    const types = await this.listAll(companyId, false);
+    return types.map((type) => type.code);
   },
 };

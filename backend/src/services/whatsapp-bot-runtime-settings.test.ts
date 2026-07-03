@@ -67,12 +67,21 @@ describe("whatsapp bot runtime settings integration", () => {
     };
 
     await runWithBotRuntimeContext(context, async () => {
-      await whatsappBotService.handleWebhook(companyId, {
-        MessageSid: "SM123",
-        From: "whatsapp:+5491111111111",
-        To: "whatsapp:+5491000000000",
-        Body: "hola",
-      });
+      await whatsappBotService.handleWebhook(
+        {
+          companyId,
+          employeeId,
+          phoneNumber: "+5491111111111",
+          session: null,
+          resolutionSource: "simulation_forced_company",
+        },
+        {
+          MessageSid: "SM123",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+5491000000000",
+          Body: "hola",
+        },
+      );
     });
 
     assert.equal(loadCount, 1);

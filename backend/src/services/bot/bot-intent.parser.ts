@@ -1,7 +1,10 @@
-import { isAbsenceCancelIntent, isAbsenceIntent } from "../../utils/absence-intent";
+import { isAbsenceIntent } from "../../utils/absence-intent";
 import {
   isCheckInIntent,
   isCheckoutIntent,
+  isGlobalCancelCommand,
+  isGlobalHelpCommand,
+  isGlobalMenuCommand,
   isSimpleGreeting,
   parseInventorySelection,
 } from "../../utils/intent";
@@ -29,8 +32,12 @@ export const parseBotIntent = (input: {
     return "unknown";
   }
 
-  if (isAbsenceCancelIntent(body)) {
+  if (isGlobalCancelCommand(body)) {
     return "cancel";
+  }
+
+  if (isGlobalHelpCommand(body)) {
+    return "menu";
   }
 
   if (parseInventorySelection(body) !== null) {
@@ -49,7 +56,7 @@ export const parseBotIntent = (input: {
     return "absence";
   }
 
-  if (isSimpleGreeting(body)) {
+  if (isGlobalMenuCommand(body) || isSimpleGreeting(body)) {
     return "menu";
   }
 

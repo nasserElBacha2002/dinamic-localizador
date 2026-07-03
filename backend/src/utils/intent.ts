@@ -27,8 +27,21 @@ const CHECKOUT_INTENTS = [
   "finalice",
   "finalicé",
   "salida",
-  "salir",
 ] as const;
+
+const GLOBAL_MENU_COMMANDS = ["menu", "inicio"] as const;
+const GLOBAL_HELP_COMMANDS = ["ayuda", "help"] as const;
+// "salir" is a global cancel command (exits the active flow).
+// For checkout/departure, employees should use "Me voy", "Terminé", "Finalicé", or "Salida".
+const GLOBAL_CANCEL_COMMANDS = ["cancelar", "salir"] as const;
+const GLOBAL_BACK_COMMANDS = ["volver"] as const;
+
+const matchesCommand = (body: string, commands: readonly string[]): boolean => {
+  const normalized = normalizeIntentText(body);
+  return commands.some(
+    (command) => normalized === command || normalized.startsWith(`${command} `),
+  );
+};
 
 export const isCheckoutIntent = (body: string): boolean => {
   const normalized = normalizeIntentText(body);
@@ -50,6 +63,15 @@ export const isSimpleGreeting = (body: string): boolean => {
     (greeting) => normalized === greeting || normalized.startsWith(`${greeting} `),
   );
 };
+
+export const isGlobalMenuCommand = (body: string): boolean => matchesCommand(body, GLOBAL_MENU_COMMANDS);
+
+export const isGlobalHelpCommand = (body: string): boolean => matchesCommand(body, GLOBAL_HELP_COMMANDS);
+
+export const isGlobalCancelCommand = (body: string): boolean =>
+  matchesCommand(body, GLOBAL_CANCEL_COMMANDS);
+
+export const isGlobalBackCommand = (body: string): boolean => matchesCommand(body, GLOBAL_BACK_COMMANDS);
 
 export const parseInventorySelection = (body: string): number | null => {
   const normalized = normalizeIntentText(body);

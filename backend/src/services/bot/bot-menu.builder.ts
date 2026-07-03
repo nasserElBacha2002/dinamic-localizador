@@ -2,13 +2,17 @@ import type { CompanyModuleKey } from "../../constants/company-modules";
 import type { BotSessionState } from "../../types/twilio.types";
 import {
   isAbsenceSessionState,
+  isAssignmentSelectionSessionState,
   isCheckInSessionState,
   isCheckoutSessionState,
 } from "../../utils/bot-session-states";
 import {
   getAbsenceModuleBlockedMessage,
+  getAssignmentConfirmationModuleBlockedMessage,
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
+  getUpcomingAssignmentsModuleBlockedMessage,
+  getWorkdayModuleBlockedMessage,
 } from "../whatsapp-module-gate";
 
 export const NO_WHATSAPP_OPTIONS_MESSAGE =
@@ -23,6 +27,8 @@ const MENU_OPTION_HINTS: Record<string, string> = {
   "Marcar llegada": 'escribí "Llegué"',
   "Marcar salida": 'escribí "Me voy"',
   "Pedir ausencia o vacaciones": 'escribí "Pedir ausencia"',
+  "Consultar jornada de hoy": 'escribí "Mi jornada" o "Hoy"',
+  "Ver próximos turnos": 'escribí "Mis turnos" o "Agenda"',
 };
 
 export function buildGreetingMessage(
@@ -41,6 +47,14 @@ export function buildGreetingMessage(
 
   if (!getAbsenceModuleBlockedMessage(moduleStates)) {
     labels.push("Pedir ausencia o vacaciones");
+  }
+
+  if (!getWorkdayModuleBlockedMessage(moduleStates)) {
+    labels.push("Consultar jornada de hoy");
+  }
+
+  if (!getUpcomingAssignmentsModuleBlockedMessage(moduleStates)) {
+    labels.push("Ver próximos turnos");
   }
 
   if (labels.length === 0) {
@@ -117,6 +131,10 @@ export function getModuleBlockedMessageForSessionState(
 
   if (isAbsenceSessionState(state)) {
     return getAbsenceModuleBlockedMessage(moduleStates);
+  }
+
+  if (isAssignmentSelectionSessionState(state)) {
+    return getAssignmentConfirmationModuleBlockedMessage(moduleStates);
   }
 
   return null;

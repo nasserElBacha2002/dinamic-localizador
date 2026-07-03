@@ -786,3 +786,157 @@ describe("whatsapp webhook bot simulator regression", () => {
     assert.equal(attendanceCreates, 0);
   });
 });
+
+describe("whatsapp webhook Task 5 workday and assignments", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  const sampleAssignment = () => ({
+    inventoryId: inventoryA,
+    storeName: "Carrefour Palermo",
+    storeAddress: "Av. Santa Fe 1234, Palermo",
+    storeLatitude: -34.6037,
+    storeLongitude: -58.3816,
+    scheduledStart: "2026-07-08T23:30:00.000Z",
+    scheduledEnd: "2026-07-09T06:00:00.000Z",
+    inventoryStatus: "SCHEDULED",
+    confirmationStatus: "PENDING" as const,
+    attendanceReceivedAt: null,
+    attendanceCheckoutAt: null,
+    punctualityStatus: null,
+  });
+
+  it("returns today workday through webhook flow", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "mi jornada" }),
+      simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
+      setup: async () => {
+        const { employeeAssignmentQueryRepository } = await import(
+          "../repositories/employee-assignment-query.repository"
+        );
+        mock.method(employeeAssignmentQueryRepository, "listTodayForEmployee", async () => [
+          sampleAssignment(),
+        ]);
+      },
+    });
+
+    assert.match(message, /Tu jornada de hoy:/);
+    assert.match(message, /Carrefour Palermo/);
+    assert.match(message, /Mapa: https:\/\/www\.google\.com\/maps\/search/);
+  });
+
+  it("returns upcoming assignments through webhook flow", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "mis inventarios" }),
+      simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
+      setup: async () => {
+        const { employeeAssignmentQueryRepository } = await import(
+          "../repositories/employee-assignment-query.repository"
+        );
+        mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+          sampleAssignment(),
+        ]);
+      },
+    });
+
+    assert.match(message, /Tus próximos inventarios:/);
+    assert.match(message, /Carrefour Palermo/);
+  });
+
+  it("confirms single upcoming assignment through webhook flow", async () => {
+    let updateCalls = 0;
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "confirmo asistencia" }),
+      simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
+      setup: async () => {
+        const { employeeAssignmentQueryRepository } = await import(
+          "../repositories/employee-assignment-query.repository"
+        );
+        mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+          sampleAssignment(),
+        ]);
+        mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+          sampleAssignment(),
+        );
+        mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+          updateCalls += 1;
+          return true;
+        });
+      },
+    });
+
+    assert.match(message, /confirmamos tu asistencia/i);
+    assert.equal(updateCalls, 1);
+  });
+
+  it("reports unavailability for single upcoming assignment", async () => {
+    let updateCalls = 0;
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "no puedo asistir" }),
+      simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
+      setup: async () => {
+        const { employeeAssignmentQueryRepository } = await import(
+          "../repositories/employee-assignment-query.repository"
+        );
+        mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+          sampleAssignment(),
+        ]);
+        mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+          sampleAssignment(),
+        );
+        mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+          updateCalls += 1;
+          return true;
+        });
+      },
+    });
+
+    assert.match(message, /no estás disponible/i);
+    assert.equal(updateCalls, 1);
+  });
+
+  it("blocks workday when required modules are disabled", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "hoy" }),
+      setup: async () => {
+        const { companyModuleService } = await import("./company-module.service");
+        const states = enabledStates();
+        states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+        mock.method(companyModuleService, "getModuleStates", async () => states);
+      },
+    });
+
+    assert.match(message, new RegExp(MODULE_DISABLED_MESSAGE));
+  });
+
+  it("returns unknown employee message for workday query", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "mi jornada" }),
+      inbound: { employeeId: employeeA },
+      simulation: { employeeIdOverride: null },
+      setup: async () => {
+        const { employeeRepository } = await import("../repositories/employee.repository");
+        mock.method(employeeRepository, "findById", async () => null);
+      },
+    });
+
+    assert.match(message, new RegExp(UNKNOWN_EMPLOYEE_MESSAGE));
+  });
+
+  it("preserves existing check-in flow after Task 5 commands", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({ Body: "Llegué" }),
+      setup: async () => {
+        const { inventoryRepository } = await import("../repositories/inventory.repository");
+        const { botSessionService } = await import("./bot-session.service");
+        mock.method(inventoryRepository, "findCompatibleForEmployee", async () => [
+          compatibleInventory(inventoryA),
+        ]);
+        mock.method(botSessionService, "createWaitingLocationSession", async () => undefined);
+      },
+    });
+
+    assert.match(message, /ubicación actual/i);
+  });
+});

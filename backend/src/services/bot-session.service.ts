@@ -413,6 +413,98 @@ export const botSessionService = {
     });
   },
 
+  async createConfirmAttendanceSelectionSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      options: InventorySelectionOption[];
+    },
+  ): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            inventoryId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_CONFIRM_ATTENDANCE_SELECTION",
+            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] confirm attendance selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
+  async createUnavailabilitySelectionSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      options: InventorySelectionOption[];
+    },
+  ): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            inventoryId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_UNAVAILABILITY_SELECTION",
+            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] unavailability selection session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        options: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        throw new AppError(
+          409,
+          "BOT_ACTIVE_SESSION_CONFLICT",
+          "Ya existe una sesión activa para este empleado",
+        );
+      }
+
+      throw error;
+    }
+  },
+
   async completeSession(companyId: string, sessionId: string, transaction?: sql.Transaction): Promise<void> {
     await botSessionRepository.updateSession(companyId, sessionId, { state: "COMPLETED" }, transaction);
     console.info("[bot-session] session completed", { sessionId });

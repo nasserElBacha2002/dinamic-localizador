@@ -45,3 +45,25 @@ export function getAbsenceModuleBlockedMessage(
 
   return null;
 }
+
+export function getWorkdayModuleBlockedMessage(
+  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+): string | null {
+  return getCheckInModuleBlockedMessage(moduleStates);
+}
+
+export function getUpcomingAssignmentsModuleBlockedMessage(
+  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+): string | null {
+  if (!isModuleEnabledInStates(moduleStates, COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS)) {
+    return MODULE_DISABLED_MESSAGE;
+  }
+
+  return null;
+}
+
+export function getAssignmentConfirmationModuleBlockedMessage(
+  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+): string | null {
+  return getUpcomingAssignmentsModuleBlockedMessage(moduleStates);
+}

@@ -25,6 +25,8 @@ describe("buildGreetingMessage", () => {
     assert.match(message, /Marcar llegada — escribí "Llegué"/);
     assert.match(message, /Marcar salida — escribí "Me voy"/);
     assert.match(message, /Pedir ausencia o vacaciones — escribí "Pedir ausencia"/);
+    assert.match(message, /Consultar jornada de hoy — escribí "Mi jornada" o "Hoy"/);
+    assert.match(message, /Ver próximos turnos — escribí "Mis turnos" o "Agenda"/);
     assert.match(message, /Ayuda/);
     assert.match(message, /Cancelar/);
   });
@@ -41,6 +43,22 @@ describe("buildGreetingMessage", () => {
     const message = buildGreetingMessage(states);
     assert.doesNotMatch(message, /ausencia/i);
     assert.match(message, /Marcar llegada/);
+  });
+
+  it("hides workday when attendance or inventory_operations is disabled", () => {
+    const states = allEnabled();
+    states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
+    const message = buildGreetingMessage(states);
+    assert.doesNotMatch(message, /jornada de hoy/i);
+    assert.doesNotMatch(message, /Marcar llegada/);
+  });
+
+  it("hides upcoming assignments when inventory_operations is disabled", () => {
+    const states = allEnabled();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    const message = buildGreetingMessage(states);
+    assert.doesNotMatch(message, /próximos turnos/i);
+    assert.doesNotMatch(message, /jornada de hoy/i);
   });
 
   it("hides check-in when inventory_operations is disabled", () => {

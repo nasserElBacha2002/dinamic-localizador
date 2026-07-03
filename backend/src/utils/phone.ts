@@ -27,3 +27,20 @@ export const tryNormalizeWhatsAppPhone = (from: string): string | null => {
     return null;
   }
 };
+
+/** Masks phone numbers for structured logs (e.g. +54911******11). */
+export const maskPhoneNumberForLog = (phoneNumber: string): string => {
+  let normalized = phoneNumber.trim();
+  try {
+    normalized = normalizeWhatsAppPhone(
+      normalized.startsWith("whatsapp:") ? normalized : `whatsapp:${normalized}`,
+    );
+  } catch {
+  }
+
+  if (normalized.length <= 8) {
+    return "***";
+  }
+
+  return `${normalized.slice(0, 6)}******${normalized.slice(-2)}`;
+};

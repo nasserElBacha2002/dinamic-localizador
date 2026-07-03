@@ -50,7 +50,11 @@ export const botSessionRepository = {
     return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
   },
 
-  async findValidActiveByPhoneGlobal(
+  /**
+   * Company-resolution only. Must not be used after WhatsApp company context is resolved.
+   * When multiple active sessions exist for the same phone, returns the most recent one.
+   */
+  async findLatestValidActiveByPhoneForCompanyResolutionOnly(
     phoneNumber: string,
     scope?: BotSessionScope,
   ): Promise<BotSession | null> {

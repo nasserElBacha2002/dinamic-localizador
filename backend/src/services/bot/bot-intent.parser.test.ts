@@ -20,9 +20,14 @@ describe("parseBotIntent", () => {
     assert.equal(parseBotIntent({ body: "Pedir ausencia" }), "absence");
   });
 
-  it("detects menu greetings", () => {
+  it("detects menu greetings and commands", () => {
     assert.equal(parseBotIntent({ body: "hola" }), "menu");
     assert.equal(parseBotIntent({ body: "buenos dias" }), "menu");
+    assert.equal(parseBotIntent({ body: "menu" }), "menu");
+    assert.equal(parseBotIntent({ body: "menú" }), "menu");
+    assert.equal(parseBotIntent({ body: "inicio" }), "menu");
+    assert.equal(parseBotIntent({ body: "ayuda" }), "menu");
+    assert.equal(parseBotIntent({ body: "help" }), "menu");
   });
 
   it("detects location messages", () => {
@@ -35,6 +40,7 @@ describe("parseBotIntent", () => {
 
   it("detects cancel intent", () => {
     assert.equal(parseBotIntent({ body: "Cancelar" }), "cancel");
+    assert.equal(parseBotIntent({ body: "salir" }), "cancel");
   });
 
   it("returns unknown for unsupported text", () => {

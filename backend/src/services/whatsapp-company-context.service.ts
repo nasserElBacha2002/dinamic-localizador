@@ -10,7 +10,7 @@ import type {
   WhatsAppResolutionSource,
 } from "../types/whatsapp-company-context";
 import { getBotRuntimeContext } from "../utils/bot-runtime-context";
-import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
+import { maskPhoneNumberForLog, normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
 import {
   AMBIGUOUS_COMPANY_MESSAGE,
   COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
@@ -23,6 +23,7 @@ const logResolution = (context: WhatsAppInboundContext): void => {
     companyId: context.companyId,
     employeeId: context.employeeId ?? undefined,
     hasActiveSession: Boolean(context.session),
+    phoneNumber: maskPhoneNumberForLog(context.phoneNumber),
   });
 };
 
@@ -49,9 +50,12 @@ const resolveForcedCompany = async (
   phoneNumber: string,
 ): Promise<WhatsAppCompanyResolution> => {
   const simulation = getBotRuntimeContext();
-  const session = await botSessionRepository.findValidActiveByPhoneGlobal(phoneNumber);
+  const session =
+    await botSessionRepository.findLatestValidActiveByPhoneForCompanyResolutionOnly(phoneNumber);
   const scopedSession =
-    session?.companyId === companyId ? session : await botSessionRepository.findValidActiveByPhone(companyId, phoneNumber);
+    session?.companyId === companyId
+      ? session
+      : await botSessionRepository.findValidActiveByPhone(companyId, phoneNumber);
 
   let employeeId: string | null = null;
   if (simulation?.employeeIdOverride) {
@@ -73,9 +77,10 @@ const resolveForcedCompany = async (
 const resolveFromActiveSession = async (
   phoneNumber: string,
 ): Promise<WhatsAppCompanyResolution | null> => {
-  const session = await botSessionRepository.findValidActiveByPhoneGlobal(phoneNumber, {
-    mode: "production",
-  });
+  const session = await botSessionRepository.findLatestValidActiveByPhoneForCompanyResolutionOnly(
+    phoneNumber,
+    { mode: "production" },
+  );
   if (!session) {
     return null;
   }
@@ -92,6 +97,11 @@ const resolveFromActiveSession = async (
   });
 };
 
+/**
+ * Single-tenant helper only: matches the configured Twilio number when exactly one active company exists.
+ * TODO(phase-1.7): Real multi-company routing should use an explicit per-company mapping
+ * (for example `company_whatsapp_numbers`) instead of this heuristic.
+ */
 const resolveFromReceivingNumber = async (
   phoneTo: string,
   phoneNumber: string,
@@ -134,7 +144,7 @@ const resolveFromEmployeePhone = async (
 
   if (matches.length > 1) {
     console.info("[whatsapp-company-context] ambiguous employee phone match", {
-      phoneNumber,
+      phoneNumber: maskPhoneNumberForLog(phoneNumber),
       companyCount: matches.length,
     });
     return {
@@ -162,18 +172,43 @@ const resolveFromEmployeePhone = async (
   return null;
 };
 
+/**
+ * Legacy/single-tenant fallback only. Not full SaaS routing.
+ * Allowed when there is exactly one active company, or when BOT_DEFAULT_COMPANY_* is explicitly configured.
+ */
 const resolveFromDefaultCompany = async (
   phoneNumber: string,
-): Promise<WhatsAppCompanyResolution> => {
+): Promise<WhatsAppCompanyResolution | null> => {
   const activeCompanies = await companyRepository.listActive();
-  const companyId = selectDefaultBotCompanyId(activeCompanies, {
-    defaultCompanyId: process.env.BOT_DEFAULT_COMPANY_ID ?? env.BOT_DEFAULT_COMPANY_ID,
-    defaultCompanyName: process.env.BOT_DEFAULT_COMPANY_NAME ?? env.BOT_DEFAULT_COMPANY_NAME,
-  });
+  const explicitDefaultId = process.env.BOT_DEFAULT_COMPANY_ID ?? env.BOT_DEFAULT_COMPANY_ID;
+  const explicitDefaultName = process.env.BOT_DEFAULT_COMPANY_NAME ?? env.BOT_DEFAULT_COMPANY_NAME;
+  const hasExplicitDefault = Boolean(explicitDefaultId || explicitDefaultName);
 
-  console.info("[whatsapp-company-context] using default company fallback", {
+  if (activeCompanies.length !== 1 && !hasExplicitDefault) {
+    return null;
+  }
+
+  let companyId: string;
+  try {
+    companyId =
+      activeCompanies.length === 1
+        ? activeCompanies[0].id
+        : selectDefaultBotCompanyId(activeCompanies, {
+            defaultCompanyId: explicitDefaultId,
+            defaultCompanyName: explicitDefaultName,
+          });
+  } catch (error) {
+    if (error instanceof AppError && error.code === "BOT_COMPANY_SELECTION_REQUIRED") {
+      return null;
+    }
+    throw error;
+  }
+
+  console.info("[whatsapp-company-context] using legacy default company fallback", {
     companyId,
-    phoneNumber,
+    phoneNumber: maskPhoneNumberForLog(phoneNumber),
+    activeCompanyCount: activeCompanies.length,
+    explicitDefaultConfigured: hasExplicitDefault,
   });
 
   const employee = await employeeRepository.findByPhone(companyId, phoneNumber);
@@ -213,22 +248,19 @@ export const whatsappCompanyContextService = {
       return fromEmployeePhone;
     }
 
-    try {
-      return await resolveFromDefaultCompany(phoneNumber);
-    } catch (error) {
-      if (error instanceof AppError && error.code === "BOT_COMPANY_SELECTION_REQUIRED") {
-        console.info("[whatsapp-company-context] company selection required", {
-          phoneNumber,
-          messageSid: input.messageSid,
-        });
-        return {
-          kind: "blocked",
-          message: COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
-          reason: "company_unavailable",
-        };
-      }
-
-      throw error;
+    const fromDefaultCompany = await resolveFromDefaultCompany(phoneNumber);
+    if (fromDefaultCompany) {
+      return fromDefaultCompany;
     }
+
+    console.info("[whatsapp-company-context] company selection required", {
+      phoneNumber: maskPhoneNumberForLog(phoneNumber),
+      messageSid: input.messageSid,
+    });
+    return {
+      kind: "blocked",
+      message: COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
+      reason: "company_unavailable",
+    };
   },
 };

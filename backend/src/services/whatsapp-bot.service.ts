@@ -19,10 +19,6 @@ import {
   formatLocalTime,
   isWithinInventoryWindow,
 } from "../utils/attendance-validation";
-import { isCheckoutSessionState, isAbsenceSessionState } from "../utils/bot-session-states";
-import { InvalidCoordinatesError } from "../utils/haversine";
-import { isAbsenceCancelIntent } from "../utils/absence-intent";
-import { parseInventorySelection } from "../utils/intent";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import {
@@ -31,13 +27,7 @@ import {
   getRequireCheckoutLocation,
   runWithBotRuntimeSettings,
 } from "../utils/bot-runtime-settings-scope";
-import { absenceBotService } from "./absence-bot.service";
 import { companyModuleService } from "./company-module.service";
-import {
-  getAbsenceModuleBlockedMessage,
-  getAttendanceModuleBlockedMessage,
-  getCheckInModuleBlockedMessage,
-} from "./whatsapp-module-gate";
 import {
   buildCheckInValidation,
   buildCheckoutValidation,
@@ -55,22 +45,10 @@ import {
   DUPLICATE_CHECKOUT_MESSAGE,
   DUPLICATE_MESSAGE_SID_RESPONSE,
   GENERIC_ERROR_MESSAGE,
-  GLOBAL_CANCEL_MESSAGE,
-  GREETING_MESSAGE,
-  ACTIVE_ATTENDANCE_FLOW_MESSAGE,
-  INVALID_COORDINATES_MESSAGE,
   INVALID_SELECTION_MESSAGE,
-  LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
-  LOCATION_DURING_SELECTION_MESSAGE,
-  LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE,
-  LOCATION_WITHOUT_SESSION_MESSAGE,
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
   NO_CHECKOUT_INVENTORY_MESSAGE,
   NO_INVENTORY_MESSAGE,
-  UNPARSEABLE_MESSAGE,
-  UNKNOWN_EMPLOYEE_MESSAGE,
-  WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
-  WAITING_LOCATION_TEXT_MESSAGE,
 } from "./bot/bot-response.builder";
 import {
   findCheckoutEligibleInventoryById,
@@ -82,7 +60,8 @@ import {
   mapCompatibleInventoriesToSessionOptions,
   parseInventorySelectionIndex,
 } from "./bot/bot-inventory.selector";
-import { parseBotIntent } from "./bot/bot-intent.parser";
+import { whatsappRouterService } from "./whatsapp-router/whatsapp-router.service";
+import type { WhatsAppRouterHandlers } from "./whatsapp-router/whatsapp-router.types";
 import {
   addVirtualCheckIn,
   appendSimulatorMessage,
@@ -96,7 +75,6 @@ import {
   isSimulationDryRun,
   recordSimulationArtifact,
   setLastBotResponse,
-  setLastDetectedIntent,
   setLastTwilioPayload,
   setTechnicalDetail,
 } from "../utils/bot-runtime-context";
@@ -192,9 +170,16 @@ const resolveInboundEmployeeId = async (
   return employee?.active ? employee.id : null;
 };
 
-const logModuleBlocked = (companyId: string, moduleKey: CompanyModuleKey): void => {
-  console.info("[whatsapp-bot] module blocked", { companyId, moduleKey });
-};
+const createRouterHandlers = (): WhatsAppRouterHandlers => ({
+  respond,
+  startCheckIn: (input) => whatsappBotService.startCheckIn(input),
+  startCheckout: (input) => whatsappBotService.startCheckout(input),
+  handleInventorySelection: (input) => whatsappBotService.handleInventorySelection(input),
+  handleCheckoutInventorySelection: (input) =>
+    whatsappBotService.handleCheckoutInventorySelection(input),
+  processLocationCheckIn: (input) => whatsappBotService.processLocationCheckIn(input),
+  processLocationCheckout: (input) => whatsappBotService.processLocationCheckout(input),
+});
 
 export const whatsappBotService = {
   buildTwiml,
@@ -351,213 +336,24 @@ export const whatsappBotService = {
     employeeId: string | null;
     moduleStates: ReadonlyMap<CompanyModuleKey, boolean>;
   }): Promise<string> {
-    const body = input.payload.Body?.trim() ?? "";
-    const { companyId } = input;
-
-    if (!input.employeeId) {
-      console.info("[whatsapp-bot] employee not identified", { phone: input.phoneFrom });
-      return respond(companyId, {
-        message: UNKNOWN_EMPLOYEE_MESSAGE,
-        employeeId: null,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
     const { activeSession: session, recentlyExpired } =
-      await botSessionService.getSessionResolutionByPhone(companyId, input.phoneFrom);
+      await botSessionService.getSessionResolutionByPhone(input.companyId, input.phoneFrom);
 
-    if (!session && recentlyExpired && parseInventorySelection(body)) {
-      console.info("[whatsapp-bot] inventory selection after expired session", {
-        phone: input.phoneFrom,
-      });
-      return respond(companyId, {
-        message: EXPIRED_SESSION_MESSAGE,
+    return whatsappRouterService.routeTextMessage(
+      {
+        companyId: input.companyId,
         employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session && isAbsenceCancelIntent(body)) {
-      await botSessionService.cancelSession(companyId, session.id);
-      return respond(companyId, {
-        message: GLOBAL_CANCEL_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session?.state === "WAITING_INVENTORY_SELECTION") {
-      return this.handleInventorySelection({
-        companyId,
+        payload: input.payload,
+        messageType: "TEXT",
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        moduleStates: input.moduleStates,
         session,
-        body,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-      });
-    }
-
-    if (session?.state === "WAITING_CHECKOUT_INVENTORY_SELECTION") {
-      return this.handleCheckoutInventorySelection({
-        companyId,
-        session,
-        body,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-        messageSid: input.payload.MessageSid,
-      });
-    }
-
-    if (session?.state === "WAITING_LOCATION") {
-      return respond(companyId, {
-        message: WAITING_LOCATION_TEXT_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session?.state === "WAITING_CHECKOUT_LOCATION") {
-      return respond(companyId, {
-        message: WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session && isAbsenceSessionState(session.state)) {
-      const boundRespond = (msg: Parameters<typeof respond>[1]) => respond(companyId, msg);
-      return absenceBotService.handleAbsenceSession(companyId, {
-        session,
-        body,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-        messageSid: input.payload.MessageSid,
-        respond: boundRespond,
-      });
-    }
-
-    if (!body) {
-      return respond(companyId, {
-        message: UNPARSEABLE_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    const intent = parseBotIntent({ body });
-
-    if (intent === "checkout") {
-      setLastDetectedIntent("checkout");
-      const blockedMessage = getAttendanceModuleBlockedMessage(input.moduleStates);
-      if (blockedMessage) {
-        logModuleBlocked(companyId, "attendance");
-        return respond(companyId, {
-          message: blockedMessage,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-      if (session && isAbsenceSessionState(session.state)) {
-        return respond(companyId, {
-          message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-      return this.startCheckout({
-        companyId,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-        messageSid: input.payload.MessageSid,
-      });
-    }
-
-    if (intent === "arrival") {
-      setLastDetectedIntent("check-in");
-      const blockedMessage = getCheckInModuleBlockedMessage(input.moduleStates);
-      if (blockedMessage) {
-        logModuleBlocked(companyId, "attendance");
-        return respond(companyId, {
-          message: blockedMessage,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-      if (session && isAbsenceSessionState(session.state)) {
-        return respond(companyId, {
-          message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-      return this.startCheckIn({
-        companyId,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-      });
-    }
-
-    if (intent === "absence") {
-      setLastDetectedIntent("absence");
-      const blockedMessage = getAbsenceModuleBlockedMessage(input.moduleStates);
-      if (blockedMessage) {
-        logModuleBlocked(companyId, "absences");
-        return respond(companyId, {
-          message: blockedMessage,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-      if (absenceBotService.hasActiveAttendanceSession(session)) {
-        return respond(companyId, {
-          message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-
-      const boundRespond = (msg: Parameters<typeof respond>[1]) => respond(companyId, msg);
-      return absenceBotService.startAbsenceFlow(companyId, {
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-        body,
-        respond: boundRespond,
-      });
-    }
-
-    if (intent === "menu") {
-      setLastDetectedIntent("greeting");
-      return respond(companyId, {
-        message: GREETING_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    return respond(companyId, {
-      message: GREETING_MESSAGE,
-      employeeId: input.employeeId,
-      phoneFrom: input.phoneTo,
-      phoneTo: input.phoneFrom,
-    });
+        recentlyExpired,
+        body: input.payload.Body?.trim() ?? "",
+      },
+      createRouterHandlers(),
+    );
   },
 
   async startCheckout(input: {
@@ -859,126 +655,24 @@ export const whatsappBotService = {
     employeeId: string | null;
     moduleStates: ReadonlyMap<CompanyModuleKey, boolean>;
   }): Promise<string> {
-    const { companyId } = input;
-    if (!input.employeeId) {
-      return respond(companyId, {
-        message: UNKNOWN_EMPLOYEE_MESSAGE,
-        employeeId: null,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
     const { activeSession: session, recentlyExpired } =
-      await botSessionService.getSessionResolutionByPhone(companyId, input.phoneFrom);
+      await botSessionService.getSessionResolutionByPhone(input.companyId, input.phoneFrom);
 
-    if (!session) {
-      return respond(companyId, {
-        message: recentlyExpired ? EXPIRED_SESSION_MESSAGE : LOCATION_WITHOUT_SESSION_MESSAGE,
+    return whatsappRouterService.routeLocationMessage(
+      {
+        companyId: input.companyId,
         employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session.state === "WAITING_INVENTORY_SELECTION") {
-      return respond(companyId, {
-        message: LOCATION_DURING_SELECTION_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session.state === "WAITING_CHECKOUT_INVENTORY_SELECTION") {
-      return respond(companyId, {
-        message: LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    if (session.state === "WAITING_CHECKOUT_LOCATION" && session.inventoryId) {
-      try {
-        const latitude = Number(input.payload.Latitude);
-        const longitude = Number(input.payload.Longitude);
-
-        return await this.processLocationCheckout({
-          companyId,
-          session,
-          employeeId: input.employeeId,
-          inventoryId: session.inventoryId,
-          latitude,
-          longitude,
-          messageSid: input.payload.MessageSid,
-          phoneFrom: input.phoneFrom,
-          phoneTo: input.phoneTo,
-        });
-      } catch (error) {
-        if (error instanceof InvalidCoordinatesError) {
-          return respond(companyId, {
-            message: INVALID_COORDINATES_MESSAGE,
-            employeeId: input.employeeId,
-            phoneFrom: input.phoneTo,
-            phoneTo: input.phoneFrom,
-          });
-        }
-
-        console.error("[whatsapp-bot] unexpected checkout location processing error", error);
-        return respond(companyId, {
-          message: GENERIC_ERROR_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-    }
-
-    if (session.state !== "WAITING_LOCATION" || !session.inventoryId) {
-      return respond(companyId, {
-        message: isCheckoutSessionState(session.state)
-          ? LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE
-          : LOCATION_WITHOUT_SESSION_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    try {
-      const latitude = Number(input.payload.Latitude);
-      const longitude = Number(input.payload.Longitude);
-
-      return await this.processLocationCheckIn({
-        companyId,
-        session,
-        employeeId: input.employeeId,
-        inventoryId: session.inventoryId,
-        latitude,
-        longitude,
-        messageSid: input.payload.MessageSid,
+        payload: input.payload,
+        messageType: "LOCATION",
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
-      });
-    } catch (error) {
-      if (error instanceof InvalidCoordinatesError) {
-        return respond(companyId, {
-          message: INVALID_COORDINATES_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-
-      console.error("[whatsapp-bot] unexpected location processing error", error);
-      return respond(companyId, {
-        message: GENERIC_ERROR_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
+        moduleStates: input.moduleStates,
+        session,
+        recentlyExpired,
+        body: input.payload.Body?.trim() ?? "",
+      },
+      createRouterHandlers(),
+    );
   },
 
   async processLocationCheckIn(input: {

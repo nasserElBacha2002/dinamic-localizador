@@ -74,11 +74,6 @@ export const companyModuleService = {
     return new Map(modules.map((module) => [module.moduleKey, module.isEnabled]));
   },
 
-  async isCompanyModuleEnabled(companyId: string, moduleKey: CompanyModuleKey): Promise<boolean> {
-    const states = await this.getModuleStates(companyId);
-    return states.get(moduleKey) === true;
-  },
-
   async updateModules(
     companyId: string,
     role: CompanyRole,

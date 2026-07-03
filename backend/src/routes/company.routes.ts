@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { companyController } from "../controllers/company.controller";
 import { resolveCompanyContext, requirePermission } from "../middleware/company-context";
+import { requirePlatformAdmin } from "../middleware/require-platform-admin";
 import { asyncHandler } from "../middleware/async-handler";
 import { validate } from "../middleware/validate";
 import {
@@ -109,6 +110,6 @@ companyRouter.patch(
   validate(companyIdParamSchema, "params"),
   validate(updateCompanyModulesSchema),
   resolveCompanyContext,
-  requirePermission("company:settings:update"),
+  asyncHandler(requirePlatformAdmin),
   asyncHandler(companyController.updateModules),
 );

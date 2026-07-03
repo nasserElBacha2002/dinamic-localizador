@@ -11,12 +11,20 @@ import {
   type OperationalSettingsFormValues,
 } from "../../../utils/company-settings-validation";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { SettingsFormField } from "./SettingsFormField";
 
 interface CompanyOperationalSettingsSectionProps {
   settings: CompanySettings;
   canUpdate: boolean;
   onSaved: (message: string) => void;
 }
+
+const numberInputProps = {
+  min: 0,
+  max: 240,
+  step: 1,
+  hideControls: true,
+} as const;
 
 export function CompanyOperationalSettingsSection({
   settings,
@@ -62,128 +70,158 @@ export function CompanyOperationalSettingsSection({
     >
       <Stack gap="md">
         <FormGrid columns={{ base: 1, md: 2 }}>
-          <TextInput
+          <SettingsFormField
             label="Zona horaria operativa"
-            value={formValues.operationTimezone}
-            onChange={(event) =>
-              setFormValues((current) => ({
-                ...current,
-                operationTimezone: event.currentTarget.value,
-              }))
-            }
-            disabled={disabled}
-          />
-          <NumberInput
+            description="Zona horaria usada por operaciones y reportes."
+          >
+            <TextInput
+              value={formValues.operationTimezone}
+              onChange={(event) =>
+                setFormValues((current) => ({
+                  ...current,
+                  operationTimezone: event.currentTarget.value,
+                }))
+              }
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Radio permitido por defecto (m)"
             description="Default para operaciones e importaciones."
-            value={formValues.defaultRadiusMeters === "" ? "" : Number(formValues.defaultRadiusMeters)}
-            onChange={(value) =>
-              setFormValues((current) => ({
-                ...current,
-                defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
-              }))
-            }
-            min={10}
-            max={5000}
-            disabled={disabled}
-          />
-          <TextInput
+          >
+            <NumberInput
+              value={formValues.defaultRadiusMeters === "" ? "" : Number(formValues.defaultRadiusMeters)}
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              min={10}
+              max={5000}
+              step={1}
+              hideControls
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Horario de inicio por defecto"
             description="Default para operaciones e importaciones."
-            placeholder="20:30"
-            value={formValues.defaultOperationStartTime}
-            onChange={(event) =>
-              setFormValues((current) => ({
-                ...current,
-                defaultOperationStartTime: event.currentTarget.value,
-              }))
-            }
-            disabled={disabled}
-          />
-          <TextInput
+          >
+            <TextInput
+              placeholder="20:30"
+              value={formValues.defaultOperationStartTime}
+              onChange={(event) =>
+                setFormValues((current) => ({
+                  ...current,
+                  defaultOperationStartTime: event.currentTarget.value,
+                }))
+              }
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Horario de fin por defecto"
             description="Default para operaciones e importaciones."
-            placeholder="03:00"
-            value={formValues.defaultOperationEndTime}
-            onChange={(event) =>
-              setFormValues((current) => ({
-                ...current,
-                defaultOperationEndTime: event.currentTarget.value,
-              }))
-            }
-            disabled={disabled}
-          />
-          <NumberInput
+          >
+            <TextInput
+              placeholder="03:00"
+              value={formValues.defaultOperationEndTime}
+              onChange={(event) =>
+                setFormValues((current) => ({
+                  ...current,
+                  defaultOperationEndTime: event.currentTarget.value,
+                }))
+              }
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Tolerancia de llegada temprana para operaciones (min)"
             description="Default para operaciones e importaciones."
-            value={
-              formValues.defaultEarlyArrivalToleranceMinutes === ""
-                ? ""
-                : Number(formValues.defaultEarlyArrivalToleranceMinutes)
-            }
-            onChange={(value) =>
-              setFormValues((current) => ({
-                ...current,
-                defaultEarlyArrivalToleranceMinutes:
-                  value === "" || value === undefined ? "" : String(value),
-              }))
-            }
-            min={0}
-            max={240}
-            disabled={disabled}
-          />
-          <NumberInput
+          >
+            <NumberInput
+              value={
+                formValues.defaultEarlyArrivalToleranceMinutes === ""
+                  ? ""
+                  : Number(formValues.defaultEarlyArrivalToleranceMinutes)
+              }
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  defaultEarlyArrivalToleranceMinutes:
+                    value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              {...numberInputProps}
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Tolerancia de llegada tardía para operaciones (min)"
             description="Default para operaciones e importaciones."
-            value={
-              formValues.defaultLateArrivalToleranceMinutes === ""
-                ? ""
-                : Number(formValues.defaultLateArrivalToleranceMinutes)
-            }
-            onChange={(value) =>
-              setFormValues((current) => ({
-                ...current,
-                defaultLateArrivalToleranceMinutes:
-                  value === "" || value === undefined ? "" : String(value),
-              }))
-            }
-            min={0}
-            max={240}
-            disabled={disabled}
-          />
-          <NumberInput
+          >
+            <NumberInput
+              value={
+                formValues.defaultLateArrivalToleranceMinutes === ""
+                  ? ""
+                  : Number(formValues.defaultLateArrivalToleranceMinutes)
+              }
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  defaultLateArrivalToleranceMinutes:
+                    value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              {...numberInputProps}
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Tolerancia de puntualidad WhatsApp (min)"
             description="Validación del mensaje “Llegué”."
-            value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
-            onChange={(value) =>
-              setFormValues((current) => ({
-                ...current,
-                lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
-              }))
-            }
-            min={0}
-            max={240}
-            disabled={disabled}
-          />
-          <NumberInput
+          >
+            <NumberInput
+              value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              {...numberInputProps}
+              disabled={disabled}
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
             label="Tolerancia de salida anticipada WhatsApp (min)"
             description="Validación del mensaje “Terminé”."
-            value={
-              formValues.earlyLeaveToleranceMinutes === ""
-                ? ""
-                : Number(formValues.earlyLeaveToleranceMinutes)
-            }
-            onChange={(value) =>
-              setFormValues((current) => ({
-                ...current,
-                earlyLeaveToleranceMinutes:
-                  value === "" || value === undefined ? "" : String(value),
-              }))
-            }
-            min={0}
-            max={240}
-            disabled={disabled}
-          />
+          >
+            <NumberInput
+              value={
+                formValues.earlyLeaveToleranceMinutes === ""
+                  ? ""
+                  : Number(formValues.earlyLeaveToleranceMinutes)
+              }
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  earlyLeaveToleranceMinutes:
+                    value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              {...numberInputProps}
+              disabled={disabled}
+            />
+          </SettingsFormField>
         </FormGrid>
 
         {validationErrors.length > 0 ? (

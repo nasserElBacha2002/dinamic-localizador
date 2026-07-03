@@ -147,18 +147,19 @@ export function CompanyAbsenceSettingsDialog({
                 <Table.Td>
                   <Switch
                     checked={row.autoAssignOnEmployeeCreate}
-                    onChange={(event) =>
+                    onChange={(event) => {
+                      const checked = event.currentTarget.checked;
                       setDraft((current) =>
                         current.map((item, itemIndex) =>
                           itemIndex === index
                             ? {
                                 ...item,
-                                autoAssignOnEmployeeCreate: event.currentTarget.checked,
+                                autoAssignOnEmployeeCreate: checked,
                               }
                             : item,
                         ),
-                      )
-                    }
+                      );
+                    }}
                     disabled={disabled || !row.isActive}
                     aria-label={`Asignar automáticamente al crear empleado ${row.absenceTypeName}`}
                   />

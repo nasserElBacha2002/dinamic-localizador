@@ -113,7 +113,7 @@ export const companyController = {
     const companyId = requireRequestCompanyId(req);
     const modules = await companyModuleService.updateModules(
       companyId,
-      req.companyRole!,
+      Boolean(req.isPlatformAdmin),
       req.body,
     );
     res.status(200).json({ data: modules });

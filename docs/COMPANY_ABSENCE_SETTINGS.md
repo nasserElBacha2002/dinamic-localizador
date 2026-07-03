@@ -32,6 +32,36 @@ Companies can update them through the absence settings API.
 - Balances are created only for settings with `auto_assign_on_employee_create = true`, using `default_annual_days`. Inactive absence types are skipped.
 - **Existing employees:** balances are never overwritten automatically.
 
+## Backfilling existing employees
+
+Employees registered before absence defaults were configured do not receive balances automatically. Run the operational backfill script to create **missing** balances from each company's current absence settings.
+
+The script is idempotent and safe to run multiple times:
+
+- It only inserts balances that do not exist for the target year.
+- It never updates `total_days`, `used_days`, or notes on existing rows.
+- It respects `auto_assign_on_employee_create = false`.
+- It skips inactive absence types.
+- Decimal defaults such as `2.5` are preserved.
+
+Recommended production flow:
+
+1. Run dry-run.
+2. Review the number of balances to be created.
+3. Run the real command.
+4. Run the command again and confirm `0` new balances.
+
+Example commands:
+
+```bash
+cd backend
+npm run backfill:absence-balances -- --dry-run
+npm run backfill:absence-balances
+npm run backfill:absence-balances -- --company-id <uuid> --year 2026
+```
+
+The target year defaults to the current calendar year in each company's `operation_timezone` (`company_settings`). Use `--year` to backfill a specific year explicitly.
+
 ## API
 
 - `GET /api/companies/:companyId/settings/absences`

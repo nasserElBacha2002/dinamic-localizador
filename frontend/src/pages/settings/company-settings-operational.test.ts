@@ -53,6 +53,19 @@ describe("CompanyOperationalSettingsSection", () => {
     assert.doesNotMatch(sectionFile, /SettingsDialog/);
   });
 
+  it("uses aligned SettingsFormField wrappers with helper text on every field", () => {
+    const sectionFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+      "utf8",
+    );
+
+    assert.equal((sectionFile.match(/SettingsFormField/g) ?? []).length, 8);
+    assert.match(sectionFile, /description="Zona horaria usada por operaciones y reportes\."/);
+    assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
+    assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
+    assert.match(sectionFile, /hideControls/);
+  });
+
   it("uses dirty-aware save and discard actions", () => {
     const sectionFile = readFileSync(
       join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
@@ -128,6 +141,41 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /setOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationTypes"\)/);
     assert.doesNotMatch(pageFile, /CompanyInventoryOperationSettingsDialog/);
+  });
+});
+
+describe("Company modules permissions", () => {
+  it("keeps module management out of company settings page", () => {
+    const pageFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
+      "utf8",
+    );
+
+    assert.doesNotMatch(pageFile, /useCompanyModules/);
+    assert.doesNotMatch(pageFile, /useUpdateCompanyModules/);
+    assert.doesNotMatch(pageFile, /Módulos habilitados/);
+    assert.doesNotMatch(pageFile, /Gestionar módulos/);
+  });
+
+  it("restricts module PATCH to platform admin in backend route", () => {
+    const routesFile = readFileSync(
+      join(process.cwd(), "../backend/src/routes/company.routes.ts"),
+      "utf8",
+    );
+    const serviceFile = readFileSync(
+      join(process.cwd(), "../backend/src/services/company-module.service.ts"),
+      "utf8",
+    );
+
+    assert.match(routesFile, /requirePlatformAdmin/);
+    assert.match(serviceFile, /PLATFORM_ADMIN_REQUIRED/);
+  });
+
+  it("shows platform companies nav only for platform admin", () => {
+    const navFile = readFileSync(join(process.cwd(), "src/utils/company-modules.ts"), "utf8");
+    assert.match(navFile, /if \(isPlatformAdmin\)/);
+    assert.match(navFile, /Empresas de plataforma/);
+    assert.doesNotMatch(navFile, /Módulos habilitados/);
   });
 });
 

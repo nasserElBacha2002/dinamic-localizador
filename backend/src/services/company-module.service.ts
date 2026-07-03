@@ -3,12 +3,11 @@ import {
   CORE_COMPANY_MODULE_KEYS,
   type CompanyModuleKey,
 } from "../constants/company-modules";
-import { roleHasPermission } from "../constants/company-permissions";
 import { AppError } from "../errors/app-error";
 import { companyModuleRepository } from "../repositories/company-module.repository";
 import { companyRepository } from "../repositories/company.repository";
 import type { UpdateCompanyModulesInput } from "../schemas/company-module.schema";
-import type { CompanyModule, CompanyModuleDto, CompanyRole } from "../types/company";
+import type { CompanyModule, CompanyModuleDto } from "../types/company";
 
 const toCompanyModuleDto = (module: CompanyModule): CompanyModuleDto => ({
   companyId: module.companyId,
@@ -76,11 +75,15 @@ export const companyModuleService = {
 
   async updateModules(
     companyId: string,
-    role: CompanyRole,
+    isPlatformAdmin: boolean,
     input: UpdateCompanyModulesInput,
   ): Promise<CompanyModuleDto[]> {
-    if (!roleHasPermission(role, "company:settings:update")) {
-      throw new AppError(403, "FORBIDDEN", "No tiene permisos para actualizar los módulos.");
+    if (!isPlatformAdmin) {
+      throw new AppError(
+        403,
+        "PLATFORM_ADMIN_REQUIRED",
+        "Solo un administrador de plataforma puede gestionar módulos.",
+      );
     }
 
     await assertActiveCompany(companyId);

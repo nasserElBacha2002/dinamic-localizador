@@ -103,6 +103,22 @@ export const employeeRepository = {
     }));
   },
 
+  async listActiveByCompanyId(companyId: string): Promise<Employee[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT *
+        FROM employees
+        WHERE company_id = @companyId
+          AND active = 1
+        ORDER BY name ASC, created_at ASC
+      `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
   async list(
     companyId: string,
     query: ListEmployeesQuery,

@@ -2,6 +2,7 @@ import type { CompanySettingsFormValues } from "../types/company-settings";
 
 const LIMITS = {
   defaultRadiusMeters: { min: 10, max: 5000 },
+  geofenceReviewMarginMeters: { min: 0, max: 500 },
   lateGraceMinutes: { min: 0, max: 240 },
   earlyLeaveToleranceMinutes: { min: 0, max: 240 },
   inventoryToleranceMinutes: { min: 0, max: 240 },
@@ -33,6 +34,25 @@ function validateIntegerField(
   return null;
 }
 
+function validateOptionalIntegerField(
+  raw: string,
+  label: string,
+  min: number,
+  max: number,
+): string | null {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const value = Number(trimmed);
+  if (!Number.isInteger(value) || value < min || value > max) {
+    return `${label} debe ser un número entero entre ${min} y ${max}.`;
+  }
+
+  return null;
+}
+
 function validateOptionalHHmm(raw: string, label: string): string | null {
   const trimmed = raw.trim();
   if (!trimmed) {
@@ -46,7 +66,7 @@ function validateOptionalHHmm(raw: string, label: string): string | null {
   return null;
 }
 
-export function validateCompanySettingsForm(values: CompanySettingsFormValues): string[] {
+function validateTimezone(values: Pick<CompanySettingsFormValues, "operationTimezone">): string[] {
   const errors: string[] = [];
   const timezone = values.operationTimezone.trim();
 
@@ -58,14 +78,46 @@ export function validateCompanySettingsForm(values: CompanySettingsFormValues): 
     errors.push("La zona horaria operativa no es válida.");
   }
 
+  return errors;
+}
+
+export function validateGeneralSettingsForm(
+  values: Pick<CompanySettingsFormValues, "operationTimezone">,
+): string[] {
+  return validateTimezone(values);
+}
+
+export function validateInventoryOperationSettingsForm(
+  values: Pick<
+    CompanySettingsFormValues,
+    | "defaultRadiusMeters"
+    | "geofenceReviewMarginMeters"
+    | "defaultOperationStartTime"
+    | "defaultOperationEndTime"
+    | "defaultEarlyArrivalToleranceMinutes"
+    | "defaultLateArrivalToleranceMinutes"
+  >,
+): string[] {
+  const errors: string[] = [];
+
   const radiusError = validateIntegerField(
     values.defaultRadiusMeters,
-    "El radio predeterminado",
+    "El radio permitido por defecto",
     LIMITS.defaultRadiusMeters.min,
     LIMITS.defaultRadiusMeters.max,
   );
   if (radiusError) {
     errors.push(radiusError);
+  }
+
+  const reviewMarginError = validateOptionalIntegerField(
+    values.geofenceReviewMarginMeters,
+    "El margen de revisión de geocerca",
+    LIMITS.geofenceReviewMarginMeters.min,
+    LIMITS.geofenceReviewMarginMeters.max,
+  );
+  if (reviewMarginError) {
+    errors.push(reviewMarginError);
   }
 
   const startTimeError = validateOptionalHHmm(
@@ -104,6 +156,14 @@ export function validateCompanySettingsForm(values: CompanySettingsFormValues): 
     errors.push(lateArrivalError);
   }
 
+  return errors;
+}
+
+export function validateWhatsAppSettingsForm(
+  values: Pick<CompanySettingsFormValues, "lateGraceMinutes" | "earlyLeaveToleranceMinutes">,
+): string[] {
+  const errors: string[] = [];
+
   const lateGraceError = validateIntegerField(
     values.lateGraceMinutes,
     "La tolerancia de puntualidad WhatsApp",
@@ -127,6 +187,90 @@ export function validateCompanySettingsForm(values: CompanySettingsFormValues): 
   return errors;
 }
 
+export function validateOperationalSettingsForm(
+  values: OperationalSettingsFormValues,
+): string[] {
+  return [
+    ...validateGeneralSettingsForm(values),
+    ...validateInventoryOperationSettingsForm({
+      ...values,
+      geofenceReviewMarginMeters: "",
+    }),
+    ...validateWhatsAppSettingsForm(values),
+  ];
+}
+
+export type OperationalSettingsFormValues = Pick<
+  CompanySettingsFormValues,
+  | "operationTimezone"
+  | "defaultRadiusMeters"
+  | "defaultOperationStartTime"
+  | "defaultOperationEndTime"
+  | "defaultEarlyArrivalToleranceMinutes"
+  | "defaultLateArrivalToleranceMinutes"
+  | "lateGraceMinutes"
+  | "earlyLeaveToleranceMinutes"
+>;
+
+export function toOperationalSettingsFormValues(settings: {
+  operationTimezone: string;
+  defaultRadiusMeters: number;
+  lateGraceMinutes: number;
+  earlyLeaveToleranceMinutes: number;
+  defaultEarlyArrivalToleranceMinutes: number;
+  defaultLateArrivalToleranceMinutes: number;
+  defaultOperationStartTime: string | null;
+  defaultOperationEndTime: string | null;
+}): OperationalSettingsFormValues {
+  return {
+    operationTimezone: settings.operationTimezone,
+    defaultRadiusMeters: String(settings.defaultRadiusMeters),
+    defaultOperationStartTime: settings.defaultOperationStartTime ?? "",
+    defaultOperationEndTime: settings.defaultOperationEndTime ?? "",
+    defaultEarlyArrivalToleranceMinutes: String(settings.defaultEarlyArrivalToleranceMinutes),
+    defaultLateArrivalToleranceMinutes: String(settings.defaultLateArrivalToleranceMinutes),
+    lateGraceMinutes: String(settings.lateGraceMinutes),
+    earlyLeaveToleranceMinutes: String(settings.earlyLeaveToleranceMinutes),
+  };
+}
+
+export function toOperationalSettingsUpdateInput(values: OperationalSettingsFormValues) {
+  return {
+    operationTimezone: values.operationTimezone.trim(),
+    defaultRadiusMeters: Number(values.defaultRadiusMeters),
+    defaultOperationStartTime: values.defaultOperationStartTime.trim() || null,
+    defaultOperationEndTime: values.defaultOperationEndTime.trim() || null,
+    defaultEarlyArrivalToleranceMinutes: Number(values.defaultEarlyArrivalToleranceMinutes),
+    defaultLateArrivalToleranceMinutes: Number(values.defaultLateArrivalToleranceMinutes),
+    lateGraceMinutes: Number(values.lateGraceMinutes),
+    earlyLeaveToleranceMinutes: Number(values.earlyLeaveToleranceMinutes),
+  };
+}
+
+export function operationalSettingsEqual(
+  left: OperationalSettingsFormValues,
+  right: OperationalSettingsFormValues,
+): boolean {
+  return (
+    left.operationTimezone === right.operationTimezone &&
+    left.defaultRadiusMeters === right.defaultRadiusMeters &&
+    left.defaultOperationStartTime === right.defaultOperationStartTime &&
+    left.defaultOperationEndTime === right.defaultOperationEndTime &&
+    left.defaultEarlyArrivalToleranceMinutes === right.defaultEarlyArrivalToleranceMinutes &&
+    left.defaultLateArrivalToleranceMinutes === right.defaultLateArrivalToleranceMinutes &&
+    left.lateGraceMinutes === right.lateGraceMinutes &&
+    left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes
+  );
+}
+
+export function validateCompanySettingsForm(values: CompanySettingsFormValues): string[] {
+  return [
+    ...validateGeneralSettingsForm(values),
+    ...validateInventoryOperationSettingsForm(values),
+    ...validateWhatsAppSettingsForm(values),
+  ];
+}
+
 export function toCompanySettingsFormValues(settings: {
   operationTimezone: string;
   defaultRadiusMeters: number;
@@ -138,10 +282,16 @@ export function toCompanySettingsFormValues(settings: {
   defaultLateArrivalToleranceMinutes: number;
   defaultOperationStartTime: string | null;
   defaultOperationEndTime: string | null;
+  geofenceReviewMarginMeters?: number | null;
 }): CompanySettingsFormValues {
   return {
     operationTimezone: settings.operationTimezone,
     defaultRadiusMeters: String(settings.defaultRadiusMeters),
+    geofenceReviewMarginMeters:
+      settings.geofenceReviewMarginMeters === null ||
+      settings.geofenceReviewMarginMeters === undefined
+        ? ""
+        : String(settings.geofenceReviewMarginMeters),
     defaultOperationStartTime: settings.defaultOperationStartTime ?? "",
     defaultOperationEndTime: settings.defaultOperationEndTime ?? "",
     defaultEarlyArrivalToleranceMinutes: String(settings.defaultEarlyArrivalToleranceMinutes),
@@ -157,6 +307,9 @@ export function toCompanySettingsUpdateInput(values: CompanySettingsFormValues) 
   return {
     operationTimezone: values.operationTimezone.trim(),
     defaultRadiusMeters: Number(values.defaultRadiusMeters),
+    geofenceReviewMarginMeters: values.geofenceReviewMarginMeters.trim()
+      ? Number(values.geofenceReviewMarginMeters)
+      : null,
     defaultOperationStartTime: values.defaultOperationStartTime.trim() || null,
     defaultOperationEndTime: values.defaultOperationEndTime.trim() || null,
     defaultEarlyArrivalToleranceMinutes: Number(values.defaultEarlyArrivalToleranceMinutes),
@@ -175,6 +328,7 @@ export function formValuesEqual(
   return (
     left.operationTimezone === right.operationTimezone &&
     left.defaultRadiusMeters === right.defaultRadiusMeters &&
+    left.geofenceReviewMarginMeters === right.geofenceReviewMarginMeters &&
     left.defaultOperationStartTime === right.defaultOperationStartTime &&
     left.defaultOperationEndTime === right.defaultOperationEndTime &&
     left.defaultEarlyArrivalToleranceMinutes === right.defaultEarlyArrivalToleranceMinutes &&
@@ -184,4 +338,65 @@ export function formValuesEqual(
     left.requireCheckoutLocation === right.requireCheckoutLocation &&
     left.allowManualAttendanceCorrections === right.allowManualAttendanceCorrections
   );
+}
+
+export function generalSettingsEqual(
+  left: Pick<CompanySettingsFormValues, "operationTimezone">,
+  right: Pick<CompanySettingsFormValues, "operationTimezone">,
+): boolean {
+  return left.operationTimezone === right.operationTimezone;
+}
+
+export function inventoryOperationSettingsEqual(
+  left: Pick<
+    CompanySettingsFormValues,
+    | "defaultRadiusMeters"
+    | "geofenceReviewMarginMeters"
+    | "defaultOperationStartTime"
+    | "defaultOperationEndTime"
+    | "defaultEarlyArrivalToleranceMinutes"
+    | "defaultLateArrivalToleranceMinutes"
+  >,
+  right: Pick<
+    CompanySettingsFormValues,
+    | "defaultRadiusMeters"
+    | "geofenceReviewMarginMeters"
+    | "defaultOperationStartTime"
+    | "defaultOperationEndTime"
+    | "defaultEarlyArrivalToleranceMinutes"
+    | "defaultLateArrivalToleranceMinutes"
+  >,
+): boolean {
+  return (
+    left.defaultRadiusMeters === right.defaultRadiusMeters &&
+    left.geofenceReviewMarginMeters === right.geofenceReviewMarginMeters &&
+    left.defaultOperationStartTime === right.defaultOperationStartTime &&
+    left.defaultOperationEndTime === right.defaultOperationEndTime &&
+    left.defaultEarlyArrivalToleranceMinutes === right.defaultEarlyArrivalToleranceMinutes &&
+    left.defaultLateArrivalToleranceMinutes === right.defaultLateArrivalToleranceMinutes
+  );
+}
+
+export function whatsAppSettingsEqual(
+  left: Pick<CompanySettingsFormValues, "lateGraceMinutes" | "earlyLeaveToleranceMinutes">,
+  right: Pick<CompanySettingsFormValues, "lateGraceMinutes" | "earlyLeaveToleranceMinutes">,
+): boolean {
+  return (
+    left.lateGraceMinutes === right.lateGraceMinutes &&
+    left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes
+  );
+}
+
+export function checkoutSettingsEqual(
+  left: Pick<CompanySettingsFormValues, "requireCheckoutLocation">,
+  right: Pick<CompanySettingsFormValues, "requireCheckoutLocation">,
+): boolean {
+  return left.requireCheckoutLocation === right.requireCheckoutLocation;
+}
+
+export function correctionsSettingsEqual(
+  left: Pick<CompanySettingsFormValues, "allowManualAttendanceCorrections">,
+  right: Pick<CompanySettingsFormValues, "allowManualAttendanceCorrections">,
+): boolean {
+  return left.allowManualAttendanceCorrections === right.allowManualAttendanceCorrections;
 }

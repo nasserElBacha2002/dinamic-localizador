@@ -6,6 +6,7 @@ import { validateCompanySettingsForm } from "./company-settings-validation";
 const validForm = (): CompanySettingsFormValues => ({
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: "150",
+  geofenceReviewMarginMeters: "30",
   defaultOperationStartTime: "20:30",
   defaultOperationEndTime: "03:00",
   defaultEarlyArrivalToleranceMinutes: "60",
@@ -50,7 +51,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       defaultRadiusMeters: "",
     });
-    assert.ok(errors.some((error) => error.includes("radio predeterminado")));
+    assert.ok(errors.some((error) => error.includes("radio permitido")));
   });
 
   it("rejects non-numeric radius", () => {
@@ -58,7 +59,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       defaultRadiusMeters: "abc",
     });
-    assert.ok(errors.some((error) => error.includes("radio predeterminado")));
+    assert.ok(errors.some((error) => error.includes("radio permitido")));
   });
 
   it("rejects radius below 10", () => {
@@ -66,7 +67,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       defaultRadiusMeters: "9",
     });
-    assert.ok(errors.some((error) => error.includes("radio predeterminado")));
+    assert.ok(errors.some((error) => error.includes("radio permitido")));
   });
 
   it("rejects radius above 5000", () => {
@@ -74,7 +75,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       defaultRadiusMeters: "5001",
     });
-    assert.ok(errors.some((error) => error.includes("radio predeterminado")));
+    assert.ok(errors.some((error) => error.includes("radio permitido")));
   });
 
   it("accepts valid radius", () => {
@@ -82,7 +83,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       defaultRadiusMeters: "5000",
     });
-    assert.equal(errors.some((error) => error.includes("radio predeterminado")), false);
+    assert.equal(errors.some((error) => error.includes("radio permitido")), false);
   });
 
   it("rejects invalid default operation start time", () => {

@@ -35,6 +35,7 @@ export type UpdateCompanySettingsInput = Partial<
 export interface CompanySettingsFormValues {
   operationTimezone: string;
   defaultRadiusMeters: string;
+  geofenceReviewMarginMeters: string;
   defaultOperationStartTime: string;
   defaultOperationEndTime: string;
   defaultEarlyArrivalToleranceMinutes: string;

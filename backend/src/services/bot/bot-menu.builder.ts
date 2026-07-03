@@ -72,15 +72,18 @@ export function buildGreetingMessage(
 
 export function buildHelpMessage(
   moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+  options?: { hasActiveSession?: boolean },
 ): string {
-  return [
+  const lines = [
     "Te puedo ayudar con las opciones habilitadas para tu empresa.",
     "",
-    buildGreetingMessage(moduleStates),
+    buildGreetingMessage(moduleStates, { hasActiveSession: options?.hasActiveSession }),
     "",
     'Si estás en medio de un flujo, escribí "Cancelar" para salir.',
     "Si algo no funciona como esperás, contactá a administración.",
-  ].join("\n");
+  ];
+
+  return lines.join("\n");
 }
 
 export function buildNoActiveFlowCancelMessage(

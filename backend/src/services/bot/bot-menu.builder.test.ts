@@ -29,7 +29,7 @@ describe("buildGreetingMessage", () => {
     assert.match(message, /Cancelar/);
   });
 
-  it("notes active flow when requested", () => {
+  it("notes active flow when requested in greeting", () => {
     const message = buildGreetingMessage(allEnabled(), { hasActiveSession: true });
     assert.match(message, /Tenés un flujo activo/);
     assert.match(message, /Cancelar/);
@@ -86,6 +86,12 @@ describe("buildHelpMessage", () => {
     const message = buildHelpMessage(states);
     assert.doesNotMatch(message, /ausencia/i);
     assert.match(message, /Marcar salida/);
+  });
+
+  it("notes active flow when requested", () => {
+    const message = buildHelpMessage(allEnabled(), { hasActiveSession: true });
+    assert.match(message, /Tenés un flujo activo/);
+    assert.match(message, /Te puedo ayudar con las opciones habilitadas/);
   });
 });
 

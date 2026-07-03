@@ -49,7 +49,7 @@ export const tryHandleGlobalCommand = async (
 
   if (isGlobalHelpCommand(body)) {
     setLastDetectedIntent("greeting");
-    return respond(buildHelpMessage(moduleStates));
+    return respond(buildHelpMessage(moduleStates, { hasActiveSession: Boolean(session) }));
   }
 
   if (isGlobalMenuCommand(body)) {

@@ -2,6 +2,7 @@ import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration
 import { isCheckoutSessionState } from "../../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../../utils/haversine";
 import { parseInventorySelection } from "../../utils/intent";
+import { maskPhoneNumberForLog } from "../../utils/phone";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
   GENERIC_ERROR_MESSAGE,
@@ -41,7 +42,9 @@ export const whatsappRouterService = {
     const { companyId } = ctx;
 
     if (!ctx.employeeId) {
-      console.info("[whatsapp-bot] employee not identified", { phone: ctx.phoneFrom });
+      console.info("[whatsapp-bot] employee not identified", {
+        phone: maskPhoneNumberForLog(ctx.phoneFrom),
+      });
       return handlers.respond(companyId, {
         message: UNKNOWN_EMPLOYEE_MESSAGE,
         employeeId: null,
@@ -52,7 +55,7 @@ export const whatsappRouterService = {
 
     if (!ctx.session && ctx.recentlyExpired && parseInventorySelection(ctx.body)) {
       console.info("[whatsapp-bot] inventory selection after expired session", {
-        phone: ctx.phoneFrom,
+        phone: maskPhoneNumberForLog(ctx.phoneFrom),
       });
       return handlers.respond(companyId, {
         message: EXPIRED_SESSION_MESSAGE,

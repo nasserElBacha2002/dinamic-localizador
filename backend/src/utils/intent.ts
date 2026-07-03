@@ -31,6 +31,8 @@ const CHECKOUT_INTENTS = [
 
 const GLOBAL_MENU_COMMANDS = ["menu", "inicio"] as const;
 const GLOBAL_HELP_COMMANDS = ["ayuda", "help"] as const;
+// "salir" is a global cancel command (exits the active flow).
+// For checkout/departure, employees should use "Me voy", "Terminé", "Finalicé", or "Salida".
 const GLOBAL_CANCEL_COMMANDS = ["cancelar", "salir"] as const;
 const GLOBAL_BACK_COMMANDS = ["volver"] as const;
 

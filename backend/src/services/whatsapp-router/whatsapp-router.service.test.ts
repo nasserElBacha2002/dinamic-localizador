@@ -581,6 +581,22 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.match(response, /ABSENCE_SESSION/);
     assert.equal(absenceHandled, 1);
   });
+  it("returns help with active-flow note during active session", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "ayuda",
+        session: buildSession("WAITING_LOCATION"),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /Te puedo ayudar con las opciones habilitadas/);
+    assert.match(response, /Tenés un flujo activo/);
+  });
 });
 
 describe("whatsappRouterService.routeLocationMessage", () => {

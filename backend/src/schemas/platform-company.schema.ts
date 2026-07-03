@@ -9,6 +9,11 @@ const companySettingsInputSchema = z.object({
   earlyLeaveToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
   requireCheckoutLocation: z.boolean().optional(),
   allowManualAttendanceCorrections: z.boolean().optional(),
+  defaultEarlyArrivalToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
+  defaultLateArrivalToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
+  defaultOperationStartTime: z.string().trim().regex(/^\d{1,2}:\d{2}$/).optional().nullable(),
+  defaultOperationEndTime: z.string().trim().regex(/^\d{1,2}:\d{2}$/).optional().nullable(),
+  geofenceReviewMarginMeters: z.coerce.number().int().nonnegative().optional().nullable(),
 });
 
 const ownerInputSchema = z.object({

@@ -54,11 +54,37 @@ export interface CompanySettings {
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;
+  defaultEarlyArrivalToleranceMinutes: number;
+  defaultLateArrivalToleranceMinutes: number;
+  defaultOperationStartTime: string | null;
+  defaultOperationEndTime: string | null;
+  geofenceReviewMarginMeters: number | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export type CompanySettingsDto = Omit<CompanySettings, "id">;
+
+export interface CompanyAbsenceSetting {
+  id: string;
+  companyId: string;
+  absenceTypeCode: string;
+  defaultAnnualDays: number;
+  autoAssignOnEmployeeCreate: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyLocationType {
+  id: string;
+  companyId: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface CompanyModule {
   id: string;

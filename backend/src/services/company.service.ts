@@ -1,4 +1,4 @@
-import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
+import { toCompanySettingsInput } from "../constants/company-settings";
 import { roleHasPermission } from "../constants/company-permissions";
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
@@ -21,6 +21,11 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   earlyLeaveToleranceMinutes: settings.earlyLeaveToleranceMinutes,
   requireCheckoutLocation: settings.requireCheckoutLocation,
   allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,
+  defaultEarlyArrivalToleranceMinutes: settings.defaultEarlyArrivalToleranceMinutes,
+  defaultLateArrivalToleranceMinutes: settings.defaultLateArrivalToleranceMinutes,
+  defaultOperationStartTime: settings.defaultOperationStartTime,
+  defaultOperationEndTime: settings.defaultOperationEndTime,
+  geofenceReviewMarginMeters: settings.geofenceReviewMarginMeters,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });
@@ -58,7 +63,7 @@ export const companyService = {
 
     const settings = await companySettingsRepository.findOrCreateByCompanyId(
       companyId,
-      DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
+      toCompanySettingsInput(),
     );
 
     return toCompanySettingsDto(settings);
@@ -78,7 +83,7 @@ export const companyService = {
     const existing = await companySettingsRepository.findByCompanyId(companyId);
     if (!existing) {
       const created = await companySettingsRepository.create(companyId, {
-        ...DEFAULT_COMPANY_OPERATIONAL_SETTINGS,
+        ...toCompanySettingsInput(),
         ...input,
       });
       return toCompanySettingsDto(created);

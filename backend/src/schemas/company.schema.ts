@@ -57,6 +57,55 @@ export const updateCompanySettingsSchema = z
       .optional(),
     requireCheckoutLocation: z.boolean().optional(),
     allowManualAttendanceCorrections: z.boolean().optional(),
+    defaultEarlyArrivalToleranceMinutes: z.coerce
+      .number()
+      .int("La tolerancia de llegada anticipada debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.defaultEarlyArrivalToleranceMinutes.min,
+        "La tolerancia de llegada anticipada no puede ser negativa.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.defaultEarlyArrivalToleranceMinutes.max,
+        "La tolerancia de llegada anticipada no puede superar 240 minutos.",
+      )
+      .optional(),
+    defaultLateArrivalToleranceMinutes: z.coerce
+      .number()
+      .int("La tolerancia de llegada tardía debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.defaultLateArrivalToleranceMinutes.min,
+        "La tolerancia de llegada tardía no puede ser negativa.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.defaultLateArrivalToleranceMinutes.max,
+        "La tolerancia de llegada tardía no puede superar 240 minutos.",
+      )
+      .optional(),
+    defaultOperationStartTime: z
+      .string()
+      .trim()
+      .regex(/^\d{1,2}:\d{2}$/, "El horario de inicio debe tener formato HH:mm.")
+      .optional()
+      .nullable(),
+    defaultOperationEndTime: z
+      .string()
+      .trim()
+      .regex(/^\d{1,2}:\d{2}$/, "El horario de fin debe tener formato HH:mm.")
+      .optional()
+      .nullable(),
+    geofenceReviewMarginMeters: z.coerce
+      .number()
+      .int("El margen de revisión debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.geofenceReviewMarginMeters.min,
+        "El margen de revisión no puede ser negativo.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.geofenceReviewMarginMeters.max,
+        "El margen de revisión no puede superar 5000 metros.",
+      )
+      .optional()
+      .nullable(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

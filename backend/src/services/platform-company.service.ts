@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { DEFAULT_COMPANY_MODULE_KEYS } from "../constants/company-modules";
+import { toCompanySettingsInput } from "../constants/company-settings";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { companyModuleRepository } from "../repositories/company-module.repository";
@@ -10,15 +11,6 @@ import { userRepository } from "../repositories/user.repository";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
 import { hashPassword, normalizeEmail } from "../utils/password";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
-
-const DEFAULT_SETTINGS = {
-  operationTimezone: "America/Argentina/Buenos_Aires",
-  defaultRadiusMeters: 150,
-  lateGraceMinutes: 15,
-  earlyLeaveToleranceMinutes: 15,
-  requireCheckoutLocation: true,
-  allowManualAttendanceCorrections: true,
-};
 
 export const platformCompanyService = {
   async listCompanies() {
@@ -60,12 +52,12 @@ export const platformCompanyService = {
       );
 
       const settingsInput = {
-        ...DEFAULT_SETTINGS,
+        ...toCompanySettingsInput(),
         ...input.settings,
         operationTimezone:
           input.settings?.operationTimezone ??
           input.defaultTimezone ??
-          DEFAULT_SETTINGS.operationTimezone,
+          toCompanySettingsInput().operationTimezone,
       };
 
       await companySettingsRepository.create(company.id, settingsInput, transaction);

@@ -1,7 +1,8 @@
 import { Accordion, Button, Group, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { Link as RouterLink, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { ReviewAttendanceDialog } from "../../components/attendance/ReviewAttendanceDialog";
 import { DetailFieldGrid } from "../../design-system";
 import {
@@ -21,6 +22,7 @@ import {
   useReviewAttendanceRecord,
 } from "../../hooks/useAttendance";
 import { usePaginationState } from "../../hooks/usePaginationState";
+// Reviews sub-table on detail page: local pagination only; parent list state lives in /attendance URL.
 import type { AttendanceReview } from "../../types/attendance";
 import { formatDateTime } from "../../utils/dates";
 import { terminology } from "../../domain/terminology";
@@ -34,6 +36,7 @@ import {
 
 export function AttendanceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { goBackToList } = useListBackNavigation("/attendance");
   const pagination = usePaginationState(10);
   const attendanceQuery = useAttendanceRecord(id);
   const reviewsQuery = useAttendanceReviews(id, pagination.page, pagination.pageSize);
@@ -109,7 +112,7 @@ export function AttendanceDetailPage() {
                 </Button>
               </>
             ) : null}
-            <Button component={RouterLink} to="/attendance" variant="default">
+            <Button variant="default" onClick={goBackToList}>
               Volver
             </Button>
           </Group>

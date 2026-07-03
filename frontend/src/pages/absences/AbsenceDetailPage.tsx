@@ -2,6 +2,7 @@ import { Alert, Button, Group, Modal, Stack, Text, Textarea } from "@mantine/cor
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
@@ -61,6 +62,7 @@ const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
 
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { goBackToList } = useListBackNavigation("/absences");
   const queryClient = useQueryClient();
   const requestQuery = useAbsenceRequest(id);
   const approveMutation = useApproveAbsenceRequest(id ?? "");
@@ -181,7 +183,7 @@ export function AbsenceDetailPage() {
                 </Button>
               </>
             ) : null}
-            <Button component={RouterLink} to="/absences" variant="default">
+            <Button variant="default" onClick={goBackToList}>
               Volver al listado
             </Button>
           </Group>

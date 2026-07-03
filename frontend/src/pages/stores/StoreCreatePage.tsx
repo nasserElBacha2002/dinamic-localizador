@@ -1,8 +1,9 @@
 import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { Link as RouterLink, useNavigate, useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
 import { PageHeader } from "../../design-system";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCreateStore } from "../../hooks/useStores";
 import type { StoreFormValues } from "../../schemas/store.schema";
 import { toNullableStoreFormat, toNullableStoreText } from "../../schemas/store.schema";
@@ -10,7 +11,7 @@ import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreCreatePage() {
-  const navigate = useNavigate();
+  const { goBackToList } = useListBackNavigation("/stores");
   const [searchParams] = useSearchParams();
   const createMutation = useCreateStore();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -21,7 +22,7 @@ export function StoreCreatePage() {
     setErrorMessage(null);
 
     try {
-      const store = await createMutation.mutateAsync({
+      await createMutation.mutateAsync({
         name: values.name,
         address: toNullableStoreText(values.address),
         neighborhood: toNullableStoreText(values.neighborhood),
@@ -32,7 +33,7 @@ export function StoreCreatePage() {
         allowedRadiusMeters: values.allowedRadiusMeters,
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
       });
-      navigate(`/stores/${store.id}`);
+      goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -45,7 +46,7 @@ export function StoreCreatePage() {
         description="Definí la ubicación y el perímetro de validación."
         action={
           <Group gap="sm" visibleFrom="lg">
-            <Button component={RouterLink} to="/stores" variant="default">
+            <Button variant="default" onClick={goBackToList}>
               Cancelar
             </Button>
             <Button type="submit" form={STORE_FORM_ID} loading={createMutation.isPending}>
@@ -69,6 +70,7 @@ export function StoreCreatePage() {
         }}
         submitLabel={submitLabel}
         cancelTo="/stores"
+        onCancel={goBackToList}
         loading={createMutation.isPending}
         errorMessage={errorMessage}
         isEditMode={false}

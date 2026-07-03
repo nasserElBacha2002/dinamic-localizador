@@ -1,7 +1,8 @@
 import { Button, Group } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
-import { Link as RouterLink, useNavigate, useParams } from "react-router-dom";
+import { useParams } from "react-router-dom";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { STORE_FORM_ID, StoreForm } from "../../components/stores/StoreForm";
 import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useStore, useUpdateStore } from "../../hooks/useStores";
@@ -11,7 +12,7 @@ import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 export function StoreEditPage() {
-  const navigate = useNavigate();
+  const { goBackToList } = useListBackNavigation("/stores");
   const { id } = useParams<{ id: string }>();
   const storeQuery = useStore(id);
   const updateMutation = useUpdateStore(id ?? "");
@@ -58,7 +59,7 @@ export function StoreEditPage() {
         color: "green",
         message: `${terminology.location.singular} actualizada correctamente.`,
       });
-      navigate("/stores");
+      goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     }
@@ -71,7 +72,7 @@ export function StoreEditPage() {
         description="Actualizá la información y el perímetro de validación de la ubicación."
         action={
           <Group gap="sm" visibleFrom="lg">
-            <Button component={RouterLink} to="/stores" variant="default">
+            <Button variant="default" onClick={goBackToList}>
               Cancelar
             </Button>
             <Button type="submit" form={STORE_FORM_ID} loading={updateMutation.isPending}>
@@ -95,6 +96,7 @@ export function StoreEditPage() {
         }}
         submitLabel="Guardar cambios"
         cancelTo="/stores"
+        onCancel={goBackToList}
         loading={updateMutation.isPending}
         errorMessage={errorMessage}
         isEditMode

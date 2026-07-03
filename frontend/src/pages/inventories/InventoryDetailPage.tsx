@@ -2,6 +2,7 @@ import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import {
   ConfirmDialog,
   ErrorState,
@@ -46,6 +47,7 @@ function inventoryStatusTone(status: InventoryStatus): StatusBadgeTone {
 
 export function InventoryDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { goBackToList } = useListBackNavigation("/inventories");
   const inventoryQuery = useInventory(id);
   const updateMutation = useUpdateInventory(id ?? "");
   const cancelMutation = useCancelInventory();
@@ -163,7 +165,7 @@ export function InventoryDetailPage() {
                 {`Cancelar ${terminology.operation.singular.toLowerCase()}`}
               </Button>
             ) : null}
-            <Button component={RouterLink} to="/inventories" variant="default">
+            <Button variant="default" onClick={goBackToList}>
               Volver al listado
             </Button>
           </Group>

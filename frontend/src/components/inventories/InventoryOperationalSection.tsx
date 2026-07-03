@@ -18,6 +18,7 @@ import {
   useUnassignInventoryEmployee,
 } from "../../hooks/useInventories";
 import { usePaginationState } from "../../hooks/usePaginationState";
+// Embedded detail sub-table: pagination is scoped to this section, not a navigable list view.
 import type { InventoryAttendanceSummaryEmployee } from "../../types/inventory-attendance-summary";
 import { formatDateTime } from "../../utils/dates";
 import { formatDistanceMeters, getRelatedName, safeText } from "../../utils/display-safe";

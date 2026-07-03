@@ -24,6 +24,7 @@ interface StoreFormProps {
   defaultValues: StoreFormValues;
   submitLabel: string;
   cancelTo: string;
+  onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
   isEditMode?: boolean;
@@ -36,6 +37,7 @@ export function StoreForm({
   defaultValues,
   submitLabel,
   cancelTo,
+  onCancel,
   loading = false,
   errorMessage,
   isEditMode = false,
@@ -143,7 +145,7 @@ export function StoreForm({
 
         {showBottomActions ? (
           <Box className={classes.actionsSection} hiddenFrom="lg">
-            <FormActions submitLabel={submitLabel} cancelTo={cancelTo} loading={loading} />
+            <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
           </Box>
         ) : null}
       </Box>

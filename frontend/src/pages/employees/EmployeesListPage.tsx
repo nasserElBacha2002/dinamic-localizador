@@ -1,6 +1,6 @@
 import { Button, Select } from "@mantine/core";
-import { useCallback, useMemo, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { useCallback, useMemo } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   DataTable,
   FilterBar,
@@ -13,52 +13,48 @@ import {
 } from "../../design-system";
 import { useEmployees } from "../../hooks/useEmployees";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import { usePaginationState } from "../../hooks/usePaginationState";
+import { useListNavigationState } from "../../hooks/useListNavigationState";
+import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { terminology } from "../../domain/terminology";
 import type { Employee } from "../../types/employee";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
+import { navigateWithListContext } from "../../utils/list-navigation";
 import { hasPermission } from "../../utils/permissions";
+
+const EMPLOYEES_LIST_PATH = "/employees";
+
+const EMPLOYEE_TABLE_DEFAULTS = {
+  page: 1,
+  pageSize: 10,
+  search: "",
+  active: "all" as "all" | "true" | "false",
+};
+
+const EMPLOYEE_TABLE_FIELDS = {
+  active: { type: "enum", values: ["all", "true", "false"] },
+} as const;
 
 export function EmployeesListPage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const listNav = useListNavigationState(EMPLOYEES_LIST_PATH);
   const permissionsQuery = useCompanyPermissions();
   const canManageEmployees = hasPermission(
     permissionsQuery.data?.permissions,
     "employees:manage",
   );
-  const pagination = usePaginationState(10);
-  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [activeFilter, setActiveFilter] = useState<"all" | "true" | "false">("all");
 
-  const handleSearch = useCallback(
-    (value: string) => {
-      resetPage();
-      const nextSearch = value.trim();
-      setSearchInput(nextSearch);
-      setSearch(nextSearch);
-    },
-    [resetPage],
-  );
-
-  const handleSearchChange = useCallback(
-    (value: string) => {
-      setSearchInput(value);
-      if (!value) {
-        resetPage();
-        setSearch("");
-      }
-    },
-    [resetPage],
-  );
+  const table = useTableUrlState({
+    defaults: EMPLOYEE_TABLE_DEFAULTS,
+    fields: EMPLOYEE_TABLE_FIELDS,
+  });
 
   const filters = {
-    page,
-    limit: pageSize,
-    search: search || undefined,
-    active: activeFilter === "all" ? undefined : activeFilter === "true",
+    page: table.page,
+    limit: table.pageSize,
+    search: table.state.search || undefined,
+    active: table.state.active === "all" ? undefined : table.state.active === "true",
   };
 
   const { data, isPending, isError, error } = useEmployees(filters);
@@ -97,10 +93,9 @@ export function EmployeesListPage() {
         return;
       }
 
-      resetPage();
-      setActiveFilter(value as "all" | "true" | "false");
+      table.setField("active", value as "all" | "true" | "false");
     },
-    [resetPage],
+    [table],
   );
 
   return (
@@ -110,7 +105,7 @@ export function EmployeesListPage() {
         description={`Administrá el personal habilitado para ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canManageEmployees ? (
-            <Button component={Link} to="/employees/new">
+            <Button component={Link} to="/employees/new" state={listNav}>
               {`Nuevo ${terminology.worker.singular.toLowerCase()}`}
             </Button>
           ) : undefined
@@ -120,9 +115,9 @@ export function EmployeesListPage() {
       <FilterBar>
         <FilterBar.Item>
           <SearchInput
-            value={searchInput}
-            onChange={handleSearchChange}
-            onSearch={handleSearch}
+            value={table.searchInput}
+            onChange={table.setSearch}
+            onSearch={table.commitSearch}
             placeholder="Nombre, documento o teléfono"
             label="Buscar"
           />
@@ -130,7 +125,7 @@ export function EmployeesListPage() {
         <FilterBar.Item>
           <Select
             label="Estado"
-            value={activeFilter}
+            value={table.state.active}
             onChange={handleActiveFilterChange}
             data={[
               { value: "all", label: "Todos" },
@@ -149,15 +144,17 @@ export function EmployeesListPage() {
         error={isError ? getApiErrorMessage(error) : undefined}
         emptyTitle={`No hay ${terminology.worker.plural.toLowerCase()}`}
         emptyDescription={`Creá el primer ${terminology.worker.singular.toLowerCase()} para comenzar.`}
-        onRowClick={(row) => navigate(`/employees/${row.id}`)}
+        onRowClick={(row) =>
+          navigateWithListContext(navigate, `/employees/${row.id}`, EMPLOYEES_LIST_PATH, location)
+        }
         aria-label={`Listado de ${terminology.worker.plural.toLowerCase()}`}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls
               meta={mapApiPaginationMeta(data.meta)}
-              onPageChange={onPageChange}
-              pageSize={pageSize}
-              onPageSizeChange={onPageSizeChange}
+              onPageChange={table.onPageChange}
+              pageSize={table.pageSize}
+              onPageSizeChange={table.onPageSizeChange}
               showPageSizeSelector
             />
           ) : undefined

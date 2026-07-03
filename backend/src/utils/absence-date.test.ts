@@ -4,6 +4,8 @@ import {
   calculateTotalAbsenceDays,
   compareAbsenceDates,
   formatAbsenceDateDisplay,
+  getDateIsoInTimezone,
+  getOperationDayUtcBounds,
   getUtcOffsetHoursFromTimezone,
   parseAbsenceDateInput,
   parseSpanishDateInput,
@@ -112,5 +114,23 @@ describe("compareAbsenceDates", () => {
 describe("getUtcOffsetHoursFromTimezone", () => {
   it("returns -3 for Argentina operation timezone", () => {
     assert.equal(getUtcOffsetHoursFromTimezone("America/Argentina/Buenos_Aires"), -3);
+  });
+});
+
+describe("getOperationDayUtcBounds", () => {
+  it("returns UTC bounds for a calendar day in Argentina", () => {
+    const at = new Date("2026-07-03T15:00:00.000Z");
+    assert.equal(
+      getDateIsoInTimezone(at, "America/Argentina/Buenos_Aires"),
+      "2026-07-03",
+    );
+
+    const { dayStartUtc, dayEndUtc } = getOperationDayUtcBounds(
+      at,
+      "America/Argentina/Buenos_Aires",
+    );
+
+    assert.equal(dayStartUtc.toISOString(), "2026-07-03T03:00:00.000Z");
+    assert.equal(dayEndUtc.toISOString(), "2026-07-04T02:59:59.999Z");
   });
 });

@@ -893,6 +893,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
     });
 
     assert.match(message, /no estás disponible/i);
+    assert.match(message, /podrá revisar esta respuesta desde el panel/i);
     assert.equal(updateCalls, 1);
   });
 

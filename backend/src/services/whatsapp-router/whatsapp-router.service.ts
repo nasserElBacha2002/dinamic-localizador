@@ -33,7 +33,7 @@ import {
   handleCheckoutLocation,
 } from "./checkout.handler";
 import { tryHandleGlobalCommand } from "./global-command.handler";
-import { handleMenuFallback } from "./menu.handler";
+import { handleMenuFallback, handleNumericMenuSelection } from "./menu.handler";
 import { respondIfActiveSessionModuleBlocked } from "./module-session-gate";
 import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler";
 import { handleWorkdayIntent } from "./workday.handler";
@@ -127,6 +127,13 @@ export const whatsappRouterService = {
         phoneFrom: ctx.phoneTo,
         phoneTo: ctx.phoneFrom,
       });
+    }
+
+    if (!ctx.session) {
+      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
+      if (menuNumberResponse) {
+        return menuNumberResponse;
+      }
     }
 
     const intent = parseBotIntent({ body: ctx.body });

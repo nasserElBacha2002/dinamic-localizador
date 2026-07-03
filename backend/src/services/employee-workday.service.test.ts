@@ -198,4 +198,165 @@ describe("employeeWorkdayService", () => {
 
     assert.equal(result.kind, "past");
   });
+
+  it("scopes today workday query to company and employee", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let queriedCompanyId: string | null = null;
+    let queriedEmployeeId: string | null = null;
+
+    mock.method(
+      employeeAssignmentQueryRepository,
+      "listTodayForEmployee",
+      async (resolvedCompanyId: string, resolvedEmployeeId: string) => {
+        queriedCompanyId = resolvedCompanyId;
+        queriedEmployeeId = resolvedEmployeeId;
+        return [];
+      },
+    );
+
+    await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.buildTodayWorkdayMessage(companyId, employeeId, true),
+    );
+
+    assert.equal(queriedCompanyId, companyId);
+    assert.equal(queriedEmployeeId, employeeId);
+  });
+
+  it("scopes upcoming assignments query to company and employee", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let queriedCompanyId: string | null = null;
+    let queriedEmployeeId: string | null = null;
+
+    mock.method(
+      employeeAssignmentQueryRepository,
+      "listUpcomingForEmployee",
+      async (resolvedCompanyId: string, resolvedEmployeeId: string) => {
+        queriedCompanyId = resolvedCompanyId;
+        queriedEmployeeId = resolvedEmployeeId;
+        return [];
+      },
+    );
+
+    await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.buildUpcomingAssignmentsMessage(companyId, employeeId),
+    );
+
+    assert.equal(queriedCompanyId, companyId);
+    assert.equal(queriedEmployeeId, employeeId);
+  });
+
+  it("cannot confirm assignment outside resolved company or employee scope", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+    const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
+
+    let updateCalls = 0;
+    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () => null);
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      updateCalls += 1;
+      return true;
+    });
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId),
+    );
+
+    assert.equal(result.kind, "not_found");
+    assert.equal(result.message, INVALID_SELECTION_MESSAGE);
+    assert.equal(updateCalls, 0);
+  });
+
+  it("cannot mark unavailable outside resolved company or employee scope", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+    const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
+
+    let updateCalls = 0;
+    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () => null);
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      updateCalls += 1;
+      return true;
+    });
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, inventoryId),
+    );
+
+    assert.equal(result.kind, "not_found");
+    assert.equal(result.message, INVALID_SELECTION_MESSAGE);
+    assert.equal(updateCalls, 0);
+  });
+
+  it("updates confirmation status when confirming after unavailable", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let updatedStatus: string | null = null;
+    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+      assignment({ confirmationStatus: "UNAVAILABLE" }),
+    );
+    mock.method(
+      employeeAssignmentQueryRepository,
+      "updateConfirmationStatus",
+      async (_companyId, _employeeId, _inventoryId, status) => {
+        updatedStatus = status;
+        return true;
+      },
+    );
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.equal(updatedStatus, "CONFIRMED");
+  });
+
+  it("updates confirmation status when marking unavailable after confirmed", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let updatedStatus: string | null = null;
+    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+      assignment({ confirmationStatus: "CONFIRMED" }),
+    );
+    mock.method(
+      employeeAssignmentQueryRepository,
+      "updateConfirmationStatus",
+      async (_companyId, _employeeId, _inventoryId, status) => {
+        updatedStatus = status;
+        return true;
+      },
+    );
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, inventoryId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.equal(updatedStatus, "UNAVAILABLE");
+    assert.match(result.message, /podrá revisar esta respuesta desde el panel/i);
+  });
 });

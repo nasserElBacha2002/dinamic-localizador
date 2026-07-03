@@ -3,6 +3,7 @@ import type { AssignmentConfirmationStatus } from "../constants/assignment-confi
 import { UPCOMING_ASSIGNMENTS_LIMIT } from "../constants/assignment-confirmation";
 import { getPool } from "../database/connection";
 import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
+import { getOperationDayUtcBounds } from "../utils/absence-date";
 import { mapEmployeeAssignedInventoryRow } from "../utils/employee-assignment-row-mapper";
 
 const ASSIGNED_INVENTORY_SELECT = `
@@ -41,22 +42,18 @@ export const employeeAssignmentQueryRepository = {
     at: Date,
     operationTimezone: string,
   ): Promise<EmployeeAssignedInventory[]> {
+    const { dayStartUtc, dayEndUtc } = getOperationDayUtcBounds(at, operationTimezone);
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("at", sql.DateTime2, at)
-      .input("operationTimezone", sql.NVarChar(80), operationTimezone)
+      .input("dayStartUtc", sql.DateTime2, dayStartUtc)
+      .input("dayEndUtc", sql.DateTime2, dayEndUtc)
       .query(`
         ${ASSIGNED_INVENTORY_SELECT}
-          AND CONVERT(
-            date,
-            (CAST(i.scheduled_start AS DATETIMEOFFSET) AT TIME ZONE 'UTC') AT TIME ZONE @operationTimezone
-          ) = CONVERT(
-            date,
-            (CAST(@at AS DATETIMEOFFSET) AT TIME ZONE 'UTC') AT TIME ZONE @operationTimezone
-          )
+          AND i.scheduled_start >= @dayStartUtc
+          AND i.scheduled_start <= @dayEndUtc
         ORDER BY i.scheduled_start ASC
       `);
 
@@ -127,8 +124,16 @@ export const employeeAssignmentQueryRepository = {
       .query(`
         UPDATE operation_assignments
         SET confirmation_status = @status,
-            confirmed_at = CASE WHEN @status = 'CONFIRMED' THEN SYSUTCDATETIME() ELSE confirmed_at END,
-            unavailable_at = CASE WHEN @status = 'UNAVAILABLE' THEN SYSUTCDATETIME() ELSE unavailable_at END
+            confirmed_at = CASE
+              WHEN @status = 'CONFIRMED' THEN SYSUTCDATETIME()
+              WHEN @status = 'UNAVAILABLE' THEN NULL
+              ELSE confirmed_at
+            END,
+            unavailable_at = CASE
+              WHEN @status = 'UNAVAILABLE' THEN SYSUTCDATETIME()
+              WHEN @status = 'CONFIRMED' THEN NULL
+              ELSE unavailable_at
+            END
         WHERE company_id = @companyId
           AND employee_id = @employeeId
           AND inventory_id = @inventoryId

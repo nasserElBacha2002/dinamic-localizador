@@ -68,6 +68,53 @@ export const handleActiveAssignmentSelectionSession = async (
   return respond(ctx, handlers, result.message);
 };
 
+const handleAssignmentSelectionFlow = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+  assignments: Awaited<ReturnType<typeof employeeWorkdayService.listConfirmableAssignments>>,
+  options: {
+    emptyMessage: string;
+    applyToAssignment: (
+      companyId: string,
+      employeeId: string,
+      inventoryId: string,
+    ) => Promise<{ message: string }>;
+    createSelectionSession: (selectionOptions: ReturnType<typeof employeeWorkdayService.mapToSelectionOptions>) => Promise<void>;
+    buildSelectionPrompt: (items: typeof assignments) => string;
+  },
+): Promise<string> => {
+  if (assignments.length === 0) {
+    return respond(ctx, handlers, options.emptyMessage);
+  }
+
+  const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
+  if (explicitSelection !== null) {
+    if (!isValidInventorySelection(explicitSelection, assignments.length)) {
+      return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
+    }
+
+    const selected = assignments[explicitSelection - 1];
+    const result = await options.applyToAssignment(
+      ctx.companyId,
+      ctx.employeeId!,
+      selected.inventoryId,
+    );
+    return respond(ctx, handlers, result.message);
+  }
+
+  if (assignments.length === 1) {
+    const result = await options.applyToAssignment(
+      ctx.companyId,
+      ctx.employeeId!,
+      assignments[0].inventoryId,
+    );
+    return respond(ctx, handlers, result.message);
+  }
+
+  await options.createSelectionSession(employeeWorkdayService.mapToSelectionOptions(assignments));
+  return respond(ctx, handlers, options.buildSelectionPrompt(assignments));
+};
+
 export const handleConfirmAttendanceIntent = async (
   ctx: WhatsAppRouterContext,
   handlers: WhatsAppRouterHandlers,
@@ -84,40 +131,21 @@ export const handleConfirmAttendanceIntent = async (
     ctx.employeeId!,
   );
 
-  if (assignments.length === 0) {
-    return respond(ctx, handlers, employeeWorkdayService.noConfirmableMessage);
-  }
-
-  const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
-  if (explicitSelection !== null && assignments.length > 1) {
-    if (!isValidInventorySelection(explicitSelection, assignments.length)) {
-      return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
-    }
-    const selected = assignments[explicitSelection - 1];
-    const result = await employeeWorkdayService.confirmAssignment(
-      ctx.companyId,
-      ctx.employeeId!,
-      selected.inventoryId,
-    );
-    return respond(ctx, handlers, result.message);
-  }
-
-  if (assignments.length === 1) {
-    const result = await employeeWorkdayService.confirmAssignment(
-      ctx.companyId,
-      ctx.employeeId!,
-      assignments[0].inventoryId,
-    );
-    return respond(ctx, handlers, result.message);
-  }
-
-  await botSessionService.createConfirmAttendanceSelectionSession(ctx.companyId, {
-    employeeId: ctx.employeeId!,
-    phoneNumber: ctx.phoneFrom,
-    options: employeeWorkdayService.mapToSelectionOptions(assignments),
+  return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
+    emptyMessage: employeeWorkdayService.noConfirmableMessage,
+    applyToAssignment: async (companyId, employeeId, inventoryId) => {
+      const result = await employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId);
+      return { message: result.message };
+    },
+    createSelectionSession: async (selectionOptions) => {
+      await botSessionService.createConfirmAttendanceSelectionSession(ctx.companyId, {
+        employeeId: ctx.employeeId!,
+        phoneNumber: ctx.phoneFrom,
+        options: selectionOptions,
+      });
+    },
+    buildSelectionPrompt: (items) => employeeWorkdayService.buildConfirmSelectionPrompt(items),
   });
-
-  return respond(ctx, handlers, employeeWorkdayService.buildConfirmSelectionPrompt(assignments));
 };
 
 export const handleUnavailabilityIntent = async (
@@ -136,38 +164,23 @@ export const handleUnavailabilityIntent = async (
     ctx.employeeId!,
   );
 
-  if (assignments.length === 0) {
-    return respond(ctx, handlers, employeeWorkdayService.noUnavailabilityMessage);
-  }
-
-  const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
-  if (explicitSelection !== null && assignments.length > 1) {
-    if (!isValidInventorySelection(explicitSelection, assignments.length)) {
-      return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
-    }
-    const selected = assignments[explicitSelection - 1];
-    const result = await employeeWorkdayService.markAssignmentUnavailable(
-      ctx.companyId,
-      ctx.employeeId!,
-      selected.inventoryId,
-    );
-    return respond(ctx, handlers, result.message);
-  }
-
-  if (assignments.length === 1) {
-    const result = await employeeWorkdayService.markAssignmentUnavailable(
-      ctx.companyId,
-      ctx.employeeId!,
-      assignments[0].inventoryId,
-    );
-    return respond(ctx, handlers, result.message);
-  }
-
-  await botSessionService.createUnavailabilitySelectionSession(ctx.companyId, {
-    employeeId: ctx.employeeId!,
-    phoneNumber: ctx.phoneFrom,
-    options: employeeWorkdayService.mapToSelectionOptions(assignments),
+  return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
+    emptyMessage: employeeWorkdayService.noUnavailabilityMessage,
+    applyToAssignment: async (companyId, employeeId, inventoryId) => {
+      const result = await employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        inventoryId,
+      );
+      return { message: result.message };
+    },
+    createSelectionSession: async (selectionOptions) => {
+      await botSessionService.createUnavailabilitySelectionSession(ctx.companyId, {
+        employeeId: ctx.employeeId!,
+        phoneNumber: ctx.phoneFrom,
+        options: selectionOptions,
+      });
+    },
+    buildSelectionPrompt: (items) => employeeWorkdayService.buildUnavailabilitySelectionPrompt(items),
   });
-
-  return respond(ctx, handlers, employeeWorkdayService.buildUnavailabilitySelectionPrompt(assignments));
 };

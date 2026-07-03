@@ -144,7 +144,7 @@ export const employeeWorkdayService = {
       assignment.storeName,
       formatAssignmentDateTimeLine(assignment, timeZone),
       "",
-      "Administración será notificada para revisar la cobertura.",
+      "Administración podrá revisar esta respuesta desde el panel.",
     ].join("\n");
   },
 

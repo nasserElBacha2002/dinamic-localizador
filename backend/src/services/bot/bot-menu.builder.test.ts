@@ -27,8 +27,11 @@ describe("buildGreetingMessage", () => {
     assert.match(message, /Pedir ausencia o vacaciones — escribí "Pedir ausencia"/);
     assert.match(message, /Consultar jornada de hoy — escribí "Mi jornada" o "Hoy"/);
     assert.match(message, /Ver próximos turnos — escribí "Mis turnos" o "Agenda"/);
+    assert.match(message, /Confirmar asistencia — escribí "Confirmo asistencia"/);
+    assert.match(message, /Avisar no disponibilidad — escribí "No puedo asistir"/);
     assert.match(message, /Ayuda/);
     assert.match(message, /Cancelar/);
+    assert.match(message, /número de la opción/);
   });
 
   it("notes active flow when requested in greeting", () => {
@@ -59,6 +62,14 @@ describe("buildGreetingMessage", () => {
     const message = buildGreetingMessage(states);
     assert.doesNotMatch(message, /próximos turnos/i);
     assert.doesNotMatch(message, /jornada de hoy/i);
+    assert.doesNotMatch(message, /Confirmar asistencia/i);
+    assert.doesNotMatch(message, /Avisar no disponibilidad/i);
+  });
+
+  it("shows confirmation and unavailability when inventory_operations is enabled", () => {
+    const message = buildGreetingMessage(allEnabled());
+    assert.match(message, /Confirmar asistencia — escribí "Confirmo asistencia"/);
+    assert.match(message, /Avisar no disponibilidad — escribí "No puedo asistir"/);
   });
 
   it("hides check-in when inventory_operations is disabled", () => {
@@ -85,7 +96,7 @@ describe("buildGreetingMessage", () => {
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     const message = buildGreetingMessage(states);
     assert.equal(message, NO_WHATSAPP_OPTIONS_MESSAGE);
-    assert.doesNotMatch(message, MODULE_DISABLED_MESSAGE);
+    assert.doesNotMatch(message, new RegExp(MODULE_DISABLED_MESSAGE));
   });
 });
 

@@ -1,20 +1,40 @@
 import {
   Button,
   Checkbox,
+  Divider,
   Group,
   Modal,
   NumberInput,
+  Select,
   Stack,
   Switch,
   Text,
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
+import { DEFAULT_COMPANY_OPERATIONAL_DEFAULTS } from "../../constants/company-operational-defaults";
+import {
+  DEFAULT_OPERATION_TIMEZONE,
+  getCanonicalOperationTimezone,
+  getOperationTimezoneOptions,
+} from "../../constants/operation-timezones";
+import { FormGrid } from "../../design-system";
+import type { CompanyModuleKey } from "../../types/company-module";
 import type { CreatePlatformCompanyInput } from "../../types/platform-company";
+import type { CompanySettingsFormValues } from "../../types/company-settings";
+import {
+  COMPANY_MODULE_DESCRIPTIONS,
+  COMPANY_MODULE_LABELS,
+} from "../../utils/company-modules";
+import {
+  toCompanySettingsFormValues,
+  toCompanySettingsUpdateInput,
+  validateCompanySettingsForm,
+} from "../../utils/company-settings-validation";
+import { OperationTimeInput } from "../settings/components/OperationTimeInput";
+import { SettingsFormField } from "../settings/components/SettingsFormField";
 
-const DEFAULT_TIMEZONE = "America/Argentina/Buenos_Aires";
-
-const MODULE_OPTIONS: NonNullable<CreatePlatformCompanyInput["modules"]> = [
+const MODULE_OPTIONS: CompanyModuleKey[] = [
   "attendance",
   "inventory_operations",
   "absences",
@@ -22,14 +42,18 @@ const MODULE_OPTIONS: NonNullable<CreatePlatformCompanyInput["modules"]> = [
   "bot_simulator",
 ];
 
+const numberInputProps = {
+  min: 0,
+  max: 240,
+  step: 1,
+  hideControls: true,
+} as const;
+
+const DEFAULT_SETTINGS = toCompanySettingsFormValues(DEFAULT_COMPANY_OPERATIONAL_DEFAULTS);
+
 const DEFAULT_FORM_STATE = {
   name: "",
-  defaultTimezone: DEFAULT_TIMEZONE,
-  defaultRadiusMeters: "150",
-  lateGraceMinutes: "15",
-  earlyLeaveToleranceMinutes: "15",
-  requireCheckoutLocation: true,
-  allowManualAttendanceCorrections: true,
+  settings: DEFAULT_SETTINGS,
   modules: [...MODULE_OPTIONS] as CreatePlatformCompanyInput["modules"],
   ownerName: "",
   ownerEmail: "",
@@ -52,20 +76,7 @@ export function CreatePlatformCompanyDialog({
   onSubmit,
 }: CreatePlatformCompanyDialogProps) {
   const [name, setName] = useState(DEFAULT_FORM_STATE.name);
-  const [defaultTimezone, setDefaultTimezone] = useState(DEFAULT_FORM_STATE.defaultTimezone);
-  const [defaultRadiusMeters, setDefaultRadiusMeters] = useState(
-    DEFAULT_FORM_STATE.defaultRadiusMeters,
-  );
-  const [lateGraceMinutes, setLateGraceMinutes] = useState(DEFAULT_FORM_STATE.lateGraceMinutes);
-  const [earlyLeaveToleranceMinutes, setEarlyLeaveToleranceMinutes] = useState(
-    DEFAULT_FORM_STATE.earlyLeaveToleranceMinutes,
-  );
-  const [requireCheckoutLocation, setRequireCheckoutLocation] = useState(
-    DEFAULT_FORM_STATE.requireCheckoutLocation,
-  );
-  const [allowManualAttendanceCorrections, setAllowManualAttendanceCorrections] = useState(
-    DEFAULT_FORM_STATE.allowManualAttendanceCorrections,
-  );
+  const [settings, setSettings] = useState<CompanySettingsFormValues>(DEFAULT_FORM_STATE.settings);
   const [modules, setModules] = useState<CreatePlatformCompanyInput["modules"]>(
     DEFAULT_FORM_STATE.modules,
   );
@@ -75,14 +86,15 @@ export function CreatePlatformCompanyDialog({
     DEFAULT_FORM_STATE.ownerTemporaryPassword,
   );
 
+  const timezoneOptions = useMemo(
+    () => getOperationTimezoneOptions(settings.operationTimezone),
+    [settings.operationTimezone],
+  );
+  const selectedTimezone = getCanonicalOperationTimezone(settings.operationTimezone);
+
   const resetForm = () => {
     setName(DEFAULT_FORM_STATE.name);
-    setDefaultTimezone(DEFAULT_FORM_STATE.defaultTimezone);
-    setDefaultRadiusMeters(DEFAULT_FORM_STATE.defaultRadiusMeters);
-    setLateGraceMinutes(DEFAULT_FORM_STATE.lateGraceMinutes);
-    setEarlyLeaveToleranceMinutes(DEFAULT_FORM_STATE.earlyLeaveToleranceMinutes);
-    setRequireCheckoutLocation(DEFAULT_FORM_STATE.requireCheckoutLocation);
-    setAllowManualAttendanceCorrections(DEFAULT_FORM_STATE.allowManualAttendanceCorrections);
+    setSettings({ ...DEFAULT_SETTINGS });
     setModules([...DEFAULT_FORM_STATE.modules!]);
     setOwnerName(DEFAULT_FORM_STATE.ownerName);
     setOwnerEmail(DEFAULT_FORM_STATE.ownerEmail);
@@ -91,9 +103,13 @@ export function CreatePlatformCompanyDialog({
 
   const validationErrors = useMemo(() => {
     const errors: string[] = [];
+
     if (!name.trim()) {
       errors.push("El nombre de la empresa es obligatorio.");
     }
+
+    errors.push(...validateCompanySettingsForm(settings));
+
     if (!ownerName.trim()) {
       errors.push("El nombre del owner es obligatorio.");
     }
@@ -103,51 +119,24 @@ export function CreatePlatformCompanyDialog({
     if (!ownerTemporaryPassword || ownerTemporaryPassword.length < 8) {
       errors.push("La contraseña temporal del owner debe tener al menos 8 caracteres.");
     }
-
-    const radius = Number(defaultRadiusMeters);
-    if (!Number.isInteger(radius) || radius <= 0) {
-      errors.push("El radio predeterminado debe ser un número entero positivo.");
-    }
-
-    const lateGrace = Number(lateGraceMinutes);
-    if (!Number.isInteger(lateGrace) || lateGrace < 0) {
-      errors.push("La tolerancia de llegada debe ser un número entero mayor o igual a 0.");
-    }
-
-    const earlyLeave = Number(earlyLeaveToleranceMinutes);
-    if (!Number.isInteger(earlyLeave) || earlyLeave < 0) {
-      errors.push(
-        "La tolerancia de salida anticipada debe ser un número entero mayor o igual a 0.",
-      );
+    if (!modules || modules.length === 0) {
+      errors.push("Debe habilitar al menos un módulo.");
     }
 
     return errors;
-  }, [
-    defaultRadiusMeters,
-    earlyLeaveToleranceMinutes,
-    lateGraceMinutes,
-    name,
-    ownerEmail,
-    ownerName,
-    ownerTemporaryPassword,
-  ]);
+  }, [modules, name, ownerEmail, ownerName, ownerTemporaryPassword, settings]);
 
   const isValid = validationErrors.length === 0;
 
   const handleSubmit = () => {
     if (!isValid || loading) return;
 
+    const settingsPayload = toCompanySettingsUpdateInput(settings);
+
     onSubmit({
       name: name.trim(),
-      defaultTimezone: defaultTimezone.trim() || DEFAULT_TIMEZONE,
-      settings: {
-        operationTimezone: defaultTimezone.trim() || DEFAULT_TIMEZONE,
-        defaultRadiusMeters: Number(defaultRadiusMeters),
-        lateGraceMinutes: Number(lateGraceMinutes),
-        earlyLeaveToleranceMinutes: Number(earlyLeaveToleranceMinutes),
-        requireCheckoutLocation,
-        allowManualAttendanceCorrections,
-      },
+      defaultTimezone: settingsPayload.operationTimezone || DEFAULT_OPERATION_TIMEZONE,
+      settings: settingsPayload,
       modules,
       owner: {
         name: ownerName.trim(),
@@ -163,101 +152,249 @@ export function CreatePlatformCompanyDialog({
     onClose();
   };
 
+  const updateSettings = (patch: Partial<CompanySettingsFormValues>) => {
+    setSettings((current) => ({ ...current, ...patch }));
+  };
+
   return (
     <Modal
       opened={open}
       onClose={loading ? () => undefined : handleClose}
       title="Crear empresa"
-      size="lg"
+      size="xl"
       centered
       onExitTransitionEnd={() => {
         if (!open) resetForm();
       }}
     >
       <Stack gap="md">
-        <TextInput
-          label="Nombre de la empresa"
-          value={name}
-          onChange={(event) => setName(event.currentTarget.value)}
-          required
-        />
-        <TextInput
-          label="Zona horaria"
-          value={defaultTimezone}
-          onChange={(event) => setDefaultTimezone(event.currentTarget.value)}
-        />
-        <NumberInput
-          label="Radio predeterminado (m)"
-          value={defaultRadiusMeters === "" ? "" : Number(defaultRadiusMeters)}
-          onChange={(value) =>
-            setDefaultRadiusMeters(value === "" || value === undefined ? "" : String(value))
-          }
-          min={1}
-        />
-        <NumberInput
-          label="Tolerancia de llegada (min)"
-          value={lateGraceMinutes === "" ? "" : Number(lateGraceMinutes)}
-          onChange={(value) =>
-            setLateGraceMinutes(value === "" || value === undefined ? "" : String(value))
-          }
-          min={0}
-        />
-        <NumberInput
-          label="Tolerancia de salida anticipada (min)"
-          value={earlyLeaveToleranceMinutes === "" ? "" : Number(earlyLeaveToleranceMinutes)}
-          onChange={(value) =>
-            setEarlyLeaveToleranceMinutes(value === "" || value === undefined ? "" : String(value))
-          }
-          min={0}
-        />
-        <Switch
-          label="Requerir ubicación en checkout"
-          checked={requireCheckoutLocation}
-          onChange={(event) => setRequireCheckoutLocation(event.currentTarget.checked)}
-        />
-        <Switch
-          label="Permitir correcciones manuales de asistencia"
-          checked={allowManualAttendanceCorrections}
-          onChange={(event) => setAllowManualAttendanceCorrections(event.currentTarget.checked)}
-        />
-        <Stack gap="xs">
-          {MODULE_OPTIONS.map((moduleKey) => (
-            <Checkbox
-              key={moduleKey}
-              label={moduleKey}
-              checked={modules?.includes(moduleKey) ?? false}
-              onChange={(event) => {
-                setModules((current) => {
-                  const next = new Set(current ?? []);
-                  if (event.currentTarget.checked) next.add(moduleKey);
-                  else next.delete(moduleKey);
-                  return [...next];
-                });
-              }}
-            />
-          ))}
+        <Stack gap="sm">
+          <Text fw={600}>Configuración operativa</Text>
+          <Text size="sm" c="dimmed">
+            Defaults usados por operaciones, importaciones y validaciones del bot.
+          </Text>
+
+          <TextInput
+            label="Nombre de la empresa"
+            value={name}
+            onChange={(event) => setName(event.currentTarget.value)}
+            required
+          />
+
+          <FormGrid columns={{ base: 1, md: 2 }}>
+            <SettingsFormField
+              label="Zona horaria operativa"
+              description="Zona horaria usada por operaciones y reportes."
+            >
+              <Select
+                searchable
+                data={timezoneOptions}
+                value={selectedTimezone}
+                onChange={(value) => {
+                  if (!value) return;
+                  updateSettings({ operationTimezone: value });
+                }}
+                nothingFoundMessage="No se encontraron zonas horarias"
+                disabled={loading}
+                aria-label="Zona horaria operativa"
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Radio permitido por defecto (m)"
+              description="Default para operaciones e importaciones."
+            >
+              <NumberInput
+                value={settings.defaultRadiusMeters === "" ? "" : Number(settings.defaultRadiusMeters)}
+                onChange={(value) =>
+                  updateSettings({
+                    defaultRadiusMeters: value === "" || value === undefined ? "" : String(value),
+                  })
+                }
+                min={10}
+                max={5000}
+                step={1}
+                hideControls
+                disabled={loading}
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Horario de inicio por defecto"
+              description="Default para operaciones e importaciones."
+            >
+              <OperationTimeInput
+                value={settings.defaultOperationStartTime}
+                onChange={(value) => updateSettings({ defaultOperationStartTime: value })}
+                disabled={loading}
+                aria-label="Horario de inicio por defecto"
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Horario de fin por defecto"
+              description="Default para operaciones e importaciones."
+            >
+              <OperationTimeInput
+                value={settings.defaultOperationEndTime}
+                onChange={(value) => updateSettings({ defaultOperationEndTime: value })}
+                disabled={loading}
+                aria-label="Horario de fin por defecto"
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Tolerancia de llegada temprana para operaciones (min)"
+              description="Default para operaciones e importaciones."
+            >
+              <NumberInput
+                value={
+                  settings.defaultEarlyArrivalToleranceMinutes === ""
+                    ? ""
+                    : Number(settings.defaultEarlyArrivalToleranceMinutes)
+                }
+                onChange={(value) =>
+                  updateSettings({
+                    defaultEarlyArrivalToleranceMinutes:
+                      value === "" || value === undefined ? "" : String(value),
+                  })
+                }
+                {...numberInputProps}
+                disabled={loading}
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Tolerancia de llegada tardía para operaciones (min)"
+              description="Default para operaciones e importaciones."
+            >
+              <NumberInput
+                value={
+                  settings.defaultLateArrivalToleranceMinutes === ""
+                    ? ""
+                    : Number(settings.defaultLateArrivalToleranceMinutes)
+                }
+                onChange={(value) =>
+                  updateSettings({
+                    defaultLateArrivalToleranceMinutes:
+                      value === "" || value === undefined ? "" : String(value),
+                  })
+                }
+                {...numberInputProps}
+                disabled={loading}
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Tolerancia de puntualidad WhatsApp (min)"
+              description="Validación del mensaje “Llegué”."
+            >
+              <NumberInput
+                value={settings.lateGraceMinutes === "" ? "" : Number(settings.lateGraceMinutes)}
+                onChange={(value) =>
+                  updateSettings({
+                    lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
+                  })
+                }
+                {...numberInputProps}
+                disabled={loading}
+              />
+            </SettingsFormField>
+
+            <SettingsFormField
+              label="Tolerancia de salida anticipada WhatsApp (min)"
+              description="Validación del mensaje “Terminé”."
+            >
+              <NumberInput
+                value={
+                  settings.earlyLeaveToleranceMinutes === ""
+                    ? ""
+                    : Number(settings.earlyLeaveToleranceMinutes)
+                }
+                onChange={(value) =>
+                  updateSettings({
+                    earlyLeaveToleranceMinutes:
+                      value === "" || value === undefined ? "" : String(value),
+                  })
+                }
+                {...numberInputProps}
+                disabled={loading}
+              />
+            </SettingsFormField>
+          </FormGrid>
+
+          <Switch
+            label="Requerir ubicación en checkout"
+            description="Si está activo, el empleado deberá compartir ubicación al enviar “Terminé”."
+            checked={settings.requireCheckoutLocation}
+            onChange={(event) => {
+              updateSettings({ requireCheckoutLocation: event.currentTarget.checked });
+            }}
+            disabled={loading}
+          />
+          <Switch
+            label="Permitir correcciones manuales de asistencia"
+            description="Habilita ajustes manuales de asistencia desde el panel operativo."
+            checked={settings.allowManualAttendanceCorrections}
+            onChange={(event) => {
+              updateSettings({ allowManualAttendanceCorrections: event.currentTarget.checked });
+            }}
+            disabled={loading}
+          />
         </Stack>
-        <TextInput
-          label="Nombre del owner"
-          value={ownerName}
-          onChange={(event) => setOwnerName(event.currentTarget.value)}
-          required
-        />
-        <TextInput
-          label="Email del owner"
-          type="email"
-          value={ownerEmail}
-          onChange={(event) => setOwnerEmail(event.currentTarget.value)}
-          required
-        />
-        <TextInput
-          label="Contraseña temporal del owner"
-          type="password"
-          value={ownerTemporaryPassword}
-          onChange={(event) => setOwnerTemporaryPassword(event.currentTarget.value)}
-          required
-          description="La contraseña se usará solo si el usuario owner no existe todavía. Si el usuario ya existe, el backend no cambiará su contraseña."
-        />
+
+        <Divider />
+
+        <Stack gap="sm">
+          <Text fw={600}>Accesos</Text>
+          <Text size="sm" c="dimmed">
+            Módulos habilitados para la empresa y usuario owner inicial.
+          </Text>
+
+          <Stack gap="xs">
+            {MODULE_OPTIONS.map((moduleKey) => (
+              <Checkbox
+                key={moduleKey}
+                label={COMPANY_MODULE_LABELS[moduleKey]}
+                description={COMPANY_MODULE_DESCRIPTIONS[moduleKey]}
+                checked={modules?.includes(moduleKey) ?? false}
+                onChange={(event) => {
+                  const checked = event.currentTarget.checked;
+                  setModules((current) => {
+                    const next = new Set(current ?? []);
+                    if (checked) next.add(moduleKey);
+                    else next.delete(moduleKey);
+                    return [...next];
+                  });
+                }}
+                disabled={loading}
+              />
+            ))}
+          </Stack>
+
+          <TextInput
+            label="Nombre del owner"
+            value={ownerName}
+            onChange={(event) => setOwnerName(event.currentTarget.value)}
+            required
+          />
+          <TextInput
+            label="Email del owner"
+            type="email"
+            value={ownerEmail}
+            onChange={(event) => setOwnerEmail(event.currentTarget.value)}
+            required
+          />
+          <TextInput
+            label="Contraseña temporal del owner"
+            type="password"
+            value={ownerTemporaryPassword}
+            onChange={(event) => setOwnerTemporaryPassword(event.currentTarget.value)}
+            required
+            description="La contraseña se usará solo si el usuario owner no existe todavía. Si el usuario ya existe, el backend no cambiará su contraseña."
+          />
+        </Stack>
+
         {validationErrors.length > 0 ? (
           <Text size="sm" c="red">
             {validationErrors.join(" ")}

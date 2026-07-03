@@ -18,6 +18,11 @@ export interface CreatePlatformCompanyInput {
     earlyLeaveToleranceMinutes?: number;
     requireCheckoutLocation?: boolean;
     allowManualAttendanceCorrections?: boolean;
+    defaultEarlyArrivalToleranceMinutes?: number;
+    defaultLateArrivalToleranceMinutes?: number;
+    defaultOperationStartTime?: string | null;
+    defaultOperationEndTime?: string | null;
+    geofenceReviewMarginMeters?: number | null;
   };
   modules?: Array<
     "attendance" | "inventory_operations" | "absences" | "reports" | "bot_simulator"

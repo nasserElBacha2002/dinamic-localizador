@@ -1,5 +1,11 @@
 import { isAbsenceIntent } from "../../utils/absence-intent";
 import {
+  isConfirmAttendanceIntent,
+  isUnavailabilityIntent,
+  isUpcomingAssignmentsIntent,
+  isWorkdayQueryIntent,
+} from "../../utils/assignment-intent";
+import {
   isCheckInIntent,
   isCheckoutIntent,
   isGlobalCancelCommand,
@@ -14,6 +20,10 @@ export type BotIntent =
   | "checkout"
   | "menu"
   | "absence"
+  | "workday"
+  | "upcoming_assignments"
+  | "confirm_attendance"
+  | "report_unavailability"
   | "location"
   | "inventory_selection"
   | "cancel"
@@ -40,6 +50,14 @@ export const parseBotIntent = (input: {
     return "menu";
   }
 
+  if (isConfirmAttendanceIntent(body)) {
+    return "confirm_attendance";
+  }
+
+  if (isUnavailabilityIntent(body)) {
+    return "report_unavailability";
+  }
+
   if (parseInventorySelection(body) !== null) {
     return "inventory_selection";
   }
@@ -54,6 +72,14 @@ export const parseBotIntent = (input: {
 
   if (isAbsenceIntent(body)) {
     return "absence";
+  }
+
+  if (isWorkdayQueryIntent(body)) {
+    return "workday";
+  }
+
+  if (isUpcomingAssignmentsIntent(body)) {
+    return "upcoming_assignments";
   }
 
   if (isGlobalMenuCommand(body) || isSimpleGreeting(body)) {

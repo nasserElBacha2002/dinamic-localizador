@@ -2,6 +2,7 @@ import type { CompanyModuleKey } from "../../constants/company-modules";
 import type { BotSession } from "../../types/twilio.types";
 import {
   isAbsenceSessionState,
+  isAssignmentSelectionSessionState,
   isCheckInSessionState,
   isCheckoutSessionState,
 } from "../../utils/bot-session-states";
@@ -32,6 +33,8 @@ export const respondIfActiveSessionModuleBlocked = async (
     logModuleBlocked(companyId, "attendance");
   } else if (isAbsenceSessionState(session.state)) {
     logModuleBlocked(companyId, "absences");
+  } else if (isAssignmentSelectionSessionState(session.state)) {
+    logModuleBlocked(companyId, "inventory_operations");
   }
 
   const input: WhatsAppRouterRespondInput = {

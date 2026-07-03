@@ -18,6 +18,11 @@ import {
   isAbsenceFlowSession,
 } from "./absence.handler";
 import {
+  handleActiveAssignmentSelectionSession,
+  handleConfirmAttendanceIntent,
+  handleUnavailabilityIntent,
+} from "./assignment-confirmation.handler";
+import {
   handleActiveCheckInTextSession,
   handleArrivalIntent,
   handleCheckInLocation,
@@ -28,9 +33,12 @@ import {
   handleCheckoutLocation,
 } from "./checkout.handler";
 import { tryHandleGlobalCommand } from "./global-command.handler";
-import { handleMenuFallback } from "./menu.handler";
+import { handleMenuFallback, handleNumericMenuSelection } from "./menu.handler";
 import { respondIfActiveSessionModuleBlocked } from "./module-session-gate";
+import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler";
+import { handleWorkdayIntent } from "./workday.handler";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
+import { isAssignmentSelectionSessionState } from "../../utils/bot-session-states";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
 
@@ -96,6 +104,17 @@ export const whatsappRouterService = {
         return checkoutResponse;
       }
 
+      if (isAssignmentSelectionSessionState(ctx.session.state)) {
+        const assignmentSelectionResponse = await handleActiveAssignmentSelectionSession(
+          ctx,
+          ctx.session,
+          handlers,
+        );
+        if (assignmentSelectionResponse) {
+          return assignmentSelectionResponse;
+        }
+      }
+
       if (isAbsenceFlowSession(ctx.session)) {
         return handleActiveAbsenceSession(ctx, ctx.session, handlers);
       }
@@ -110,6 +129,13 @@ export const whatsappRouterService = {
       });
     }
 
+    if (!ctx.session) {
+      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
+      if (menuNumberResponse) {
+        return menuNumberResponse;
+      }
+    }
+
     const intent = parseBotIntent({ body: ctx.body });
 
     if (intent === "checkout") {
@@ -122,6 +148,22 @@ export const whatsappRouterService = {
 
     if (intent === "absence") {
       return handleAbsenceIntent(ctx, handlers, ctx.session);
+    }
+
+    if (intent === "workday") {
+      return handleWorkdayIntent(ctx, handlers);
+    }
+
+    if (intent === "upcoming_assignments") {
+      return handleUpcomingAssignmentsIntent(ctx, handlers);
+    }
+
+    if (intent === "confirm_attendance") {
+      return handleConfirmAttendanceIntent(ctx, handlers);
+    }
+
+    if (intent === "report_unavailability") {
+      return handleUnavailabilityIntent(ctx, handlers);
     }
 
     if (intent === "menu") {

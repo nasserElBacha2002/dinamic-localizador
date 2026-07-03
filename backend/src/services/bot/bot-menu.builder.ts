@@ -2,14 +2,31 @@ import type { CompanyModuleKey } from "../../constants/company-modules";
 import type { BotSessionState } from "../../types/twilio.types";
 import {
   isAbsenceSessionState,
+  isAssignmentSelectionSessionState,
   isCheckInSessionState,
   isCheckoutSessionState,
 } from "../../utils/bot-session-states";
 import {
   getAbsenceModuleBlockedMessage,
+  getAssignmentConfirmationModuleBlockedMessage,
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
 } from "../whatsapp-module-gate";
+import {
+  buildAvailableMenuOptions,
+  formatMenuOptionsLines,
+} from "./bot-menu-options";
+
+export {
+  buildAvailableMenuOptions,
+  buildInvalidMenuSelectionMessage,
+  formatMenuOptionsLines,
+  INVALID_MENU_SELECTION_PREFIX,
+  isNumericMenuInput,
+  parseMenuNumberInput,
+  resolveMenuNumberSelection,
+} from "./bot-menu-options";
+export type { BotMenuOption, BotMenuOptionKey } from "./bot-menu-options";
 
 export const NO_WHATSAPP_OPTIONS_MESSAGE =
   "Hola 👋\n\nEn este momento no hay opciones disponibles por WhatsApp para tu empresa. Contactá a administración.";
@@ -19,45 +36,23 @@ export const NO_ACTIVE_FLOW_CANCEL_PREFIX = "No tenés ningún flujo activo para
 export const VOLVER_ACTIVE_SESSION_MESSAGE =
   'No puedo volver al paso anterior en este flujo. Si querés empezar de nuevo, escribí "Cancelar".';
 
-const MENU_OPTION_HINTS: Record<string, string> = {
-  "Marcar llegada": 'escribí "Llegué"',
-  "Marcar salida": 'escribí "Me voy"',
-  "Pedir ausencia o vacaciones": 'escribí "Pedir ausencia"',
-};
-
 export function buildGreetingMessage(
   moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
   options?: { hasActiveSession?: boolean },
 ): string {
-  const labels: string[] = [];
+  const menuOptions = buildAvailableMenuOptions(moduleStates);
 
-  if (!getCheckInModuleBlockedMessage(moduleStates)) {
-    labels.push("Marcar llegada");
-  }
-
-  if (!getAttendanceModuleBlockedMessage(moduleStates)) {
-    labels.push("Marcar salida");
-  }
-
-  if (!getAbsenceModuleBlockedMessage(moduleStates)) {
-    labels.push("Pedir ausencia o vacaciones");
-  }
-
-  if (labels.length === 0) {
+  if (menuOptions.length === 0) {
     return NO_WHATSAPP_OPTIONS_MESSAGE;
   }
-
-  const numbered = labels.map(
-    (label, index) => `${index + 1}. ${label} — ${MENU_OPTION_HINTS[label]}`,
-  );
 
   const lines = [
     "Hola 👋",
     "¿Qué querés hacer?",
     "",
-    ...numbered,
+    ...formatMenuOptionsLines(menuOptions),
     "",
-    'También podés escribir "Ayuda" o "Cancelar".',
+    'También podés escribir "Ayuda", "Cancelar" o el número de la opción.',
   ];
 
   if (options?.hasActiveSession) {
@@ -117,6 +112,10 @@ export function getModuleBlockedMessageForSessionState(
 
   if (isAbsenceSessionState(state)) {
     return getAbsenceModuleBlockedMessage(moduleStates);
+  }
+
+  if (isAssignmentSelectionSessionState(state)) {
+    return getAssignmentConfirmationModuleBlockedMessage(moduleStates);
   }
 
   return null;

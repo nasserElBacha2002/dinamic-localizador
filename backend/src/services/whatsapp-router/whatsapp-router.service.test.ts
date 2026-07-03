@@ -6,6 +6,7 @@ import type { BotSession } from "../../types/twilio.types";
 import {
   GLOBAL_CANCEL_MESSAGE,
   INVALID_COORDINATES_MESSAGE,
+  INVALID_SELECTION_MESSAGE,
   LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
   LOCATION_DURING_SELECTION_MESSAGE,
   MODULE_DISABLED_MESSAGE,
@@ -784,5 +785,748 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.match(response, new RegExp(INVALID_COORDINATES_MESSAGE));
     assert.equal(calls.processLocationCheckout, 1);
     assert.equal(calls.processLocationCheckIn, 0);
+  });
+});
+
+const sampleAssignedInventory = (id = inventoryId) => ({
+  inventoryId: id,
+  storeName: "Carrefour Palermo",
+  storeAddress: "Av. Santa Fe 1234",
+  storeLatitude: -34.6,
+  storeLongitude: -58.4,
+  scheduledStart: "2026-07-08T23:30:00.000Z",
+  scheduledEnd: "2026-07-09T06:00:00.000Z",
+  inventoryStatus: "SCHEDULED",
+  confirmationStatus: "PENDING" as const,
+  attendanceReceivedAt: null,
+  attendanceCheckoutAt: null,
+  punctualityStatus: null,
+});
+
+describe("whatsappRouterService Task 5 workday and assignments", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("routes mi jornada to workday handler when modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "buildTodayWorkdayMessage", async () => "WORKDAY_OK");
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "mi jornada", payload: { ...baseContext().payload, Body: "mi jornada" } }),
+      handlers,
+    );
+
+    assert.match(response, /WORKDAY_OK/);
+    assert.equal(calls.startCheckIn, 0);
+    assert.equal(calls.respond, 1);
+  });
+
+  it("blocks mi jornada when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "hoy", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
+    assert.equal(calls.respond, 1);
+  });
+
+  it("routes mis turnos to upcoming assignments handler", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "buildUpcomingAssignmentsMessage", async () => "UPCOMING_OK");
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "mis turnos" }),
+      handlers,
+    );
+
+    assert.match(response, /UPCOMING_OK/);
+  });
+
+  it("confirms attendance for a single upcoming assignment", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
+      {
+        inventoryId,
+        storeName: "Carrefour Palermo",
+        storeAddress: "Av. Santa Fe 1234",
+        storeLatitude: -34.6,
+        storeLongitude: -58.4,
+        scheduledStart: "2026-07-08T23:30:00.000Z",
+        scheduledEnd: "2026-07-09T06:00:00.000Z",
+        inventoryStatus: "SCHEDULED",
+        confirmationStatus: "PENDING",
+        attendanceReceivedAt: null,
+        attendanceCheckoutAt: null,
+        punctualityStatus: null,
+      },
+    ]);
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
+      kind: "ok" as const,
+      message: "CONFIRMED_OK",
+    }));
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "confirmo asistencia" }),
+      handlers,
+    );
+
+    assert.match(response, /CONFIRMED_OK/);
+  });
+
+  it("handles numeric selection in confirm attendance session", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    const options = [
+      {
+        inventoryId,
+        storeName: "Carrefour Palermo",
+        scheduledStart: "2026-07-08T23:30:00.000Z",
+      },
+    ];
+
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
+      kind: "ok" as const,
+      message: "SELECTED_CONFIRMED",
+    }));
+    mock.method(botSessionService, "completeSession", async () => undefined);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION", {
+          contextJson: JSON.stringify({ inventoryOptions: options }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /SELECTED_CONFIRMED/);
+  });
+
+  it("confirms attendance with explicit selection when only one assignment exists", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let confirmedInventoryId: string | null = null;
+
+    mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
+      sampleAssignedInventory(),
+    ]);
+    mock.method(employeeWorkdayService, "confirmAssignment", async (_companyId, _employeeId, invId) => {
+      confirmedInventoryId = invId;
+      return { kind: "ok" as const, message: "CONFIRMED_OK" };
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "confirmar 1" }),
+      handlers,
+    );
+
+    assert.match(response, /CONFIRMED_OK/);
+    assert.equal(confirmedInventoryId, inventoryId);
+  });
+
+  it("returns invalid selection for explicit out-of-range confirm with one assignment", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let confirmCalls = 0;
+    let sessionCalls = 0;
+
+    mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
+      sampleAssignedInventory(),
+    ]);
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => {
+      confirmCalls += 1;
+      return { kind: "ok" as const, message: "SHOULD_NOT_CONFIRM" };
+    });
+    mock.method(botSessionService, "createConfirmAttendanceSelectionSession", async () => {
+      sessionCalls += 1;
+      return buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION");
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "confirmar 2" }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(INVALID_SELECTION_MESSAGE));
+    assert.equal(confirmCalls, 0);
+    assert.equal(sessionCalls, 0);
+  });
+
+  it("marks unavailable with explicit selection when only one assignment exists", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let unavailableInventoryId: string | null = null;
+
+    mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => [
+      sampleAssignedInventory(),
+    ]);
+    mock.method(
+      employeeWorkdayService,
+      "markAssignmentUnavailable",
+      async (_companyId, _employeeId, invId) => {
+        unavailableInventoryId = invId;
+        return { kind: "ok" as const, message: "UNAVAILABLE_OK" };
+      },
+    );
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "no puedo turno 1" }),
+      handlers,
+    );
+
+    assert.match(response, /UNAVAILABLE_OK/);
+    assert.equal(unavailableInventoryId, inventoryId);
+  });
+
+  it("returns invalid selection for explicit out-of-range unavailability with one assignment", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let unavailableCalls = 0;
+    let sessionCalls = 0;
+
+    mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => [
+      sampleAssignedInventory(),
+    ]);
+    mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => {
+      unavailableCalls += 1;
+      return { kind: "ok" as const, message: "SHOULD_NOT_MARK" };
+    });
+    mock.method(botSessionService, "createUnavailabilitySelectionSession", async () => {
+      sessionCalls += 1;
+      return buildSession("WAITING_UNAVAILABILITY_SELECTION");
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "no puedo turno 2" }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(INVALID_SELECTION_MESSAGE));
+    assert.equal(unavailableCalls, 0);
+    assert.equal(sessionCalls, 0);
+  });
+
+  it("returns invalid selection for explicit out-of-range confirm with multiple assignments", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let confirmCalls = 0;
+    let sessionCalls = 0;
+
+    mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
+      sampleAssignedInventory(),
+      sampleAssignedInventory("00000000-0000-4000-8000-000000000099"),
+    ]);
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => {
+      confirmCalls += 1;
+      return { kind: "ok" as const, message: "SHOULD_NOT_CONFIRM" };
+    });
+    mock.method(botSessionService, "createConfirmAttendanceSelectionSession", async () => {
+      sessionCalls += 1;
+      return buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION");
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "confirmar 3" }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(INVALID_SELECTION_MESSAGE));
+    assert.equal(confirmCalls, 0);
+    assert.equal(sessionCalls, 0);
+  });
+
+  it("blocks confirm attendance when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    let listCalls = 0;
+
+    mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => {
+      listCalls += 1;
+      return [];
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "confirmo asistencia", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
+    assert.equal(listCalls, 0);
+  });
+
+  it("blocks report unavailability when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    let listCalls = 0;
+
+    mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => {
+      listCalls += 1;
+      return [];
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "no puedo asistir", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
+    assert.equal(listCalls, 0);
+  });
+
+  it("blocks numeric confirm selection when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    let confirmCalls = 0;
+    let completeCalls = 0;
+
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => {
+      confirmCalls += 1;
+      return { kind: "ok" as const, message: "SHOULD_NOT_CONFIRM" };
+    });
+    mock.method(botSessionService, "completeSession", async () => {
+      completeCalls += 1;
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        moduleStates: states,
+        session: buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION", {
+          contextJson: JSON.stringify({
+            inventoryOptions: [
+              {
+                inventoryId,
+                storeName: "Carrefour Palermo",
+                scheduledStart: "2026-07-08T23:30:00.000Z",
+              },
+            ],
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
+    assert.equal(confirmCalls, 0);
+    assert.equal(completeCalls, 0);
+  });
+
+  it("blocks numeric unavailability selection when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    let unavailableCalls = 0;
+    let completeCalls = 0;
+
+    mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => {
+      unavailableCalls += 1;
+      return { kind: "ok" as const, message: "SHOULD_NOT_MARK" };
+    });
+    mock.method(botSessionService, "completeSession", async () => {
+      completeCalls += 1;
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        moduleStates: states,
+        session: buildSession("WAITING_UNAVAILABILITY_SELECTION", {
+          contextJson: JSON.stringify({
+            inventoryOptions: [
+              {
+                inventoryId,
+                storeName: "Carrefour Palermo",
+                scheduledStart: "2026-07-08T23:30:00.000Z",
+              },
+            ],
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(MODULE_DISABLED_MESSAGE));
+    assert.equal(unavailableCalls, 0);
+    assert.equal(completeCalls, 0);
+  });
+});
+
+describe("whatsappRouterService numeric menu selection", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("routes 1 to check-in when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "1" }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKIN_STARTED/);
+    assert.equal(calls.startCheckIn, 1);
+  });
+
+  it("routes 2 to checkout when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "2" }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKOUT_STARTED/);
+    assert.equal(calls.startCheckout, 1);
+  });
+
+  it("routes 3 to absence when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let absenceStarted = 0;
+
+    mock.method(absenceBotService, "startAbsenceFlow", async () => {
+      absenceStarted += 1;
+      return "<Response><Message>ABSENCE_STARTED</Message></Response>";
+    });
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "3" }),
+      handlers,
+    );
+
+    assert.match(response, /ABSENCE_STARTED/);
+    assert.equal(absenceStarted, 1);
+  });
+
+  it("routes 4 to workday when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "buildTodayWorkdayMessage", async () => "WORKDAY_OK");
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "4" }),
+      handlers,
+    );
+
+    assert.match(response, /WORKDAY_OK/);
+  });
+
+  it("routes 5 to upcoming assignments when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "buildUpcomingAssignmentsMessage", async () => "UPCOMING_OK");
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "5" }),
+      handlers,
+    );
+
+    assert.match(response, /UPCOMING_OK/);
+  });
+
+  it("routes 6 to confirm attendance when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => []);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "6" }),
+      handlers,
+    );
+
+    assert.match(response, /No tenés inventarios próximos para confirmar asistencia/);
+  });
+
+  it("routes 7 to report unavailability when all modules are enabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => []);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "7" }),
+      handlers,
+    );
+
+    assert.match(response, /No tenés inventarios próximos para reportar no disponibilidad/);
+  });
+
+  it("routes 3 to workday when absences is disabled", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+
+    mock.method(employeeWorkdayService, "buildTodayWorkdayMessage", async () => "WORKDAY_OK");
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "3", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, /WORKDAY_OK/);
+  });
+
+  it("returns invalid menu message for out-of-range numeric option", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+    const { INVALID_MENU_SELECTION_PREFIX } = await import("../bot/bot-menu-options");
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "9" }),
+      handlers,
+    );
+
+    assert.match(response, new RegExp(INVALID_MENU_SELECTION_PREFIX));
+    assert.match(response, /1\. Marcar llegada/);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("keeps inventory selection during WAITING_INVENTORY_SELECTION", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_INVENTORY_SELECTION"),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /INVENTORY_SELECTED/);
+    assert.equal(calls.handleInventorySelection, 1);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("keeps checkout inventory selection during WAITING_CHECKOUT_INVENTORY_SELECTION", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_CHECKOUT_INVENTORY_SELECTION"),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKOUT_INVENTORY_SELECTED/);
+    assert.equal(calls.handleCheckoutInventorySelection, 1);
+    assert.equal(calls.startCheckout, 0);
+  });
+
+  it("routes 1 to checkout when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "1", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKOUT_STARTED/);
+    assert.equal(calls.startCheckout, 1);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("routes 2 to absence when inventory_operations is disabled", async () => {
+    setupUnitTestEnv();
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    let absenceStarted = 0;
+
+    mock.method(absenceBotService, "startAbsenceFlow", async () => {
+      absenceStarted += 1;
+      return "<Response><Message>ABSENCE_STARTED</Message></Response>";
+    });
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "2", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, /ABSENCE_STARTED/);
+    assert.equal(absenceStarted, 1);
+  });
+
+  it("routes 1 to absence when attendance is disabled", async () => {
+    setupUnitTestEnv();
+    const { absenceBotService } = await import("../absence-bot.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
+    let absenceStarted = 0;
+
+    mock.method(absenceBotService, "startAbsenceFlow", async () => {
+      absenceStarted += 1;
+      return "<Response><Message>ABSENCE_STARTED</Message></Response>";
+    });
+    mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "1", moduleStates: states }),
+      handlers,
+    );
+
+    assert.match(response, /ABSENCE_STARTED/);
+    assert.equal(absenceStarted, 1);
+    assert.equal(calls.startCheckIn, 0);
+    assert.equal(calls.startCheckout, 0);
+  });
+
+  it("keeps confirm attendance selection during WAITING_CONFIRM_ATTENDANCE_SELECTION", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+    const options = [
+      {
+        inventoryId,
+        storeName: "Carrefour Palermo",
+        scheduledStart: "2026-07-08T23:30:00.000Z",
+      },
+    ];
+
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
+      kind: "ok" as const,
+      message: "SELECTED_CONFIRMED",
+    }));
+    mock.method(botSessionService, "completeSession", async () => undefined);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION", {
+          contextJson: JSON.stringify({ inventoryOptions: options }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /SELECTED_CONFIRMED/);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("keeps unavailability selection during WAITING_UNAVAILABILITY_SELECTION", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+    const options = [
+      {
+        inventoryId,
+        storeName: "Carrefour Palermo",
+        scheduledStart: "2026-07-08T23:30:00.000Z",
+      },
+    ];
+
+    mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => ({
+      kind: "ok" as const,
+      message: "SELECTED_UNAVAILABLE",
+    }));
+    mock.method(botSessionService, "completeSession", async () => undefined);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_UNAVAILABILITY_SELECTION", {
+          contextJson: JSON.stringify({ inventoryOptions: options }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /SELECTED_UNAVAILABLE/);
+    assert.equal(calls.startCheckIn, 0);
   });
 });

@@ -21,6 +21,7 @@ import {
 import { normalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { whatsappBotService } from "./whatsapp-bot.service";
+import { whatsappCompanyContextService } from "./whatsapp-company-context.service";
 import { botSessionService } from "./bot-session.service";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import { geolocationService } from "./geolocation.service";
@@ -358,7 +359,16 @@ export const botSimulatorService = {
     });
 
     await runWithBotRuntimeContext(context, async () => {
-      const twiml = await whatsappBotService.handleWebhook(companyId, payload);
+      const resolution = await whatsappCompanyContextService.resolve({
+        phoneFrom: payload.From,
+        phoneTo: payload.To ?? "",
+        messageSid: payload.MessageSid,
+        forcedCompanyId: companyId,
+      });
+      if (resolution.kind === "blocked") {
+        throw new AppError(400, "WHATSAPP_CONTEXT_BLOCKED", resolution.message);
+      }
+      const twiml = await whatsappBotService.handleWebhook(resolution.context, payload);
       const outbound = extractMessageFromTwiml(twiml);
       if (!context.messages.some((message) => message.id === `SIM-OUT-${messageSid}`)) {
         context.messages.push({
@@ -426,7 +436,16 @@ export const botSimulatorService = {
         }
       }
 
-      const twiml = await whatsappBotService.handleWebhook(companyId, payload);
+      const resolution = await whatsappCompanyContextService.resolve({
+        phoneFrom: payload.From,
+        phoneTo: payload.To ?? "",
+        messageSid: payload.MessageSid,
+        forcedCompanyId: companyId,
+      });
+      if (resolution.kind === "blocked") {
+        throw new AppError(400, "WHATSAPP_CONTEXT_BLOCKED", resolution.message);
+      }
+      const twiml = await whatsappBotService.handleWebhook(resolution.context, payload);
       const outbound = extractMessageFromTwiml(twiml);
       if (!context.messages.some((message) => message.id === `SIM-OUT-${messageSid}`)) {
         context.messages.push({

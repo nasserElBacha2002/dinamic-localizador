@@ -50,6 +50,27 @@ export const botSessionRepository = {
     return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
   },
 
+  async findValidActiveByPhoneGlobal(
+    phoneNumber: string,
+    scope?: BotSessionScope,
+  ): Promise<BotSession | null> {
+    const resolvedScope = resolveBotSessionScope(scope);
+    const request = getPool().request();
+    request.input("phoneNumber", sql.NVarChar(30), phoneNumber);
+    const scopeSql = applyBotSessionScope(request, resolvedScope);
+    const result = await request.query(`
+      SELECT TOP 1 *
+      FROM bot_sessions
+      WHERE phone_number = @phoneNumber
+        AND state IN ${ACTIVE_STATE_SQL}
+        AND expires_at > SYSUTCDATETIME()
+        ${scopeSql}
+      ORDER BY created_at DESC
+    `);
+
+    return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
+  },
+
   async findStaleActiveByPhone(
     companyId: string,
     phoneNumber: string,

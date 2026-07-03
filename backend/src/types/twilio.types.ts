@@ -17,6 +17,7 @@ export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN";
 
 export interface BotSession {
   id: string;
+  companyId: string;
   employeeId: string;
   inventoryId: string | null;
   phoneNumber: string;

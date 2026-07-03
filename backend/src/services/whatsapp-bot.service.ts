@@ -1,5 +1,6 @@
 import sql from "mssql";
 import twilio from "twilio";
+import type { CompanyModuleKey } from "../constants/company-modules";
 import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
 import { getPool } from "../database/connection";
@@ -11,6 +12,7 @@ import { whatsappMessageRepository } from "../repositories/whatsapp-message.repo
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
 import { botSessionService } from "./bot-session.service";
 import type { BotSession } from "../types/twilio.types";
+import type { WhatsAppInboundContext } from "../types/whatsapp-company-context";
 import type { AttendanceRecord } from "../types/domain";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import {
@@ -30,6 +32,12 @@ import {
   runWithBotRuntimeSettings,
 } from "../utils/bot-runtime-settings-scope";
 import { absenceBotService } from "./absence-bot.service";
+import { companyModuleService } from "./company-module.service";
+import {
+  getAbsenceModuleBlockedMessage,
+  getAttendanceModuleBlockedMessage,
+  getCheckInModuleBlockedMessage,
+} from "./whatsapp-module-gate";
 import {
   buildCheckInValidation,
   buildCheckoutValidation,
@@ -165,15 +173,44 @@ const respond = async (
   return buildTwiml(input.message);
 };
 
+const resolveInboundEmployeeId = async (
+  companyId: string,
+  phoneFrom: string,
+  resolvedEmployeeId: string | null,
+): Promise<string | null> => {
+  const simulationContext = getBotRuntimeContext();
+  if (simulationContext?.employeeIdOverride) {
+    return simulationContext.employeeIdOverride;
+  }
+
+  if (resolvedEmployeeId) {
+    const employee = await employeeRepository.findById(companyId, resolvedEmployeeId);
+    return employee?.active ? employee.id : null;
+  }
+
+  const employee = await employeeRepository.findByPhone(companyId, phoneFrom);
+  return employee?.active ? employee.id : null;
+};
+
+const logModuleBlocked = (companyId: string, moduleKey: CompanyModuleKey): void => {
+  console.info("[whatsapp-bot] module blocked", { companyId, moduleKey });
+};
+
 export const whatsappBotService = {
   buildTwiml,
 
-  async handleWebhook(companyId: string, payload: TwilioWebhookInput): Promise<string> {
-    const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
-    return runWithBotRuntimeSettings(runtimeSettings, async () => this.handleWebhookWithSettings(companyId, payload));
+  async handleWebhook(inbound: WhatsAppInboundContext, payload: TwilioWebhookInput): Promise<string> {
+    const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(inbound.companyId);
+    return runWithBotRuntimeSettings(runtimeSettings, async () =>
+      this.handleWebhookWithSettings(inbound, payload),
+    );
   },
 
-  async handleWebhookWithSettings(companyId: string, payload: TwilioWebhookInput): Promise<string> {
+  async handleWebhookWithSettings(
+    inbound: WhatsAppInboundContext,
+    payload: TwilioWebhookInput,
+  ): Promise<string> {
+    const companyId = inbound.companyId;
     const phoneFrom = normalizeWhatsAppPhone(payload.From);
     const phoneTo = tryNormalizeWhatsAppPhone(payload.To) ?? payload.To;
     const simulationContext = getBotRuntimeContext();
@@ -191,6 +228,8 @@ export const whatsappBotService = {
       messageSid: payload.MessageSid,
       from: phoneFrom,
       type: getMessageType(payload),
+      companyId,
+      resolutionSource: inbound.resolutionSource,
     });
 
     try {
@@ -211,11 +250,8 @@ export const whatsappBotService = {
         }
       }
 
-      const employee = simulationContext
-        ? null
-        : await employeeRepository.findByPhone(companyId, phoneFrom);
-      const employeeId =
-        simulationContext?.employeeIdOverride ?? (employee?.active ? employee.id : null);
+      const employeeId = await resolveInboundEmployeeId(companyId, phoneFrom, inbound.employeeId);
+      const moduleStates = await companyModuleService.getModuleStates(companyId);
 
       if (!simulationContext) {
         await whatsappMessageRepository.create({
@@ -253,6 +289,7 @@ export const whatsappBotService = {
           phoneFrom,
           phoneTo: botNumber,
           employeeId,
+          moduleStates,
         });
       } else {
         response = await this.handleTextMessage({
@@ -261,6 +298,7 @@ export const whatsappBotService = {
           phoneFrom,
           phoneTo: botNumber,
           employeeId,
+          moduleStates,
         });
       }
 
@@ -311,6 +349,7 @@ export const whatsappBotService = {
     phoneFrom: string;
     phoneTo: string;
     employeeId: string | null;
+    moduleStates: ReadonlyMap<CompanyModuleKey, boolean>;
   }): Promise<string> {
     const body = input.payload.Body?.trim() ?? "";
     const { companyId } = input;
@@ -417,6 +456,16 @@ export const whatsappBotService = {
 
     if (intent === "checkout") {
       setLastDetectedIntent("checkout");
+      const blockedMessage = getAttendanceModuleBlockedMessage(input.moduleStates);
+      if (blockedMessage) {
+        logModuleBlocked(companyId, "attendance");
+        return respond(companyId, {
+          message: blockedMessage,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
       if (session && isAbsenceSessionState(session.state)) {
         return respond(companyId, {
           message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
@@ -436,6 +485,16 @@ export const whatsappBotService = {
 
     if (intent === "arrival") {
       setLastDetectedIntent("check-in");
+      const blockedMessage = getCheckInModuleBlockedMessage(input.moduleStates);
+      if (blockedMessage) {
+        logModuleBlocked(companyId, "attendance");
+        return respond(companyId, {
+          message: blockedMessage,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
       if (session && isAbsenceSessionState(session.state)) {
         return respond(companyId, {
           message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
@@ -454,6 +513,16 @@ export const whatsappBotService = {
 
     if (intent === "absence") {
       setLastDetectedIntent("absence");
+      const blockedMessage = getAbsenceModuleBlockedMessage(input.moduleStates);
+      if (blockedMessage) {
+        logModuleBlocked(companyId, "absences");
+        return respond(companyId, {
+          message: blockedMessage,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
       if (absenceBotService.hasActiveAttendanceSession(session)) {
         return respond(companyId, {
           message: ACTIVE_ATTENDANCE_FLOW_MESSAGE,
@@ -788,6 +857,7 @@ export const whatsappBotService = {
     phoneFrom: string;
     phoneTo: string;
     employeeId: string | null;
+    moduleStates: ReadonlyMap<CompanyModuleKey, boolean>;
   }): Promise<string> {
     const { companyId } = input;
     if (!input.employeeId) {

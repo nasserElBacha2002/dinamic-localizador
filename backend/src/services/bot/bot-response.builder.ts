@@ -11,6 +11,15 @@ export const GLOBAL_CANCEL_MESSAGE =
 export const UNKNOWN_EMPLOYEE_MESSAGE =
   "No encontramos un empleado activo asociado a este número de WhatsApp. Contactá a administración.";
 
+export const MODULE_DISABLED_MESSAGE =
+  "Esta opción no está disponible para tu empresa en este momento.";
+
+export const AMBIGUOUS_COMPANY_MESSAGE =
+  "Tu número está asociado a más de una empresa. Contactá a administración para indicar con cuál empresa querés operar.";
+
+export const COMPANY_CONTEXT_UNAVAILABLE_MESSAGE =
+  "No se pudo determinar la empresa para procesar tu mensaje. Contactá a administración.";
+
 export const GREETING_MESSAGE =
   'Hola. Para registrar tu llegada escribí "Llegué". Para registrar tu salida escribí "Me voy". Para pedir una ausencia escribí "Quiero pedir vacaciones" o "Pedir ausencia".';
 

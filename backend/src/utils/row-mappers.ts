@@ -198,6 +198,7 @@ export const mapAttendanceWithRelationsRow = (
 
 export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
+  companyId: String(row.company_id),
   employeeId: String(row.employee_id),
   inventoryId: row.inventory_id ? String(row.inventory_id) : null,
   phoneNumber: String(row.phone_number),

@@ -82,6 +82,27 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async listActiveByPhone(phoneNumber: string): Promise<Array<Employee & { companyId: string }>> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("phoneNumber", sql.NVarChar(30), phoneNumber)
+      .query(`
+        SELECT e.*
+        FROM employees e
+        INNER JOIN companies c ON c.id = e.company_id
+        WHERE e.phone_number = @phoneNumber
+          AND e.active = 1
+          AND c.status = 'ACTIVE'
+        ORDER BY e.created_at ASC
+      `);
+
+    return result.recordset.map((row) => ({
+      ...mapEmployeeRow(row as Record<string, unknown>),
+      companyId: String((row as Record<string, unknown>).company_id),
+    }));
+  },
+
   async list(
     companyId: string,
     query: ListEmployeesQuery,

@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { STANDARD_COMPANY_LOCATION_TYPE_SEEDS } from "../constants/company-location-types";
+import { LEGACY_COMPANY_LOCATION_TYPE_SEEDS } from "../constants/company-location-types";
 import { getPool } from "../database/connection";
 import type { CompanyLocationType } from "../types/company";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
@@ -160,11 +160,11 @@ export const companyLocationTypesRepository = {
     return mapRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async ensureStandardTypesForCompany(
+  async ensureLegacyTypesForCompany(
     companyId: string,
     transaction?: sql.Transaction,
   ): Promise<void> {
-    for (const seed of STANDARD_COMPANY_LOCATION_TYPE_SEEDS) {
+    for (const seed of LEGACY_COMPANY_LOCATION_TYPE_SEEDS) {
       const request = transaction ? new sql.Request(transaction) : getPool().request();
       await request
         .input("companyId", sql.UniqueIdentifier, companyId)

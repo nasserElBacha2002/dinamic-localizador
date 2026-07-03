@@ -21,6 +21,8 @@ export const employeeService = {
 
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
+    // Catalog/settings are ensured before the transaction. Balance inserts share the
+    // employee creation transaction; reads during init use committed catalog data.
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();

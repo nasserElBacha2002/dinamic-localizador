@@ -270,6 +270,32 @@ describe("inventoryImportService preview", () => {
     assert.equal(result.rows[0]?.status, "invalid");
   });
 
+  it("ignores empty Formato values", async () => {
+    mockStores();
+    mockImportDefaults();
+    const minimal = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
+    const withEmptyFormat = await previewCsv(
+      ["PUNTO", "Fecha", "Formato"],
+      ["213", FUTURE_DATE, ""],
+    );
+
+    assert.equal(withEmptyFormat.rows[0]?.status, "valid");
+    assert.deepEqual(withEmptyFormat.rows[0]?.storeId, minimal.rows[0]?.storeId);
+  });
+
+  it("accepts dynamic company location type codes such as WAREHOUSE", async () => {
+    mockStores();
+    mockImportDefaults();
+    mockLocationTypes(["Express", "WAREHOUSE"]);
+
+    const result = await previewCsv(
+      ["PUNTO", "Fecha", "Formato"],
+      ["213", FUTURE_DATE, "WAREHOUSE"],
+    );
+
+    assert.equal(result.rows[0]?.status, "valid");
+  });
+
   it("fails when location column is missing", async () => {
     mockStores();
     mockImportDefaults();

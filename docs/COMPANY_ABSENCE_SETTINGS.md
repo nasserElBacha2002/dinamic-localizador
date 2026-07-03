@@ -28,6 +28,7 @@ Companies can update them through the absence settings API.
 ## Employee balances
 
 - **New employees:** employee creation and absence balance initialization run in a single database transaction. If balance initialization fails, the employee row is rolled back and the API returns an error.
+- Absence catalog/settings are ensured before the employee transaction starts. Balance inserts are transactional with employee creation; catalog reads during init use committed data outside the transaction.
 - Balances are created only for settings with `auto_assign_on_employee_create = true`, using `default_annual_days`. Inactive absence types are skipped.
 - **Existing employees:** balances are never overwritten automatically.
 

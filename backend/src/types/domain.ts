@@ -1,6 +1,7 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
-import type { StoreFormat } from "../constants/store-formats";
 import type { EmployeeType } from "../constants/employee-types";
+
+export type StoreFormat = string;
 
 export type InventoryStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";

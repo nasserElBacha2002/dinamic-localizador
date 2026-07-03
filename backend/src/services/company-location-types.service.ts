@@ -23,29 +23,29 @@ const assertSettingsPermission = (role: CompanyMembershipSummary["role"]): void 
   }
 };
 
-const resolveUniqueCode = async (
+const resolveRequestedCode = async (
   companyId: string,
   name: string,
   preferredCode?: string,
   excludeId?: string,
 ): Promise<string> => {
-  const baseCode = preferredCode?.trim() || normalizeLocationTypeCode(name);
-  let candidate = baseCode;
-  let suffix = 2;
+  const code = preferredCode?.trim() || normalizeLocationTypeCode(name);
+  const existing = await companyLocationTypesRepository.findByCode(companyId, code);
 
-  while (true) {
-    const existing = await companyLocationTypesRepository.findByCode(companyId, candidate);
-    if (!existing || existing.id === excludeId) {
-      return candidate;
-    }
-    candidate = `${baseCode}_${suffix}`.slice(0, 80);
-    suffix += 1;
+  if (existing && existing.id !== excludeId) {
+    throw new AppError(
+      409,
+      "LOCATION_TYPE_CODE_ALREADY_EXISTS",
+      "Ya existe un tipo de ubicación/servicio con ese código.",
+    );
   }
+
+  return code;
 };
 
 export const companyLocationTypesService = {
   async ensureLocationTypesCatalogForCompany(companyId: string, transaction?: import("mssql").Transaction) {
-    await companyLocationTypesRepository.ensureStandardTypesForCompany(companyId, transaction);
+    await companyLocationTypesRepository.ensureLegacyTypesForCompany(companyId, transaction);
   },
 
   async listLocationTypes(companyId: string, activeOnly = false): Promise<CompanyLocationType[]> {
@@ -62,7 +62,7 @@ export const companyLocationTypesService = {
     assertSettingsPermission(role);
     await assertActiveCompany(companyId);
 
-    const code = await resolveUniqueCode(companyId, input.name, input.code);
+    const code = await resolveRequestedCode(companyId, input.name, input.code);
     const existingTypes = await companyLocationTypesRepository.listByCompanyId(companyId, false);
     const maxSortOrder = existingTypes.reduce((max, type) => Math.max(max, type.sortOrder), 0);
 
@@ -105,7 +105,7 @@ export const companyLocationTypesService = {
 
     const updatePayload: UpdateCompanyLocationTypeInput = { ...input };
     if (input.code !== undefined) {
-      updatePayload.code = await resolveUniqueCode(
+      updatePayload.code = await resolveRequestedCode(
         companyId,
         input.name ?? existing.name,
         input.code,

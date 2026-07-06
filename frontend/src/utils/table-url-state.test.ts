@@ -103,7 +103,7 @@ describe("serializeTableUrlState", () => {
       page: 1,
       pageSize: 10,
       status: "active",
-      storeId: "",
+      serviceId: "",
     };
 
     const params = serializeTableUrlState({
@@ -113,7 +113,7 @@ describe("serializeTableUrlState", () => {
         page: 2,
         pageSize: 25,
         status: "inactive",
-        storeId: "store-1",
+        serviceId: "service-1",
       },
       fields: {
         status: { type: "enum", values: ["active", "inactive"] },
@@ -124,7 +124,7 @@ describe("serializeTableUrlState", () => {
     assert.equal(params.get("page"), "2");
     assert.equal(params.get("pageSize"), "25");
     assert.equal(params.get("status"), "inactive");
-    assert.equal(params.get("storeId"), "store-1");
+    assert.equal(params.get("serviceId"), "service-1");
   });
 });
 

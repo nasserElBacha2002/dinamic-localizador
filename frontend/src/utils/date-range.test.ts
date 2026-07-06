@@ -3,7 +3,7 @@ import { describe, it } from "node:test";
 import {
   formatDateRangeDisplay,
   getDateRangePresetLabel,
-  getDefaultInventoryDateRange,
+  getDefaultOperationDateRange,
   getDefaultPresetsForMode,
   getDefaultStatisticsDateRange,
   getDateRangeQueryValue,
@@ -224,8 +224,8 @@ describe("isInvalidCustomDateRange", () => {
 });
 
 describe("default date ranges", () => {
-  it("uses today for inventories", () => {
-    const value = getDefaultInventoryDateRange(REFERENCE_DATE);
+  it("uses today for operations", () => {
+    const value = getDefaultOperationDateRange(REFERENCE_DATE);
     assert.equal(value.preset, "today");
     assert.equal(getDateRangePresetLabel(value.preset!), "Hoy");
   });

@@ -5,7 +5,7 @@ const LIMITS = {
   geofenceReviewMarginMeters: { min: 0, max: 500 },
   lateGraceMinutes: { min: 0, max: 240 },
   earlyLeaveToleranceMinutes: { min: 0, max: 240 },
-  inventoryToleranceMinutes: { min: 0, max: 240 },
+  operationToleranceMinutes: { min: 0, max: 240 },
   operationTimezoneMaxLength: 80,
 } as const;
 
@@ -87,7 +87,7 @@ export function validateGeneralSettingsForm(
   return validateTimezone(values);
 }
 
-export function validateInventoryOperationSettingsForm(
+export function validateOperationOperationSettingsForm(
   values: Pick<
     CompanySettingsFormValues,
     | "defaultRadiusMeters"
@@ -139,8 +139,8 @@ export function validateInventoryOperationSettingsForm(
   const earlyArrivalError = validateIntegerField(
     values.defaultEarlyArrivalToleranceMinutes,
     "La tolerancia de llegada temprana para operaciones",
-    LIMITS.inventoryToleranceMinutes.min,
-    LIMITS.inventoryToleranceMinutes.max,
+    LIMITS.operationToleranceMinutes.min,
+    LIMITS.operationToleranceMinutes.max,
   );
   if (earlyArrivalError) {
     errors.push(earlyArrivalError);
@@ -149,8 +149,8 @@ export function validateInventoryOperationSettingsForm(
   const lateArrivalError = validateIntegerField(
     values.defaultLateArrivalToleranceMinutes,
     "La tolerancia de llegada tardía para operaciones",
-    LIMITS.inventoryToleranceMinutes.min,
-    LIMITS.inventoryToleranceMinutes.max,
+    LIMITS.operationToleranceMinutes.min,
+    LIMITS.operationToleranceMinutes.max,
   );
   if (lateArrivalError) {
     errors.push(lateArrivalError);
@@ -192,11 +192,12 @@ export function validateOperationalSettingsForm(
 ): string[] {
   return [
     ...validateGeneralSettingsForm(values),
-    ...validateInventoryOperationSettingsForm({
+    ...validateOperationOperationSettingsForm({
       ...values,
       geofenceReviewMarginMeters: "",
     }),
     ...validateWhatsAppSettingsForm(values),
+    ...validateConfirmationReminderSettingsForm(values),
   ];
 }
 
@@ -210,7 +211,33 @@ export type OperationalSettingsFormValues = Pick<
   | "defaultLateArrivalToleranceMinutes"
   | "lateGraceMinutes"
   | "earlyLeaveToleranceMinutes"
+  | "confirmationReminderEnabled"
+  | "confirmationReminderHoursBefore"
 >;
+
+export function validateConfirmationReminderSettingsForm(
+  values: Pick<
+    CompanySettingsFormValues,
+    "confirmationReminderEnabled" | "confirmationReminderHoursBefore"
+  >,
+): string[] {
+  const errors: string[] = [];
+  if (!values.confirmationReminderEnabled) {
+    return errors;
+  }
+
+  const hoursError = validateIntegerField(
+    values.confirmationReminderHoursBefore,
+    "Las horas del recordatorio de confirmación",
+    1,
+    168,
+  );
+  if (hoursError) {
+    errors.push(hoursError);
+  }
+
+  return errors;
+}
 
 export function toOperationalSettingsFormValues(settings: {
   operationTimezone: string;
@@ -221,6 +248,8 @@ export function toOperationalSettingsFormValues(settings: {
   defaultLateArrivalToleranceMinutes: number;
   defaultOperationStartTime: string | null;
   defaultOperationEndTime: string | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
 }): OperationalSettingsFormValues {
   return {
     operationTimezone: settings.operationTimezone,
@@ -231,6 +260,8 @@ export function toOperationalSettingsFormValues(settings: {
     defaultLateArrivalToleranceMinutes: String(settings.defaultLateArrivalToleranceMinutes),
     lateGraceMinutes: String(settings.lateGraceMinutes),
     earlyLeaveToleranceMinutes: String(settings.earlyLeaveToleranceMinutes),
+    confirmationReminderEnabled: settings.confirmationReminderEnabled,
+    confirmationReminderHoursBefore: String(settings.confirmationReminderHoursBefore),
   };
 }
 
@@ -244,6 +275,8 @@ export function toOperationalSettingsUpdateInput(values: OperationalSettingsForm
     defaultLateArrivalToleranceMinutes: Number(values.defaultLateArrivalToleranceMinutes),
     lateGraceMinutes: Number(values.lateGraceMinutes),
     earlyLeaveToleranceMinutes: Number(values.earlyLeaveToleranceMinutes),
+    confirmationReminderEnabled: values.confirmationReminderEnabled,
+    confirmationReminderHoursBefore: Number(values.confirmationReminderHoursBefore),
   };
 }
 
@@ -259,14 +292,16 @@ export function operationalSettingsEqual(
     left.defaultEarlyArrivalToleranceMinutes === right.defaultEarlyArrivalToleranceMinutes &&
     left.defaultLateArrivalToleranceMinutes === right.defaultLateArrivalToleranceMinutes &&
     left.lateGraceMinutes === right.lateGraceMinutes &&
-    left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes
+    left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes &&
+    left.confirmationReminderEnabled === right.confirmationReminderEnabled &&
+    left.confirmationReminderHoursBefore === right.confirmationReminderHoursBefore
   );
 }
 
 export function validateCompanySettingsForm(values: CompanySettingsFormValues): string[] {
   return [
     ...validateGeneralSettingsForm(values),
-    ...validateInventoryOperationSettingsForm(values),
+    ...validateOperationOperationSettingsForm(values),
     ...validateWhatsAppSettingsForm(values),
   ];
 }
@@ -283,6 +318,8 @@ export function toCompanySettingsFormValues(settings: {
   defaultOperationStartTime: string | null;
   defaultOperationEndTime: string | null;
   geofenceReviewMarginMeters?: number | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
 }): CompanySettingsFormValues {
   return {
     operationTimezone: settings.operationTimezone,
@@ -300,6 +337,8 @@ export function toCompanySettingsFormValues(settings: {
     earlyLeaveToleranceMinutes: String(settings.earlyLeaveToleranceMinutes),
     requireCheckoutLocation: settings.requireCheckoutLocation,
     allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,
+    confirmationReminderEnabled: settings.confirmationReminderEnabled,
+    confirmationReminderHoursBefore: String(settings.confirmationReminderHoursBefore),
   };
 }
 
@@ -318,6 +357,8 @@ export function toCompanySettingsUpdateInput(values: CompanySettingsFormValues) 
     earlyLeaveToleranceMinutes: Number(values.earlyLeaveToleranceMinutes),
     requireCheckoutLocation: values.requireCheckoutLocation,
     allowManualAttendanceCorrections: values.allowManualAttendanceCorrections,
+    confirmationReminderEnabled: values.confirmationReminderEnabled,
+    confirmationReminderHoursBefore: Number(values.confirmationReminderHoursBefore),
   };
 }
 
@@ -347,7 +388,7 @@ export function generalSettingsEqual(
   return left.operationTimezone === right.operationTimezone;
 }
 
-export function inventoryOperationSettingsEqual(
+export function operationSettingsEqual(
   left: Pick<
     CompanySettingsFormValues,
     | "defaultRadiusMeters"

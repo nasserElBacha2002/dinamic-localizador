@@ -73,7 +73,7 @@ export const isGlobalCancelCommand = (body: string): boolean =>
 
 export const isGlobalBackCommand = (body: string): boolean => matchesCommand(body, GLOBAL_BACK_COMMANDS);
 
-export const parseInventorySelection = (body: string): number | null => {
+export const parseOperationSelection = (body: string): number | null => {
   const normalized = normalizeIntentText(body);
   if (!/^\d+$/.test(normalized)) {
     return null;

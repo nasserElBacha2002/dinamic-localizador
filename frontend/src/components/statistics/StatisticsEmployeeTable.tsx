@@ -18,7 +18,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 type SortableField =
   | "employeeName"
   | "phoneNumber"
-  | "assignedInventoriesCount"
+  | "assignedOperationsCount"
   | "confirmedAttendances"
   | "noShowCount"
   | "lateCount"
@@ -49,7 +49,7 @@ interface StatisticsEmployeeTableProps {
 const EXPORT_HEADERS = [
   "Empleado",
   "Teléfono",
-  "Inventarios asignados",
+  "Operaciones asignadas",
   "Confirmadas",
   "Sin asistencia",
   "Tarde",
@@ -63,7 +63,7 @@ function toExportRows(rows: AttendanceByEmployeeRow[]) {
   return rows.map((row) => [
     row.employeeName,
     row.phoneNumber,
-    row.assignedInventoriesCount,
+    row.assignedOperationsCount,
     row.confirmedAttendances,
     row.noShowCount,
     row.lateCount,
@@ -104,9 +104,9 @@ export function StatisticsEmployeeTable({
       },
       { key: "phoneNumber", header: "Teléfono", getValue: (row) => row.phoneNumber },
       {
-        key: "assignedInventoriesCount",
+        key: "assignedOperationsCount",
         header: terminology.operation.plural,
-        getValue: (row) => row.assignedInventoriesCount,
+        getValue: (row) => row.assignedOperationsCount,
         align: "right",
       },
       {

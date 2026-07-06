@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
-import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
+import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import {
@@ -10,19 +10,20 @@ import {
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const employeeId = "00000000-0000-4000-8000-000000000002";
-const inventoryId = "00000000-0000-4000-8000-000000000003";
+const operationId = "00000000-0000-4000-8000-000000000003";
 
 const assignment = (
-  overrides: Partial<EmployeeAssignedInventory> = {},
-): EmployeeAssignedInventory => ({
-  inventoryId,
-  storeName: "Carrefour Palermo",
-  storeAddress: "Av. Santa Fe 1234",
-  storeLatitude: -34.6,
-  storeLongitude: -58.4,
+  overrides: Partial<EmployeeAssignedOperation> = {},
+): EmployeeAssignedOperation => ({
+  operationId,
+  serviceName: "Carrefour Palermo",
+  serviceAddress: "Av. Santa Fe 1234",
+  serviceLocality: "Palermo",
+  serviceLatitude: -34.6,
+  serviceLongitude: -58.4,
   scheduledStart: "2026-07-08T23:30:00.000Z",
   scheduledEnd: "2026-07-09T06:00:00.000Z",
-  inventoryStatus: "SCHEDULED",
+  operationStatus: "SCHEDULED",
   confirmationStatus: "PENDING",
   attendanceReceivedAt: null,
   attendanceCheckoutAt: null,
@@ -55,7 +56,7 @@ describe("employeeWorkdayService", () => {
     mock.restoreAll();
   });
 
-  it("returns no-assignment message when today has no inventories", async () => {
+  it("returns no-assignment message when today has no operations", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
@@ -81,8 +82,8 @@ describe("employeeWorkdayService", () => {
     mock.method(employeeAssignmentQueryRepository, "listTodayForEmployee", async () => [
       assignment(),
       assignment({
-        inventoryId: "00000000-0000-4000-8000-000000000004",
-        storeName: "Jumbo Caballito",
+        operationId: "00000000-0000-4000-8000-000000000004",
+        serviceName: "Jumbo Caballito",
       }),
     ]);
 
@@ -94,6 +95,31 @@ describe("employeeWorkdayService", () => {
     assert.match(message, /1\. Carrefour Palermo/);
     assert.match(message, /2\. Jumbo Caballito/);
     assert.match(message, /Llegada: pendiente/);
+  });
+
+  it("includes canonical service reference in upcoming assignments message", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+      assignment({
+        serviceName: "Carrefour Caballito",
+        serviceAddress: "Av. Rivadavia 5108",
+        serviceLocality: "Caballito",
+      }),
+    ]);
+
+    const message = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.buildUpcomingAssignmentsMessage(companyId, employeeId),
+    );
+
+    assert.match(
+      message,
+      /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/,
+    );
   });
 
   it("returns upcoming assignments ordered and limited by repository", async () => {
@@ -111,7 +137,7 @@ describe("employeeWorkdayService", () => {
       employeeWorkdayService.buildUpcomingAssignmentsMessage(companyId, employeeId),
     );
 
-    assert.match(message, /Tus próximos inventarios:/);
+    assert.match(message, /Tus próximos trabajos:/);
     assert.match(message, /Carrefour Palermo/);
   });
 
@@ -139,7 +165,7 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "CONFIRMED" }),
     );
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -148,7 +174,7 @@ describe("employeeWorkdayService", () => {
     });
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId),
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "ok");
@@ -164,7 +190,7 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "UNAVAILABLE" }),
     );
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -173,7 +199,7 @@ describe("employeeWorkdayService", () => {
     });
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, inventoryId),
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "ok");
@@ -188,12 +214,12 @@ describe("employeeWorkdayService", () => {
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ scheduledStart: "2026-07-08T10:00:00.000Z" }),
     );
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId),
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "past");
@@ -264,14 +290,14 @@ describe("employeeWorkdayService", () => {
     const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () => null);
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => null);
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
       updateCalls += 1;
       return true;
     });
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId),
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "not_found");
@@ -288,14 +314,14 @@ describe("employeeWorkdayService", () => {
     const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () => null);
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => null);
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
       updateCalls += 1;
       return true;
     });
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, inventoryId),
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "not_found");
@@ -311,20 +337,20 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updatedStatus: string | null = null;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "UNAVAILABLE" }),
     );
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
-      async (_companyId, _employeeId, _inventoryId, status) => {
+      async (_companyId, _employeeId, _operationId, status) => {
         updatedStatus = status;
         return true;
       },
     );
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId),
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "ok");
@@ -339,20 +365,20 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updatedStatus: string | null = null;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "CONFIRMED" }),
     );
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
-      async (_companyId, _employeeId, _inventoryId, status) => {
+      async (_companyId, _employeeId, _operationId, status) => {
         updatedStatus = status;
         return true;
       },
     );
 
     const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
-      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, inventoryId),
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId),
     );
 
     assert.equal(result.kind, "ok");

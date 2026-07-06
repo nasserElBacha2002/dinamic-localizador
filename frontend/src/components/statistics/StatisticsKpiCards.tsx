@@ -24,7 +24,7 @@ const KPI_ITEMS: Array<{
   { key: "rejectedCount", label: "Rechazados" },
   { key: "manuallyAcceptedCount", label: "Aceptados manualmente" },
   { key: "noShowCount", label: "Sin asistencia" },
-  { key: "totalInventories", label: terminology.operation.plural },
+  { key: "totalOperations", label: terminology.operation.plural },
 ];
 
 export function StatisticsKpiCards({ summary, isLoading }: StatisticsKpiCardsProps) {

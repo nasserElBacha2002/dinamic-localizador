@@ -211,7 +211,7 @@ describe("companyLocationTypesService", () => {
     assert.equal(disabled.isActive, false);
   });
 
-  it("rejects inactive location type for store assignment", async () => {
+  it("rejects inactive location type for service assignment", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
       "../repositories/company-location-types.repository"
@@ -225,7 +225,7 @@ describe("companyLocationTypesService", () => {
     }));
 
     await assert.rejects(
-      () => companyLocationTypesService.assertActiveStoreFormat("company-1", "EXPRESS"),
+      () => companyLocationTypesService.assertActiveServiceFormat("company-1", "EXPRESS"),
       (error: unknown) => error instanceof AppError && error.code === "INACTIVE_LOCATION_TYPE",
     );
   });

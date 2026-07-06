@@ -8,15 +8,15 @@ export const geolocationService = {
   evaluateDistance(
     receivedLatitude: number,
     receivedLongitude: number,
-    storeLatitude: number,
-    storeLongitude: number,
+    serviceLatitude: number,
+    serviceLongitude: number,
     allowedRadiusMeters: number,
   ) {
     const distanceMeters = calculateDistanceMeters(
       receivedLatitude,
       receivedLongitude,
-      storeLatitude,
-      storeLongitude,
+      serviceLatitude,
+      serviceLongitude,
     );
 
     const radius =

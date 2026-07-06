@@ -9,7 +9,7 @@ export interface AttendanceStatisticsSummary {
   rejectedCount: number;
   manuallyAcceptedCount: number;
   noShowCount: number;
-  totalInventories: number;
+  totalOperations: number;
 }
 
 export interface AttendanceTimelinePoint {
@@ -33,7 +33,7 @@ export interface AttendanceByEmployeeRow {
   employeeId: string;
   employeeName: string;
   phoneNumber: string;
-  assignedInventoriesCount: number;
+  assignedOperationsCount: number;
   confirmedAttendances: number;
   noShowCount: number;
   lateCount: number;
@@ -43,10 +43,10 @@ export interface AttendanceByEmployeeRow {
   lastAttendanceDate: string | null;
 }
 
-export interface AttendanceByInventoryRow {
-  inventoryId: string;
-  storeName: string;
-  storeAddress: string | null;
+export interface AttendanceByOperationRow {
+  operationId: string;
+  serviceName: string;
+  serviceAddress: string | null;
   scheduledStart: string;
   assignedEmployeesCount: number;
   presentCount: number;
@@ -58,11 +58,11 @@ export interface AttendanceByInventoryRow {
   operationalStatus: string;
 }
 
-export interface AttendanceByLocationRow {
-  storeId: string;
-  storeName: string;
+export interface AttendanceByServiceRow {
+  serviceId: string;
+  serviceName: string;
   address: string | null;
-  totalInventories: number;
+  totalOperations: number;
   averageAttendancePercentage: number;
   totalAssignedEmployees: number;
   totalConfirmedAttendances: number;
@@ -82,8 +82,8 @@ export type StatisticsValidationStatus =
 export interface StatisticsFilters {
   dateFrom?: string;
   dateTo?: string;
-  inventoryId?: string;
-  storeId?: string;
+  operationId?: string;
+  serviceId?: string;
   employeeId?: string;
   validationStatus?: StatisticsValidationStatus;
   locationStatus?: string;

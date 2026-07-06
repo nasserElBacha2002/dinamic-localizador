@@ -48,8 +48,8 @@ describe("parseBotIntent", () => {
     assert.equal(parseBotIntent({ body: "", hasLocation: true }), "location");
   });
 
-  it("detects inventory numeric selection", () => {
-    assert.equal(parseBotIntent({ body: "2" }), "inventory_selection");
+  it("detects operation numeric selection", () => {
+    assert.equal(parseBotIntent({ body: "2" }), "operation_selection");
   });
 
   it("detects cancel intent", () => {

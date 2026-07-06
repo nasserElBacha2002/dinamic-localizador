@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getAttendanceByEmployee,
-  getAttendanceByInventory,
-  getAttendanceByLocation,
+  getAttendanceByOperation,
+  getAttendanceByService,
   getAttendanceStatisticsSummary,
   getAttendanceStatisticsTimeline,
   getAttendanceStatusDistribution,
@@ -20,10 +20,10 @@ const statisticsKeys = {
     [...statisticsKeys.all, companyId, "status-distribution", filters] as const,
   byEmployee: (companyId: string | undefined, filters: StatisticsFilters) =>
     [...statisticsKeys.all, companyId, "by-employee", filters] as const,
-  byInventory: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "by-inventory", filters] as const,
+  byOperation: (companyId: string | undefined, filters: StatisticsFilters) =>
+    [...statisticsKeys.all, companyId, "by-operation", filters] as const,
   byLocation: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "by-location", filters] as const,
+    [...statisticsKeys.all, companyId, "by-service", filters] as const,
 };
 
 export function useStatisticsSummary(filters: StatisticsFilters) {
@@ -66,22 +66,22 @@ export function useStatisticsByEmployee(filters: StatisticsFilters) {
   });
 }
 
-export function useStatisticsByInventory(filters: StatisticsFilters) {
+export function useStatisticsByOperation(filters: StatisticsFilters) {
   const { companyId, enabled } = useOperationalQueryEnabled();
 
   return useQuery({
-    queryKey: statisticsKeys.byInventory(companyId, filters),
-    queryFn: () => getAttendanceByInventory(filters),
+    queryKey: statisticsKeys.byOperation(companyId, filters),
+    queryFn: () => getAttendanceByOperation(filters),
     enabled,
   });
 }
 
-export function useStatisticsByLocation(filters: StatisticsFilters) {
+export function useStatisticsByService(filters: StatisticsFilters) {
   const { companyId, enabled } = useOperationalQueryEnabled();
 
   return useQuery({
     queryKey: statisticsKeys.byLocation(companyId, filters),
-    queryFn: () => getAttendanceByLocation(filters),
+    queryFn: () => getAttendanceByService(filters),
     enabled,
   });
 }

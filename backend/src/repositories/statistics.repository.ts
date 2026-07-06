@@ -3,8 +3,8 @@ import { getPool } from "../database/connection";
 import type { StatisticsFilters } from "../schemas/statistics.schema";
 import type {
   AttendanceByEmployeeRow,
-  AttendanceByInventoryRow,
-  AttendanceByLocationRow,
+  AttendanceByOperationRow,
+  AttendanceByServiceRow,
   AttendanceStatisticsSummary,
   AttendanceStatusDistributionItem,
   AttendanceTimelinePoint,
@@ -13,11 +13,11 @@ import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-
 
 const ASSIGNMENT_BASE_FROM = `
   FROM operation_assignments ie
-  INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = ie.company_id
-  INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
+  INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = ie.company_id
+  INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
   INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = ie.company_id
   LEFT JOIN attendance_records ar
-    ON ar.inventory_id = ie.inventory_id
+    ON ar.operation_id = ie.operation_id
    AND ar.employee_id = ie.employee_id
    AND ar.company_id = ie.company_id
 `;
@@ -44,17 +44,17 @@ const buildStatisticsFilters = (companyId: string, filters: StatisticsFilters): 
     });
   }
 
-  if (filters.inventoryId) {
+  if (filters.operationId) {
     sqlFilters.push({
-      clause: "i.id = @inventoryId",
-      apply: (request) => request.input("inventoryId", sql.UniqueIdentifier, filters.inventoryId),
+      clause: "i.id = @operationId",
+      apply: (request) => request.input("operationId", sql.UniqueIdentifier, filters.operationId),
     });
   }
 
-  if (filters.storeId) {
+  if (filters.serviceId) {
     sqlFilters.push({
-      clause: "s.id = @storeId",
-      apply: (request) => request.input("storeId", sql.UniqueIdentifier, filters.storeId),
+      clause: "s.id = @serviceId",
+      apply: (request) => request.input("serviceId", sql.UniqueIdentifier, filters.serviceId),
     });
   }
 
@@ -131,7 +131,7 @@ const STATUS_LABELS: Record<string, string> = {
 const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
   employeeName: "e.name",
   phoneNumber: "e.phone_number",
-  assignedInventoriesCount: "assigned_inventories_count",
+  assignedOperationsCount: "assigned_operations_count",
   confirmedAttendances: "confirmed_attendances",
   noShowCount: "no_show_count",
   lateCount: "late_count",
@@ -141,8 +141,8 @@ const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
   lastAttendanceDate: "last_attendance_date",
 };
 
-const INVENTORY_SORT_FIELDS: Record<string, string> = {
-  storeName: "s.name",
+const OPERATION_SORT_FIELDS: Record<string, string> = {
+  serviceName: "s.name",
   scheduledStart: "i.scheduled_start",
   assignedEmployeesCount: "assigned_employees_count",
   presentCount: "present_count",
@@ -154,10 +154,10 @@ const INVENTORY_SORT_FIELDS: Record<string, string> = {
   operationalStatus: "i.status",
 };
 
-const LOCATION_SORT_FIELDS: Record<string, string> = {
-  storeName: "s.name",
+const SERVICE_SORT_FIELDS: Record<string, string> = {
+  serviceName: "s.name",
   address: "s.address",
-  totalInventories: "total_inventories",
+  totalOperations: "total_operations",
   averageAttendancePercentage: "average_attendance_percentage",
   totalAssignedEmployees: "total_assigned_employees",
   totalConfirmedAttendances: "total_confirmed_attendances",
@@ -191,7 +191,7 @@ export const statisticsRepository = {
     const result = await request.query(`
       SELECT
         COUNT(*) AS total_assigned,
-        COUNT(DISTINCT i.id) AS total_inventories,
+        COUNT(DISTINCT i.id) AS total_operations,
         SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS total_attendance_records,
         SUM(CASE WHEN ar.punctuality_status IN ('ON_TIME', 'EARLY') THEN 1 ELSE 0 END) AS present_count,
         SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,
@@ -219,7 +219,7 @@ export const statisticsRepository = {
       rejectedCount: toNumber(row.rejected_count),
       manuallyAcceptedCount: toNumber(row.manually_accepted_count),
       noShowCount: toNumber(row.no_show_count),
-      totalInventories: toNumber(row.total_inventories),
+      totalOperations: toNumber(row.total_operations),
     };
   },
 
@@ -321,7 +321,7 @@ export const statisticsRepository = {
         e.id AS employee_id,
         e.name AS employee_name,
         e.phone_number,
-        COUNT(DISTINCT ie.inventory_id) AS assigned_inventories_count,
+        COUNT(DISTINCT ie.operation_id) AS assigned_operations_count,
         SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS confirmed_attendances,
         SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count,
         SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,
@@ -351,7 +351,7 @@ export const statisticsRepository = {
         employeeId: String(record.employee_id),
         employeeName: String(record.employee_name),
         phoneNumber: String(record.phone_number),
-        assignedInventoriesCount: toNumber(record.assigned_inventories_count),
+        assignedOperationsCount: toNumber(record.assigned_operations_count),
         confirmedAttendances: toNumber(record.confirmed_attendances),
         noShowCount: toNumber(record.no_show_count),
         lateCount: toNumber(record.late_count),
@@ -365,18 +365,18 @@ export const statisticsRepository = {
     return { data, total };
   },
 
-  async getByInventory(
+  async getByOperation(
     companyId: string,
     filters: StatisticsFilters,
     page: number,
     limit: number,
     sortBy?: string,
     sortDirection: "asc" | "desc" = "desc",
-  ): Promise<{ data: AttendanceByInventoryRow[]; total: number }> {
+  ): Promise<{ data: AttendanceByOperationRow[]; total: number }> {
     const pool = getPool();
     const sqlFilters = buildStatisticsFilters(companyId, filters);
     const whereClause = buildWhereClause(sqlFilters);
-    const orderBy = resolveSort(sortBy, INVENTORY_SORT_FIELDS, "i.scheduled_start", sortDirection);
+    const orderBy = resolveSort(sortBy, OPERATION_SORT_FIELDS, "i.scheduled_start", sortDirection);
     const offset = (page - 1) * limit;
 
     const countRequest = pool.request();
@@ -395,9 +395,9 @@ export const statisticsRepository = {
 
     const dataResult = await dataRequest.query(`
       SELECT
-        i.id AS inventory_id,
-        s.name AS store_name,
-        s.address AS store_address,
+        i.id AS operation_id,
+        s.name AS service_name,
+        s.address AS service_address,
         i.scheduled_start,
         i.status AS operational_status,
         COUNT(*) AS assigned_employees_count,
@@ -426,9 +426,9 @@ export const statisticsRepository = {
     const data = dataResult.recordset.map((row) => {
       const record = row as Record<string, unknown>;
       return {
-        inventoryId: String(record.inventory_id),
-        storeName: String(record.store_name),
-        storeAddress: record.store_address ? String(record.store_address) : null,
+        operationId: String(record.operation_id),
+        serviceName: String(record.service_name),
+        serviceAddress: record.service_address ? String(record.service_address) : null,
         scheduledStart: toIsoDate(record.scheduled_start) ?? "",
         assignedEmployeesCount: toNumber(record.assigned_employees_count),
         presentCount: toNumber(record.present_count),
@@ -444,18 +444,18 @@ export const statisticsRepository = {
     return { data, total };
   },
 
-  async getByLocation(
+  async getByService(
     companyId: string,
     filters: StatisticsFilters,
     page: number,
     limit: number,
     sortBy?: string,
     sortDirection: "asc" | "desc" = "desc",
-  ): Promise<{ data: AttendanceByLocationRow[]; total: number }> {
+  ): Promise<{ data: AttendanceByServiceRow[]; total: number }> {
     const pool = getPool();
     const sqlFilters = buildStatisticsFilters(companyId, filters);
     const whereClause = buildWhereClause(sqlFilters);
-    const orderBy = resolveSort(sortBy, LOCATION_SORT_FIELDS, "s.name", sortDirection);
+    const orderBy = resolveSort(sortBy, SERVICE_SORT_FIELDS, "s.name", sortDirection);
     const offset = (page - 1) * limit;
 
     const countRequest = pool.request();
@@ -474,10 +474,10 @@ export const statisticsRepository = {
 
     const dataResult = await dataRequest.query(`
       SELECT
-        s.id AS store_id,
-        s.name AS store_name,
+        s.id AS service_id,
+        s.name AS service_name,
         s.address,
-        COUNT(DISTINCT i.id) AS total_inventories,
+        COUNT(DISTINCT i.id) AS total_operations,
         COUNT(*) AS total_assigned_employees,
         SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS total_confirmed_attendances,
         SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS total_no_shows,
@@ -504,10 +504,10 @@ export const statisticsRepository = {
     const data = dataResult.recordset.map((row) => {
       const record = row as Record<string, unknown>;
       return {
-        storeId: String(record.store_id),
-        storeName: String(record.store_name),
+        serviceId: String(record.service_id),
+        serviceName: String(record.service_name),
         address: record.address ? String(record.address) : null,
-        totalInventories: toNumber(record.total_inventories),
+        totalOperations: toNumber(record.total_operations),
         averageAttendancePercentage: Number(record.average_attendance_percentage ?? 0),
         totalAssignedEmployees: toNumber(record.total_assigned_employees),
         totalConfirmedAttendances: toNumber(record.total_confirmed_attendances),

@@ -9,7 +9,7 @@ import { runAttendanceReminderJobOnce } from "../jobs/attendance-reminder.job";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 const testReminderSchema = z.object({
-  inventoryId: z.uuid(),
+  operationId: z.uuid(),
   employeeId: z.uuid(),
   notificationType: z.enum(ATTENDANCE_NOTIFICATION_TYPES),
 });
@@ -62,7 +62,7 @@ devReminderRouter.post(
         status: "ok",
         outcome,
         notificationType: parsed.data.notificationType,
-        inventoryId: parsed.data.inventoryId,
+        operationId: parsed.data.operationId,
         employeeId: parsed.data.employeeId,
       });
     } catch (error) {

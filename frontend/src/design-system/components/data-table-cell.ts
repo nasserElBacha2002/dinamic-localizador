@@ -31,7 +31,7 @@ export function resolveDataTableCellValue<T>(row: T, column: DataTableColumnLike
 
     return DISPLAY_FALLBACK;
   } catch (error) {
-    if (import.meta.env.DEV) {
+    if (import.meta.env?.DEV) {
       console.warn("[DataTable] Failed to resolve cell value", {
         columnKey: column.key,
         row,

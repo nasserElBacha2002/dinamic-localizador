@@ -1,11 +1,12 @@
 import { INVALID_SELECTION_MESSAGE } from "./bot/bot-response.builder";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
-import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
-import type { InventorySelectionOption } from "../types/twilio.types";
+import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
+import type { OperationSelectionOption } from "../types/twilio.types";
 import { getBotNow } from "../utils/bot-runtime-context";
 import { getBotOperationTimezone } from "../utils/bot-runtime-settings-scope";
 import {
   formatAssignmentDateTimeLine,
+  formatAssignmentServiceReference,
   formatTodayAssignmentBlock,
   formatUpcomingAssignmentBlock,
   formatUpcomingSelectionLine,
@@ -16,15 +17,17 @@ import {
   PAST_ASSIGNMENT_MESSAGE,
 } from "../utils/employee-assignment-format";
 
-const isFutureAssignment = (assignment: EmployeeAssignedInventory, at: Date): boolean =>
+const isFutureAssignment = (assignment: EmployeeAssignedOperation, at: Date): boolean =>
   new Date(assignment.scheduledStart).getTime() > at.getTime();
 
 const mapToSelectionOptions = (
-  assignments: EmployeeAssignedInventory[],
-): InventorySelectionOption[] =>
+  assignments: EmployeeAssignedOperation[],
+): OperationSelectionOption[] =>
   assignments.map((assignment) => ({
-    inventoryId: assignment.inventoryId,
-    storeName: assignment.storeName,
+    operationId: assignment.operationId,
+    serviceName: assignment.serviceName,
+    serviceAddress: assignment.serviceAddress,
+    serviceLocality: assignment.serviceLocality,
     scheduledStart: assignment.scheduledStart,
   }));
 
@@ -71,7 +74,7 @@ export const employeeWorkdayService = {
       return NO_UPCOMING_ASSIGNMENTS_MESSAGE;
     }
 
-    const lines = ["Tus próximos inventarios:", ""];
+    const lines = ["Tus próximos trabajos:", ""];
     assignments.forEach((assignment, index) => {
       lines.push(...formatUpcomingAssignmentBlock(assignment, index + 1, timeZone));
       if (index < assignments.length - 1) {
@@ -85,7 +88,7 @@ export const employeeWorkdayService = {
   async listConfirmableAssignments(
     companyId: string,
     employeeId: string,
-  ): Promise<EmployeeAssignedInventory[]> {
+  ): Promise<EmployeeAssignedOperation[]> {
     const at = getBotNow();
     const assignments = await employeeAssignmentQueryRepository.listUpcomingForEmployee(
       companyId,
@@ -98,14 +101,26 @@ export const employeeWorkdayService = {
   async listUnavailabilityAssignments(
     companyId: string,
     employeeId: string,
-  ): Promise<EmployeeAssignedInventory[]> {
+  ): Promise<EmployeeAssignedOperation[]> {
     return this.listConfirmableAssignments(companyId, employeeId);
   },
 
-  buildConfirmSelectionPrompt(assignments: EmployeeAssignedInventory[]): string {
+  async getAssignmentForResponseMessage(
+    companyId: string,
+    employeeId: string,
+    operationId: string,
+  ): Promise<EmployeeAssignedOperation | null> {
+    return employeeAssignmentQueryRepository.findByOperationForEmployee(
+      companyId,
+      employeeId,
+      operationId,
+    );
+  },
+
+  buildConfirmSelectionPrompt(assignments: EmployeeAssignedOperation[]): string {
     const timeZone = getBotOperationTimezone();
     const lines = [
-      "Tenés varios próximos inventarios. Respondé con el número que querés confirmar:",
+      "Tenés varios próximos trabajos. Respondé con el número que querés confirmar:",
       "",
       ...assignments.map((assignment, index) =>
         formatUpcomingSelectionLine(assignment, index + 1, timeZone),
@@ -114,10 +129,10 @@ export const employeeWorkdayService = {
     return lines.join("\n");
   },
 
-  buildUnavailabilitySelectionPrompt(assignments: EmployeeAssignedInventory[]): string {
+  buildUnavailabilitySelectionPrompt(assignments: EmployeeAssignedOperation[]): string {
     const timeZone = getBotOperationTimezone();
     const lines = [
-      "Tenés varios próximos inventarios. Respondé con el número para indicar en cuál no estás disponible:",
+      "Tenés varios próximos trabajos. Respondé con el número para indicar en cuál no estás disponible:",
       "",
       ...assignments.map((assignment, index) =>
         formatUpcomingSelectionLine(assignment, index + 1, timeZone),
@@ -126,22 +141,22 @@ export const employeeWorkdayService = {
     return lines.join("\n");
   },
 
-  buildConfirmedMessage(assignment: EmployeeAssignedInventory): string {
+  buildConfirmedMessage(assignment: EmployeeAssignedOperation): string {
     const timeZone = getBotOperationTimezone();
     return [
       "Listo, confirmamos tu asistencia para:",
       "",
-      assignment.storeName,
+      formatAssignmentServiceReference(assignment),
       formatAssignmentDateTimeLine(assignment, timeZone),
     ].join("\n");
   },
 
-  buildUnavailableMessage(assignment: EmployeeAssignedInventory): string {
+  buildUnavailableMessage(assignment: EmployeeAssignedOperation): string {
     const timeZone = getBotOperationTimezone();
     return [
       "Entendido. Registramos que no estás disponible para:",
       "",
-      assignment.storeName,
+      formatAssignmentServiceReference(assignment),
       formatAssignmentDateTimeLine(assignment, timeZone),
       "",
       "Administración podrá revisar esta respuesta desde el panel.",
@@ -151,12 +166,12 @@ export const employeeWorkdayService = {
   async confirmAssignment(
     companyId: string,
     employeeId: string,
-    inventoryId: string,
+    operationId: string,
   ): Promise<{ kind: "ok" | "not_found" | "past"; message: string }> {
-    const assignment = await employeeAssignmentQueryRepository.findByInventoryForEmployee(
+    const assignment = await employeeAssignmentQueryRepository.findByOperationForEmployee(
       companyId,
       employeeId,
-      inventoryId,
+      operationId,
     );
     if (!assignment) {
       return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
@@ -174,7 +189,7 @@ export const employeeWorkdayService = {
     await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
       employeeId,
-      inventoryId,
+      operationId,
       "CONFIRMED",
     );
 
@@ -184,12 +199,12 @@ export const employeeWorkdayService = {
   async markAssignmentUnavailable(
     companyId: string,
     employeeId: string,
-    inventoryId: string,
+    operationId: string,
   ): Promise<{ kind: "ok" | "not_found" | "past"; message: string }> {
-    const assignment = await employeeAssignmentQueryRepository.findByInventoryForEmployee(
+    const assignment = await employeeAssignmentQueryRepository.findByOperationForEmployee(
       companyId,
       employeeId,
-      inventoryId,
+      operationId,
     );
     if (!assignment) {
       return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
@@ -207,7 +222,7 @@ export const employeeWorkdayService = {
     await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
       employeeId,
-      inventoryId,
+      operationId,
       "UNAVAILABLE",
     );
 

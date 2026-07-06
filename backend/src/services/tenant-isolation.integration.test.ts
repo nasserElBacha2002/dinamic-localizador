@@ -9,8 +9,8 @@ import {
 } from "../test-helpers/integration-test";
 import { companyContextService } from "./company-context.service";
 import { employeeRepository } from "../repositories/employee.repository";
-import { storeRepository } from "../repositories/store.repository";
-import { inventoryRepository } from "../repositories/inventory.repository";
+import { serviceRepository } from "../repositories/service.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import { botSimulationSessionRepository } from "../repositories/bot-simulation-session.repository";
@@ -23,8 +23,8 @@ describeDatabaseIntegration("tenant isolation hardening", () => {
   let dinamicCompanyId = "";
   let otherCompanyId = "";
   let dinamicEmployeeId = "";
-  let dinamicStoreId = "";
-  let dinamicInventoryId = "";
+  let dinamicServiceId = "";
+  let dinamicOperationId = "";
   let dinamicAttendanceId = "";
   let dinamicAbsenceRequestId = "";
   let dinamicBotSessionId = "";
@@ -67,14 +67,14 @@ describeDatabaseIntegration("tenant isolation hardening", () => {
     assert.ok(employees.items[0], "requires at least one employee in Dinamic Systems");
     dinamicEmployeeId = employees.items[0].id;
 
-    const stores = await storeRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
-    if (stores.items[0]) {
-      dinamicStoreId = stores.items[0].id;
+    const services = await serviceRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
+    if (services.items[0]) {
+      dinamicServiceId = services.items[0].id;
     }
 
-    const inventories = await inventoryRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
-    if (inventories.items[0]) {
-      dinamicInventoryId = inventories.items[0].id;
+    const operations = await operationRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
+    if (operations.items[0]) {
+      dinamicOperationId = operations.items[0].id;
     }
 
     const attendance = await attendanceRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
@@ -118,33 +118,33 @@ describeDatabaseIntegration("tenant isolation hardening", () => {
     assert.notEqual(original.name, "Cross-tenant tamper");
   });
 
-  it("does not return store from another company", async () => {
-    if (!dinamicStoreId) {
+  it("does not return service from another company", async () => {
+    if (!dinamicServiceId) {
       return;
     }
 
-    const store = await storeRepository.findById(otherCompanyId, dinamicStoreId);
-    assert.equal(store, null);
+    const service = await serviceRepository.findById(otherCompanyId, dinamicServiceId);
+    assert.equal(service, null);
   });
 
-  it("does not update store from another company", async () => {
-    if (!dinamicStoreId) {
+  it("does not update service from another company", async () => {
+    if (!dinamicServiceId) {
       return;
     }
 
-    const updated = await storeRepository.update(otherCompanyId, dinamicStoreId, {
+    const updated = await serviceRepository.update(otherCompanyId, dinamicServiceId, {
       name: "Cross-tenant tamper",
     });
     assert.equal(updated, null);
   });
 
-  it("does not return inventory from another company", async () => {
-    if (!dinamicInventoryId) {
+  it("does not return operation from another company", async () => {
+    if (!dinamicOperationId) {
       return;
     }
 
-    const inventory = await inventoryRepository.findById(otherCompanyId, dinamicInventoryId);
-    assert.equal(inventory, null);
+    const operation = await operationRepository.findById(otherCompanyId, dinamicOperationId);
+    assert.equal(operation, null);
   });
 
   it("does not return attendance from another company", async () => {

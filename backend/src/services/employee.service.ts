@@ -83,12 +83,12 @@ export const employeeService = {
     }
 
     if (input.active === false) {
-      const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(companyId, id);
+      const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
       if (hasSchedules) {
         throw new AppError(
           409,
-          "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_INVENTORIES",
-          "No se puede desactivar un empleado con inventarios activos o programados",
+          "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
+          "No se puede desactivar un empleado con operaciones activas o programadas",
         );
       }
     }
@@ -102,12 +102,12 @@ export const employeeService = {
 
   async deactivate(companyId: string, id: string) {
     await this.getById(companyId, id);
-    const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(companyId, id);
+    const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
     if (hasSchedules) {
       throw new AppError(
         409,
-        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_INVENTORIES",
-        "No se puede desactivar un empleado con inventarios activos o programados",
+        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
+        "No se puede desactivar un empleado con operaciones activas o programadas",
       );
     }
 

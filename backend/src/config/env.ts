@@ -25,6 +25,7 @@ const envSchema = z
     TWILIO_VALIDATE_SIGNATURE: z.stringbool().optional(),
     TWILIO_ARRIVAL_REMINDER_CONTENT_SID: z.string().optional(),
     TWILIO_EXIT_REMINDER_CONTENT_SID: z.string().optional(),
+    TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID: z.string().optional(),
     TWILIO_TEMPLATE_NO_CHECKIN_SID: z.string().optional(),
     ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),

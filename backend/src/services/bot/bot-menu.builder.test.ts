@@ -15,7 +15,7 @@ import {
 const allEnabled = () =>
   new Map([
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
-    [COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, true],
+    [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
   ]);
 
@@ -48,7 +48,7 @@ describe("buildGreetingMessage", () => {
     assert.match(message, /Marcar llegada/);
   });
 
-  it("hides workday when attendance or inventory_operations is disabled", () => {
+  it("hides workday when attendance or operations is disabled", () => {
     const states = allEnabled();
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
     const message = buildGreetingMessage(states);
@@ -56,9 +56,9 @@ describe("buildGreetingMessage", () => {
     assert.doesNotMatch(message, /Marcar llegada/);
   });
 
-  it("hides upcoming assignments when inventory_operations is disabled", () => {
+  it("hides upcoming assignments when operations is disabled", () => {
     const states = allEnabled();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     const message = buildGreetingMessage(states);
     assert.doesNotMatch(message, /próximos turnos/i);
     assert.doesNotMatch(message, /jornada de hoy/i);
@@ -66,15 +66,15 @@ describe("buildGreetingMessage", () => {
     assert.doesNotMatch(message, /Avisar no disponibilidad/i);
   });
 
-  it("shows confirmation and unavailability when inventory_operations is enabled", () => {
+  it("shows confirmation and unavailability when operations is enabled", () => {
     const message = buildGreetingMessage(allEnabled());
     assert.match(message, /Confirmar asistencia — escribí "Confirmo asistencia"/);
     assert.match(message, /Avisar no disponibilidad — escribí "No puedo asistir"/);
   });
 
-  it("hides check-in when inventory_operations is disabled", () => {
+  it("hides check-in when operations is disabled", () => {
     const states = allEnabled();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     const message = buildGreetingMessage(states);
     assert.doesNotMatch(message, /Marcar llegada/);
     assert.match(message, /Marcar salida/);
@@ -92,7 +92,7 @@ describe("buildGreetingMessage", () => {
   it("returns a safe no-options message when all employee-facing modules are disabled", () => {
     const states = allEnabled();
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     const message = buildGreetingMessage(states);
     assert.equal(message, NO_WHATSAPP_OPTIONS_MESSAGE);

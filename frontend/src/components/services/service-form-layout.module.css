@@ -1,0 +1,43 @@
+.serviceFormLayout {
+  display: grid;
+  gap: var(--mantine-spacing-lg);
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas:
+    "info"
+    "map"
+    "geo"
+    "actions";
+}
+
+.infoSection {
+  grid-area: info;
+}
+
+.mapSection {
+  grid-area: map;
+  min-width: 0;
+}
+
+.geoSection {
+  grid-area: geo;
+}
+
+.actionsSection {
+  grid-area: actions;
+}
+
+@media (min-width: 62em) {
+  .serviceFormLayout {
+    grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
+    grid-template-areas:
+      "info map"
+      "geo map"
+      "actions map";
+    align-items: start;
+  }
+
+  .mapSection {
+    position: sticky;
+    top: var(--mantine-spacing-md);
+  }
+}

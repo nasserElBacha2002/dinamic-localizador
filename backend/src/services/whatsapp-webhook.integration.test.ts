@@ -28,30 +28,30 @@ import {
 
 const companyA = "11111111-1111-1111-1111-111111111111";
 const employeeA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
-const inventoryA = "cccccccc-cccc-cccc-cccc-cccccccccccc";
-const inventoryB = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+const operationA = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+const operationB = "dddddddd-dddd-dddd-dddd-dddddddddddd";
 const phone = "+5491111111111";
 const botNumber = "whatsapp:+10000000000";
 
-const compatibleInventory = (id: string, storeName = "Tienda Centro") => ({
+const compatibleOperation = (id: string, serviceName = "Servicio Centro") => ({
   id,
-  storeName,
+  serviceName,
   scheduledStart: "2026-07-05T15:00:00.000Z",
   scheduledEnd: "2026-07-05T21:00:00.000Z",
-  storeLatitude: -34.6,
-  storeLongitude: -58.4,
+  serviceLatitude: -34.6,
+  serviceLongitude: -58.4,
   allowedRadiusMeters: 150,
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 30,
 });
 
-const checkoutEligibleInventory = (id: string, storeName = "Tienda Centro") => ({
+const checkoutEligibleOperation = (id: string, serviceName = "Servicio Centro") => ({
   id,
-  storeName,
+  serviceName,
   scheduledStart: "2026-07-05T15:00:00.000Z",
   scheduledEnd: "2026-07-05T21:00:00.000Z",
-  storeLatitude: -34.6,
-  storeLongitude: -58.4,
+  serviceLatitude: -34.6,
+  serviceLongitude: -58.4,
   allowedRadiusMeters: 150,
 });
 
@@ -71,7 +71,7 @@ const defaultEmployee = (companyId: string, id: string) => ({
 const enabledStates = () =>
   new Map<CompanyModuleKey, boolean>([
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
-    [COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, true],
+    [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
     [COMPANY_MODULE_KEYS.REPORTS, true],
     [COMPANY_MODULE_KEYS.BOT_SIMULATOR, true],
@@ -133,17 +133,17 @@ const buildSession = (
   id: "session-1",
   companyId,
   employeeId: employeeA,
-  inventoryId:
-    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? inventoryA : null,
+  operationId:
+    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? operationA : null,
   phoneNumber: phone,
   state,
   contextJson:
-    state === "WAITING_INVENTORY_SELECTION" || state === "WAITING_CHECKOUT_INVENTORY_SELECTION"
+    state === "WAITING_OPERATION_SELECTION" || state === "WAITING_CHECKOUT_OPERATION_SELECTION"
       ? JSON.stringify({
-          inventoryOptions: [
+          operationOptions: [
             {
-              inventoryId: inventoryA,
-              storeName: "Tienda Centro",
+              operationId: operationA,
+              serviceName: "Servicio Centro",
               scheduledStart: "2026-07-05T15:00:00.000Z",
             },
           ],
@@ -399,7 +399,7 @@ describe("whatsapp webhook dynamic menu", () => {
   it("returns no-options message when all employee-facing modules are disabled", async () => {
     const states = enabledStates();
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "menu" }),
@@ -493,37 +493,37 @@ describe("whatsapp webhook check-in regression", () => {
     mock.restoreAll();
   });
 
-  it("starts check-in and asks for location with one compatible inventory", async () => {
+  it("starts check-in and asks for location with one compatible operation", async () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Llegué" }),
       setup: async () => {
-        const { inventoryRepository } = await import("../repositories/inventory.repository");
+        const { operationRepository } = await import("../repositories/operation.repository");
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(inventoryRepository, "findCompatibleForEmployee", async () => [
-          compatibleInventory(inventoryA),
+        mock.method(operationRepository, "findCompatibleForEmployee", async () => [
+          compatibleOperation(operationA),
         ]);
         mock.method(botSessionService, "createWaitingLocationSession", async (_companyId, input) => {
-          assert.equal(input.inventoryId, inventoryA);
+          assert.equal(input.operationId, operationA);
         });
       },
     });
     assert.match(message, /ubicación actual/i);
   });
 
-  it("asks for inventory selection with multiple compatible inventories", async () => {
+  it("asks for operation selection with multiple compatible operations", async () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Llegué" }),
       setup: async () => {
-        const { inventoryRepository } = await import("../repositories/inventory.repository");
+        const { operationRepository } = await import("../repositories/operation.repository");
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(inventoryRepository, "findCompatibleForEmployee", async () => [
-          compatibleInventory(inventoryA, "Tienda A"),
-          compatibleInventory(inventoryB, "Tienda B"),
+        mock.method(operationRepository, "findCompatibleForEmployee", async () => [
+          compatibleOperation(operationA, "Servicio A"),
+          compatibleOperation(operationB, "Servicio B"),
         ]);
-        mock.method(botSessionService, "createInventorySelectionSession", async () => undefined);
+        mock.method(botSessionService, "createOperationSelectionSession", async () => undefined);
       },
     });
-    assert.match(message, /seleccioná el inventario|Respondé con el número/i);
+    assert.match(message, /seleccioná el trabajo|Respondé con el número/i);
   });
 
   it("blocks check-in when attendance is disabled", async () => {
@@ -570,14 +570,14 @@ describe("whatsapp webhook checkout regression", () => {
     mock.restoreAll();
   });
 
-  it("starts checkout and asks for location with one eligible inventory", async () => {
+  it("starts checkout and asks for location with one eligible operation", async () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Me voy" }),
       setup: async () => {
         const { attendanceRepository } = await import("../repositories/attendance.repository");
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(attendanceRepository, "findCheckoutEligibleInventories", async () => [
-          checkoutEligibleInventory(inventoryA),
+        mock.method(attendanceRepository, "findCheckoutEligibleOperations", async () => [
+          checkoutEligibleOperation(operationA),
         ]);
         mock.method(botSessionService, "createWaitingCheckoutLocationSession", async () => undefined);
       },
@@ -708,11 +708,11 @@ describe("whatsapp webhook multi-company isolation", () => {
         mock.method(companyModuleService, "getModuleStates", async (resolvedCompanyId: string) =>
           resolvedCompanyId === companyA ? statesA : statesB,
         );
-        const { inventoryRepository } = await import("../repositories/inventory.repository");
+        const { operationRepository } = await import("../repositories/operation.repository");
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(inventoryRepository, "findCompatibleForEmployee", async (resolvedCompanyId: string) => {
+        mock.method(operationRepository, "findCompatibleForEmployee", async (resolvedCompanyId: string) => {
           assert.equal(resolvedCompanyId, companyA);
-          return [compatibleInventory(inventoryA)];
+          return [compatibleOperation(operationA)];
         });
         mock.method(botSessionService, "createWaitingLocationSession", async () => undefined);
       },
@@ -793,14 +793,14 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
   });
 
   const sampleAssignment = () => ({
-    inventoryId: inventoryA,
-    storeName: "Carrefour Palermo",
-    storeAddress: "Av. Santa Fe 1234, Palermo",
-    storeLatitude: -34.6037,
-    storeLongitude: -58.3816,
+    operationId: operationA,
+    serviceName: "Carrefour Palermo",
+    serviceAddress: "Av. Santa Fe 1234, Palermo",
+    serviceLatitude: -34.6037,
+    serviceLongitude: -58.3816,
     scheduledStart: "2026-07-08T23:30:00.000Z",
     scheduledEnd: "2026-07-09T06:00:00.000Z",
-    inventoryStatus: "SCHEDULED",
+    operationStatus: "SCHEDULED",
     confirmationStatus: "PENDING" as const,
     attendanceReceivedAt: null,
     attendanceCheckoutAt: null,
@@ -828,7 +828,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
 
   it("returns upcoming assignments through webhook flow", async () => {
     const message = await runSimulatedWebhook({
-      payload: webhookPayload({ Body: "mis inventarios" }),
+      payload: webhookPayload({ Body: "mis trabajos" }),
       simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
       setup: async () => {
         const { employeeAssignmentQueryRepository } = await import(
@@ -840,7 +840,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       },
     });
 
-    assert.match(message, /Tus próximos inventarios:/);
+    assert.match(message, /Tus próximos trabajos:/);
     assert.match(message, /Carrefour Palermo/);
   });
 
@@ -856,7 +856,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
         mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
           sampleAssignment(),
         ]);
-        mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+        mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
           sampleAssignment(),
         );
         mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -882,7 +882,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
         mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
           sampleAssignment(),
         ]);
-        mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+        mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
           sampleAssignment(),
         );
         mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -903,7 +903,7 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       setup: async () => {
         const { companyModuleService } = await import("./company-module.service");
         const states = enabledStates();
-        states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+        states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
         mock.method(companyModuleService, "getModuleStates", async () => states);
       },
     });
@@ -929,10 +929,10 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Llegué" }),
       setup: async () => {
-        const { inventoryRepository } = await import("../repositories/inventory.repository");
+        const { operationRepository } = await import("../repositories/operation.repository");
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(inventoryRepository, "findCompatibleForEmployee", async () => [
-          compatibleInventory(inventoryA),
+        mock.method(operationRepository, "findCompatibleForEmployee", async () => [
+          compatibleOperation(operationA),
         ]);
         mock.method(botSessionService, "createWaitingLocationSession", async () => undefined);
       },

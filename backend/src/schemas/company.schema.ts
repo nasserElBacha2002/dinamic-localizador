@@ -107,6 +107,19 @@ export const updateCompanySettingsSchema = z
       )
       .optional()
       .nullable(),
+    confirmationReminderEnabled: z.boolean().optional(),
+    confirmationReminderHoursBefore: z.coerce
+      .number()
+      .int("Las horas del recordatorio deben ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.confirmationReminderHoursBefore.min,
+        "Las horas del recordatorio deben ser al menos 1.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.confirmationReminderHoursBefore.max,
+        "Las horas del recordatorio no pueden superar 168.",
+      )
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

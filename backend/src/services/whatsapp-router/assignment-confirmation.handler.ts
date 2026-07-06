@@ -1,3 +1,4 @@
+import { resolveOperationOptionsFromSessionContext } from "../../utils/legacy-operation-session-context";
 import { botSessionService } from "../bot-session.service";
 import { employeeWorkdayService } from "../employee-workday.service";
 import { INVALID_SELECTION_MESSAGE } from "../bot/bot-response.builder";
@@ -6,9 +7,9 @@ import { isAssignmentSelectionSessionState } from "../../utils/bot-session-state
 import { parseOptionalAssignmentSelection } from "../../utils/assignment-intent";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import {
-  isValidInventorySelection,
-  parseInventorySelectionIndex,
-} from "../bot/bot-inventory.selector";
+  isValidOperationSelection,
+  parseOperationSelectionIndex,
+} from "../bot/bot-operation.selector";
 import { logModuleBlocked } from "./module-session-gate";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../types/twilio.types";
@@ -41,10 +42,10 @@ export const handleActiveAssignmentSelectionSession = async (
     return null;
   }
 
-  const selection = parseInventorySelectionIndex(ctx.body);
-  const options = botSessionService.parseContext(session.contextJson).inventoryOptions ?? [];
+  const selection = parseOperationSelectionIndex(ctx.body);
+  const options = resolveOperationOptionsFromSessionContext(botSessionService.parseContext(session.contextJson)) ?? [];
 
-  if (!isValidInventorySelection(selection, options.length)) {
+  if (!isValidOperationSelection(selection, options.length)) {
     return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
   }
 
@@ -53,7 +54,7 @@ export const handleActiveAssignmentSelectionSession = async (
     const result = await employeeWorkdayService.confirmAssignment(
       ctx.companyId,
       ctx.employeeId!,
-      selected.inventoryId,
+      selected.operationId,
     );
     await completeSelectionSession(ctx.companyId, session);
     return respond(ctx, handlers, result.message);
@@ -62,7 +63,7 @@ export const handleActiveAssignmentSelectionSession = async (
   const result = await employeeWorkdayService.markAssignmentUnavailable(
     ctx.companyId,
     ctx.employeeId!,
-    selected.inventoryId,
+    selected.operationId,
   );
   await completeSelectionSession(ctx.companyId, session);
   return respond(ctx, handlers, result.message);
@@ -77,7 +78,7 @@ const handleAssignmentSelectionFlow = async (
     applyToAssignment: (
       companyId: string,
       employeeId: string,
-      inventoryId: string,
+      operationId: string,
     ) => Promise<{ message: string }>;
     createSelectionSession: (selectionOptions: ReturnType<typeof employeeWorkdayService.mapToSelectionOptions>) => Promise<void>;
     buildSelectionPrompt: (items: typeof assignments) => string;
@@ -89,7 +90,7 @@ const handleAssignmentSelectionFlow = async (
 
   const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
   if (explicitSelection !== null) {
-    if (!isValidInventorySelection(explicitSelection, assignments.length)) {
+    if (!isValidOperationSelection(explicitSelection, assignments.length)) {
       return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
     }
 
@@ -97,7 +98,7 @@ const handleAssignmentSelectionFlow = async (
     const result = await options.applyToAssignment(
       ctx.companyId,
       ctx.employeeId!,
-      selected.inventoryId,
+      selected.operationId,
     );
     return respond(ctx, handlers, result.message);
   }
@@ -106,7 +107,7 @@ const handleAssignmentSelectionFlow = async (
     const result = await options.applyToAssignment(
       ctx.companyId,
       ctx.employeeId!,
-      assignments[0].inventoryId,
+      assignments[0].operationId,
     );
     return respond(ctx, handlers, result.message);
   }
@@ -122,7 +123,7 @@ export const handleConfirmAttendanceIntent = async (
   setLastDetectedIntent("confirm-attendance");
   const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
-    logModuleBlocked(ctx.companyId, "inventory_operations");
+    logModuleBlocked(ctx.companyId, "operations");
     return respond(ctx, handlers, blockedMessage);
   }
 
@@ -133,8 +134,8 @@ export const handleConfirmAttendanceIntent = async (
 
   return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
     emptyMessage: employeeWorkdayService.noConfirmableMessage,
-    applyToAssignment: async (companyId, employeeId, inventoryId) => {
-      const result = await employeeWorkdayService.confirmAssignment(companyId, employeeId, inventoryId);
+    applyToAssignment: async (companyId, employeeId, operationId) => {
+      const result = await employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId);
       return { message: result.message };
     },
     createSelectionSession: async (selectionOptions) => {
@@ -155,7 +156,7 @@ export const handleUnavailabilityIntent = async (
   setLastDetectedIntent("report-unavailability");
   const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
-    logModuleBlocked(ctx.companyId, "inventory_operations");
+    logModuleBlocked(ctx.companyId, "operations");
     return respond(ctx, handlers, blockedMessage);
   }
 
@@ -166,11 +167,11 @@ export const handleUnavailabilityIntent = async (
 
   return handleAssignmentSelectionFlow(ctx, handlers, assignments, {
     emptyMessage: employeeWorkdayService.noUnavailabilityMessage,
-    applyToAssignment: async (companyId, employeeId, inventoryId) => {
+    applyToAssignment: async (companyId, employeeId, operationId) => {
       const result = await employeeWorkdayService.markAssignmentUnavailable(
         companyId,
         employeeId,
-        inventoryId,
+        operationId,
       );
       return { message: result.message };
     },

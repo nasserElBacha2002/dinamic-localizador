@@ -5,9 +5,9 @@ import { EMPTY_DATE_RANGE_VALUE } from "../../utils/date-range";
 export const ATTENDANCE_TABLE_DEFAULTS = {
   page: 1,
   pageSize: 10,
-  inventoryId: "",
+  operationId: "",
   employeeId: "",
-  storeId: "",
+  serviceId: "",
   validationStatus: "",
   locationStatus: "",
   punctualityStatus: "",

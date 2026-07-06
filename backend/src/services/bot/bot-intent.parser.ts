@@ -12,7 +12,7 @@ import {
   isGlobalHelpCommand,
   isGlobalMenuCommand,
   isSimpleGreeting,
-  parseInventorySelection,
+  parseOperationSelection,
 } from "../../utils/intent";
 
 export type BotIntent =
@@ -25,7 +25,7 @@ export type BotIntent =
   | "confirm_attendance"
   | "report_unavailability"
   | "location"
-  | "inventory_selection"
+  | "operation_selection"
   | "cancel"
   | "unknown";
 
@@ -58,8 +58,8 @@ export const parseBotIntent = (input: {
     return "report_unavailability";
   }
 
-  if (parseInventorySelection(body) !== null) {
-    return "inventory_selection";
+  if (parseOperationSelection(body) !== null) {
+    return "operation_selection";
   }
 
   if (isCheckoutIntent(body)) {

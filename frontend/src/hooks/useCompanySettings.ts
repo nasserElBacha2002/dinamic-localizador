@@ -31,7 +31,7 @@ export function useCompanySettings(
   });
 }
 
-export function useCompanySettingsForInventoryCreate() {
+export function useCompanySettingsForOperationCreate() {
   return useCompanySettings(true, {
     staleTime: 0,
     refetchOnMount: "always",

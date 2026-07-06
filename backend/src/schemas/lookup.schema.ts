@@ -10,15 +10,15 @@ export const employeeLookupQuerySchema = lookupLimitSchema.merge(searchFilterSch
   active: z.coerce.boolean().optional(),
 });
 
-export const storeLookupQuerySchema = lookupLimitSchema.merge(searchFilterSchema).extend({
+export const serviceLookupQuerySchema = lookupLimitSchema.merge(searchFilterSchema).extend({
   id: z.string().uuid().optional(),
   active: z.coerce.boolean().optional(),
 });
 
-export const inventoryLookupQuerySchema = lookupLimitSchema.merge(searchFilterSchema).extend({
+export const operationLookupQuerySchema = lookupLimitSchema.merge(searchFilterSchema).extend({
   id: z.string().uuid().optional(),
 });
 
 export type EmployeeLookupQuery = z.infer<typeof employeeLookupQuerySchema>;
-export type StoreLookupQuery = z.infer<typeof storeLookupQuerySchema>;
-export type InventoryLookupQuery = z.infer<typeof inventoryLookupQuerySchema>;
+export type ServiceLookupQuery = z.infer<typeof serviceLookupQuerySchema>;
+export type OperationLookupQuery = z.infer<typeof operationLookupQuerySchema>;

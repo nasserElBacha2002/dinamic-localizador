@@ -3,8 +3,8 @@ import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
 import { botSimulationSessionRepository } from "../repositories/bot-simulation-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { inventoryRepository } from "../repositories/inventory.repository";
-import { storeRepository } from "../repositories/store.repository";
+import { operationRepository } from "../repositories/operation.repository";
+import { serviceRepository } from "../repositories/service.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import type {
   CreateBotSimulationSessionInput,
@@ -209,19 +209,19 @@ export const botSimulatorService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado o inactivo.");
     }
 
-    let storeId = input.storeId ?? null;
-    if (input.inventoryId) {
-      const inventory = await inventoryRepository.findById(companyId, input.inventoryId);
-      if (!inventory) {
-        throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado.");
+    let serviceId = input.serviceId ?? null;
+    if (input.operationId) {
+      const operation = await operationRepository.findById(companyId, input.operationId);
+      if (!operation) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada.");
       }
-      storeId = inventory.storeId;
+      serviceId = operation.serviceId;
     }
 
-    if (storeId) {
-      const store = await storeRepository.findById(companyId, storeId);
-      if (!store) {
-        throw new AppError(404, "STORE_NOT_FOUND", "Tienda no encontrada.");
+    if (serviceId) {
+      const service = await serviceRepository.findById(companyId, serviceId);
+      if (!service) {
+        throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado.");
       }
     }
 
@@ -230,8 +230,8 @@ export const botSimulatorService = {
     const session = await botSimulationSessionRepository.create({
       companyId,
       employeeId: employee.id,
-      inventoryId: input.inventoryId ?? null,
-      storeId,
+      operationId: input.operationId ?? null,
+      serviceId,
       phoneNumber,
       simulatedNow: input.simulatedNow,
       mode: input.mode,
@@ -252,8 +252,8 @@ export const botSimulatorService = {
         companyId: session.companyId,
         employeeId: employee.id,
         employeeName: employee.name,
-        inventoryId: session.inventoryId,
-        storeId: session.storeId,
+        operationId: session.operationId,
+        serviceId: session.serviceId,
         phoneNumber: session.phoneNumber,
         simulationMode: session.mode,
       },
@@ -313,8 +313,8 @@ export const botSimulatorService = {
         sessionId: session.id,
         companyId: session.companyId,
         employeeId: session.employeeId,
-        inventoryId: session.inventoryId,
-        storeId: session.storeId,
+        operationId: session.operationId,
+        serviceId: session.serviceId,
         phoneNumber: session.phoneNumber,
         simulationMode: session.mode,
       },
@@ -414,23 +414,23 @@ export const botSimulatorService = {
     });
 
     await runWithBotRuntimeContext(context, async () => {
-      if (session.storeId) {
-        const store = await storeRepository.findById(companyId, session.storeId);
-        if (store) {
+      if (session.serviceId) {
+        const service = await serviceRepository.findById(companyId, session.serviceId);
+        if (service) {
           const geo = geolocationService.evaluateDistance(
             input.latitude,
             input.longitude,
-            store.latitude,
-            store.longitude,
-            store.allowedRadiusMeters,
+            service.latitude,
+            service.longitude,
+            service.allowedRadiusMeters,
           );
           const geoEvaluation = evaluateGeofence(
             geo.distanceMeters,
-            store.allowedRadiusMeters,
+            service.allowedRadiusMeters,
             env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
           );
           context.technicalDetails.calculatedDistance = Math.round(geo.distanceMeters * 100) / 100;
-          context.technicalDetails.allowedRadius = store.allowedRadiusMeters;
+          context.technicalDetails.allowedRadius = service.allowedRadiusMeters;
           context.technicalDetails.reviewMargin = env.BOT_GEOFENCE_REVIEW_MARGIN_METERS;
           context.technicalDetails.expectedResult = geoEvaluation.geoValidationStatus;
         }
@@ -466,7 +466,7 @@ export const botSimulatorService = {
   },
 
   async getLocationPresets(companyId: string, sessionId: string): Promise<{
-    storeLocation: { latitude: number; longitude: number } | null;
+    serviceLocation: { latitude: number; longitude: number } | null;
     outsideRadius: { latitude: number; longitude: number } | null;
     nearRadiusLimit: { latitude: number; longitude: number } | null;
     allowedRadiusMeters: number | null;
@@ -474,9 +474,9 @@ export const botSimulatorService = {
   }> {
     const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
     const session = await botSimulationSessionRepository.findById(companyId, sessionId);
-    if (!session?.storeId) {
+    if (!session?.serviceId) {
       return {
-        storeLocation: null,
+        serviceLocation: null,
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
@@ -484,10 +484,10 @@ export const botSimulatorService = {
       };
     }
 
-    const store = await storeRepository.findById(companyId, session.storeId);
-    if (!store) {
+    const service = await serviceRepository.findById(companyId, session.serviceId);
+    if (!service) {
       return {
-        storeLocation: null,
+        serviceLocation: null,
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
@@ -495,20 +495,20 @@ export const botSimulatorService = {
       };
     }
 
-    const radius = store.allowedRadiusMeters > 0 ? store.allowedRadiusMeters : runtimeSettings.defaultRadiusMeters;
+    const radius = service.allowedRadiusMeters > 0 ? service.allowedRadiusMeters : runtimeSettings.defaultRadiusMeters;
     const margin = runtimeSettings.geofenceReviewMarginMeters;
     const outsideOffset = (radius + margin + 50) / 111_320;
     const nearOffset = (radius + Math.max(1, margin - 5)) / 111_320;
 
     return {
-      storeLocation: { latitude: store.latitude, longitude: store.longitude },
+      serviceLocation: { latitude: service.latitude, longitude: service.longitude },
       outsideRadius: {
-        latitude: store.latitude + outsideOffset,
-        longitude: store.longitude,
+        latitude: service.latitude + outsideOffset,
+        longitude: service.longitude,
       },
       nearRadiusLimit: {
-        latitude: store.latitude + nearOffset,
-        longitude: store.longitude,
+        latitude: service.latitude + nearOffset,
+        longitude: service.longitude,
       },
       allowedRadiusMeters: radius,
       reviewMarginMeters: margin,

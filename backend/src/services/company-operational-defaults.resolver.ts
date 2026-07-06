@@ -11,14 +11,14 @@ import { companyOperationalSettingsService } from "./company-operational-setting
 
 export type OperationalDefaultsSource = "company_settings" | "operational_defaults" | "environment";
 
-export type InventoryOperationalDefaults = {
+export type OperationOperationalDefaults = {
   companyId: string;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   source: OperationalDefaultsSource;
 };
 
-export type ImportOperationalDefaults = InventoryOperationalDefaults & {
+export type ImportOperationalDefaults = OperationOperationalDefaults & {
   operationTimezone: string;
   defaultOperationStartTime: string;
   defaultOperationEndTime: string;
@@ -27,7 +27,7 @@ export type ImportOperationalDefaults = InventoryOperationalDefaults & {
   geofenceReviewMarginSource: OperationalDefaultsSource;
 };
 
-export type StoreOperationalDefaults = {
+export type ServiceOperationalDefaults = {
   companyId: string;
   defaultRadiusMeters: number;
   source: OperationalDefaultsSource;
@@ -38,10 +38,10 @@ export type CompanyAbsenceDefault = Pick<
   "absenceTypeCode" | "defaultAnnualDays" | "autoAssignOnEmployeeCreate"
 >;
 
-const buildInventoryDefaults = (
+const buildOperationDefaults = (
   companyId: string,
   settings: CompanySettings | null,
-): InventoryOperationalDefaults => {
+): OperationOperationalDefaults => {
   if (settings) {
     return {
       companyId,
@@ -102,7 +102,7 @@ const buildImportDefaults = (
   companyId: string,
   settings: CompanySettings | null,
 ): ImportOperationalDefaults => {
-  const inventoryDefaults = buildInventoryDefaults(companyId, settings);
+  const operationDefaults = buildOperationDefaults(companyId, settings);
   const timezone = resolveOperationTimezone(settings?.operationTimezone);
   const startTime = resolveTimeDefault(
     settings?.defaultOperationStartTime,
@@ -115,7 +115,7 @@ const buildImportDefaults = (
   const reviewMargin = resolveGeofenceReviewMargin(settings?.geofenceReviewMarginMeters);
 
   return {
-    ...inventoryDefaults,
+    ...operationDefaults,
     operationTimezone: timezone.value,
     timezoneSource: timezone.source,
     defaultOperationStartTime: startTime.value,
@@ -126,9 +126,9 @@ const buildImportDefaults = (
 };
 
 export const companyOperationalDefaultsResolver = {
-  async getInventoryDefaults(companyId: string): Promise<InventoryOperationalDefaults> {
+  async getOperationDefaults(companyId: string): Promise<OperationOperationalDefaults> {
     const settings = await companySettingsRepository.findByCompanyId(companyId);
-    return buildInventoryDefaults(companyId, settings);
+    return buildOperationDefaults(companyId, settings);
   },
 
   async getImportDefaults(companyId: string): Promise<ImportOperationalDefaults> {
@@ -136,7 +136,7 @@ export const companyOperationalDefaultsResolver = {
     return buildImportDefaults(companyId, settings);
   },
 
-  async getStoreDefaults(companyId: string): Promise<StoreOperationalDefaults> {
+  async getServiceDefaults(companyId: string): Promise<ServiceOperationalDefaults> {
     const { settings, source } =
       await companyOperationalSettingsService.getCompanyOperationalSettingsWithSource(companyId);
 

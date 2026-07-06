@@ -15,10 +15,8 @@ const GLOBAL_API_PREFIXES = ["auth", "health", "webhooks", "database"] as const;
 
 export const OPERATIONAL_API_PREFIXES = [
   "employees",
-  "inventories",
   "operations",
-  "stores",
-  "locations",
+  "services",
   "attendance",
   "statistics",
   "absence-types",

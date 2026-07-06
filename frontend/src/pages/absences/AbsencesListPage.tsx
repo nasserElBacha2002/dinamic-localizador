@@ -120,9 +120,9 @@ export function AbsencesListPage() {
       },
       { key: "createdAt", header: "Creada", getValue: (row) => formatDateTime(row.createdAt) },
       {
-        key: "affectedInventories",
+        key: "affectedOperations",
         header: `${terminology.operation.plural} afectadas`,
-        getValue: (row) => row.affectedInventoriesCount,
+        getValue: (row) => row.affectedOperationsCount,
       },
     ],
     [],

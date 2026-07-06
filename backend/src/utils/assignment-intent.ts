@@ -1,4 +1,4 @@
-import { normalizeIntentText, parseInventorySelection } from "./intent";
+import { normalizeIntentText, parseOperationSelection } from "./intent";
 
 const WORKDAY_KEYWORDS = [
   "mi jornada",
@@ -14,9 +14,9 @@ const UPCOMING_KEYWORDS = [
   "mis turnos",
   "proximos turnos",
   "próximos turnos",
-  "mis inventarios",
-  "proximos inventarios",
-  "próximos inventarios",
+  "mis trabajos",
+  "proximos trabajos",
+  "próximos trabajos",
   "agenda",
   "proximos trabajos",
   "próximos trabajos",
@@ -26,7 +26,7 @@ const CONFIRM_KEYWORDS = [
   "confirmo asistencia",
   "voy a asistir",
   "confirmar turno",
-  "confirmar inventario",
+  "confirmar trabajo",
   "confirmo turno",
 ] as const;
 
@@ -74,5 +74,5 @@ export const parseOptionalAssignmentSelection = (body: string): number | null =>
     const value = Number.parseInt(trailingNumber[1], 10);
     return Number.isFinite(value) && value > 0 ? value : null;
   }
-  return parseInventorySelection(body);
+  return parseOperationSelection(body);
 };

@@ -1,8 +1,8 @@
 import { useQuery } from "@tanstack/react-query";
 import {
   getEmployeeLookups,
-  getInventoryLookups,
-  getStoreLookups,
+  getOperationLookups,
+  getServiceLookups,
 } from "../api/lookups.api";
 import type { LookupQuery } from "../types/lookups";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
@@ -18,23 +18,23 @@ export function useEmployeeLookups(query: LookupQuery = {}, extraEnabled = true)
   });
 }
 
-export function useStoreLookups(query: LookupQuery = {}, extraEnabled = true) {
+export function useServiceLookups(query: LookupQuery = {}, extraEnabled = true) {
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
 
   return useQuery({
-    queryKey: ["lookups", "stores", companyId, query],
-    queryFn: () => getStoreLookups(query),
+    queryKey: ["lookups", "services", companyId, query],
+    queryFn: () => getServiceLookups(query),
     enabled,
     staleTime: 30_000,
   });
 }
 
-export function useInventoryLookups(query: LookupQuery = {}, extraEnabled = true) {
+export function useOperationLookups(query: LookupQuery = {}, extraEnabled = true) {
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
 
   return useQuery({
-    queryKey: ["lookups", "inventories", companyId, query],
-    queryFn: () => getInventoryLookups(query),
+    queryKey: ["lookups", "operations", companyId, query],
+    queryFn: () => getOperationLookups(query),
     enabled,
     staleTime: 30_000,
   });

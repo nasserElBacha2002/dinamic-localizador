@@ -22,7 +22,7 @@ import {
   useNeedsInfoAbsenceRequest,
   useRejectAbsenceRequest,
 } from "../../hooks/useAbsences";
-import type { AffectedInventoryWarning } from "../../types/absence";
+import type { AffectedOperationWarning } from "../../types/absence";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -32,10 +32,10 @@ import {
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
-import { inventoryStatusLabels } from "../../utils/labels";
+import { operationStatusLabels } from "../../utils/labels";
 
-const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
-  { key: "store", header: "Tienda", getValue: (row) => row.storeName },
+const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
+  { key: "service", header: "Servicio", getValue: (row) => row.serviceName },
   { key: "start", header: "Inicio", getValue: (row) => formatDateTime(row.scheduledStart) },
   {
     key: "end",
@@ -46,15 +46,15 @@ const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
     key: "status",
     header: "Estado",
     getValue: (row) =>
-      inventoryStatusLabels[row.status as keyof typeof inventoryStatusLabels] ?? row.status,
+      operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status,
   },
   {
     key: "action",
     header: "Acción",
     align: "right",
     render: (row) => (
-      <Button component={RouterLink} to={`/inventories/${row.inventoryId}`} size="compact-xs" variant="light">
-        Ver inventario
+      <Button component={RouterLink} to={`/operations/${row.operationId}`} size="compact-xs" variant="light">
+        Ver operación
       </Button>
     ),
   },
@@ -234,21 +234,21 @@ export function AbsenceDetailPage() {
         <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
       </SectionCard>
 
-      <SectionCard title="Inventarios afectados">
-        {request.affectedInventories.length === 0 ? (
+      <SectionCard title="Operaciones afectadas">
+        {request.affectedOperations.length === 0 ? (
           <Text c="dimmed">
-            No se detectaron inventarios asignados que se superpongan con esta ausencia.
+            No se detectaron operaciones asignadas que se superpongan con esta ausencia.
           </Text>
         ) : (
           <Stack gap="md">
             <Alert color="yellow">
-              Esta solicitud se superpone con {request.affectedInventories.length} inventario(s)
+              Esta solicitud se superpone con {request.affectedOperations.length} operación(es)
               asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
             </Alert>
             <DataTable
-              rows={request.affectedInventories}
-              columns={affectedInventoryColumns}
-              getRowKey={(row) => row.inventoryId}
+              rows={request.affectedOperations}
+              columns={affectedOperationColumns}
+              getRowKey={(row) => row.operationId}
             />
           </Stack>
         )}

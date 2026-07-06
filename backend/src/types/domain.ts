@@ -1,9 +1,9 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { EmployeeType } from "../constants/employee-types";
 
-export type StoreFormat = string;
+export type ServiceFormat = string;
 
-export type InventoryStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type OperationStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
 export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
@@ -20,13 +20,13 @@ export interface Employee {
   updatedAt: string;
 }
 
-export interface Store {
+export interface Service {
   id: string;
   name: string;
   address: string | null;
   neighborhood: string | null;
   locality: string | null;
-  storeFormat: StoreFormat | null;
+  serviceFormat: ServiceFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters: number;
@@ -36,33 +36,33 @@ export interface Store {
   updatedAt: string;
 }
 
-export interface Inventory {
+export interface Operation {
   id: string;
-  storeId: string;
+  serviceId: string;
   scheduledStart: string;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
-  status: InventoryStatus;
+  status: OperationStatus;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface InventoryWithStore extends Inventory {
-  store: Pick<Store, "id" | "name" | "address" | "active">;
+export interface OperationWithService extends Operation {
+  service: Pick<Service, "id" | "name" | "address" | "active">;
   assignedEmployeesCount?: number;
   attendanceRecordsCount?: number;
 }
 
-export interface InventoryDetail extends Inventory {
-  store: Store;
+export interface OperationDetail extends Operation {
+  service: Service;
   assignedEmployees: Employee[];
   attendanceRecordsCount: number;
 }
 
-export interface InventoryEmployeeAssignment {
-  inventoryId: string;
+export interface OperationEmployeeAssignment {
+  operationId: string;
   employeeId: string;
   assignedAt: string;
   employee?: Employee;
@@ -70,7 +70,7 @@ export interface InventoryEmployeeAssignment {
 
 export interface AttendanceRecord {
   id: string;
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
   receivedLatitude: number;
   receivedLongitude: number;
@@ -100,6 +100,6 @@ export interface AttendanceRecord {
 
 export interface AttendanceRecordWithRelations extends AttendanceRecord {
   employee: Pick<Employee, "id" | "name" | "phoneNumber">;
-  inventory: Pick<Inventory, "id" | "status" | "scheduledStart" | "scheduledEnd">;
-  store: Pick<Store, "id" | "name" | "address"> & { allowedRadiusMeters?: number };
+  operation: Pick<Operation, "id" | "status" | "scheduledStart" | "scheduledEnd">;
+  service: Pick<Service, "id" | "name" | "address"> & { allowedRadiusMeters?: number };
 }

@@ -7,9 +7,10 @@ import { getPool } from "../database/connection";
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { inventoryEmployeeRepository } from "../repositories/inventory-employee.repository";
+import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
+import { resolveOperationOptionsFromSessionContext } from "../utils/legacy-operation-session-context";
 import { botSessionService } from "./bot-session.service";
 import type { BotSession } from "../types/twilio.types";
 import type { WhatsAppInboundContext } from "../types/whatsapp-company-context";
@@ -17,7 +18,7 @@ import type { AttendanceRecord } from "../types/domain";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import {
   formatLocalTime,
-  isWithinInventoryWindow,
+  isWithinOperationWindow,
 } from "../utils/attendance-validation";
 import { normalizeWhatsAppPhone, tryNormalizeWhatsAppPhone } from "../utils/phone";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
@@ -36,10 +37,10 @@ import {
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import {
   buildArrivalRegisteredMessage,
-  buildCheckoutInventorySelectionPrompt,
+  buildCheckoutOperationSelectionPrompt,
   buildCheckoutLocationRequestMessage,
   buildCheckoutRegisteredMessage,
-  buildInventorySelectionPrompt,
+  buildOperationSelectionPrompt,
   buildLocationRequestMessage,
   DUPLICATE_ATTENDANCE_MESSAGE,
   DUPLICATE_CHECKOUT_MESSAGE,
@@ -47,19 +48,19 @@ import {
   GENERIC_ERROR_MESSAGE,
   INVALID_SELECTION_MESSAGE,
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
-  NO_CHECKOUT_INVENTORY_MESSAGE,
-  NO_INVENTORY_MESSAGE,
+  NO_CHECKOUT_OPERATION_MESSAGE,
+  NO_OPERATION_MESSAGE,
 } from "./bot/bot-response.builder";
 import {
-  findCheckoutEligibleInventoryById,
-  findCompatibleInventoryById,
-  isValidInventorySelection,
-  listCheckoutEligibleInventories,
-  listCompatibleInventories,
-  mapCheckoutInventoriesToSessionOptions,
-  mapCompatibleInventoriesToSessionOptions,
-  parseInventorySelectionIndex,
-} from "./bot/bot-inventory.selector";
+  findCheckoutEligibleOperationById,
+  findCompatibleOperationById,
+  isValidOperationSelection,
+  listCheckoutEligibleOperations,
+  listCompatibleOperations,
+  mapCheckoutOperationsToSessionOptions,
+  mapCompatibleOperationsToSessionOptions,
+  parseOperationSelectionIndex,
+} from "./bot/bot-operation.selector";
 import { whatsappRouterService } from "./whatsapp-router/whatsapp-router.service";
 import type { WhatsAppRouterHandlers } from "./whatsapp-router/whatsapp-router.types";
 import {
@@ -174,9 +175,9 @@ const createRouterHandlers = (): WhatsAppRouterHandlers => ({
   respond,
   startCheckIn: (input) => whatsappBotService.startCheckIn(input),
   startCheckout: (input) => whatsappBotService.startCheckout(input),
-  handleInventorySelection: (input) => whatsappBotService.handleInventorySelection(input),
-  handleCheckoutInventorySelection: (input) =>
-    whatsappBotService.handleCheckoutInventorySelection(input),
+  handleOperationSelection: (input) => whatsappBotService.handleOperationSelection(input),
+  handleCheckoutOperationSelection: (input) =>
+    whatsappBotService.handleCheckoutOperationSelection(input),
   processLocationCheckIn: (input) => whatsappBotService.processLocationCheckIn(input),
   processLocationCheckout: (input) => whatsappBotService.processLocationCheckout(input),
 });
@@ -364,7 +365,7 @@ export const whatsappBotService = {
     messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
-    const eligible = await listCheckoutEligibleInventories(companyId, input.employeeId);
+    const eligible = await listCheckoutEligibleOperations(companyId, input.employeeId);
 
     if (eligible.length === 0) {
       return respond(companyId, {
@@ -375,30 +376,30 @@ export const whatsappBotService = {
       });
     }
 
-    const finalizeWithoutLocation = async (inventoryId: string) =>
+    const finalizeWithoutLocation = async (operationId: string) =>
       this.processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
-        inventoryId,
+        operationId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
       });
 
     if (eligible.length === 1) {
-      const inventory = eligible[0];
+      const operation = eligible[0];
       if (!getRequireCheckoutLocation()) {
-        return finalizeWithoutLocation(inventory.id);
+        return finalizeWithoutLocation(operation.id);
       }
 
       await botSessionService.createWaitingCheckoutLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        inventoryId: inventory.id,
+        operationId: operation.id,
       });
 
       return respond(companyId, {
-        message: buildCheckoutLocationRequestMessage(inventory),
+        message: buildCheckoutLocationRequestMessage(operation),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -406,38 +407,38 @@ export const whatsappBotService = {
     }
 
     if (!getRequireCheckoutLocation()) {
-      const options = mapCheckoutInventoriesToSessionOptions(eligible);
-      await botSessionService.createCheckoutInventorySelectionSession(companyId, {
+      const options = mapCheckoutOperationsToSessionOptions(eligible);
+      await botSessionService.createCheckoutOperationSelectionSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
         options,
       });
 
       return respond(companyId, {
-        message: `${buildCheckoutInventorySelectionPrompt(eligible)}\n\nNo se requiere ubicación para registrar la salida.`,
+        message: `${buildCheckoutOperationSelectionPrompt(eligible)}\n\nNo se requiere ubicación para registrar la salida.`,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    const options = mapCheckoutInventoriesToSessionOptions(eligible);
+    const options = mapCheckoutOperationsToSessionOptions(eligible);
 
-    await botSessionService.createCheckoutInventorySelectionSession(companyId, {
+    await botSessionService.createCheckoutOperationSelectionSession(companyId, {
       employeeId: input.employeeId,
       phoneNumber: input.phoneFrom,
       options,
     });
 
     return respond(companyId, {
-      message: buildCheckoutInventorySelectionPrompt(eligible),
+      message: buildCheckoutOperationSelectionPrompt(eligible),
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
     });
   },
 
-  async handleCheckoutInventorySelection(input: {
+  async handleCheckoutOperationSelection(input: {
     companyId: string;
     session: BotSession;
     body: string;
@@ -447,11 +448,11 @@ export const whatsappBotService = {
     messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
-    const selection = parseInventorySelectionIndex(input.body);
+    const selection = parseOperationSelectionIndex(input.body);
     const context = botSessionService.parseContext(input.session.contextJson);
-    const options = context.inventoryOptions ?? [];
+    const options = resolveOperationOptionsFromSessionContext(context) ?? [];
 
-    if (!isValidInventorySelection(selection, options.length)) {
+    if (!isValidOperationSelection(selection, options.length)) {
       return respond(companyId, {
         message: INVALID_SELECTION_MESSAGE,
         employeeId: input.employeeId,
@@ -461,11 +462,11 @@ export const whatsappBotService = {
     }
 
     const selected = options[selection - 1];
-    const eligible = await findCheckoutEligibleInventoryById(companyId, input.employeeId, selected.inventoryId);
+    const eligible = await findCheckoutEligibleOperationById(companyId, input.employeeId, selected.operationId);
 
     if (!eligible) {
       return respond(companyId, {
-        message: NO_CHECKOUT_INVENTORY_MESSAGE,
+        message: NO_CHECKOUT_OPERATION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -476,7 +477,7 @@ export const whatsappBotService = {
       return this.processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
-        inventoryId: eligible.id,
+        operationId: eligible.id,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
@@ -484,7 +485,7 @@ export const whatsappBotService = {
       });
     }
 
-    const selectionResult = await botSessionService.selectCheckoutInventoryAndRenewExpiration(companyId, 
+    const selectionResult = await botSessionService.selectCheckoutOperationAndRenewExpiration(companyId, 
       input.session.id,
       eligible.id,
     );
@@ -523,61 +524,61 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const now = getBotNow();
-    const inventories = await listCompatibleInventories(companyId, input.employeeId, now);
+    const operations = await listCompatibleOperations(companyId, input.employeeId, now);
 
-    if (inventories.length === 0) {
-      console.info("[whatsapp-bot] no compatible inventory", { employeeId: input.employeeId });
+    if (operations.length === 0) {
+      console.info("[whatsapp-bot] no compatible operation", { employeeId: input.employeeId });
       return respond(companyId, {
-        message: NO_INVENTORY_MESSAGE,
+        message: NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    if (inventories.length === 1) {
-      const inventory = inventories[0];
+    if (operations.length === 1) {
+      const operation = operations[0];
       await botSessionService.createWaitingLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        inventoryId: inventory.id,
+        operationId: operation.id,
       });
 
       console.info("[whatsapp-bot] session created WAITING_LOCATION", {
         employeeId: input.employeeId,
-        inventoryId: inventory.id,
+        operationId: operation.id,
       });
 
       return respond(companyId, {
-        message: buildLocationRequestMessage(inventory),
+        message: buildLocationRequestMessage(operation),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    const options = mapCompatibleInventoriesToSessionOptions(inventories);
+    const options = mapCompatibleOperationsToSessionOptions(operations);
 
-    await botSessionService.createInventorySelectionSession(companyId, {
+    await botSessionService.createOperationSelectionSession(companyId, {
       employeeId: input.employeeId,
       phoneNumber: input.phoneFrom,
       options,
     });
 
-    console.info("[whatsapp-bot] session created WAITING_INVENTORY_SELECTION", {
+    console.info("[whatsapp-bot] session created WAITING_OPERATION_SELECTION", {
       employeeId: input.employeeId,
       options: options.length,
     });
 
     return respond(companyId, {
-      message: buildInventorySelectionPrompt(inventories),
+      message: buildOperationSelectionPrompt(operations),
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
     });
   },
 
-  async handleInventorySelection(input: {
+  async handleOperationSelection(input: {
     companyId: string;
     session: BotSession;
     body: string;
@@ -586,11 +587,11 @@ export const whatsappBotService = {
     phoneTo: string;
   }): Promise<string> {
     const { companyId } = input;
-    const selection = parseInventorySelectionIndex(input.body);
+    const selection = parseOperationSelectionIndex(input.body);
     const context = botSessionService.parseContext(input.session.contextJson);
-    const options = context.inventoryOptions ?? [];
+    const options = resolveOperationOptionsFromSessionContext(context) ?? [];
 
-    if (!isValidInventorySelection(selection, options.length)) {
+    if (!isValidOperationSelection(selection, options.length)) {
       return respond(companyId, {
         message: INVALID_SELECTION_MESSAGE,
         employeeId: input.employeeId,
@@ -601,22 +602,22 @@ export const whatsappBotService = {
 
     const selected = options[selection - 1];
     const now = getBotNow();
-    const compatible = await findCompatibleInventoryById(companyId, 
+    const compatible = await findCompatibleOperationById(companyId, 
       input.employeeId,
-      selected.inventoryId,
+      selected.operationId,
       now,
     );
 
     if (!compatible) {
       return respond(companyId, {
-        message: NO_INVENTORY_MESSAGE,
+        message: NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    const selectionResult = await botSessionService.selectInventoryAndRenewExpiration(companyId, 
+    const selectionResult = await botSessionService.selectOperationAndRenewExpiration(companyId, 
       input.session.id,
       compatible.id,
     );
@@ -679,7 +680,7 @@ export const whatsappBotService = {
     companyId: string;
     session: BotSession;
     employeeId: string;
-    inventoryId: string;
+    operationId: string;
     latitude: number;
     longitude: number;
     messageSid: string;
@@ -688,28 +689,28 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const receivedAt = getBotNow();
-    const compatible = await findCompatibleInventoryById(companyId, 
+    const compatible = await findCompatibleOperationById(companyId, 
       input.employeeId,
-      input.inventoryId,
+      input.operationId,
       receivedAt,
     );
 
     if (!compatible) {
       return respond(companyId, {
-        message: NO_INVENTORY_MESSAGE,
+        message: NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    const isAssigned = await inventoryEmployeeRepository.exists(companyId, 
-      input.inventoryId,
+    const isAssigned = await operationEmployeeRepository.exists(companyId, 
+      input.operationId,
       input.employeeId,
     );
     if (!isAssigned) {
       return respond(companyId, {
-        message: NO_INVENTORY_MESSAGE,
+        message: NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -717,8 +718,8 @@ export const whatsappBotService = {
     }
 
     const hasActiveRecord = isSimulationDryRun()
-      ? hasVirtualActiveRecord(input.inventoryId, input.employeeId)
-      : await attendanceRepository.hasActiveRecord(companyId, input.inventoryId, input.employeeId, {
+      ? hasVirtualActiveRecord(input.operationId, input.employeeId)
+      : await attendanceRepository.hasActiveRecord(companyId, input.operationId, input.employeeId, {
           simulationSessionId: getSimulationSessionId(),
         });
     if (hasActiveRecord) {
@@ -739,9 +740,9 @@ export const whatsappBotService = {
     const { validation, distanceMeters: geoDistance, effectiveRadiusMeters } = buildCheckInValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
-      storeLatitude: compatible.storeLatitude,
-      storeLongitude: compatible.storeLongitude,
-      storeAllowedRadiusMeters: compatible.allowedRadiusMeters,
+      serviceLatitude: compatible.serviceLatitude,
+      serviceLongitude: compatible.serviceLongitude,
+      serviceAllowedRadiusMeters: compatible.allowedRadiusMeters,
       receivedAt,
       scheduledStart: new Date(compatible.scheduledStart),
       earlyToleranceMinutes: compatible.earlyToleranceMinutes,
@@ -766,7 +767,7 @@ export const whatsappBotService = {
       });
 
       const virtualRecord = addVirtualCheckIn({
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         employeeId: input.employeeId,
         receivedAt: receivedAt.toISOString(),
         validationStatus: validation.validationStatus,
@@ -779,7 +780,7 @@ export const whatsappBotService = {
         type: "check-in",
         persisted: false,
         virtualAttendanceId: virtualRecord.id,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         employeeId: input.employeeId,
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
@@ -824,7 +825,7 @@ export const whatsappBotService = {
       }
 
       const hasDuplicate = await attendanceRepository.hasActiveRecordInTransaction(companyId, transaction,
-        input.inventoryId,
+        input.operationId,
         input.employeeId,
         getSimulationSessionId(),
       );
@@ -841,7 +842,7 @@ export const whatsappBotService = {
       }
 
       const created = await attendanceRepository.createInTransaction(companyId, transaction, {
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         employeeId: input.employeeId,
         receivedLatitude: input.latitude,
         receivedLongitude: input.longitude,
@@ -861,7 +862,7 @@ export const whatsappBotService = {
           type: "check-in",
           persisted: true,
           attendanceId: created.id,
-          inventoryId: input.inventoryId,
+          operationId: input.operationId,
           employeeId: input.employeeId,
           validationStatus: validation.validationStatus,
           locationStatus: validation.locationStatus,
@@ -881,7 +882,7 @@ export const whatsappBotService = {
 
       console.info("[whatsapp-bot] attendance created", {
         employeeId: input.employeeId,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         validationStatus: validation.validationStatus,
       });
 
@@ -939,7 +940,7 @@ export const whatsappBotService = {
     companyId: string;
     session: BotSession;
     employeeId: string;
-    inventoryId: string;
+    operationId: string;
     latitude: number;
     longitude: number;
     messageSid: string;
@@ -948,7 +949,7 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutEligibleInventoryById(companyId, input.employeeId, input.inventoryId);
+    const eligible = await findCheckoutEligibleOperationById(companyId, input.employeeId, input.operationId);
 
     if (!eligible) {
       return respond(companyId, {
@@ -962,16 +963,16 @@ export const whatsappBotService = {
     const simulationSessionId = getSimulationSessionId();
     let attendance = isSimulationDryRun()
       ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.inventoryId, input.employeeId, {
+      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
           simulationSessionId,
         });
 
     if (isSimulationDryRun()) {
-      const virtual = findVirtualCheckInForCheckout(input.inventoryId, input.employeeId);
+      const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
       if (virtual) {
         attendance = {
           id: virtual.id,
-          inventoryId: virtual.inventoryId,
+          operationId: virtual.operationId,
           employeeId: virtual.employeeId,
           receivedLatitude: input.latitude,
           receivedLongitude: input.longitude,
@@ -1029,9 +1030,9 @@ export const whatsappBotService = {
     const { validation, distanceMeters: checkoutDistance, effectiveRadiusMeters } = buildCheckoutValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
-      storeLatitude: eligible.storeLatitude,
-      storeLongitude: eligible.storeLongitude,
-      storeAllowedRadiusMeters: eligible.allowedRadiusMeters,
+      serviceLatitude: eligible.serviceLatitude,
+      serviceLongitude: eligible.serviceLongitude,
+      serviceAllowedRadiusMeters: eligible.allowedRadiusMeters,
       checkoutAt,
       scheduledEnd: eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
       runtimeSettings,
@@ -1183,7 +1184,7 @@ export const whatsappBotService = {
   async processCheckoutWithoutLocation(input: {
     companyId: string;
     employeeId: string;
-    inventoryId: string;
+    operationId: string;
     phoneFrom: string;
     phoneTo: string;
     messageSid: string;
@@ -1197,10 +1198,10 @@ export const whatsappBotService = {
       }
     };
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutEligibleInventoryById(
+    const eligible = await findCheckoutEligibleOperationById(
       companyId,
       input.employeeId,
-      input.inventoryId,
+      input.operationId,
     );
 
     if (!eligible) {
@@ -1221,16 +1222,16 @@ export const whatsappBotService = {
     const simulationSessionId = getSimulationSessionId();
     let attendance = isSimulationDryRun()
       ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.inventoryId, input.employeeId, {
+      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
           simulationSessionId,
         });
 
     if (isSimulationDryRun()) {
-      const virtual = findVirtualCheckInForCheckout(input.inventoryId, input.employeeId);
+      const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
       if (virtual) {
         attendance = {
           id: virtual.id,
-          inventoryId: virtual.inventoryId,
+          operationId: virtual.operationId,
           employeeId: virtual.employeeId,
           receivedLatitude: 0,
           receivedLongitude: 0,
@@ -1381,4 +1382,4 @@ export const whatsappBotService = {
   },
 };
 
-export const isInventoryCompatibleAt = isWithinInventoryWindow;
+export const isOperationCompatibleAt = isWithinOperationWindow;

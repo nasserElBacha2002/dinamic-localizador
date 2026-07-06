@@ -9,7 +9,7 @@ import type { CreateAbsenceRequestInput, ListAbsenceRequestsQuery } from "../sch
 import type { AbsenceRequestDetail } from "../types/absence";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
-import { absenceInventoryImpactService } from "./absence-inventory-impact.service";
+import { absenceOperationImpactService } from "./absence-operation-impact.service";
 import {
   calculateTotalAbsenceDays,
   compareAbsenceDates,
@@ -78,7 +78,7 @@ const validateDates = (input: {
   }
 };
 
-const countAffectedInventoriesSafely = async (
+const countAffectedOperationsSafely = async (
   companyId: string,
   input: {
     employeeId: string;
@@ -87,13 +87,13 @@ const countAffectedInventoriesSafely = async (
   },
 ): Promise<number> => {
   try {
-    const affectedInventories = await absenceInventoryImpactService.findAffectedInventories(
+    const affectedOperations = await absenceOperationImpactService.findAffectedOperations(
       companyId,
       input,
     );
-    return affectedInventories.length;
+    return affectedOperations.length;
   } catch (error) {
-    console.error("[absence-request] affected inventories count failed", {
+    console.error("[absence-request] affected operations count failed", {
       employeeId: input.employeeId,
       startDate: input.startDate,
       endDate: input.endDate,
@@ -216,7 +216,7 @@ export const absenceRequestService = {
     const items = await Promise.all(
       result.items.map(async (item) => ({
         ...item,
-        affectedInventoriesCount: await countAffectedInventoriesSafely(companyId, {
+        affectedOperationsCount: await countAffectedOperationsSafely(companyId, {
           employeeId: item.employeeId,
           startDate: item.startDate,
           endDate: item.endDate,
@@ -237,16 +237,16 @@ export const absenceRequestService = {
     }
 
     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
-    const [events, affectedInventories, balanceImpact] = await Promise.all([
+    const [events, affectedOperations, balanceImpact] = await Promise.all([
       absenceRequestRepository.listEvents(companyId, id),
-      absenceInventoryImpactService
-        .findAffectedInventories(companyId, {
+      absenceOperationImpactService
+        .findAffectedOperations(companyId, {
           employeeId: request.employeeId,
           startDate: request.startDate,
           endDate: request.endDate,
         })
         .catch((error) => {
-          console.error("[absence-request] affected inventories detail failed", {
+          console.error("[absence-request] affected operations detail failed", {
             requestId: id,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -265,9 +265,9 @@ export const absenceRequestService = {
 
     return {
       ...request,
-      affectedInventoriesCount: affectedInventories.length,
+      affectedOperationsCount: affectedOperations.length,
       events,
-      affectedInventories,
+      affectedOperations,
       balanceImpact,
     };
   },

@@ -1,8 +1,13 @@
 import type { CheckoutStatus } from "../../constants/checkout-status";
 import type { PunctualityStatus } from "../../types/domain";
-import type { CheckoutEligibleInventory, CompatibleInventory } from "../../types/twilio.types";
+import type { CheckoutEligibleOperation, CompatibleOperation } from "../../types/twilio.types";
 import { formatLocalTime } from "../../utils/attendance-validation";
 import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
+import {
+  formatAssignmentServiceReference,
+  formatBotOperationSelectionLines,
+} from "../../utils/employee-assignment-format";
+import { formatServiceReferenceFromFields } from "../../utils/format-service-reference";
 import { checkoutStatusLabel } from "../../utils/checkout-validation";
 
 export const GLOBAL_CANCEL_MESSAGE =
@@ -27,10 +32,10 @@ export const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
   'Ya tenés un flujo de llegada o salida en curso. Completalo o escribí "Cancelar" antes de solicitar una ausencia.';
 
 export const NO_CHECK_IN_FOR_CHECKOUT_MESSAGE =
-  "No encontré una llegada registrada para este inventario. Primero tenés que haber marcado 'Llegué'.";
+  "No encontré una llegada registrada para este trabajo. Primero tenés que haber marcado 'Llegué'.";
 
-export const NO_CHECKOUT_INVENTORY_MESSAGE =
-  "No encontramos un inventario con llegada registrada pendiente de salida. Verificá con administración.";
+export const NO_CHECKOUT_OPERATION_MESSAGE =
+  "No encontramos un trabajo con llegada registrada pendiente de salida. Verificá con administración.";
 
 export const LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE =
   'Para registrar tu salida, primero escribí "Me voy".';
@@ -39,15 +44,15 @@ export const WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE =
   "Todavía necesitamos tu ubicación actual para registrar la salida. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
 
 export const LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE =
-  "Primero seleccioná el inventario para registrar la salida respondiendo con el número correspondiente.";
+  "Primero seleccioná el trabajo para registrar la salida respondiendo con el número correspondiente.";
 
 export const DUPLICATE_CHECKOUT_MESSAGE = "Tu salida ya había sido registrada anteriormente.";
 
 export const CHECKOUT_REMINDER =
-  "Cuando finalices el inventario, enviá 'Me voy' para registrar tu salida.";
+  "Cuando finalices el trabajo, enviá 'Me voy' para registrar tu salida.";
 
-export const NO_INVENTORY_MESSAGE =
-  "No encontramos un inventario asignado para vos en la fecha y horario actuales. Verificá con administración.";
+export const NO_OPERATION_MESSAGE =
+  "No encontramos un trabajo asignado para vos en la fecha y horario actuales. Verificá con administración.";
 
 export const LOCATION_WITHOUT_SESSION_MESSAGE =
   'Para registrar tu llegada, primero escribí "Llegué".';
@@ -56,7 +61,7 @@ export const WAITING_LOCATION_TEXT_MESSAGE =
   "Todavía necesitamos tu ubicación actual. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
 
 export const LOCATION_DURING_SELECTION_MESSAGE =
-  "Primero seleccioná el inventario respondiendo con el número correspondiente.";
+  "Primero seleccioná el trabajo respondiendo con el número correspondiente.";
 
 export const INVALID_SELECTION_MESSAGE =
   "La opción ingresada no es válida. Respondé con uno de los números disponibles.";
@@ -64,7 +69,7 @@ export const INVALID_SELECTION_MESSAGE =
 export const UNPARSEABLE_MESSAGE =
   'No pudimos interpretar el mensaje. Para registrar tu llegada escribí "Llegué".';
 
-export const DUPLICATE_ATTENDANCE_MESSAGE = "Ya registraste tu llegada para este inventario.";
+export const DUPLICATE_ATTENDANCE_MESSAGE = "Ya registraste tu llegada para este trabajo.";
 
 export const DUPLICATE_MESSAGE_SID_RESPONSE = "Ya procesamos tu mensaje anterior.";
 
@@ -78,42 +83,44 @@ export const buildMainMenuMessage = (): string => GREETING_MESSAGE;
 
 export const buildSessionExpiredMessage = (message: string): string => message;
 
-export const buildNoInventoryMessage = (): string => NO_INVENTORY_MESSAGE;
+export const buildNoOperationMessage = (): string => NO_OPERATION_MESSAGE;
 
-export const buildLocationRequestMessage = (inventory: CompatibleInventory): string => {
-  const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-  return `Encontramos tu inventario en ${inventory.storeName}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
+export const buildLocationRequestMessage = (operation: CompatibleOperation): string => {
+  const localTime = formatLocalTime(operation.scheduledStart, getBotOperationTimezone());
+  const serviceReference = formatServiceReferenceFromFields(operation);
+  return `Encontramos tu trabajo en ${serviceReference}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
 };
 
-export const buildInventorySelectionPrompt = (inventories: CompatibleInventory[]): string => {
-  const lines = inventories.map((inventory, index) => {
-    const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-    return `${index + 1}. ${inventory.storeName} — ${localTime}`;
-  });
+export const buildOperationSelectionPrompt = (operations: CompatibleOperation[]): string => {
+  const timeZone = getBotOperationTimezone();
+  const lines = operations.flatMap((operation, index) =>
+    formatBotOperationSelectionLines(index + 1, operation, timeZone),
+  );
 
-  return `Encontramos más de un inventario compatible:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente.`;
+  return `Encontramos más de un trabajo compatible:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente.`;
 };
 
 export const buildCheckoutLocationRequestMessage = (
-  inventory: CheckoutEligibleInventory,
+  operation: CheckoutEligibleOperation,
 ): string => {
-  const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-  return `Perfecto. Para registrar tu salida del inventario en ${inventory.storeName} (${localTime}), compartime tu ubicación actual.`;
+  const localTime = formatLocalTime(operation.scheduledStart, getBotOperationTimezone());
+  const serviceReference = formatServiceReferenceFromFields(operation);
+  return `Perfecto. Para registrar tu salida del trabajo en ${serviceReference} (${localTime}), compartime tu ubicación actual.`;
 };
 
-export const buildCheckoutInventorySelectionPrompt = (
-  inventories: CheckoutEligibleInventory[],
+export const buildCheckoutOperationSelectionPrompt = (
+  operations: CheckoutEligibleOperation[],
 ): string => {
-  const lines = inventories.map((inventory, index) => {
-    const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-    return `${index + 1}. ${inventory.storeName} — ${localTime}`;
-  });
+  const timeZone = getBotOperationTimezone();
+  const lines = operations.flatMap((operation, index) =>
+    formatBotOperationSelectionLines(index + 1, operation, timeZone),
+  );
 
-  return `Encontramos más de un inventario con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
+  return `Encontramos más de un trabajo con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
 };
 
 export const buildArrivalRegisteredMessage = (input: {
-  compatible: CompatibleInventory;
+  compatible: CompatibleOperation;
   distanceMeters: number;
   validationStatus: "VALID" | "PENDING_REVIEW" | "REJECTED";
   punctualityStatus: PunctualityStatus;
@@ -122,6 +129,7 @@ export const buildArrivalRegisteredMessage = (input: {
 }): string => {
   const localTime = formatLocalTime(input.receivedAt.toISOString(), getBotOperationTimezone());
   const roundedDistance = Math.round(input.distanceMeters);
+  const serviceReference = formatAssignmentServiceReference(input.compatible);
 
   if (input.validationStatus === "REJECTED") {
     return buildOutsideRadiusMessage(input.validationReason);
@@ -132,11 +140,11 @@ export const buildArrivalRegisteredMessage = (input: {
       input.punctualityStatus === "LATE"
         ? "Tu llegada fue registrada como tarde."
         : "Tu llegada fue registrada correctamente.";
-    return `${headline}\n\nTienda: ${input.compatible.storeName}\nLlegada: ${localTime}\nDistancia: ${roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
+    return `${headline}\n\nServicio: ${serviceReference}\nLlegada: ${localTime}\nDistancia: ${roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
   }
 
   return buildReviewRequiredMessage({
-    storeName: input.compatible.storeName,
+    serviceReference,
     localTime,
     roundedDistance,
     flow: "arrival",
@@ -144,7 +152,7 @@ export const buildArrivalRegisteredMessage = (input: {
 };
 
 export const buildCheckoutRegisteredMessage = (input: {
-  eligible: CheckoutEligibleInventory;
+  eligible: CheckoutEligibleOperation;
   checkInAt: string;
   checkoutAt: Date;
   distanceMeters: number | null;
@@ -159,6 +167,7 @@ export const buildCheckoutRegisteredMessage = (input: {
     ? `Distancia: ${Math.round(input.distanceMeters ?? 0)} m`
     : "Ubicación: no requerida";
   const statusLabel = checkoutStatusLabel(input.checkoutStatus);
+  const serviceReference = formatAssignmentServiceReference(input.eligible);
 
   if (input.checkoutStatus === "CHECKOUT_REJECTED") {
     return buildCheckoutRejectedMessage();
@@ -172,10 +181,10 @@ export const buildCheckoutRegisteredMessage = (input: {
       input.checkoutStatus === "CHECKOUT_LOCATION_REVIEW"
         ? "estás fuera del radio permitido"
         : "saliste antes del horario previsto";
-    return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
+    return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nServicio: ${serviceReference}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
   }
 
-  let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
+  let message = `Tu salida fue registrada correctamente.\n\nServicio: ${serviceReference}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
 
   if (input.checkoutStatus === "CHECKOUT_LATE_EXTRA_TIME" && input.extraWorkedMinutes > 0) {
     message += `\nTiempo extra: ${input.extraWorkedMinutes} min`;
@@ -191,14 +200,14 @@ export const buildCheckoutRejectedMessage = (): string =>
   `❌ No pudimos registrar tu salida.\n\nMotivo: ubicación fuera del radio permitido.\nContactá a tu supervisor si considerás que existe un error.`;
 
 export const buildReviewRequiredMessage = (input: {
-  storeName: string;
+  serviceReference: string;
   localTime: string;
   roundedDistance: number;
   flow: "arrival" | "checkout";
 }): string => {
   if (input.flow === "arrival") {
-    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.storeName}\nLlegada: ${input.localTime}\nDistancia: ${input.roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
+    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nServicio: ${input.serviceReference}\nLlegada: ${input.localTime}\nDistancia: ${input.roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
   }
 
-  return `Tu salida fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.storeName}\nDistancia: ${input.roundedDistance} m`;
+  return `Tu salida fue registrada, pero quedó pendiente de revisión.\n\nServicio: ${input.serviceReference}\nDistancia: ${input.roundedDistance} m`;
 };

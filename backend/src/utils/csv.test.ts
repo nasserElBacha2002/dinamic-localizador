@@ -9,7 +9,7 @@ describe("escapeCsvValue", () => {
   });
 
   it("escapes commas and quotes", () => {
-    assert.equal(escapeCsvValue('Tienda "Centro"'), '"Tienda ""Centro"""');
+    assert.equal(escapeCsvValue('Servicio "Centro"'), '"Servicio ""Centro"""');
   });
 });
 

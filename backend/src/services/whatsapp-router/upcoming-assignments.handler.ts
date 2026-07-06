@@ -11,7 +11,7 @@ export const handleUpcomingAssignmentsIntent = async (
   setLastDetectedIntent("upcoming-assignments");
   const blockedMessage = getUpcomingAssignmentsModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
-    logModuleBlocked(ctx.companyId, "inventory_operations");
+    logModuleBlocked(ctx.companyId, "operations");
     return handlers.respond(ctx.companyId, {
       message: blockedMessage,
       employeeId: ctx.employeeId,

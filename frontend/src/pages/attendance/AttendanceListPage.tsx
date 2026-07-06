@@ -2,8 +2,8 @@ import { Button, Group, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { EmployeeLookupAutocomplete } from "../../components/lookups/EmployeeLookupAutocomplete";
-import { InventoryLookupAutocomplete } from "../../components/lookups/InventoryLookupAutocomplete";
-import { StoreLookupAutocomplete } from "../../components/lookups/StoreLookupAutocomplete";
+import { OperationLookupAutocomplete } from "../../components/lookups/OperationLookupAutocomplete";
+import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
 import {
   DataTable,
   FilterBar,
@@ -74,9 +74,9 @@ export function AttendanceListPage() {
   const filters = {
     page: table.page,
     limit: table.pageSize,
-    inventoryId: table.state.inventoryId || undefined,
+    operationId: table.state.operationId || undefined,
     employeeId: table.state.employeeId || undefined,
-    storeId: table.state.storeId || undefined,
+    serviceId: table.state.serviceId || undefined,
     validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
@@ -114,14 +114,14 @@ export function AttendanceListPage() {
         getValue: (row) => getRelatedName(row.employee),
       },
       {
-        key: "store",
-        header: terminology.location.singular,
-        getValue: (row) => getRelatedName(row.store),
+        key: "service",
+        header: terminology.service.singular,
+        getValue: (row) => getRelatedName(row.service),
       },
       {
-        key: "inventory",
+        key: "operation",
         header: terminology.operation.singular,
-        getValue: (row) => formatDateTime(row.inventory?.scheduledStart),
+        getValue: (row) => formatDateTime(row.operation?.scheduledStart),
       },
       { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
       { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
@@ -206,10 +206,10 @@ export function AttendanceListPage() {
 
       <FilterBar>
         <FilterBar.Item>
-          <InventoryLookupAutocomplete
-            value={table.state.inventoryId || null}
+          <OperationLookupAutocomplete
+            value={table.state.operationId || null}
             onChange={(id) => {
-              table.setField("inventoryId", id ?? "");
+              table.setField("operationId", id ?? "");
             }}
           />
         </FilterBar.Item>
@@ -225,10 +225,10 @@ export function AttendanceListPage() {
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <StoreLookupAutocomplete
-            value={table.state.storeId || null}
+          <ServiceLookupAutocomplete
+            value={table.state.serviceId || null}
             onChange={(id) => {
-              table.setField("storeId", id ?? "");
+              table.setField("serviceId", id ?? "");
             }}
             activeOnly={false}
           />

@@ -24,7 +24,7 @@ const LIST_FIELDS = {
   status: { type: "enum", values: ["", "SCHEDULED", "COMPLETED"] },
 } as const;
 
-function InventoriesListHarness() {
+function OperationsListHarness() {
   const navigate = useNavigate();
   const location = useLocation();
   const table = useTableUrlState({
@@ -61,7 +61,7 @@ function InventoriesListHarness() {
       <button
         type="button"
         onClick={() =>
-          navigateWithListContext(navigate, "/inventories/inv-1", "/inventories", location)
+          navigateWithListContext(navigate, "/operations/inv-1", "/operations", location)
         }
       >
         Abrir detalle
@@ -70,8 +70,8 @@ function InventoriesListHarness() {
   );
 }
 
-function InventoryDetailHarness() {
-  const { goBackToList } = useListBackNavigation("/inventories");
+function OperationDetailHarness() {
+  const { goBackToList } = useListBackNavigation("/operations");
 
   return (
     <button type="button" onClick={goBackToList}>
@@ -80,12 +80,12 @@ function InventoryDetailHarness() {
   );
 }
 
-function renderInventoriesFlow(initialEntry: string) {
+function renderOperationsFlow(initialEntry: string) {
   return render(
     <MemoryRouter initialEntries={[initialEntry]}>
       <Routes>
-        <Route path="/inventories" element={<InventoriesListHarness />} />
-        <Route path="/inventories/:id" element={<InventoryDetailHarness />} />
+        <Route path="/operations" element={<OperationsListHarness />} />
+        <Route path="/operations/:id" element={<OperationDetailHarness />} />
       </Routes>
     </MemoryRouter>,
   );
@@ -101,7 +101,7 @@ beforeEach(() => {
 
 describe("table URL navigation integration", () => {
   it("restores list filters and pagination after returning from detail", async () => {
-    const view = renderInventoriesFlow("/inventories");
+    const view = renderOperationsFlow("/operations");
 
     fireEvent.click(view.getByRole("button", { name: "Filtrar programadas" }));
     fireEvent.click(view.getByRole("button", { name: "Página 2" }));
@@ -123,7 +123,7 @@ describe("table URL navigation integration", () => {
   });
 
   it("commits search immediately and preserves it after detail navigation", async () => {
-    const view = renderInventoriesFlow("/inventories?search=carrefour");
+    const view = renderOperationsFlow("/operations?search=carrefour");
 
     await waitFor(() => {
       assert.equal(view.getByTestId("search").textContent, "carrefour");
@@ -141,24 +141,24 @@ describe("table URL navigation integration", () => {
   });
 
   it("falls back to base list path when detail is opened directly", async () => {
-    const view = renderInventoriesFlow("/inventories/inv-1");
+    const view = renderOperationsFlow("/operations/inv-1");
 
     fireEvent.click(view.getByRole("button", { name: "Volver al listado" }));
 
     await waitFor(() => {
-      assert.equal(view.getByTestId("url").textContent, "/inventories");
+      assert.equal(view.getByTestId("url").textContent, "/operations");
     });
   });
 
   it("ignores invalid query params and falls back to defaults", () => {
-    const view = renderInventoriesFlow("/inventories?page=abc&pageSize=0&status=INVALID");
+    const view = renderOperationsFlow("/operations?page=abc&pageSize=0&status=INVALID");
 
     assert.equal(view.getByTestId("page").textContent, "1");
     assert.equal(view.getByTestId("status").textContent, "");
   });
 
   it("commitSearch writes trimmed value to the URL immediately", async () => {
-    const view = renderInventoriesFlow("/inventories");
+    const view = renderOperationsFlow("/operations");
 
     fireEvent.change(view.getByLabelText("Buscar"), { target: { value: "  carrefour  " } });
     await waitFor(() => {

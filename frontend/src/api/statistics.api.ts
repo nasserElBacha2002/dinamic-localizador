@@ -1,8 +1,8 @@
 import type { PaginatedResponse, SingleResponse } from "../types/api";
 import type {
   AttendanceByEmployeeRow,
-  AttendanceByInventoryRow,
-  AttendanceByLocationRow,
+  AttendanceByOperationRow,
+  AttendanceByServiceRow,
   AttendanceStatisticsSummary,
   AttendanceStatusDistributionItem,
   AttendanceTimelinePoint,
@@ -55,21 +55,21 @@ export async function getAttendanceByEmployee(
   return data;
 }
 
-export async function getAttendanceByInventory(
+export async function getAttendanceByOperation(
   filters: StatisticsFilters,
-): Promise<PaginatedResponse<AttendanceByInventoryRow>> {
-  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceByInventoryRow>>(
-    "statistics/attendance/by-inventory",
+): Promise<PaginatedResponse<AttendanceByOperationRow>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceByOperationRow>>(
+    "statistics/attendance/by-operation",
     { params: toParams(filters) },
   );
   return data;
 }
 
-export async function getAttendanceByLocation(
+export async function getAttendanceByService(
   filters: StatisticsFilters,
-): Promise<PaginatedResponse<AttendanceByLocationRow>> {
-  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceByLocationRow>>(
-    "statistics/attendance/by-location",
+): Promise<PaginatedResponse<AttendanceByServiceRow>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceByServiceRow>>(
+    "statistics/attendance/by-service",
     { params: toParams(filters) },
   );
   return data;

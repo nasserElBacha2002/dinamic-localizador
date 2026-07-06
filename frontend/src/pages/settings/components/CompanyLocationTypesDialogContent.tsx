@@ -66,7 +66,7 @@ export function CompanyLocationTypesDialogContent({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Los tipos de ubicación se usan para clasificar tiendas, depósitos u otros puntos operativos.
+        Los tipos de ubicación se usan para clasificar servicios, depósitos u otros puntos operativos.
       </Text>
 
       {canUpdate ? (

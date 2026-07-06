@@ -2,10 +2,10 @@ import * as XLSX from "xlsx";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { parseCsvContent, type ParsedCsv } from "./csv-parse";
 import {
-  createInventoryImportDateTimeUtils,
-  formatInventoryDateParts,
+  createOperationImportDateTimeUtils,
+  formatOperationImportDateParts,
   parseExcelSerialNumber,
-} from "./inventory-import-datetime";
+} from "./operation-import-datetime";
 
 export type SpreadsheetFileType = "csv" | "xlsx";
 
@@ -30,7 +30,7 @@ export const detectSpreadsheetFileType = (fileName: string): SpreadsheetFileType
 const isFechaColumn = (header: string): boolean => header.toLowerCase() === "fecha";
 
 const parseXlsxBuffer = (buffer: Buffer, operationTimezone: string): ParsedSpreadsheet => {
-  const { dateToInventoryDateParts } = createInventoryImportDateTimeUtils({
+  const { dateToOperationImportDateParts } = createOperationImportDateTimeUtils({
     operationTimezone,
     defaultOperationStartTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,
     defaultOperationEndTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
@@ -42,14 +42,14 @@ const parseXlsxBuffer = (buffer: Buffer, operationTimezone: string): ParsedSprea
     }
 
     if (value instanceof Date) {
-      return formatInventoryDateParts(dateToInventoryDateParts(value));
+      return formatOperationImportDateParts(dateToOperationImportDateParts(value));
     }
 
     if (typeof value === "number") {
       if (isFechaColumn(header)) {
         const serial = parseExcelSerialNumber(value);
         if (serial) {
-          return formatInventoryDateParts(serial);
+          return formatOperationImportDateParts(serial);
         }
       }
 

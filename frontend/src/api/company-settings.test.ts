@@ -75,7 +75,7 @@ describe("company settings frontend module", () => {
     assert.ok(errors.length >= 3);
   });
 
-  it("includes inventory default fields in operational save payload", () => {
+  it("includes operation default fields in operational save payload", () => {
     const validationFile = readFileSync(
       join(process.cwd(), "src/utils/company-settings-validation.ts"),
       "utf8",

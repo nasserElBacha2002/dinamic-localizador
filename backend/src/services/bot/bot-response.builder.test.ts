@@ -6,48 +6,54 @@ import {
   buildCheckoutRejectedMessage,
   buildLocationRequestMessage,
   buildMainMenuMessage,
-  buildNoInventoryMessage,
+  buildNoOperationMessage,
   buildOutsideRadiusMessage,
   DUPLICATE_ATTENDANCE_MESSAGE,
   GREETING_MESSAGE,
   INVALID_COORDINATES_MESSAGE,
-  NO_INVENTORY_MESSAGE,
+  NO_OPERATION_MESSAGE,
 } from "./bot-response.builder";
 
 describe("bot response builders", () => {
-  const inventory = {
-    id: "inv-1",
-    storeName: "Tienda Centro",
+  const operation = {
+    id: "op-1",
+    serviceId: "svc-1",
+    serviceName: "Carrefour Caballito",
+    serviceAddress: "Av. Rivadavia 5108",
+    serviceLocality: "Caballito",
     scheduledStart: "2026-07-05T15:00:00.000Z",
     scheduledEnd: "2026-07-05T21:00:00.000Z",
-    storeLatitude: -34.6,
-    storeLongitude: -58.4,
+    serviceLatitude: -34.6,
+    serviceLongitude: -58.4,
     allowedRadiusMeters: 150,
     earlyToleranceMinutes: 15,
     lateToleranceMinutes: 30,
+    status: "SCHEDULED",
   };
+
+  const serviceReference = "Carrefour Caballito - Av. Rivadavia 5108 - Caballito";
 
   it("builds main menu message", () => {
     assert.equal(buildMainMenuMessage(), GREETING_MESSAGE);
   });
 
-  it("builds no inventory message", () => {
-    assert.equal(buildNoInventoryMessage(), NO_INVENTORY_MESSAGE);
+  it("builds no operation message", () => {
+    assert.equal(buildNoOperationMessage(), NO_OPERATION_MESSAGE);
     assert.equal(
-      NO_INVENTORY_MESSAGE,
-      "No encontramos un inventario asignado para vos en la fecha y horario actuales. Verificá con administración.",
+      NO_OPERATION_MESSAGE,
+      "No encontramos un trabajo asignado para vos en la fecha y horario actuales. Verificá con administración.",
     );
   });
 
   it("builds location request message", () => {
-    const message = buildLocationRequestMessage(inventory);
-    assert.match(message, /Tienda Centro/);
+    const message = buildLocationRequestMessage(operation);
+    assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
     assert.match(message, /ubicación actual/i);
   });
 
   it("builds arrival registered response", () => {
     const message = buildArrivalRegisteredMessage({
-      compatible: inventory,
+      compatible: operation,
       distanceMeters: 80,
       validationStatus: "VALID",
       punctualityStatus: "ON_TIME",
@@ -55,6 +61,7 @@ describe("bot response builders", () => {
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
     });
     assert.match(message, /registrada correctamente/i);
+    assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
     assert.match(message, /Me voy/);
   });
 
@@ -66,7 +73,7 @@ describe("bot response builders", () => {
 
   it("builds checkout rejected response", () => {
     const message = buildCheckoutRegisteredMessage({
-      eligible: inventory,
+      eligible: operation,
       checkInAt: "2026-07-05T15:00:00.000Z",
       checkoutAt: new Date("2026-07-05T21:10:00.000Z"),
       distanceMeters: 250,
@@ -79,7 +86,7 @@ describe("bot response builders", () => {
 
   it("builds checkout message without distance when location was not provided", () => {
     const message = buildCheckoutRegisteredMessage({
-      eligible: inventory,
+      eligible: operation,
       checkInAt: "2026-07-05T15:00:00.000Z",
       checkoutAt: new Date("2026-07-05T21:05:00.000Z"),
       distanceMeters: null,
@@ -94,7 +101,7 @@ describe("bot response builders", () => {
 
   it("builds checkout message with distance when location was provided", () => {
     const message = buildCheckoutRegisteredMessage({
-      eligible: inventory,
+      eligible: operation,
       checkInAt: "2026-07-05T15:00:00.000Z",
       checkoutAt: new Date("2026-07-05T21:05:00.000Z"),
       distanceMeters: 42,
@@ -109,7 +116,7 @@ describe("bot response builders", () => {
   it("exposes duplicate attendance message constant", () => {
     assert.equal(
       DUPLICATE_ATTENDANCE_MESSAGE,
-      "Ya registraste tu llegada para este inventario.",
+      "Ya registraste tu llegada para este trabajo.",
     );
   });
 

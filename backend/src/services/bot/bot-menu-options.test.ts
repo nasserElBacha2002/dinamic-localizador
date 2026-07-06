@@ -11,7 +11,7 @@ import {
 const allEnabled = () =>
   new Map([
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
-    [COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, true],
+    [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
   ]);
 
@@ -49,9 +49,9 @@ describe("buildAvailableMenuOptions", () => {
     assert.equal(resolveMenuNumberSelection("3", states), "workday");
   });
 
-  it("removes inventory-dependent options when inventory_operations is disabled", () => {
+  it("removes operation-dependent options when operations is disabled", () => {
     const states = allEnabled();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     const options = buildAvailableMenuOptions(states);
     assert.deepEqual(options.map((option) => option.key), ["checkout", "absence"]);
     assert.equal(resolveMenuNumberSelection("1", states), "checkout");
@@ -74,7 +74,7 @@ describe("buildAvailableMenuOptions", () => {
   it("returns empty options when all employee-facing modules are disabled", () => {
     const states = allEnabled();
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
     assert.equal(buildAvailableMenuOptions(states).length, 0);
   });

@@ -1,3 +1,4 @@
+import type { AssignmentConfirmationStatus } from "../types/assignment-confirmation";
 import type {
   CheckoutStatus,
   LocationStatus,
@@ -7,6 +8,14 @@ import type {
 } from "../types/attendance";
 
 type StatusBadgeTone = "success" | "warning" | "danger" | "info" | "neutral";
+
+export function assignmentConfirmationStatusTone(
+  status: AssignmentConfirmationStatus,
+): StatusBadgeTone {
+  if (status === "CONFIRMED") return "success";
+  if (status === "UNAVAILABLE") return "danger";
+  return "warning";
+}
 
 export function validationStatusTone(status: ValidationStatus): StatusBadgeTone {
   if (status === "VALID") return "success";

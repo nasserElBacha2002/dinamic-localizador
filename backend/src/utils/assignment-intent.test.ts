@@ -21,7 +21,7 @@ describe("isWorkdayQueryIntent", () => {
 describe("isUpcomingAssignmentsIntent", () => {
   it("detects upcoming assignment commands", () => {
     assert.equal(isUpcomingAssignmentsIntent("mis turnos"), true);
-    assert.equal(isUpcomingAssignmentsIntent("próximos inventarios"), true);
+    assert.equal(isUpcomingAssignmentsIntent("próximos trabajos"), true);
     assert.equal(isUpcomingAssignmentsIntent("agenda"), true);
     assert.equal(isUpcomingAssignmentsIntent("mi jornada"), false);
   });

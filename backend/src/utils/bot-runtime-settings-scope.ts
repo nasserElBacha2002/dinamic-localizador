@@ -45,9 +45,9 @@ export function getSessionTtlMinutes(): number {
   return getBotRuntimeSettings()?.sessionTtlMinutes ?? env.BOT_SESSION_TTL_MINUTES;
 }
 
-export function resolveEffectiveAllowedRadiusMeters(storeRadiusMeters: number): number {
-  if (storeRadiusMeters > 0) {
-    return storeRadiusMeters;
+export function resolveEffectiveAllowedRadiusMeters(serviceRadiusMeters: number): number {
+  if (serviceRadiusMeters > 0) {
+    return serviceRadiusMeters;
   }
 
   return getDefaultRadiusMeters();

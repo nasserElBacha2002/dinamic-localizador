@@ -26,15 +26,15 @@ export type BotSimulationSessionState = {
 export type CreateBotSimulationSessionInput = {
   companyId?: string | null;
   employeeId: string;
-  inventoryId?: string | null;
-  storeId?: string | null;
+  operationId?: string | null;
+  serviceId?: string | null;
   phoneNumber: string;
   simulatedNow: string;
   mode: BotSimulationMode;
 };
 
 export type LocationPresets = {
-  storeLocation: { latitude: number; longitude: number } | null;
+  serviceLocation: { latitude: number; longitude: number } | null;
   outsideRadius: { latitude: number; longitude: number } | null;
   nearRadiusLimit: { latitude: number; longitude: number } | null;
   allowedRadiusMeters: number | null;

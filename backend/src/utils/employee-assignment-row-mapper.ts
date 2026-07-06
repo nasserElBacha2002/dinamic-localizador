@@ -1,6 +1,6 @@
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { PunctualityStatus } from "../types/domain";
-import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
+import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 
 const parseConfirmationStatus = (value: unknown): AssignmentConfirmationStatus => {
   const status = String(value ?? "PENDING");
@@ -10,18 +10,19 @@ const parseConfirmationStatus = (value: unknown): AssignmentConfirmationStatus =
   return "PENDING";
 };
 
-export const mapEmployeeAssignedInventoryRow = (
+export const mapEmployeeAssignedOperationRow = (
   row: Record<string, unknown>,
-): EmployeeAssignedInventory => ({
-  inventoryId: String(row.inventory_id),
-  storeName: String(row.store_name),
-  storeAddress: row.store_address ? String(row.store_address) : null,
-  storeLatitude: row.store_latitude === null || row.store_latitude === undefined ? null : Number(row.store_latitude),
-  storeLongitude:
-    row.store_longitude === null || row.store_longitude === undefined ? null : Number(row.store_longitude),
+): EmployeeAssignedOperation => ({
+  operationId: String(row.operation_id),
+  serviceName: String(row.service_name),
+  serviceAddress: row.service_address ? String(row.service_address) : null,
+  serviceLocality: row.service_locality ? String(row.service_locality) : null,
+  serviceLatitude: row.service_latitude === null || row.service_latitude === undefined ? null : Number(row.service_latitude),
+  serviceLongitude:
+    row.service_longitude === null || row.service_longitude === undefined ? null : Number(row.service_longitude),
   scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
   scheduledEnd: new Date(row.scheduled_end as Date | string).toISOString(),
-  inventoryStatus: String(row.inventory_status),
+  operationStatus: String(row.operation_status),
   confirmationStatus: parseConfirmationStatus(row.confirmation_status),
   attendanceReceivedAt: row.received_at
     ? new Date(row.received_at as Date | string).toISOString()

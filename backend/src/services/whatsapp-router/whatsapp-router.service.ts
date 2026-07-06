@@ -1,7 +1,7 @@
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
 import { isCheckoutSessionState } from "../../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../../utils/haversine";
-import { parseInventorySelection } from "../../utils/intent";
+import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
@@ -22,6 +22,7 @@ import {
   handleConfirmAttendanceIntent,
   handleUnavailabilityIntent,
 } from "./assignment-confirmation.handler";
+import { handleActiveAttendanceConfirmationResponseSession } from "./attendance-confirmation-response.handler";
 import {
   handleActiveCheckInTextSession,
   handleArrivalIntent,
@@ -61,8 +62,8 @@ export const whatsappRouterService = {
       });
     }
 
-    if (!ctx.session && ctx.recentlyExpired && parseInventorySelection(ctx.body)) {
-      console.info("[whatsapp-bot] inventory selection after expired session", {
+    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
+      console.info("[whatsapp-bot] operation selection after expired session", {
         phone: maskPhoneNumberForLog(ctx.phoneFrom),
       });
       return handlers.respond(companyId, {
@@ -113,6 +114,15 @@ export const whatsappRouterService = {
         if (assignmentSelectionResponse) {
           return assignmentSelectionResponse;
         }
+      }
+
+      const confirmationResponse = await handleActiveAttendanceConfirmationResponseSession(
+        ctx,
+        ctx.session,
+        handlers,
+      );
+      if (confirmationResponse) {
+        return confirmationResponse;
       }
 
       if (isAbsenceFlowSession(ctx.session)) {

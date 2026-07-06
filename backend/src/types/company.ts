@@ -59,6 +59,8 @@ export interface CompanySettings {
   defaultOperationStartTime: string | null;
   defaultOperationEndTime: string | null;
   geofenceReviewMarginMeters: number | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -105,10 +107,10 @@ export type CompanyPermission =
   | "users:manage"
   | "employees:read"
   | "employees:manage"
-  | "stores:read"
-  | "stores:manage"
-  | "inventories:read"
-  | "inventories:manage"
+  | "services:read"
+  | "services:manage"
+  | "operations:read"
+  | "operations:manage"
   | "attendance:read"
   | "attendance:review"
   | "attendance:export"

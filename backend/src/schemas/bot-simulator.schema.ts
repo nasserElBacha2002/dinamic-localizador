@@ -5,8 +5,8 @@ export const botSimulationModeSchema = z.enum(["dry-run", "persistent"]);
 export const createBotSimulationSessionSchema = z.object({
   companyId: z.string().uuid().optional().nullable(),
   employeeId: z.string().uuid(),
-  inventoryId: z.string().uuid().optional().nullable(),
-  storeId: z.string().uuid().optional().nullable(),
+  operationId: z.string().uuid().optional().nullable(),
+  serviceId: z.string().uuid().optional().nullable(),
   phoneNumber: z.string().trim().min(8),
   simulatedNow: z.string().datetime(),
   mode: botSimulationModeSchema.default("dry-run"),

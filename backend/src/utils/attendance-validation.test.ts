@@ -4,7 +4,7 @@ import {
   combineAttendanceValidation,
   evaluateGeofence,
   evaluatePunctuality,
-  isWithinInventoryWindow,
+  isWithinOperationWindow,
 } from "./attendance-validation";
 
 describe("evaluateGeofence", () => {
@@ -78,17 +78,17 @@ describe("evaluatePunctuality", () => {
   });
 });
 
-describe("isWithinInventoryWindow", () => {
+describe("isWithinOperationWindow", () => {
   it("accepts compatible timestamp", () => {
     const scheduledStart = new Date("2026-06-16T12:00:00.000Z");
     const at = new Date("2026-06-16T12:10:00.000Z");
-    assert.equal(isWithinInventoryWindow(at, scheduledStart, 15, 30), true);
+    assert.equal(isWithinOperationWindow(at, scheduledStart, 15, 30), true);
   });
 
   it("rejects too early timestamp", () => {
     const scheduledStart = new Date("2026-06-16T12:00:00.000Z");
     const at = new Date("2026-06-16T11:30:00.000Z");
-    assert.equal(isWithinInventoryWindow(at, scheduledStart, 15, 30), false);
+    assert.equal(isWithinOperationWindow(at, scheduledStart, 15, 30), false);
   });
 });
 

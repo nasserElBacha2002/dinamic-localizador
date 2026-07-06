@@ -27,6 +27,8 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
     defaultOperationStartTime: "20:30",
     defaultOperationEndTime: "03:00",
     geofenceReviewMarginMeters: 30,
+    confirmationReminderEnabled: true,
+    confirmationReminderHoursBefore: 24,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -58,9 +60,11 @@ describe("CompanyOperationalSettingsSection", () => {
       join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
       "utf8",
     );
+    const activeSection = sectionFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
 
-    assert.equal((sectionFile.match(/SettingsFormField/g) ?? []).length, 8);
-    assert.match(sectionFile, /description="Zona horaria usada por operaciones y reportes\."/);
+    assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 9);
+    assert.match(activeSection, /description="Zona horaria usada por operaciones y reportes\."/);
+    assert.match(activeSection, /description="Ventana configurable por empresa antes del inicio de la operación\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
     assert.match(sectionFile, /getOperationTimezoneOptions/);
@@ -89,6 +93,8 @@ describe("CompanyOperationalSettingsSection", () => {
     });
 
     assert.deepEqual(Object.keys(payload).sort(), [
+      "confirmationReminderEnabled",
+      "confirmationReminderHoursBefore",
       "defaultEarlyArrivalToleranceMinutes",
       "defaultLateArrivalToleranceMinutes",
       "defaultOperationEndTime",
@@ -143,7 +149,7 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /CompanyLocationTypesDialog/);
     assert.match(pageFile, /setOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationTypes"\)/);
-    assert.doesNotMatch(pageFile, /CompanyInventoryOperationSettingsDialog/);
+    assert.doesNotMatch(pageFile, /CompanyOperationOperationSettingsDialog/);
   });
 });
 
@@ -183,18 +189,18 @@ describe("Company modules permissions", () => {
 });
 
 describe("Regression: related modules still use company settings APIs", () => {
-  it("StoreForm still loads location types from API hook", () => {
-    const storeFormFile = readFileSync(
-      join(process.cwd(), "src/components/stores/StoreForm.tsx"),
+  it("ServiceForm still loads location types from API hook", () => {
+    const serviceFormFile = readFileSync(
+      join(process.cwd(), "src/components/services/ServiceForm.tsx"),
       "utf8",
     );
-    assert.match(storeFormFile, /useCompanyLocationTypes/);
-    assert.doesNotMatch(storeFormFile, /STORE_FORMATS/);
+    assert.match(serviceFormFile, /useCompanyLocationTypes/);
+    assert.doesNotMatch(serviceFormFile, /STORE_FORMATS/);
   });
 
-  it("inventory create defaults still use operation tolerances", () => {
+  it("operation create defaults still use operation tolerances", () => {
     const defaultsFile = readFileSync(
-      join(process.cwd(), "src/utils/inventory-create-defaults.ts"),
+      join(process.cwd(), "src/utils/operation-create-defaults.ts"),
       "utf8",
     );
     assert.match(defaultsFile, /defaultEarlyArrivalToleranceMinutes/);

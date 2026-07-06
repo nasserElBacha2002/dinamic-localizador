@@ -1,8 +1,8 @@
 export type BotSessionState =
   | "WAITING_LOCATION"
-  | "WAITING_INVENTORY_SELECTION"
+  | "WAITING_OPERATION_SELECTION"
   | "WAITING_CHECKOUT_LOCATION"
-  | "WAITING_CHECKOUT_INVENTORY_SELECTION"
+  | "WAITING_CHECKOUT_OPERATION_SELECTION"
   | "WAITING_ABSENCE_TYPE"
   | "WAITING_ABSENCE_START_DATE"
   | "WAITING_ABSENCE_END_DATE"
@@ -10,6 +10,7 @@ export type BotSessionState =
   | "WAITING_ABSENCE_CONFIRMATION"
   | "WAITING_CONFIRM_ATTENDANCE_SELECTION"
   | "WAITING_UNAVAILABILITY_SELECTION"
+  | "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE"
   | "COMPLETED"
   | "CANCELLED"
   | "EXPIRED";
@@ -21,7 +22,7 @@ export interface BotSession {
   id: string;
   companyId: string;
   employeeId: string;
-  inventoryId: string | null;
+  operationId: string | null;
   phoneNumber: string;
   state: BotSessionState;
   contextJson: string | null;
@@ -30,15 +31,26 @@ export interface BotSession {
   updatedAt: string;
 }
 
-export interface InventorySelectionOption {
-  inventoryId: string;
-  storeName: string;
+export interface OperationSelectionOption {
+  operationId: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
   scheduledStart: string;
 }
 
 export interface BotSessionContext {
-  inventoryOptions?: InventorySelectionOption[];
+  operationOptions?: OperationSelectionOption[];
+  /** @deprecated Read compat — see legacy-operation-session-context.ts */
+  inventoryOptions?: OperationSelectionOption[];
   flow?: "ABSENCE_REQUEST";
+  attendanceConfirmation?: {
+    operationId: string;
+    /** @deprecated Read compat for sessions created before Phase 3 rename */
+    inventoryId?: string;
+    notificationId?: string;
+    scheduleVersion: number;
+  };
   absenceDraft?: {
     absenceTypeId?: string;
     absenceTypeCode?: string;
@@ -81,12 +93,14 @@ export interface TwilioWebhookPayload {
   NumMedia?: string;
 }
 
-export interface CompatibleInventory {
+export interface CompatibleOperation {
   id: string;
-  storeId: string;
-  storeName: string;
-  storeLatitude: number;
-  storeLongitude: number;
+  serviceId: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
+  serviceLatitude: number;
+  serviceLongitude: number;
   allowedRadiusMeters: number;
   scheduledStart: string;
   scheduledEnd: string | null;
@@ -95,6 +109,6 @@ export interface CompatibleInventory {
   status: string;
 }
 
-export interface CheckoutEligibleInventory extends CompatibleInventory {
+export interface CheckoutEligibleOperation extends CompatibleOperation {
   attendanceId: string;
 }

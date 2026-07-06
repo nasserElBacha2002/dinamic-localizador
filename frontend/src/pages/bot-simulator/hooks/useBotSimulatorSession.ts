@@ -11,15 +11,15 @@ import {
   useSendBotSimulationMessage,
 } from "../../../hooks/useBotSimulator";
 import { useEmployee } from "../../../hooks/useEmployees";
-import { useInventory } from "../../../hooks/useInventories";
+import { useOperation } from "../../../hooks/useOperations";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { localDateTimeInputToIso, toLocalDateTimeInputValue } from "../utils";
 
 export function useBotSimulatorSession() {
   const [employeeId, setEmployeeId] = useState<string | null>(null);
-  const [inventoryId, setInventoryId] = useState<string | null>(null);
-  const [manualStoreId, setManualStoreId] = useState<string | null>(null);
-  const [storeManuallySet, setStoreManuallySet] = useState(false);
+  const [operationId, setOperationId] = useState<string | null>(null);
+  const [manualServiceId, setManualServiceId] = useState<string | null>(null);
+  const [serviceManuallySet, setServiceManuallySet] = useState(false);
   const [manualPhoneNumber, setManualPhoneNumber] = useState("");
   const [phoneManuallySet, setPhoneManuallySet] = useState(false);
   const [simulatedNowInput, setSimulatedNowInput] = useState(() => toLocalDateTimeInputValue(new Date()));
@@ -37,7 +37,7 @@ export function useBotSimulatorSession() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const { data: employee } = useEmployee(employeeId ?? undefined);
-  const { data: inventory } = useInventory(inventoryId ?? undefined);
+  const { data: operation } = useOperation(operationId ?? undefined);
 
   const createSessionMutation = useCreateBotSimulationSession();
   const restartSessionMutation = useRestartBotSimulationSession();
@@ -48,7 +48,7 @@ export function useBotSimulatorSession() {
   const resolvedPhoneNumber = phoneManuallySet
     ? manualPhoneNumber
     : (employee?.phoneNumber ?? manualPhoneNumber);
-  const resolvedStoreId = storeManuallySet ? manualStoreId : (inventory?.storeId ?? manualStoreId);
+  const resolvedServiceId = serviceManuallySet ? manualServiceId : (operation?.serviceId ?? manualServiceId);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -76,8 +76,8 @@ export function useBotSimulatorSession() {
     try {
       const result = await createSessionMutation.mutateAsync({
         employeeId,
-        inventoryId,
-        storeId: resolvedStoreId,
+        operationId,
+        serviceId: resolvedServiceId,
         phoneNumber: resolvedPhoneNumber.trim(),
         simulatedNow: localDateTimeInputToIso(simulatedNowInput),
         mode,
@@ -100,9 +100,9 @@ export function useBotSimulatorSession() {
     setCustomLongitudeError(null);
     setLocationDialogOpen(false);
     setEmployeeId(null);
-    setInventoryId(null);
-    setManualStoreId(null);
-    setStoreManuallySet(false);
+    setOperationId(null);
+    setManualServiceId(null);
+    setServiceManuallySet(false);
     setManualPhoneNumber("");
     setPhoneManuallySet(false);
   };
@@ -182,8 +182,8 @@ export function useBotSimulatorSession() {
       ["companyId", "Empresa"],
       ["employeeName", "Empleado"],
       ["employeeId", "ID empleado"],
-      ["inventoryId", "Inventario"],
-      ["storeId", "Tienda"],
+      ["operationId", "Operación"],
+      ["serviceId", "Servicio"],
       ["phoneNumber", "Teléfono simulado"],
       ["lastDetectedIntent", "Última intención"],
       ["calculatedDistance", "Distancia calculada (m)"],
@@ -235,11 +235,11 @@ export function useBotSimulatorSession() {
   return {
     employeeId,
     setEmployeeId,
-    inventoryId,
-    setInventoryId,
-    manualStoreId,
-    setManualStoreId,
-    setStoreManuallySet,
+    operationId,
+    setOperationId,
+    manualServiceId,
+    setManualServiceId,
+    setServiceManuallySet,
     manualPhoneNumber,
     setManualPhoneNumber,
     setPhoneManuallySet,
@@ -264,7 +264,7 @@ export function useBotSimulatorSession() {
     setCustomLongitudeError,
     chatEndRef,
     resolvedPhoneNumber,
-    resolvedStoreId,
+    resolvedServiceId,
     locationPresets,
     isBusy,
     canStart,

@@ -105,7 +105,7 @@ describe("companyModuleService", () => {
         companyModuleService.updateModules("company-1", true, {
           modules: [
             { moduleKey: "attendance", isEnabled: false },
-            { moduleKey: "inventory_operations", isEnabled: false },
+            { moduleKey: "operations", isEnabled: false },
             { moduleKey: "absences", isEnabled: false },
           ],
         }),

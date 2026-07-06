@@ -3,16 +3,16 @@ export interface EmployeeLookup {
   fullName: string;
 }
 
-export interface StoreLookup {
+export interface ServiceLookup {
   id: string;
   name: string;
   address: string | null;
 }
 
-export interface InventoryLookup {
+export interface OperationLookup {
   id: string;
   name: string;
   startDate: string;
   endDate: string | null;
-  storeName: string;
+  serviceName: string;
 }

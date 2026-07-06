@@ -238,6 +238,54 @@ export function CompanyOperationalSettingsSection({
           </SettingsFormField>
         </FormGrid>
 
+{/*         <Text fw={600} size="sm">
+          Confirmación de asistencia
+        </Text> */}
+        <FormGrid columns={{ base: 1, md: 2 }}>
+{/*           <SettingsFormField
+            label="Enviar recordatorio automático"
+            description="WhatsApp proactivo a empleados con confirmación pendiente."
+          >
+            <Switch
+              checked={formValues.confirmationReminderEnabled}
+              onChange={(event) => {
+                const checked = event.currentTarget.checked;
+                setFormValues((current) => ({
+                  ...current,
+                  confirmationReminderEnabled: checked,
+                }));
+              }}
+              disabled={disabled}
+              aria-label="Enviar recordatorio automático de confirmación"
+            />
+          </SettingsFormField> */}
+
+          <SettingsFormField
+            label="Enviar recordatorio (horas antes)"
+            description="Ventana configurable por empresa antes del inicio de la operación."
+          >
+            <NumberInput
+              value={
+                formValues.confirmationReminderHoursBefore === ""
+                  ? ""
+                  : Number(formValues.confirmationReminderHoursBefore)
+              }
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  confirmationReminderHoursBefore:
+                    value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              min={1}
+              max={168}
+              step={1}
+              hideControls
+              disabled={disabled || !formValues.confirmationReminderEnabled}
+            />
+          </SettingsFormField>
+        </FormGrid>
+
         {validationErrors.length > 0 ? (
           <Text size="sm" c="red">
             {validationErrors.join(" ")}

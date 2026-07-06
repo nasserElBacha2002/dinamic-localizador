@@ -83,7 +83,7 @@ export const employeeService = {
     }
 
     if (input.active === false) {
-      const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(companyId, id);
+      const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
       if (hasSchedules) {
         throw new AppError(
           409,
@@ -102,7 +102,7 @@ export const employeeService = {
 
   async deactivate(companyId: string, id: string) {
     await this.getById(companyId, id);
-    const hasSchedules = await employeeRepository.hasActiveOrScheduledInventories(companyId, id);
+    const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
     if (hasSchedules) {
       throw new AppError(
         409,

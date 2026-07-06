@@ -1,4 +1,4 @@
-import type { InventoryStatus } from "./inventory-status";
+import type { OperationStatus } from "./operation-status";
 
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
@@ -15,7 +15,7 @@ export type OperationalStatus = "NO_CHECK_IN" | "VALID" | "PENDING_REVIEW" | "RE
 
 export interface AttendanceRecord {
   id: string;
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
   receivedLatitude: number;
   receivedLongitude: number;
@@ -49,17 +49,17 @@ export interface AttendanceEmployeeSummary {
   phoneNumber: string;
 }
 
-export interface AttendanceInventorySummary {
+export interface AttendanceOperationSummary {
   id: string;
-  status: InventoryStatus;
+  status: OperationStatus;
   scheduledStart: string;
   scheduledEnd: string | null;
 }
 
 export interface AttendanceRecordWithRelations extends AttendanceRecord {
   employee: AttendanceEmployeeSummary;
-  inventory: AttendanceInventorySummary;
-  store: {
+  operation: AttendanceOperationSummary;
+  service: {
     id: string;
     name: string;
     address: string | null;
@@ -101,7 +101,7 @@ export interface AttendanceTechnicalDetails {
     id: string;
     state: string;
     expiresAt: string;
-    inventoryId: string | null;
+    operationId: string | null;
   } | null;
   coordinates: {
     latitude: number;
@@ -118,9 +118,9 @@ export interface AttendanceDetail extends AttendanceRecordWithRelations {
 export interface AttendanceFilters {
   page?: number;
   limit?: number;
-  inventoryId?: string;
+  operationId?: string;
   employeeId?: string;
-  storeId?: string;
+  serviceId?: string;
   validationStatus?: ValidationStatus;
   locationStatus?: LocationStatus;
   punctualityStatus?: PunctualityStatus;
@@ -131,7 +131,7 @@ export interface AttendanceFilters {
 }
 
 export interface CreateAttendanceInput {
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
   receivedLatitude: number;
   receivedLongitude: number;

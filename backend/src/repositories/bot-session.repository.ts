@@ -251,7 +251,7 @@ export const botSessionRepository = {
     input: {
       companyId: string;
       employeeId: string;
-      inventoryId: string | null;
+      operationId: string | null;
       phoneNumber: string;
       state: BotSessionState;
       contextJson: string | null;
@@ -266,7 +266,7 @@ export const botSessionRepository = {
     const result = await request
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
-      .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("state", sql.NVarChar(40), input.state)
       .input("contextJson", sql.NVarChar(sql.MAX), input.contextJson)
@@ -275,12 +275,12 @@ export const botSessionRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, createFlags.simulationSessionId)
       .query(`
         INSERT INTO bot_sessions (
-          company_id, employee_id, inventory_id, phone_number, state, context_json, expires_at,
+          company_id, employee_id, operation_id, phone_number, state, context_json, expires_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @employeeId, @inventoryId, @phoneNumber, @state, @contextJson, @expiresAt,
+          @companyId, @employeeId, @operationId, @phoneNumber, @state, @contextJson, @expiresAt,
           @isSimulation, @simulationSessionId
         )
       `);
@@ -292,7 +292,7 @@ export const botSessionRepository = {
     companyId: string,
     id: string,
     input: {
-      inventoryId?: string | null;
+      operationId?: string | null;
       state?: BotSessionState;
       contextJson?: string | null;
       expiresAt?: Date;
@@ -307,9 +307,9 @@ export const botSessionRepository = {
     request.input("id", sql.UniqueIdentifier, id);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
 
-    if (input.inventoryId !== undefined) {
-      request.input("inventoryId", sql.UniqueIdentifier, input.inventoryId);
-      fields.push("inventory_id = @inventoryId");
+    if (input.operationId !== undefined) {
+      request.input("operationId", sql.UniqueIdentifier, input.operationId);
+      fields.push("operation_id = @operationId");
     }
 
     if (input.state !== undefined) {

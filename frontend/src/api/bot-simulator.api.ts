@@ -26,8 +26,8 @@ export type BotSimulationSessionState = {
 export type CreateBotSimulationSessionInput = {
   companyId?: string | null;
   employeeId: string;
-  inventoryId?: string | null;
-  storeId?: string | null;
+  operationId?: string | null;
+  serviceId?: string | null;
   phoneNumber: string;
   simulatedNow: string;
   mode: BotSimulationMode;

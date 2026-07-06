@@ -82,6 +82,6 @@ const main = async (): Promise<void> => {
 };
 
 void main().catch((error) => {
-  console.error("Store export failed:", error instanceof Error ? error.message : error);
+  console.error("Service export failed:", error instanceof Error ? error.message : error);
   process.exit(1);
 });

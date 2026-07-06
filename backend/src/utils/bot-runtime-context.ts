@@ -15,7 +15,7 @@ export type BotSimulatorMessage = {
 
 export type VirtualAttendanceRecord = {
   id: string;
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
   receivedAt: string;
   validationStatus: string;
@@ -122,7 +122,7 @@ export function addVirtualCheckIn(record: Omit<VirtualAttendanceRecord, "id" | "
 }
 
 export function findVirtualCheckInForCheckout(
-  inventoryId: string,
+  operationId: string,
   employeeId: string,
 ): VirtualAttendanceRecord | null {
   const context = getBotRuntimeContext();
@@ -135,7 +135,7 @@ export function findVirtualCheckInForCheckout(
       .reverse()
       .find(
         (record) =>
-          record.inventoryId === inventoryId &&
+          record.operationId === operationId &&
           record.employeeId === employeeId &&
           record.checkoutAt === null &&
           (record.validationStatus === "VALID" || record.validationStatus === "PENDING_REVIEW"),
@@ -143,8 +143,8 @@ export function findVirtualCheckInForCheckout(
   );
 }
 
-export function hasVirtualActiveRecord(inventoryId: string, employeeId: string): boolean {
-  return findVirtualCheckInForCheckout(inventoryId, employeeId) !== null;
+export function hasVirtualActiveRecord(operationId: string, employeeId: string): boolean {
+  return findVirtualCheckInForCheckout(operationId, employeeId) !== null;
 }
 
 export function completeVirtualCheckOut(

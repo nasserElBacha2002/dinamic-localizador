@@ -1,8 +1,8 @@
 import { Alert, Button, Stack, Text, TextInput } from "@mantine/core";
 import type { BotSimulationMode } from "../../../api/bot-simulator.api";
 import { EmployeeSearchAutocomplete } from "../../../components/employees/EmployeeSearchAutocomplete";
-import { InventorySearchAutocomplete } from "../../../components/inventories/InventorySearchAutocomplete";
-import { StoreSearchAutocomplete } from "../../../components/stores/StoreSearchAutocomplete";
+import { OperationSearchAutocomplete } from "../../../components/operations/OperationSearchAutocomplete";
+import { ServiceSearchAutocomplete } from "../../../components/services/ServiceSearchAutocomplete";
 import { FilterSelect, SectionCard } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 
@@ -10,11 +10,11 @@ type BotSessionPanelProps = Pick<
   BotSimulatorSessionState,
   | "employeeId"
   | "setEmployeeId"
-  | "inventoryId"
-  | "setInventoryId"
-  | "resolvedStoreId"
-  | "setManualStoreId"
-  | "setStoreManuallySet"
+  | "operationId"
+  | "setOperationId"
+  | "resolvedServiceId"
+  | "setManualServiceId"
+  | "setServiceManuallySet"
   | "resolvedPhoneNumber"
   | "setManualPhoneNumber"
   | "setPhoneManuallySet"
@@ -31,11 +31,11 @@ type BotSessionPanelProps = Pick<
 export function BotSessionPanel({
   employeeId,
   setEmployeeId,
-  inventoryId,
-  setInventoryId,
-  resolvedStoreId,
-  setManualStoreId,
-  setStoreManuallySet,
+  operationId,
+  setOperationId,
+  resolvedServiceId,
+  setManualServiceId,
+  setServiceManuallySet,
   resolvedPhoneNumber,
   setManualPhoneNumber,
   setPhoneManuallySet,
@@ -73,21 +73,21 @@ export function BotSessionPanel({
           required
         />
 
-        <InventorySearchAutocomplete
-          value={inventoryId}
+        <OperationSearchAutocomplete
+          value={operationId}
           onChange={(id) => {
-            setInventoryId(id);
-            setStoreManuallySet(false);
-            setManualStoreId(null);
+            setOperationId(id);
+            setServiceManuallySet(false);
+            setManualServiceId(null);
           }}
           allowCreate={false}
         />
 
-        <StoreSearchAutocomplete
-          value={resolvedStoreId}
+        <ServiceSearchAutocomplete
+          value={resolvedServiceId}
           onChange={(id) => {
-            setStoreManuallySet(true);
-            setManualStoreId(id);
+            setServiceManuallySet(true);
+            setManualServiceId(id);
           }}
           activeOnly={false}
           allowCreate={false}

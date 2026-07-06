@@ -41,8 +41,8 @@ describe("company permissions by role", () => {
     const readPermissions = [
       "company:read",
       "employees:read",
-      "stores:read",
-      "inventories:read",
+      "services:read",
+      "operations:read",
       "attendance:read",
       "absences:read",
       "reports:read",
@@ -65,15 +65,15 @@ describe("company permissions by role", () => {
 
   it("maps SUPERVISOR to attendance review and inventory read", () => {
     assert.ok(roleHasPermission("SUPERVISOR", "attendance:review"));
-    assert.ok(roleHasPermission("SUPERVISOR", "inventories:read"));
+    assert.ok(roleHasPermission("SUPERVISOR", "operations:read"));
     assert.ok(!roleHasPermission("SUPERVISOR", "employees:manage"));
   });
 
   it("maps OPERATOR to inventories and attendance read only", () => {
-    assert.ok(roleHasPermission("OPERATOR", "inventories:read"));
+    assert.ok(roleHasPermission("OPERATOR", "operations:read"));
     assert.ok(roleHasPermission("OPERATOR", "attendance:read"));
     assert.ok(!roleHasPermission("OPERATOR", "employees:read"));
-    assert.ok(!roleHasPermission("OPERATOR", "inventories:manage"));
+    assert.ok(!roleHasPermission("OPERATOR", "operations:manage"));
   });
 
   it("includes all defined permissions for OWNER without brittle size assertions", () => {

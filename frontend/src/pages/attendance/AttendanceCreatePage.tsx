@@ -17,7 +17,7 @@ export function AttendanceCreatePage() {
 
     try {
       const record = await createMutation.mutateAsync({
-        inventoryId: values.inventoryId,
+        operationId: values.operationId,
         employeeId: values.employeeId,
         receivedLatitude: values.receivedLatitude,
         receivedLongitude: values.receivedLongitude,
@@ -43,7 +43,7 @@ export function AttendanceCreatePage() {
       />
       <AttendanceTestForm
         defaultValues={{
-          inventoryId: "",
+          operationId: "",
           employeeId: "",
           receivedLatitude: 0,
           receivedLongitude: 0,

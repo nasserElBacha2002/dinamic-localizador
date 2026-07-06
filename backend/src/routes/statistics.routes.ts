@@ -36,15 +36,15 @@ statisticsRouter.get(
 );
 
 statisticsRouter.get(
-  "/attendance/by-inventory",
+  "/attendance/by-operation",
   requirePermission("reports:read"),
   validate(statisticsTableQuerySchema, "query"),
-  asyncHandler(statisticsController.byInventory),
+  asyncHandler(statisticsController.byOperation),
 );
 
 statisticsRouter.get(
-  "/attendance/by-location",
+  "/attendance/by-service",
   requirePermission("reports:read"),
   validate(statisticsTableQuerySchema, "query"),
-  asyncHandler(statisticsController.byLocation),
+  asyncHandler(statisticsController.byService),
 );

@@ -16,7 +16,7 @@ import { hashPassword } from "../utils/password";
 
 const TEST_OPERATOR_EMAIL = "integration-route-alias-operator@test.local";
 
-describeDatabaseIntegration("API route aliases integration", () => {
+describeDatabaseIntegration("API canonical routes integration", () => {
   let baseUrl = "";
   let closeServer: (() => Promise<void>) | null = null;
   let dinamicCompanyId = "";
@@ -104,24 +104,16 @@ describeDatabaseIntegration("API route aliases integration", () => {
 
   const companyPath = (suffix: string) => `/api/companies/${dinamicCompanyId}${suffix}`;
 
-  it("returns the same list response for GET /stores and GET /locations", async () => {
+  it("returns 200 for GET /services", async () => {
     const token = platformAdminToken();
-    const storesResponse = await apiRequest(baseUrl, companyPath("/stores"), { token });
-    const locationsResponse = await apiRequest(baseUrl, companyPath("/locations"), { token });
-
-    assert.equal(storesResponse.status, 200);
-    assert.equal(locationsResponse.status, 200);
-    assert.deepEqual(locationsResponse.body, storesResponse.body);
+    const response = await apiRequest(baseUrl, companyPath("/services"), { token });
+    assert.equal(response.status, 200);
   });
 
-  it("returns the same list response for GET /inventories and GET /operations", async () => {
+  it("returns 200 for GET /operations", async () => {
     const token = platformAdminToken();
-    const inventoriesResponse = await apiRequest(baseUrl, companyPath("/inventories"), { token });
-    const operationsResponse = await apiRequest(baseUrl, companyPath("/operations"), { token });
-
-    assert.equal(inventoriesResponse.status, 200);
-    assert.equal(operationsResponse.status, 200);
-    assert.deepEqual(operationsResponse.body, inventoriesResponse.body);
+    const response = await apiRequest(baseUrl, companyPath("/operations"), { token });
+    assert.equal(response.status, 200);
   });
 
   it("returns the same list response for GET /employees and GET /workers", async () => {
@@ -134,96 +126,63 @@ describeDatabaseIntegration("API route aliases integration", () => {
     assert.deepEqual(workersResponse.body, employeesResponse.body);
   });
 
-  it("returns the same lookup response for canonical and alias lookup routes", async () => {
+  it("returns lookup data for canonical /lookups/services and /lookups/operations", async () => {
     const token = platformAdminToken();
 
-    const storesLookup = await apiRequest(baseUrl, companyPath("/lookups/stores"), { token });
-    const locationsLookup = await apiRequest(baseUrl, companyPath("/lookups/locations"), { token });
-    assert.equal(storesLookup.status, 200);
-    assert.equal(locationsLookup.status, 200);
-    assert.deepEqual(locationsLookup.body, storesLookup.body);
-
-    const inventoriesLookup = await apiRequest(baseUrl, companyPath("/lookups/inventories"), { token });
+    const servicesLookup = await apiRequest(baseUrl, companyPath("/lookups/services"), { token });
     const operationsLookup = await apiRequest(baseUrl, companyPath("/lookups/operations"), { token });
-    assert.equal(inventoriesLookup.status, 200);
+    assert.equal(servicesLookup.status, 200);
     assert.equal(operationsLookup.status, 200);
-    assert.deepEqual(operationsLookup.body, inventoriesLookup.body);
-
-    const employeesLookup = await apiRequest(baseUrl, companyPath("/lookups/employees"), { token });
-    const workersLookup = await apiRequest(baseUrl, companyPath("/lookups/workers"), { token });
-    assert.equal(employeesLookup.status, 200);
-    assert.equal(workersLookup.status, 200);
-    assert.deepEqual(workersLookup.body, employeesLookup.body);
   });
 
-  it("denies OPERATOR access to stores and locations with the same permission gate", async () => {
+  it("denies OPERATOR access to services", async () => {
     const token = operatorToken();
-
-    const storesResponse = await apiRequest(baseUrl, companyPath("/stores"), { token });
-    const locationsResponse = await apiRequest(baseUrl, companyPath("/locations"), { token });
-    assert.equal(storesResponse.status, 403);
-    assert.equal(locationsResponse.status, 403);
+    const response = await apiRequest(baseUrl, companyPath("/services"), { token });
+    assert.equal(response.status, 403);
   });
 
-  it("denies OPERATOR POST to stores and locations with the same permission gate", async () => {
+  it("denies OPERATOR POST to services", async () => {
     const token = operatorToken();
     const body = {
-      name: "Alias Test Store",
+      name: "Canonical Test Service",
       address: "Test",
       latitude: -34.6,
       longitude: -58.38,
       allowedRadiusMeters: 150,
     };
 
-    const storesResponse = await apiRequest(baseUrl, companyPath("/stores"), {
-      method: "POST",
-      token,
-      body,
-    });
-    const locationsResponse = await apiRequest(baseUrl, companyPath("/locations"), {
+    const response = await apiRequest(baseUrl, companyPath("/services"), {
       method: "POST",
       token,
       body,
     });
 
-    assert.equal(storesResponse.status, 403);
-    assert.equal(locationsResponse.status, 403);
+    assert.equal(response.status, 403);
   });
 
-  it("allows OPERATOR access to inventories and operations list APIs", async () => {
+  it("allows OPERATOR access to operations list API", async () => {
     const token = operatorToken();
-
-    const inventoriesResponse = await apiRequest(baseUrl, companyPath("/inventories"), { token });
-    const operationsResponse = await apiRequest(baseUrl, companyPath("/operations"), { token });
-
-    assert.equal(inventoriesResponse.status, 200);
-    assert.equal(operationsResponse.status, 200);
-    assert.deepEqual(operationsResponse.body, inventoriesResponse.body);
+    const response = await apiRequest(baseUrl, companyPath("/operations"), { token });
+    assert.equal(response.status, 200);
   });
 
-  it("denies OPERATOR POST to inventories and operations with the same permission gate", async () => {
+  it("denies OPERATOR POST to operations", async () => {
     const token = operatorToken();
     const body = {
-      storeId: "00000000-0000-4000-8000-000000000001",
+      serviceId: "00000000-0000-4000-8000-000000000001",
       scheduledStart: "2030-01-01T20:30:00.000Z",
       scheduledEnd: "2030-01-02T03:00:00.000Z",
       earlyToleranceMinutes: 60,
       lateToleranceMinutes: 90,
     };
 
-    const inventoriesResponse = await apiRequest(baseUrl, companyPath("/inventories"), {
-      method: "POST",
-      token,
-      body,
-    });
-    const operationsResponse = await apiRequest(baseUrl, companyPath("/operations"), {
+    const response = await apiRequest(baseUrl, companyPath("/operations"), {
       method: "POST",
       token,
       body,
     });
 
-    assert.equal(inventoriesResponse.status, 403);
-    assert.equal(operationsResponse.status, 403);
+    assert.equal(response.status, 403);
   });
 
   it("denies OPERATOR access to employees and workers full APIs", async () => {

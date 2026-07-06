@@ -34,7 +34,7 @@ export function buildGeneralSettingsSummary(settings: CompanySettings) {
   return [{ label: "Zona horaria", value: settings.operationTimezone }];
 }
 
-export function buildInventoryOperationSummary(settings: CompanySettings) {
+export function buildOperationOperationSummary(settings: CompanySettings) {
   const items = [
     { label: "Horario", value: formatOperationSchedule(settings.defaultOperationStartTime, settings.defaultOperationEndTime) },
     {

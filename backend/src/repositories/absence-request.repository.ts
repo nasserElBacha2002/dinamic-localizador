@@ -428,9 +428,9 @@ export const absenceRequestRepository = {
     absenceEndAt: Date,
   ): Promise<
     Array<{
-      inventoryId: string;
-      storeId: string;
-      storeName: string;
+      operationId: string;
+      serviceId: string;
+      serviceName: string;
       scheduledStart: string;
       scheduledEnd: string | null;
       status: string;
@@ -445,15 +445,15 @@ export const absenceRequestRepository = {
       .input("absenceEndAt", sql.DateTime2, absenceEndAt)
       .query(`
         SELECT
-          i.id AS inventory_id,
-          i.store_id,
-          s.name AS store_name,
+          i.id AS operation_id,
+          i.service_id,
+          s.name AS service_name,
           i.scheduled_start,
           i.scheduled_end,
           i.status
         FROM operation_assignments ie
-        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = @companyId
-        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = @companyId
+        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         WHERE ie.employee_id = @employeeId
           AND ie.company_id = @companyId
           AND i.status NOT IN ('CANCELLED')
@@ -473,9 +473,9 @@ export const absenceRequestRepository = {
     return result.recordset
       .filter((row) => row.scheduled_start != null)
       .map((row) => ({
-        inventoryId: String(row.inventory_id),
-        storeId: String(row.store_id),
-        storeName: String(row.store_name),
+        operationId: String(row.operation_id),
+        serviceId: String(row.service_id),
+        serviceName: String(row.service_name),
         scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
         scheduledEnd: row.scheduled_end
           ? new Date(row.scheduled_end as Date | string).toISOString()

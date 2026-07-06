@@ -7,7 +7,7 @@ import { getPool } from "../database/connection";
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { inventoryEmployeeRepository } from "../repositories/inventory-employee.repository";
+import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
 import { botSessionService } from "./bot-session.service";
@@ -52,14 +52,14 @@ import {
 } from "./bot/bot-response.builder";
 import {
   findCheckoutEligibleInventoryById,
-  findCompatibleInventoryById,
+  findCompatibleOperationById,
   isValidInventorySelection,
   listCheckoutEligibleInventories,
   listCompatibleInventories,
   mapCheckoutInventoriesToSessionOptions,
   mapCompatibleInventoriesToSessionOptions,
   parseInventorySelectionIndex,
-} from "./bot/bot-inventory.selector";
+} from "./bot/bot-operation.selector";
 import { whatsappRouterService } from "./whatsapp-router/whatsapp-router.service";
 import type { WhatsAppRouterHandlers } from "./whatsapp-router/whatsapp-router.types";
 import {
@@ -375,11 +375,11 @@ export const whatsappBotService = {
       });
     }
 
-    const finalizeWithoutLocation = async (inventoryId: string) =>
+    const finalizeWithoutLocation = async (operationId: string) =>
       this.processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
-        inventoryId,
+        operationId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
@@ -394,7 +394,7 @@ export const whatsappBotService = {
       await botSessionService.createWaitingCheckoutLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        inventoryId: inventory.id,
+        operationId: inventory.id,
       });
 
       return respond(companyId, {
@@ -461,7 +461,7 @@ export const whatsappBotService = {
     }
 
     const selected = options[selection - 1];
-    const eligible = await findCheckoutEligibleInventoryById(companyId, input.employeeId, selected.inventoryId);
+    const eligible = await findCheckoutEligibleInventoryById(companyId, input.employeeId, selected.operationId);
 
     if (!eligible) {
       return respond(companyId, {
@@ -476,7 +476,7 @@ export const whatsappBotService = {
       return this.processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
-        inventoryId: eligible.id,
+        operationId: eligible.id,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
@@ -540,12 +540,12 @@ export const whatsappBotService = {
       await botSessionService.createWaitingLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        inventoryId: inventory.id,
+        operationId: inventory.id,
       });
 
       console.info("[whatsapp-bot] session created WAITING_LOCATION", {
         employeeId: input.employeeId,
-        inventoryId: inventory.id,
+        operationId: inventory.id,
       });
 
       return respond(companyId, {
@@ -601,9 +601,9 @@ export const whatsappBotService = {
 
     const selected = options[selection - 1];
     const now = getBotNow();
-    const compatible = await findCompatibleInventoryById(companyId, 
+    const compatible = await findCompatibleOperationById(companyId, 
       input.employeeId,
-      selected.inventoryId,
+      selected.operationId,
       now,
     );
 
@@ -679,7 +679,7 @@ export const whatsappBotService = {
     companyId: string;
     session: BotSession;
     employeeId: string;
-    inventoryId: string;
+    operationId: string;
     latitude: number;
     longitude: number;
     messageSid: string;
@@ -688,9 +688,9 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const receivedAt = getBotNow();
-    const compatible = await findCompatibleInventoryById(companyId, 
+    const compatible = await findCompatibleOperationById(companyId, 
       input.employeeId,
-      input.inventoryId,
+      input.operationId,
       receivedAt,
     );
 
@@ -703,8 +703,8 @@ export const whatsappBotService = {
       });
     }
 
-    const isAssigned = await inventoryEmployeeRepository.exists(companyId, 
-      input.inventoryId,
+    const isAssigned = await operationEmployeeRepository.exists(companyId, 
+      input.operationId,
       input.employeeId,
     );
     if (!isAssigned) {
@@ -717,8 +717,8 @@ export const whatsappBotService = {
     }
 
     const hasActiveRecord = isSimulationDryRun()
-      ? hasVirtualActiveRecord(input.inventoryId, input.employeeId)
-      : await attendanceRepository.hasActiveRecord(companyId, input.inventoryId, input.employeeId, {
+      ? hasVirtualActiveRecord(input.operationId, input.employeeId)
+      : await attendanceRepository.hasActiveRecord(companyId, input.operationId, input.employeeId, {
           simulationSessionId: getSimulationSessionId(),
         });
     if (hasActiveRecord) {
@@ -739,8 +739,8 @@ export const whatsappBotService = {
     const { validation, distanceMeters: geoDistance, effectiveRadiusMeters } = buildCheckInValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
-      storeLatitude: compatible.storeLatitude,
-      storeLongitude: compatible.storeLongitude,
+      serviceLatitude: compatible.serviceLatitude,
+      serviceLongitude: compatible.serviceLongitude,
       storeAllowedRadiusMeters: compatible.allowedRadiusMeters,
       receivedAt,
       scheduledStart: new Date(compatible.scheduledStart),
@@ -766,7 +766,7 @@ export const whatsappBotService = {
       });
 
       const virtualRecord = addVirtualCheckIn({
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         employeeId: input.employeeId,
         receivedAt: receivedAt.toISOString(),
         validationStatus: validation.validationStatus,
@@ -779,7 +779,7 @@ export const whatsappBotService = {
         type: "check-in",
         persisted: false,
         virtualAttendanceId: virtualRecord.id,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         employeeId: input.employeeId,
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
@@ -824,7 +824,7 @@ export const whatsappBotService = {
       }
 
       const hasDuplicate = await attendanceRepository.hasActiveRecordInTransaction(companyId, transaction,
-        input.inventoryId,
+        input.operationId,
         input.employeeId,
         getSimulationSessionId(),
       );
@@ -841,7 +841,7 @@ export const whatsappBotService = {
       }
 
       const created = await attendanceRepository.createInTransaction(companyId, transaction, {
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         employeeId: input.employeeId,
         receivedLatitude: input.latitude,
         receivedLongitude: input.longitude,
@@ -861,7 +861,7 @@ export const whatsappBotService = {
           type: "check-in",
           persisted: true,
           attendanceId: created.id,
-          inventoryId: input.inventoryId,
+          operationId: input.operationId,
           employeeId: input.employeeId,
           validationStatus: validation.validationStatus,
           locationStatus: validation.locationStatus,
@@ -881,7 +881,7 @@ export const whatsappBotService = {
 
       console.info("[whatsapp-bot] attendance created", {
         employeeId: input.employeeId,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         validationStatus: validation.validationStatus,
       });
 
@@ -939,7 +939,7 @@ export const whatsappBotService = {
     companyId: string;
     session: BotSession;
     employeeId: string;
-    inventoryId: string;
+    operationId: string;
     latitude: number;
     longitude: number;
     messageSid: string;
@@ -948,7 +948,7 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutEligibleInventoryById(companyId, input.employeeId, input.inventoryId);
+    const eligible = await findCheckoutEligibleInventoryById(companyId, input.employeeId, input.operationId);
 
     if (!eligible) {
       return respond(companyId, {
@@ -962,16 +962,16 @@ export const whatsappBotService = {
     const simulationSessionId = getSimulationSessionId();
     let attendance = isSimulationDryRun()
       ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.inventoryId, input.employeeId, {
+      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
           simulationSessionId,
         });
 
     if (isSimulationDryRun()) {
-      const virtual = findVirtualCheckInForCheckout(input.inventoryId, input.employeeId);
+      const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
       if (virtual) {
         attendance = {
           id: virtual.id,
-          inventoryId: virtual.inventoryId,
+          operationId: virtual.operationId,
           employeeId: virtual.employeeId,
           receivedLatitude: input.latitude,
           receivedLongitude: input.longitude,
@@ -1029,8 +1029,8 @@ export const whatsappBotService = {
     const { validation, distanceMeters: checkoutDistance, effectiveRadiusMeters } = buildCheckoutValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
-      storeLatitude: eligible.storeLatitude,
-      storeLongitude: eligible.storeLongitude,
+      serviceLatitude: eligible.serviceLatitude,
+      serviceLongitude: eligible.serviceLongitude,
       storeAllowedRadiusMeters: eligible.allowedRadiusMeters,
       checkoutAt,
       scheduledEnd: eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
@@ -1183,7 +1183,7 @@ export const whatsappBotService = {
   async processCheckoutWithoutLocation(input: {
     companyId: string;
     employeeId: string;
-    inventoryId: string;
+    operationId: string;
     phoneFrom: string;
     phoneTo: string;
     messageSid: string;
@@ -1200,7 +1200,7 @@ export const whatsappBotService = {
     const eligible = await findCheckoutEligibleInventoryById(
       companyId,
       input.employeeId,
-      input.inventoryId,
+      input.operationId,
     );
 
     if (!eligible) {
@@ -1221,16 +1221,16 @@ export const whatsappBotService = {
     const simulationSessionId = getSimulationSessionId();
     let attendance = isSimulationDryRun()
       ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.inventoryId, input.employeeId, {
+      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
           simulationSessionId,
         });
 
     if (isSimulationDryRun()) {
-      const virtual = findVirtualCheckInForCheckout(input.inventoryId, input.employeeId);
+      const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
       if (virtual) {
         attendance = {
           id: virtual.id,
-          inventoryId: virtual.inventoryId,
+          operationId: virtual.operationId,
           employeeId: virtual.employeeId,
           receivedLatitude: 0,
           receivedLongitude: 0,

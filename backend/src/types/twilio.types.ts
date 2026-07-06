@@ -22,7 +22,7 @@ export interface BotSession {
   id: string;
   companyId: string;
   employeeId: string;
-  inventoryId: string | null;
+  operationId: string | null;
   phoneNumber: string;
   state: BotSessionState;
   contextJson: string | null;
@@ -32,8 +32,8 @@ export interface BotSession {
 }
 
 export interface InventorySelectionOption {
-  inventoryId: string;
-  storeName: string;
+  operationId: string;
+  serviceName: string;
   scheduledStart: string;
 }
 
@@ -41,7 +41,9 @@ export interface BotSessionContext {
   inventoryOptions?: InventorySelectionOption[];
   flow?: "ABSENCE_REQUEST";
   attendanceConfirmation?: {
-    inventoryId: string;
+    operationId: string;
+    /** @deprecated Read compat for sessions created before Phase 3 rename */
+    inventoryId?: string;
     notificationId?: string;
     scheduleVersion: number;
   };
@@ -87,12 +89,12 @@ export interface TwilioWebhookPayload {
   NumMedia?: string;
 }
 
-export interface CompatibleInventory {
+export interface CompatibleOperation {
   id: string;
-  storeId: string;
-  storeName: string;
-  storeLatitude: number;
-  storeLongitude: number;
+  serviceId: string;
+  serviceName: string;
+  serviceLatitude: number;
+  serviceLongitude: number;
   allowedRadiusMeters: number;
   scheduledStart: string;
   scheduledEnd: string | null;
@@ -101,6 +103,6 @@ export interface CompatibleInventory {
   status: string;
 }
 
-export interface CheckoutEligibleInventory extends CompatibleInventory {
+export interface CheckoutEligibleOperation extends CompatibleOperation {
   attendanceId: string;
 }

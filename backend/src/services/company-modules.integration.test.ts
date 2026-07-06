@@ -452,7 +452,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       { moduleKey: "inventory_operations", isEnabled: false },
     ]);
 
-    const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/stores`, {
+    const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/services`, {
       token,
     });
     assert.equal(response.status, 403);

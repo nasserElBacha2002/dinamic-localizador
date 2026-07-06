@@ -9,15 +9,15 @@ export const lookupController = {
     res.status(200).json({ data });
   },
 
-  async listStores(req: Request, res: Response) {
+  async listServices(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const data = await lookupService.listStores(companyId, req.validatedQuery as never);
+    const data = await lookupService.listServices(companyId, req.validatedQuery as never);
     res.status(200).json({ data });
   },
 
-  async listInventories(req: Request, res: Response) {
+  async listOperations(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const data = await lookupService.listInventories(companyId, req.validatedQuery as never);
+    const data = await lookupService.listOperations(companyId, req.validatedQuery as never);
     res.status(200).json({ data });
   },
 };

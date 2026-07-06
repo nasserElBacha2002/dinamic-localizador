@@ -99,20 +99,20 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
 
     const storesResponse = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/stores`,
+      `/api/companies/${dinamicCompanyId}/services`,
       { token },
     );
     assert.equal(storesResponse.status, 403);
   });
 
-  it("allows OPERATOR access to inventories and attendance APIs", async () => {
+  it("allows OPERATOR access to operations and attendance APIs", async () => {
     const token = operatorToken();
-    const inventoriesResponse = await apiRequest(
+    const operationsResponse = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/inventories`,
+      `/api/companies/${dinamicCompanyId}/operations`,
       { token },
     );
-    assert.equal(inventoriesResponse.status, 200);
+    assert.equal(operationsResponse.status, 200);
 
     const attendanceResponse = await apiRequest(
       baseUrl,
@@ -139,14 +139,14 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
 
     const storesLookup = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/lookups/stores`,
+      `/api/companies/${dinamicCompanyId}/lookups/services`,
       { token },
     );
     assert.equal(storesLookup.status, 200);
 
     const inventoriesLookup = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/lookups/inventories`,
+      `/api/companies/${dinamicCompanyId}/lookups/operations`,
       { token },
     );
     assert.equal(inventoriesLookup.status, 200);

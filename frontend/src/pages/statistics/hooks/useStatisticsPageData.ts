@@ -1,8 +1,8 @@
 import { useMemo, useCallback, useState } from "react";
 import {
   useStatisticsByEmployee,
-  useStatisticsByInventory,
-  useStatisticsByLocation,
+  useStatisticsByOperation,
+  useStatisticsByService,
   useStatisticsStatusDistribution,
   useStatisticsSummary,
   useStatisticsTimeline,
@@ -27,6 +27,7 @@ import {
 } from "../../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart } from "../../../utils/dates";
 import { formatPercent } from "../../../utils/export";
+import { terminology } from "../../../domain/terminology";
 import {
   buildStatusDistributionOption,
   buildTimelineChartOption,
@@ -94,8 +95,8 @@ export function useStatisticsPageData() {
     () => ({
       dateFrom: isoDateFrom,
       dateTo: isoDateTo,
-      inventoryId: table.state.inventoryId || undefined,
-      storeId: table.state.storeId || undefined,
+      operationId: table.state.operationId || undefined,
+      serviceId: table.state.serviceId || undefined,
       employeeId: table.state.employeeId || undefined,
       validationStatus: (table.state.validationStatus as StatisticsValidationStatus) || undefined,
       locationStatus: table.state.locationStatus || undefined,
@@ -105,10 +106,10 @@ export function useStatisticsPageData() {
       isoDateFrom,
       isoDateTo,
       table.state.employeeId,
-      table.state.inventoryId,
+      table.state.operationId,
       table.state.locationStatus,
       table.state.punctualityStatus,
-      table.state.storeId,
+      table.state.serviceId,
       table.state.validationStatus,
     ],
   );
@@ -155,7 +156,7 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.invSortBy, table.state.invSortOrder],
   );
 
-  const locationFilters = useMemo(
+  const serviceFilters = useMemo(
     () => ({
       ...baseFilters,
       page: table.state.locPage,
@@ -166,7 +167,7 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.locPage, table.state.locPageSize, table.state.locSortBy, table.state.locSortOrder],
   );
 
-  const locationExportFilters = useMemo(
+  const serviceExportFilters = useMemo(
     () => ({
       ...baseFilters,
       export: true,
@@ -181,14 +182,14 @@ export function useStatisticsPageData() {
   const distributionQuery = useStatisticsStatusDistribution(baseFilters);
   const employeeQuery = useStatisticsByEmployee(employeeFilters);
   const employeeExportQuery = useStatisticsByEmployee(employeeExportFilters);
-  const inventoryQuery = useStatisticsByInventory(inventoryFilters);
-  const inventoryExportQuery = useStatisticsByInventory(inventoryExportFilters);
-  const locationQuery = useStatisticsByLocation(locationFilters);
-  const locationExportQuery = useStatisticsByLocation(locationExportFilters);
+  const inventoryQuery = useStatisticsByOperation(inventoryFilters);
+  const inventoryExportQuery = useStatisticsByOperation(inventoryExportFilters);
+  const serviceQuery = useStatisticsByService(serviceFilters);
+  const serviceExportQuery = useStatisticsByService(serviceExportFilters);
 
   const chartEmployeeData = employeeExportQuery.data?.data ?? [];
-  const chartInventoryData = inventoryExportQuery.data?.data ?? [];
-  const chartLocationData = locationExportQuery.data?.data ?? [];
+  const chartOperationData = inventoryExportQuery.data?.data ?? [];
+  const chartServiceData = serviceExportQuery.data?.data ?? [];
 
   const topEmployeesByAttendance = [...chartEmployeeData]
     .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
@@ -199,11 +200,11 @@ export function useStatisticsPageData() {
     .filter((row) => row.lateCount > 0)
     .slice(0, 10);
 
-  const topInventoriesByAttendance = [...chartInventoryData]
+  const topInventoriesByAttendance = [...chartOperationData]
     .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
     .slice(0, 10);
 
-  const topLocationsByAttendance = [...chartLocationData]
+  const topServicesByAttendance = [...chartServiceData]
     .sort((a, b) => b.averageAttendancePercentage - a.averageAttendancePercentage)
     .slice(0, 10);
 
@@ -246,7 +247,7 @@ export function useStatisticsPageData() {
         ["Rechazados", summary.rejectedCount],
         ["Aceptados manualmente", summary.manuallyAcceptedCount],
         ["Sin asistencia", summary.noShowCount],
-        ["Inventarios", summary.totalInventories],
+        [terminology.operation.plural, summary.totalOperations],
       ]
     : [];
 
@@ -274,7 +275,7 @@ export function useStatisticsPageData() {
     table.setState({ empSortBy: field, empSortOrder: "desc", empPage: 1 });
   };
 
-  const handleInventorySort = (field: string) => {
+  const handleOperationSort = (field: string) => {
     if (table.state.invSortBy === field) {
       table.setState({
         invSortBy: field,
@@ -333,10 +334,10 @@ export function useStatisticsPageData() {
     defaultDateRange,
     dateRange,
     setDateRange: (value: DateRangeValue) => table.setState(dateRangeToUrlFields(value)),
-    inventoryId: table.state.inventoryId,
-    setInventoryId: (value: string) => table.setField("inventoryId", value),
-    storeId: table.state.storeId,
-    setStoreId: (value: string) => table.setField("storeId", value),
+    operationId: table.state.operationId,
+    setOperationId: (value: string) => table.setField("operationId", value),
+    serviceId: table.state.serviceId,
+    setServiceId: (value: string) => table.setField("serviceId", value),
     employeeId: table.state.employeeId,
     setEmployeeId: (value: string) => table.setField("employeeId", value),
     validationStatus: table.state.validationStatus as StatisticsValidationStatus,
@@ -356,8 +357,8 @@ export function useStatisticsPageData() {
     employeeExportQuery,
     inventoryQuery,
     inventoryExportQuery,
-    locationQuery,
-    locationExportQuery,
+    serviceQuery,
+    serviceExportQuery,
     employeePagination,
     inventoryPagination,
     locationPagination,
@@ -368,7 +369,7 @@ export function useStatisticsPageData() {
     locationSortBy: table.state.locSortBy,
     locationSortDirection: table.state.locSortOrder,
     handleEmployeeSort,
-    handleInventorySort,
+    handleOperationSort,
     handleLocationSort,
     summaryHeaders: SUMMARY_HEADERS,
     summary,
@@ -381,7 +382,7 @@ export function useStatisticsPageData() {
     topEmployeesByAttendance,
     topLateEmployees,
     topInventoriesByAttendance,
-    topLocationsByAttendance,
+    topServicesByAttendance,
   };
 }
 

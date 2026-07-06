@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
+import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import {
   buildGoogleMapsSearchUrl,
   formatAssignmentAddress,
@@ -9,16 +9,16 @@ import {
 } from "./employee-assignment-format";
 
 const baseAssignment = (
-  overrides: Partial<EmployeeAssignedInventory> = {},
-): EmployeeAssignedInventory => ({
-  inventoryId: "inv-1",
-  storeName: "Carrefour Palermo",
-  storeAddress: "Av. Santa Fe 1234, Palermo",
-  storeLatitude: -34.6037,
-  storeLongitude: -58.3816,
+  overrides: Partial<EmployeeAssignedOperation> = {},
+): EmployeeAssignedOperation => ({
+  operationId: "inv-1",
+  serviceName: "Carrefour Palermo",
+  serviceAddress: "Av. Santa Fe 1234, Palermo",
+  serviceLatitude: -34.6037,
+  serviceLongitude: -58.3816,
   scheduledStart: "2026-07-08T23:30:00.000Z",
   scheduledEnd: "2026-07-09T06:00:00.000Z",
-  inventoryStatus: "SCHEDULED",
+  operationStatus: "SCHEDULED",
   confirmationStatus: "PENDING",
   attendanceReceivedAt: null,
   attendanceCheckoutAt: null,
@@ -32,7 +32,7 @@ describe("employee assignment formatting", () => {
   });
 
   it("handles missing address gracefully", () => {
-    assert.equal(formatAssignmentAddress(baseAssignment({ storeAddress: null })), "no disponible");
+    assert.equal(formatAssignmentAddress(baseAssignment({ serviceAddress: null })), "no disponible");
   });
 
   it("builds coordinate-based Google Maps link", () => {
@@ -42,7 +42,7 @@ describe("employee assignment formatting", () => {
 
   it("builds address-based Google Maps link when coordinates are missing", () => {
     const url = buildGoogleMapsSearchUrl(
-      baseAssignment({ storeLatitude: null, storeLongitude: null }),
+      baseAssignment({ serviceLatitude: null, serviceLongitude: null }),
     );
     assert.match(url ?? "", /query=Av.%20Santa%20Fe%201234/);
   });

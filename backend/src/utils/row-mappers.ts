@@ -3,11 +3,11 @@ import type {
   AttendanceRecord,
   AttendanceRecordWithRelations,
   Employee,
-  Inventory,
-  InventoryDetail,
-  InventoryEmployeeAssignment,
-  InventoryWithStore,
-  Store,
+  Operation,
+  OperationDetail,
+  OperationEmployeeAssignment,
+  OperationWithService,
+  Service,
 } from "../types/domain";
 import type { AttendanceReview, User } from "../types/auth";
 
@@ -42,7 +42,7 @@ const parseStoreFormat = (value: unknown): string | null => {
   return storeFormat.length > 0 ? storeFormat : null;
 };
 
-export const mapStoreRow = (row: Record<string, unknown>): Store => ({
+export const mapServiceRow = (row: Record<string, unknown>): Service => ({
   id: String(row.id),
   name: String(row.name),
   address: row.address ? String(row.address) : null,
@@ -58,26 +58,26 @@ export const mapStoreRow = (row: Record<string, unknown>): Store => ({
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
 
-export const mapInventoryRow = (row: Record<string, unknown>): Inventory => ({
+export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   id: String(row.id),
-  storeId: String(row.store_id),
+  serviceId: String(row.service_id),
   scheduledStart: toIsoString(row.scheduled_start as Date | string),
   scheduledEnd: row.scheduled_end ? toIsoString(row.scheduled_end as Date | string) : null,
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
   lateToleranceMinutes: Number(row.late_tolerance_minutes),
-  status: String(row.status) as Inventory["status"],
+  status: String(row.status) as Operation["status"],
   notes: row.notes ? String(row.notes) : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
 
-export const mapInventoryWithStoreRow = (row: Record<string, unknown>): InventoryWithStore => ({
-  ...mapInventoryRow(row),
-  store: {
-    id: String(row.store_id),
-    name: String(row.store_name),
-    address: row.store_address ? String(row.store_address) : null,
-    active: Boolean(row.store_active),
+export const mapOperationWithServiceRow = (row: Record<string, unknown>): OperationWithService => ({
+  ...mapOperationRow(row),
+  service: {
+    id: String(row.service_id),
+    name: String(row.service_name),
+    address: row.service_address ? String(row.service_address) : null,
+    active: Boolean(row.service_active),
   },
   assignedEmployeesCount: row.assigned_employees_count
     ? Number(row.assigned_employees_count)
@@ -87,20 +87,20 @@ export const mapInventoryWithStoreRow = (row: Record<string, unknown>): Inventor
     : undefined,
 });
 
-export const mapInventoryDetail = (
-  inventory: Inventory,
-  store: Store,
+export const mapOperationDetail = (
+  operation: Operation,
+  service: Service,
   assignedEmployees: Employee[],
   attendanceRecordsCount: number,
-): InventoryDetail => ({
-  ...inventory,
-  store,
+): OperationDetail => ({
+  ...operation,
+  service,
   assignedEmployees,
   attendanceRecordsCount,
 });
 
-export const mapAssignmentRow = (row: Record<string, unknown>): InventoryEmployeeAssignment => ({
-  inventoryId: String(row.inventory_id),
+export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmployeeAssignment => ({
+  operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
   assignedAt: toIsoString(row.assigned_at as Date | string),
   employee: row.employee_name
@@ -122,7 +122,7 @@ export const mapAssignmentRow = (row: Record<string, unknown>): InventoryEmploye
 
 export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord => ({
   id: String(row.id),
-  inventoryId: String(row.inventory_id),
+  operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
   receivedLatitude: Number(row.received_latitude),
   receivedLongitude: Number(row.received_longitude),
@@ -176,21 +176,21 @@ export const mapAttendanceWithRelationsRow = (
     name: String(row.employee_name),
     phoneNumber: String(row.employee_phone_number),
   },
-  inventory: {
-    id: String(row.inventory_id),
-    status: String(row.inventory_status) as Inventory["status"],
-    scheduledStart: toIsoString(row.inventory_scheduled_start as Date | string),
-    scheduledEnd: row.inventory_scheduled_end
-      ? toIsoString(row.inventory_scheduled_end as Date | string)
+  operation: {
+    id: String(row.operation_id),
+    status: String(row.operation_status) as Operation["status"],
+    scheduledStart: toIsoString(row.operation_scheduled_start as Date | string),
+    scheduledEnd: row.operation_scheduled_end
+      ? toIsoString(row.operation_scheduled_end as Date | string)
       : null,
   },
-  store: {
-    id: String(row.store_id),
-    name: String(row.store_name),
-    address: row.store_address ? String(row.store_address) : null,
+  service: {
+    id: String(row.service_id),
+    name: String(row.service_name),
+    address: row.service_address ? String(row.service_address) : null,
     allowedRadiusMeters:
-      row.store_allowed_radius_meters !== undefined && row.store_allowed_radius_meters !== null
-        ? Number(row.store_allowed_radius_meters)
+      row.service_allowed_radius_meters !== undefined && row.service_allowed_radius_meters !== null
+        ? Number(row.service_allowed_radius_meters)
         : undefined,
   },
 });
@@ -199,7 +199,7 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
   companyId: String(row.company_id),
   employeeId: String(row.employee_id),
-  inventoryId: row.inventory_id ? String(row.inventory_id) : null,
+  operationId: row.operation_id ? String(row.operation_id) : null,
   phoneNumber: String(row.phone_number),
   state: String(row.state) as import("../types/twilio.types").BotSessionState,
   contextJson: row.context_json ? String(row.context_json) : null,

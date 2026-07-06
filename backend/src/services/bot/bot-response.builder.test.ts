@@ -17,11 +17,11 @@ import {
 describe("bot response builders", () => {
   const inventory = {
     id: "inv-1",
-    storeName: "Tienda Centro",
+    serviceName: "Tienda Centro",
     scheduledStart: "2026-07-05T15:00:00.000Z",
     scheduledEnd: "2026-07-05T21:00:00.000Z",
-    storeLatitude: -34.6,
-    storeLongitude: -58.4,
+    serviceLatitude: -34.6,
+    serviceLongitude: -58.4,
     allowedRadiusMeters: 150,
     earlyToleranceMinutes: 15,
     lateToleranceMinutes: 30,

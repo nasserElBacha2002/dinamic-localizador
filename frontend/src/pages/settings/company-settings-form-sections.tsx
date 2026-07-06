@@ -16,7 +16,7 @@ export function CompanyGeneralSettingsFields({
   return (
     <TextInput
       label="Zona horaria operativa"
-      description="Define la zona horaria usada para operaciones, inventarios y reportes."
+      description="Define la zona horaria usada para operaciones, servicios y reportes."
       value={formValues.operationTimezone}
       onChange={(event) =>
         setFormValues((current) => ({ ...current, operationTimezone: event.currentTarget.value }))
@@ -26,7 +26,7 @@ export function CompanyGeneralSettingsFields({
   );
 }
 
-export function CompanyInventoryOperationSettingsFields({
+export function CompanyOperationOperationSettingsFields({
   formValues,
   setFormValues,
   disabled,
@@ -216,7 +216,7 @@ export function CompanySettingsCorrectionsFields({
 
 // Backward-compatible exports for existing section tests
 export {
-  CompanyInventoryOperationSettingsFields as CompanyInventoryOperationSettingsSection,
+  CompanyOperationOperationSettingsFields as CompanyOperationOperationSettingsSection,
   CompanyAttendanceWhatsAppSettingsFields as CompanyAttendanceWhatsAppSettingsSection,
   CompanySettingsCheckoutFields as CompanySettingsCheckoutSection,
   CompanySettingsCorrectionsFields as CompanySettingsCorrectionsSection,

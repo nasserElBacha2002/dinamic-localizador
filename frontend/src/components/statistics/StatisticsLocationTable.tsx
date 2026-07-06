@@ -9,15 +9,15 @@ import {
   type DataTableColumn,
 } from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
-import type { AttendanceByLocationRow } from "../../types/statistics";
+import type { AttendanceByServiceRow } from "../../types/statistics";
 import { formatPercent } from "../../utils/export";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 type SortableField =
-  | "storeName"
+  | "serviceName"
   | "address"
-  | "totalInventories"
+  | "totalOperations"
   | "averageAttendancePercentage"
   | "totalAssignedEmployees"
   | "totalConfirmedAttendances"
@@ -27,7 +27,7 @@ type SortableField =
   | "totalManualReviews";
 
 interface StatisticsLocationTableProps {
-  rows: AttendanceByLocationRow[];
+  rows: AttendanceByServiceRow[];
   isLoading?: boolean;
   isError?: boolean;
   error?: unknown;
@@ -39,16 +39,16 @@ interface StatisticsLocationTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onSortChange: (field: SortableField) => void;
-  exportRows: AttendanceByLocationRow[];
+  exportRows: AttendanceByServiceRow[];
   dateFrom?: string;
   dateTo?: string;
   exportsDisabled?: boolean;
 }
 
 const EXPORT_HEADERS = [
-  "Tienda",
+  "Servicio",
   "Dirección",
-  "Inventarios",
+  "Operaciones",
   "% asistencia promedio",
   "Empleados asignados",
   "Confirmadas",
@@ -58,11 +58,11 @@ const EXPORT_HEADERS = [
   "Revisiones manuales",
 ];
 
-function toExportRows(rows: AttendanceByLocationRow[]) {
+function toExportRows(rows: AttendanceByServiceRow[]) {
   return rows.map((row) => [
-    row.storeName,
+    row.serviceName,
     row.address ?? "",
-    row.totalInventories,
+    row.totalOperations,
     formatPercent(row.averageAttendancePercentage),
     row.totalAssignedEmployees,
     row.totalConfirmedAttendances,
@@ -93,12 +93,12 @@ export function StatisticsLocationTable({
 }: StatisticsLocationTableProps) {
   const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
 
-  const columns = useMemo<DataTableColumn<AttendanceByLocationRow>[]>(
+  const columns = useMemo<DataTableColumn<AttendanceByServiceRow>[]>(
     () => [
       {
-        key: "storeName",
-        header: terminology.location.singular,
-        getValue: (row) => row.storeName,
+        key: "serviceName",
+        header: terminology.service.singular,
+        getValue: (row) => row.serviceName,
         sortable: true,
       },
       {
@@ -107,9 +107,9 @@ export function StatisticsLocationTable({
         getValue: (row) => row.address ?? "—",
       },
       {
-        key: "totalInventories",
+        key: "totalOperations",
         header: terminology.operation.plural,
-        getValue: (row) => row.totalInventories,
+        getValue: (row) => row.totalOperations,
         align: "right",
       },
       {
@@ -159,7 +159,7 @@ export function StatisticsLocationTable({
   );
 
   if (isLoading) {
-    return <LoadingState message={`Cargando estadísticas por ${terminology.location.singular.toLowerCase()}...`} />;
+    return <LoadingState message={`Cargando estadísticas por ${terminology.service.singular.toLowerCase()}...`} />;
   }
 
   if (isError) {
@@ -170,12 +170,12 @@ export function StatisticsLocationTable({
     <Stack gap="md">
       <Group justify="flex-end">
         <ExportActionButtons
-          baseName="attendance-by-location"
+          baseName="attendance-by-service"
           headers={EXPORT_HEADERS}
           rows={exportData}
           dateFrom={dateFrom}
           dateTo={dateTo}
-          sheetName="Por tienda"
+          sheetName="Por servicio"
           disabled={exportsDisabled}
         />
       </Group>
@@ -183,12 +183,12 @@ export function StatisticsLocationTable({
       <DataTable
         rows={rows}
         columns={columns}
-        getRowKey={(row) => row.storeId}
+        getRowKey={(row) => row.serviceId}
         sortBy={sortBy}
         sortDirection={sortDirection}
         onSortChange={(key) => onSortChange(key as SortableField)}
         emptyTitle="Sin resultados"
-        emptyDescription={`No hay datos de ${terminology.location.plural.toLowerCase()} para los filtros seleccionados.`}
+        emptyDescription={`No hay datos de ${terminology.service.plural.toLowerCase()} para los filtros seleccionados.`}
       />
 
       <PaginationControls

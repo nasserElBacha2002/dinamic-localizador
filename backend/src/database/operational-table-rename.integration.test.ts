@@ -2,9 +2,9 @@ import assert from "node:assert/strict";
 import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "./connection";
-import { inventoryRepository } from "../repositories/inventory.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import { lookupRepository } from "../repositories/lookup.repository";
-import { storeRepository } from "../repositories/store.repository";
+import { serviceRepository } from "../repositories/service.repository";
 import {
   describeDatabaseIntegration,
   requireDinamicCompanyId,
@@ -66,11 +66,11 @@ describeDatabaseIntegration("operational table rename schema (Phase 2.7)", () =>
     assert.ok(await objectId("dbo.attendance_records", "U"));
   });
 
-  it("keeps renamed column names on physical tables", async () => {
-    assert.ok(await columnExists("scheduled_operations", "store_id"));
-    assert.ok(await columnExists("operation_assignments", "inventory_id"));
+  it("keeps renamed column names on physical tables (migration 035)", async () => {
+    assert.ok(await columnExists("scheduled_operations", "service_id"));
+    assert.ok(await columnExists("operation_assignments", "operation_id"));
     assert.ok(await columnExists("operation_assignments", "employee_id"));
-    assert.ok(await columnExists("attendance_records", "inventory_id"));
+    assert.ok(await columnExists("attendance_records", "operation_id"));
     assert.ok(await columnExists("attendance_records", "employee_id"));
   });
 
@@ -84,16 +84,16 @@ describeDatabaseIntegration("operational table rename schema (Phase 2.7)", () =>
   it("repository list methods work against physical tables", async () => {
     const companyId = await requireDinamicCompanyId();
 
-    const stores = await storeRepository.list(companyId, { page: 1, limit: 5 });
+    const stores = await serviceRepository.list(companyId, { page: 1, limit: 5 });
     assert.ok(Array.isArray(stores.items));
 
-    const inventories = await inventoryRepository.list(companyId, { page: 1, limit: 5 });
+    const inventories = await operationRepository.list(companyId, { page: 1, limit: 5 });
     assert.ok(Array.isArray(inventories.items));
 
-    const storeLookups = await lookupRepository.listStores(companyId, { limit: 5 });
+    const storeLookups = await lookupRepository.listServices(companyId, { limit: 5 });
     assert.ok(Array.isArray(storeLookups));
 
-    const inventoryLookups = await lookupRepository.listInventories(companyId, { limit: 5 });
+    const inventoryLookups = await lookupRepository.listOperations(companyId, { limit: 5 });
     assert.ok(Array.isArray(inventoryLookups));
   });
 });

@@ -4,11 +4,11 @@ import { buildAttendanceReminderTemplateVariables } from "./attendance-reminder-
 
 describe("buildAttendanceReminderTemplateVariables", () => {
   const candidate = {
-    inventoryId: "inv-1",
+    operationId: "inv-1",
     employeeId: "emp-1",
     employeeName: "Ana Pérez",
     employeePhoneNumber: "+5491112345678",
-    storeName: "Sucursal Centro",
+    serviceName: "Sucursal Centro",
     scheduledStart: "2026-06-23T14:00:00.000Z",
     scheduledEnd: "2026-06-23T22:00:00.000Z",
   };

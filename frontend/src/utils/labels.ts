@@ -1,6 +1,6 @@
 import type { AssignmentConfirmationStatus } from "../types/assignment-confirmation";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../types/attendance";
-import type { InventoryStatus } from "../types/inventory";
+import type { OperationStatus } from "../types/operation";
 
 export const assignmentConfirmationStatusLabels: Record<AssignmentConfirmationStatus, string> = {
   CONFIRMED: "Confirmado",
@@ -15,7 +15,7 @@ export const assignmentConfirmationStatusTableLabels: Record<AssignmentConfirmat
     UNAVAILABLE: "No disponible",
   };
 
-export const inventoryStatusLabels: Record<InventoryStatus, string> = {
+export const operationStatusLabels: Record<OperationStatus, string> = {
   SCHEDULED: "Programado",
   IN_PROGRESS: "En curso",
   COMPLETED: "Finalizado",

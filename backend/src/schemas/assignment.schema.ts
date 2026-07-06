@@ -5,11 +5,11 @@ export const assignEmployeeSchema = z.object({
 });
 
 export const assignmentParamsSchema = z.object({
-  inventoryId: z.string().uuid("UUID de inventario inválido"),
+  operationId: z.string().uuid("UUID de inventario inválido"),
 });
 
 export const unassignParamsSchema = z.object({
-  inventoryId: z.string().uuid("UUID de inventario inválido"),
+  operationId: z.string().uuid("UUID de inventario inválido"),
   employeeId: z.string().uuid("UUID de empleado inválido"),
 });
 

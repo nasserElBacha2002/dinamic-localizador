@@ -1,6 +1,6 @@
 import type { CheckoutStatus } from "../../constants/checkout-status";
 import type { PunctualityStatus } from "../../types/domain";
-import type { CheckoutEligibleInventory, CompatibleInventory } from "../../types/twilio.types";
+import type { CheckoutEligibleOperation, CompatibleOperation } from "../../types/twilio.types";
 import { formatLocalTime } from "../../utils/attendance-validation";
 import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
 import { checkoutStatusLabel } from "../../utils/checkout-validation";
@@ -80,40 +80,40 @@ export const buildSessionExpiredMessage = (message: string): string => message;
 
 export const buildNoInventoryMessage = (): string => NO_INVENTORY_MESSAGE;
 
-export const buildLocationRequestMessage = (inventory: CompatibleInventory): string => {
+export const buildLocationRequestMessage = (inventory: CompatibleOperation): string => {
   const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-  return `Encontramos tu inventario en ${inventory.storeName}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
+  return `Encontramos tu inventario en ${inventory.serviceName}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
 };
 
-export const buildInventorySelectionPrompt = (inventories: CompatibleInventory[]): string => {
+export const buildInventorySelectionPrompt = (inventories: CompatibleOperation[]): string => {
   const lines = inventories.map((inventory, index) => {
     const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-    return `${index + 1}. ${inventory.storeName} — ${localTime}`;
+    return `${index + 1}. ${inventory.serviceName} — ${localTime}`;
   });
 
   return `Encontramos más de un inventario compatible:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente.`;
 };
 
 export const buildCheckoutLocationRequestMessage = (
-  inventory: CheckoutEligibleInventory,
+  inventory: CheckoutEligibleOperation,
 ): string => {
   const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-  return `Perfecto. Para registrar tu salida del inventario en ${inventory.storeName} (${localTime}), compartime tu ubicación actual.`;
+  return `Perfecto. Para registrar tu salida del inventario en ${inventory.serviceName} (${localTime}), compartime tu ubicación actual.`;
 };
 
 export const buildCheckoutInventorySelectionPrompt = (
-  inventories: CheckoutEligibleInventory[],
+  inventories: CheckoutEligibleOperation[],
 ): string => {
   const lines = inventories.map((inventory, index) => {
     const localTime = formatLocalTime(inventory.scheduledStart, getBotOperationTimezone());
-    return `${index + 1}. ${inventory.storeName} — ${localTime}`;
+    return `${index + 1}. ${inventory.serviceName} — ${localTime}`;
   });
 
   return `Encontramos más de un inventario con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
 };
 
 export const buildArrivalRegisteredMessage = (input: {
-  compatible: CompatibleInventory;
+  compatible: CompatibleOperation;
   distanceMeters: number;
   validationStatus: "VALID" | "PENDING_REVIEW" | "REJECTED";
   punctualityStatus: PunctualityStatus;
@@ -132,11 +132,11 @@ export const buildArrivalRegisteredMessage = (input: {
       input.punctualityStatus === "LATE"
         ? "Tu llegada fue registrada como tarde."
         : "Tu llegada fue registrada correctamente.";
-    return `${headline}\n\nTienda: ${input.compatible.storeName}\nLlegada: ${localTime}\nDistancia: ${roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
+    return `${headline}\n\nTienda: ${input.compatible.serviceName}\nLlegada: ${localTime}\nDistancia: ${roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
   }
 
   return buildReviewRequiredMessage({
-    storeName: input.compatible.storeName,
+    serviceName: input.compatible.serviceName,
     localTime,
     roundedDistance,
     flow: "arrival",
@@ -144,7 +144,7 @@ export const buildArrivalRegisteredMessage = (input: {
 };
 
 export const buildCheckoutRegisteredMessage = (input: {
-  eligible: CheckoutEligibleInventory;
+  eligible: CheckoutEligibleOperation;
   checkInAt: string;
   checkoutAt: Date;
   distanceMeters: number | null;
@@ -172,10 +172,10 @@ export const buildCheckoutRegisteredMessage = (input: {
       input.checkoutStatus === "CHECKOUT_LOCATION_REVIEW"
         ? "estás fuera del radio permitido"
         : "saliste antes del horario previsto";
-    return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
+    return `Tu salida fue registrada, pero quedó pendiente de revisión porque ${reason}.\n\nTienda: ${input.eligible.serviceName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
   }
 
-  let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.storeName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
+  let message = `Tu salida fue registrada correctamente.\n\nTienda: ${input.eligible.serviceName}\nLlegada: ${arrivalTime}\nSalida: ${departureTime}\n${distanceLine}\nEstado: ${statusLabel}`;
 
   if (input.checkoutStatus === "CHECKOUT_LATE_EXTRA_TIME" && input.extraWorkedMinutes > 0) {
     message += `\nTiempo extra: ${input.extraWorkedMinutes} min`;
@@ -191,14 +191,14 @@ export const buildCheckoutRejectedMessage = (): string =>
   `❌ No pudimos registrar tu salida.\n\nMotivo: ubicación fuera del radio permitido.\nContactá a tu supervisor si considerás que existe un error.`;
 
 export const buildReviewRequiredMessage = (input: {
-  storeName: string;
+  serviceName: string;
   localTime: string;
   roundedDistance: number;
   flow: "arrival" | "checkout";
 }): string => {
   if (input.flow === "arrival") {
-    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.storeName}\nLlegada: ${input.localTime}\nDistancia: ${input.roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
+    return `Tu llegada fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.serviceName}\nLlegada: ${input.localTime}\nDistancia: ${input.roundedDistance} m\n\n${CHECKOUT_REMINDER}`;
   }
 
-  return `Tu salida fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.storeName}\nDistancia: ${input.roundedDistance} m`;
+  return `Tu salida fue registrada, pero quedó pendiente de revisión.\n\nTienda: ${input.serviceName}\nDistancia: ${input.roundedDistance} m`;
 };

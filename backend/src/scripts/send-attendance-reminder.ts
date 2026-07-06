@@ -39,10 +39,10 @@ const main = async (): Promise<void> => {
 
     if (mode === "test") {
       const notificationType = readArg("type") as AttendanceNotificationType | undefined;
-      const inventoryId = readArg("inventory-id");
+      const operationId = readArg("inventory-id");
       const employeeId = readArg("employee-id");
 
-      if (!notificationType || !inventoryId || !employeeId) {
+      if (!notificationType || !operationId || !employeeId) {
         printUsage();
         process.exit(1);
       }
@@ -56,7 +56,7 @@ const main = async (): Promise<void> => {
       const companyId = await companyContextService.resolveDefaultCompanyId();
       const outcome = await attendanceReminderService.sendTestReminder(companyId, {
         notificationType,
-        inventoryId,
+        operationId,
         employeeId,
       });
 
@@ -66,7 +66,7 @@ const main = async (): Promise<void> => {
             status: "ok",
             outcome,
             notificationType,
-            inventoryId,
+            operationId,
             employeeId,
           },
           null,

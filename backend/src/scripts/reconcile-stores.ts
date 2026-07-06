@@ -318,6 +318,6 @@ const main = async (): Promise<void> => {
 };
 
 void main().catch((error) => {
-  console.error("Store reconciliation failed:", error instanceof Error ? error.message : error);
+  console.error("Service reconciliation failed:", error instanceof Error ? error.message : error);
   process.exit(1);
 });

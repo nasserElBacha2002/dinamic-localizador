@@ -47,8 +47,8 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
-    const storeId = String(storeResult.recordset[0]?.id ?? "");
-    assert.ok(storeId);
+    const serviceId = String(storeResult.recordset[0]?.id ?? "");
+    assert.ok(serviceId);
 
     const initialStart = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     const rescheduledStart = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
@@ -56,16 +56,16 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     const inventoryInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("storeId", sql.UniqueIdentifier, storeId)
+      .input("serviceId", sql.UniqueIdentifier, serviceId)
       .input("scheduledStart", sql.DateTime2, initialStart)
       .query(`
         INSERT INTO scheduled_operations (
-          company_id, store_id, scheduled_start, early_tolerance_minutes, late_tolerance_minutes, status
+          company_id, service_id, scheduled_start, early_tolerance_minutes, late_tolerance_minutes, status
         )
         OUTPUT INSERTED.id
-        VALUES (@companyId, @storeId, @scheduledStart, 60, 90, 'SCHEDULED')
+        VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const inventoryId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(inventoryInsert.recordset[0].id);
 
     const employeeInsert = await pool
       .request()
@@ -81,46 +81,46 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         INSERT INTO operation_assignments (
-          company_id, inventory_id, employee_id, confirmation_status, confirmed_at, confirmation_schedule_version
+          company_id, operation_id, employee_id, confirmation_status, confirmed_at, confirmation_schedule_version
         )
-        VALUES (@companyId, @inventoryId, @employeeId, 'CONFIRMED', SYSUTCDATETIME(), 1)
+        VALUES (@companyId, @operationId, @employeeId, 'CONFIRMED', SYSUTCDATETIME(), 1)
       `);
 
     await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         INSERT INTO whatsapp_attendance_notifications (
-          company_id, inventory_id, employee_id, notification_type, status, attempt_count,
+          company_id, operation_id, employee_id, notification_type, status, attempt_count,
           schedule_version, reminder_source, twilio_message_sid, sent_at
         )
         VALUES (
-          @companyId, @inventoryId, @employeeId, 'ATTENDANCE_CONFIRMATION_REMINDER', 'SENT', 1,
+          @companyId, @operationId, @employeeId, 'ATTENDANCE_CONFIRMATION_REMINDER', 'SENT', 1,
           1, 'AUTOMATIC', 'SM_V1_HISTORICAL', SYSUTCDATETIME()
         )
       `);
 
-    const { inventoryService } = await import("./inventory.service");
-    await inventoryService.update(companyId, inventoryId, {
+    const { operationService } = await import("./operation.service");
+    await operationService.update(companyId, operationId, {
       scheduledStart: rescheduledStart.toISOString(),
     });
 
     const assignmentAfterReschedule = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT confirmation_status, confirmation_schedule_version
         FROM operation_assignments
         WHERE company_id = @companyId
-          AND inventory_id = @inventoryId
+          AND operation_id = @operationId
           AND employee_id = @employeeId
       `);
     const assignmentRow = assignmentAfterReschedule.recordset[0] as {
@@ -133,13 +133,13 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     const historicalNotification = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT schedule_version, status, twilio_message_sid
         FROM whatsapp_attendance_notifications
         WHERE company_id = @companyId
-          AND inventory_id = @inventoryId
+          AND operation_id = @operationId
           AND employee_id = @employeeId
           AND schedule_version = 1
       `);
@@ -156,6 +156,8 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     env.TWILIO_ACCOUNT_SID = "AC_TEST";
     env.TWILIO_AUTH_TOKEN = "auth";
     env.TWILIO_WHATSAPP_NUMBER = "whatsapp:+10000000000";
+    env.TWILIO_ARRIVAL_REMINDER_CONTENT_SID = "HX_ARRIVAL";
+    env.TWILIO_EXIT_REMINDER_CONTENT_SID = "HX_EXIT";
     env.TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID = "HX_CONFIRMATION";
     env.ATTENDANCE_REMINDER_JOB_ENABLED = true;
 
@@ -170,7 +172,7 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
       id: "session-cycle-v2",
       companyId,
       employeeId,
-      inventoryId,
+      operationId,
       phoneNumber: "+5491100000000",
       state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
       contextJson: null,
@@ -186,13 +188,13 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     const versionTwoNotifications = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT status, schedule_version, twilio_message_sid
         FROM whatsapp_attendance_notifications
         WHERE company_id = @companyId
-          AND inventory_id = @inventoryId
+          AND operation_id = @operationId
           AND employee_id = @employeeId
           AND schedule_version = 2
       `);
@@ -212,13 +214,13 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     const versionTwoCount = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .query(`
         SELECT COUNT(*) AS total
         FROM whatsapp_attendance_notifications
         WHERE company_id = @companyId
-          AND inventory_id = @inventoryId
+          AND operation_id = @operationId
           AND employee_id = @employeeId
           AND schedule_version = 2
       `);

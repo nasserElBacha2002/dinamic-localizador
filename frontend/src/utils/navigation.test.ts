@@ -22,7 +22,7 @@ describe("navigation grouping", () => {
   it("groups nav items into sections and hides empty sections", () => {
     const items = getAdminNavItems({
       modules: allEnabledModules,
-      permissions: ["attendance:read", "inventories:read"],
+      permissions: ["attendance:read", "operations:read"],
       isPlatformAdmin: false,
       modulesLoading: false,
     });
@@ -33,29 +33,29 @@ describe("navigation grouping", () => {
       ["general", "operation"],
     );
     assert.equal(sections[0]?.items[0]?.path, "/");
-    assert.ok(sections[1]?.items.some((item) => item.path === "/inventories"));
+    assert.ok(sections[1]?.items.some((item) => item.path === "/operations"));
     assert.ok(sections[1]?.items.some((item) => item.path === "/attendance"));
   });
 
-  it("shows Importación only for inventories:manage", () => {
+  it("shows Importación only for operations:manage", () => {
     const readOnly = getAdminNavItems({
       modules: allEnabledModules,
-      permissions: ["inventories:read"],
+      permissions: ["operations:read"],
       isPlatformAdmin: false,
       modulesLoading: false,
     });
     assert.equal(
-      readOnly.some((item) => item.path === "/inventories/import"),
+      readOnly.some((item) => item.path === "/operations/import"),
       false,
     );
 
     const manage = getAdminNavItems({
       modules: allEnabledModules,
-      permissions: ["inventories:manage"],
+      permissions: ["operations:manage"],
       isPlatformAdmin: false,
       modulesLoading: false,
     });
-    const importItem = manage.find((item) => item.path === "/inventories/import");
+    const importItem = manage.find((item) => item.path === "/operations/import");
     assert.ok(importItem);
     assert.equal(importItem?.section, "tools");
   });

@@ -141,7 +141,7 @@ export const botSessionService = {
     input: {
     employeeId: string;
     phoneNumber: string;
-    inventoryId: string;
+    operationId: string;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -150,7 +150,7 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: input.inventoryId,
+            operationId: input.operationId,
             phoneNumber: input.phoneNumber,
             state: "WAITING_LOCATION",
             contextJson: null,
@@ -163,7 +163,7 @@ export const botSessionService = {
       console.info("[bot-session] waiting location session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         expiresAt: session.expiresAt,
       });
 
@@ -199,7 +199,7 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: null,
+            operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_INVENTORY_SELECTION",
             contextJson: JSON.stringify({ inventoryOptions: input.options }),
@@ -237,7 +237,7 @@ export const botSessionService = {
   async selectInventoryAndRenewExpiration(
     companyId: string,
     sessionId: string,
-    inventoryId: string,
+    operationId: string,
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
       const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
@@ -261,7 +261,7 @@ export const botSessionService = {
         companyId,
         sessionId,
         {
-          inventoryId,
+          operationId,
           state: "WAITING_LOCATION",
           contextJson: null,
           expiresAt: renewedExpiresAt,
@@ -275,7 +275,7 @@ export const botSessionService = {
 
       console.info("[bot-session] session renewed after inventory selection", {
         sessionId: updated.id,
-        inventoryId,
+        operationId,
         expiresAt: updated.expiresAt,
       });
 
@@ -288,7 +288,7 @@ export const botSessionService = {
     input: {
     employeeId: string;
     phoneNumber: string;
-    inventoryId: string;
+    operationId: string;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -297,7 +297,7 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: input.inventoryId,
+            operationId: input.operationId,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_LOCATION",
             contextJson: null,
@@ -310,7 +310,7 @@ export const botSessionService = {
       console.info("[bot-session] waiting checkout location session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         expiresAt: session.expiresAt,
       });
 
@@ -342,7 +342,7 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: null,
+            operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_INVENTORY_SELECTION",
             contextJson: JSON.stringify({ inventoryOptions: input.options }),
@@ -376,7 +376,7 @@ export const botSessionService = {
   async selectCheckoutInventoryAndRenewExpiration(
     companyId: string,
     sessionId: string,
-    inventoryId: string,
+    operationId: string,
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
       const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
@@ -397,7 +397,7 @@ export const botSessionService = {
         companyId,
         sessionId,
         {
-          inventoryId,
+          operationId,
           state: "WAITING_CHECKOUT_LOCATION",
           contextJson: null,
           expiresAt: renewedExpiresAt,
@@ -428,7 +428,7 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: null,
+            operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CONFIRM_ATTENDANCE_SELECTION",
             contextJson: JSON.stringify({ inventoryOptions: input.options }),
@@ -474,7 +474,7 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: null,
+            operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_UNAVAILABILITY_SELECTION",
             contextJson: JSON.stringify({ inventoryOptions: input.options }),
@@ -510,7 +510,7 @@ export const botSessionService = {
     input: {
       employeeId: string;
       phoneNumber: string;
-      inventoryId: string;
+      operationId: string;
       notificationId: string;
       scheduleVersion: number;
     },
@@ -522,12 +522,12 @@ export const botSessionService = {
           {
             companyId,
             employeeId: input.employeeId,
-            inventoryId: input.inventoryId,
+            operationId: input.operationId,
             phoneNumber: input.phoneNumber,
             state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
             contextJson: JSON.stringify({
               attendanceConfirmation: {
-                inventoryId: input.inventoryId,
+                operationId: input.operationId,
                 notificationId: input.notificationId,
                 scheduleVersion: input.scheduleVersion,
               },
@@ -541,7 +541,7 @@ export const botSessionService = {
       console.info("[bot-session] attendance confirmation response session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
-        inventoryId: input.inventoryId,
+        operationId: input.operationId,
         scheduleVersion: input.scheduleVersion,
       });
 
@@ -550,7 +550,7 @@ export const botSessionService = {
       if (botSessionRepository.isUniqueConstraintError(error)) {
         console.info("[bot-session] skipped confirmation response session because active session exists", {
           employeeId: input.employeeId,
-          inventoryId: input.inventoryId,
+          operationId: input.operationId,
         });
         return null;
       }
@@ -583,7 +583,7 @@ export const botSessionService = {
         {
           companyId,
           employeeId: input.employeeId,
-          inventoryId: null,
+          operationId: null,
           phoneNumber: input.phoneNumber,
           state: input.state,
           contextJson: input.contextJson,

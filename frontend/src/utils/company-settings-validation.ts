@@ -87,7 +87,7 @@ export function validateGeneralSettingsForm(
   return validateTimezone(values);
 }
 
-export function validateInventoryOperationSettingsForm(
+export function validateOperationOperationSettingsForm(
   values: Pick<
     CompanySettingsFormValues,
     | "defaultRadiusMeters"
@@ -192,7 +192,7 @@ export function validateOperationalSettingsForm(
 ): string[] {
   return [
     ...validateGeneralSettingsForm(values),
-    ...validateInventoryOperationSettingsForm({
+    ...validateOperationOperationSettingsForm({
       ...values,
       geofenceReviewMarginMeters: "",
     }),
@@ -301,7 +301,7 @@ export function operationalSettingsEqual(
 export function validateCompanySettingsForm(values: CompanySettingsFormValues): string[] {
   return [
     ...validateGeneralSettingsForm(values),
-    ...validateInventoryOperationSettingsForm(values),
+    ...validateOperationOperationSettingsForm(values),
     ...validateWhatsAppSettingsForm(values),
   ];
 }

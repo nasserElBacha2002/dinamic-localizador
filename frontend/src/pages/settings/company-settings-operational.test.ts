@@ -64,7 +64,7 @@ describe("CompanyOperationalSettingsSection", () => {
 
     assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 9);
     assert.match(activeSection, /description="Zona horaria usada por operaciones y reportes\."/);
-    assert.match(activeSection, /description="Ventana configurable por empresa antes del inicio del inventario\."/);
+    assert.match(activeSection, /description="Ventana configurable por empresa antes del inicio de la operación\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
     assert.match(sectionFile, /getOperationTimezoneOptions/);
@@ -149,7 +149,7 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /CompanyLocationTypesDialog/);
     assert.match(pageFile, /setOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationTypes"\)/);
-    assert.doesNotMatch(pageFile, /CompanyInventoryOperationSettingsDialog/);
+    assert.doesNotMatch(pageFile, /CompanyOperationOperationSettingsDialog/);
   });
 });
 
@@ -189,9 +189,9 @@ describe("Company modules permissions", () => {
 });
 
 describe("Regression: related modules still use company settings APIs", () => {
-  it("StoreForm still loads location types from API hook", () => {
+  it("ServiceForm still loads location types from API hook", () => {
     const storeFormFile = readFileSync(
-      join(process.cwd(), "src/components/stores/StoreForm.tsx"),
+      join(process.cwd(), "src/components/services/ServiceForm.tsx"),
       "utf8",
     );
     assert.match(storeFormFile, /useCompanyLocationTypes/);
@@ -200,7 +200,7 @@ describe("Regression: related modules still use company settings APIs", () => {
 
   it("inventory create defaults still use operation tolerances", () => {
     const defaultsFile = readFileSync(
-      join(process.cwd(), "src/utils/inventory-create-defaults.ts"),
+      join(process.cwd(), "src/utils/operation-create-defaults.ts"),
       "utf8",
     );
     assert.match(defaultsFile, /defaultEarlyArrivalToleranceMinutes/);

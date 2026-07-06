@@ -1,0 +1,81 @@
+import { AppError } from "../errors/app-error";
+import { serviceRepository } from "../repositories/service.repository";
+import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
+import { buildPaginationMeta } from "../utils/pagination";
+import { companyLocationTypesService } from "./company-location-types.service";
+
+export const serviceService = {
+  async create(companyId: string, input: CreateServiceInput) {
+    await companyLocationTypesService.assertActiveStoreFormat(companyId, input.storeFormat);
+
+    return serviceRepository.create(companyId, {
+      ...input,
+      name: input.name.trim(),
+      address: input.address?.trim() ?? null,
+      storeFormat: input.storeFormat?.trim() ?? null,
+    });
+  },
+
+  async list(companyId: string, query: ListServicesQuery) {
+    const result = await serviceRepository.list(companyId, query);
+    return {
+      data: result.items,
+      meta: buildPaginationMeta(query.page, query.limit, result.total),
+    };
+  },
+
+  async getById(companyId: string, id: string) {
+    const store = await serviceRepository.findById(companyId, id);
+    if (!store) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+    }
+    return store;
+  },
+
+  async update(companyId: string, id: string, input: UpdateServiceInput) {
+    await this.getById(companyId, id);
+
+    if (input.storeFormat !== undefined) {
+      await companyLocationTypesService.assertActiveStoreFormat(companyId, input.storeFormat);
+    }
+
+    if (input.active === false) {
+      const hasSchedules = await serviceRepository.hasActiveOrScheduledOperations(companyId, id);
+      if (hasSchedules) {
+        throw new AppError(
+          409,
+          "SERVICE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
+          "No se puede desactivar una tienda con inventarios activos o programados",
+        );
+      }
+    }
+
+    const updated = await serviceRepository.update(companyId, id, {
+      ...input,
+      storeFormat:
+        input.storeFormat !== undefined ? input.storeFormat?.trim() ?? null : undefined,
+    });
+    if (!updated) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+    }
+    return updated;
+  },
+
+  async deactivate(companyId: string, id: string) {
+    await this.getById(companyId, id);
+    const hasSchedules = await serviceRepository.hasActiveOrScheduledOperations(companyId, id);
+    if (hasSchedules) {
+      throw new AppError(
+        409,
+        "SERVICE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
+        "No se puede desactivar una tienda con inventarios activos o programados",
+      );
+    }
+
+    const updated = await serviceRepository.deactivate(companyId, id);
+    if (!updated) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+    }
+    return updated;
+  },
+};

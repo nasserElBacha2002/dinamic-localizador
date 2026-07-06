@@ -1,6 +1,6 @@
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { PunctualityStatus } from "../types/domain";
-import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
+import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import { formatLocalTime, punctualityLabel } from "./attendance-validation";
 
 export const NO_TODAY_ASSIGNMENTS_MESSAGE = "No tenés inventarios asignados para hoy.";
@@ -12,32 +12,32 @@ export const NO_UNAVAILABILITY_ASSIGNMENTS_MESSAGE =
 export const PAST_ASSIGNMENT_MESSAGE =
   "Ese inventario ya comenzó o finalizó. No se puede modificar desde WhatsApp.";
 
-export const formatAssignmentAddress = (assignment: EmployeeAssignedInventory): string => {
-  if (assignment.storeAddress?.trim()) {
-    return assignment.storeAddress.trim();
+export const formatAssignmentAddress = (assignment: EmployeeAssignedOperation): string => {
+  if (assignment.serviceAddress?.trim()) {
+    return assignment.serviceAddress.trim();
   }
   return "no disponible";
 };
 
-export const buildGoogleMapsSearchUrl = (assignment: EmployeeAssignedInventory): string | null => {
+export const buildGoogleMapsSearchUrl = (assignment: EmployeeAssignedOperation): string | null => {
   if (
-    assignment.storeLatitude !== null &&
-    assignment.storeLongitude !== null &&
-    Number.isFinite(assignment.storeLatitude) &&
-    Number.isFinite(assignment.storeLongitude)
+    assignment.serviceLatitude !== null &&
+    assignment.serviceLongitude !== null &&
+    Number.isFinite(assignment.serviceLatitude) &&
+    Number.isFinite(assignment.serviceLongitude)
   ) {
-    return `https://www.google.com/maps/search/?api=1&query=${assignment.storeLatitude},${assignment.storeLongitude}`;
+    return `https://www.google.com/maps/search/?api=1&query=${assignment.serviceLatitude},${assignment.serviceLongitude}`;
   }
 
-  if (assignment.storeAddress?.trim()) {
-    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignment.storeAddress.trim())}`;
+  if (assignment.serviceAddress?.trim()) {
+    return `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(assignment.serviceAddress.trim())}`;
   }
 
   return null;
 };
 
 export const formatAssignmentSchedule = (
-  assignment: EmployeeAssignedInventory,
+  assignment: EmployeeAssignedOperation,
   timeZone: string,
 ): string => {
   const start = formatLocalTime(assignment.scheduledStart, timeZone);
@@ -46,7 +46,7 @@ export const formatAssignmentSchedule = (
 };
 
 export const formatAssignmentDate = (
-  assignment: EmployeeAssignedInventory,
+  assignment: EmployeeAssignedOperation,
   timeZone: string,
 ): string =>
   new Intl.DateTimeFormat("es-AR", {
@@ -57,7 +57,7 @@ export const formatAssignmentDate = (
   }).format(new Date(assignment.scheduledStart));
 
 export const formatAssignmentDateTimeLine = (
-  assignment: EmployeeAssignedInventory,
+  assignment: EmployeeAssignedOperation,
   timeZone: string,
 ): string => `${formatAssignmentDate(assignment, timeZone)} — ${formatLocalTime(assignment.scheduledStart, timeZone)}`;
 
@@ -70,14 +70,14 @@ const confirmationStatusLabel = (status: AssignmentConfirmationStatus): string =
   return labels[status];
 };
 
-const formatAttendanceArrival = (assignment: EmployeeAssignedInventory, timeZone: string): string => {
+const formatAttendanceArrival = (assignment: EmployeeAssignedOperation, timeZone: string): string => {
   if (!assignment.attendanceReceivedAt) {
     return "pendiente";
   }
   return formatLocalTime(assignment.attendanceReceivedAt, timeZone);
 };
 
-const formatAttendanceCheckout = (assignment: EmployeeAssignedInventory, timeZone: string): string => {
+const formatAttendanceCheckout = (assignment: EmployeeAssignedOperation, timeZone: string): string => {
   if (!assignment.attendanceCheckoutAt) {
     return "pendiente";
   }
@@ -91,7 +91,7 @@ const formatAttendanceState = (punctualityStatus: PunctualityStatus | null): str
   return `Llegada ${punctualityLabel(punctualityStatus).toLowerCase()}`;
 };
 
-export const formatAssignmentLocationLines = (assignment: EmployeeAssignedInventory): string[] => {
+export const formatAssignmentLocationLines = (assignment: EmployeeAssignedOperation): string[] => {
   const lines = [`Dirección: ${formatAssignmentAddress(assignment)}`];
   const mapUrl = buildGoogleMapsSearchUrl(assignment);
   if (mapUrl) {
@@ -101,13 +101,13 @@ export const formatAssignmentLocationLines = (assignment: EmployeeAssignedInvent
 };
 
 export const formatTodayAssignmentBlock = (
-  assignment: EmployeeAssignedInventory,
+  assignment: EmployeeAssignedOperation,
   index: number,
   timeZone: string,
   includeAttendance: boolean,
 ): string[] => {
   const lines = [
-    `${index}. ${assignment.storeName}`,
+    `${index}. ${assignment.serviceName}`,
     `   Horario: ${formatAssignmentSchedule(assignment, timeZone)}`,
     ...formatAssignmentLocationLines(assignment).map((line) => `   ${line}`),
     `   Estado: ${confirmationStatusLabel(assignment.confirmationStatus)}`,
@@ -126,19 +126,19 @@ export const formatTodayAssignmentBlock = (
 };
 
 export const formatUpcomingAssignmentBlock = (
-  assignment: EmployeeAssignedInventory,
+  assignment: EmployeeAssignedOperation,
   index: number,
   timeZone: string,
 ): string[] => [
-  `${index}. ${assignment.storeName}`,
+  `${index}. ${assignment.serviceName}`,
   `   Fecha: ${formatAssignmentDate(assignment, timeZone)}`,
   `   Horario: ${formatAssignmentSchedule(assignment, timeZone)}`,
   ...formatAssignmentLocationLines(assignment).map((line) => `   ${line}`),
 ];
 
 export const formatUpcomingSelectionLine = (
-  assignment: EmployeeAssignedInventory,
+  assignment: EmployeeAssignedOperation,
   index: number,
   timeZone: string,
 ): string =>
-  `${index}. ${assignment.storeName} — ${formatAssignmentDateTimeLine(assignment, timeZone)}`;
+  `${index}. ${assignment.serviceName} — ${formatAssignmentDateTimeLine(assignment, timeZone)}`;

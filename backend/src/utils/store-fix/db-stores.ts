@@ -151,7 +151,7 @@ export const printStartupSummary = (input: {
   snapshot: EnvironmentSnapshot;
 }): void => {
   console.log("");
-  console.log("Store fix script — environment");
+  console.log("Service fix script — environment");
   console.log(`- NODE_ENV: ${input.snapshot.nodeEnv}`);
   console.log(`- DB_HOST: ${input.snapshot.dbHost}`);
   console.log(`- DB_PORT: ${input.snapshot.dbPort}`);

@@ -2,31 +2,31 @@ import sql from "mssql";
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import { UPCOMING_ASSIGNMENTS_LIMIT } from "../constants/assignment-confirmation";
 import { getPool } from "../database/connection";
-import type { EmployeeAssignedInventory } from "../types/employee-assignment-query";
+import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import { getOperationDayUtcBounds } from "../utils/absence-date";
-import { mapEmployeeAssignedInventoryRow } from "../utils/employee-assignment-row-mapper";
+import { mapEmployeeAssignedOperationRow } from "../utils/employee-assignment-row-mapper";
 
-const ASSIGNED_INVENTORY_SELECT = `
+const ASSIGNED_OPERATION_SELECT = `
   SELECT
-    i.id AS inventory_id,
+    i.id AS operation_id,
     i.scheduled_start,
     i.scheduled_end,
-    i.status AS inventory_status,
-    s.name AS store_name,
-    s.address AS store_address,
-    s.latitude AS store_latitude,
-    s.longitude AS store_longitude,
+    i.status AS operation_status,
+    s.name AS service_name,
+    s.address AS service_address,
+    s.latitude AS service_latitude,
+    s.longitude AS service_longitude,
     ie.confirmation_status,
     ar.received_at,
     ar.checkout_at,
     ar.punctuality_status
   FROM operation_assignments ie
   INNER JOIN scheduled_operations i
-    ON i.id = ie.inventory_id AND i.company_id = @companyId
+    ON i.id = ie.operation_id AND i.company_id = @companyId
   INNER JOIN operational_locations s
-    ON s.id = i.store_id AND s.company_id = @companyId
+    ON s.id = i.service_id AND s.company_id = @companyId
   LEFT JOIN attendance_records ar
-    ON ar.inventory_id = ie.inventory_id
+    ON ar.operation_id = ie.operation_id
    AND ar.employee_id = ie.employee_id
    AND ar.company_id = @companyId
    AND ar.is_simulation = 0
@@ -41,7 +41,7 @@ export const employeeAssignmentQueryRepository = {
     employeeId: string,
     at: Date,
     operationTimezone: string,
-  ): Promise<EmployeeAssignedInventory[]> {
+  ): Promise<EmployeeAssignedOperation[]> {
     const { dayStartUtc, nextDayStartUtc } = getOperationDayUtcBounds(at, operationTimezone);
     const pool = getPool();
     const result = await pool
@@ -51,14 +51,14 @@ export const employeeAssignmentQueryRepository = {
       .input("dayStartUtc", sql.DateTime2, dayStartUtc)
       .input("nextDayStartUtc", sql.DateTime2, nextDayStartUtc)
       .query(`
-        ${ASSIGNED_INVENTORY_SELECT}
+        ${ASSIGNED_OPERATION_SELECT}
           AND i.scheduled_start >= @dayStartUtc
           AND i.scheduled_start < @nextDayStartUtc
         ORDER BY i.scheduled_start ASC
       `);
 
     return result.recordset.map((row) =>
-      mapEmployeeAssignedInventoryRow(row as Record<string, unknown>),
+      mapEmployeeAssignedOperationRow(row as Record<string, unknown>),
     );
   },
 
@@ -67,7 +67,7 @@ export const employeeAssignmentQueryRepository = {
     employeeId: string,
     at: Date,
     limit = UPCOMING_ASSIGNMENTS_LIMIT,
-  ): Promise<EmployeeAssignedInventory[]> {
+  ): Promise<EmployeeAssignedOperation[]> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -76,7 +76,7 @@ export const employeeAssignmentQueryRepository = {
       .input("at", sql.DateTime2, at)
       .input("limit", sql.Int, limit)
       .query(`
-        ${ASSIGNED_INVENTORY_SELECT}
+        ${ASSIGNED_OPERATION_SELECT}
           AND i.scheduled_start >= @at
           AND i.status NOT IN ('COMPLETED', 'CANCELLED')
         ORDER BY i.scheduled_start ASC
@@ -84,34 +84,34 @@ export const employeeAssignmentQueryRepository = {
       `);
 
     return result.recordset.map((row) =>
-      mapEmployeeAssignedInventoryRow(row as Record<string, unknown>),
+      mapEmployeeAssignedOperationRow(row as Record<string, unknown>),
     );
   },
 
   async findByInventoryForEmployee(
     companyId: string,
     employeeId: string,
-    inventoryId: string,
-  ): Promise<EmployeeAssignedInventory | null> {
+    operationId: string,
+  ): Promise<EmployeeAssignedOperation | null> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .query(`
-        ${ASSIGNED_INVENTORY_SELECT}
-          AND ie.inventory_id = @inventoryId
+        ${ASSIGNED_OPERATION_SELECT}
+          AND ie.operation_id = @operationId
       `);
 
     const row = result.recordset[0] as Record<string, unknown> | undefined;
-    return row ? mapEmployeeAssignedInventoryRow(row) : null;
+    return row ? mapEmployeeAssignedOperationRow(row) : null;
   },
 
   async updateConfirmationStatus(
     companyId: string,
     employeeId: string,
-    inventoryId: string,
+    operationId: string,
     status: AssignmentConfirmationStatus,
   ): Promise<boolean> {
     const pool = getPool();
@@ -119,7 +119,7 @@ export const employeeAssignmentQueryRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("status", sql.NVarChar(20), status)
       .query(`
         UPDATE operation_assignments
@@ -136,7 +136,7 @@ export const employeeAssignmentQueryRepository = {
             END
         WHERE company_id = @companyId
           AND employee_id = @employeeId
-          AND inventory_id = @inventoryId
+          AND operation_id = @operationId
       `);
 
     return (result.rowsAffected[0] ?? 0) > 0;
@@ -144,7 +144,7 @@ export const employeeAssignmentQueryRepository = {
 
   async resetConfirmationsForInventoryScheduleChange(
     companyId: string,
-    inventoryId: string,
+    operationId: string,
     transaction?: sql.Transaction,
   ): Promise<number> {
     const request = transaction
@@ -153,7 +153,7 @@ export const employeeAssignmentQueryRepository = {
 
     const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .query(`
         UPDATE operation_assignments
         SET confirmation_status = 'PENDING',
@@ -161,7 +161,7 @@ export const employeeAssignmentQueryRepository = {
             unavailable_at = NULL,
             confirmation_schedule_version = confirmation_schedule_version + 1
         WHERE company_id = @companyId
-          AND inventory_id = @inventoryId
+          AND operation_id = @operationId
       `);
 
     return result.rowsAffected[0] ?? 0;

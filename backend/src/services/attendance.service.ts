@@ -8,8 +8,8 @@ import { attendanceReviewRepository } from "../repositories/attendance-review.re
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { inventoryEmployeeRepository } from "../repositories/inventory-employee.repository";
-import { inventoryRepository } from "../repositories/inventory.repository";
+import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { ReviewAttendanceInput } from "../schemas/attendance-review.schema";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
@@ -36,9 +36,9 @@ const formatLocalDateTime = (value: string | Date | null | undefined): string =>
 
 export const attendanceService = {
   async create(companyId: string, input: CreateAttendanceInput) {
-    const inventory = await inventoryRepository.findById(companyId, input.inventoryId);
+    const inventory = await operationRepository.findById(companyId, input.operationId);
     if (!inventory) {
-      throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
     }
 
     const employee = await employeeRepository.findById(companyId, input.employeeId);
@@ -46,9 +46,9 @@ export const attendanceService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
-    const isAssigned = await inventoryEmployeeRepository.exists(
+    const isAssigned = await operationEmployeeRepository.exists(
       companyId,
-      input.inventoryId,
+      input.operationId,
       input.employeeId,
     );
     if (!isAssigned) {
@@ -61,7 +61,7 @@ export const attendanceService = {
 
     const hasActiveRecord = await attendanceRepository.hasActiveRecord(
       companyId,
-      input.inventoryId,
+      input.operationId,
       input.employeeId,
     );
     if (hasActiveRecord) {
@@ -169,7 +169,7 @@ export const attendanceService = {
             id: session.id,
             state: session.state,
             expiresAt: session.expiresAt,
-            inventoryId: session.inventoryId,
+            operationId: session.operationId,
           }
         : null,
       coordinates: {
@@ -261,9 +261,9 @@ export const attendanceService = {
       String(row.employee_name ?? ""),
       row.employee_document_number ? String(row.employee_document_number) : "",
       String(row.employee_phone_number ?? ""),
-      String(row.store_name ?? ""),
+      String(row.service_name ?? ""),
       row.store_address ? String(row.store_address) : "",
-      String(row.inventory_id ?? ""),
+      String(row.operation_id ?? ""),
       formatLocalDateTime(row.inventory_scheduled_start as string),
       formatLocalDateTime(row.received_at as string),
       row.distance_meters !== undefined ? Number(row.distance_meters) : "",

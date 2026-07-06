@@ -26,7 +26,7 @@ const buildSession = (companyId: string, employeeId: string) => ({
   id: "session-1",
   companyId,
   employeeId,
-  inventoryId: null,
+  operationId: null,
   phoneNumber: phone,
   state: "WAITING_LOCATION" as const,
   contextJson: null,

@@ -1,15 +1,15 @@
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { PunctualityStatus } from "./domain";
 
-export interface EmployeeAssignedInventory {
-  inventoryId: string;
-  storeName: string;
-  storeAddress: string | null;
-  storeLatitude: number | null;
-  storeLongitude: number | null;
+export interface EmployeeAssignedOperation {
+  operationId: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLatitude: number | null;
+  serviceLongitude: number | null;
   scheduledStart: string;
   scheduledEnd: string;
-  inventoryStatus: string;
+  operationStatus: string;
   confirmationStatus: AssignmentConfirmationStatus;
   attendanceReceivedAt: string | null;
   attendanceCheckoutAt: string | null;

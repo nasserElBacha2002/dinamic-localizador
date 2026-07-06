@@ -133,7 +133,7 @@ export const buildFixPlan = (
         storeNumber,
         dbId: "",
         skippedReason: "current_store_not_found",
-        details: "Store number is not present in the connected database",
+        details: "Service number is not present in the connected database",
       });
       continue;
     }
@@ -394,7 +394,7 @@ export const buildFixPlan = (
         storeNumber: row.storeNumber,
         dbId: "",
         skippedReason: "missing_store_already_exists_in_current_db",
-        details: "Store number already exists in the connected database",
+        details: "Service number already exists in the connected database",
       });
       continue;
     }

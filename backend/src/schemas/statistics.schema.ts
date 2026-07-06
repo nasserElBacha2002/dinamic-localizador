@@ -27,8 +27,8 @@ const exportFlagSchema = z
   .transform((value) => value === "true");
 
 export const statisticsFiltersSchema = dateRangeSchema.extend({
-  inventoryId: z.string().uuid().optional(),
-  storeId: z.string().uuid().optional(),
+  operationId: z.string().uuid().optional(),
+  serviceId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),
   validationStatus: validationStatusFilterSchema.optional(),
   locationStatus: locationStatusFilterSchema.optional(),

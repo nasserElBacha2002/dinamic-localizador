@@ -262,7 +262,7 @@ export function CompanyOperationalSettingsSection({
 
           <SettingsFormField
             label="Enviar recordatorio (horas antes)"
-            description="Ventana configurable por empresa antes del inicio del inventario."
+            description="Ventana configurable por empresa antes del inicio de la operación."
           >
             <NumberInput
               value={

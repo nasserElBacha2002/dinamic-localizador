@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const attendanceTestFormSchema = z.object({
-  inventoryId: z.string().uuid("Seleccioná un inventario"),
+  operationId: z.string().uuid("Seleccioná un inventario"),
   employeeId: z.string().uuid("Seleccioná un empleado"),
   receivedLatitude: z.number().min(-90).max(90),
   receivedLongitude: z.number().min(-180).max(180),

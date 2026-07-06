@@ -25,7 +25,7 @@ import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-r
 
 const companyId = "00000000-0000-4000-8000-000000000001";
 const employeeId = "00000000-0000-4000-8000-000000000002";
-const inventoryId = "00000000-0000-4000-8000-000000000003";
+const operationId = "00000000-0000-4000-8000-000000000003";
 
 const enabledStates = () =>
   new Map([
@@ -43,8 +43,8 @@ const buildSession = (
   id: "session-1",
   companyId,
   employeeId,
-  inventoryId:
-    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? inventoryId : null,
+  operationId:
+    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? operationId : null,
   phoneNumber: "+5491111111111",
   state,
   contextJson:
@@ -788,15 +788,15 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 });
 
-const sampleAssignedInventory = (id = inventoryId) => ({
-  inventoryId: id,
-  storeName: "Carrefour Palermo",
-  storeAddress: "Av. Santa Fe 1234",
-  storeLatitude: -34.6,
-  storeLongitude: -58.4,
+const sampleAssignedOperation = (id = operationId) => ({
+  operationId: id,
+  serviceName: "Carrefour Palermo",
+  serviceAddress: "Av. Santa Fe 1234",
+  serviceLatitude: -34.6,
+  serviceLongitude: -58.4,
   scheduledStart: "2026-07-08T23:30:00.000Z",
   scheduledEnd: "2026-07-09T06:00:00.000Z",
-  inventoryStatus: "SCHEDULED",
+  operationStatus: "SCHEDULED",
   confirmationStatus: "PENDING" as const,
   attendanceReceivedAt: null,
   attendanceCheckoutAt: null,
@@ -866,14 +866,14 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
 
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
       {
-        inventoryId,
-        storeName: "Carrefour Palermo",
-        storeAddress: "Av. Santa Fe 1234",
-        storeLatitude: -34.6,
-        storeLongitude: -58.4,
+        operationId,
+        serviceName: "Carrefour Palermo",
+        serviceAddress: "Av. Santa Fe 1234",
+        serviceLatitude: -34.6,
+        serviceLongitude: -58.4,
         scheduledStart: "2026-07-08T23:30:00.000Z",
         scheduledEnd: "2026-07-09T06:00:00.000Z",
-        inventoryStatus: "SCHEDULED",
+        operationStatus: "SCHEDULED",
         confirmationStatus: "PENDING",
         attendanceReceivedAt: null,
         attendanceCheckoutAt: null,
@@ -902,8 +902,8 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
 
     const options = [
       {
-        inventoryId,
-        storeName: "Carrefour Palermo",
+        operationId,
+        serviceName: "Carrefour Palermo",
         scheduledStart: "2026-07-08T23:30:00.000Z",
       },
     ];
@@ -935,7 +935,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     let confirmedInventoryId: string | null = null;
 
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
-      sampleAssignedInventory(),
+      sampleAssignedOperation(),
     ]);
     mock.method(employeeWorkdayService, "confirmAssignment", async (_companyId, _employeeId, invId) => {
       confirmedInventoryId = invId;
@@ -948,7 +948,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     );
 
     assert.match(response, /CONFIRMED_OK/);
-    assert.equal(confirmedInventoryId, inventoryId);
+    assert.equal(confirmedInventoryId, operationId);
   });
 
   it("returns invalid selection for explicit out-of-range confirm with one assignment", async () => {
@@ -961,7 +961,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     let sessionCalls = 0;
 
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
-      sampleAssignedInventory(),
+      sampleAssignedOperation(),
     ]);
     mock.method(employeeWorkdayService, "confirmAssignment", async () => {
       confirmCalls += 1;
@@ -990,7 +990,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     let unavailableInventoryId: string | null = null;
 
     mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => [
-      sampleAssignedInventory(),
+      sampleAssignedOperation(),
     ]);
     mock.method(
       employeeWorkdayService,
@@ -1007,7 +1007,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     );
 
     assert.match(response, /UNAVAILABLE_OK/);
-    assert.equal(unavailableInventoryId, inventoryId);
+    assert.equal(unavailableInventoryId, operationId);
   });
 
   it("returns invalid selection for explicit out-of-range unavailability with one assignment", async () => {
@@ -1020,7 +1020,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     let sessionCalls = 0;
 
     mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => [
-      sampleAssignedInventory(),
+      sampleAssignedOperation(),
     ]);
     mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => {
       unavailableCalls += 1;
@@ -1051,8 +1051,8 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     let sessionCalls = 0;
 
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
-      sampleAssignedInventory(),
-      sampleAssignedInventory("00000000-0000-4000-8000-000000000099"),
+      sampleAssignedOperation(),
+      sampleAssignedOperation("00000000-0000-4000-8000-000000000099"),
     ]);
     mock.method(employeeWorkdayService, "confirmAssignment", async () => {
       confirmCalls += 1;
@@ -1146,8 +1146,8 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
           contextJson: JSON.stringify({
             inventoryOptions: [
               {
-                inventoryId,
-                storeName: "Carrefour Palermo",
+                operationId,
+                serviceName: "Carrefour Palermo",
                 scheduledStart: "2026-07-08T23:30:00.000Z",
               },
             ],
@@ -1189,8 +1189,8 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
           contextJson: JSON.stringify({
             inventoryOptions: [
               {
-                inventoryId,
-                storeName: "Carrefour Palermo",
+                operationId,
+                serviceName: "Carrefour Palermo",
                 scheduledStart: "2026-07-08T23:30:00.000Z",
               },
             ],
@@ -1470,8 +1470,8 @@ describe("whatsappRouterService numeric menu selection", () => {
     const { handlers, calls } = createMockHandlers();
     const options = [
       {
-        inventoryId,
-        storeName: "Carrefour Palermo",
+        operationId,
+        serviceName: "Carrefour Palermo",
         scheduledStart: "2026-07-08T23:30:00.000Z",
       },
     ];
@@ -1504,8 +1504,8 @@ describe("whatsappRouterService numeric menu selection", () => {
     const { handlers, calls } = createMockHandlers();
     const options = [
       {
-        inventoryId,
-        storeName: "Carrefour Palermo",
+        operationId,
+        serviceName: "Carrefour Palermo",
         scheduledStart: "2026-07-08T23:30:00.000Z",
       },
     ];
@@ -1553,7 +1553,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       message: "CONTEXT_CONFIRMED",
     }));
     mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => ({
-      storeName: "Carrefour Caballito",
+      serviceName: "Carrefour Caballito",
       scheduledStart: "2026-07-15T23:30:00.000Z",
     }));
     mock.method(botSessionService, "completeSession", async () => undefined);
@@ -1564,7 +1564,7 @@ describe("whatsappRouterService numeric menu selection", () => {
         session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
           contextJson: JSON.stringify({
             attendanceConfirmation: {
-              inventoryId,
+              operationId,
               employeeId,
               notificationId: "notif-1",
               scheduleVersion: 1,
@@ -1602,7 +1602,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       message: "CONTEXT_UNAVAILABLE",
     }));
     mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => ({
-      storeName: "Carrefour Caballito",
+      serviceName: "Carrefour Caballito",
       scheduledStart: "2026-07-15T23:30:00.000Z",
     }));
     mock.method(botSessionService, "completeSession", async () => undefined);
@@ -1613,7 +1613,7 @@ describe("whatsappRouterService numeric menu selection", () => {
         session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
           contextJson: JSON.stringify({
             attendanceConfirmation: {
-              inventoryId,
+              operationId,
               employeeId,
               notificationId: "notif-1",
               scheduleVersion: 1,
@@ -1649,7 +1649,7 @@ describe("whatsappRouterService numeric menu selection", () => {
         session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
           contextJson: JSON.stringify({
             attendanceConfirmation: {
-              inventoryId,
+              operationId,
               employeeId,
               notificationId: "notif-1",
               scheduleVersion: 1,
@@ -1675,7 +1675,7 @@ describe("whatsappRouterService numeric menu selection", () => {
         session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
           contextJson: JSON.stringify({
             attendanceConfirmation: {
-              inventoryId,
+              operationId,
               employeeId,
               notificationId: "notif-1",
               scheduleVersion: 1,
@@ -1712,7 +1712,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       message: "CONTEXT_CONFIRMED",
     }));
     mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => ({
-      storeName: "Carrefour Caballito",
+      serviceName: "Carrefour Caballito",
       scheduledStart: "2026-07-15T23:30:00.000Z",
     }));
     mock.method(botSessionService, "completeSession", async () => undefined);
@@ -1723,7 +1723,7 @@ describe("whatsappRouterService numeric menu selection", () => {
         session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
           contextJson: JSON.stringify({
             attendanceConfirmation: {
-              inventoryId,
+              operationId,
               employeeId,
               notificationId: "notif-1",
               scheduleVersion: 1,

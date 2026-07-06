@@ -117,9 +117,9 @@ export interface AbsenceBalanceImpact {
 }
 
 export interface AffectedInventoryWarning {
-  inventoryId: string;
-  storeId: string;
-  storeName: string;
+  operationId: string;
+  serviceId: string;
+  serviceName: string;
   scheduledStart: string;
   scheduledEnd: string | null;
   status: string;

@@ -3,8 +3,8 @@ import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
 import { botSimulationSessionRepository } from "../repositories/bot-simulation-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { inventoryRepository } from "../repositories/inventory.repository";
-import { storeRepository } from "../repositories/store.repository";
+import { operationRepository } from "../repositories/operation.repository";
+import { serviceRepository } from "../repositories/service.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import type {
   CreateBotSimulationSessionInput,
@@ -209,19 +209,19 @@ export const botSimulatorService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado o inactivo.");
     }
 
-    let storeId = input.storeId ?? null;
-    if (input.inventoryId) {
-      const inventory = await inventoryRepository.findById(companyId, input.inventoryId);
+    let serviceId = input.serviceId ?? null;
+    if (input.operationId) {
+      const inventory = await operationRepository.findById(companyId, input.operationId);
       if (!inventory) {
-        throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado.");
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado.");
       }
-      storeId = inventory.storeId;
+      serviceId = inventory.serviceId;
     }
 
-    if (storeId) {
-      const store = await storeRepository.findById(companyId, storeId);
+    if (serviceId) {
+      const store = await serviceRepository.findById(companyId, serviceId);
       if (!store) {
-        throw new AppError(404, "STORE_NOT_FOUND", "Tienda no encontrada.");
+        throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada.");
       }
     }
 
@@ -230,8 +230,8 @@ export const botSimulatorService = {
     const session = await botSimulationSessionRepository.create({
       companyId,
       employeeId: employee.id,
-      inventoryId: input.inventoryId ?? null,
-      storeId,
+      operationId: input.operationId ?? null,
+      serviceId,
       phoneNumber,
       simulatedNow: input.simulatedNow,
       mode: input.mode,
@@ -252,8 +252,8 @@ export const botSimulatorService = {
         companyId: session.companyId,
         employeeId: employee.id,
         employeeName: employee.name,
-        inventoryId: session.inventoryId,
-        storeId: session.storeId,
+        operationId: session.operationId,
+        serviceId: session.serviceId,
         phoneNumber: session.phoneNumber,
         simulationMode: session.mode,
       },
@@ -313,8 +313,8 @@ export const botSimulatorService = {
         sessionId: session.id,
         companyId: session.companyId,
         employeeId: session.employeeId,
-        inventoryId: session.inventoryId,
-        storeId: session.storeId,
+        operationId: session.operationId,
+        serviceId: session.serviceId,
         phoneNumber: session.phoneNumber,
         simulationMode: session.mode,
       },
@@ -414,8 +414,8 @@ export const botSimulatorService = {
     });
 
     await runWithBotRuntimeContext(context, async () => {
-      if (session.storeId) {
-        const store = await storeRepository.findById(companyId, session.storeId);
+      if (session.serviceId) {
+        const store = await serviceRepository.findById(companyId, session.serviceId);
         if (store) {
           const geo = geolocationService.evaluateDistance(
             input.latitude,
@@ -474,7 +474,7 @@ export const botSimulatorService = {
   }> {
     const runtimeSettings = await botRuntimeSettingsService.getBotRuntimeSettings(companyId);
     const session = await botSimulationSessionRepository.findById(companyId, sessionId);
-    if (!session?.storeId) {
+    if (!session?.serviceId) {
       return {
         storeLocation: null,
         outsideRadius: null,
@@ -484,7 +484,7 @@ export const botSimulatorService = {
       };
     }
 
-    const store = await storeRepository.findById(companyId, session.storeId);
+    const store = await serviceRepository.findById(companyId, session.serviceId);
     if (!store) {
       return {
         storeLocation: null,

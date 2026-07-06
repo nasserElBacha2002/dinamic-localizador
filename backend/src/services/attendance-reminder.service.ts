@@ -109,7 +109,7 @@ const sendReminderForCandidate = async (
   if (!contentSid) {
     console.info("[attendance-reminder] skipped notification because template SID is not configured", {
       notificationType,
-      inventoryId: candidate.inventoryId,
+      operationId: candidate.operationId,
       employeeId: candidate.employeeId,
     });
     return "skipped";
@@ -117,7 +117,7 @@ const sendReminderForCandidate = async (
 
   const scheduleVersion = candidate.scheduleVersion ?? 1;
   const claimed = await attendanceNotificationRepository.claimNotificationForAttempt(companyId, {
-    inventoryId: candidate.inventoryId,
+    operationId: candidate.operationId,
     employeeId: candidate.employeeId,
     notificationType,
     scheduleVersion,
@@ -127,7 +127,7 @@ const sendReminderForCandidate = async (
   if (!claimed) {
     console.info("[attendance-reminder] skipped concurrent or non-retryable notification", {
       notificationType,
-      inventoryId: candidate.inventoryId,
+      operationId: candidate.operationId,
       employeeId: candidate.employeeId,
     });
     return "skipped";
@@ -142,7 +142,7 @@ const sendReminderForCandidate = async (
 
     console.info("[attendance-reminder] reminder skipped because employee has no WhatsApp phone", {
       notificationType,
-      inventoryId: candidate.inventoryId,
+      operationId: candidate.operationId,
       employeeId: candidate.employeeId,
       notificationId: claimed.id,
     });
@@ -153,7 +153,7 @@ const sendReminderForCandidate = async (
   if (notificationType === "NO_CHECKIN_AT_START") {
     const stillEligible = await attendanceNotificationRepository.isNoCheckInAtStartEligible(
       companyId,
-      candidate.inventoryId,
+      candidate.operationId,
       candidate.employeeId,
     );
 
@@ -167,7 +167,7 @@ const sendReminderForCandidate = async (
         "[attendance-reminder] skipped no-check-in notification because employee is no longer eligible",
         {
           notificationType,
-          inventoryId: candidate.inventoryId,
+          operationId: candidate.operationId,
           employeeId: candidate.employeeId,
           notificationId: claimed.id,
         },
@@ -180,7 +180,7 @@ const sendReminderForCandidate = async (
   if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
     const stillEligible = await attendanceNotificationRepository.isConfirmationReminderEligible(
       companyId,
-      candidate.inventoryId,
+      candidate.operationId,
       candidate.employeeId,
       scheduleVersion,
     );
@@ -195,7 +195,7 @@ const sendReminderForCandidate = async (
         "[attendance-reminder] skipped confirmation reminder because employee is no longer eligible",
         {
           notificationType,
-          inventoryId: candidate.inventoryId,
+          operationId: candidate.operationId,
           employeeId: candidate.employeeId,
           notificationId: claimed.id,
           scheduleVersion,
@@ -212,7 +212,7 @@ const sendReminderForCandidate = async (
       preparedSession = await botSessionService.createAttendanceConfirmationResponseSession(companyId, {
         employeeId: candidate.employeeId,
         phoneNumber: candidate.employeePhoneNumber,
-        inventoryId: candidate.inventoryId,
+        operationId: candidate.operationId,
         notificationId: claimed.id,
         scheduleVersion,
       });
@@ -226,7 +226,7 @@ const sendReminderForCandidate = async (
 
       console.error("[attendance-reminder] confirmation context preparation failed before send", {
         notificationType,
-        inventoryId: candidate.inventoryId,
+        operationId: candidate.operationId,
         employeeId: candidate.employeeId,
         notificationId: claimed.id,
         scheduleVersion,
@@ -239,7 +239,7 @@ const sendReminderForCandidate = async (
     if (!preparedSession) {
       console.warn("[attendance-reminder] confirmation context unavailable before send", {
         notificationType,
-        inventoryId: candidate.inventoryId,
+        operationId: candidate.operationId,
         employeeId: candidate.employeeId,
         notificationId: claimed.id,
         scheduleVersion,
@@ -280,7 +280,7 @@ const sendReminderForCandidate = async (
           "[attendance-reminder] post-send SENT persistence failed; recovery state recorded",
           {
             notificationType,
-            inventoryId: candidate.inventoryId,
+            operationId: candidate.operationId,
             employeeId: candidate.employeeId,
             notificationId: claimed.id,
             scheduleVersion,
@@ -295,7 +295,7 @@ const sendReminderForCandidate = async (
         console.error("[attendance-reminder] CRITICAL sent persistence unknown after Twilio delivery", {
           notificationType,
           companyId,
-          inventoryId: candidate.inventoryId,
+          operationId: candidate.operationId,
           employeeId: candidate.employeeId,
           notificationId: claimed.id,
           scheduleVersion,
@@ -321,7 +321,7 @@ const sendReminderForCandidate = async (
 
     console.info("[attendance-reminder] reminder sent", {
       notificationType,
-      inventoryId: candidate.inventoryId,
+      operationId: candidate.operationId,
       employeeId: candidate.employeeId,
       notificationId: claimed.id,
       scheduleVersion,
@@ -331,7 +331,7 @@ const sendReminderForCandidate = async (
     if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && !preparedSession) {
       console.error("[attendance-reminder] SENT_CONTEXT_FAILED after successful Twilio send", {
         notificationType,
-        inventoryId: candidate.inventoryId,
+        operationId: candidate.operationId,
         employeeId: candidate.employeeId,
         notificationId: claimed.id,
         scheduleVersion,
@@ -351,7 +351,7 @@ const sendReminderForCandidate = async (
 
         console.error("[attendance-reminder] prepared session cleanup failed", {
           notificationType,
-          inventoryId: candidate.inventoryId,
+          operationId: candidate.operationId,
           employeeId: candidate.employeeId,
           notificationId: claimed.id,
           scheduleVersion,
@@ -371,7 +371,7 @@ const sendReminderForCandidate = async (
 
     console.error("[attendance-reminder] reminder failed", {
       notificationType,
-      inventoryId: candidate.inventoryId,
+      operationId: candidate.operationId,
       employeeId: candidate.employeeId,
       notificationId: claimed.id,
       errorMessage,
@@ -410,7 +410,7 @@ const processCandidates = async (
 
       console.error("[attendance-reminder] unhandled candidate processing error", {
         companyId,
-        inventoryId: candidate.inventoryId,
+        operationId: candidate.operationId,
         employeeId: candidate.employeeId,
         notificationType,
         errorMessage,
@@ -538,7 +538,7 @@ export const attendanceReminderService = {
   async sendTestReminder(
     companyId: string,
     input: {
-      inventoryId: string;
+      operationId: string;
       employeeId: string;
       notificationType: AttendanceNotificationType;
     },
@@ -551,7 +551,7 @@ export const attendanceReminderService = {
     if (input.notificationType === "EXIT_REMINDER_15_MIN") {
       const isEligible = await attendanceNotificationRepository.isExitReminderEligible(
         companyId,
-        input.inventoryId,
+        input.operationId,
         input.employeeId,
       );
 
@@ -567,7 +567,7 @@ export const attendanceReminderService = {
     if (input.notificationType === "NO_CHECKIN_AT_START") {
       const isEligible = await attendanceNotificationRepository.isNoCheckInAtStartEligible(
         companyId,
-        input.inventoryId,
+        input.operationId,
         input.employeeId,
       );
 

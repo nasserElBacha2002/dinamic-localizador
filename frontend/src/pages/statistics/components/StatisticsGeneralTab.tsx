@@ -29,8 +29,8 @@ type StatisticsGeneralTabProps = Pick<
   | "employeeExportQuery"
   | "topEmployeesByAttendance"
   | "topLateEmployees"
-  | "locationExportQuery"
-  | "topLocationsByAttendance"
+  | "serviceExportQuery"
+  | "topServicesByAttendance"
 >;
 
 export function StatisticsGeneralTab({
@@ -53,8 +53,8 @@ export function StatisticsGeneralTab({
   employeeExportQuery,
   topEmployeesByAttendance,
   topLateEmployees,
-  locationExportQuery,
-  topLocationsByAttendance,
+  serviceExportQuery,
+  topServicesByAttendance,
 }: StatisticsGeneralTabProps) {
   return (
     <Stack gap="lg">
@@ -122,18 +122,18 @@ export function StatisticsGeneralTab({
             option={buildHorizontalBarOption(
               "",
               topInventoriesByAttendance.map(
-                (row) => `${row.storeName} (${row.scheduledStart.slice(0, 10)})`,
+                (row) => `${row.serviceName} (${row.scheduledStart.slice(0, 10)})`,
               ),
               topInventoriesByAttendance.map((row) => row.attendancePercentage),
             )}
             exportHeaders={["Inventario", "Tienda", "Fecha", "% asistencia"]}
             exportRows={topInventoriesByAttendance.map((row) => [
-              row.inventoryId,
-              row.storeName,
+              row.operationId,
+              row.serviceName,
               row.scheduledStart.slice(0, 10),
               formatPercent(row.attendancePercentage),
             ])}
-            exportBaseName="attendance-by-inventory-chart"
+            exportBaseName="attendance-by-operation-chart"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
@@ -181,20 +181,20 @@ export function StatisticsGeneralTab({
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
             title="Rendimiento por tienda / ubicación"
-            isLoading={locationExportQuery.isPending}
-            isEmpty={topLocationsByAttendance.length === 0}
+            isLoading={serviceExportQuery.isPending}
+            isEmpty={topServicesByAttendance.length === 0}
             option={buildVerticalBarOption(
               "",
-              topLocationsByAttendance.map((row) => row.storeName),
-              topLocationsByAttendance.map((row) => row.averageAttendancePercentage),
+              topServicesByAttendance.map((row) => row.serviceName),
+              topServicesByAttendance.map((row) => row.averageAttendancePercentage),
               "%",
             )}
             exportHeaders={["Tienda", "% asistencia promedio"]}
-            exportRows={topLocationsByAttendance.map((row) => [
-              row.storeName,
+            exportRows={topServicesByAttendance.map((row) => [
+              row.serviceName,
               formatPercent(row.averageAttendancePercentage),
             ])}
-            exportBaseName="attendance-by-location-chart"
+            exportBaseName="attendance-by-service-chart"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}

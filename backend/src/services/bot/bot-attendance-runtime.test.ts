@@ -29,8 +29,8 @@ describe("bot attendance runtime", () => {
     const result = buildCheckInValidation({
       employeeLatitude: store.latitude,
       employeeLongitude: store.longitude,
-      storeLatitude: store.latitude,
-      storeLongitude: store.longitude,
+      serviceLatitude: store.latitude,
+      serviceLongitude: store.longitude,
       storeAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
@@ -49,8 +49,8 @@ describe("bot attendance runtime", () => {
     const result = buildCheckInValidation({
       employeeLatitude: -34.6005,
       employeeLongitude: -58.4005,
-      storeLatitude: store.latitude,
-      storeLongitude: store.longitude,
+      serviceLatitude: store.latitude,
+      serviceLongitude: store.longitude,
       storeAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
@@ -68,8 +68,8 @@ describe("bot attendance runtime", () => {
     const result = buildCheckInValidation({
       employeeLatitude: store.latitude,
       employeeLongitude: store.longitude,
-      storeLatitude: store.latitude,
-      storeLongitude: store.longitude,
+      serviceLatitude: store.latitude,
+      serviceLongitude: store.longitude,
       storeAllowedRadiusMeters: 150,
       receivedAt: new Date("2026-07-05T15:01:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
@@ -86,8 +86,8 @@ describe("bot attendance runtime", () => {
     const result = buildCheckoutValidation({
       employeeLatitude: store.latitude,
       employeeLongitude: store.longitude,
-      storeLatitude: store.latitude,
-      storeLongitude: store.longitude,
+      serviceLatitude: store.latitude,
+      serviceLongitude: store.longitude,
       storeAllowedRadiusMeters: 150,
       checkoutAt: new Date("2026-07-05T20:58:00.000Z"),
       scheduledEnd: new Date("2026-07-05T21:00:00.000Z"),

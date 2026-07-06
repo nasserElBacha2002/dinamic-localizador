@@ -12,12 +12,12 @@ import {
 } from "../design-system";
 import { useCompanyPermissions } from "../hooks/useCompanyUsers";
 import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
-import { useInventories } from "../hooks/useInventories";
-import type { InventoryWithStore } from "../types/inventory";
+import { useOperations } from "../hooks/useOperations";
+import type { OperationWithService } from "../types/operation";
 import { terminology } from "../domain/terminology";
 import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
-import { inventoryStatusLabels } from "../utils/labels";
+import { operationStatusLabels } from "../utils/labels";
 
 type HealthStatus = "loading" | "ok" | "error";
 
@@ -62,10 +62,10 @@ function HealthMetricCard({ title, status, details }: HealthMetricCardProps) {
   );
 }
 
-function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore }) {
+function UpcomingOperationCard({ inventory }: { inventory: OperationWithService }) {
   const navigate = useNavigate();
-  const destination = `/inventories/${inventory.id}`;
-  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.store.name}`;
+  const destination = `/operations/${inventory.id}`;
+  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.service.name}`;
 
   const handleNavigate = () => {
     navigate(destination);
@@ -95,12 +95,12 @@ function UpcomingInventoryCard({ inventory }: { inventory: InventoryWithStore })
       style={{ cursor: "pointer" }}
     >
       <Stack gap={4}>
-        <Text fw={600}>{inventory.store.name}</Text>
+        <Text fw={600}>{inventory.service.name}</Text>
         <Text size="sm" c="dimmed">
-          {inventory.store.address ?? "—"} · {scheduleText}
+          {inventory.service.address ?? "—"} · {scheduleText}
         </Text>
         <StatusBadge
-          label={inventoryStatusLabels[inventory.status] ?? inventory.status}
+          label={operationStatusLabels[inventory.status] ?? inventory.status}
           tone="info"
           variant="light"
         />
@@ -116,11 +116,11 @@ export function HomePage() {
   const healthReady = databaseHealth.data?.database === "connected";
 
   const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
-    "inventories:read",
-    "inventories:manage",
+    "operations:read",
+    "operations:manage",
   ]);
 
-  const upcomingInventoriesQuery = useInventories(
+  const upcomingInventoriesQuery = useOperations(
     { status: "SCHEDULED", page: 1, limit: 5 },
     healthReady && canReadInventories,
   );
@@ -206,7 +206,7 @@ export function HomePage() {
           {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
             <Stack gap="sm">
               {upcomingInventoriesQuery.data.data.map((inventory) => (
-                <UpcomingInventoryCard key={inventory.id} inventory={inventory} />
+                <UpcomingOperationCard key={inventory.id} inventory={inventory} />
               ))}
             </Stack>
           ) : null}

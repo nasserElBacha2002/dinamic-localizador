@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
-import { InventorySearchAutocomplete } from "../inventories/InventorySearchAutocomplete";
-import { StoreSearchAutocomplete } from "../stores/StoreSearchAutocomplete";
+import { OperationSearchAutocomplete } from "../operations/OperationSearchAutocomplete";
+import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
 import { FilterBar, FilterDateRangeInput, FilterSelect } from "../../design-system";
 import type { DateRangeValue } from "../../types/date-range";
 import type { StatisticsValidationStatus } from "../../types/statistics";
@@ -14,15 +14,15 @@ import {
 interface StatisticsFiltersBarProps {
   dateRange: DateRangeValue;
   defaultDateRange: DateRangeValue;
-  inventoryId: string;
-  storeId: string;
+  operationId: string;
+  serviceId: string;
   employeeId: string;
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
   punctualityStatus: string;
   onDateRangeChange: (value: DateRangeValue) => void;
-  onInventoryChange: (value: string) => void;
-  onStoreChange: (value: string) => void;
+  onOperationChange: (value: string) => void;
+  onServiceChange: (value: string) => void;
   onEmployeeChange: (value: string) => void;
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
@@ -32,15 +32,15 @@ interface StatisticsFiltersBarProps {
 export function StatisticsFiltersBar({
   dateRange,
   defaultDateRange,
-  inventoryId,
-  storeId,
+  operationId,
+  serviceId,
   employeeId,
   validationStatus,
   locationStatus,
   punctualityStatus,
   onDateRangeChange,
-  onInventoryChange,
-  onStoreChange,
+  onOperationChange,
+  onServiceChange,
   onEmployeeChange,
   onValidationStatusChange,
   onLocationStatusChange,
@@ -87,16 +87,16 @@ export function StatisticsFiltersBar({
         />
       </FilterBar.Item>
       <FilterBar.Item>
-        <InventorySearchAutocomplete
-          value={inventoryId || null}
-          onChange={(id) => onInventoryChange(id ?? "")}
+        <OperationSearchAutocomplete
+          value={operationId || null}
+          onChange={(id) => onOperationChange(id ?? "")}
           allowCreate={false}
         />
       </FilterBar.Item>
       <FilterBar.Item>
-        <StoreSearchAutocomplete
-          value={storeId || null}
-          onChange={(id) => onStoreChange(id ?? "")}
+        <ServiceSearchAutocomplete
+          value={serviceId || null}
+          onChange={(id) => onServiceChange(id ?? "")}
           allowCreate={false}
         />
       </FilterBar.Item>

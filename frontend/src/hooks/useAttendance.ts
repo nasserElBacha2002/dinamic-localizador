@@ -38,9 +38,9 @@ export function useCreateAttendanceRecord() {
     mutationFn: createAttendanceRecord,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
-      queryClient.invalidateQueries({ queryKey: ["inventories"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-attendance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["operations"] });
+      queryClient.invalidateQueries({ queryKey: ["operation"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
     },
   });
 }
@@ -54,7 +54,7 @@ export function useReviewAttendanceRecord(attendanceId: string) {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
       queryClient.invalidateQueries({ queryKey: ["attendance-record"] });
       queryClient.invalidateQueries({ queryKey: ["attendance-reviews"] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-attendance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
     },
   });
 }
@@ -74,7 +74,7 @@ export function useReviewAttendance() {
       queryClient.invalidateQueries({ queryKey: ["attendance"] });
       queryClient.invalidateQueries({ queryKey: ["attendance-record", variables.attendanceId] });
       queryClient.invalidateQueries({ queryKey: ["attendance-reviews", variables.attendanceId] });
-      queryClient.invalidateQueries({ queryKey: ["inventory-attendance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
     },
   });
 }

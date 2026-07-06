@@ -315,6 +315,6 @@ const main = async (): Promise<void> => {
 };
 
 void main().catch((error) => {
-  console.error("Store fix script failed:", error instanceof Error ? error.message : error);
+  console.error("Service fix script failed:", error instanceof Error ? error.message : error);
   process.exit(1);
 });

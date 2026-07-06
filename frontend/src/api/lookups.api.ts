@@ -1,8 +1,8 @@
 import type {
   EmployeeLookup,
-  InventoryLookup,
+  OperationLookup,
   LookupQuery,
-  StoreLookup,
+  ServiceLookup,
 } from "../types/lookups";
 import { API_ENDPOINTS } from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
@@ -17,9 +17,9 @@ export async function getEmployeeLookups(query: LookupQuery = {}): Promise<Emplo
   return data.data;
 }
 
-export async function getStoreLookups(query: LookupQuery = {}): Promise<StoreLookup[]> {
-  const { data } = await scopedApiClient.get<{ data: StoreLookup[] }>(
-    API_ENDPOINTS.lookups.locations,
+export async function getServiceLookups(query: LookupQuery = {}): Promise<ServiceLookup[]> {
+  const { data } = await scopedApiClient.get<{ data: ServiceLookup[] }>(
+    API_ENDPOINTS.lookups.services,
     {
       params: query,
     },
@@ -27,8 +27,8 @@ export async function getStoreLookups(query: LookupQuery = {}): Promise<StoreLoo
   return data.data;
 }
 
-export async function getInventoryLookups(query: LookupQuery = {}): Promise<InventoryLookup[]> {
-  const { data } = await scopedApiClient.get<{ data: InventoryLookup[] }>(
+export async function getOperationLookups(query: LookupQuery = {}): Promise<OperationLookup[]> {
+  const { data } = await scopedApiClient.get<{ data: OperationLookup[] }>(
     API_ENDPOINTS.lookups.operations,
     {
       params: query,

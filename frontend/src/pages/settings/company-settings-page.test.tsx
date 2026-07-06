@@ -9,7 +9,7 @@ import type { CompanyLocationType } from "../../types/company-location-type";
 import type { CompanySettings } from "../../types/company-settings";
 import {
   buildAbsenceSummary,
-  buildInventoryOperationSummary,
+  buildOperationOperationSummary,
   buildLocationTypesSummary,
   buildWhatsAppSummary,
 } from "./company-settings-summaries";
@@ -38,7 +38,7 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
 
 describe("Company settings summaries", () => {
   it("builds inventory operation summary from company settings", () => {
-    const summary = buildInventoryOperationSummary(createMockSettings());
+    const summary = buildOperationOperationSummary(createMockSettings());
     const schedule = summary.find((item) => item.label === "Horario");
     assert.equal(schedule?.value, "20:30 → 03:00");
   });

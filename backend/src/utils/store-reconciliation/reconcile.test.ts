@@ -153,7 +153,7 @@ describe("reconcileStores", () => {
     baseDatabaseStore({
       id: "db-999",
       name: "999",
-      address: "Extra Store",
+      address: "Extra Service",
     }),
   ];
 

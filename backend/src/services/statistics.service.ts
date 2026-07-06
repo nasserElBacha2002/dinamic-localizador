@@ -50,9 +50,9 @@ export const statisticsService = {
     };
   },
 
-  async getByInventory(companyId: string, query: StatisticsTableQuery) {
+  async getByOperation(companyId: string, query: StatisticsTableQuery) {
     const { page, limit } = resolvePagination(query);
-    const { data, total } = await statisticsRepository.getByInventory(
+    const { data, total } = await statisticsRepository.getByOperation(
       companyId,
       query,
       page,
@@ -67,9 +67,9 @@ export const statisticsService = {
     };
   },
 
-  async getByLocation(companyId: string, query: StatisticsTableQuery) {
+  async getByService(companyId: string, query: StatisticsTableQuery) {
     const { page, limit } = resolvePagination(query);
-    const { data, total } = await statisticsRepository.getByLocation(
+    const { data, total } = await statisticsRepository.getByService(
       companyId,
       query,
       page,

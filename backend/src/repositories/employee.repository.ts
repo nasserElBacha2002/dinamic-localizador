@@ -231,7 +231,7 @@ export const employeeRepository = {
     return this.update(companyId, id, { active: false });
   },
 
-  async hasActiveOrScheduledInventories(companyId: string, employeeId: string): Promise<boolean> {
+  async hasActiveOrScheduledOperations(companyId: string, employeeId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -240,7 +240,7 @@ export const employeeRepository = {
       .query(`
         SELECT TOP 1 1 AS found
         FROM operation_assignments ie
-        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id
+        INNER JOIN scheduled_operations i ON i.id = ie.operation_id
         WHERE ie.employee_id = @employeeId
           AND ie.company_id = @companyId
           AND i.company_id = @companyId

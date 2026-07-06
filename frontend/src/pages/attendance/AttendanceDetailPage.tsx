@@ -126,10 +126,10 @@ export function AttendanceDetailPage() {
               label: terminology.worker.singular,
               value: `${record.employee.name} (${record.employee.phoneNumber})`,
             },
-            { label: terminology.location.singular, value: record.store.name },
+            { label: terminology.service.singular, value: record.service.name },
             {
               label: `${terminology.operation.singular} programada`,
-              value: formatDateTime(record.inventory.scheduledStart),
+              value: formatDateTime(record.operation.scheduledStart),
             },
             { label: "Llegada", value: formatDateTime(record.receivedAt) },
             { label: "Salida", value: formatDateTime(record.checkoutAt) },
@@ -154,7 +154,7 @@ export function AttendanceDetailPage() {
             },
             {
               label: "Radio permitido",
-              value: record.store.allowedRadiusMeters != null ? `${record.store.allowedRadiusMeters} m` : "—",
+              value: record.service.allowedRadiusMeters != null ? `${record.service.allowedRadiusMeters} m` : "—",
             },
             {
               label: "Estado llegada",

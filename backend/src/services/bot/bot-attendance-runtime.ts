@@ -14,8 +14,8 @@ import { evaluateAttendanceGeofence } from "./bot-geofence.validator";
 export function buildCheckInValidation(input: {
   employeeLatitude: number;
   employeeLongitude: number;
-  storeLatitude: number;
-  storeLongitude: number;
+  serviceLatitude: number;
+  serviceLongitude: number;
   storeAllowedRadiusMeters: number;
   receivedAt: Date;
   scheduledStart: Date;
@@ -35,8 +35,8 @@ export function buildCheckInValidation(input: {
   const geo = evaluateAttendanceGeofence({
     employeeLatitude: input.employeeLatitude,
     employeeLongitude: input.employeeLongitude,
-    storeLatitude: input.storeLatitude,
-    storeLongitude: input.storeLongitude,
+    serviceLatitude: input.serviceLatitude,
+    serviceLongitude: input.serviceLongitude,
     allowedRadiusMeters: effectiveRadiusMeters,
     reviewMarginMeters: input.runtimeSettings.geofenceReviewMarginMeters,
     defaultRadiusMeters: input.runtimeSettings.defaultRadiusMeters,
@@ -60,8 +60,8 @@ export function buildCheckInValidation(input: {
 export function buildCheckoutValidation(input: {
   employeeLatitude: number;
   employeeLongitude: number;
-  storeLatitude: number;
-  storeLongitude: number;
+  serviceLatitude: number;
+  serviceLongitude: number;
   storeAllowedRadiusMeters: number;
   checkoutAt: Date;
   scheduledEnd: Date | null;
@@ -79,8 +79,8 @@ export function buildCheckoutValidation(input: {
   const geo = evaluateAttendanceGeofence({
     employeeLatitude: input.employeeLatitude,
     employeeLongitude: input.employeeLongitude,
-    storeLatitude: input.storeLatitude,
-    storeLongitude: input.storeLongitude,
+    serviceLatitude: input.serviceLatitude,
+    serviceLongitude: input.serviceLongitude,
     allowedRadiusMeters: effectiveRadiusMeters,
     reviewMarginMeters: input.runtimeSettings.geofenceReviewMarginMeters,
     defaultRadiusMeters: input.runtimeSettings.defaultRadiusMeters,

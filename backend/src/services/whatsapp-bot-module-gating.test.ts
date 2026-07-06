@@ -250,7 +250,7 @@ describe("whatsapp bot module gating", () => {
   });
 });
 
-const inventoryId = "00000000-0000-4000-8000-000000000003";
+const operationId = "00000000-0000-4000-8000-000000000003";
 
 const buildBotSession = (
   state:
@@ -266,8 +266,8 @@ const buildBotSession = (
   id: "session-1",
   companyId,
   employeeId,
-  inventoryId:
-    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? inventoryId : null,
+  operationId:
+    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? operationId : null,
   phoneNumber: "+5491111111111",
   state,
   contextJson: state === "WAITING_CHECKOUT_INVENTORY_SELECTION" ? JSON.stringify({ inventoryOptions: [] }) : null,

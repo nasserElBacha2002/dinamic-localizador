@@ -9,19 +9,19 @@ export interface TerminologyEntry {
 }
 
 export const terminology = {
-  location: {
-    singular: "Ubicación",
-    plural: "Ubicaciones",
+  service: {
+    singular: "Servicio",
+    plural: "Servicios",
     legacySingular: "Tienda",
     legacyPlural: "Tiendas",
-    technical: "store",
+    technical: "service",
   },
   operation: {
     singular: "Operación",
     plural: "Operaciones",
     legacySingular: "Inventario",
     legacyPlural: "Inventarios",
-    technical: "inventory",
+    technical: "operation",
   },
   worker: {
     singular: "Colaborador",
@@ -43,9 +43,9 @@ export const terminology = {
 export type TerminologyKey = keyof typeof terminology;
 
 export const legacyTerminology = {
-  location: {
-    singular: terminology.location.legacySingular!,
-    plural: terminology.location.legacyPlural!,
+  service: {
+    singular: terminology.service.legacySingular!,
+    plural: terminology.service.legacyPlural!,
   },
   operation: {
     singular: terminology.operation.legacySingular!,
@@ -72,8 +72,8 @@ export function formatTerminology(
 /** Assigned workers label used in tables and KPIs. */
 export const assignedWorkersLabel = "Colaboradores asignados";
 
-/** Location address label for forms and detail views. */
-export const locationAddressLabel = "Dirección de la ubicación";
+/** Service address label for forms and detail views. */
+export const serviceAddressLabel = "Dirección del servicio";
 
 /** Operation schedule label for detail views. */
 export const operationScheduleLabel = "Horario de la operación";

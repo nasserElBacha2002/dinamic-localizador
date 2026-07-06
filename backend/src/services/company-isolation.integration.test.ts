@@ -10,7 +10,7 @@ import {
 import { companyContextService } from "../services/company-context.service";
 import { companyService } from "../services/company.service";
 import { employeeRepository } from "../repositories/employee.repository";
-import { storeRepository } from "../repositories/store.repository";
+import { serviceRepository } from "../repositories/service.repository";
 import { companyRepository } from "../repositories/company.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -78,12 +78,12 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   it("scopes store lookups by company", async () => {
-    const dinamicStores = await storeRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
+    const dinamicStores = await serviceRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
     if (!dinamicStores.items[0]) {
       return;
     }
 
-    const foreignStore = await storeRepository.findById(otherCompanyId, dinamicStores.items[0].id);
+    const foreignStore = await serviceRepository.findById(otherCompanyId, dinamicStores.items[0].id);
     assert.equal(foreignStore, null);
   });
 

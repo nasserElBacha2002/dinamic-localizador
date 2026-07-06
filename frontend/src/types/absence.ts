@@ -71,10 +71,10 @@ export interface AbsenceRequestListItem extends AbsenceRequest {
   affectedInventoriesCount: number;
 }
 
-export interface AffectedInventoryWarning {
-  inventoryId: string;
-  storeId: string;
-  storeName: string;
+export interface AffectedOperationWarning {
+  operationId: string;
+  serviceId: string;
+  serviceName: string;
   scheduledStart: string;
   scheduledEnd: string | null;
   status: string;
@@ -82,7 +82,7 @@ export interface AffectedInventoryWarning {
 
 export interface AbsenceRequestDetail extends AbsenceRequestListItem {
   events: AbsenceRequestEvent[];
-  affectedInventories: AffectedInventoryWarning[];
+  affectedInventories: AffectedOperationWarning[];
   balanceImpact?: AbsenceBalanceImpact | null;
 }
 

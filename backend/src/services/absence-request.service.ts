@@ -9,7 +9,7 @@ import type { CreateAbsenceRequestInput, ListAbsenceRequestsQuery } from "../sch
 import type { AbsenceRequestDetail } from "../types/absence";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
-import { absenceInventoryImpactService } from "./absence-inventory-impact.service";
+import { absenceOperationImpactService } from "./absence-operation-impact.service";
 import {
   calculateTotalAbsenceDays,
   compareAbsenceDates,
@@ -87,7 +87,7 @@ const countAffectedInventoriesSafely = async (
   },
 ): Promise<number> => {
   try {
-    const affectedInventories = await absenceInventoryImpactService.findAffectedInventories(
+    const affectedInventories = await absenceOperationImpactService.findAffectedInventories(
       companyId,
       input,
     );
@@ -239,7 +239,7 @@ export const absenceRequestService = {
     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
     const [events, affectedInventories, balanceImpact] = await Promise.all([
       absenceRequestRepository.listEvents(companyId, id),
-      absenceInventoryImpactService
+      absenceOperationImpactService
         .findAffectedInventories(companyId, {
           employeeId: request.employeeId,
           startDate: request.startDate,

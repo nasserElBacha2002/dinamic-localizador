@@ -18,14 +18,14 @@ export const buildAttendanceReminderTemplateVariables = (
   if (notificationType === "NO_CHECKIN_AT_START") {
     return {
       "1": candidate.employeeName,
-      "2": candidate.storeName,
+      "2": candidate.serviceName,
     };
   }
 
   if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
     return {
       "1": candidate.employeeName,
-      "2": candidate.storeName,
+      "2": candidate.serviceName,
       "3": formatLocalDate(candidate.scheduledStart, timeZone),
       "4": formatLocalTime(candidate.scheduledStart, timeZone),
     };
@@ -42,7 +42,7 @@ export const buildAttendanceReminderTemplateVariables = (
 
   return {
     "1": candidate.employeeName,
-    "2": candidate.storeName,
+    "2": candidate.serviceName,
     "3": formatLocalTime(scheduleIso, timeZone),
   };
 };

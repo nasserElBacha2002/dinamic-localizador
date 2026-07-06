@@ -24,6 +24,51 @@ export const operationEmployeeRepository = {
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async assignInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationId: string,
+    employeeId: string,
+  ): Promise<OperationEmployeeAssignment> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        INSERT INTO operation_assignments (company_id, operation_id, employee_id)
+        OUTPUT INSERTED.*
+        VALUES (@companyId, @operationId, @employeeId)
+      `);
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findAssignment(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+  ): Promise<OperationEmployeeAssignment | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT TOP 1 *
+        FROM operation_assignments
+        WHERE operation_id = @operationId
+          AND employee_id = @employeeId
+          AND company_id = @companyId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async exists(companyId: string, operationId: string, employeeId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool

@@ -43,12 +43,12 @@ export const operationRepository = {
       .input("notes", sql.NVarChar(1000), input.notes ?? null)
       .query(`
         INSERT INTO scheduled_operations (
-          company_id, service_id, scheduled_start, scheduled_end,
+          company_id, service_id, operation_kind, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @serviceId, @scheduledStart, @scheduledEnd,
+          @companyId, @serviceId, N'ONE_TIME', @scheduledStart, @scheduledEnd,
           @earlyToleranceMinutes, @lateToleranceMinutes, @notes
         )
       `);
@@ -72,12 +72,12 @@ export const operationRepository = {
       .input("notes", sql.NVarChar(1000), input.notes ?? null)
       .query(`
         INSERT INTO scheduled_operations (
-          company_id, service_id, scheduled_start, scheduled_end,
+          company_id, service_id, operation_kind, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @serviceId, @scheduledStart, @scheduledEnd,
+          @companyId, @serviceId, N'ONE_TIME', @scheduledStart, @scheduledEnd,
           @earlyToleranceMinutes, @lateToleranceMinutes, @notes
         )
       `);
@@ -166,13 +166,13 @@ export const operationRepository = {
         request.input(`lateToleranceMinutes${index}`, sql.Int, input.lateToleranceMinutes);
         request.input(`notes${index}`, sql.NVarChar(1000), input.notes ?? null);
         valueRows.push(
-          `(@companyId, @serviceId${index}, @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
+          `(@companyId, @serviceId${index}, N'ONE_TIME', @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
         );
       });
 
       const result = await request.query(`
         INSERT INTO scheduled_operations (
-          company_id, service_id, scheduled_start, scheduled_end,
+          company_id, service_id, operation_kind, scheduled_start, scheduled_end,
           early_tolerance_minutes, late_tolerance_minutes, notes
         )
         OUTPUT INSERTED.*

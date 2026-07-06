@@ -1,5 +1,6 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { EmployeeType } from "../constants/employee-types";
+import type { OperationKind } from "../constants/operation-kind";
 
 export type ServiceFormat = string;
 
@@ -39,6 +40,7 @@ export interface Service {
 export interface Operation {
   id: string;
   serviceId: string;
+  operationKind: OperationKind;
   scheduledStart: string;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
@@ -72,6 +74,7 @@ export interface AttendanceRecord {
   id: string;
   operationId: string;
   employeeId: string;
+  employeeWorkdayId: string | null;
   receivedLatitude: number;
   receivedLongitude: number;
   distanceMeters: number;

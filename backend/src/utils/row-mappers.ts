@@ -61,6 +61,7 @@ export const mapServiceRow = (row: Record<string, unknown>): Service => ({
 export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   id: String(row.id),
   serviceId: String(row.service_id),
+  operationKind: (row.operation_kind ? String(row.operation_kind) : "ONE_TIME") as Operation["operationKind"],
   scheduledStart: toIsoString(row.scheduled_start as Date | string),
   scheduledEnd: row.scheduled_end ? toIsoString(row.scheduled_end as Date | string) : null,
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
@@ -124,6 +125,7 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
   id: String(row.id),
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
+  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
   receivedLatitude: Number(row.received_latitude),
   receivedLongitude: Number(row.received_longitude),
   distanceMeters: Number(row.distance_meters),

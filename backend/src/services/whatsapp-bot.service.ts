@@ -35,6 +35,7 @@ import {
   buildCheckoutValidationWithoutLocation,
 } from "./bot/bot-attendance-runtime";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
+import { workdayMaterializationService } from "./workday-materialization.service";
 import {
   buildArrivalRegisteredMessage,
   buildCheckoutOperationSelectionPrompt,
@@ -717,11 +718,21 @@ export const whatsappBotService = {
       });
     }
 
+    const employeeWorkdayPreview = isSimulationDryRun()
+      ? null
+      : await workdayMaterializationService.ensureEmployeeWorkday(
+          companyId,
+          input.operationId,
+          input.employeeId,
+        );
+
     const hasActiveRecord = isSimulationDryRun()
       ? hasVirtualActiveRecord(input.operationId, input.employeeId)
-      : await attendanceRepository.hasActiveRecord(companyId, input.operationId, input.employeeId, {
-          simulationSessionId: getSimulationSessionId(),
-        });
+      : await attendanceRepository.hasActiveRecordByEmployeeWorkday(
+          companyId,
+          employeeWorkdayPreview!.id,
+          { simulationSessionId: getSimulationSessionId() },
+        );
     if (hasActiveRecord) {
       await botSessionService.completeSession(companyId, input.session.id);
       return respond(companyId, {
@@ -824,9 +835,17 @@ export const whatsappBotService = {
         });
       }
 
-      const hasDuplicate = await attendanceRepository.hasActiveRecordInTransaction(companyId, transaction,
+      const employeeWorkday = await workdayMaterializationService.ensureEmployeeWorkdayInTransaction(
+        companyId,
+        transaction,
         input.operationId,
         input.employeeId,
+      );
+
+      const hasDuplicate = await attendanceRepository.hasActiveRecordByEmployeeWorkdayInTransaction(
+        companyId,
+        transaction,
+        employeeWorkday.id,
         getSimulationSessionId(),
       );
 
@@ -844,6 +863,7 @@ export const whatsappBotService = {
       const created = await attendanceRepository.createInTransaction(companyId, transaction, {
         operationId: input.operationId,
         employeeId: input.employeeId,
+        employeeWorkdayId: employeeWorkday.id,
         receivedLatitude: input.latitude,
         receivedLongitude: input.longitude,
         distanceMeters: Math.round(geoDistance * 100) / 100,
@@ -961,11 +981,20 @@ export const whatsappBotService = {
     }
 
     const simulationSessionId = getSimulationSessionId();
-    let attendance = isSimulationDryRun()
-      ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
-          simulationSessionId,
-        });
+    let attendance: AttendanceRecord | null = isSimulationDryRun() ? null : null;
+
+    if (!isSimulationDryRun()) {
+      const employeeWorkday = await workdayMaterializationService.ensureEmployeeWorkday(
+        companyId,
+        input.operationId,
+        input.employeeId,
+      );
+      attendance = await attendanceRepository.findCheckInForEmployeeWorkday(
+        companyId,
+        employeeWorkday.id,
+        { simulationSessionId },
+      );
+    }
 
     if (isSimulationDryRun()) {
       const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
@@ -974,6 +1003,7 @@ export const whatsappBotService = {
           id: virtual.id,
           operationId: virtual.operationId,
           employeeId: virtual.employeeId,
+          employeeWorkdayId: null,
           receivedLatitude: input.latitude,
           receivedLongitude: input.longitude,
           distanceMeters: virtual.distanceMeters,
@@ -1220,11 +1250,20 @@ export const whatsappBotService = {
     }
 
     const simulationSessionId = getSimulationSessionId();
-    let attendance = isSimulationDryRun()
-      ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
-          simulationSessionId,
-        });
+    let attendance: AttendanceRecord | null = isSimulationDryRun() ? null : null;
+
+    if (!isSimulationDryRun()) {
+      const employeeWorkday = await workdayMaterializationService.ensureEmployeeWorkday(
+        companyId,
+        input.operationId,
+        input.employeeId,
+      );
+      attendance = await attendanceRepository.findCheckInForEmployeeWorkday(
+        companyId,
+        employeeWorkday.id,
+        { simulationSessionId },
+      );
+    }
 
     if (isSimulationDryRun()) {
       const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
@@ -1233,6 +1272,7 @@ export const whatsappBotService = {
           id: virtual.id,
           operationId: virtual.operationId,
           employeeId: virtual.employeeId,
+          employeeWorkdayId: null,
           receivedLatitude: 0,
           receivedLongitude: 0,
           distanceMeters: virtual.distanceMeters,

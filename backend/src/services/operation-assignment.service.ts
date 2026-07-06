@@ -1,8 +1,12 @@
+import sql from "mssql";
+import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { employeeRepository } from "../repositories/employee.repository";
+import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { isOperationAssignable } from "../utils/operation-status";
+import { workdayMaterializationService } from "./workday-materialization.service";
 
 export const operationAssignmentService = {
   async assignEmployee(companyId: string, operationId: string, employeeId: string) {
@@ -26,12 +30,51 @@ export const operationAssignmentService = {
       throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
     }
 
-    const exists = await operationEmployeeRepository.exists(companyId, operationId, employeeId);
-    if (exists) {
+    const existingAssignment = await operationEmployeeRepository.findAssignment(
+      companyId,
+      operationId,
+      employeeId,
+    );
+    if (existingAssignment) {
+      const existingWorkday = await employeeWorkdayRepository.findByOperationAndEmployee(
+        companyId,
+        operationId,
+        employeeId,
+      );
+      if (!existingWorkday) {
+        await workdayMaterializationService.ensureEmployeeWorkday(
+          companyId,
+          operationId,
+          employeeId,
+        );
+        return existingAssignment;
+      }
       throw new AppError(409, "OPERATION_EMPLOYEE_ALREADY_ASSIGNED", "La asignación ya existe");
     }
 
-    return operationEmployeeRepository.assign(companyId, operationId, employeeId);
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const assignment = await operationEmployeeRepository.assignInTransaction(
+        companyId,
+        transaction,
+        operationId,
+        employeeId,
+      );
+      await workdayMaterializationService.ensureEmployeeWorkdayInTransaction(
+        companyId,
+        transaction,
+        operationId,
+        employeeId,
+      );
+      await transaction.commit();
+      return assignment;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   },
 
   async listAssignedEmployees(companyId: string, operationId: string) {

@@ -14,8 +14,18 @@ export const operationAssignmentPath = (operationId: string): string =>
 
 export const operationAssignmentMemberPath = (
   operationId: string,
-  employeeId: string,
-): string => `${operationAssignmentPath(operationId)}/${employeeId}`;
+  assignmentId: string,
+): string => `${operationAssignmentPath(operationId)}/${assignmentId}`;
+
+export const operationAssignmentCancelPath = (
+  operationId: string,
+  assignmentId: string,
+): string => `${operationAssignmentMemberPath(operationId, assignmentId)}/cancel`;
+
+export const operationAssignmentEndPath = (
+  operationId: string,
+  assignmentId: string,
+): string => `${operationAssignmentMemberPath(operationId, assignmentId)}/end`;
 
 export const operationPath = (operationId: string): string =>
   `${API_ENDPOINTS.operations}/${operationId}`;

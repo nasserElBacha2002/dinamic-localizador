@@ -12,6 +12,7 @@ import { buildAbsenceSummary, buildLocationTypesSummary } from "./company-settin
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsSection } from "./components/CompanyOperationalSettingsSection";
+import { CompanyWeeklyScheduleSection } from "./components/CompanyWeeklyScheduleSection";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 
 type DialogKey = "absences" | "locationTypes";
@@ -75,6 +76,8 @@ export function CompanySettingsPage() {
         canUpdate={canUpdate}
         onSaved={handleSaved}
       />
+
+      <CompanyWeeklyScheduleSection canUpdate={canUpdate} onSaved={handleSaved} />
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
         <SettingsSummaryCard

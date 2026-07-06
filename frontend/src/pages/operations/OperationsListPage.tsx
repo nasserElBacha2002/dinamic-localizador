@@ -17,7 +17,7 @@ import { useOperations } from "../../hooks/useOperations";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useListNavigationState } from "../../hooks/useListNavigationState";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
-import type { OperationListSortField, OperationStatus, OperationWithService } from "../../types/operation";
+import type { OperationKind, OperationListSortField, OperationStatus, OperationWithService } from "../../types/operation";
 import type { DateRangeValue } from "../../types/date-range";
 import { terminology } from "../../domain/terminology";
 import { getDefaultOperationDateRange, getDateRangeQueryValue } from "../../utils/date-range";
@@ -25,10 +25,10 @@ import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../utils/date-ran
 import {
   dateInputToIsoEnd,
   dateInputToIsoStart,
-  formatDateTime,
 } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { navigateWithListContext } from "../../utils/list-navigation";
+import { formatOperationScheduleListLabel, operationKindLabels } from "../../utils/operation-schedule-display";
 import { getOperationServiceAddress, getOperationServiceName } from "./operations-list-columns";
 import { operationStatusLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
@@ -89,6 +89,7 @@ export function OperationsListPage() {
     page: table.page,
     limit: table.pageSize,
     status: (table.state.status || undefined) as OperationStatus | undefined,
+    operationKind: (table.state.operationKind || undefined) as OperationKind | undefined,
     serviceId: table.state.serviceId || undefined,
     dateFrom: dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined,
     dateTo: dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined,
@@ -112,6 +113,15 @@ export function OperationsListPage() {
     [],
   );
 
+  const operationKindOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      { value: "ONE_TIME", label: operationKindLabels.ONE_TIME },
+      { value: "RECURRING", label: operationKindLabels.RECURRING },
+    ],
+    [],
+  );
+
   const columns = useMemo<DataTableColumn<OperationWithService>[]>(
     () => [
       {
@@ -128,15 +138,15 @@ export function OperationsListPage() {
       },
       {
         key: "scheduledStart",
-        header: "Inicio",
+        header: "Programación",
         sortable: true,
-        getValue: (row) => formatDateTime(row.scheduledStart),
-      },
-      {
-        key: "scheduledEnd",
-        header: "Fin",
-        sortable: true,
-        getValue: (row) => formatDateTime(row.scheduledEnd),
+        getValue: (row) =>
+          formatOperationScheduleListLabel(
+            row.operationKind ?? "ONE_TIME",
+            row.scheduledStart,
+            row.scheduledEnd,
+            row.scheduleSummary,
+          ),
       },
       {
         key: "status",
@@ -182,6 +192,17 @@ export function OperationsListPage() {
       />
 
       <FilterBar>
+        <FilterBar.Item>
+          <FilterSelect
+            label="Tipo de operación"
+            value={table.state.operationKind}
+            onChange={(nextValue) => {
+              table.setField("operationKind", nextValue);
+            }}
+            data={operationKindOptions}
+          />
+        </FilterBar.Item>
+
         <FilterBar.Item>
           <FilterSelect
             label="Estado"

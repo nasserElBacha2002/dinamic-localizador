@@ -62,7 +62,9 @@ export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   id: String(row.id),
   serviceId: String(row.service_id),
   operationKind: (row.operation_kind ? String(row.operation_kind) : "ONE_TIME") as Operation["operationKind"],
-  scheduledStart: toIsoString(row.scheduled_start as Date | string),
+  scheduledStart: row.scheduled_start
+    ? toIsoString(row.scheduled_start as Date | string)
+    : null,
   scheduledEnd: row.scheduled_end ? toIsoString(row.scheduled_end as Date | string) : null,
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
   lateToleranceMinutes: Number(row.late_tolerance_minutes),
@@ -101,9 +103,21 @@ export const mapOperationDetail = (
 });
 
 export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmployeeAssignment => ({
+  id: String(row.id),
+  companyId: String(row.company_id),
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
+  validFrom: String(row.valid_from).slice(0, 10),
+  validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
   assignedAt: toIsoString(row.assigned_at as Date | string),
+  createdAt: toIsoString((row.created_at ?? row.assigned_at) as Date | string),
+  updatedAt: toIsoString((row.updated_at ?? row.assigned_at) as Date | string),
+  confirmationStatus: row.confirmation_status
+    ? (String(row.confirmation_status) as OperationEmployeeAssignment["confirmationStatus"])
+    : undefined,
+  confirmedAt: row.confirmed_at ? toIsoString(row.confirmed_at as Date | string) : null,
+  unavailableAt: row.unavailable_at ? toIsoString(row.unavailable_at as Date | string) : null,
+  cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at as Date | string) : null,
   employee: row.employee_name
     ? {
         id: String(row.employee_id),

@@ -5,6 +5,7 @@ import { companyRepository } from "../repositories/company.repository";
 import { companyModuleService } from "./company-module.service";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { companyLocationTypesService } from "./company-location-types.service";
+import { companyWorkScheduleService } from "./company-work-schedule.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
@@ -156,6 +157,24 @@ export const companyService = {
   ) {
     await this.getCompanyOrThrow(companyId);
     return companyLocationTypesService.disableLocationType(companyId, role, locationTypeId);
+  },
+
+  async getWorkSchedule(companyId: string) {
+    await this.getCompanyOrThrow(companyId);
+    return companyWorkScheduleService.getByCompanyId(companyId);
+  },
+
+  async updateWorkSchedule(
+    companyId: string,
+    role: CompanyMembershipSummary["role"],
+    input: { timezone: string; days: import("../types/schedule").WeeklyScheduleDay[] },
+  ) {
+    if (!roleHasPermission(role, "company:settings:update")) {
+      throw new AppError(403, "FORBIDDEN", "No tiene permisos para actualizar la configuración.");
+    }
+
+    await this.getCompanyOrThrow(companyId);
+    return companyWorkScheduleService.update(companyId, input);
   },
 
   async getCompanyOrThrow(companyId: string): Promise<Company> {

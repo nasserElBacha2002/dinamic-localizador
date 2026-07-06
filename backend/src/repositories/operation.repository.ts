@@ -11,10 +11,14 @@ import {
   mapEmployeeRow,
   mapServiceRow,
 } from "../utils/row-mappers";
+import { operationWorkdayRepository } from "./operation-workday.repository";
+import { companySettingsRepository } from "./company-settings.repository";
+import { getDateIsoInTimezone } from "../utils/absence-date";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import { resolveSqlSort } from "../utils/sql-sort";
 import type {
-  CreateOperationInput,
+  CreateOneTimeOperationInput,
   ListOperationsQuery,
   UpdateOperationInput,
 } from "../schemas/operation.schema";
@@ -30,7 +34,7 @@ const OPERATION_LIST_SORT_FIELDS: Record<string, string> = {
 };
 
 export const operationRepository = {
-  async create(companyId: string, input: CreateOperationInput): Promise<Operation> {
+  async create(companyId: string, input: CreateOneTimeOperationInput): Promise<Operation> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -56,10 +60,42 @@ export const operationRepository = {
     return mapOperationRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async createRecurring(
+    companyId: string,
+    input: {
+      serviceId: string;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      notes: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<Operation> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("serviceId", sql.UniqueIdentifier, input.serviceId)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("notes", sql.NVarChar(1000), input.notes ?? null)
+      .query(`
+        INSERT INTO scheduled_operations (
+          company_id, service_id, operation_kind, scheduled_start, scheduled_end,
+          early_tolerance_minutes, late_tolerance_minutes, notes
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @companyId, @serviceId, N'RECURRING', NULL, NULL,
+          @earlyToleranceMinutes, @lateToleranceMinutes, @notes
+        )
+      `);
+
+    return mapOperationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async createInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    input: CreateOperationInput,
+    input: CreateOneTimeOperationInput,
   ): Promise<Operation> {
     const request = new sql.Request(transaction);
     const result = await request
@@ -140,7 +176,7 @@ export const operationRepository = {
   async createManyInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    inputs: CreateOperationInput[],
+    inputs: CreateOneTimeOperationInput[],
   ): Promise<Operation[]> {
     if (inputs.length === 0) {
       return [];
@@ -220,17 +256,35 @@ export const operationRepository = {
       return null;
     }
 
+    const operationWorkdays = await operationWorkdayRepository.listByOperationId(companyId, id);
+    let workDate = operationWorkdays[0]?.workDate ?? null;
+
+    if (!workDate && operation.operationKind === "RECURRING") {
+      const settings = await companySettingsRepository.findByCompanyId(companyId);
+      const timezone = resolveOperationTimezone(settings?.operationTimezone);
+      workDate = getDateIsoInTimezone(new Date(), timezone);
+    }
+
     const employeesResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, id)
+      .input("workDate", sql.Date, workDate ?? null)
       .query(`
-      SELECT e.*
+      SELECT DISTINCT e.*
       FROM operation_assignments ie
       INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
       WHERE ie.operation_id = @operationId
         AND ie.company_id = @companyId
         AND e.company_id = @companyId
+        AND (
+          @workDate IS NULL
+          OR (
+            ie.cancelled_at IS NULL
+            AND @workDate >= ie.valid_from
+            AND (ie.valid_until IS NULL OR @workDate <= ie.valid_until)
+          )
+        )
       ORDER BY e.name ASC
     `);
 
@@ -286,10 +340,17 @@ export const operationRepository = {
       });
     }
 
+    if (query.operationKind) {
+      filters.push({
+        clause: "i.operation_kind = @operationKind",
+        apply: (request) => request.input("operationKind", sql.NVarChar(20), query.operationKind),
+      });
+    }
+
     if (query.dateFrom) {
       const dateFrom = query.dateFrom;
       filters.push({
-        clause: "i.scheduled_start >= @dateFrom",
+        clause: "(i.operation_kind = N'ONE_TIME' AND i.scheduled_start >= @dateFrom)",
         apply: (request) => request.input("dateFrom", sql.DateTime2, new Date(dateFrom)),
       });
     }
@@ -297,7 +358,7 @@ export const operationRepository = {
     if (query.dateTo) {
       const dateTo = query.dateTo;
       filters.push({
-        clause: "i.scheduled_start <= @dateTo",
+        clause: "(i.operation_kind = N'ONE_TIME' AND i.scheduled_start <= @dateTo)",
         apply: (request) => request.input("dateTo", sql.DateTime2, new Date(dateTo)),
       });
     }
@@ -322,7 +383,7 @@ export const operationRepository = {
     const orderBy = resolveSqlSort(
       query.sortBy,
       OPERATION_LIST_SORT_FIELDS,
-      "i.scheduled_start",
+      "COALESCE(i.scheduled_start, CAST(os.valid_from AS DATETIME2))",
       query.sortDirection ?? "asc",
     );
 
@@ -331,9 +392,14 @@ export const operationRepository = {
         i.*,
         s.name AS service_name,
         s.address AS service_address,
-        s.active AS service_active
+        s.active AS service_active,
+        os.schedule_source,
+        os.valid_from AS schedule_valid_from,
+        os.valid_until AS schedule_valid_until,
+        os.version AS schedule_version
       FROM scheduled_operations i
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
+      LEFT JOIN operation_schedules os ON os.operation_id = i.id AND os.company_id = i.company_id
       ${whereClause}
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -449,8 +515,16 @@ export const operationRepository = {
         FROM scheduled_operations i
         INNER JOIN operation_assignments ie
           ON ie.operation_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
+         AND ie.cancelled_at IS NULL
+        INNER JOIN operation_workdays ow
+          ON ow.operation_id = i.id AND ow.company_id = i.company_id
+         AND @at >= DATEADD(MINUTE, -i.early_tolerance_minutes, ow.expected_start_at)
+         AND @at <= DATEADD(MINUTE, i.late_tolerance_minutes, ow.expected_start_at)
+         AND ow.work_date >= ie.valid_from
+         AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         WHERE i.company_id = @companyId
+          AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('COMPLETED', 'CANCELLED')
           AND s.active = 1
           AND @at >= DATEADD(MINUTE, -i.early_tolerance_minutes, i.scheduled_start)

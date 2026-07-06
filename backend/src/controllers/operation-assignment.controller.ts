@@ -9,26 +9,41 @@ export const operationAssignmentController = {
       companyId,
       String(req.params.operationId),
       req.body.employeeId,
+      {
+        validFrom: req.body.validFrom,
+        validUntil: req.body.validUntil,
+      },
     );
     res.status(201).json({ data: assignment });
   },
 
-  async listAssignedEmployees(req: Request, res: Response) {
+  async listAssignmentPeriods(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const items = await operationAssignmentService.listAssignedEmployees(
+    const items = await operationAssignmentService.listAssignmentPeriods(
       companyId,
       String(req.params.operationId),
     );
     res.status(200).json({ data: items });
   },
 
-  async unassignEmployee(req: Request, res: Response) {
+  async cancelAssignment(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    await operationAssignmentService.unassignEmployee(
+    const assignment = await operationAssignmentService.cancelAssignment(
       companyId,
       String(req.params.operationId),
-      String(req.params.employeeId),
+      String(req.params.assignmentId),
     );
-    res.status(204).send();
+    res.status(200).json({ data: assignment });
+  },
+
+  async endAssignment(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const assignment = await operationAssignmentService.endAssignment(
+      companyId,
+      String(req.params.operationId),
+      String(req.params.assignmentId),
+      req.body.effectiveDate,
+    );
+    res.status(200).json({ data: assignment });
   },
 };

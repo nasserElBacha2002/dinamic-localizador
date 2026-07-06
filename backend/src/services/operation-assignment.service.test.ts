@@ -11,14 +11,13 @@ describe("operationAssignmentService", () => {
     mock.restoreAll();
   });
 
-  it("repairs missing EmployeeWorkday when assignment already exists", async () => {
+  it("rejects ONE_TIME assignment outside operation work date", async () => {
     setupUnitTestEnv();
     const { operationRepository } = await import("../repositories/operation.repository");
     const { employeeRepository } = await import("../repositories/employee.repository");
-    const { operationEmployeeRepository } = await import("../repositories/operation-employee.repository");
-    const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
-    const { workdayMaterializationService } = await import("./workday-materialization.service");
+    const { operationWorkDateService } = await import("./operation-work-date.service");
     const { operationAssignmentService } = await import("./operation-assignment.service");
+    const { AppError } = await import("../errors/app-error");
 
     mock.method(operationRepository, "findById", async () => ({
       id: operationId,
@@ -29,34 +28,19 @@ describe("operationAssignmentService", () => {
       id: employeeId,
       active: true,
     }));
-    mock.method(operationEmployeeRepository, "findAssignment", async () => ({
-      operationId,
-      employeeId,
-      assignedAt: "2026-01-01T00:00:00.000Z",
-    }));
-    mock.method(employeeWorkdayRepository, "findByOperationAndEmployee", async () => null);
+    mock.method(operationWorkDateService, "resolveOperationWorkDate", async () => "2026-07-10");
 
-    let repaired = false;
-    mock.method(workdayMaterializationService, "ensureEmployeeWorkday", async () => {
-      repaired = true;
-      return {
-        id: "employee-workday",
-        companyId,
-        operationWorkdayId: "operation-workday",
-        employeeId,
-        expectationStatus: "EXPECTED",
-        absenceRequestId: null,
-        createdAt: "2026-01-01T00:00:00.000Z",
-        updatedAt: "2026-01-01T00:00:00.000Z",
-      };
-    });
-
-    const assignment = await operationAssignmentService.assignEmployee(
-      companyId,
-      operationId,
-      employeeId,
+    await assert.rejects(
+      () =>
+        operationAssignmentService.assignEmployee(companyId, operationId, employeeId, {
+          validFrom: "2026-07-15",
+          validUntil: null,
+        }),
+      (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal(error.code, "ASSIGNMENT_OUTSIDE_OPERATION_WORK_DATE");
+        return true;
+      },
     );
-    assert.equal(assignment.operationId, operationId);
-    assert.equal(repaired, true);
   });
 });

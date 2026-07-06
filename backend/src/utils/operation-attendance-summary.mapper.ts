@@ -38,6 +38,7 @@ export const resolveOperationalStatus = (attendance: AttendanceRecord | null): O
 export const mapOperationAttendanceSummaryRow = (
   row: Record<string, unknown>,
 ): {
+  assignmentId: string;
   employee: ReturnType<typeof mapEmployeeRow>;
   attendance: AttendanceRecord | null;
   operationalStatus: OperationalStatus;
@@ -77,6 +78,7 @@ export const mapOperationAttendanceSummaryRow = (
     : null;
 
   return {
+    assignmentId: String(row.assignment_id),
     employee,
     attendance,
     operationalStatus: resolveOperationalStatus(attendance),

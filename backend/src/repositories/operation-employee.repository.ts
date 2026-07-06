@@ -1,64 +1,127 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { OperationEmployeeAssignment } from "../types/domain";
 import { mapAssignmentRow } from "../utils/row-mappers";
 
+const NOT_CANCELLED_CLAUSE = `cancelled_at IS NULL`;
+
+const NOT_CANCELLED_CLAUSE_ALIASED = `oa.cancelled_at IS NULL`;
+
+const ACTIVE_ON_WORK_DATE_CLAUSE = `
+  ${NOT_CANCELLED_CLAUSE_ALIASED}
+  AND @workDate >= oa.valid_from
+  AND (oa.valid_until IS NULL OR @workDate <= oa.valid_until)
+`;
+
+const ACTIVE_ON_WORK_DATE_CLAUSE_UNALIASED = `
+  ${NOT_CANCELLED_CLAUSE}
+  AND @workDate >= valid_from
+  AND (valid_until IS NULL OR @workDate <= valid_until)
+`;
+
+const OVERLAP_CLAUSE = `
+  cancelled_at IS NULL
+  AND valid_from <= ISNULL(@validUntil, '9999-12-31')
+  AND @validFrom <= ISNULL(valid_until, '9999-12-31')
+`;
+
+const listSelectClause = `
+  SELECT
+    oa.*,
+    e.name AS employee_name,
+    e.document_number AS employee_document_number,
+    e.phone_number AS employee_phone_number,
+    e.employee_type AS employee_type,
+    e.active AS employee_active,
+    e.created_at AS employee_created_at,
+    e.updated_at AS employee_updated_at
+  FROM operation_assignments oa
+  INNER JOIN employees e ON e.id = oa.employee_id AND e.company_id = @companyId
+`;
+
 export const operationEmployeeRepository = {
-  async assign(
-    companyId: string,
-    operationId: string,
-    employeeId: string,
-  ): Promise<OperationEmployeeAssignment> {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .query(`
-        INSERT INTO operation_assignments (company_id, operation_id, employee_id)
-        OUTPUT INSERTED.*
-        VALUES (@companyId, @operationId, @employeeId)
-      `);
-
-    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
-  },
-
-  async assignInTransaction(
+  async createInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    operationId: string,
-    employeeId: string,
+    input: {
+      operationId: string;
+      employeeId: string;
+      validFrom: string;
+      validUntil: string | null;
+    },
   ): Promise<OperationEmployeeAssignment> {
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("validFrom", sql.Date, input.validFrom)
+      .input("validUntil", sql.Date, input.validUntil)
       .query(`
-        INSERT INTO operation_assignments (company_id, operation_id, employee_id)
+        INSERT INTO operation_assignments (
+          company_id, operation_id, employee_id, valid_from, valid_until
+        )
         OUTPUT INSERTED.*
-        VALUES (@companyId, @operationId, @employeeId)
+        VALUES (
+          @companyId, @operationId, @employeeId, @validFrom, @validUntil
+        )
       `);
 
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findAssignment(
+  async findOverlappingInTransaction(
     companyId: string,
-    operationId: string,
-    employeeId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      employeeId: string;
+      validFrom: string;
+      validUntil: string | null;
+      excludeAssignmentId?: string;
+    },
+  ): Promise<OperationEmployeeAssignment | null> {
+    const request = new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("validFrom", sql.Date, input.validFrom)
+      .input("validUntil", sql.Date, input.validUntil);
+
+    if (input.excludeAssignmentId) {
+      request.input("excludeAssignmentId", sql.UniqueIdentifier, input.excludeAssignmentId);
+    }
+
+    const result = await request.query(`
+      SELECT TOP 1 *
+      FROM operation_assignments WITH (UPDLOCK, HOLDLOCK)
+      WHERE company_id = @companyId
+        AND operation_id = @operationId
+        AND employee_id = @employeeId
+        ${input.excludeAssignmentId ? "AND id <> @excludeAssignmentId" : ""}
+        AND ${OVERLAP_CLAUSE}
+    `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findById(
+    companyId: string,
+    assignmentId: string,
   ): Promise<OperationEmployeeAssignment | null> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
       .query(`
         SELECT TOP 1 *
         FROM operation_assignments
-        WHERE operation_id = @operationId
-          AND employee_id = @employeeId
+        WHERE id = @assignmentId
           AND company_id = @companyId
       `);
 
@@ -69,22 +132,81 @@ export const operationEmployeeRepository = {
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async exists(companyId: string, operationId: string, employeeId: string): Promise<boolean> {
+  async findByIdInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    assignmentId: string,
+  ): Promise<OperationEmployeeAssignment | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .query(`
+        SELECT TOP 1 *
+        FROM operation_assignments WITH (UPDLOCK, HOLDLOCK)
+        WHERE id = @assignmentId
+          AND company_id = @companyId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findActiveForEmployeeOnWorkDate(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+    workDate: string,
+    transaction?: sql.Transaction,
+  ): Promise<OperationEmployeeAssignment | null> {
+    const request = transaction
+      ? new sql.Request(transaction)
+      : getPool().request();
+
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("workDate", sql.Date, workDate)
+      .query(`
+        SELECT TOP 1 *
+        FROM operation_assignments
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND employee_id = @employeeId
+          AND ${ACTIVE_ON_WORK_DATE_CLAUSE_UNALIASED}
+        ORDER BY valid_from DESC, assigned_at DESC
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listActiveForOperationOnWorkDate(
+    companyId: string,
+    operationId: string,
+    workDate: string,
+  ): Promise<OperationEmployeeAssignment[]> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("workDate", sql.Date, workDate)
       .query(`
-        SELECT TOP 1 1 AS found
-        FROM operation_assignments
-        WHERE operation_id = @operationId
-          AND employee_id = @employeeId
-          AND company_id = @companyId
+        ${listSelectClause}
+        WHERE oa.operation_id = @operationId
+          AND oa.company_id = @companyId
+          AND ${ACTIVE_ON_WORK_DATE_CLAUSE}
+        ORDER BY e.name ASC, oa.valid_from ASC
       `);
 
-    return Boolean(result.recordset[0]);
+    return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
   },
 
   async listByOperation(
@@ -97,40 +219,171 @@ export const operationEmployeeRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .query(`
-      SELECT
-        ie.*,
-        e.name AS employee_name,
-        e.document_number AS employee_document_number,
-        e.phone_number AS employee_phone_number,
-        e.employee_type AS employee_type,
-        e.active AS employee_active,
-        e.created_at AS employee_created_at,
-        e.updated_at AS employee_updated_at
-      FROM operation_assignments ie
-      INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-      WHERE ie.operation_id = @operationId
-        AND ie.company_id = @companyId
-      ORDER BY ie.assigned_at ASC
-    `);
+        ${listSelectClause}
+        WHERE oa.operation_id = @operationId
+          AND oa.company_id = @companyId
+        ORDER BY oa.valid_from DESC, oa.assigned_at DESC
+      `);
 
     return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
   },
 
-  async remove(companyId: string, operationId: string, employeeId: string): Promise<boolean> {
+  async cancelAssignmentInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    assignmentId: string,
+  ): Promise<OperationEmployeeAssignment | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .query(`
+        UPDATE operation_assignments
+        SET cancelled_at = SYSUTCDATETIME(),
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @assignmentId
+          AND company_id = @companyId
+          AND cancelled_at IS NULL
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async updateConfirmationStatusByAssignmentId(
+    companyId: string,
+    assignmentId: string,
+    status: AssignmentConfirmationStatus,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .input("status", sql.NVarChar(20), status)
+      .query(`
+        UPDATE operation_assignments
+        SET confirmation_status = @status,
+            confirmed_at = CASE
+              WHEN @status = 'CONFIRMED' THEN SYSUTCDATETIME()
+              WHEN @status = 'UNAVAILABLE' THEN NULL
+              ELSE confirmed_at
+            END,
+            unavailable_at = CASE
+              WHEN @status = 'UNAVAILABLE' THEN SYSUTCDATETIME()
+              WHEN @status = 'CONFIRMED' THEN NULL
+              ELSE unavailable_at
+            END,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND id = @assignmentId
+          AND cancelled_at IS NULL
+      `);
+
+    return (result.rowsAffected[0] ?? 0) > 0;
+  },
+
+  async endAssignmentInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    assignmentId: string,
+    effectiveDate: string,
+  ): Promise<OperationEmployeeAssignment | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .input("effectiveDate", sql.Date, effectiveDate)
+      .query(`
+        UPDATE operation_assignments
+        SET valid_until = @effectiveDate,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @assignmentId
+          AND company_id = @companyId
+          AND cancelled_at IS NULL
+          AND valid_until IS NULL
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async updateValidityInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    assignmentId: string,
+    input: { validFrom: string; validUntil: string | null },
+  ): Promise<OperationEmployeeAssignment | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .input("validFrom", sql.Date, input.validFrom)
+      .input("validUntil", sql.Date, input.validUntil)
+      .query(`
+        UPDATE operation_assignments
+        SET valid_from = @validFrom,
+            valid_until = @validUntil,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @assignmentId
+          AND company_id = @companyId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async countActiveForOperationOnWorkDate(
+    companyId: string,
+    operationId: string,
+    workDate: string,
+  ): Promise<number> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("workDate", sql.Date, workDate)
       .query(`
-        DELETE FROM operation_assignments
-        WHERE operation_id = @operationId
-          AND employee_id = @employeeId
-          AND company_id = @companyId
+        SELECT COUNT(DISTINCT employee_id) AS total
+        FROM operation_assignments
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND ${ACTIVE_ON_WORK_DATE_CLAUSE_UNALIASED}
       `);
 
-    return (result.rowsAffected[0] ?? 0) > 0;
+    return Number(result.recordset[0]?.total ?? 0);
+  },
+
+  async hasAttendanceForAssignment(
+    companyId: string,
+    assignmentId: string,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM employee_workdays ew
+        INNER JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+         AND ar.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.operation_assignment_id = @assignmentId
+      `);
+
+    return Boolean(result.recordset[0]);
   },
 
   async hasAttendanceRecord(
@@ -153,5 +406,20 @@ export const operationEmployeeRepository = {
       `);
 
     return Boolean(result.recordset[0]);
+  },
+
+  async exists(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+    workDate: string,
+  ): Promise<boolean> {
+    const assignment = await this.findActiveForEmployeeOnWorkDate(
+      companyId,
+      operationId,
+      employeeId,
+      workDate,
+    );
+    return Boolean(assignment);
   },
 };

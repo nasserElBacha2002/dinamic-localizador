@@ -2,12 +2,13 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   assignEmployeeToOperation,
   cancelOperation,
+  cancelOperationAssignment,
   createOperation,
+  endOperationAssignment,
   getOperations,
   getOperationAttendanceSummary,
   getOperationById,
   getOperationEmployees,
-  unassignEmployeeFromOperation,
   updateOperation,
 } from "../api/operations.api";
 import type {
@@ -87,7 +88,8 @@ export function useAssignOperationEmployee(operationId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (employeeId: string) => assignEmployeeToOperation(operationId, employeeId),
+    mutationFn: (input: { employeeId: string; validFrom?: string; validUntil?: string | null }) =>
+      assignEmployeeToOperation(operationId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
@@ -96,11 +98,26 @@ export function useAssignOperationEmployee(operationId: string) {
   });
 }
 
-export function useUnassignOperationEmployee(operationId: string) {
+export function useCancelOperationAssignment(operationId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: (employeeId: string) => unassignEmployeeFromOperation(operationId, employeeId),
+    mutationFn: (assignmentId: string) =>
+      cancelOperationAssignment(operationId, assignmentId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["operation"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
+    },
+  });
+}
+
+export function useEndOperationAssignment(operationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: (input: { assignmentId: string; effectiveDate: string }) =>
+      endOperationAssignment(operationId, input.assignmentId, input.effectiveDate),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });

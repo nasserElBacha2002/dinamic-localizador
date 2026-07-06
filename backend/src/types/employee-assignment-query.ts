@@ -2,6 +2,7 @@ import type { AssignmentConfirmationStatus } from "../constants/assignment-confi
 import type { PunctualityStatus } from "./domain";
 
 export interface EmployeeAssignedOperation {
+  assignmentId: string;
   operationId: string;
   serviceName: string;
   serviceAddress: string | null;

@@ -2,9 +2,11 @@ import sql from "mssql";
 import { AppError } from "../errors/app-error";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
+import { isAssignmentActiveOnWorkDate } from "../utils/assignment-period";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 
@@ -115,6 +117,7 @@ const ensureEmployeeWorkdayRow = async (
   companyId: string,
   operationWorkday: OperationWorkday,
   employeeId: string,
+  operationAssignmentId: string,
   transaction?: sql.Transaction,
 ): Promise<EmployeeWorkday> => {
   const findExisting = transaction
@@ -134,12 +137,55 @@ const ensureEmployeeWorkdayRow = async (
 
   const existing = await findExisting();
   if (existing) {
+    if (!existing.operationAssignmentId) {
+      const assignment = await operationEmployeeRepository.findById(
+        companyId,
+        operationAssignmentId,
+      );
+      if (
+        !assignment ||
+        assignment.employeeId !== employeeId ||
+        assignment.operationId !== operationWorkday.operationId ||
+        !isAssignmentActiveOnWorkDate({
+          validFrom: assignment.validFrom,
+          validUntil: assignment.validUntil,
+          workDate: operationWorkday.workDate,
+          cancelledAt: assignment.cancelledAt,
+        })
+      ) {
+        throw new AppError(
+          409,
+          "EMPLOYEE_WORKDAY_ASSIGNMENT_MISMATCH",
+          "La jornada del empleado no coincide con la asignación activa",
+        );
+      }
+
+      if (transaction) {
+        return employeeWorkdayRepository.attachAssignmentInTransaction(
+          companyId,
+          transaction,
+          existing.id,
+          operationAssignmentId,
+        );
+      }
+      return employeeWorkdayRepository.attachAssignment(companyId, existing.id, operationAssignmentId);
+    }
+
+    if (existing.operationAssignmentId !== operationAssignmentId) {
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_ASSIGNMENT_MISMATCH",
+        "La jornada del empleado ya está vinculada a otra asignación",
+      );
+    }
+
     return existing;
   }
 
   const insertPayload = {
     operationWorkdayId: operationWorkday.id,
     employeeId,
+    operationAssignmentId,
     expectationStatus: "EXPECTED" as const,
   };
 
@@ -178,7 +224,26 @@ export const workdayMaterializationService = {
     employeeId: string,
   ): Promise<EmployeeWorkday> {
     const operationWorkday = await ensureOperationWorkdayRow(companyId, operationId);
-    return ensureEmployeeWorkdayRow(companyId, operationWorkday, employeeId);
+    const assignment = await operationEmployeeRepository.findActiveForEmployeeOnWorkDate(
+      companyId,
+      operationId,
+      employeeId,
+      operationWorkday.workDate,
+    );
+    if (!assignment) {
+      throw new AppError(
+        409,
+        "EMPLOYEE_NOT_ASSIGNED_TO_OPERATION",
+        "El empleado no está asignado a la operación",
+      );
+    }
+
+    return ensureEmployeeWorkdayRow(
+      companyId,
+      operationWorkday,
+      employeeId,
+      assignment.id,
+    );
   },
 
   async ensureEmployeeWorkdayInTransaction(
@@ -188,7 +253,69 @@ export const workdayMaterializationService = {
     employeeId: string,
   ): Promise<EmployeeWorkday> {
     const operationWorkday = await ensureOperationWorkdayRow(companyId, operationId, transaction);
-    return ensureEmployeeWorkdayRow(companyId, operationWorkday, employeeId, transaction);
+    const assignment = await operationEmployeeRepository.findActiveForEmployeeOnWorkDate(
+      companyId,
+      operationId,
+      employeeId,
+      operationWorkday.workDate,
+      transaction,
+    );
+    if (!assignment) {
+      throw new AppError(
+        409,
+        "EMPLOYEE_NOT_ASSIGNED_TO_OPERATION",
+        "El empleado no está asignado a la operación",
+      );
+    }
+
+    return ensureEmployeeWorkdayRow(
+      companyId,
+      operationWorkday,
+      employeeId,
+      assignment.id,
+      transaction,
+    );
+  },
+
+  async ensureEmployeeWorkdayForAssignmentInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationId: string,
+    employeeId: string,
+    operationAssignmentId: string,
+    workDate: string,
+  ): Promise<EmployeeWorkday | null> {
+    const assignment = await operationEmployeeRepository.findByIdInTransaction(
+      companyId,
+      transaction,
+      operationAssignmentId,
+    );
+    if (
+      !assignment ||
+      assignment.operationId !== operationId ||
+      assignment.employeeId !== employeeId ||
+      !isAssignmentActiveOnWorkDate({
+        validFrom: assignment.validFrom,
+        validUntil: assignment.validUntil,
+        workDate,
+        cancelledAt: assignment.cancelledAt,
+      })
+    ) {
+      return null;
+    }
+
+    const operationWorkday = await ensureOperationWorkdayRow(companyId, operationId, transaction);
+    if (operationWorkday.workDate !== workDate) {
+      return null;
+    }
+
+    return ensureEmployeeWorkdayRow(
+      companyId,
+      operationWorkday,
+      employeeId,
+      assignment.id,
+      transaction,
+    );
   },
 
   async ensureOneTimeOperationMaterialized(

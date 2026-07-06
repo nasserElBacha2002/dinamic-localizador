@@ -35,6 +35,7 @@ import {
   buildCheckoutValidationWithoutLocation,
 } from "./bot/bot-attendance-runtime";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
+import { operationWorkDateService } from "./operation-work-date.service";
 import { workdayMaterializationService } from "./workday-materialization.service";
 import {
   buildArrivalRegisteredMessage,
@@ -705,9 +706,16 @@ export const whatsappBotService = {
       });
     }
 
-    const isAssigned = await operationEmployeeRepository.exists(companyId, 
+    const workDate = await operationWorkDateService.resolveOperationWorkDate(
+      companyId,
+      input.operationId,
+    );
+
+    const isAssigned = await operationEmployeeRepository.exists(
+      companyId,
       input.operationId,
       input.employeeId,
+      workDate,
     );
     if (!isAssigned) {
       return respond(companyId, {

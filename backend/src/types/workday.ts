@@ -20,6 +20,7 @@ export interface EmployeeWorkday {
   id: string;
   companyId: string;
   operationWorkdayId: string;
+  operationAssignmentId: string | null;
   employeeId: string;
   expectationStatus: EmployeeWorkdayExpectationStatus;
   absenceRequestId: string | null;

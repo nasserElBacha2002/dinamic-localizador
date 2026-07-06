@@ -20,7 +20,8 @@ import type {
 import { buildParams } from "./client";
 import {
   API_ENDPOINTS,
-  operationAssignmentMemberPath,
+  operationAssignmentCancelPath,
+  operationAssignmentEndPath,
   operationAssignmentPath,
   operationPath,
 } from "./endpoints";
@@ -72,20 +73,43 @@ export async function getOperationEmployees(
 
 export async function assignEmployeeToOperation(
   operationId: string,
-  employeeId: string,
+  input: { employeeId: string; validFrom?: string; validUntil?: string | null },
 ): Promise<OperationEmployeeAssignment> {
   const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
     operationAssignmentPath(operationId),
-    { employeeId },
+    input,
   );
   return data.data;
 }
 
+export async function cancelOperationAssignment(
+  operationId: string,
+  assignmentId: string,
+): Promise<OperationEmployeeAssignment> {
+  const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
+    operationAssignmentCancelPath(operationId, assignmentId),
+  );
+  return data.data;
+}
+
+/** @deprecated Use cancelOperationAssignment */
 export async function unassignEmployeeFromOperation(
   operationId: string,
-  employeeId: string,
+  assignmentId: string,
 ): Promise<void> {
-  await scopedApiClient.delete(operationAssignmentMemberPath(operationId, employeeId));
+  await cancelOperationAssignment(operationId, assignmentId);
+}
+
+export async function endOperationAssignment(
+  operationId: string,
+  assignmentId: string,
+  effectiveDate: string,
+): Promise<OperationEmployeeAssignment> {
+  const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
+    operationAssignmentEndPath(operationId, assignmentId),
+    { effectiveDate },
+  );
+  return data.data;
 }
 
 export async function getOperationAttendanceSummary(

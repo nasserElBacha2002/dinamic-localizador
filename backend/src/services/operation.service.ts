@@ -1,27 +1,40 @@
 // Operational domain: Operation maps to scheduled_operations; Service maps to operational_locations.
-// Product-facing UI may refer to a ScheduledOperation / Operación.
 import { AppError } from "../errors/app-error";
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { operationRepository } from "../repositories/operation.repository";
+import { operationScheduleRepository } from "../repositories/operation-schedule.repository";
 import { serviceRepository } from "../repositories/service.repository";
+import { companySettingsRepository } from "../repositories/company-settings.repository";
 import type {
   CreateOperationInput,
+  CreateOneTimeOperationInput,
+  CreateRecurringOperationInput,
   ListOperationsQuery,
   UpdateOperationInput,
 } from "../schemas/operation.schema";
 import { auditService } from "./audit.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
+import { recurringScheduleService } from "./recurring-schedule.service";
 import { canTransitionOperationStatus, isOperationEditable } from "../utils/operation-status";
 import {
   isOperationStartInPast,
   resolveLifecycleOperationStatus,
 } from "../utils/operation-lifecycle";
 import { buildPaginationMeta } from "../utils/pagination";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
+import {
+  buildScheduleSummaryLabel,
+  normalizeWeeklyScheduleDays,
+  validateWeeklyScheduleDays,
+  weeklySchedulesEqual,
+} from "../utils/weekly-schedule";
+import type { OperationDetail, OperationWithService } from "../types/domain";
+import type { OperationScheduleSummary } from "../types/schedule";
 
-const validateOperationDates = (
+const validateOneTimeDates = (
   scheduledStart: string,
   scheduledEnd: string | null | undefined,
 ): void => {
@@ -62,23 +75,63 @@ const syncLifecycleStatus = async (
   return updated ?? operation;
 };
 
-type ResolvedCreateOperationInput = CreateOperationInput & {
-  earlyToleranceMinutes: number;
-  lateToleranceMinutes: number;
-};
-
-const resolveCreateOperationInput = async (
+const resolveCreateTolerances = async (
   companyId: string,
-  input: CreateOperationInput,
-): Promise<ResolvedCreateOperationInput> => {
+  input: Pick<CreateOperationInput, "earlyToleranceMinutes" | "lateToleranceMinutes">,
+) => {
   const operationDefaults =
     await companyOperationalDefaultsResolver.getOperationDefaults(companyId);
 
   return {
-    ...input,
     earlyToleranceMinutes:
       input.earlyToleranceMinutes ?? operationDefaults.earlyToleranceMinutes,
     lateToleranceMinutes: input.lateToleranceMinutes ?? operationDefaults.lateToleranceMinutes,
+  };
+};
+
+const buildScheduleSummary = async (
+  companyId: string,
+  operation: OperationWithService,
+): Promise<OperationScheduleSummary | undefined> => {
+  if (operation.operationKind !== "RECURRING") {
+    return undefined;
+  }
+
+  const schedule = await operationScheduleRepository.findByOperationId(companyId, operation.id);
+  if (!schedule) {
+    return undefined;
+  }
+
+  const effectiveDays = await recurringScheduleService.resolveEffectiveDays(companyId, schedule);
+  const label = buildScheduleSummaryLabel(effectiveDays);
+
+  return {
+    scheduleSource: schedule.scheduleSource,
+    validFrom: schedule.validFrom,
+    validUntil: schedule.validUntil,
+    summaryLabel: label.summaryLabel,
+    enabledWeekdayCount: label.enabledWeekdayCount,
+    hasCustomWeekdayHours: label.hasCustomWeekdayHours,
+  };
+};
+
+const enrichOperationDetail = async (
+  companyId: string,
+  detail: OperationDetail,
+): Promise<OperationDetail> => {
+  if (detail.operationKind !== "RECURRING") {
+    return detail;
+  }
+
+  const schedule = await operationScheduleRepository.findByOperationId(companyId, detail.id);
+  if (!schedule) {
+    return detail;
+  }
+
+  const effectiveDays = await recurringScheduleService.resolveEffectiveDays(companyId, schedule);
+  return {
+    ...detail,
+    schedule: recurringScheduleService.buildDisplaySchedule(schedule, effectiveDays),
   };
 };
 
@@ -92,16 +145,93 @@ export const operationService = {
       throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
     }
 
-    validateOperationDates(input.scheduledStart, input.scheduledEnd);
+    const tolerances = await resolveCreateTolerances(companyId, input);
+
+    if (input.operationKind === "ONE_TIME") {
+      return this.createOneTime(companyId, input, tolerances);
+    }
+
+    return this.createRecurring(companyId, input, tolerances);
+  },
+
+  async createOneTime(
+    companyId: string,
+    input: CreateOneTimeOperationInput,
+    tolerances: { earlyToleranceMinutes: number; lateToleranceMinutes: number },
+  ) {
+    validateOneTimeDates(input.scheduledStart, input.scheduledEnd);
     validateOperationStartNotInPast(input.scheduledStart);
 
-    const resolvedInput = await resolveCreateOperationInput(companyId, input);
-    return operationRepository.create(companyId, resolvedInput);
+    return operationRepository.create(companyId, {
+      ...input,
+      ...tolerances,
+    });
+  },
+
+  async createRecurring(
+    companyId: string,
+    input: CreateRecurringOperationInput,
+    tolerances: { earlyToleranceMinutes: number; lateToleranceMinutes: number },
+  ) {
+    if (input.scheduleSource === "CUSTOM") {
+      const normalizedDays = normalizeWeeklyScheduleDays(input.scheduleDays ?? []);
+      const validation = validateWeeklyScheduleDays(normalizedDays);
+      if (!validation.valid) {
+        throw new AppError(400, validation.code, validation.message);
+      }
+    }
+
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const timezone = resolveOperationTimezone(settings?.operationTimezone);
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const operation = await operationRepository.createRecurring(
+        companyId,
+        {
+          serviceId: input.serviceId,
+          earlyToleranceMinutes: tolerances.earlyToleranceMinutes,
+          lateToleranceMinutes: tolerances.lateToleranceMinutes,
+          notes: input.notes ?? null,
+        },
+        transaction,
+      );
+
+      await operationScheduleRepository.createInTransaction(companyId, transaction, {
+        operationId: operation.id,
+        scheduleSource: input.scheduleSource,
+        timezone,
+        validFrom: input.validFrom,
+        validUntil: input.validUntil ?? null,
+        days:
+          input.scheduleSource === "CUSTOM"
+            ? normalizeWeeklyScheduleDays(input.scheduleDays ?? [])
+            : undefined,
+      });
+
+      await transaction.commit();
+      return operation;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   },
 
   async list(companyId: string, query: ListOperationsQuery) {
     const result = await operationRepository.list(companyId, query);
-    const data = await Promise.all(result.items.map((item) => syncLifecycleStatus(companyId, item)));
+    const data = await Promise.all(
+      result.items.map(async (item) => {
+        const synced = await syncLifecycleStatus(companyId, item);
+        const scheduleSummary = await buildScheduleSummary(companyId, { ...item, ...synced });
+        return {
+          ...synced,
+          scheduleSummary,
+        };
+      }),
+    );
     return {
       data,
       meta: buildPaginationMeta(query.page, query.limit, result.total),
@@ -123,14 +253,22 @@ export const operationService = {
     }
 
     const synced = await syncLifecycleStatus(companyId, detail);
-    return {
+    return enrichOperationDetail(companyId, {
       ...detail,
       ...synced,
-    };
+    });
   },
 
   async update(companyId: string, id: string, input: UpdateOperationInput) {
     const current = await this.getById(companyId, id);
+
+    if (input.operationKind !== undefined) {
+      throw new AppError(
+        409,
+        "OPERATION_KIND_IMMUTABLE",
+        "El tipo de operación no puede modificarse después de crearla",
+      );
+    }
 
     if (!isOperationEditable(current.status)) {
       throw new AppError(
@@ -140,6 +278,26 @@ export const operationService = {
       );
     }
 
+    if (current.operationKind === "RECURRING") {
+      if (input.scheduledStart !== undefined || input.scheduledEnd !== undefined) {
+        throw new AppError(
+          400,
+          "INVALID_OPERATION_SCHEDULE_FIELDS",
+          "Las operaciones habituales no usan inicio y fin programados",
+        );
+      }
+      return this.updateRecurring(companyId, id, current, input);
+    }
+
+    return this.updateOneTime(companyId, id, current, input);
+  },
+
+  async updateOneTime(
+    companyId: string,
+    id: string,
+    current: OperationRecord,
+    input: UpdateOperationInput,
+  ) {
     if (input.serviceId) {
       const service = await serviceRepository.findById(companyId, input.serviceId);
       if (!service) {
@@ -158,8 +316,13 @@ export const operationService = {
       );
     }
 
-    validateOperationDates(
-      input.scheduledStart ?? current.scheduledStart,
+    const nextStart = input.scheduledStart ?? current.scheduledStart;
+    if (!nextStart) {
+      throw new AppError(400, "OPERATION_SCHEDULE_REQUIRED", "La operación requiere fecha de inicio");
+    }
+
+    validateOneTimeDates(
+      nextStart,
       input.scheduledEnd === undefined ? current.scheduledEnd : input.scheduledEnd,
     );
 
@@ -169,6 +332,7 @@ export const operationService = {
 
     const scheduleChanged =
       input.scheduledStart !== undefined &&
+      current.scheduledStart &&
       new Date(input.scheduledStart).getTime() !== new Date(current.scheduledStart).getTime();
 
     let updated: OperationRecord | null;
@@ -221,6 +385,95 @@ export const operationService = {
     });
 
     return updated;
+  },
+
+  async updateRecurring(
+    companyId: string,
+    id: string,
+    current: OperationRecord,
+    input: UpdateOperationInput,
+  ) {
+    const schedule = await operationScheduleRepository.findByOperationId(companyId, id);
+    if (!schedule) {
+      throw new AppError(404, "OPERATION_SCHEDULE_NOT_FOUND", "La operación no tiene horario configurado");
+    }
+
+    if (input.scheduleSource === "COMPANY" && input.scheduleDays) {
+      throw new AppError(400, "INVALID_SCHEDULE_SOURCE", "La configuración del horario no es válida");
+    }
+
+    if (input.scheduleSource === "CUSTOM" || schedule.scheduleSource === "CUSTOM") {
+      const nextSource = input.scheduleSource ?? schedule.scheduleSource;
+      if (nextSource === "CUSTOM") {
+        const days = normalizeWeeklyScheduleDays(
+          input.scheduleDays ?? (schedule.scheduleSource === "CUSTOM" ? schedule.days : []),
+        );
+        const validation = validateWeeklyScheduleDays(days);
+        if (!validation.valid) {
+          throw new AppError(400, validation.code, validation.message);
+        }
+      }
+    }
+
+    const nextValidFrom = input.validFrom ?? schedule.validFrom;
+    const nextValidUntil =
+      input.validUntil !== undefined ? input.validUntil : schedule.validUntil;
+    if (nextValidUntil && nextValidUntil < nextValidFrom) {
+      throw new AppError(
+        400,
+        "INVALID_OPERATION_VALIDITY_RANGE",
+        "La fecha de finalización no puede ser anterior a la fecha de inicio",
+      );
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const updatedOperation = await operationRepository.update(companyId, id, input, transaction);
+      if (!updatedOperation) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+      }
+
+      const nextSource = input.scheduleSource ?? schedule.scheduleSource;
+      const nextDays =
+        nextSource === "CUSTOM"
+          ? normalizeWeeklyScheduleDays(
+              input.scheduleDays ?? (schedule.scheduleSource === "CUSTOM" ? schedule.days : []),
+            )
+          : undefined;
+
+      const scheduleChanged =
+        nextSource !== schedule.scheduleSource ||
+        nextValidFrom !== schedule.validFrom ||
+        nextValidUntil !== schedule.validUntil ||
+        (nextSource === "CUSTOM" &&
+          nextDays &&
+          !weeklySchedulesEqual(nextDays, schedule.days));
+
+      if (
+        input.scheduleSource !== undefined ||
+        input.validFrom !== undefined ||
+        input.validUntil !== undefined ||
+        input.scheduleDays !== undefined
+      ) {
+        await operationScheduleRepository.updateInTransaction(companyId, transaction, id, {
+          scheduleSource: nextSource,
+          timezone: schedule.timezone,
+          validFrom: nextValidFrom,
+          validUntil: nextValidUntil,
+          days: nextDays,
+          nextVersion: scheduleChanged ? schedule.version + 1 : schedule.version,
+        });
+      }
+
+      await transaction.commit();
+      return updatedOperation;
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
   },
 
   async cancel(companyId: string, id: string) {

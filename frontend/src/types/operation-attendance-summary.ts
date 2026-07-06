@@ -6,6 +6,7 @@ import type { Operation } from "./operation";
 import type { Service } from "./service";
 
 export interface OperationAttendanceSummaryEmployee {
+  assignmentId: string;
   employee: Employee;
   attendance: AttendanceRecord | null;
   operationalStatus: OperationalStatus;

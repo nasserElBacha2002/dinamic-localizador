@@ -75,9 +75,15 @@ const sampleEmployee: Employee = {
 };
 
 const sampleAssignment: OperationEmployeeAssignment = {
+  id: "assignment-1",
+  companyId: "company-1",
   operationId: sampleOperation.id,
   employeeId: sampleEmployee.id,
+  validFrom: "2026-01-01",
+  validUntil: "2026-01-01",
   assignedAt: "2026-01-01T00:00:00.000Z",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
 const sampleAttendance: AttendanceRecord = {

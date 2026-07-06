@@ -19,6 +19,7 @@ function buildRow(
   attendanceId: string | null,
 ): OperationAttendanceSummaryEmployee {
   return {
+    assignmentId: `assignment-${id}`,
     employee: {
       id,
       name: `Employee ${id}`,

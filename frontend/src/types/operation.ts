@@ -1,13 +1,17 @@
 import type { Employee } from "./employee";
 import type { OperationStatus } from "./operation-status";
+import type { OperationScheduleSummary, OperationScheduleView } from "./schedule";
 import type { Service, ServiceSummary } from "./service";
 
 export type { OperationStatus } from "./operation-status";
 
+export type OperationKind = "ONE_TIME" | "RECURRING";
+
 export interface Operation {
   id: string;
   serviceId: string;
-  scheduledStart: string;
+  operationKind: OperationKind;
+  scheduledStart: string | null;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
@@ -19,18 +23,30 @@ export interface Operation {
 
 export interface OperationWithService extends Operation {
   service: ServiceSummary;
+  scheduleSummary?: OperationScheduleSummary;
 }
 
 export interface OperationDetail extends Operation {
   service: Service;
   assignedEmployees: Employee[];
   attendanceRecordsCount: number;
+  schedule?: OperationScheduleView;
 }
 
+export type AssignmentLifecycleState = "CURRENT" | "FUTURE" | "ENDED";
+
 export interface OperationEmployeeAssignment {
+  id: string;
+  companyId: string;
   operationId: string;
   employeeId: string;
+  validFrom: string;
+  validUntil: string | null;
   assignedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  cancelledAt?: string | null;
+  lifecycleState?: AssignmentLifecycleState;
   employee?: Employee;
 }
 
@@ -48,6 +64,7 @@ export interface OperationFilters {
   limit?: number;
   status?: OperationStatus;
   serviceId?: string;
+  operationKind?: OperationKind;
   search?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -55,7 +72,8 @@ export interface OperationFilters {
   sortDirection?: "asc" | "desc";
 }
 
-export interface CreateOperationInput {
+export interface CreateOneTimeOperationInput {
+  operationKind: "ONE_TIME";
   serviceId: string;
   scheduledStart: string;
   scheduledEnd?: string | null;
@@ -64,10 +82,28 @@ export interface CreateOperationInput {
   notes?: string | null;
 }
 
+export interface CreateRecurringOperationInput {
+  operationKind: "RECURRING";
+  serviceId: string;
+  validFrom: string;
+  validUntil?: string | null;
+  scheduleSource: "COMPANY" | "CUSTOM";
+  scheduleDays?: import("./schedule").WeeklyScheduleDay[];
+  earlyToleranceMinutes?: number;
+  lateToleranceMinutes?: number;
+  notes?: string | null;
+}
+
+export type CreateOperationInput = CreateOneTimeOperationInput | CreateRecurringOperationInput;
+
 export interface UpdateOperationInput {
   serviceId?: string;
   scheduledStart?: string;
   scheduledEnd?: string | null;
+  validFrom?: string;
+  validUntil?: string | null;
+  scheduleSource?: "COMPANY" | "CUSTOM";
+  scheduleDays?: import("./schedule").WeeklyScheduleDay[];
   earlyToleranceMinutes?: number;
   lateToleranceMinutes?: number;
   notes?: string | null;

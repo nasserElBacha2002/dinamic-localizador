@@ -4,19 +4,16 @@ import { join } from "node:path";
 import { describe, it } from "node:test";
 
 describe("operation kind write protection", () => {
-  it("creates operations as ONE_TIME in repository insert paths", () => {
-    const source = readFileSync(
-      join(process.cwd(), "src/repositories/operation.repository.ts"),
-      "utf8",
-    );
-
-    assert.match(source, /N'ONE_TIME'/);
-    assert.doesNotMatch(source, /operation_kind.*RECURRING/);
+  it("rejects operationKind changes in update schema", () => {
+    const schema = readFileSync(join(process.cwd(), "src/schemas/operation.schema.ts"), "utf8");
+    assert.match(schema, /operationKind: z\.never\(\)\.optional\(\)/);
+    assert.match(schema, /El tipo de operación no puede modificarse después de crearla/);
   });
 
-  it("does not expose operationKind in public update schema", () => {
+  it("supports discriminated create schemas for ONE_TIME and RECURRING", () => {
     const schema = readFileSync(join(process.cwd(), "src/schemas/operation.schema.ts"), "utf8");
-    assert.doesNotMatch(schema, /operationKind/);
-    assert.doesNotMatch(schema, /RECURRING/);
+    assert.match(schema, /createOneTimeOperationSchema/);
+    assert.match(schema, /createRecurringOperationSchema/);
+    assert.match(schema, /discriminatedUnion\("operationKind"/);
   });
 });

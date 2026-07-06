@@ -43,6 +43,7 @@ const employeeWorkday = (): EmployeeWorkday => ({
   id: employeeWorkdayId,
   companyId,
   operationWorkdayId,
+  operationAssignmentId: "00000000-0000-4000-8000-000000000006",
   employeeId,
   expectationStatus: "EXPECTED",
   absenceRequestId: null,
@@ -123,11 +124,23 @@ describe("workdayMaterializationService", () => {
     const { companySettingsRepository } = await import("../repositories/company-settings.repository");
     const { operationWorkdayRepository } = await import("../repositories/operation-workday.repository");
     const { employeeWorkdayRepository } = await import("../repositories/employee-workday.repository");
+    const { operationEmployeeRepository } = await import("../repositories/operation-employee.repository");
     const { workdayMaterializationService } = await import("./workday-materialization.service");
 
     mock.method(operationRepository, "findById", async () => operation());
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);
     mock.method(operationWorkdayRepository, "listByOperationId", async () => [operationWorkday()]);
+    mock.method(operationEmployeeRepository, "findActiveForEmployeeOnWorkDate", async () => ({
+      id: "00000000-0000-4000-8000-000000000006",
+      companyId,
+      operationId,
+      employeeId,
+      validFrom: "2026-07-06",
+      validUntil: "2026-07-06",
+      assignedAt: "2026-01-01T00:00:00.000Z",
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    }));
     mock.method(employeeWorkdayRepository, "findByWorkdayAndEmployee", async () => null);
     mock.method(employeeWorkdayRepository, "insert", async () => employeeWorkday());
 
@@ -138,5 +151,30 @@ describe("workdayMaterializationService", () => {
     );
     assert.equal(result.id, employeeWorkdayId);
     assert.equal(result.expectationStatus, "EXPECTED");
+    assert.equal(result.operationAssignmentId, "00000000-0000-4000-8000-000000000006");
+  });
+
+  it("rejects employee workday when no active assignment covers work date", async () => {
+    setupUnitTestEnv();
+    const { operationRepository } = await import("../repositories/operation.repository");
+    const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+    const { operationWorkdayRepository } = await import("../repositories/operation-workday.repository");
+    const { operationEmployeeRepository } = await import("../repositories/operation-employee.repository");
+    const { workdayMaterializationService } = await import("./workday-materialization.service");
+    const { AppError } = await import("../errors/app-error");
+
+    mock.method(operationRepository, "findById", async () => operation());
+    mock.method(companySettingsRepository, "findByCompanyId", async () => null);
+    mock.method(operationWorkdayRepository, "listByOperationId", async () => [operationWorkday()]);
+    mock.method(operationEmployeeRepository, "findActiveForEmployeeOnWorkDate", async () => null);
+
+    await assert.rejects(
+      () => workdayMaterializationService.ensureEmployeeWorkday(companyId, operationId, employeeId),
+      (error: unknown) => {
+        assert.ok(error instanceof AppError);
+        assert.equal(error.code, "EMPLOYEE_NOT_ASSIGNED_TO_OPERATION");
+        return true;
+      },
+    );
   });
 });

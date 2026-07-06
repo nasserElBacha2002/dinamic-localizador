@@ -2,7 +2,9 @@ import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { WeeklySchedulePreview } from "../../components/schedules/WeeklySchedulePreview";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
+import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import {
   ConfirmDialog,
   ErrorState,
@@ -13,6 +15,7 @@ import {
   StatusBadge,
   type StatusBadgeTone,
 } from "../../design-system";
+import { OperationAssignmentsSection } from "../../components/operations/OperationAssignmentsSection";
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import { OperationWorkforceSection } from "../../components/operations/OperationWorkforceSection";
@@ -24,10 +27,21 @@ import {
 } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
 import type { OperationStatus } from "../../types/operation";
-import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from "../../utils/dates";
+import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
+import {
+  buildOperationEditDefaultValues,
+  formatOperationDetailScheduleTitle,
+  resolveOperationReferenceDate,
+  toOperationUpdatePayload,
+} from "../../utils/operation-detail-display";
+import {
+  formatRecurringValidity,
+  operationKindLabels,
+  scheduleSourceLabels,
+} from "../../utils/operation-schedule-display";
 import { operationStatusLabels } from "../../utils/labels";
 
 function operationStatusTone(status: OperationStatus): StatusBadgeTone {
@@ -49,6 +63,7 @@ export function OperationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
+  const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
 
@@ -65,6 +80,11 @@ export function OperationDetailPage() {
   const assignedEmployeeIds = useMemo(
     () => operation?.assignedEmployees.map((employee) => employee.id) ?? [],
     [operation?.assignedEmployees],
+  );
+
+  const operationWorkDate = useMemo(
+    () => (operation ? resolveOperationReferenceDate(operation) : ""),
+    [operation],
   );
 
   if (!id) {
@@ -107,15 +127,7 @@ export function OperationDetailPage() {
     setErrorMessage(null);
 
     try {
-      await updateMutation.mutateAsync({
-        serviceId: values.serviceId,
-        scheduledStart: datetimeLocalToIso(values.scheduledStart),
-        scheduledEnd: values.scheduledEnd ? datetimeLocalToIso(values.scheduledEnd) : null,
-        earlyToleranceMinutes: values.earlyToleranceMinutes,
-        lateToleranceMinutes: values.lateToleranceMinutes,
-        notes: values.notes?.trim() ? values.notes.trim() : null,
-        status: values.status,
-      });
+      await updateMutation.mutateAsync(toOperationUpdatePayload(operation, values));
       setEditing(false);
       showFeedback(`${terminology.operation.singular} actualizada correctamente.`);
     } catch (error) {
@@ -137,7 +149,7 @@ export function OperationDetailPage() {
     <>
       <PageHeader
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
-        description={`${operation.service.name} · ${formatDateTime(operation.scheduledStart)}`}
+        description={formatOperationDetailScheduleTitle(operation)}
         action={
           <Group gap="sm" wrap="wrap">
             {editing && canEdit ? (
@@ -190,11 +202,19 @@ export function OperationDetailPage() {
           />
           <MetricCard
             title="Horario de operación"
-            value={formatDateTime(operation.scheduledStart)}
+            value={
+              operation.operationKind === "RECURRING"
+                ? operationKindLabels.RECURRING
+                : formatDateTime(operation.scheduledStart)
+            }
             description={
-              operation.scheduledEnd
-                ? `Fin: ${formatDateTime(operation.scheduledEnd)}`
-                : "Sin horario de fin"
+              operation.operationKind === "RECURRING"
+                ? operation.schedule
+                  ? formatRecurringValidity(operation.schedule.validFrom, operation.schedule.validUntil)
+                  : "Trabajo habitual"
+                : operation.scheduledEnd
+                  ? `Fin: ${formatDateTime(operation.scheduledEnd)}`
+                  : "Sin horario de fin"
             }
           />
           <MetricCard title="Geocerca" value={geofenceSummary} description="Radio y tolerancias horarias" />
@@ -202,13 +222,51 @@ export function OperationDetailPage() {
 
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
-            <OperationWorkforceSection
-              operationId={operation.id}
-              canAssign={canAssign}
-              scheduledStart={operation.scheduledStart}
-              assignedEmployeeIds={assignedEmployeeIds}
-              onFeedback={(message, severity) => showFeedback(message, severity)}
-            />
+            <Stack gap="lg">
+              {operation.operationKind === "RECURRING" && operation.schedule ? (
+                <SectionCard
+                  title="Horario de trabajo"
+                  description="Configuración semanal de la operación habitual."
+                >
+                  <Stack gap="sm">
+                    <Group gap="xs">
+                      <StatusBadge
+                        label={scheduleSourceLabels[operation.schedule.scheduleSource]}
+                        tone="info"
+                        variant="light"
+                      />
+                    </Group>
+                    <OperationDetailFieldGrid
+                      fields={[
+                        {
+                          label: "Vigencia",
+                          value: formatRecurringValidity(
+                            operation.schedule.validFrom,
+                            operation.schedule.validUntil,
+                          ),
+                        },
+                      ]}
+                    />
+                    <WeeklySchedulePreview days={operation.schedule.days} />
+                  </Stack>
+                </SectionCard>
+              ) : null}
+
+              <OperationAssignmentsSection
+                operationId={operation.id}
+                operationKind={operation.operationKind ?? "ONE_TIME"}
+                canAssign={canAssign}
+                operationWorkDate={operationWorkDate}
+                activeEmployeeIds={assignedEmployeeIds}
+                onFeedback={(message, severity) => showFeedback(message, severity)}
+              />
+              <OperationWorkforceSection
+                operationId={operation.id}
+                canAssign={canAssign}
+                scheduledStart={operation.scheduledStart}
+                onFeedback={(message, severity) => showFeedback(message, severity)}
+              />
+            </Stack>
           </Box>
 
           <Box className={layoutClasses.dataSection}>
@@ -227,10 +285,25 @@ export function OperationDetailPage() {
                       />
                     ),
                   },
+                  { label: "Tipo", value: operationKindLabels[operation.operationKind ?? "ONE_TIME"] },
                   { label: terminology.service.singular, value: serviceFieldValue },
                   { label: "Dirección", value: operation.service?.address ?? "—" },
-                  { label: operationScheduleLabel, value: formatDateTime(operation.scheduledStart) },
-                  { label: "Fin", value: formatDateTime(operation.scheduledEnd) },
+                  ...(operation.operationKind === "RECURRING"
+                    ? [
+                        {
+                          label: "Vigencia",
+                          value: operation.schedule
+                            ? formatRecurringValidity(
+                                operation.schedule.validFrom,
+                                operation.schedule.validUntil,
+                              )
+                            : "—",
+                        },
+                      ]
+                    : [
+                        { label: operationScheduleLabel, value: formatDateTime(operation.scheduledStart) },
+                        { label: "Fin", value: formatDateTime(operation.scheduledEnd) },
+                      ]),
                   { label: "Tolerancia temprana", value: `${operation.earlyToleranceMinutes} min` },
                   { label: "Tolerancia tardía", value: `${operation.lateToleranceMinutes} min` },
                   { label: "Asistencias registradas", value: operation.attendanceRecordsCount },
@@ -246,15 +319,9 @@ export function OperationDetailPage() {
                 <OperationForm
                   mode="edit"
                   currentStatus={operation.status}
-                  defaultValues={{
-                    serviceId: operation.serviceId,
-                    scheduledStart: isoToDatetimeLocal(operation.scheduledStart),
-                    scheduledEnd: operation.scheduledEnd ? isoToDatetimeLocal(operation.scheduledEnd) : "",
-                    earlyToleranceMinutes: operation.earlyToleranceMinutes,
-                    lateToleranceMinutes: operation.lateToleranceMinutes,
-                    notes: operation.notes ?? "",
-                    status: operation.status,
-                  }}
+                  currentOperationKind={operation.operationKind ?? "ONE_TIME"}
+                  companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
+                  defaultValues={buildOperationEditDefaultValues(operation)}
                   submitLabel="Guardar cambios"
                   cancelTo={`/operations/${operation.id}`}
                   loading={updateMutation.isPending}

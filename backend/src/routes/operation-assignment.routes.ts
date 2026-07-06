@@ -5,8 +5,9 @@ import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   assignEmployeeSchema,
+  assignmentMemberParamsSchema,
   assignmentParamsSchema,
-  unassignParamsSchema,
+  endAssignmentSchema,
 } from "../schemas/assignment.schema";
 
 export const operationAssignmentRouter = Router({ mergeParams: true });
@@ -22,11 +23,24 @@ operationAssignmentRouter.get(
   "/",
   requirePermission("operations:read"),
   validate(assignmentParamsSchema, "params"),
-  asyncHandler(operationAssignmentController.listAssignedEmployees),
+  asyncHandler(operationAssignmentController.listAssignmentPeriods),
+);
+operationAssignmentRouter.post(
+  "/:assignmentId/cancel",
+  requirePermission("operations:manage"),
+  validate(assignmentMemberParamsSchema, "params"),
+  asyncHandler(operationAssignmentController.cancelAssignment),
+);
+operationAssignmentRouter.post(
+  "/:assignmentId/end",
+  requirePermission("operations:manage"),
+  validate(assignmentMemberParamsSchema, "params"),
+  validate(endAssignmentSchema),
+  asyncHandler(operationAssignmentController.endAssignment),
 );
 operationAssignmentRouter.delete(
-  "/:employeeId",
+  "/:assignmentId",
   requirePermission("operations:manage"),
-  validate(unassignParamsSchema, "params"),
-  asyncHandler(operationAssignmentController.unassignEmployee),
+  validate(assignmentMemberParamsSchema, "params"),
+  asyncHandler(operationAssignmentController.cancelAssignment),
 );

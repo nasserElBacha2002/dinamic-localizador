@@ -12,14 +12,20 @@ import type {
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 
 const ASSIGNMENT_BASE_FROM = `
-  FROM operation_assignments ie
-  INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = ie.company_id
+  FROM operation_assignments oa
+  INNER JOIN scheduled_operations i ON i.id = oa.operation_id AND i.company_id = oa.company_id
+  INNER JOIN employee_workdays ew ON ew.operation_assignment_id = oa.id AND ew.company_id = oa.company_id
+  INNER JOIN operation_workdays ow ON ow.id = ew.operation_workday_id AND ow.company_id = ew.company_id
   INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
-  INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = ie.company_id
+  INNER JOIN employees e ON e.id = oa.employee_id AND e.company_id = i.company_id
   LEFT JOIN attendance_records ar
-    ON ar.operation_id = ie.operation_id
-   AND ar.employee_id = ie.employee_id
-   AND ar.company_id = ie.company_id
+    ON ar.employee_workday_id = ew.id
+   AND ar.company_id = ew.company_id
+   AND ar.is_simulation = 0
+  WHERE oa.cancelled_at IS NULL
+    AND ew.expectation_status <> 'CANCELLED'
+    AND ow.work_date >= oa.valid_from
+    AND (oa.valid_until IS NULL OR ow.work_date <= oa.valid_until)
 `;
 
 const buildStatisticsFilters = (companyId: string, filters: StatisticsFilters): SqlFilter[] => {
@@ -321,7 +327,7 @@ export const statisticsRepository = {
         e.id AS employee_id,
         e.name AS employee_name,
         e.phone_number,
-        COUNT(DISTINCT ie.operation_id) AS assigned_operations_count,
+        COUNT(DISTINCT oa.operation_id) AS assigned_operations_count,
         SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS confirmed_attendances,
         SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count,
         SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,

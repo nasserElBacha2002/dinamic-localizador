@@ -30,6 +30,14 @@ export const operationWorkdayResolver = {
       );
     }
 
+    if (!operation.scheduledStart) {
+      throw new AppError(
+        400,
+        "OPERATION_SCHEDULE_REQUIRED",
+        "La operación ONE_TIME requiere fecha de inicio programada",
+      );
+    }
+
     const expectedStartAt = new Date(operation.scheduledStart);
     const expectedEndAt = operation.scheduledEnd ? new Date(operation.scheduledEnd) : null;
     const workDate = resolveWorkDateFromScheduledStart(expectedStartAt, timezone);

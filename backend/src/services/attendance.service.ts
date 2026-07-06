@@ -48,10 +48,16 @@ export const attendanceService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
+    const operationWorkday = await workdayMaterializationService.ensureOperationWorkday(
+      companyId,
+      input.operationId,
+    );
+
     const isAssigned = await operationEmployeeRepository.exists(
       companyId,
       input.operationId,
       input.employeeId,
+      operationWorkday.workDate,
     );
     if (!isAssigned) {
       throw new AppError(

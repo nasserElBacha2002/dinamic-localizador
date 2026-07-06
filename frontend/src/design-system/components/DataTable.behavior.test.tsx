@@ -24,7 +24,7 @@ describe("DataTable click behavior", () => {
     const clicked: string[] = [];
     const view = render(
       <MantineProvider>
-        <DataTable
+        <DataTable<SampleRow>
           rows={[
             { id: "a", label: "Row A", clickable: true },
             { id: "b", label: "Row B", clickable: false },
@@ -46,7 +46,7 @@ describe("DataTable click behavior", () => {
     const clicked: string[] = [];
     const view = render(
       <MantineProvider>
-        <DataTable
+        <DataTable<SampleRow>
           rows={[
             { id: "a", label: "Row A", clickable: true },
             { id: "b", label: "Row B", clickable: false },
@@ -68,7 +68,7 @@ describe("DataTable click behavior", () => {
     const actionClicks: string[] = [];
     const view = render(
       <MantineProvider>
-        <DataTable
+        <DataTable<SampleRow>
           rows={[{ id: "a", label: "Row A", clickable: true }]}
           columns={[{ key: "label", header: "Label", getValue: (row) => row.label }]}
           getRowKey={(row) => row.id}

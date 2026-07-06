@@ -7,6 +7,6 @@ export function useListNavigationState(listPath: string) {
 
   return useMemo(
     () => buildListNavigationState(listPath, location),
-    [listPath, location.pathname, location.search],
+    [listPath, location],
   );
 }

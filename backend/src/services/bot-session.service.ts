@@ -505,6 +505,60 @@ export const botSessionService = {
     }
   },
 
+  async createAttendanceConfirmationResponseSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      inventoryId: string;
+      notificationId: string;
+      scheduleVersion: number;
+    },
+  ): Promise<BotSession | null> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            inventoryId: input.inventoryId,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
+            contextJson: JSON.stringify({
+              attendanceConfirmation: {
+                inventoryId: input.inventoryId,
+                notificationId: input.notificationId,
+                scheduleVersion: input.scheduleVersion,
+              },
+            }),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+
+      console.info("[bot-session] attendance confirmation response session created", {
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        inventoryId: input.inventoryId,
+        scheduleVersion: input.scheduleVersion,
+      });
+
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        console.info("[bot-session] skipped confirmation response session because active session exists", {
+          employeeId: input.employeeId,
+          inventoryId: input.inventoryId,
+        });
+        return null;
+      }
+
+      throw error;
+    }
+  },
+
   async completeSession(companyId: string, sessionId: string, transaction?: sql.Transaction): Promise<void> {
     await botSessionRepository.updateSession(companyId, sessionId, { state: "COMPLETED" }, transaction);
     console.info("[bot-session] session completed", { sessionId });

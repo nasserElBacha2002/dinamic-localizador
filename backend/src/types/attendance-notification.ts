@@ -25,4 +25,7 @@ export interface AttendanceReminderCandidate {
   storeName: string;
   scheduledStart: string;
   scheduledEnd: string | null;
+  scheduleVersion: number;
+  confirmationReminderHoursBefore: number;
+  operationTimezone?: string;
 }

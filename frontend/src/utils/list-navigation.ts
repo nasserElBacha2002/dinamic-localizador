@@ -18,17 +18,22 @@ export function buildListNavigationState(
   };
 }
 
-export function resolveListReturnPath(listPath: string, state: unknown): string {
-  if (!state || typeof state !== "object" || !("fromList" in state)) {
-    return listPath;
+export function resolveListReturnPath(defaultListPath: string, state: unknown): string {
+  if (!state || typeof state !== "object") {
+    return defaultListPath;
   }
 
-  const fromList = (state as ListNavigationState).fromList;
+  const navState = state as Partial<ListNavigationState>;
+  const fromList = navState.fromList;
+  const contextListPath = navState.listPath ?? defaultListPath;
+
   if (typeof fromList !== "string" || fromList.length === 0) {
-    return listPath;
+    return defaultListPath;
   }
 
-  const normalizedListPath = listPath.endsWith("/") ? listPath.slice(0, -1) : listPath;
+  const normalizedListPath = contextListPath.endsWith("/")
+    ? contextListPath.slice(0, -1)
+    : contextListPath;
   const normalizedFromList = fromList.split("?")[0];
 
   if (
@@ -38,7 +43,7 @@ export function resolveListReturnPath(listPath: string, state: unknown): string 
     return fromList;
   }
 
-  return listPath;
+  return defaultListPath;
 }
 
 export function navigateWithListContext(

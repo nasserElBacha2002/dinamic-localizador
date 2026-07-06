@@ -26,6 +26,7 @@ export interface DataTableProps<T> {
   emptyTitle?: ReactNode;
   emptyDescription?: ReactNode;
   onRowClick?: (row: T) => void;
+  isRowClickable?: (row: T) => boolean;
   rowActions?: (row: T) => ReactNode;
   rowActionsHeader?: ReactNode;
   pagination?: ReactNode;
@@ -101,6 +102,7 @@ export function DataTable<T>({
   emptyTitle = "Sin resultados",
   emptyDescription = "No hay datos para mostrar.",
   onRowClick,
+  isRowClickable,
   rowActions,
   rowActionsHeader = "Acciones",
   pagination,
@@ -167,7 +169,7 @@ export function DataTable<T>({
             <Table.Tbody>
               {safeRows.map((row) => {
                 const rowKey = getRowKey(row);
-                const clickable = Boolean(onRowClick);
+                const clickable = Boolean(onRowClick) && (isRowClickable ? isRowClickable(row) : true);
 
                 return (
                   <Table.Tr
@@ -179,6 +181,7 @@ export function DataTable<T>({
                       clickable ? (event) => handleRowKeyDown(event, row, onRowClick) : undefined
                     }
                     style={clickable ? { cursor: "pointer" } : undefined}
+                    data-clickable={clickable ? "true" : undefined}
                   >
                     {columns.map((column) => (
                       <Table.Td key={column.key} style={{ textAlign: column.align ?? "left" }}>

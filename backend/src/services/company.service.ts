@@ -33,6 +33,8 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   defaultOperationStartTime: settings.defaultOperationStartTime,
   defaultOperationEndTime: settings.defaultOperationEndTime,
   geofenceReviewMarginMeters: settings.geofenceReviewMarginMeters,
+  confirmationReminderEnabled: settings.confirmationReminderEnabled,
+  confirmationReminderHoursBefore: settings.confirmationReminderHoursBefore,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

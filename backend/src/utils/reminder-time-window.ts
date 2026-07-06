@@ -36,5 +36,30 @@ export const buildInventoryStartDueWindow = (
   };
 };
 
+/** Inventories whose reminder threshold (start - hoursBefore) is due at referenceAt. */
+export const buildConfirmationReminderDueWindow = (
+  referenceAt: Date,
+  hoursBefore: number,
+): ReminderTimeWindow => {
+  const windowStart = new Date(referenceAt.getTime() - 60 * 60_000);
+  const windowEnd = referenceAt;
+
+  return {
+    referenceAt,
+    windowStart,
+    windowEnd,
+    hoursBefore,
+  } as ReminderTimeWindow & { hoursBefore: number };
+};
+
+export const isConfirmationReminderThresholdReached = (
+  scheduledStart: Date,
+  referenceAt: Date,
+  hoursBefore: number,
+): boolean => {
+  const thresholdMs = scheduledStart.getTime() - hoursBefore * 60 * 60_000;
+  return referenceAt.getTime() >= thresholdMs && referenceAt.getTime() < scheduledStart.getTime();
+};
+
 /** @deprecated Use buildReminderDueWindow */
 export const buildReminderTargetWindow = buildReminderDueWindow;

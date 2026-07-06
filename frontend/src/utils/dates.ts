@@ -39,6 +39,21 @@ export function formatDate(iso: string | null | undefined): string {
   return dateFormatter.format(new Date(iso));
 }
 
+const timeFormatter = new Intl.DateTimeFormat("es-AR", {
+  timeZone: TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+export function formatTime(iso: string | null | undefined): string {
+  if (!iso) {
+    return "—";
+  }
+
+  return timeFormatter.format(new Date(iso));
+}
+
 export function isoToDatetimeLocal(iso: string): string {
   const parts = dateTimeFormatter.formatToParts(new Date(iso));
   const year = getPart(parts, "year");

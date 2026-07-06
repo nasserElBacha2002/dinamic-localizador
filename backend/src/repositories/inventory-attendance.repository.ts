@@ -1,4 +1,5 @@
 import sql from "mssql";
+import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import { getPool } from "../database/connection";
 import type { OperationalStatus } from "../types/auth";
 import type { AttendanceRecord, Employee, Inventory, Store } from "../types/domain";
@@ -9,6 +10,9 @@ export interface InventoryAttendanceSummaryRow {
   employee: Employee;
   attendance: AttendanceRecord | null;
   operationalStatus: OperationalStatus;
+  confirmationStatus: AssignmentConfirmationStatus;
+  confirmedAt: string | null;
+  unavailableAt: string | null;
 }
 
 export interface InventoryAttendanceSummaryCounts {
@@ -18,7 +22,26 @@ export interface InventoryAttendanceSummaryCounts {
   pendingReview: number;
   rejected: number;
   withoutCheckIn: number;
+  confirmedEmployees: number;
+  pendingConfirmationEmployees: number;
+  unavailableEmployees: number;
 }
+
+const parseConfirmationStatus = (value: unknown): AssignmentConfirmationStatus => {
+  const status = String(value ?? "PENDING");
+  if (status === "CONFIRMED" || status === "UNAVAILABLE") {
+    return status;
+  }
+  return "PENDING";
+};
+
+const toIsoOrNull = (value: unknown): string | null => {
+  if (value === null || value === undefined) {
+    return null;
+  }
+  const date = value instanceof Date ? value : new Date(value as string);
+  return Number.isNaN(date.getTime()) ? null : date.toISOString();
+};
 
 const resolveOperationalStatus = (attendance: AttendanceRecord | null): OperationalStatus => {
   if (!attendance) {
@@ -72,6 +95,9 @@ const mapSummaryRow = (row: Record<string, unknown>): InventoryAttendanceSummary
     employee,
     attendance,
     operationalStatus: resolveOperationalStatus(attendance),
+    confirmationStatus: parseConfirmationStatus(row.confirmation_status),
+    confirmedAt: toIsoOrNull(row.confirmed_at),
+    unavailableAt: toIsoOrNull(row.unavailable_at),
   };
 };
 
@@ -156,7 +182,10 @@ export const inventoryAttendanceRepository = {
           SUM(CASE WHEN ar.validation_status = 'VALID' THEN 1 ELSE 0 END) AS valid_count,
           SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
           SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
-          SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS without_check_in
+          SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS without_check_in,
+          SUM(CASE WHEN ie.confirmation_status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
+          SUM(CASE WHEN ie.confirmation_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
+          SUM(CASE WHEN ie.confirmation_status = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
         ${employeesBaseQuery}
       `);
 
@@ -168,6 +197,9 @@ export const inventoryAttendanceRepository = {
       pendingReview: Number(summaryRow.pending_review ?? 0),
       rejected: Number(summaryRow.rejected ?? 0),
       withoutCheckIn: Number(summaryRow.without_check_in ?? 0),
+      confirmedEmployees: Number(summaryRow.confirmed_employees ?? 0),
+      pendingConfirmationEmployees: Number(summaryRow.pending_confirmation_employees ?? 0),
+      unavailableEmployees: Number(summaryRow.unavailable_employees ?? 0),
     };
 
     const employeesResult = await pool
@@ -179,6 +211,9 @@ export const inventoryAttendanceRepository = {
       .query(`
         SELECT
           e.*,
+          ie.confirmation_status,
+          ie.confirmed_at,
+          ie.unavailable_at,
           ar.id AS attendance_id,
           ar.inventory_id AS attendance_inventory_id,
           ar.employee_id AS attendance_employee_id,

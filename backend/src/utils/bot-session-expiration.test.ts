@@ -27,6 +27,7 @@ describe("bot session expiration helpers", () => {
       "WAITING_ABSENCE_CONFIRMATION",
       "WAITING_CONFIRM_ATTENDANCE_SELECTION",
       "WAITING_UNAVAILABILITY_SELECTION",
+      "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
     ]);
   });
 

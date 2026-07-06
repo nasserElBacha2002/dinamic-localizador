@@ -10,6 +10,7 @@ export type BotSessionState =
   | "WAITING_ABSENCE_CONFIRMATION"
   | "WAITING_CONFIRM_ATTENDANCE_SELECTION"
   | "WAITING_UNAVAILABILITY_SELECTION"
+  | "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE"
   | "COMPLETED"
   | "CANCELLED"
   | "EXPIRED";
@@ -39,6 +40,11 @@ export interface InventorySelectionOption {
 export interface BotSessionContext {
   inventoryOptions?: InventorySelectionOption[];
   flow?: "ABSENCE_REQUEST";
+  attendanceConfirmation?: {
+    inventoryId: string;
+    notificationId?: string;
+    scheduleVersion: number;
+  };
   absenceDraft?: {
     absenceTypeId?: string;
     absenceTypeCode?: string;

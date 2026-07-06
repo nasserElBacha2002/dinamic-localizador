@@ -59,6 +59,8 @@ export interface CompanySettings {
   defaultOperationStartTime: string | null;
   defaultOperationEndTime: string | null;
   geofenceReviewMarginMeters: number | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
   createdAt: string;
   updatedAt: string;
 }

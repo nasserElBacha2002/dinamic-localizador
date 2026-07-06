@@ -1,5 +1,19 @@
+import type { AssignmentConfirmationStatus } from "../types/assignment-confirmation";
 import type { LocationStatus, PunctualityStatus, ValidationStatus } from "../types/attendance";
 import type { InventoryStatus } from "../types/inventory";
+
+export const assignmentConfirmationStatusLabels: Record<AssignmentConfirmationStatus, string> = {
+  CONFIRMED: "Confirmado",
+  PENDING: "Pendiente de respuesta",
+  UNAVAILABLE: "No disponible",
+};
+
+export const assignmentConfirmationStatusTableLabels: Record<AssignmentConfirmationStatus, string> =
+  {
+    CONFIRMED: "Confirmado",
+    PENDING: "Pendiente",
+    UNAVAILABLE: "No disponible",
+  };
 
 export const inventoryStatusLabels: Record<InventoryStatus, string> = {
   SCHEDULED: "Programado",
@@ -64,5 +78,15 @@ export const operationalStatusLabels: Record<
   NO_CHECK_IN: "Sin registro",
   VALID: "Validado",
   PENDING_REVIEW: "Pendiente",
+  REJECTED: "Rechazado",
+};
+
+export const operationalAttendanceStatusTableLabels: Record<
+  import("../types/attendance").OperationalStatus,
+  string
+> = {
+  NO_CHECK_IN: "Sin registro",
+  VALID: "Validado",
+  PENDING_REVIEW: "A revisar",
   REJECTED: "Rechazado",
 };

@@ -1,6 +1,6 @@
-import { Alert, Button, Group, SimpleGrid, Text } from "@mantine/core";
+import { Alert, Button, Group, Stack, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import {
@@ -18,26 +18,26 @@ import {
   useUnassignInventoryEmployee,
 } from "../../hooks/useInventories";
 import { usePaginationState } from "../../hooks/usePaginationState";
-// Embedded detail sub-table: pagination is scoped to this section, not a navigable list view.
 import type { InventoryAttendanceSummaryEmployee } from "../../types/inventory-attendance-summary";
-import { formatDateTime } from "../../utils/dates";
-import { formatDistanceMeters, getRelatedName, safeText } from "../../utils/display-safe";
+import { formatTime } from "../../utils/dates";
+import { getRelatedName, safeText } from "../../utils/display-safe";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
-  locationStatusLabels,
-  checkoutStatusLabels,
-  operationalStatusLabels,
-  punctualityStatusLabels,
-  validationStatusLabels,
+  assignmentConfirmationStatusTableLabels,
+  employeeTypeLabels,
+  operationalAttendanceStatusTableLabels,
 } from "../../utils/labels";
 import {
-  checkoutStatusTone,
-  locationStatusTone,
+  assignmentConfirmationStatusTone,
   operationalStatusTone,
-  punctualityStatusTone,
-  validationStatusTone,
 } from "../../utils/attendance-status-tones";
+import {
+  formatOperationalCheckInCell,
+  formatOperationalCheckOutCell,
+} from "../../utils/inventory-operational-display";
+import { navigateWithListContext } from "../../utils/list-navigation";
+import { OperationalSummaryMetrics } from "./OperationalSummaryMetrics";
 
 interface InventoryOperationalSectionProps {
   inventoryId: string;
@@ -65,6 +65,9 @@ export function InventoryOperationalSection({
   assignedEmployeeIds,
   onFeedback,
 }: InventoryOperationalSectionProps) {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const inventoryDetailPath = `/inventories/${inventoryId}`;
   const pagination = usePaginationState(10);
   const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [reviewTarget, setReviewTarget] = useState<{
@@ -124,116 +127,74 @@ export function InventoryOperationalSection({
   const summary = summaryQuery.data?.summary;
   const rows = summaryQuery.data?.employees ?? [];
   const meta = summaryQuery.data?.meta;
+  const expectedArrivalTime = formatTime(scheduledStart);
 
   const columns = useMemo<DataTableColumn<InventoryAttendanceSummaryEmployee>[]>(
     () => [
       {
         key: "employee",
-        header: terminology.worker.singular,
-        getValue: (row) => getRelatedName(row.employee),
+        header: "Colaborador",
+        width: 180,
+        render: (row) => (
+          <Stack gap={2}>
+            <Text size="sm" fw={500}>
+              {getRelatedName(row.employee)}
+            </Text>
+            <Text size="xs" c="dimmed">
+              {safeText(row.employee?.phoneNumber ?? null)}
+            </Text>
+          </Stack>
+        ),
       },
       {
-        key: "phone",
-        header: "Teléfono",
-        getValue: (row) => safeText(row.employee?.phoneNumber ?? null),
+        key: "employeeType",
+        header: "Tipo",
+        width: 90,
+        getValue: (row) =>
+          row.employee?.employeeType ? employeeTypeLabels[row.employee.employeeType] : "—",
+      },
+      {
+        key: "confirmation",
+        header: "Confirmación",
+        width: 120,
+        render: (row) => (
+          <StatusBadge
+            label={assignmentConfirmationStatusTableLabels[row.confirmationStatus]}
+            tone={assignmentConfirmationStatusTone(row.confirmationStatus)}
+          />
+        ),
       },
       {
         key: "expected",
         header: "Hora esperada",
-        getValue: () => formatDateTime(scheduledStart),
+        width: 100,
+        getValue: () => expectedArrivalTime,
       },
       {
         key: "checkIn",
         header: "Check-in",
-        getValue: (row) =>
-          row.attendance ? formatDateTime(row.attendance.receivedAt) : "—",
-      },
-      {
-        key: "distance",
-        header: "Distancia",
-        getValue: (row) =>
-          row.attendance ? formatDistanceMeters(row.attendance.distanceMeters) : "—",
+        width: 110,
+        render: (row) => formatOperationalCheckInCell(row.attendance),
       },
       {
         key: "checkOut",
         header: "Check-out",
-        getValue: (row) =>
-          row.attendance?.checkoutAt ? formatDateTime(row.attendance.checkoutAt) : "—",
+        width: 120,
+        render: (row) => formatOperationalCheckOutCell(row.attendance),
       },
       {
-        key: "checkoutStatus",
-        header: "Estado salida",
-        render: (row) =>
-          row.attendance?.checkoutStatus ? (
-            <StatusBadge
-              label={checkoutStatusLabels[row.attendance.checkoutStatus]}
-              tone={checkoutStatusTone(row.attendance.checkoutStatus)}
-            />
-          ) : (
-            "—"
-          ),
-      },
-      {
-        key: "extraTime",
-        header: "Tiempo extra",
-        getValue: (row) =>
-          row.attendance?.extraWorkedMinutes
-            ? `${row.attendance.extraWorkedMinutes} min`
-            : row.attendance?.earlyDepartureMinutes
-              ? `${row.attendance.earlyDepartureMinutes} min antes`
-              : "—",
-      },
-      {
-        key: "location",
-        header: "Ubicación",
-        render: (row) =>
-          row.attendance ? (
-            <StatusBadge
-              label={locationStatusLabels[row.attendance.locationStatus]}
-              tone={locationStatusTone(row.attendance.locationStatus)}
-            />
-          ) : (
-            "—"
-          ),
-      },
-      {
-        key: "punctuality",
-        header: "Puntualidad",
-        render: (row) =>
-          row.attendance ? (
-            <StatusBadge
-              label={punctualityStatusLabels[row.attendance.punctualityStatus]}
-              tone={punctualityStatusTone(row.attendance.punctualityStatus)}
-            />
-          ) : (
-            "—"
-          ),
-      },
-      {
-        key: "validation",
-        header: "Validación",
-        render: (row) =>
-          row.attendance ? (
-            <StatusBadge
-              label={validationStatusLabels[row.attendance.validationStatus]}
-              tone={validationStatusTone(row.attendance.validationStatus)}
-            />
-          ) : (
-            "—"
-          ),
-      },
-      {
-        key: "operational",
-        header: "Estado operativo",
+        key: "attendanceStatus",
+        header: "Estado asistencia",
+        width: 130,
         render: (row) => (
           <StatusBadge
-            label={operationalStatusLabels[row.operationalStatus]}
+            label={operationalAttendanceStatusTableLabels[row.operationalStatus]}
             tone={operationalStatusTone(row.operationalStatus)}
           />
         ),
       },
     ],
-    [scheduledStart],
+    [expectedArrivalTime],
   );
 
   return (
@@ -251,32 +212,11 @@ export function InventoryOperationalSection({
         </Button>
       }
     >
-      {summary ? (
-        <SimpleGrid cols={{ base: 2, sm: 3, md: 6 }} spacing="sm" mb="md">
-          <Text size="sm">
-            Asignados: <strong>{summary.assigned}</strong>
-          </Text>
-          <Text size="sm">
-            Con check-in: <strong>{summary.checkedIn}</strong>
-          </Text>
-          <Text size="sm">
-            Validados: <strong>{summary.valid}</strong>
-          </Text>
-          <Text size="sm">
-            Pendientes: <strong>{summary.pendingReview}</strong>
-          </Text>
-          <Text size="sm">
-            Rechazados: <strong>{summary.rejected}</strong>
-          </Text>
-          <Text size="sm">
-            Sin registro: <strong>{summary.withoutCheckIn}</strong>
-          </Text>
-        </SimpleGrid>
-      ) : null}
+      {summary ? <OperationalSummaryMetrics summary={summary} /> : null}
 
       {canAssign ? (
-        <Group align="flex-end" gap="md" mb="md" wrap="wrap">
-          <div style={{ flex: 1, minWidth: 260 }}>
+        <Group align="flex-end" gap="sm" mb="md" wrap="nowrap">
+          <div style={{ flex: 1, minWidth: 0 }}>
             <EmployeeSearchAutocomplete
               label={`${terminology.worker.singular} activo`}
               value={selectedEmployeeId || null}
@@ -284,13 +224,13 @@ export function InventoryOperationalSection({
               excludeIds={assignedEmployeeIds}
               descriptionMode="assignment"
               helperText="Buscá por nombre. Verás tipo y último día trabajado."
+              placeholder="Nombre o teléfono"
             />
           </div>
           <Button
             onClick={() => void handleAssign()}
             disabled={!selectedEmployeeId || assignMutation.isPending}
             loading={assignMutation.isPending}
-            mb={4}
           >
             Asignar
           </Button>
@@ -314,18 +254,21 @@ export function InventoryOperationalSection({
         }
         emptyTitle={`No hay ${terminology.worker.plural.toLowerCase()} asignados`}
         emptyDescription={`Asigná ${terminology.worker.plural.toLowerCase()} activos para comenzar el seguimiento operativo.`}
+        onRowClick={(row) => {
+          if (!row.attendance) {
+            return;
+          }
+
+          navigateWithListContext(
+            navigate,
+            `/attendance/${row.attendance.id}`,
+            inventoryDetailPath,
+            location,
+          );
+        }}
+        isRowClickable={(row) => Boolean(row.attendance)}
         rowActions={(row) => (
-          <Group gap="xs" justify="flex-end" wrap="wrap">
-            {row.attendance ? (
-              <Button
-                component={RouterLink}
-                to={`/attendance/${row.attendance.id}`}
-                size="compact-sm"
-                variant="light"
-              >
-                Ver
-              </Button>
-            ) : null}
+          <Group gap="xs" justify="flex-end" wrap="nowrap">
             {canReviewAttendance(row) ? (
               <>
                 <Button

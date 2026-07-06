@@ -1,4 +1,4 @@
-import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
+import { Button, Group, NumberInput, Select, Stack, Switch, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { getCanonicalOperationTimezone, getOperationTimezoneOptions } from "../../../constants/operation-timezones";
 import { FormErrorAlert, FormGrid, SectionCard } from "../../../design-system";
@@ -234,6 +234,54 @@ export function CompanyOperationalSettingsSection({
               }
               {...numberInputProps}
               disabled={disabled}
+            />
+          </SettingsFormField>
+        </FormGrid>
+
+        <Text fw={600} size="sm">
+          Confirmación de asistencia
+        </Text>
+        <FormGrid columns={{ base: 1, md: 2 }}>
+          <SettingsFormField
+            label="Enviar recordatorio automático"
+            description="WhatsApp proactivo a empleados con confirmación pendiente."
+          >
+            <Switch
+              checked={formValues.confirmationReminderEnabled}
+              onChange={(event) => {
+                const checked = event.currentTarget.checked;
+                setFormValues((current) => ({
+                  ...current,
+                  confirmationReminderEnabled: checked,
+                }));
+              }}
+              disabled={disabled}
+              aria-label="Enviar recordatorio automático de confirmación"
+            />
+          </SettingsFormField>
+
+          <SettingsFormField
+            label="Enviar recordatorio (horas antes)"
+            description="Ventana configurable por empresa antes del inicio del inventario."
+          >
+            <NumberInput
+              value={
+                formValues.confirmationReminderHoursBefore === ""
+                  ? ""
+                  : Number(formValues.confirmationReminderHoursBefore)
+              }
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  confirmationReminderHoursBefore:
+                    value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              min={1}
+              max={168}
+              step={1}
+              hideControls
+              disabled={disabled || !formValues.confirmationReminderEnabled}
             />
           </SettingsFormField>
         </FormGrid>

@@ -102,6 +102,18 @@ export const employeeWorkdayService = {
     return this.listConfirmableAssignments(companyId, employeeId);
   },
 
+  async getAssignmentForResponseMessage(
+    companyId: string,
+    employeeId: string,
+    inventoryId: string,
+  ): Promise<EmployeeAssignedInventory | null> {
+    return employeeAssignmentQueryRepository.findByInventoryForEmployee(
+      companyId,
+      employeeId,
+      inventoryId,
+    );
+  },
+
   buildConfirmSelectionPrompt(assignments: EmployeeAssignedInventory[]): string {
     const timeZone = getBotOperationTimezone();
     const lines = [

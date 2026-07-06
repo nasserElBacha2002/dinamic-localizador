@@ -11,6 +11,8 @@ export interface CompanySettings {
   defaultOperationStartTime: string | null;
   defaultOperationEndTime: string | null;
   geofenceReviewMarginMeters: number | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -29,6 +31,8 @@ export type UpdateCompanySettingsInput = Partial<
     | "defaultOperationStartTime"
     | "defaultOperationEndTime"
     | "geofenceReviewMarginMeters"
+    | "confirmationReminderEnabled"
+    | "confirmationReminderHoursBefore"
   >
 >;
 
@@ -44,4 +48,6 @@ export interface CompanySettingsFormValues {
   earlyLeaveToleranceMinutes: string;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: string;
 }

@@ -19,6 +19,8 @@ export type CompanySettingsInput = {
   defaultOperationStartTime?: string | null;
   defaultOperationEndTime?: string | null;
   geofenceReviewMarginMeters?: number | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
 };
 
 const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
@@ -38,6 +40,8 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.geofence_review_margin_meters == null
       ? null
       : Number(row.geofence_review_margin_meters),
+  confirmationReminderEnabled: Boolean(row.confirmation_reminder_enabled ?? true),
+  confirmationReminderHoursBefore: Number(row.confirmation_reminder_hours_before ?? 24),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -88,6 +92,16 @@ export const companySettingsRepository = {
       )
       .input("defaultOperationEndTime", sql.VarChar(8), toSqlTimeValue(input.defaultOperationEndTime))
       .input("geofenceReviewMarginMeters", sql.Int, input.geofenceReviewMarginMeters ?? null)
+      .input(
+        "confirmationReminderEnabled",
+        sql.Bit,
+        input.confirmationReminderEnabled ? 1 : 0,
+      )
+      .input(
+        "confirmationReminderHoursBefore",
+        sql.Int,
+        input.confirmationReminderHoursBefore,
+      )
       .query(`
         INSERT INTO company_settings (
           company_id, operation_timezone, default_radius_meters,
@@ -95,7 +109,8 @@ export const companySettingsRepository = {
           require_checkout_location, allow_manual_attendance_corrections,
           default_early_arrival_tolerance_minutes, default_late_arrival_tolerance_minutes,
           default_operation_start_time, default_operation_end_time,
-          geofence_review_margin_meters
+          geofence_review_margin_meters,
+          confirmation_reminder_enabled, confirmation_reminder_hours_before
         )
         OUTPUT INSERTED.*
         VALUES (
@@ -104,7 +119,8 @@ export const companySettingsRepository = {
           @requireCheckoutLocation, @allowManualAttendanceCorrections,
           @defaultEarlyArrivalToleranceMinutes, @defaultLateArrivalToleranceMinutes,
           @defaultOperationStartTime, @defaultOperationEndTime,
-          @geofenceReviewMarginMeters
+          @geofenceReviewMarginMeters,
+          @confirmationReminderEnabled, @confirmationReminderHoursBefore
         )
       `);
 
@@ -152,6 +168,8 @@ export const companySettingsRepository = {
         | "defaultOperationStartTime"
         | "defaultOperationEndTime"
         | "geofenceReviewMarginMeters"
+        | "confirmationReminderEnabled"
+        | "confirmationReminderHoursBefore"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -226,6 +244,22 @@ export const companySettingsRepository = {
     if (input.geofenceReviewMarginMeters !== undefined) {
       request.input("geofenceReviewMarginMeters", sql.Int, input.geofenceReviewMarginMeters);
       fields.push("geofence_review_margin_meters = @geofenceReviewMarginMeters");
+    }
+    if (input.confirmationReminderEnabled !== undefined) {
+      request.input(
+        "confirmationReminderEnabled",
+        sql.Bit,
+        input.confirmationReminderEnabled ? 1 : 0,
+      );
+      fields.push("confirmation_reminder_enabled = @confirmationReminderEnabled");
+    }
+    if (input.confirmationReminderHoursBefore !== undefined) {
+      request.input(
+        "confirmationReminderHoursBefore",
+        sql.Int,
+        input.confirmationReminderHoursBefore,
+      );
+      fields.push("confirmation_reminder_hours_before = @confirmationReminderHoursBefore");
     }
 
     if (fields.length === 0) {

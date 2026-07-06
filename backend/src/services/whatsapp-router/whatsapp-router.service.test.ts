@@ -1529,4 +1529,106 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.match(response, /SELECTED_UNAVAILABLE/);
     assert.equal(calls.startCheckIn, 0);
   });
+
+  it("confirms exact inventory during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
+      kind: "ok" as const,
+      message: "CONTEXT_CONFIRMED",
+    }));
+    mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => ({
+      storeName: "Carrefour Caballito",
+      scheduledStart: "2026-07-15T23:30:00.000Z",
+    }));
+    mock.method(botSessionService, "completeSession", async () => undefined);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "sí",
+        session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
+          contextJson: JSON.stringify({
+            attendanceConfirmation: {
+              inventoryId,
+              employeeId,
+              notificationId: "notif-1",
+              scheduleVersion: 1,
+            },
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /Asistencia confirmada/);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("marks unavailable during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
+    setupUnitTestEnv();
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => ({
+      kind: "ok" as const,
+      message: "CONTEXT_UNAVAILABLE",
+    }));
+    mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => ({
+      storeName: "Carrefour Caballito",
+      scheduledStart: "2026-07-15T23:30:00.000Z",
+    }));
+    mock.method(botSessionService, "completeSession", async () => undefined);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "no puedo",
+        session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
+          contextJson: JSON.stringify({
+            attendanceConfirmation: {
+              inventoryId,
+              employeeId,
+              notificationId: "notif-1",
+              scheduleVersion: 1,
+            },
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /no vas a poder asistir/);
+    assert.equal(calls.startCheckIn, 0);
+  });
+
+  it("keeps contextual flow for ambiguous reply during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "tal vez",
+        session: buildSession("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", {
+          contextJson: JSON.stringify({
+            attendanceConfirmation: {
+              inventoryId,
+              employeeId,
+              notificationId: "notif-1",
+              scheduleVersion: 1,
+            },
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /No pude interpretar tu respuesta/);
+    assert.match(response, /1 - Confirmar asistencia/);
+  });
 });

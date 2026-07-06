@@ -141,4 +141,26 @@ export const employeeAssignmentQueryRepository = {
 
     return (result.rowsAffected[0] ?? 0) > 0;
   },
+
+  async resetConfirmationsForInventoryScheduleChange(
+    companyId: string,
+    inventoryId: string,
+  ): Promise<number> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .query(`
+        UPDATE operation_assignments
+        SET confirmation_status = 'PENDING',
+            confirmed_at = NULL,
+            unavailable_at = NULL,
+            confirmation_schedule_version = confirmation_schedule_version + 1
+        WHERE company_id = @companyId
+          AND inventory_id = @inventoryId
+      `);
+
+    return result.rowsAffected[0] ?? 0;
+  },
 };

@@ -22,6 +22,7 @@ import {
   handleConfirmAttendanceIntent,
   handleUnavailabilityIntent,
 } from "./assignment-confirmation.handler";
+import { handleActiveAttendanceConfirmationResponseSession } from "./attendance-confirmation-response.handler";
 import {
   handleActiveCheckInTextSession,
   handleArrivalIntent,
@@ -113,6 +114,15 @@ export const whatsappRouterService = {
         if (assignmentSelectionResponse) {
           return assignmentSelectionResponse;
         }
+      }
+
+      const confirmationResponse = await handleActiveAttendanceConfirmationResponseSession(
+        ctx,
+        ctx.session,
+        handlers,
+      );
+      if (confirmationResponse) {
+        return confirmationResponse;
       }
 
       if (isAbsenceFlowSession(ctx.session)) {

@@ -12,6 +12,7 @@ export const ACTIVE_BOT_SESSION_STATES = [
   "WAITING_ABSENCE_CONFIRMATION",
   "WAITING_CONFIRM_ATTENDANCE_SELECTION",
   "WAITING_UNAVAILABILITY_SELECTION",
+  "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
 ] as const satisfies readonly BotSessionState[];
 
 export const ACTIVE_BOT_SESSION_STATES_SQL = `(${ACTIVE_BOT_SESSION_STATES.map((state) => `'${state}'`).join(", ")})`;
@@ -32,3 +33,7 @@ export const isAbsenceSessionState = (state: BotSessionState): boolean =>
 export const isAssignmentSelectionSessionState = (state: BotSessionState): boolean =>
   state === "WAITING_CONFIRM_ATTENDANCE_SELECTION" ||
   state === "WAITING_UNAVAILABILITY_SELECTION";
+
+export const isAttendanceConfirmationResponseSessionState = (
+  state: BotSessionState,
+): boolean => state === "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE";

@@ -12,4 +12,6 @@ export const DEFAULT_COMPANY_OPERATIONAL_DEFAULTS = {
   defaultOperationStartTime: "20:30",
   defaultOperationEndTime: "03:00",
   geofenceReviewMarginMeters: null as number | null,
+  confirmationReminderEnabled: true,
+  confirmationReminderHoursBefore: 24,
 } as const;

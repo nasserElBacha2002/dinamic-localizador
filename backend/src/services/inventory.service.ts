@@ -2,6 +2,7 @@
 // Product-facing UI may refer to a ScheduledOperation / Operación.
 import { AppError } from "../errors/app-error";
 import { inventoryAttendanceRepository } from "../repositories/inventory-attendance.repository";
+import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { inventoryRepository } from "../repositories/inventory.repository";
 import { storeRepository } from "../repositories/store.repository";
 import type {
@@ -167,6 +168,23 @@ export const inventoryService = {
     const updated = await inventoryRepository.update(companyId, id, input);
     if (!updated) {
       throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
+    }
+
+    if (
+      input.scheduledStart &&
+      new Date(input.scheduledStart).getTime() !== new Date(current.scheduledStart).getTime()
+    ) {
+      const resetCount = await employeeAssignmentQueryRepository.resetConfirmationsForInventoryScheduleChange(
+        companyId,
+        id,
+      );
+      if (resetCount > 0) {
+        console.info("[inventory] confirmation state reset after schedule change", {
+          companyId,
+          inventoryId: id,
+          resetAssignments: resetCount,
+        });
+      }
     }
 
     await auditService.log(companyId, {

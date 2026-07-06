@@ -40,6 +40,9 @@ const mapCandidateRow = (row: Record<string, unknown>): AttendanceReminderCandid
   scheduledEnd: row.scheduled_end
     ? new Date(row.scheduled_end as Date | string).toISOString()
     : null,
+  scheduleVersion: Number(row.schedule_version ?? row.confirmation_schedule_version ?? 1),
+  confirmationReminderHoursBefore: Number(row.confirmation_reminder_hours_before ?? 24),
+  operationTimezone: row.operation_timezone ? String(row.operation_timezone) : undefined,
 });
 
 const PHONE_FILTER_SQL = `
@@ -73,21 +76,25 @@ export const attendanceNotificationRepository = {
       inventoryId: string;
       employeeId: string;
       notificationType: AttendanceNotificationType;
+      scheduleVersion?: number;
     },
   ): Promise<AttendanceNotification | null> {
     const pool = getPool();
+    const scheduleVersion = input.scheduleVersion ?? 1;
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("notificationType", sql.NVarChar(40), input.notificationType)
+      .input("scheduleVersion", sql.Int, scheduleVersion)
       .query(`
         SELECT TOP 1 *
         FROM whatsapp_attendance_notifications
         WHERE inventory_id = @inventoryId
           AND employee_id = @employeeId
           AND notification_type = @notificationType
+          AND schedule_version = @scheduleVersion
           AND company_id = @companyId
       `);
 
@@ -363,16 +370,20 @@ export const attendanceNotificationRepository = {
       inventoryId: string;
       employeeId: string;
       notificationType: AttendanceNotificationType;
+      scheduleVersion?: number;
+      reminderSource?: "AUTOMATIC" | "MANUAL";
       attemptedAt?: Date;
     },
   ): Promise<AttendanceNotification | null> {
     const attemptedAt = input.attemptedAt ?? new Date();
+    const scheduleVersion = input.scheduleVersion ?? 1;
     const { staleBefore, maxAttempts } = getRetryThresholds();
 
     const reclaimed = await this.reclaimNotificationForAttempt(companyId, {
       inventoryId: input.inventoryId,
       employeeId: input.employeeId,
       notificationType: input.notificationType,
+      scheduleVersion,
       attemptedAt,
       staleBefore,
       maxAttempts,
@@ -390,12 +401,18 @@ export const attendanceNotificationRepository = {
         .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
         .input("notificationType", sql.NVarChar(40), input.notificationType)
+        .input("scheduleVersion", sql.Int, scheduleVersion)
+        .input("reminderSource", sql.NVarChar(20), input.reminderSource ?? "AUTOMATIC")
         .query(`
           INSERT INTO whatsapp_attendance_notifications (
-            company_id, inventory_id, employee_id, notification_type, status, attempt_count
+            company_id, inventory_id, employee_id, notification_type, status, attempt_count,
+            schedule_version, reminder_source
           )
           OUTPUT INSERTED.*
-          VALUES (@companyId, @inventoryId, @employeeId, @notificationType, 'PENDING', 0)
+          VALUES (
+            @companyId, @inventoryId, @employeeId, @notificationType, 'PENDING', 0,
+            @scheduleVersion, @reminderSource
+          )
         `);
 
       const inserted = mapNotificationRow(insertResult.recordset[0] as Record<string, unknown>);
@@ -414,6 +431,7 @@ export const attendanceNotificationRepository = {
         inventoryId: input.inventoryId,
         employeeId: input.employeeId,
         notificationType: input.notificationType,
+        scheduleVersion,
         attemptedAt,
         staleBefore,
         maxAttempts,
@@ -443,6 +461,7 @@ export const attendanceNotificationRepository = {
       inventoryId?: string;
       employeeId?: string;
       notificationType?: AttendanceNotificationType;
+      scheduleVersion?: number;
       attemptedAt: Date;
       staleBefore: Date;
       maxAttempts: number;
@@ -463,11 +482,13 @@ export const attendanceNotificationRepository = {
       request
         .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
-        .input("notificationType", sql.NVarChar(40), input.notificationType);
+        .input("notificationType", sql.NVarChar(40), input.notificationType)
+        .input("scheduleVersion", sql.Int, input.scheduleVersion ?? 1);
       whereClause = `
         inventory_id = @inventoryId
         AND employee_id = @employeeId
         AND notification_type = @notificationType
+        AND schedule_version = @scheduleVersion
         AND company_id = @companyId
       `;
     } else {
@@ -613,5 +634,89 @@ export const attendanceNotificationRepository = {
             sent_at = NULL
         WHERE id = @notificationId AND company_id = @companyId
       `);
+  },
+
+  async findConfirmationReminderCandidates(
+    companyId: string,
+    referenceAt: Date,
+  ): Promise<AttendanceReminderCandidate[]> {
+    const pool = getPool();
+    const { staleBefore, maxAttempts } = getRetryThresholds();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("referenceAt", sql.DateTime2, referenceAt)
+      .input("staleBefore", sql.DateTime2, staleBefore)
+      .input("maxAttempts", sql.Int, maxAttempts)
+      .query(`
+        SELECT
+          i.id AS inventory_id,
+          i.scheduled_start,
+          i.scheduled_end,
+          s.name AS store_name,
+          e.id AS employee_id,
+          e.name AS employee_name,
+          e.phone_number AS employee_phone_number,
+          ie.confirmation_schedule_version AS schedule_version,
+          cs.confirmation_reminder_hours_before,
+          cs.operation_timezone
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        INNER JOIN operation_assignments ie ON ie.inventory_id = i.id AND ie.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        INNER JOIN company_settings cs ON cs.company_id = @companyId
+        LEFT JOIN whatsapp_attendance_notifications wan
+          ON wan.inventory_id = i.id
+          AND wan.employee_id = e.id
+          AND wan.notification_type = 'ATTENDANCE_CONFIRMATION_REMINDER'
+          AND wan.schedule_version = ie.confirmation_schedule_version
+          AND wan.company_id = @companyId
+        WHERE i.company_id = @companyId
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND s.active = 1
+          AND e.active = 1
+          AND ie.confirmation_status = 'PENDING'
+          AND cs.confirmation_reminder_enabled = 1
+          AND i.scheduled_start > @referenceAt
+          AND DATEADD(HOUR, -cs.confirmation_reminder_hours_before, i.scheduled_start) <= @referenceAt
+          ${PHONE_FILTER_SQL}
+          ${buildNotificationEligibilitySql()}
+      `);
+
+    return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
+  },
+
+  async isConfirmationReminderEligible(
+    companyId: string,
+    inventoryId: string,
+    employeeId: string,
+    scheduleVersion: number,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("scheduleVersion", sql.Int, scheduleVersion)
+      .query(`
+        SELECT TOP 1 1 AS eligible
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id AND i.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        INNER JOIN company_settings cs ON cs.company_id = @companyId
+        WHERE ie.company_id = @companyId
+          AND ie.inventory_id = @inventoryId
+          AND ie.employee_id = @employeeId
+          AND ie.confirmation_status = 'PENDING'
+          AND ie.confirmation_schedule_version = @scheduleVersion
+          AND e.active = 1
+          AND e.phone_number IS NOT NULL
+          AND LTRIM(RTRIM(e.phone_number)) <> ''
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND cs.confirmation_reminder_enabled = 1
+      `);
+
+    return Boolean(result.recordset[0]);
   },
 };

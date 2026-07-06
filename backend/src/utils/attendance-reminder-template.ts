@@ -2,6 +2,14 @@ import type { AttendanceNotificationType } from "../constants/attendance-notific
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { formatLocalTime } from "./attendance-validation";
 
+const formatLocalDate = (iso: string, timeZone: string): string =>
+  new Intl.DateTimeFormat("es-AR", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(iso));
+
 export const buildAttendanceReminderTemplateVariables = (
   candidate: AttendanceReminderCandidate,
   notificationType: AttendanceNotificationType,
@@ -11,6 +19,15 @@ export const buildAttendanceReminderTemplateVariables = (
     return {
       "1": candidate.employeeName,
       "2": candidate.storeName,
+    };
+  }
+
+  if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
+    return {
+      "1": candidate.employeeName,
+      "2": candidate.storeName,
+      "3": formatLocalDate(candidate.scheduledStart, timeZone),
+      "4": formatLocalTime(candidate.scheduledStart, timeZone),
     };
   }
 

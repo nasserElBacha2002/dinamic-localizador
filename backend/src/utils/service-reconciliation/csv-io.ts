@@ -39,8 +39,8 @@ const parseCoordinate = (value: string): number | null => {
 
 export const loadOfficialServices = (filePath: string): OfficialService[] =>
   readCsvRecords(filePath).flatMap((record) => {
-    const rawStoreId = readField(record, "store_id");
-    const serviceNumber = normalizeServiceNumber(rawStoreId);
+    const rawServiceId = readField(record, "store_id");
+    const serviceNumber = normalizeServiceNumber(rawServiceId);
     if (!serviceNumber) {
       return [];
     }
@@ -48,7 +48,7 @@ export const loadOfficialServices = (filePath: string): OfficialService[] =>
     return [
       {
         serviceNumber,
-        rawStoreId,
+        rawServiceId,
         officialAddress: readField(record, "official_address"),
         neighborhood: readField(record, "neighborhood"),
         locality: readField(record, "locality"),

@@ -17,7 +17,7 @@ const activeService = {
   address: "Addr",
   neighborhood: null,
   locality: null,
-  storeFormat: null,
+  serviceFormat: null,
   latitude: -34.6,
   longitude: -58.38,
   allowedRadiusMeters: 150,

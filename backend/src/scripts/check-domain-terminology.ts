@@ -3,29 +3,36 @@
  * Run: npm run check:terminology
  */
 import { readFileSync, readdirSync, statSync } from "node:fs";
-import { basename, join, relative } from "node:path";
+import { join, relative } from "node:path";
+import {
+  isAllowlistedViolation,
+  scanCodeLine,
+  scanPackageJson,
+  scanPath,
+  type TerminologyViolation,
+} from "./domain-terminology-scanner";
 
 const ROOT = join(process.cwd(), "..");
-const SCAN_ROOTS = [
-  join(ROOT, "backend/src"),
-  join(ROOT, "frontend/src"),
+const SCAN_ROOTS = [join(ROOT, "backend/src"), join(ROOT, "frontend/src")] as const;
+const CONFIG_FILES = [
+  "backend/package.json",
+  "frontend/package.json",
 ] as const;
 
-const SELF_PATH = "backend/src/scripts/check-domain-terminology.ts";
+const SELF_PATHS = new Set([
+  "backend/src/scripts/check-domain-terminology.ts",
+  "backend/src/scripts/domain-terminology-scanner.ts",
+  "backend/src/scripts/domain-terminology-scanner.test.ts",
+]);
 
-const FORBIDDEN_PATTERN =
-  /\b(inventory|inventories|inventario|inventarios|store|stores|tienda|tiendas)\b/i;
-
-const FORBIDDEN_PATH_PATTERN =
-  /(?:^|\/)(?:.*\/)?(?:inventory|inventories|store|stores)(?:\/|\.)/i;
-
-/** Exact file paths (relative to repo root) allowed to contain legacy tokens. */
+/** Exact file paths (relative to repo root) fully exempt from content scanning. */
 const ALLOWLISTED_FILES = new Set([
   "backend/src/utils/legacy-operation-session-context.ts",
   "backend/src/constants/operation-import.ts",
   "backend/src/constants/operational-tables.ts",
   "backend/src/constants/operational-tables.test.ts",
   "backend/src/database/operational-table-rename.integration.test.ts",
+  "backend/src/database/company-module-migration.integration.test.ts",
   "backend/src/scripts/audit-operational-rename-schema.ts",
   "frontend/src/domain/terminology.ts",
   "frontend/src/domain/terminology.test.ts",
@@ -34,21 +41,23 @@ const ALLOWLISTED_FILES = new Set([
 ]);
 
 /** Per-file line patterns allowed (narrow compatibility). */
-const ALLOWLISTED_LINE_PATTERNS_BY_FILE: Record<string, RegExp[]> = {
-  "backend/src/types/twilio.types.ts": [/inventoryId/, /inventoryOptions/],
+const ALLOWED_LEGACY_REFERENCES: Record<string, RegExp[]> = {
+  "backend/src/utils/legacy-operation-session-context.ts": [/inventoryId/, /inventoryOptions/],
+  "backend/src/constants/operation-import.ts": [/tienda/, /Tienda/],
+  "backend/src/repositories/service.repository.ts": [/store_format/, /@serviceFormat/],
+  "backend/src/utils/row-mappers.ts": [/store_format/],
   "backend/src/utils/bot-session-states.ts": [/WAITING_.*OPERATION_SELECTION/],
+  "backend/src/constants/company-location-types.ts": [/store_format/],
+  "backend/src/types/twilio.types.ts": [/inventoryId/, /inventoryOptions/],
+  "backend/src/utils/bot-runtime-context.ts": [/\.getStore\(\)/],
+  "backend/src/utils/bot-runtime-settings-scope.ts": [/\.getStore\(\)/],
+  "backend/src/scripts/export-database-services.ts": [/store_format/],
   "backend/src/routes/api-route-aliases.test.ts": [
     /legacyRoute|legacyPath|concat\(|\/invent|\/stor/,
   ],
-  "backend/src/scripts/export-database-services.ts": [/export:stores/],
-  "backend/src/scripts/fix-services-from-reconciliation.ts": [/fix:stores/],
   "backend/src/services/whatsapp-router/whatsapp-router.service.test.ts": [/doesNotMatch.*inventario/],
   "backend/src/services/whatsapp-bot.service.ts": [/UX_attendance_records_inventory/],
-  "frontend/src/types/operation-import.ts": [/store_format|storeFormat/],
-  "frontend/src/schemas/service.schema.ts": [/storeFormat/],
-  "frontend/src/types/service.ts": [/storeFormat/],
-  "frontend/src/components/services/ServiceForm.tsx": [/storeFormat/],
-  "frontend/src/pages/settings/company-settings-operational.test.ts": [/doesNotMatch.*Inventarios/],
+  "frontend/src/pages/settings/company-settings-operational.test.ts": [/doesNotMatch.*Inventarios/, /STORE_FORMATS/],
   "frontend/src/design-system/filters/FilterLookupInput.tsx": [/store=\{/],
 };
 
@@ -57,7 +66,9 @@ function collectFiles(dir: string, acc: string[] = []): string[] {
     const full = join(dir, entry);
     const st = statSync(full);
     if (st.isDirectory()) {
-      if (entry === "node_modules" || entry === "dist") continue;
+      if (entry === "node_modules" || entry === "dist") {
+        continue;
+      }
       collectFiles(full, acc);
     } else if (/\.(ts|tsx)$/.test(entry)) {
       acc.push(full);
@@ -66,77 +77,77 @@ function collectFiles(dir: string, acc: string[] = []): string[] {
   return acc;
 }
 
-function isForbiddenPath(repoRelative: string): boolean {
-  if (ALLOWLISTED_FILES.has(repoRelative)) {
-    return false;
-  }
-  const fileName = basename(repoRelative);
-  if (/^(inventory|store)/i.test(fileName) || /(inventory|store)/i.test(fileName.replace(/\.[^.]+$/, ""))) {
-    return true;
-  }
-  return FORBIDDEN_PATH_PATTERN.test(`/${repoRelative}`);
+function formatViolation(violation: TerminologyViolation): string {
+  const location = violation.line > 0 ? `${violation.file}:${violation.line}` : violation.file;
+  return `  ${location} [${violation.category}] token=${violation.matchedToken}: ${violation.text}`;
 }
 
-function isAllowlistedLine(repoRelative: string, line: string): boolean {
-  if (repoRelative === SELF_PATH) {
-    return true;
-  }
-  if (ALLOWLISTED_FILES.has(repoRelative)) {
-    return true;
-  }
-  const patterns = ALLOWLISTED_LINE_PATTERNS_BY_FILE[repoRelative];
-  if (!patterns) {
-    return false;
-  }
-  return patterns.some((pattern) => pattern.test(line));
+function shouldSkipContentScan(repoRelative: string): boolean {
+  return SELF_PATHS.has(repoRelative) || ALLOWLISTED_FILES.has(repoRelative);
 }
 
-function main(): void {
-  const violations: Array<{ file: string; line: number; text: string; kind: "path" | "content" }> = [];
+function collectViolations(): TerminologyViolation[] {
+  const violations: TerminologyViolation[] = [];
 
   for (const scanRoot of SCAN_ROOTS) {
     for (const filePath of collectFiles(scanRoot)) {
       const repoRelative = relative(ROOT, filePath).replace(/\\/g, "/");
 
-      if (isForbiddenPath(repoRelative)) {
-        violations.push({
-          file: repoRelative,
-          line: 0,
-          text: "(forbidden legacy path or filename)",
-          kind: "path",
-        });
+      const pathViolation = scanPath(repoRelative);
+      if (pathViolation && !ALLOWLISTED_FILES.has(repoRelative)) {
+        violations.push(pathViolation);
+        continue;
+      }
+
+      if (shouldSkipContentScan(repoRelative)) {
         continue;
       }
 
       const content = readFileSync(filePath, "utf8");
       const lines = content.split("\n");
 
-      for (let i = 0; i < lines.length; i++) {
-        const line = lines[i];
-        if (!FORBIDDEN_PATTERN.test(line)) {
-          continue;
+      for (let index = 0; index < lines.length; index++) {
+        const line = lines[index];
+        const lineViolations = scanCodeLine(repoRelative, index + 1, line);
+        for (const violation of lineViolations) {
+          if (isAllowlistedViolation(repoRelative, line, violation, ALLOWED_LEGACY_REFERENCES)) {
+            continue;
+          }
+          violations.push(violation);
         }
-        if (isAllowlistedLine(repoRelative, line)) {
-          continue;
-        }
-        violations.push({
-          file: repoRelative,
-          line: i + 1,
-          text: line.trim().slice(0, 160),
-          kind: "content",
-        });
       }
     }
   }
 
+  for (const configFile of CONFIG_FILES) {
+    const filePath = join(ROOT, configFile);
+    const content = readFileSync(filePath, "utf8");
+    const configViolations = scanPackageJson(configFile, content);
+    for (const violation of configViolations) {
+      if (isAllowlistedViolation(configFile, violation.text, violation, ALLOWED_LEGACY_REFERENCES)) {
+        continue;
+      }
+      violations.push(violation);
+    }
+  }
+
+  return violations;
+}
+
+export function runDomainTerminologyGuard(): TerminologyViolation[] {
+  return collectViolations();
+}
+
+function main(): void {
+  const violations = collectViolations();
+
   if (violations.length > 0) {
     console.error(`Domain terminology guard failed: ${violations.length} violation(s)\n`);
-    for (const v of violations.slice(0, 60)) {
-      const location = v.line > 0 ? `${v.file}:${v.line}` : v.file;
-      console.error(`  ${location}: ${v.text}`);
+    for (const violation of violations.slice(0, 80)) {
+      console.error(formatViolation(violation));
     }
-    if (violations.length > 60) {
-      console.error(`  ... and ${violations.length - 60} more`);
+    if (violations.length > 80) {
+      console.error(`  ... and ${violations.length - 80} more`);
     }
     process.exit(1);
   }
@@ -144,4 +155,6 @@ function main(): void {
   console.log("Domain terminology guard passed.");
 }
 
-main();
+if (require.main === module) {
+  main();
+}

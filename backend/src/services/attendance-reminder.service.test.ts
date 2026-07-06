@@ -6,11 +6,11 @@ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 type EnvConfig = typeof import("../config/env").env;
 
 const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
-const INVENTORY_ID = "22222222-2222-2222-2222-222222222222";
+const OPERATION_ID = "22222222-2222-2222-2222-222222222222";
 const EMPLOYEE_ID = "33333333-3333-3333-3333-333333333333";
 
 const candidate = {
-  operationId: INVENTORY_ID,
+  operationId: OPERATION_ID,
   employeeId: EMPLOYEE_ID,
   employeeName: "Ana",
   employeePhoneNumber: "+5491112345678",
@@ -23,7 +23,7 @@ const candidate = {
 
 const claimedNotification = {
   id: "44444444-4444-4444-4444-444444444444",
-  operationId: INVENTORY_ID,
+  operationId: OPERATION_ID,
   employeeId: EMPLOYEE_ID,
   notificationType: "NO_CHECKIN_AT_START" as const,
   twilioMessageSid: null,
@@ -84,7 +84,7 @@ describe("attendanceReminderService", () => {
     );
 
     const outcome = await attendanceReminderService.sendTestReminder(COMPANY_ID, {
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       employeeId: EMPLOYEE_ID,
       notificationType: "ARRIVAL_REMINDER_15_MIN",
     });
@@ -120,7 +120,7 @@ describe("attendanceReminderService", () => {
     const markSentMock = mock.method(attendanceNotificationRepository, "markSent", async () => undefined);
 
     const outcome = await attendanceReminderService.sendTestReminder(COMPANY_ID, {
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       employeeId: EMPLOYEE_ID,
       notificationType: "NO_CHECKIN_AT_START",
     });
@@ -162,7 +162,7 @@ describe("attendanceReminderService", () => {
     }));
 
     const outcome = await attendanceReminderService.sendTestReminder(COMPANY_ID, {
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       employeeId: EMPLOYEE_ID,
       notificationType: "NO_CHECKIN_AT_START",
     });
@@ -198,7 +198,7 @@ describe("attendanceReminderService", () => {
     );
 
     const outcome = await attendanceReminderService.sendTestReminder(COMPANY_ID, {
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       employeeId: EMPLOYEE_ID,
       notificationType: "NO_CHECKIN_AT_START",
     });
@@ -238,7 +238,7 @@ describe("attendanceReminderService", () => {
     );
 
     const outcome = await attendanceReminderService.sendTestReminder(COMPANY_ID, {
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       employeeId: EMPLOYEE_ID,
       notificationType: "NO_CHECKIN_AT_START",
     });
@@ -271,7 +271,7 @@ describe("attendanceReminderService", () => {
     }));
 
     const outcome = await attendanceReminderService.sendTestReminder(COMPANY_ID, {
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       employeeId: EMPLOYEE_ID,
       notificationType: "NO_CHECKIN_AT_START",
     });
@@ -396,7 +396,7 @@ describe("attendanceReminderService", () => {
         id: "session-confirmation",
         companyId: COMPANY_ID,
         employeeId: EMPLOYEE_ID,
-        operationId: INVENTORY_ID,
+        operationId: OPERATION_ID,
         phoneNumber: candidate.employeePhoneNumber,
         state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
         contextJson: null,
@@ -493,7 +493,7 @@ describe("attendanceReminderService", () => {
       id: "session-confirmation",
       companyId: COMPANY_ID,
       employeeId: EMPLOYEE_ID,
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       phoneNumber: candidate.employeePhoneNumber,
       state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
       contextJson: null,
@@ -609,7 +609,7 @@ describe("attendanceReminderService", () => {
       id: "session-confirmation",
       companyId: COMPANY_ID,
       employeeId: EMPLOYEE_ID,
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       phoneNumber: candidate.employeePhoneNumber,
       state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
       contextJson: null,
@@ -672,7 +672,7 @@ describe("attendanceReminderService", () => {
       id: "session-confirmation",
       companyId: COMPANY_ID,
       employeeId: EMPLOYEE_ID,
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       phoneNumber: candidate.employeePhoneNumber,
       state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
       contextJson: null,
@@ -729,7 +729,7 @@ describe("attendanceReminderService", () => {
       id: "session-confirmation",
       companyId: COMPANY_ID,
       employeeId: EMPLOYEE_ID,
-      operationId: INVENTORY_ID,
+      operationId: OPERATION_ID,
       phoneNumber: candidate.employeePhoneNumber,
       state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
       contextJson: null,

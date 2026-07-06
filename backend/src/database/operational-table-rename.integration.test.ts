@@ -72,6 +72,36 @@ describeDatabaseIntegration("operational table rename schema (Phase 2.7)", () =>
     assert.ok(await columnExists("operation_assignments", "employee_id"));
     assert.ok(await columnExists("attendance_records", "operation_id"));
     assert.ok(await columnExists("attendance_records", "employee_id"));
+    assert.ok(await columnExists("whatsapp_attendance_notifications", "operation_id"));
+    assert.ok(await columnExists("bot_simulation_sessions", "operation_id"));
+    assert.ok(await columnExists("bot_simulation_sessions", "service_id"));
+    assert.equal(await columnExists("bot_sessions", "inventory_id"), false);
+    assert.ok(await columnExists("bot_sessions", "operation_id"));
+  });
+
+  it("has no legacy bot session states after migration 037", async () => {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT COUNT(*) AS total
+      FROM bot_sessions
+      WHERE state IN (
+        'WAITING_INVENTORY_SELECTION',
+        'WAITING_CHECKOUT_INVENTORY_SELECTION'
+      )
+    `);
+
+    assert.equal(Number(result.recordset[0]?.total ?? 0), 0);
+  });
+
+  it("has zero inventory_operations company module rows after migration 038", async () => {
+    const pool = getPool();
+    const result = await pool.request().query(`
+      SELECT COUNT(*) AS total
+      FROM company_modules
+      WHERE module_key = N'inventory_operations'
+    `);
+
+    assert.equal(Number(result.recordset[0]?.total ?? 0), 0);
   });
 
   it("repository list methods work against physical tables", async () => {

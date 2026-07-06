@@ -6,13 +6,13 @@ import { companyLocationTypesService } from "./company-location-types.service";
 
 export const serviceService = {
   async create(companyId: string, input: CreateServiceInput) {
-    await companyLocationTypesService.assertActiveStoreFormat(companyId, input.storeFormat);
+    await companyLocationTypesService.assertActiveServiceFormat(companyId, input.serviceFormat);
 
     return serviceRepository.create(companyId, {
       ...input,
       name: input.name.trim(),
       address: input.address?.trim() ?? null,
-      storeFormat: input.storeFormat?.trim() ?? null,
+      serviceFormat: input.serviceFormat?.trim() ?? null,
     });
   },
 
@@ -35,8 +35,8 @@ export const serviceService = {
   async update(companyId: string, id: string, input: UpdateServiceInput) {
     await this.getById(companyId, id);
 
-    if (input.storeFormat !== undefined) {
-      await companyLocationTypesService.assertActiveStoreFormat(companyId, input.storeFormat);
+    if (input.serviceFormat !== undefined) {
+      await companyLocationTypesService.assertActiveServiceFormat(companyId, input.serviceFormat);
     }
 
     if (input.active === false) {
@@ -52,8 +52,8 @@ export const serviceService = {
 
     const updated = await serviceRepository.update(companyId, id, {
       ...input,
-      storeFormat:
-        input.storeFormat !== undefined ? input.storeFormat?.trim() ?? null : undefined,
+      serviceFormat:
+        input.serviceFormat !== undefined ? input.serviceFormat?.trim() ?? null : undefined,
     });
     if (!updated) {
       throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");

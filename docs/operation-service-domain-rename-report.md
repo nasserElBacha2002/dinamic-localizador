@@ -2,266 +2,196 @@
 
 ## 1. Executive Summary
 
-Final review pass completed the Operation/Service domain rename across backend, frontend, bot/WhatsApp, schemas, scripts, and migrations. Active application code now uses canonical `operation` / `service` terminology. Migration 035 was rewritten to discover FK/index dependencies via SQL Server catalogs. Migration 036 no longer mutates historical `audit_logs`. Migration 037 drops hollow legacy views and completes `bot_sessions` column rename. An automated terminology guard (`npm run check:terminology`) passes on `backend/src` and `frontend/src`.
+This pass closes review blockers for the Operation/Service domain rename: identifier-aware terminology guard with tests, deterministic `company_modules` merge (migration 038), removal of legacy `*:stores` npm scripts, `storeFormat` → `serviceFormat` domain rename, forward-only migration integrity preserved, extended DB integration assertions, and WhatsApp canonical Service reference regression coverage.
 
-## 2. Canonical Domain Model
+**Final Status: BLOCKED** — DB integration tests could not be executed against a live SQL Server in this environment (106 suites cancelled without full `DB_*` credentials). Unit/build/terminology validation passes.
 
-### Operation
-Scheduled work assignment (`scheduled_operations`). Admin UI: **Operación**. WhatsApp employee-facing: **trabajo** / **jornada**.
+## 2. Terminology Guard Correction
 
-### Service
-Operational location (`operational_locations`). Admin UI: **Servicio**. WhatsApp: **Servicio** when referring to the location entity.
+### Previous Regex Blind Spot
+The prior guard used `\b(inventory|store|...)\b`, missing legacy terms embedded in identifiers (`inventoryId`, `storeFormat`, `INVENTORY_NOT_FOUND`, `seed:stores`).
 
-### Operation Assignment
-Employee-to-operation link (`operation_assignments`).
+### Identifier Detection
+New scanner (`backend/src/scripts/domain-terminology-scanner.ts`) splits camelCase/PascalCase/snake_case/SCREAMING_SNAKE segments and detects:
+- Inventory family: exact segment or prefix (`inventory`, `inventories`, `inventario`, `inventarios`)
+- Store family: exact segment match (`store`, `stores`, `tienda`, `tiendas`) — avoids `restore`, `localStorage`, `services`
 
-### Attendance
-Check-in/check-out records (`attendance_records`) tied to `operation_id`.
+### Path Detection
+Path components are scanned (`store-fix` → `PATH_NAME` violation).
 
-## 3. Migration 035 Hardening
+### Configuration Detection
+`backend/package.json` and `frontend/package.json` scripts are parsed; legacy script names like `seed:stores` fail under `CONFIGURATION`.
 
-### Reachable Schema States
-Idempotent for fresh DBs through 034 and dev DBs where 021/035 partial states may use alternate constraint names.
+### Allowlist Policy
+Exact per-file regex allowlists only:
+- `EXPLICIT_BOT_SESSION_READ_COMPATIBILITY`: `legacy-operation-session-context.ts`, `twilio.types.ts` (`inventoryId`, `inventoryOptions`)
+- `EXTERNAL_IMPORT_ALIAS`: `operation-import.ts` (`tienda` spreadsheet headers)
+- `PHYSICAL_DATABASE_COMPATIBILITY`: `store_format` in repository SQL, row mapper, export CSV header, `company-location-types.ts`
+- `THIRD_PARTY_CONTRACT`: Node `AsyncLocalStorage.getStore()` in bot runtime files
+- Mantine `store={...}` in `FilterLookupInput.tsx`
 
-### Dependency Discovery
-Per-column dynamic loops over `sys.foreign_keys` + `sys.foreign_key_columns` and `sys.indexes` + `sys.index_columns` before `sp_rename`.
+No directory-level bypasses.
 
-### Foreign Keys
-Recreated with canonical names (`FK_scheduled_operations_service_id`, `FK_operation_assignments_operation_id`, etc.).
+### Scanner Tests
+`backend/src/scripts/domain-terminology-scanner.test.ts` proves violations for `InventoryRecord`, `inventoryId`, `storeFormat`, `STORE_INACTIVE`, Spanish copy, `seed:stores`, and path `store-fix`.
 
-### Indexes
-Dropped via catalog discovery; recreated with `operation`/`service` naming including notification idempotency indexes.
+### Final Result
+`npm run check:terminology` → **PASS**
 
-### Column Rename Validation
-Targets: `scheduled_operations.service_id`, `operation_assignments.operation_id`, `attendance_records.operation_id`, `whatsapp_attendance_notifications.operation_id`, `bot_simulation_sessions.operation_id`/`service_id`, `bot_sessions.operation_id`.
+## 3. Company Module Migration Correction
 
-## 4. Inventory to Operation Final Cleanup
+### Legacy Key Merge Rule
+Migration `038_finalize_company_module_key_migration.sql` (forward-only, idempotent):
+1. When both `inventory_operations` and `operations` exist: merge `is_enabled` with OR semantics; preserve earliest `created_at`, latest `updated_at`
+2. Delete `inventory_operations` when canonical row exists
+3. Rename orphaned `inventory_operations` → `operations`
 
-### Active Symbols Removed
-`Inventory`, `InventoryRecord`, `inventoryDefaults`, `handleInventorySelection`, `buildInventorySelectionPrompt`, `createInventorySelectionSession`, schema names `createInventorySchema`, etc.
+### Duplicate Canonical/Legacy Case
+Company C scenario (legacy enabled + canonical disabled) → single `operations` row with `is_enabled = 1`.
 
-### Methods Renamed
-`findByOperationForEmployee`, `findCheckoutEligibleOperations`, `resetConfirmationsForOperationScheduleChange`, `handleOperationSelection`, `parseOperationSelection`, etc.
+### Enabled-State Merge Semantics
+`final operations enabled = canonical.enabled OR legacy.inventory_operations.enabled`
 
-### Error Codes Renamed
-`OPERATION_NOT_FOUND`, `OPERATION_NOT_EDITABLE`, `INVALID_OPERATION_STATUS_TRANSITION`, `OPERATION_START_IN_PAST`, `EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS`.
+### DB Integration Test
+`backend/src/database/company-module-migration.integration.test.ts` — asserts global zero legacy rows and exercises A/B/C merge fixture.
 
-### SQL Aliases Renamed
-`operation_*`, `service_*` in repositories and `row-mappers.ts`.
+### Final Legacy Row Count
+Expected after 038: `SELECT COUNT(*) FROM company_modules WHERE module_key = N'inventory_operations'` → **0**
 
-### Product Copy Renamed
-Spanish admin copy uses Operación; WhatsApp uses trabajo/jornada for scheduled work.
+## 4. Legacy npm Command Removal
 
-## 5. Store to Service Final Cleanup
+### Commands Removed
+From `backend/package.json`:
+- `seed:stores`
+- `reconcile:stores`
+- `export:stores`
+- `fix:stores`
 
-### Active Symbols Removed
-`Store`, `storeService`, `CurrentDbStore`, `loadCurrentStoresFromDatabase`, `storeLocation` API field.
+Canonical scripts retained: `seed:services`, `reconcile:services`, `export:services`, `fix:services`.
 
-### Methods Renamed
-`loadCurrentServicesFromDatabase`, `detectServicesSchema`, `reconcileServices`, `serviceNumber` types.
+Help text updated in `export-database-services.ts`, `fix-services-from-reconciliation.ts`, `reconcile-services.ts`.
 
-### Error Codes Renamed
-`SERVICE_NOT_FOUND`, `SERVICE_INACTIVE`, `SERVICE_NAME_ALREADY_EXISTS`.
+### External Compatibility Audit
+**No external consumer found** for `*:stores` scripts. References exist only in `.cursor/commands/deploy-dinamic-server.md` (internal Cursor command doc, not production cron/CI).
 
-### SQL Aliases Renamed
-`service_id`, `service_name`, `service_latitude`, etc.
+## 5. storeFormat Contract Audit
 
-### Product Copy Renamed
-"Servicio no encontrado", "Servicio:" in bot confirmation messages.
+### External Consumer Evidence
+**No external consumer found** for JSON/API field `storeFormat` in Postman collections, deployment scripts, or monorepo API clients.
 
-## 6. Backend Active-Code Audit
+### Final Decision
+Rename active domain field to `serviceFormat`. Physical column `store_format` retained at DB boundary.
 
-`npm run check:terminology` → **PASS** (0 violations outside explicit allowlist).
+### Domain/API Rename
+Renamed across backend types/schemas/services, frontend types/schemas/forms, and tests. Repository maps `serviceFormat: row.store_format`.
 
-## 7. Frontend Active-Code Audit
+### Physical DB Compatibility Boundary
+`store_format` appears only in:
+- `service.repository.ts` SQL
+- `row-mappers.ts` mapper input
+- `export-database-services.ts` CSV header
+- Historical migrations
 
-`npm run check:terminology` → **PASS**. Canonical routes `/operations`, `/services`. Legacy browser redirects preserved in `AppRoutes.tsx`.
+## 6. Forward-Only Migration Integrity
 
-## 8. Bot and WhatsApp Audit
+### Migration 035 History
+`035_rename_operational_foreign_key_columns.sql` — catalog-based FK/index discovery. Not modified in this pass.
 
-### Internal Domain
-`operationId`, `operationOptions`, `serviceId`, `serviceLatitude`, `serviceAllowedRadiusMeters`.
+### Migration 036 History
+`036_operational_domain_permission_audit_backfill.sql` — current file is comments only (no `audit_logs` mutation). If an earlier 036 revision ran on a persistent DB, historical audit normalization may already have occurred there; this migration file no longer performs updates.
 
-### Employee-Facing Operation Terminology
-trabajo/jornada; no inventario in active bot copy.
+### Persistent Environments Audited
+No deployment logs or migration history table snapshots in-repo proving 035/036 apply state on production. Git history shows file edits on branch only (`928fe11`, `6cc863d`). Treat as **disposable/local unless ops confirms otherwise**.
 
-### Service Terminology
-"Servicio: {name}" in location context.
+### Applied Content Restored
+035/036 not rewritten in this pass.
 
-### Legacy Session Compatibility
-Centralized in `legacy-operation-session-context.ts` (`inventoryId`/`inventoryOptions` read-only).
+### New Corrective Migrations Added
+- `038_finalize_company_module_key_migration.sql` — company module key merge (does not edit 037)
 
-## 9. API Contract Audit
+## 7. Domain Completion DB Validation
 
-### Operations
-`/operations`, `operationId`, `createOperationSchema`, `operationImportPreviewSchema`.
+### Canonical Columns
+Integration assertions in `operational-table-rename.integration.test.ts`:
+- `scheduled_operations.service_id`
+- `operation_assignments.operation_id`
+- `attendance_records.operation_id`
+- `whatsapp_attendance_notifications.operation_id`
+- `bot_simulation_sessions.operation_id`, `service_id`
+- `bot_sessions.operation_id` (no `inventory_id`)
 
-### Services
-`/services`, `serviceId`, `serviceLocation` in bot simulator presets.
+### Bot Session States
+Assert zero `WAITING_INVENTORY_SELECTION` / `WAITING_CHECKOUT_INVENTORY_SELECTION`.
 
-### Attendance
-`operationId` in schemas and CSV export headers.
+### Company Module Keys
+Assert zero `inventory_operations` rows.
 
-### Statistics
-`/statistics/by-operation`, `/statistics/by-service`.
+### Legacy Views
+Assert `stores`, `inventories`, `inventory_employees` views do not exist.
 
-### Lookups
-`/lookups/operations`, `/lookups/services`.
+### Constraints and Indexes
+Validated via migration 035 catalog recreation (structural smoke in `operational-tables.test.ts`).
 
-## 10. Database Active Schema Audit
+## 8. WhatsApp Canonical Service Reference
 
-Pending operator validation on target SQL Server after `npm run migrate`. Migrations 035–037 are idempotent. Legacy physical tables renamed in 021; 037 drops compatibility views.
+### Shared Formatter
+`formatServiceReference` / `formatServiceReferenceFromFields` unchanged.
 
-### Tables
-Canonical: `scheduled_operations`, `operational_locations`, `operation_assignments`.
+### Reminder Templates
+Twilio `{{2}}` uses canonical reference in `attendance-reminder-template.ts`.
 
-### Columns
-Canonical FK columns per migration 035.
+### Bot Messages
+Bot handlers use shared formatter via `employee-assignment-format.ts` and related builders.
 
-### Foreign Keys
-Catalog-discovered drops + canonical recreation.
+### End-to-End Message Regression
+`employee-workday.service.test.ts` asserts upcoming assignments message contains:
+`Carrefour Caballito - Av. Rivadavia 5108 - Caballito`
 
-### Indexes
-Canonical operation/service names.
+## 9. Remaining Legacy References
 
-### Constraints
-`CK_bot_sessions_state` updated in 037 for `WAITING_OPERATION_SELECTION`.
+| File | Context | Token | Classification | Reason |
+|------|---------|-------|----------------|--------|
+| `database/migrations/*.sql` | Historical DDL | inventory/store table names | HISTORICAL_IMMUTABLE_MIGRATION | Immutable migration chain |
+| `backend/src/constants/operation-import.ts` | Spreadsheet aliases | tienda/Tienda | EXTERNAL_IMPORT_ALIAS | Client file headers |
+| `backend/src/utils/legacy-operation-session-context.ts` | Session read compat | inventoryId | EXPLICIT_BOT_SESSION_READ_COMPATIBILITY | Persisted bot session JSON |
+| `backend/src/types/twilio.types.ts` | Session payload types | inventoryId/inventoryOptions | EXPLICIT_BOT_SESSION_READ_COMPATIBILITY | Twilio/session compat |
+| `backend/src/repositories/service.repository.ts` | SQL INSERT/UPDATE | store_format | PHYSICAL_DATABASE_COMPATIBILITY | DB column name |
+| `backend/src/utils/row-mappers.ts` | Mapper | store_format | PHYSICAL_DATABASE_COMPATIBILITY | DB column name |
+| `backend/src/utils/bot-runtime-context.ts` | AsyncLocalStorage | getStore() | THIRD_PARTY_CONTRACT | Node.js API |
+| `frontend/src/design-system/filters/FilterLookupInput.tsx` | Mantine Combobox | store={ | THIRD_PARTY_CONTRACT | Mantine prop |
+| `frontend/src/routes/AppRoutes.tsx` | Redirects | /inventories, /stores | HISTORICAL_DOCUMENTATION | Browser URL compat |
+| `frontend/src/domain/terminology.ts` | Label map | legacy keys | HISTORICAL_DOCUMENTATION | UI label migration map |
+| `README.md` | Product description | tienda/inventario | HISTORICAL_DOCUMENTATION | Pre-rename product doc (not active code) |
+| `mock.restoreAll()`, `stored`, `restoreAllModules` | Test/mock API | store/inventory substring | N/A (grep false positive) | Not domain terminology |
 
-### Compatibility Views
-Dropped in 037 (`stores`, `inventories`, `inventory_employees`).
-
-## 11. Legacy Database View Policy
-
-No demonstrated external SQL consumer. Hollow views removed in 037 (no column-alias compatibility).
-
-## 12. Audit History Policy
-
-Migration 036 no longer updates `audit_logs.entity_type`. UI should map `inventory`→Operación, `store`→Servicio at display time.
-
-## 13. Permissions and Modules
-
-Canonical keys: `operations`, `services`, `operations:read`, `operations:manage`, `services:read`, `services:manage`. Module key `inventory_operations` → `operations` in 037.
-
-## 14. Browser Route Compatibility
-
-`/inventories/*` → `/operations/*`, `/stores/*` → `/services/*` via `<Navigate replace />`.
-
-## 15. Files and Directories Renamed
-
-- `export-database-stores.ts` → `export-database-services.ts`
-- `service-fix/db-stores.ts` → `db-services.ts`
-- `service-reconciliation/store-number.ts` → `service-number.ts`
-- Frontend canonical: `pages/operations`, `pages/services`, `components/operations`, `components/services`
-
-## 16. Automated Terminology Guard
-
-### Scanned Paths
-`backend/src`, `frontend/src` (`.ts`, `.tsx`)
-
-### Forbidden Tokens
-inventory, inventories, inventario, inventarios, store, stores, tienda, tiendas (word boundaries)
-
-### Explicit Allowlist
-- `legacy-operation-session-context.ts`
-- `operation-import.ts` (spreadsheet header aliases)
-- `AppRoutes.tsx` (redirect paths)
-- `terminology.ts` / `terminology.test.ts`
-- Negative assertion tests
-- `storeFormat` DB field references
-- Mantine `store={combobox}` prop
-
-### Result
-**PASS**
-
-## 17. Remaining Legacy References
-
-| File | Context | Token | Classification | Why | Removal plan |
-|------|---------|-------|----------------|-----|--------------|
-| `database/migrations/001–034` | Historical DDL | inventory/store | HISTORICAL_IMMUTABLE_MIGRATION | Immutable migration history | Never rewrite |
-| `database/migrations/035.sql` | DROP VIEW | inventories/stores | HISTORICAL_IMMUTABLE_MIGRATION | Drops legacy views before rename | N/A |
-| `database/migrations/036.sql` | Comment | inventory/store | HISTORICAL_IMMUTABLE_MIGRATION | Documents audit display policy | N/A |
-| `database/migrations/037.sql` | DROP VIEW | inventories/stores | HISTORICAL_IMMUTABLE_MIGRATION | Final view removal | N/A |
-| `legacy-operation-session-context.ts` | Read compat | inventoryId | EXPLICIT_BOT_SESSION_READ_COMPATIBILITY | Active session TTL | Remove after TTL window |
-| `operation-import.ts` | CSV headers | tienda | EXTERNAL_IMPORT_ALIAS | Legacy spreadsheet format | Keep for import compat |
-| `AppRoutes.tsx` | Redirects | /inventories | EXPLICIT_API_COMPATIBILITY_ADAPTER | Browser bookmarks | Keep indefinitely |
-| `terminology.ts` | legacySingular | Tienda | EXPLICIT_API_COMPATIBILITY_ADAPTER | Display map for old audit rows | Keep |
-| `types/service.ts` | API field | storeFormat | THIRD_PARTY_CONTRACT | Physical DB column `store_format` | Rename column in future migration |
-| `docs/attendance-confirmation-*.md` | Historical report | inventory | HISTORICAL_DOCUMENTATION | Prior implementation report | Archive only |
-
-## 18. Validation Results
+## 10. Validation Results
 
 | Command | Result |
 |---------|--------|
-| `cd backend && npm run build` | PASS |
-| `cd backend && npm test` | PASS (471/471) |
-| `cd backend && npm run check:terminology` | PASS |
-| `cd frontend && npm run build` | PASS |
-| `cd frontend && npm test` | PASS (205/205) |
-| `cd backend && npm run migrate` | SKIPPED (not run in this session) |
-| `RUN_DB_INTEGRATION_TESTS=true npm test` | SKIPPED (env not configured in agent session) |
+| `npm run check:terminology` | PASS |
+| `backend npm run lint` | PASS |
+| `backend npm run build` | PASS |
+| `backend npm test` | PASS (488 tests) |
+| `frontend npm run lint` | PASS |
+| `frontend npm test` | PASS (205 tests) |
+| `frontend npm run build` | PASS |
+| `npm run migrate` | SKIPPED (no DB in agent env) |
+| `npm run migrate:status` | SKIPPED |
 
-## 19. Regression Results
+## 11. DB Integration Results
 
-Unit/integration logic covered by passing test suites. Full manual regression checklist (create operation/service, WhatsApp flows, statistics, redirects) requires staging validation after migrate.
+| Suite | Result |
+|-------|--------|
+| `operational-table-rename.integration.test.ts` | SKIPPED |
+| `company-module-migration.integration.test.ts` | SKIPPED |
+| Other `*.integration.test.ts` | SKIPPED (106 cancelled without full DB env) |
 
-## 20. Known Limitations
+## 12. Known Limitations
 
-- `store_format` physical column name retained in DB and API (`storeFormat`).
-- Carrefour reconciliation CSV uses `store_number` column header (external format).
-- DB constraint `UX_attendance_records_inventory_employee_active` retains historical name.
-- Migration apply + metadata assertions must be run on staging/production SQL Server before deploy.
+- DB integration validation requires `RUN_DB_INTEGRATION_TESTS=true` plus live SQL Server credentials.
+- README and `.cursor/commands/deploy-dinamic-server.md` still describe legacy product vocabulary; not scanned by active-code guard.
+- Scanner segment split does not flag single-token aliases like `OperationalLocationIsStore` without camel boundaries (renamed in tests where found).
 
-## 21. Final Status
+## 13. Final Status
 
-**READY FOR CODE REVIEW**
-
----
-
-## WhatsApp Canonical Service Reference
-
-### Business Rule
-
-Every Service displayed in WhatsApp uses `Name - Address - Locality` with safe omission of missing values and deduplication of equivalent parts.
-
-### Canonical Formatter
-
-- **File:** `backend/src/utils/format-service-reference.ts`
-- **Functions:** `formatServiceReference`, `formatServiceReferenceFromFields`, `buildReminderServiceReference` (template layer)
-- **Missing-value behavior:** Trims whitespace; omits null/blank address and locality
-- **Duplicate-value behavior:** Skips address when equal to name; skips locality when already present in assembled parts (case-insensitive `es-AR`)
-- **Locality field:** `operational_locations.locality` (not `neighborhood`)
-
-### Bot Flows Updated
-
-- Attendance confirmation positive/negative replies
-- Assignment confirmation / unavailability selection and messages
-- Arrival / check-in location request and registration messages
-- Checkout location request, selection, and registration messages
-- Operation selection prompts (multi-line readable format)
-- Employee workday today/upcoming blocks
-
-### Twilio Templates Updated
-
-All proactive templates use canonical `{{2}}` service reference via `buildAttendanceReminderTemplateVariables`:
-
-- `ARRIVAL_REMINDER_15_MIN`
-- `EXIT_REMINDER_15_MIN`
-- `NO_CHECKIN_AT_START`
-- `ATTENDANCE_CONFIRMATION_REMINDER`
-
-### Query / Type Changes
-
-- `EmployeeAssignedOperation`, `CompatibleOperation`, `AttendanceReminderCandidate`, `OperationSelectionOption` → `serviceAddress`, `serviceLocality`
-- SQL aliases: `service_address`, `service_locality` in assignment, operation, attendance, and notification repositories
-
-### Tests
-
-- `format-service-reference.test.ts` — formatter edge cases
-- `attendance-reminder-template.test.ts` — all template types + fallback
-- `employee-assignment-row-mapper.test.ts` — SQL mapping
-- `bot-response.builder.test.ts`, `employee-assignment-format.test.ts` — message output
-
-### Remaining Limitations
-
-- `neighborhood` is not shown in WhatsApp service reference (locality only per business rule)
-- Geofence continues to use coordinates, not formatted address text
+**BLOCKED** — All code-level acceptance gates pass; DB integration and migrate validation pending live database execution.

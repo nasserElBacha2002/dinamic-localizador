@@ -11,7 +11,7 @@ import { attendanceNotificationRepository } from "../repositories/attendance-not
 import { companyRepository } from "../repositories/company.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
-import { buildInventoryStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
+import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
 import { botSessionService } from "./bot-session.service";
 import { twilioOutboundService } from "./twilio-outbound.service";
 import type { BotSession } from "../types/twilio.types";
@@ -463,7 +463,7 @@ export const attendanceReminderService = {
     }
 
     const { windowStart, windowEnd } = buildReminderDueWindow(referenceAt);
-    const startDueWindow = buildInventoryStartDueWindow(referenceAt);
+    const startDueWindow = buildOperationStartDueWindow(referenceAt);
 
     await attendanceNotificationRepository.reconcileSentRecoveryRequired(companyId);
 

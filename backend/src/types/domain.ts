@@ -26,7 +26,7 @@ export interface Service {
   address: string | null;
   neighborhood: string | null;
   locality: string | null;
-  storeFormat: ServiceFormat | null;
+  serviceFormat: ServiceFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters: number;

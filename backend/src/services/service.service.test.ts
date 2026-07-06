@@ -9,7 +9,7 @@ const sampleService = {
   address: null,
   neighborhood: null,
   locality: null,
-  storeFormat: "LEGACY_TYPE",
+  serviceFormat: "LEGACY_TYPE",
   latitude: -34.6,
   longitude: -58.38,
   allowedRadiusMeters: 150,
@@ -30,21 +30,21 @@ describe("serviceService location type validation", () => {
     const { serviceRepository } = await import("../repositories/service.repository");
     const { serviceService } = await import("./service.service");
 
-    mock.method(companyLocationTypesService, "assertActiveStoreFormat", async () => undefined);
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
     mock.method(serviceRepository, "create", async (_companyId, input) => ({
       ...sampleService,
       name: input.name,
-      storeFormat: input.storeFormat ?? null,
+      serviceFormat: input.serviceFormat ?? null,
     }));
 
     const created = await serviceService.create("company-1", {
       name: "Warehouse A",
       latitude: -34.6,
       longitude: -58.38,
-      storeFormat: "WAREHOUSE",
+      serviceFormat: "WAREHOUSE",
     });
 
-    assert.equal(created.storeFormat, "WAREHOUSE");
+    assert.equal(created.serviceFormat, "WAREHOUSE");
   });
 
   it("rejects unknown service format on create", async () => {
@@ -52,7 +52,7 @@ describe("serviceService location type validation", () => {
     const { companyLocationTypesService } = await import("./company-location-types.service");
     const { serviceService } = await import("./service.service");
 
-    mock.method(companyLocationTypesService, "assertActiveStoreFormat", async () => {
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => {
       throw new AppError(
         400,
         "UNKNOWN_LOCATION_TYPE",
@@ -66,7 +66,7 @@ describe("serviceService location type validation", () => {
           name: "Service 1",
           latitude: -34.6,
           longitude: -58.38,
-          storeFormat: "UNKNOWN",
+          serviceFormat: "UNKNOWN",
         }),
       (error: unknown) => error instanceof AppError && error.code === "UNKNOWN_LOCATION_TYPE",
     );
@@ -77,7 +77,7 @@ describe("serviceService location type validation", () => {
     const { companyLocationTypesService } = await import("./company-location-types.service");
     const { serviceService } = await import("./service.service");
 
-    mock.method(companyLocationTypesService, "assertActiveStoreFormat", async () => {
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => {
       throw new AppError(
         400,
         "INACTIVE_LOCATION_TYPE",
@@ -91,7 +91,7 @@ describe("serviceService location type validation", () => {
           name: "Service 1",
           latitude: -34.6,
           longitude: -58.38,
-          storeFormat: "OLD_TYPE",
+          serviceFormat: "OLD_TYPE",
         }),
       (error: unknown) => error instanceof AppError && error.code === "INACTIVE_LOCATION_TYPE",
     );
@@ -104,16 +104,16 @@ describe("serviceService location type validation", () => {
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
-    mock.method(companyLocationTypesService, "assertActiveStoreFormat", async () => undefined);
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
     mock.method(serviceRepository, "update", async (_companyId, _id, input) => ({
       ...sampleService,
-      storeFormat: input.storeFormat ?? sampleService.storeFormat,
+      serviceFormat: input.serviceFormat ?? sampleService.serviceFormat,
     }));
 
     const updated = await serviceService.update("company-1", sampleService.id, {
-      storeFormat: "WAREHOUSE",
+      serviceFormat: "WAREHOUSE",
     });
-    assert.equal(updated.storeFormat, "WAREHOUSE");
+    assert.equal(updated.serviceFormat, "WAREHOUSE");
   });
 
   it("rejects unknown service format on update", async () => {
@@ -123,7 +123,7 @@ describe("serviceService location type validation", () => {
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
-    mock.method(companyLocationTypesService, "assertActiveStoreFormat", async () => {
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => {
       throw new AppError(
         400,
         "UNKNOWN_LOCATION_TYPE",
@@ -134,7 +134,7 @@ describe("serviceService location type validation", () => {
     await assert.rejects(
       () =>
         serviceService.update("company-1", sampleService.id, {
-          storeFormat: "UNKNOWN",
+          serviceFormat: "UNKNOWN",
         }),
       (error: unknown) => error instanceof AppError && error.code === "UNKNOWN_LOCATION_TYPE",
     );
@@ -147,7 +147,7 @@ describe("serviceService location type validation", () => {
     const { serviceService } = await import("./service.service");
 
     mock.method(serviceRepository, "findById", async () => sampleService);
-    mock.method(companyLocationTypesService, "assertActiveStoreFormat", async () => {
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => {
       throw new AppError(
         400,
         "INACTIVE_LOCATION_TYPE",
@@ -158,7 +158,7 @@ describe("serviceService location type validation", () => {
     await assert.rejects(
       () =>
         serviceService.update("company-1", sampleService.id, {
-          storeFormat: "OLD_TYPE",
+          serviceFormat: "OLD_TYPE",
         }),
       (error: unknown) => error instanceof AppError && error.code === "INACTIVE_LOCATION_TYPE",
     );
@@ -171,10 +171,10 @@ describe("serviceService location type validation", () => {
 
     mock.method(serviceRepository, "findById", async () => ({
       ...sampleService,
-      storeFormat: "LEGACY_INACTIVE",
+      serviceFormat: "LEGACY_INACTIVE",
     }));
 
     const service = await serviceService.getById("company-1", sampleService.id);
-    assert.equal(service.storeFormat, "LEGACY_INACTIVE");
+    assert.equal(service.serviceFormat, "LEGACY_INACTIVE");
   });
 });

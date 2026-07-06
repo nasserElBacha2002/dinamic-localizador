@@ -42,7 +42,6 @@ const parseCliOptions = (argv: string[]): { outPath: string } => {
     if (arg === "--help" || arg === "-h") {
       console.log(`Usage:
   npm run export:services -- [--out ./data/database_services.csv]
-  npm run export:stores -- [--out ./data/database_services.csv]
 
 Exports the connected database services table to CSV for reconcile:services.
 `);

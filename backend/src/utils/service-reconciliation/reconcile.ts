@@ -136,7 +136,7 @@ const buildDuplicateReports = (
         addressMatchesOfficial: "",
         coordinateStatus: "",
         officialAddress: service.officialAddress,
-        details: `raw_store_id=${service.rawStoreId}`,
+        details: `raw_service_id=${service.rawServiceId}`,
       });
     }
   }

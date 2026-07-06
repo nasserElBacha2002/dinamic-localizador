@@ -29,7 +29,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
     const companyId = String(companyResult.recordset[0]?.id ?? "");
     assert.ok(companyId);
 
-    const storeResult = await pool
+    const serviceResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -37,7 +37,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
-    const serviceId = String(storeResult.recordset[0]?.id ?? "");
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
     const futureStart = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
@@ -133,7 +133,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
     const companyId = String(companyResult.recordset[0]?.id ?? "");
     assert.ok(companyId);
 
-    const storeResult = await pool
+    const serviceResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -141,7 +141,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
-    const serviceId = String(storeResult.recordset[0]?.id ?? "");
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
     const oldStart = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);
@@ -208,7 +208,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
       /forced reset failure/,
     );
 
-    const inventoryRow = await pool
+    const operationRow = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
@@ -218,7 +218,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
         WHERE company_id = @companyId AND id = @operationId
       `);
     const persistedStart = new Date(
-      (inventoryRow.recordset[0] as { scheduled_start: Date }).scheduled_start,
+      (operationRow.recordset[0] as { scheduled_start: Date }).scheduled_start,
     );
     assert.equal(persistedStart.toISOString(), oldStart.toISOString());
 

@@ -105,8 +105,8 @@ export const loadOfficialSourceRows = (filePath?: string): OfficialSourceRow[] =
   }
 
   return readCsvRecords(filePath).flatMap((record) => {
-    const rawStoreId = field(record, "store_id");
-    const serviceNumber = rawStoreId.replace(/\.0+$/, "").trim();
+    const rawServiceId = field(record, "store_id");
+    const serviceNumber = rawServiceId.replace(/\.0+$/, "").trim();
     if (!/^\d+$/.test(serviceNumber)) {
       return [];
     }

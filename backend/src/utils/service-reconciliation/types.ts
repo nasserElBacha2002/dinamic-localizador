@@ -1,6 +1,6 @@
 export interface OfficialService {
   serviceNumber: string;
-  rawStoreId: string;
+  rawServiceId: string;
   officialAddress: string;
   neighborhood: string;
   locality: string;

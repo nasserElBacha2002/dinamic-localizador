@@ -59,7 +59,7 @@ export function ServicesListPage() {
       { key: "name", header: "Nombre", getValue: (row) => row.name },
       { key: "neighborhood", header: "Barrio", getValue: (row) => row.neighborhood ?? "—" },
       { key: "locality", header: "Localidad", getValue: (row) => row.locality ?? "—" },
-      { key: "storeFormat", header: "Formato", getValue: (row) => row.storeFormat ?? "—" },
+      { key: "serviceFormat", header: "Formato", getValue: (row) => row.serviceFormat ?? "—" },
       { key: "address", header: "Dirección", getValue: (row) => row.address ?? "—" },
       { key: "latitude", header: "Latitud", getValue: (row) => row.latitude },
       { key: "longitude", header: "Longitud", getValue: (row) => row.longitude },

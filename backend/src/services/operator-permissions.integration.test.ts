@@ -97,12 +97,12 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
     );
     assert.equal(employeesResponse.status, 403);
 
-    const storesResponse = await apiRequest(
+    const servicesResponse = await apiRequest(
       baseUrl,
       `/api/companies/${dinamicCompanyId}/services`,
       { token },
     );
-    assert.equal(storesResponse.status, 403);
+    assert.equal(servicesResponse.status, 403);
   });
 
   it("allows OPERATOR access to operations and attendance APIs", async () => {
@@ -137,12 +137,12 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
       assert.equal("fullName" in employees[0], true);
     }
 
-    const storesLookup = await apiRequest(
+    const servicesLookup = await apiRequest(
       baseUrl,
       `/api/companies/${dinamicCompanyId}/lookups/services`,
       { token },
     );
-    assert.equal(storesLookup.status, 200);
+    assert.equal(servicesLookup.status, 200);
 
     const operationsLookup = await apiRequest(
       baseUrl,

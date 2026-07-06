@@ -4,10 +4,10 @@ import { asyncHandler } from "../middleware/async-handler";
 import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
-  createStoreSchema,
-  listStoresQuerySchema,
+  createServiceSchema,
+  listServicesQuerySchema,
   serviceIdParamSchema,
-  updateStoreSchema,
+  updateServiceSchema,
 } from "../schemas/service.schema";
 
 export const serviceRouter = Router();
@@ -15,13 +15,13 @@ export const serviceRouter = Router();
 serviceRouter.post(
   "/",
   requirePermission("services:manage"),
-  validate(createStoreSchema),
+  validate(createServiceSchema),
   asyncHandler(serviceController.create),
 );
 serviceRouter.get(
   "/",
   requirePermission("services:read"),
-  validate(listStoresQuerySchema, "query"),
+  validate(listServicesQuerySchema, "query"),
   asyncHandler(serviceController.list),
 );
 serviceRouter.get(
@@ -34,7 +34,7 @@ serviceRouter.put(
   "/:id",
   requirePermission("services:manage"),
   validate(serviceIdParamSchema, "params"),
-  validate(updateStoreSchema),
+  validate(updateServiceSchema),
   asyncHandler(serviceController.update),
 );
 serviceRouter.delete(

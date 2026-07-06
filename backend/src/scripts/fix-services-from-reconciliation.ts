@@ -46,9 +46,9 @@ interface CliOptions {
 const printUsage = (): void => {
   console.log(`Usage:
   npm run fix:services -- \\
-    --summary ./reports/store_reconciliation_summary.csv \\
+    --summary ./reports/service_reconciliation_summary.csv \\
     --missing ./reports/missing_in_database.csv \\
-    --duplicates ./reports/duplicate_store_numbers.csv \\
+    --duplicates ./reports/duplicate_service_numbers.csv \\
     --address-mismatches ./reports/address_mismatches.csv \\
     --coordinate-mismatches ./reports/coordinate_mismatches.csv \\
     --out ./reports/service-fixes

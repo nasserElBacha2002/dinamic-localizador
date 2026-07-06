@@ -72,7 +72,7 @@ export function ServiceForm({
       .filter((type) => type.isActive)
       .map((type) => ({ value: type.code, label: type.name }));
 
-    const currentFormat = watchedValues.storeFormat ?? defaultValues.storeFormat ?? "";
+    const currentFormat = watchedValues.serviceFormat ?? defaultValues.serviceFormat ?? "";
     if (
       currentFormat &&
       !activeOptions.some((option) => option.value === currentFormat)
@@ -85,7 +85,7 @@ export function ServiceForm({
     }
 
     return [{ value: "", label: "Sin tipo" }, ...activeOptions];
-  }, [defaultValues.storeFormat, locationTypes, watchedValues.storeFormat]);
+  }, [defaultValues.serviceFormat, locationTypes, watchedValues.serviceFormat]);
 
   return (
     <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
@@ -106,7 +106,7 @@ export function ServiceForm({
               />
               <RHFSelect
                 control={control}
-                name="storeFormat"
+                name="serviceFormat"
                 label="Tipo de ubicación / servicio"
                 data={serviceFormatOptions}
                 clearable

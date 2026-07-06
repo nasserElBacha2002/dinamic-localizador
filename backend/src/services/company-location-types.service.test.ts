@@ -225,7 +225,7 @@ describe("companyLocationTypesService", () => {
     }));
 
     await assert.rejects(
-      () => companyLocationTypesService.assertActiveStoreFormat("company-1", "EXPRESS"),
+      () => companyLocationTypesService.assertActiveServiceFormat("company-1", "EXPRESS"),
       (error: unknown) => error instanceof AppError && error.code === "INACTIVE_LOCATION_TYPE",
     );
   });

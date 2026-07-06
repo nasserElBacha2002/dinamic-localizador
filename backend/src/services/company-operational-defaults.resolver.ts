@@ -27,7 +27,7 @@ export type ImportOperationalDefaults = OperationOperationalDefaults & {
   geofenceReviewMarginSource: OperationalDefaultsSource;
 };
 
-export type StoreOperationalDefaults = {
+export type ServiceOperationalDefaults = {
   companyId: string;
   defaultRadiusMeters: number;
   source: OperationalDefaultsSource;
@@ -136,7 +136,7 @@ export const companyOperationalDefaultsResolver = {
     return buildImportDefaults(companyId, settings);
   },
 
-  async getStoreDefaults(companyId: string): Promise<StoreOperationalDefaults> {
+  async getServiceDefaults(companyId: string): Promise<ServiceOperationalDefaults> {
     const { settings, source } =
       await companyOperationalSettingsService.getCompanyOperationalSettingsWithSource(companyId);
 

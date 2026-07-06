@@ -97,6 +97,31 @@ describe("employeeWorkdayService", () => {
     assert.match(message, /Llegada: pendiente/);
   });
 
+  it("includes canonical service reference in upcoming assignments message", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    mock.method(employeeAssignmentQueryRepository, "listUpcomingForEmployee", async () => [
+      assignment({
+        serviceName: "Carrefour Caballito",
+        serviceAddress: "Av. Rivadavia 5108",
+        serviceLocality: "Caballito",
+      }),
+    ]);
+
+    const message = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.buildUpcomingAssignmentsMessage(companyId, employeeId),
+    );
+
+    assert.match(
+      message,
+      /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/,
+    );
+  });
+
   it("returns upcoming assignments ordered and limited by repository", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(

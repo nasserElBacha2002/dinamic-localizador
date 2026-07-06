@@ -107,7 +107,7 @@ describe("geocoding helpers", () => {
   it("builds a stable cache key and geocode query", () => {
     const service: OfficialService = {
       serviceNumber: "557",
-      rawStoreId: "557",
+      rawServiceId: "557",
       officialAddress: "Av. Corrientes 1234",
       neighborhood: "San Nicolas",
       locality: "Buenos Aires",
@@ -125,14 +125,14 @@ describe("reconcileServices", () => {
   const officialServices: OfficialService[] = [
     {
       serviceNumber: "557",
-      rawStoreId: "557",
+      rawServiceId: "557",
       officialAddress: "Av. Corrientes 1234",
       neighborhood: "Centro",
       locality: "Buenos Aires",
     },
     {
       serviceNumber: "729",
-      rawStoreId: "729",
+      rawServiceId: "729",
       officialAddress: "Calle Oficial 100",
       neighborhood: "Norte",
       locality: "Cordoba",

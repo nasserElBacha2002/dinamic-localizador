@@ -17,10 +17,10 @@ import type {
 
 type AssertAssignable<T extends U, U> = true;
 
-type _OperationalLocationIsStore = AssertAssignable<OperationalLocation, Service>;
-type _StoreIsOperationalLocation = AssertAssignable<Service, OperationalLocation>;
+type _OperationalLocationIsService = AssertAssignable<OperationalLocation, Service>;
+type _ServiceIsOperationalLocation = AssertAssignable<Service, OperationalLocation>;
 type _ScheduledOperationIsOperation = AssertAssignable<ScheduledOperation, Operation>;
-type _InventoryIsScheduledOperation = AssertAssignable<Operation, ScheduledOperation>;
+type _OperationIsScheduledOperation = AssertAssignable<Operation, ScheduledOperation>;
 type _WorkerIsEmployee = AssertAssignable<Worker, Employee>;
 type _EmployeeIsWorker = AssertAssignable<Employee, Worker>;
 type _OperationAssignmentIsOperationEmployeeAssignment = AssertAssignable<
@@ -32,13 +32,13 @@ type _OperationAttendanceRecordIsAttendanceRecord = AssertAssignable<
   AttendanceRecord
 >;
 
-const sampleStore: Service = {
+const sampleService: Service = {
   id: "service-1",
   name: "Centro",
   address: "Calle 1",
   neighborhood: null,
   locality: null,
-  storeFormat: null,
+  serviceFormat: null,
   latitude: -34.6,
   longitude: -58.38,
   allowedRadiusMeters: 150,
@@ -50,7 +50,7 @@ const sampleStore: Service = {
 
 const sampleOperation: Operation = {
   id: "operation-1",
-  serviceId: sampleStore.id,
+  serviceId: sampleService.id,
   scheduledStart: "2026-01-01T20:30:00.000Z",
   scheduledEnd: "2026-01-02T03:00:00.000Z",
   earlyToleranceMinutes: 60,
@@ -111,14 +111,14 @@ const sampleAttendance: AttendanceRecord = {
 
 describe("operational domain aliases", () => {
   it("assigns Service-shaped objects to OperationalLocation", () => {
-    const location: OperationalLocation = sampleStore;
+    const location: OperationalLocation = sampleService;
     assert.equal(location.id, "service-1");
     assert.equal(location.allowedRadiusMeters, 150);
   });
 
   it("assigns Operation-shaped objects to ScheduledOperation", () => {
     const operation: ScheduledOperation = sampleOperation;
-    assert.equal(operation.serviceId, sampleStore.id);
+    assert.equal(operation.serviceId, sampleService.id);
     assert.equal(operation.status, "SCHEDULED");
   });
 

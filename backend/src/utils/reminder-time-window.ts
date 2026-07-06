@@ -23,7 +23,7 @@ export const buildReminderDueWindow = (
   };
 };
 
-export const buildInventoryStartDueWindow = (
+export const buildOperationStartDueWindow = (
   referenceAt: Date,
   windowMinutes: number = NO_CHECKIN_AT_START_WINDOW_MINUTES,
 ): ReminderTimeWindow => {

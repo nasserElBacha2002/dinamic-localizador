@@ -78,13 +78,13 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   it("scopes service lookups by company", async () => {
-    const dinamicStores = await serviceRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
-    if (!dinamicStores.items[0]) {
+    const dinamicServices = await serviceRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
+    if (!dinamicServices.items[0]) {
       return;
     }
 
-    const foreignStore = await serviceRepository.findById(otherCompanyId, dinamicStores.items[0].id);
-    assert.equal(foreignStore, null);
+    const foreignService = await serviceRepository.findById(otherCompanyId, dinamicServices.items[0].id);
+    assert.equal(foreignService, null);
   });
 
   it("seeds admin memberships for Dinamic Systems", async () => {

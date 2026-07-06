@@ -38,7 +38,7 @@ interface CliOptions {
 const printUsage = (): void => {
   console.log(`Usage:
   npm run reconcile:services -- \\
-    --official ./data/carrefour_official_stores.csv \\
+    --official ./data/carrefour_official_services.csv \\
     --database ./data/database_services.csv \\
     --out ./reports
 
@@ -232,7 +232,7 @@ const main = async (): Promise<void> => {
 
   writeReport(
     outDir,
-    "store_reconciliation_summary.csv",
+    "service_reconciliation_summary.csv",
     SUMMARY_HEADERS,
     result.summary.map(reconciliationRowToCsv),
   );
@@ -250,7 +250,7 @@ const main = async (): Promise<void> => {
   );
   writeReport(
     outDir,
-    "duplicate_store_numbers.csv",
+    "duplicate_service_numbers.csv",
     DUPLICATE_HEADERS,
     result.duplicates.map((duplicate) => [
       duplicate.source,

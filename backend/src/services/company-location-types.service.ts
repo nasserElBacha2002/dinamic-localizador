@@ -147,16 +147,16 @@ export const companyLocationTypesService = {
     return this.updateLocationType(companyId, role, locationTypeId, { isActive: false });
   },
 
-  async assertActiveStoreFormat(
+  async assertActiveServiceFormat(
     companyId: string,
-    storeFormat: string | null | undefined,
+    serviceFormat: string | null | undefined,
   ): Promise<void> {
-    if (!storeFormat?.trim()) {
+    if (!serviceFormat?.trim()) {
       return;
     }
 
     await this.ensureLocationTypesCatalogForCompany(companyId);
-    const locationType = await companyLocationTypesRepository.findByCode(companyId, storeFormat.trim());
+    const locationType = await companyLocationTypesRepository.findByCode(companyId, serviceFormat.trim());
     if (!locationType) {
       throw new AppError(
         400,

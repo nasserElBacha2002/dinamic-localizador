@@ -29,7 +29,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
     const companyId = String(companyResult.recordset[0]?.id ?? "");
     assert.ok(companyId);
 
-    const storeResult = await pool
+    const serviceResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -37,7 +37,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
-    const serviceId = String(storeResult.recordset[0]?.id ?? "");
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
     const operationInsert = await pool
@@ -112,7 +112,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         WHERE company_id = @companyId
       `);
 
-    const storeResult = await pool
+    const serviceResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -120,7 +120,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
-    const serviceId = String(storeResult.recordset[0]?.id ?? "");
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
     const referenceAt = new Date();

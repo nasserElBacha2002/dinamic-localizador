@@ -45,7 +45,7 @@ export function OperationsListPage() {
   const location = useLocation();
   const listNav = useListNavigationState(OPERATIONS_LIST_PATH);
   const permissionsQuery = useCompanyPermissions();
-  const canManageInventories = hasPermission(
+  const canManageOperations = hasPermission(
     permissionsQuery.data?.permissions,
     "operations:manage",
   );
@@ -168,7 +168,7 @@ export function OperationsListPage() {
         title={terminology.operation.plural}
         description={`Planificá ${terminology.operation.plural.toLowerCase()} y asigná ${terminology.worker.plural.toLowerCase()}.`}
         action={
-          canManageInventories ? (
+          canManageOperations ? (
             <Group gap="xs">
               <Button component={Link} to="/operations/import" state={listNav} variant="default">
                 {`Importar ${terminology.operation.plural.toLowerCase()}`}

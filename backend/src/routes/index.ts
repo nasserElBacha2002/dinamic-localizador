@@ -35,12 +35,12 @@ apiRouter.use("/webhooks/twilio", twilioRouter);
 apiRouter.use("/companies", authenticate, companyRouter);
 apiRouter.use("/platform", authenticate, platformCompanyRouter);
 
-const mountInventoryOperationsServiceRoutes = (router: Router) => {
+const mountOperationsServiceRoutes = (router: Router) => {
   const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS);
   router.use("/services", moduleGuard, serviceRouter);
 };
 
-const mountInventoryOperationsOperationRoutes = (router: Router) => {
+const mountOperationsOperationRoutes = (router: Router) => {
   const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS);
   router.use("/operations", moduleGuard, operationRouter);
 };
@@ -61,8 +61,8 @@ companyScopedOperationalRouter.use("/users", companyUserRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
 companyScopedOperationalRouter.use("/lookups", lookupRouter);
 mountEmployeeRoutes(companyScopedOperationalRouter);
-mountInventoryOperationsServiceRoutes(companyScopedOperationalRouter);
-mountInventoryOperationsOperationRoutes(companyScopedOperationalRouter);
+mountOperationsServiceRoutes(companyScopedOperationalRouter);
+mountOperationsOperationRoutes(companyScopedOperationalRouter);
 companyScopedOperationalRouter.use(
   "/operations/:operationId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
@@ -106,8 +106,8 @@ operationalRouter.use(resolveCompanyContext);
 operationalRouter.use(asyncHandler(loadCompanyModuleStates));
 operationalRouter.use("/lookups", lookupRouter);
 mountEmployeeRoutes(operationalRouter);
-mountInventoryOperationsServiceRoutes(operationalRouter);
-mountInventoryOperationsOperationRoutes(operationalRouter);
+mountOperationsServiceRoutes(operationalRouter);
+mountOperationsOperationRoutes(operationalRouter);
 operationalRouter.use(
   "/operations/:operationId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),

@@ -110,7 +110,7 @@ describe("companyOperationalDefaultsResolver", () => {
     assert.equal(defaults.defaultOperationEndTime, "03:00");
   });
 
-  it("getStoreDefaults uses operational settings service fallback chain", async () => {
+  it("getServiceDefaults uses operational settings service fallback chain", async () => {
     setupUnitTestEnv();
     const { companyOperationalSettingsService } = await import(
       "./company-operational-settings.service"
@@ -136,7 +136,7 @@ describe("companyOperationalDefaultsResolver", () => {
       }),
     );
 
-    const defaults = await companyOperationalDefaultsResolver.getStoreDefaults(companyId);
+    const defaults = await companyOperationalDefaultsResolver.getServiceDefaults(companyId);
     assert.equal(defaults.defaultRadiusMeters, 180);
     assert.equal(defaults.source, "company_settings");
   });

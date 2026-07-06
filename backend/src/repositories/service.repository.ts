@@ -17,7 +17,7 @@ export const serviceRepository = {
       .input("address", sql.NVarChar(300), input.address ?? null)
       .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
       .input("locality", sql.NVarChar(150), input.locality ?? null)
-      .input("storeFormat", sql.NVarChar(50), input.storeFormat ?? null)
+      .input("serviceFormat", sql.NVarChar(50), input.serviceFormat ?? null)
       .input("latitude", sql.Decimal(10, 7), input.latitude)
       .input("longitude", sql.Decimal(10, 7), input.longitude)
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
@@ -29,7 +29,7 @@ export const serviceRepository = {
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @name, @address, @neighborhood, @locality, @storeFormat,
+          @companyId, @name, @address, @neighborhood, @locality, @serviceFormat,
           @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId
         )
       `);
@@ -141,9 +141,9 @@ export const serviceRepository = {
       fields.push("locality = @locality");
     }
 
-    if (input.storeFormat !== undefined) {
-      request.input("storeFormat", sql.NVarChar(50), input.storeFormat);
-      fields.push("store_format = @storeFormat");
+    if (input.serviceFormat !== undefined) {
+      request.input("serviceFormat", sql.NVarChar(50), input.serviceFormat);
+      fields.push("store_format = @serviceFormat");
     }
 
     if (input.latitude !== undefined) {

@@ -41,4 +41,21 @@ export function setupDomEnvironment(): void {
     writable: true,
     value: window.Node,
   });
+  Object.defineProperty(globalThis, "getComputedStyle", {
+    configurable: true,
+    writable: true,
+    value: window.getComputedStyle.bind(window),
+  });
+
+  if (!globalThis.ResizeObserver) {
+    Object.defineProperty(globalThis, "ResizeObserver", {
+      configurable: true,
+      writable: true,
+      value: class ResizeObserver {
+        observe(): void {}
+        unobserve(): void {}
+        disconnect(): void {}
+      },
+    });
+  }
 }

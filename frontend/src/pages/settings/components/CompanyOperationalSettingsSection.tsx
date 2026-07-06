@@ -1,4 +1,4 @@
-import { Button, Group, NumberInput, Select, Stack, Switch, Text } from "@mantine/core";
+import { Button, Group, NumberInput, Select, Stack, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { getCanonicalOperationTimezone, getOperationTimezoneOptions } from "../../../constants/operation-timezones";
 import { FormErrorAlert, FormGrid, SectionCard } from "../../../design-system";
@@ -238,11 +238,11 @@ export function CompanyOperationalSettingsSection({
           </SettingsFormField>
         </FormGrid>
 
-        <Text fw={600} size="sm">
+{/*         <Text fw={600} size="sm">
           Confirmación de asistencia
-        </Text>
+        </Text> */}
         <FormGrid columns={{ base: 1, md: 2 }}>
-          <SettingsFormField
+{/*           <SettingsFormField
             label="Enviar recordatorio automático"
             description="WhatsApp proactivo a empleados con confirmación pendiente."
           >
@@ -258,7 +258,7 @@ export function CompanyOperationalSettingsSection({
               disabled={disabled}
               aria-label="Enviar recordatorio automático de confirmación"
             />
-          </SettingsFormField>
+          </SettingsFormField> */}
 
           <SettingsFormField
             label="Enviar recordatorio (horas antes)"

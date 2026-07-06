@@ -9,7 +9,7 @@ export const isNotificationRetryable = (
   staleBefore: Date,
   maxAttempts: number,
 ): boolean => {
-  if (notification.status === "SENT") {
+  if (notification.status === "SENT" || notification.status === "SENT_RECOVERY_REQUIRED") {
     return false;
   }
 

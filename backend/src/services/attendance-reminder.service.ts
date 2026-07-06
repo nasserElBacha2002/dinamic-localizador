@@ -3,6 +3,8 @@ import type { AttendanceNotificationType } from "../constants/attendance-notific
 import {
   NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER,
   NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START,
+  SENT_CONTEXT_FAILED_ERROR,
+  SENT_PERSISTENCE_UNKNOWN_ERROR,
 } from "../constants/attendance-notification";
 import { AppError } from "../errors/app-error";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
@@ -12,6 +14,14 @@ import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-re
 import { buildInventoryStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
 import { botSessionService } from "./bot-session.service";
 import { twilioOutboundService } from "./twilio-outbound.service";
+import type { BotSession } from "../types/twilio.types";
+
+export type ReminderSendOutcome =
+  | "sent"
+  | "failed"
+  | "skipped"
+  | "sent_context_failed"
+  | "sent_persistence_unknown";
 
 export interface AttendanceReminderRunSummary {
   referenceAt: string;
@@ -94,7 +104,7 @@ const sendReminderForCandidate = async (
   companyId: string,
   candidate: AttendanceReminderCandidate,
   notificationType: AttendanceNotificationType,
-): Promise<"sent" | "failed" | "skipped"> => {
+): Promise<ReminderSendOutcome> => {
   const contentSid = contentSidForType(notificationType);
   if (!contentSid) {
     console.info("[attendance-reminder] skipped notification because template SID is not configured", {
@@ -196,6 +206,48 @@ const sendReminderForCandidate = async (
     }
   }
 
+  let preparedSession: BotSession | null = null;
+  if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
+    try {
+      preparedSession = await botSessionService.createAttendanceConfirmationResponseSession(companyId, {
+        employeeId: candidate.employeeId,
+        phoneNumber: candidate.employeePhoneNumber,
+        inventoryId: candidate.inventoryId,
+        notificationId: claimed.id,
+        scheduleVersion,
+      });
+    } catch (error) {
+      const errorMessage =
+        error instanceof Error ? error.message : "Unknown error preparing confirmation context";
+      await attendanceNotificationRepository.markFailed(companyId, {
+        notificationId: claimed.id,
+        errorMessage,
+      });
+
+      console.error("[attendance-reminder] confirmation context preparation failed before send", {
+        notificationType,
+        inventoryId: candidate.inventoryId,
+        employeeId: candidate.employeeId,
+        notificationId: claimed.id,
+        scheduleVersion,
+        errorMessage,
+      });
+
+      return "failed";
+    }
+
+    if (!preparedSession) {
+      console.warn("[attendance-reminder] confirmation context unavailable before send", {
+        notificationType,
+        inventoryId: candidate.inventoryId,
+        employeeId: candidate.employeeId,
+        notificationId: claimed.id,
+        scheduleVersion,
+        reason: "ACTIVE_SESSION_CONFLICT",
+      });
+    }
+  }
+
   try {
     const contentVariables = buildTemplateVariables(candidate, notificationType);
     const result = await twilioOutboundService.sendWhatsAppTemplate({
@@ -205,11 +257,67 @@ const sendReminderForCandidate = async (
     });
 
     const sentAt = new Date();
-    await attendanceNotificationRepository.markSent(companyId, {
-      notificationId: claimed.id,
-      twilioMessageSid: result.messageSid,
-      sentAt,
-    });
+
+    try {
+      await attendanceNotificationRepository.markSent(companyId, {
+        notificationId: claimed.id,
+        twilioMessageSid: result.messageSid,
+        sentAt,
+      });
+    } catch (markSentError) {
+      const errorMessage =
+        markSentError instanceof Error ? markSentError.message : "Unknown error marking reminder sent";
+
+      try {
+        await attendanceNotificationRepository.markSentRecoveryRequired(companyId, {
+          notificationId: claimed.id,
+          twilioMessageSid: result.messageSid,
+          sentAt,
+          errorMessage,
+        });
+
+        console.error(
+          "[attendance-reminder] post-send SENT persistence failed; recovery state recorded",
+          {
+            notificationType,
+            inventoryId: candidate.inventoryId,
+            employeeId: candidate.employeeId,
+            notificationId: claimed.id,
+            scheduleVersion,
+            twilioMessageSid: result.messageSid,
+            errorMessage,
+          },
+        );
+      } catch (recoveryError) {
+        const recoveryErrorMessage =
+          recoveryError instanceof Error ? recoveryError.message : "Unknown recovery persistence error";
+
+        console.error("[attendance-reminder] CRITICAL sent persistence unknown after Twilio delivery", {
+          notificationType,
+          companyId,
+          inventoryId: candidate.inventoryId,
+          employeeId: candidate.employeeId,
+          notificationId: claimed.id,
+          scheduleVersion,
+          twilioMessageSid: result.messageSid,
+          markSentError: errorMessage,
+          recoveryError: recoveryErrorMessage,
+          errorCode: SENT_PERSISTENCE_UNKNOWN_ERROR,
+        });
+
+        if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && !preparedSession) {
+          return "sent_persistence_unknown";
+        }
+
+        return "sent_persistence_unknown";
+      }
+
+      if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && !preparedSession) {
+        return "sent_context_failed";
+      }
+
+      return "sent";
+    }
 
     console.info("[attendance-reminder] reminder sent", {
       notificationType,
@@ -220,18 +328,39 @@ const sendReminderForCandidate = async (
       twilioMessageSid: result.messageSid,
     });
 
-    if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
-      await botSessionService.createAttendanceConfirmationResponseSession(companyId, {
-        employeeId: candidate.employeeId,
-        phoneNumber: candidate.employeePhoneNumber,
+    if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && !preparedSession) {
+      console.error("[attendance-reminder] SENT_CONTEXT_FAILED after successful Twilio send", {
+        notificationType,
         inventoryId: candidate.inventoryId,
+        employeeId: candidate.employeeId,
         notificationId: claimed.id,
         scheduleVersion,
+        errorMessage: SENT_CONTEXT_FAILED_ERROR,
       });
+      return "sent_context_failed";
     }
 
     return "sent";
   } catch (error) {
+    if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && preparedSession) {
+      try {
+        await botSessionService.cancelSession(companyId, preparedSession.id);
+      } catch (cleanupError) {
+        const cleanupErrorMessage =
+          cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";
+
+        console.error("[attendance-reminder] prepared session cleanup failed", {
+          notificationType,
+          inventoryId: candidate.inventoryId,
+          employeeId: candidate.employeeId,
+          notificationId: claimed.id,
+          scheduleVersion,
+          sessionId: preparedSession.id,
+          errorMessage: cleanupErrorMessage,
+        });
+      }
+    }
+
     const errorMessage =
       error instanceof Error ? error.message : "Unknown error sending attendance reminder";
 
@@ -262,13 +391,30 @@ const processCandidates = async (
   let skipped = 0;
 
   for (const candidate of candidates) {
-    const outcome = await sendReminderForCandidate(companyId, candidate, notificationType);
-    if (outcome === "sent") {
-      sent += 1;
-    } else if (outcome === "failed") {
+    try {
+      const outcome = await sendReminderForCandidate(companyId, candidate, notificationType);
+      if (
+        outcome === "sent" ||
+        outcome === "sent_context_failed" ||
+        outcome === "sent_persistence_unknown"
+      ) {
+        sent += 1;
+      } else if (outcome === "failed") {
+        failed += 1;
+      } else {
+        skipped += 1;
+      }
+    } catch (error) {
       failed += 1;
-    } else {
-      skipped += 1;
+      const errorMessage = error instanceof Error ? error.message : "Unknown candidate processing error";
+
+      console.error("[attendance-reminder] unhandled candidate processing error", {
+        companyId,
+        inventoryId: candidate.inventoryId,
+        employeeId: candidate.employeeId,
+        notificationType,
+        errorMessage,
+      });
     }
   }
 
@@ -318,6 +464,8 @@ export const attendanceReminderService = {
 
     const { windowStart, windowEnd } = buildReminderDueWindow(referenceAt);
     const startDueWindow = buildInventoryStartDueWindow(referenceAt);
+
+    await attendanceNotificationRepository.reconcileSentRecoveryRequired(companyId);
 
     const [arrivalCandidates, exitCandidates, noCheckInCandidates, confirmationCandidates] =
       await Promise.all([
@@ -394,7 +542,7 @@ export const attendanceReminderService = {
       employeeId: string;
       notificationType: AttendanceNotificationType;
     },
-  ): Promise<"sent" | "failed" | "skipped"> {
+  ): Promise<ReminderSendOutcome> {
     const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);
     if (!candidate) {
       throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado al inventario");

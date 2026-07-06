@@ -6,8 +6,8 @@ import {
   assignmentConfirmationStatusLabels,
   assignmentConfirmationStatusTableLabels,
   operationalAttendanceStatusTableLabels,
-} from "../utils/labels";
-import { assignmentConfirmationStatusTone } from "../utils/attendance-status-tones";
+} from "../../utils/labels";
+import { assignmentConfirmationStatusTone } from "../../utils/attendance-status-tones";
 
 describe("assignment confirmation labels", () => {
   it("maps confirmation statuses to Spanish labels", () => {
@@ -37,25 +37,30 @@ describe("operational attendance status labels", () => {
   });
 });
 
-describe("InventoryOperationalSection operational UI", () => {
-  it("renders grouped summary, simplified columns, and contextual navigation", async () => {
-    const source = await readFile(
+describe("Inventory operational employee table UI", () => {
+  it("renders grouped summary wiring and simplified production table navigation", async () => {
+    const sectionSource = await readFile(
       join(process.cwd(), "src/components/inventories/InventoryOperationalSection.tsx"),
       "utf8",
     );
+    const tableSource = await readFile(
+      join(process.cwd(), "src/components/inventories/InventoryOperationalEmployeeTable.tsx"),
+      "utf8",
+    );
 
-    assert.match(source, /OperationalSummaryMetrics/);
-    assert.match(source, /Confirmación/);
-    assert.match(source, /Estado asistencia/);
-    assert.match(source, /assignmentConfirmationStatusTableLabels/);
-    assert.match(source, /operationalAttendanceStatusTableLabels/);
-    assert.match(source, /isRowClickable/);
-    assert.match(source, /navigateWithListContext/);
-    assert.doesNotMatch(source, /header: "Distancia"/);
-    assert.doesNotMatch(source, /header: "Ubicación"/);
-    assert.doesNotMatch(source, /header: "Estado operativo"/);
-    assert.doesNotMatch(source, /header: "Teléfono"/);
-    assert.doesNotMatch(source, /header: "Tiempo extra"/);
-    assert.doesNotMatch(source, /header: "Estado salida"/);
+    assert.match(sectionSource, /OperationalSummaryMetrics/);
+    assert.match(sectionSource, /InventoryOperationalEmployeeTable/);
+    assert.match(tableSource, /Confirmación/);
+    assert.match(tableSource, /Estado asistencia/);
+    assert.match(tableSource, /assignmentConfirmationStatusTableLabels/);
+    assert.match(tableSource, /operationalAttendanceStatusTableLabels/);
+    assert.match(tableSource, /isRowClickable/);
+    assert.match(tableSource, /navigateWithListContext/);
+    assert.doesNotMatch(tableSource, /header: "Distancia"/);
+    assert.doesNotMatch(tableSource, /header: "Ubicación"/);
+    assert.doesNotMatch(tableSource, /header: "Estado operativo"/);
+    assert.doesNotMatch(tableSource, /header: "Teléfono"/);
+    assert.doesNotMatch(tableSource, /header: "Tiempo extra"/);
+    assert.doesNotMatch(tableSource, /header: "Estado salida"/);
   });
 });

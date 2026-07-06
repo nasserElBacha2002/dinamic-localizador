@@ -145,10 +145,13 @@ export const employeeAssignmentQueryRepository = {
   async resetConfirmationsForInventoryScheduleChange(
     companyId: string,
     inventoryId: string,
+    transaction?: sql.Transaction,
   ): Promise<number> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction
+      ? new sql.Request(transaction)
+      : getPool().request();
+
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("inventoryId", sql.UniqueIdentifier, inventoryId)
       .query(`

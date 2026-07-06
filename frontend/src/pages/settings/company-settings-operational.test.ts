@@ -60,9 +60,11 @@ describe("CompanyOperationalSettingsSection", () => {
       join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
       "utf8",
     );
+    const activeSection = sectionFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
 
-    assert.equal((sectionFile.match(/SettingsFormField/g) ?? []).length, 8);
-    assert.match(sectionFile, /description="Zona horaria usada por operaciones y reportes\."/);
+    assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 9);
+    assert.match(activeSection, /description="Zona horaria usada por operaciones y reportes\."/);
+    assert.match(activeSection, /description="Ventana configurable por empresa antes del inicio del inventario\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
     assert.match(sectionFile, /getOperationTimezoneOptions/);
@@ -91,6 +93,8 @@ describe("CompanyOperationalSettingsSection", () => {
     });
 
     assert.deepEqual(Object.keys(payload).sort(), [
+      "confirmationReminderEnabled",
+      "confirmationReminderHoursBefore",
       "defaultEarlyArrivalToleranceMinutes",
       "defaultLateArrivalToleranceMinutes",
       "defaultOperationEndTime",

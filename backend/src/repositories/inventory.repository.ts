@@ -351,13 +351,15 @@ export const inventoryRepository = {
     companyId: string,
     id: string,
     input: UpdateInventoryInput,
+    transaction?: sql.Transaction,
   ): Promise<Inventory | null> {
-    const pool = getPool();
+    const request = transaction
+      ? new sql.Request(transaction)
+      : getPool().request();
+
     const fields: string[] = [];
-    const request = pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("id", sql.UniqueIdentifier, id);
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+    request.input("id", sql.UniqueIdentifier, id);
 
     if (input.storeId !== undefined) {
       request.input("storeId", sql.UniqueIdentifier, input.storeId);

@@ -10,6 +10,22 @@ describe("isNotificationRetryable", () => {
   const now = new Date("2026-06-23T13:00:00.000Z");
   const staleBefore = new Date("2026-06-23T12:54:00.000Z");
 
+  it("never retries SENT_RECOVERY_REQUIRED notifications", () => {
+    assert.equal(
+      isNotificationRetryable(
+        {
+          status: "SENT_RECOVERY_REQUIRED",
+          attemptCount: 1,
+          lastAttemptAt: "2026-06-23T12:50:00.000Z",
+          createdAt: "2026-06-23T12:50:00.000Z",
+        },
+        staleBefore,
+        3,
+      ),
+      false,
+    );
+  });
+
   it("never retries SENT notifications", () => {
     assert.equal(
       isNotificationRetryable(

@@ -614,6 +614,56 @@ export const attendanceNotificationRepository = {
       `);
   },
 
+  async markSentRecoveryRequired(
+    companyId: string,
+    input: {
+      notificationId: string;
+      twilioMessageSid: string;
+      sentAt: Date;
+      errorMessage: string;
+    },
+  ): Promise<void> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
+      .input("twilioMessageSid", sql.NVarChar(100), input.twilioMessageSid)
+      .input("sentAt", sql.DateTime2, input.sentAt)
+      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET status = 'SENT_RECOVERY_REQUIRED',
+            twilio_message_sid = @twilioMessageSid,
+            sent_at = @sentAt,
+            error_message = @errorMessage
+        WHERE id = @notificationId
+          AND company_id = @companyId
+          AND status = 'PENDING'
+      `);
+
+    if (result.rowsAffected[0] === 0) {
+      throw new Error("MARK_SENT_RECOVERY_REQUIRED_NOOP");
+    }
+  },
+
+  async reconcileSentRecoveryRequired(companyId: string): Promise<number> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET status = 'SENT',
+            error_message = NULL
+        OUTPUT INSERTED.id
+        WHERE company_id = @companyId
+          AND status = 'SENT_RECOVERY_REQUIRED'
+      `);
+
+    return result.recordset.length;
+  },
+
   async markFailed(
     companyId: string,
     input: {

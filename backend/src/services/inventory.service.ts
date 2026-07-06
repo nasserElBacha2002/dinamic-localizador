@@ -1,6 +1,8 @@
 // Phase 2.3 terminology note: Inventory/inventories remain stable API names.
 // Product-facing UI may refer to a ScheduledOperation / Operación.
 import { AppError } from "../errors/app-error";
+import sql from "mssql";
+import { getPool } from "../database/connection";
 import { inventoryAttendanceRepository } from "../repositories/inventory-attendance.repository";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { inventoryRepository } from "../repositories/inventory.repository";
@@ -165,26 +167,48 @@ export const inventoryService = {
       validateInventoryStartNotInPast(input.scheduledStart);
     }
 
-    const updated = await inventoryRepository.update(companyId, id, input);
-    if (!updated) {
-      throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
+    const scheduleChanged =
+      input.scheduledStart !== undefined &&
+      new Date(input.scheduledStart).getTime() !== new Date(current.scheduledStart).getTime();
+
+    let updated: InventoryRecord | null;
+    let resetCount = 0;
+
+    if (scheduleChanged) {
+      const pool = getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+
+      try {
+        updated = await inventoryRepository.update(companyId, id, input, transaction);
+        if (!updated) {
+          throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
+        }
+
+        resetCount = await employeeAssignmentQueryRepository.resetConfirmationsForInventoryScheduleChange(
+          companyId,
+          id,
+          transaction,
+        );
+
+        await transaction.commit();
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    } else {
+      updated = await inventoryRepository.update(companyId, id, input);
+      if (!updated) {
+        throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
+      }
     }
 
-    if (
-      input.scheduledStart &&
-      new Date(input.scheduledStart).getTime() !== new Date(current.scheduledStart).getTime()
-    ) {
-      const resetCount = await employeeAssignmentQueryRepository.resetConfirmationsForInventoryScheduleChange(
+    if (resetCount > 0) {
+      console.info("[inventory] confirmation state reset after schedule change", {
         companyId,
-        id,
-      );
-      if (resetCount > 0) {
-        console.info("[inventory] confirmation state reset after schedule change", {
-          companyId,
-          inventoryId: id,
-          resetAssignments: resetCount,
-        });
-      }
+        inventoryId: id,
+        resetAssignments: resetCount,
+      });
     }
 
     await auditService.log(companyId, {

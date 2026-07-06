@@ -3,7 +3,7 @@ import { employeeWorkdayService } from "../employee-workday.service";
 import {
   formatAssignmentDateTimeLine,
 } from "../../utils/employee-assignment-format";
-import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
+import { companyOperationalSettingsService } from "../company-operational-settings.service";
 import { parseAttendanceConfirmationReply } from "../../utils/attendance-confirmation-reply";
 import { isAttendanceConfirmationResponseSessionState } from "../../utils/bot-session-states";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
@@ -18,7 +18,12 @@ const AMBIGUOUS_REPLY_MESSAGE = [
 ].join("\n");
 
 const NOT_ASSIGNED_MESSAGE =
-  "Ya no estás asignado a ese inventario. Si necesitás ayuda, contactá a administración.";
+  "Ya no estás asignado a ese servicio. Si necesitás ayuda, contactá a administración.";
+
+const resolveCompanyTimezone = async (companyId: string): Promise<string> => {
+  const settings = await companyOperationalSettingsService.getCompanyOperationalSettings(companyId);
+  return settings.operationTimezone;
+};
 
 const respond = (
   ctx: WhatsAppRouterContext,
@@ -68,7 +73,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
     await botSessionService.completeSession(ctx.companyId, session.id);
 
     if (result.kind === "ok") {
-      const timeZone = getBotOperationTimezone();
+      const timeZone = await resolveCompanyTimezone(ctx.companyId);
       const assignment = await employeeWorkdayService.getAssignmentForResponseMessage(
         ctx.companyId,
         ctx.employeeId,
@@ -106,7 +111,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
   await botSessionService.completeSession(ctx.companyId, session.id);
 
   if (result.kind === "ok") {
-    const timeZone = getBotOperationTimezone();
+    const timeZone = await resolveCompanyTimezone(ctx.companyId);
     const assignment = await employeeWorkdayService.getAssignmentForResponseMessage(
       ctx.companyId,
       ctx.employeeId,
@@ -116,7 +121,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
       return respond(
         ctx,
         handlers,
-        `Registramos que no vas a poder asistir al inventario de ${assignment.storeName} del ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
+        `Registramos que no vas a poder asistir al servicio asignado en ${assignment.storeName} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
       );
     }
   }

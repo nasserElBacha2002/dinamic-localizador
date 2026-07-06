@@ -7,7 +7,12 @@ export const ATTENDANCE_NOTIFICATION_TYPES = [
 
 export type AttendanceNotificationType = (typeof ATTENDANCE_NOTIFICATION_TYPES)[number];
 
-export const ATTENDANCE_NOTIFICATION_STATUSES = ["PENDING", "SENT", "FAILED"] as const;
+export const ATTENDANCE_NOTIFICATION_STATUSES = [
+  "PENDING",
+  "SENT",
+  "FAILED",
+  "SENT_RECOVERY_REQUIRED",
+] as const;
 
 export type AttendanceNotificationStatus = (typeof ATTENDANCE_NOTIFICATION_STATUSES)[number];
 
@@ -21,6 +26,10 @@ export const NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START =
 
 export const NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER =
   "NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER";
+
+export const SENT_CONTEXT_FAILED_ERROR = "SENT_CONTEXT_FAILED";
+
+export const SENT_PERSISTENCE_UNKNOWN_ERROR = "SENT_PERSISTENCE_UNKNOWN";
 
 export const ATTENDANCE_NOTIFICATION_TYPE_LABELS: Record<AttendanceNotificationType, string> = {
   ARRIVAL_REMINDER_15_MIN: "Recordatorio de llegada (15 min)",

@@ -18,7 +18,16 @@ export function formatOperationScheduleListLabel(
   scheduleSummary?: OperationScheduleSummary,
 ): string {
   if (operationKind === "RECURRING") {
-    return scheduleSummary?.summaryLabel ?? "Trabajo habitual";
+    if (!scheduleSummary) {
+      return "Trabajo habitual";
+    }
+
+    const sourceLabel =
+      scheduleSummary.scheduleSource === "COMPANY"
+        ? "Horario de la empresa"
+        : "Horario específico";
+
+    return `Trabajo habitual · ${sourceLabel} · ${scheduleSummary.summaryLabel}`;
   }
 
   if (!scheduledStart) {

@@ -1,4 +1,4 @@
-import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { Anchor, Box, Button, Divider, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
@@ -223,35 +223,6 @@ export function OperationDetailPage() {
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
             <Stack gap="lg">
-              {operation.operationKind === "RECURRING" && operation.schedule ? (
-                <SectionCard
-                  title="Horario de trabajo"
-                  description="Configuración semanal de la operación habitual."
-                >
-                  <Stack gap="sm">
-                    <Group gap="xs">
-                      <StatusBadge
-                        label={scheduleSourceLabels[operation.schedule.scheduleSource]}
-                        tone="info"
-                        variant="light"
-                      />
-                    </Group>
-                    <OperationDetailFieldGrid
-                      fields={[
-                        {
-                          label: "Vigencia",
-                          value: formatRecurringValidity(
-                            operation.schedule.validFrom,
-                            operation.schedule.validUntil,
-                          ),
-                        },
-                      ]}
-                    />
-                    <WeeklySchedulePreview days={operation.schedule.days} />
-                  </Stack>
-                </SectionCard>
-              ) : null}
-
               <OperationAssignmentsSection
                 operationId={operation.id}
                 operationKind={operation.operationKind ?? "ONE_TIME"}
@@ -310,6 +281,30 @@ export function OperationDetailPage() {
                   { label: "Notas", value: operation.notes ?? "—" },
                 ]}
               />
+
+              {operation.operationKind === "RECURRING" && operation.schedule ? (
+                <>
+                  <Divider my="sm" />
+                  <Stack gap="sm">
+                    <Stack gap={2}>
+                      <Text size="sm" fw={600}>
+                        Horario de trabajo
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        Configuración semanal de la operación habitual.
+                      </Text>
+                    </Stack>
+                    <Group gap="xs">
+                      <StatusBadge
+                        label={scheduleSourceLabels[operation.schedule.scheduleSource]}
+                        tone="info"
+                        variant="light"
+                      />
+                    </Group>
+                    <WeeklySchedulePreview days={operation.schedule.days} />
+                  </Stack>
+                </>
+              ) : null}
             </SectionCard>
           </Box>
 

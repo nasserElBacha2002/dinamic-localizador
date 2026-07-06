@@ -1,20 +1,11 @@
 import { numberToWeekday, type WeekdayNumber } from "../constants/weekday";
-import type { ResolvedScheduleDay, WeeklyScheduleDay } from "../types/schedule";
-import type { ScheduleSource } from "../constants/schedule-source";
+import type { EffectiveRecurringSchedule, ResolvedScheduleDay } from "../types/schedule";
 
 export const recurringScheduleResolver = {
-  resolveDay(
-    workDate: string,
-    input: {
-      timezone: string;
-      scheduleSource: ScheduleSource;
-      scheduleVersion: number;
-      days: WeeklyScheduleDay[];
-    },
-  ): ResolvedScheduleDay {
+  resolveDay(workDate: string, effectiveSchedule: EffectiveRecurringSchedule): ResolvedScheduleDay {
     const dayNumber = resolveIsoWeekdayFromDateIso(workDate);
     const weekday = numberToWeekday(dayNumber);
-    const day = input.days.find((item) => item.dayOfWeek === weekday);
+    const day = effectiveSchedule.days.find((item) => item.dayOfWeek === weekday);
 
     return {
       workDate,
@@ -22,9 +13,9 @@ export const recurringScheduleResolver = {
       enabled: Boolean(day?.isEnabled),
       startTime: day?.isEnabled ? day.startTime : null,
       endTime: day?.isEnabled ? day.endTime : null,
-      timezone: input.timezone,
-      scheduleSource: input.scheduleSource,
-      scheduleVersion: input.scheduleVersion,
+      timezone: effectiveSchedule.timezone,
+      scheduleSource: effectiveSchedule.scheduleSource,
+      scheduleVersion: effectiveSchedule.version,
     };
   },
 };

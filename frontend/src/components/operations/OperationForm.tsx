@@ -1,6 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Box, Paper, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import { Anchor, Box, Paper, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
 import { useEffect, useMemo } from "react";
+import { Link as RouterLink } from "react-router-dom";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { WeeklyScheduleEditor } from "../schedules/WeeklyScheduleEditor";
 import { WeeklySchedulePreview } from "../schedules/WeeklySchedulePreview";
@@ -39,6 +40,7 @@ interface OperationFormProps {
   currentStatus?: OperationStatus;
   currentOperationKind?: OperationKind;
   companyWorkSchedule?: CompanyWorkSchedule | null;
+  companyWorkScheduleLoading?: boolean;
   submitLabel: string;
   cancelTo: string;
   onCancel?: () => void;
@@ -90,6 +92,7 @@ export function OperationForm({
   currentStatus = "SCHEDULED",
   currentOperationKind,
   companyWorkSchedule = null,
+  companyWorkScheduleLoading = false,
   submitLabel,
   cancelTo,
   onCancel,
@@ -113,6 +116,46 @@ export function OperationForm({
   const operationKind = useWatch({ control, name: "operationKind" });
   const scheduleSource = useWatch({ control, name: "scheduleSource" });
   const lockedKind = mode === "edit" ? (currentOperationKind ?? operationKind) : operationKind;
+  const serviceFieldDisabled = mode === "edit" && !isOperationEditable(currentStatus);
+  const companyScheduleAvailable = Boolean(companyWorkSchedule);
+  const companySourceDisabled =
+    serviceFieldDisabled || companyWorkScheduleLoading || !companyScheduleAvailable;
+
+  useEffect(() => {
+    if (
+      mode === "create" &&
+      lockedKind === "RECURRING" &&
+      scheduleSource === "COMPANY" &&
+      !companyWorkScheduleLoading &&
+      !companyScheduleAvailable
+    ) {
+      setValue("scheduleSource", "CUSTOM");
+    }
+  }, [
+    companyScheduleAvailable,
+    companyWorkScheduleLoading,
+    lockedKind,
+    mode,
+    scheduleSource,
+    setValue,
+  ]);
+
+  const handleFormSubmit = handleSubmit(async (values) => {
+    if (
+      values.operationKind === "RECURRING" &&
+      values.scheduleSource === "COMPANY" &&
+      !companyScheduleAvailable
+    ) {
+      return;
+    }
+
+    const payload =
+      values.operationKind === "RECURRING" && values.scheduleSource === "COMPANY"
+        ? { ...values, scheduleDays: defaultValues.scheduleDays }
+        : values;
+
+    await onSubmit(payload);
+  });
 
   useEffect(() => {
     reset(defaultValues);
@@ -129,7 +172,6 @@ export function OperationForm({
     [currentStatus, mode],
   );
 
-  const serviceFieldDisabled = mode === "edit" && !isOperationEditable(currentStatus);
   const minScheduledStart = mode === "create" ? getCurrentDatetimeLocal() : undefined;
 
   const formContent = (
@@ -266,10 +308,13 @@ export function OperationForm({
                         title="Usar horario de la empresa"
                         description="Los próximos días de trabajo usarán el horario semanal configurado para la empresa."
                         onClick={() => {
+                          if (companySourceDisabled) {
+                            return;
+                          }
                           field.onChange("COMPANY");
                           setValue("scheduleDays", defaultValues.scheduleDays);
                         }}
-                        disabled={serviceFieldDisabled}
+                        disabled={companySourceDisabled}
                       />
                     </FormGrid.Full>
                     <FormGrid.Full>
@@ -285,6 +330,16 @@ export function OperationForm({
                 )}
               />
             </FormGrid>
+            {!companyWorkScheduleLoading && !companyScheduleAvailable ? (
+              <Stack gap={4}>
+                <Text size="sm" c="red">
+                  La empresa no tiene un horario laboral semanal configurado.
+                </Text>
+                <Anchor component={RouterLink} to="/settings" size="sm">
+                  Configurar horario de la empresa
+                </Anchor>
+              </Stack>
+            ) : null}
           </Stack>
 
           {scheduleSource === "COMPANY" ? (
@@ -292,7 +347,11 @@ export function OperationForm({
               <Text size="sm" fw={500}>
                 Horario de la empresa
               </Text>
-              {companyWorkSchedule ? (
+              {companyWorkScheduleLoading ? (
+                <Text size="sm" c="dimmed">
+                  Cargando horario de la empresa...
+                </Text>
+              ) : companyWorkSchedule ? (
                 <>
                   <Text size="sm" c="dimmed">
                     {buildCompanySchedulePreviewLabel(companyWorkSchedule.days)}
@@ -300,9 +359,14 @@ export function OperationForm({
                   <WeeklySchedulePreview days={companyWorkSchedule.days} />
                 </>
               ) : (
-                <Text size="sm" c="dimmed">
-                  La empresa no tiene un horario laboral semanal configurado.
-                </Text>
+                <Stack gap={4}>
+                  <Text size="sm" c="red">
+                    La empresa no tiene un horario laboral semanal configurado.
+                  </Text>
+                  <Anchor component={RouterLink} to="/settings" size="sm">
+                    Configurar horario de la empresa
+                  </Anchor>
+                </Stack>
               )}
             </Stack>
           ) : (
@@ -374,7 +438,7 @@ export function OperationForm({
   );
 
   return (
-    <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
+    <form id={formId} onSubmit={handleFormSubmit} noValidate>
       {embedded ? formContent : <FormSection>{formContent}</FormSection>}
     </form>
   );

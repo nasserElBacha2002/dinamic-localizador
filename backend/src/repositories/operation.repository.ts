@@ -238,7 +238,11 @@ export const operationRepository = {
     return mapOperationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findDetailById(companyId: string, id: string): Promise<OperationDetail | null> {
+  async findDetailById(
+    companyId: string,
+    id: string,
+    assignmentReferenceDate?: string | null,
+  ): Promise<OperationDetail | null> {
     const operation = await this.findById(companyId, id);
     if (!operation) {
       return null;
@@ -257,12 +261,12 @@ export const operationRepository = {
     }
 
     const operationWorkdays = await operationWorkdayRepository.listByOperationId(companyId, id);
-    let workDate = operationWorkdays[0]?.workDate ?? null;
+    let workDate = assignmentReferenceDate ?? operationWorkdays[0]?.workDate ?? null;
 
-    if (!workDate && operation.operationKind === "RECURRING") {
+    if (!workDate && operation.operationKind === "ONE_TIME" && operation.scheduledStart) {
       const settings = await companySettingsRepository.findByCompanyId(companyId);
       const timezone = resolveOperationTimezone(settings?.operationTimezone);
-      workDate = getDateIsoInTimezone(new Date(), timezone);
+      workDate = getDateIsoInTimezone(new Date(operation.scheduledStart), timezone);
     }
 
     const employeesResult = await pool
@@ -347,21 +351,59 @@ export const operationRepository = {
       });
     }
 
-    if (query.dateFrom) {
-      const dateFrom = query.dateFrom;
+    const needsScheduleJoin = Boolean(query.dateFrom || query.dateTo);
+
+    if (query.dateFrom && query.dateTo) {
+      const dateFrom = query.dateFrom.slice(0, 10);
+      const dateTo = query.dateTo.slice(0, 10);
       filters.push({
-        clause: "(i.operation_kind = N'ONE_TIME' AND i.scheduled_start >= @dateFrom)",
-        apply: (request) => request.input("dateFrom", sql.DateTime2, new Date(dateFrom)),
+        clause: `(
+          (i.operation_kind = N'ONE_TIME' AND i.scheduled_start >= @dateFromTs AND i.scheduled_start <= @dateToTs)
+          OR (
+            i.operation_kind = N'RECURRING'
+            AND os.valid_from <= @dateToLocal
+            AND (os.valid_until IS NULL OR os.valid_until >= @dateFromLocal)
+          )
+        )`,
+        apply: (request) =>
+          request
+            .input("dateFromTs", sql.DateTime2, new Date(query.dateFrom!))
+            .input("dateToTs", sql.DateTime2, new Date(query.dateTo!))
+            .input("dateFromLocal", sql.Date, dateFrom)
+            .input("dateToLocal", sql.Date, dateTo),
+      });
+    } else if (query.dateFrom) {
+      const dateFrom = query.dateFrom.slice(0, 10);
+      filters.push({
+        clause: `(
+          (i.operation_kind = N'ONE_TIME' AND i.scheduled_start >= @dateFromTs)
+          OR (
+            i.operation_kind = N'RECURRING'
+            AND (os.valid_until IS NULL OR os.valid_until >= @dateFromLocal)
+          )
+        )`,
+        apply: (request) =>
+          request
+            .input("dateFromTs", sql.DateTime2, new Date(query.dateFrom!))
+            .input("dateFromLocal", sql.Date, dateFrom),
+      });
+    } else if (query.dateTo) {
+      const dateTo = query.dateTo.slice(0, 10);
+      filters.push({
+        clause: `(
+          (i.operation_kind = N'ONE_TIME' AND i.scheduled_start <= @dateToTs)
+          OR (i.operation_kind = N'RECURRING' AND os.valid_from <= @dateToLocal)
+        )`,
+        apply: (request) =>
+          request
+            .input("dateToTs", sql.DateTime2, new Date(query.dateTo!))
+            .input("dateToLocal", sql.Date, dateTo),
       });
     }
 
-    if (query.dateTo) {
-      const dateTo = query.dateTo;
-      filters.push({
-        clause: "(i.operation_kind = N'ONE_TIME' AND i.scheduled_start <= @dateTo)",
-        apply: (request) => request.input("dateTo", sql.DateTime2, new Date(dateTo)),
-      });
-    }
+    const scheduleJoin = needsScheduleJoin
+      ? "LEFT JOIN operation_schedules os ON os.operation_id = i.id AND os.company_id = i.company_id"
+      : "LEFT JOIN operation_schedules os ON os.operation_id = i.id AND os.company_id = i.company_id";
 
     const whereClause = buildWhereClause(filters);
 
@@ -371,6 +413,7 @@ export const operationRepository = {
       SELECT COUNT(*) AS total
       FROM scheduled_operations i
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
+      ${scheduleJoin}
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -399,7 +442,7 @@ export const operationRepository = {
         os.version AS schedule_version
       FROM scheduled_operations i
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
-      LEFT JOIN operation_schedules os ON os.operation_id = i.id AND os.company_id = i.company_id
+      ${scheduleJoin}
       ${whereClause}
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY

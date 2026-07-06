@@ -42,10 +42,18 @@ export const companyWorkScheduleService = {
 
     const timezone = resolveOperationTimezone(input.timezone);
     const current = await companyWorkScheduleRepository.findByCompanyId(companyId);
-    const nextVersion =
-      current && weeklySchedulesEqual(current.days, normalizedDays) && current.timezone === timezone
-        ? current.version
-        : (current?.version ?? 0) + 1;
+    const normalizedCurrentDays = current ? normalizeWeeklyScheduleDays(current.days) : null;
+
+    if (
+      current &&
+      current.timezone === timezone &&
+      normalizedCurrentDays &&
+      weeklySchedulesEqual(normalizedCurrentDays, normalizedDays)
+    ) {
+      return current;
+    }
+
+    const nextVersion = (current?.version ?? 0) + 1;
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);

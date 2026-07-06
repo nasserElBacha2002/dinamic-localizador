@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { randomUUID } from "node:crypto";
 import { getPool } from "../database/connection";
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { OperationEmployeeAssignment } from "../types/domain";
@@ -51,7 +52,9 @@ export const operationEmployeeRepository = {
       validUntil: string | null;
     },
   ): Promise<OperationEmployeeAssignment> {
+    const assignmentId = randomUUID();
     const result = await new sql.Request(transaction)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
@@ -59,11 +62,11 @@ export const operationEmployeeRepository = {
       .input("validUntil", sql.Date, input.validUntil)
       .query(`
         INSERT INTO operation_assignments (
-          company_id, operation_id, employee_id, valid_from, valid_until
+          id, company_id, operation_id, employee_id, valid_from, valid_until
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @operationId, @employeeId, @validFrom, @validUntil
+          @assignmentId, @companyId, @operationId, @employeeId, @validFrom, @validUntil
         )
       `);
 

@@ -4,6 +4,7 @@ import type { ScheduleSource } from "../constants/schedule-source";
 import { numberToWeekday, weekdayToNumber } from "../constants/weekday";
 import type { OperationSchedule, WeeklyScheduleDay } from "../types/schedule";
 import { parseSqlTimeToHHmm, toSqlTimeValue } from "../utils/sql-time";
+import { toDateOnlyString } from "../utils/row-mappers";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -23,9 +24,9 @@ const mapScheduleRow = (
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
   scheduleSource: String(row.schedule_source) as ScheduleSource,
-  timezone: String(row.timezone),
-  validFrom: String(row.valid_from).slice(0, 10),
-  validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
+  timezone: row.timezone ? String(row.timezone) : null,
+  validFrom: toDateOnlyString(row.valid_from as Date | string),
+  validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
   version: Number(row.version),
   days,
   createdAt: toIsoString(row.created_at as Date | string),
@@ -99,11 +100,71 @@ export const operationScheduleRepository = {
     for (const row of result.recordset) {
       map.set(String(row.operation_id), {
         scheduleSource: String(row.schedule_source) as ScheduleSource,
-        validFrom: String(row.valid_from).slice(0, 10),
-        validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
+        validFrom: toDateOnlyString(row.valid_from as Date | string),
+        validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
         version: Number(row.version),
       });
     }
+    return map;
+  },
+
+  async findByOperationIds(
+    companyId: string,
+    operationIds: string[],
+  ): Promise<Map<string, OperationSchedule>> {
+    if (operationIds.length === 0) {
+      return new Map();
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const idParams = operationIds.map((id, index) => {
+      request.input(`operationId${index}`, sql.UniqueIdentifier, id);
+      return `@operationId${index}`;
+    });
+
+    const schedulesResult = await request.query(`
+      SELECT *
+      FROM operation_schedules
+      WHERE company_id = @companyId
+        AND operation_id IN (${idParams.join(", ")})
+    `);
+
+    const scheduleRows = schedulesResult.recordset as Record<string, unknown>[];
+    if (scheduleRows.length === 0) {
+      return new Map();
+    }
+
+    const scheduleIds = scheduleRows.map((row) => String(row.id));
+    const daysRequest = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const scheduleIdParams = scheduleIds.map((scheduleId, index) => {
+      daysRequest.input(`scheduleId${index}`, sql.UniqueIdentifier, scheduleId);
+      return `@scheduleId${index}`;
+    });
+
+    const daysResult = await daysRequest.query(`
+      SELECT *
+      FROM operation_schedule_days
+      WHERE company_id = @companyId
+        AND operation_schedule_id IN (${scheduleIdParams.join(", ")})
+      ORDER BY day_of_week ASC
+    `);
+
+    const daysByScheduleId = new Map<string, WeeklyScheduleDay[]>();
+    for (const row of daysResult.recordset) {
+      const scheduleId = String((row as Record<string, unknown>).operation_schedule_id);
+      const existing = daysByScheduleId.get(scheduleId) ?? [];
+      existing.push(mapDayRow(row as Record<string, unknown>));
+      daysByScheduleId.set(scheduleId, existing);
+    }
+
+    const map = new Map<string, OperationSchedule>();
+    for (const row of scheduleRows) {
+      const scheduleId = String(row.id);
+      const operationId = String(row.operation_id);
+      map.set(operationId, mapScheduleRow(row, daysByScheduleId.get(scheduleId) ?? []));
+    }
+
     return map;
   },
 
@@ -113,7 +174,7 @@ export const operationScheduleRepository = {
     input: {
       operationId: string;
       scheduleSource: ScheduleSource;
-      timezone: string;
+      timezone: string | null;
       validFrom: string;
       validUntil: string | null;
       days?: WeeklyScheduleDay[];
@@ -193,7 +254,7 @@ export const operationScheduleRepository = {
     operationId: string,
     input: {
       scheduleSource: ScheduleSource;
-      timezone: string;
+      timezone: string | null;
       validFrom: string;
       validUntil: string | null;
       days?: WeeklyScheduleDay[];

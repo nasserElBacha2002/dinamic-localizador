@@ -23,13 +23,22 @@ export interface OperationSchedule {
   companyId: string;
   operationId: string;
   scheduleSource: ScheduleSource;
-  timezone: string;
+  /** Authoritative only for CUSTOM. Null for COMPANY (company schedule owns timezone). */
+  timezone: string | null;
   validFrom: string;
   validUntil: string | null;
   version: number;
   days: WeeklyScheduleDay[];
   createdAt: string;
   updatedAt: string;
+}
+
+/** Unified effective weekly schedule for a recurring operation at resolution time. */
+export interface EffectiveRecurringSchedule {
+  scheduleSource: ScheduleSource;
+  timezone: string;
+  version: number;
+  days: WeeklyScheduleDay[];
 }
 
 export interface ResolvedScheduleDay {

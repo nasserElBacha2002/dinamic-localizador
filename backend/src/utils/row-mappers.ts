@@ -14,6 +14,22 @@ import type { AttendanceReview, User } from "../types/auth";
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+export const toDateOnlyString = (value: Date | string): string => {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value);
+  const isoPrefix = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+  if (isoPrefix) {
+    return isoPrefix[1];
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  return text.slice(0, 10);
+};
+
 const parseEmployeeType = (value: unknown): EmployeeType => {
   const employeeType = String(value);
   return (EMPLOYEE_TYPES as readonly string[]).includes(employeeType)
@@ -107,8 +123,8 @@ export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmploye
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
-  validFrom: String(row.valid_from).slice(0, 10),
-  validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
+  validFrom: toDateOnlyString(row.valid_from as Date | string),
+  validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
   assignedAt: toIsoString(row.assigned_at as Date | string),
   createdAt: toIsoString((row.created_at ?? row.assigned_at) as Date | string),
   updatedAt: toIsoString((row.updated_at ?? row.assigned_at) as Date | string),
@@ -275,13 +291,6 @@ export const mapAttendanceReviewRow = (row: Record<string, unknown>): Attendance
       }
     : undefined,
 });
-
-const toDateOnlyString = (value: Date | string): string => {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-  return String(value).slice(0, 10);
-};
 
 export const mapAbsenceTypeRow = (row: Record<string, unknown>) => ({
   id: String(row.id),

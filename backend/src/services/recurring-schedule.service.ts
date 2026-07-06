@@ -1,8 +1,15 @@
 import { AppError } from "../errors/app-error";
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
-import { operationScheduleRepository } from "../repositories/operation-schedule.repository";
-import type { OperationSchedule, ResolvedScheduleDay, WeeklyScheduleDay } from "../types/schedule";
-import type { ScheduleSource } from "../constants/schedule-source";
+import type {
+  CompanyWorkSchedule,
+  EffectiveRecurringSchedule,
+  OperationSchedule,
+  ResolvedScheduleDay,
+} from "../types/schedule";
+import {
+  assertCompanyWorkScheduleExists,
+  assertRecurringScheduleConsistency,
+} from "../utils/recurring-schedule-consistency";
 import { recurringScheduleResolver } from "../utils/recurring-schedule-resolver";
 import { normalizeWeeklyScheduleDays } from "../utils/weekly-schedule";
 
@@ -27,51 +34,63 @@ const assertScheduleCoversWorkDate = (
 };
 
 export const recurringScheduleService = {
-  async resolveEffectiveDays(
+  async resolveEffectiveSchedule(
     companyId: string,
     operationSchedule: OperationSchedule,
-  ): Promise<WeeklyScheduleDay[]> {
+    companySchedule?: CompanyWorkSchedule | null,
+  ): Promise<EffectiveRecurringSchedule> {
     if (operationSchedule.scheduleSource === "CUSTOM") {
-      return normalizeWeeklyScheduleDays(operationSchedule.days);
+      if (!operationSchedule.timezone) {
+        throw new AppError(
+          409,
+          "RECURRING_SCHEDULE_DATA_INCONSISTENT",
+          "La operación habitual requiere zona horaria para horario específico",
+        );
+      }
+
+      return {
+        scheduleSource: "CUSTOM",
+        timezone: operationSchedule.timezone,
+        version: operationSchedule.version,
+        days: normalizeWeeklyScheduleDays(operationSchedule.days),
+      };
     }
 
-    const companySchedule = await companyWorkScheduleRepository.findByCompanyId(companyId);
-    if (!companySchedule) {
-      throw new AppError(
-        404,
-        "COMPANY_WORK_SCHEDULE_NOT_FOUND",
-        "La empresa no tiene un horario laboral semanal configurado",
-      );
-    }
+    const resolvedCompanySchedule =
+      companySchedule ?? (await companyWorkScheduleRepository.findByCompanyId(companyId));
+    const companyWorkSchedule = assertCompanyWorkScheduleExists(resolvedCompanySchedule);
 
-    return normalizeWeeklyScheduleDays(companySchedule.days);
+    return {
+      scheduleSource: "COMPANY",
+      timezone: companyWorkSchedule.timezone,
+      version: companyWorkSchedule.version,
+      days: normalizeWeeklyScheduleDays(companyWorkSchedule.days),
+    };
   },
 
   async resolveForWorkDate(
     companyId: string,
     operationSchedule: OperationSchedule,
     workDate: string,
+    companySchedule?: CompanyWorkSchedule | null,
   ): Promise<ResolvedScheduleDay> {
     assertScheduleCoversWorkDate(operationSchedule, workDate);
-    const days = await this.resolveEffectiveDays(companyId, operationSchedule);
-    const scheduleVersion =
-      operationSchedule.scheduleSource === "COMPANY"
-        ? (await companyWorkScheduleRepository.findByCompanyId(companyId))?.version ??
-          operationSchedule.version
-        : operationSchedule.version;
+    const effectiveSchedule = await this.resolveEffectiveSchedule(
+      companyId,
+      operationSchedule,
+      companySchedule,
+    );
 
-    return recurringScheduleResolver.resolveDay(workDate, {
-      timezone: operationSchedule.timezone,
-      scheduleSource: operationSchedule.scheduleSource,
-      scheduleVersion,
-      days,
-    });
+    return recurringScheduleResolver.resolveDay(workDate, effectiveSchedule);
   },
 
   async getOperationScheduleOrThrow(
     companyId: string,
     operationId: string,
   ): Promise<OperationSchedule> {
+    const { operationScheduleRepository } = await import(
+      "../repositories/operation-schedule.repository"
+    );
     const schedule = await operationScheduleRepository.findByOperationId(companyId, operationId);
     if (!schedule) {
       throw new AppError(404, "OPERATION_SCHEDULE_NOT_FOUND", "La operación no tiene horario configurado");
@@ -81,22 +100,23 @@ export const recurringScheduleService = {
 
   buildDisplaySchedule(
     operationSchedule: OperationSchedule,
-    effectiveDays: WeeklyScheduleDay[],
-  ): {
-    scheduleSource: ScheduleSource;
-    validFrom: string;
-    validUntil: string | null;
-    timezone: string;
-    version: number;
-    days: WeeklyScheduleDay[];
-  } {
+    effectiveSchedule: EffectiveRecurringSchedule,
+  ) {
     return {
-      scheduleSource: operationSchedule.scheduleSource,
+      scheduleSource: effectiveSchedule.scheduleSource,
       validFrom: operationSchedule.validFrom,
       validUntil: operationSchedule.validUntil,
-      timezone: operationSchedule.timezone,
-      version: operationSchedule.version,
-      days: effectiveDays,
+      timezone: effectiveSchedule.timezone,
+      version: effectiveSchedule.version,
+      days: effectiveSchedule.days,
     };
+  },
+
+  assertScheduleConsistency(
+    operationId: string,
+    schedule: OperationSchedule,
+    companySchedule: CompanyWorkSchedule | null | undefined,
+  ): void {
+    assertRecurringScheduleConsistency(operationId, schedule, companySchedule);
   },
 };

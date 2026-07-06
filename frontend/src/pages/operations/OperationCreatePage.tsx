@@ -111,6 +111,7 @@ export function OperationCreatePage() {
           mode="create"
           defaultValues={defaultValues}
           companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
+          companyWorkScheduleLoading={companyWorkScheduleQuery.isPending || companyWorkScheduleQuery.isFetching}
           submitLabel={`Crear ${terminology.operation.singular.toLowerCase()}`}
           cancelTo="/operations"
           onCancel={goBackToList}

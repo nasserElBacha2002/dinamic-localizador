@@ -139,7 +139,7 @@ describe("Company settings page layout", () => {
     assert.doesNotMatch(pageFile, /isPlatformAdmin/);
   });
 
-  it("opens absence and location dialogs from summary cards", () => {
+  it("opens absence, location and work schedule dialogs from summary cards", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
@@ -147,8 +147,11 @@ describe("Company settings page layout", () => {
 
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);
     assert.match(pageFile, /CompanyLocationTypesDialog/);
+    assert.match(pageFile, /CompanyWeeklyScheduleDialog/);
     assert.match(pageFile, /setOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationTypes"\)/);
+    assert.match(pageFile, /setOpenDialog\("workSchedule"\)/);
+    assert.doesNotMatch(pageFile, /CompanyWeeklyScheduleSection/);
     assert.doesNotMatch(pageFile, /CompanyOperationOperationSettingsDialog/);
   });
 });

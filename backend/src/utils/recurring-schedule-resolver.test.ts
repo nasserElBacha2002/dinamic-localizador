@@ -22,9 +22,9 @@ describe("recurring schedule resolver", () => {
 
   it("resolves enabled custom day with overnight hours", () => {
     const resolved = recurringScheduleResolver.resolveDay("2026-08-03", {
-      timezone: "America/Argentina/Buenos_Aires",
       scheduleSource: "CUSTOM",
-      scheduleVersion: 2,
+      timezone: "America/Argentina/Buenos_Aires",
+      version: 2,
       days: companyDays,
     });
 
@@ -34,13 +34,14 @@ describe("recurring schedule resolver", () => {
     assert.equal(resolved.endTime, "06:00");
     assert.equal(resolved.scheduleSource, "CUSTOM");
     assert.equal(resolved.scheduleVersion, 2);
+    assert.equal(resolved.timezone, "America/Argentina/Buenos_Aires");
   });
 
   it("resolves disabled weekday", () => {
     const resolved = recurringScheduleResolver.resolveDay("2026-08-04", {
-      timezone: "America/Argentina/Buenos_Aires",
       scheduleSource: "COMPANY",
-      scheduleVersion: 1,
+      timezone: "America/Argentina/Buenos_Aires",
+      version: 1,
       days: companyDays,
     });
 

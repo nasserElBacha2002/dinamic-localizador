@@ -42,6 +42,7 @@ const ASSIGNED_OPERATION_SELECT = `
   WHERE ie.company_id = @companyId
     AND ie.employee_id = @employeeId
     AND ie.cancelled_at IS NULL
+    AND i.operation_kind = N'ONE_TIME'
     AND i.status NOT IN ('CANCELLED')
 `;
 

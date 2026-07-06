@@ -17,7 +17,9 @@ import type {
 } from "../schemas/operation.schema";
 import { auditService } from "./audit.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
+import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
+import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable } from "../utils/operation-status";
 import {
   isOperationStartInPast,
@@ -25,14 +27,14 @@ import {
 } from "../utils/operation-lifecycle";
 import { buildPaginationMeta } from "../utils/pagination";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
+import { getDateIsoInTimezone } from "../utils/absence-date";
 import {
-  buildScheduleSummaryLabel,
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
   weeklySchedulesEqual,
 } from "../utils/weekly-schedule";
 import type { OperationDetail, OperationWithService } from "../types/domain";
-import type { OperationScheduleSummary } from "../types/schedule";
+import { assertCompanyWorkScheduleExists } from "../utils/recurring-schedule-consistency";
 
 const validateOneTimeDates = (
   scheduledStart: string,
@@ -89,32 +91,6 @@ const resolveCreateTolerances = async (
   };
 };
 
-const buildScheduleSummary = async (
-  companyId: string,
-  operation: OperationWithService,
-): Promise<OperationScheduleSummary | undefined> => {
-  if (operation.operationKind !== "RECURRING") {
-    return undefined;
-  }
-
-  const schedule = await operationScheduleRepository.findByOperationId(companyId, operation.id);
-  if (!schedule) {
-    return undefined;
-  }
-
-  const effectiveDays = await recurringScheduleService.resolveEffectiveDays(companyId, schedule);
-  const label = buildScheduleSummaryLabel(effectiveDays);
-
-  return {
-    scheduleSource: schedule.scheduleSource,
-    validFrom: schedule.validFrom,
-    validUntil: schedule.validUntil,
-    summaryLabel: label.summaryLabel,
-    enabledWeekdayCount: label.enabledWeekdayCount,
-    hasCustomWeekdayHours: label.hasCustomWeekdayHours,
-  };
-};
-
 const enrichOperationDetail = async (
   companyId: string,
   detail: OperationDetail,
@@ -125,13 +101,28 @@ const enrichOperationDetail = async (
 
   const schedule = await operationScheduleRepository.findByOperationId(companyId, detail.id);
   if (!schedule) {
-    return detail;
+    throw new AppError(
+      409,
+      "RECURRING_SCHEDULE_DATA_INCONSISTENT",
+      "La operación habitual no tiene configuración de horario",
+    );
   }
 
-  const effectiveDays = await recurringScheduleService.resolveEffectiveDays(companyId, schedule);
+  const companySchedule =
+    schedule.scheduleSource === "COMPANY"
+      ? await companyWorkScheduleRepository.findByCompanyId(companyId)
+      : null;
+  recurringScheduleService.assertScheduleConsistency(detail.id, schedule, companySchedule);
+
+  const effectiveSchedule = await recurringScheduleService.resolveEffectiveSchedule(
+    companyId,
+    schedule,
+    companySchedule,
+  );
+
   return {
     ...detail,
-    schedule: recurringScheduleService.buildDisplaySchedule(schedule, effectiveDays),
+    schedule: recurringScheduleService.buildDisplaySchedule(schedule, effectiveSchedule),
   };
 };
 
@@ -173,6 +164,10 @@ export const operationService = {
     input: CreateRecurringOperationInput,
     tolerances: { earlyToleranceMinutes: number; lateToleranceMinutes: number },
   ) {
+    if (input.scheduleSource === "COMPANY") {
+      assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
+    }
+
     if (input.scheduleSource === "CUSTOM") {
       const normalizedDays = normalizeWeeklyScheduleDays(input.scheduleDays ?? []);
       const validation = validateWeeklyScheduleDays(normalizedDays);
@@ -182,7 +177,7 @@ export const operationService = {
     }
 
     const settings = await companySettingsRepository.findByCompanyId(companyId);
-    const timezone = resolveOperationTimezone(settings?.operationTimezone);
+    const customTimezone = resolveOperationTimezone(settings?.operationTimezone);
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -203,7 +198,7 @@ export const operationService = {
       await operationScheduleRepository.createInTransaction(companyId, transaction, {
         operationId: operation.id,
         scheduleSource: input.scheduleSource,
-        timezone,
+        timezone: input.scheduleSource === "CUSTOM" ? customTimezone : null,
         validFrom: input.validFrom,
         validUntil: input.validUntil ?? null,
         days:
@@ -222,16 +217,22 @@ export const operationService = {
 
   async list(companyId: string, query: ListOperationsQuery) {
     const result = await operationRepository.list(companyId, query);
-    const data = await Promise.all(
+    const syncedItems: OperationWithService[] = await Promise.all(
       result.items.map(async (item) => {
         const synced = await syncLifecycleStatus(companyId, item);
-        const scheduleSummary = await buildScheduleSummary(companyId, { ...item, ...synced });
-        return {
-          ...synced,
-          scheduleSummary,
-        };
+        return { ...item, ...synced };
       }),
     );
+    const scheduleSummaries = await operationScheduleSummaryService.buildSummariesForOperations(
+      companyId,
+      syncedItems,
+    );
+
+    const data = syncedItems.map((item) => ({
+      ...item,
+      scheduleSummary: scheduleSummaries.get(item.id),
+    }));
+
     return {
       data,
       meta: buildPaginationMeta(query.page, query.limit, result.total),
@@ -247,7 +248,33 @@ export const operationService = {
   },
 
   async getDetailById(companyId: string, id: string) {
-    const detail = await operationRepository.findDetailById(companyId, id);
+    const operation = await operationRepository.findById(companyId, id);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    let assignmentReferenceDate: string | null = null;
+    if (operation.operationKind === "RECURRING") {
+      const schedule = await operationScheduleRepository.findByOperationId(companyId, id);
+      if (schedule) {
+        const companySchedule =
+          schedule.scheduleSource === "COMPANY"
+            ? await companyWorkScheduleRepository.findByCompanyId(companyId)
+            : null;
+        const effectiveSchedule = await recurringScheduleService.resolveEffectiveSchedule(
+          companyId,
+          schedule,
+          companySchedule,
+        );
+        assignmentReferenceDate = getDateIsoInTimezone(new Date(), effectiveSchedule.timezone);
+      }
+    }
+
+    const detail = await operationRepository.findDetailById(
+      companyId,
+      id,
+      assignmentReferenceDate,
+    );
     if (!detail) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
@@ -402,9 +429,14 @@ export const operationService = {
       throw new AppError(400, "INVALID_SCHEDULE_SOURCE", "La configuración del horario no es válida");
     }
 
+    const nextSource = input.scheduleSource ?? schedule.scheduleSource;
+    if (nextSource === "COMPANY") {
+      assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
+    }
+
     if (input.scheduleSource === "CUSTOM" || schedule.scheduleSource === "CUSTOM") {
-      const nextSource = input.scheduleSource ?? schedule.scheduleSource;
-      if (nextSource === "CUSTOM") {
+      const sourceForValidation = input.scheduleSource ?? schedule.scheduleSource;
+      if (sourceForValidation === "CUSTOM") {
         const days = normalizeWeeklyScheduleDays(
           input.scheduleDays ?? (schedule.scheduleSource === "CUSTOM" ? schedule.days : []),
         );
@@ -436,19 +468,22 @@ export const operationService = {
         throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
 
-      const nextSource = input.scheduleSource ?? schedule.scheduleSource;
+      const resolvedNextSource = input.scheduleSource ?? schedule.scheduleSource;
+      const settings = await companySettingsRepository.findByCompanyId(companyId);
+      const customTimezone =
+        schedule.timezone ?? resolveOperationTimezone(settings?.operationTimezone);
       const nextDays =
-        nextSource === "CUSTOM"
+        resolvedNextSource === "CUSTOM"
           ? normalizeWeeklyScheduleDays(
               input.scheduleDays ?? (schedule.scheduleSource === "CUSTOM" ? schedule.days : []),
             )
           : undefined;
 
       const scheduleChanged =
-        nextSource !== schedule.scheduleSource ||
+        resolvedNextSource !== schedule.scheduleSource ||
         nextValidFrom !== schedule.validFrom ||
         nextValidUntil !== schedule.validUntil ||
-        (nextSource === "CUSTOM" &&
+        (resolvedNextSource === "CUSTOM" &&
           nextDays &&
           !weeklySchedulesEqual(nextDays, schedule.days));
 
@@ -459,8 +494,8 @@ export const operationService = {
         input.scheduleDays !== undefined
       ) {
         await operationScheduleRepository.updateInTransaction(companyId, transaction, id, {
-          scheduleSource: nextSource,
-          timezone: schedule.timezone,
+          scheduleSource: resolvedNextSource,
+          timezone: resolvedNextSource === "CUSTOM" ? customTimezone : null,
           validFrom: nextValidFrom,
           validUntil: nextValidUntil,
           days: nextDays,

@@ -144,6 +144,7 @@ export const attendanceNotificationRepository = {
           AND wan.notification_type = 'ARRIVAL_REMINDER_15_MIN'
           AND wan.company_id = @companyId
         WHERE i.company_id = @companyId
+          AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
@@ -197,6 +198,7 @@ export const attendanceNotificationRepository = {
           AND wan.notification_type = 'NO_CHECKIN_AT_START'
           AND wan.company_id = @companyId
         WHERE i.company_id = @companyId
+          AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
@@ -283,6 +285,7 @@ export const attendanceNotificationRepository = {
           AND wan.notification_type = 'EXIT_REMINDER_15_MIN'
           AND wan.company_id = @companyId
         WHERE i.company_id = @companyId
+          AND i.operation_kind = N'ONE_TIME'
           AND i.status <> 'CANCELLED'
           AND i.scheduled_end IS NOT NULL
           AND s.active = 1
@@ -734,6 +737,7 @@ export const attendanceNotificationRepository = {
           AND wan.schedule_version = ie.confirmation_schedule_version
           AND wan.company_id = @companyId
         WHERE i.company_id = @companyId
+          AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1

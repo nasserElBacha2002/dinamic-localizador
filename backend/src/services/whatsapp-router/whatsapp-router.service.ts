@@ -1,7 +1,7 @@
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
 import { isCheckoutSessionState } from "../../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../../utils/haversine";
-import { parseInventorySelection } from "../../utils/intent";
+import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
@@ -62,8 +62,8 @@ export const whatsappRouterService = {
       });
     }
 
-    if (!ctx.session && ctx.recentlyExpired && parseInventorySelection(ctx.body)) {
-      console.info("[whatsapp-bot] inventory selection after expired session", {
+    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
+      console.info("[whatsapp-bot] operation selection after expired session", {
         phone: maskPhoneNumberForLog(ctx.phoneFrom),
       });
       return handlers.respond(companyId, {

@@ -4,24 +4,24 @@ import { join, resolve } from "node:path";
 import {
   buildReconciliationCsv,
   DUPLICATE_HEADERS,
-  loadDatabaseStores,
-  loadOfficialStores,
+  loadDatabaseServices,
+  loadOfficialServices,
   reconciliationRowToCsv,
   SUMMARY_HEADERS,
-} from "../utils/store-reconciliation/csv-io";
-import { resolveGoogleMapsApiKey } from "../utils/store-reconciliation/env";
+} from "../utils/service-reconciliation/csv-io";
+import { resolveGoogleMapsApiKey } from "../utils/service-reconciliation/env";
 import {
   loadGeocodeCache,
   runGeocodingDiagnostic,
   toGeocodingDiagnostics,
-} from "../utils/store-reconciliation/geocoding";
+} from "../utils/service-reconciliation/geocoding";
 import {
   countMatchedGeocodingAttempts,
   countMatchedGeocodingFailures,
-  getIgnoredDatabaseStoreNames,
-  reconcileStores,
-} from "../utils/store-reconciliation/reconcile";
-import type { ReconcileOptions } from "../utils/store-reconciliation/types";
+  getIgnoredDatabaseServiceNames,
+  reconcileServices,
+} from "../utils/service-reconciliation/reconcile";
+import type { ReconcileOptions } from "../utils/service-reconciliation/types";
 
 interface CliOptions {
   officialPath?: string;
@@ -37,16 +37,16 @@ interface CliOptions {
 
 const printUsage = (): void => {
   console.log(`Usage:
-  npm run reconcile:stores -- \\
+  npm run reconcile:services -- \\
     --official ./data/carrefour_official_stores.csv \\
-    --database ./data/database_stores.csv \\
+    --database ./data/database_services.csv \\
     --out ./reports
 
 Options:
-  --official <path>   Carrefour official stores CSV (source of truth)
-  --database <path>   Current database stores CSV export
+  --official <path>   Carrefour official services CSV (source of truth)
+  --database <path>   Current database services CSV export
   --out <path>        Output directory for report CSV files (default: ./reports)
-  --cache <path>      Geocoding cache file (default: ./.cache/geocoded-stores.json)
+  --cache <path>      Geocoding cache file (default: ./.cache/geocoded-services.json)
   --likely-threshold  Address similarity threshold for likely_match (default: 0.85)
   --ok-meters         Coordinate distance threshold for ok (default: 100)
   --review-meters     Coordinate distance threshold for review (default: 300)
@@ -76,7 +76,7 @@ const parseThreshold = (value: string): number => {
 const parseCliOptions = (argv: string[]): CliOptions => {
   const options: Partial<CliOptions> = {
     outDir: "./reports",
-    cachePath: "./.cache/geocoded-stores.json",
+    cachePath: "./.cache/geocoded-services.json",
     likelyMatchThreshold: 0.85,
     coordinateOkMeters: 100,
     coordinateReviewMeters: 300,
@@ -206,9 +206,9 @@ const main = async (): Promise<void> => {
   };
 
   console.log("Loading CSV files...");
-  const officialStores = loadOfficialStores(officialPath);
-  const databaseStores = loadDatabaseStores(databasePath);
-  const ignoredNames = getIgnoredDatabaseStoreNames(databaseStores);
+  const officialServices = loadOfficialServices(officialPath);
+  const databaseServices = loadDatabaseServices(databasePath);
+  const ignoredNames = getIgnoredDatabaseServiceNames(databaseServices);
 
   if (!googleMapsApiKey) {
     console.warn(
@@ -219,9 +219,9 @@ const main = async (): Promise<void> => {
   }
 
   const geocodeCache = loadGeocodeCache(cachePath);
-  const result = await reconcileStores(
-    officialStores,
-    databaseStores,
+  const result = await reconcileServices(
+    officialServices,
+    databaseServices,
     reconcileOptions,
     geocodeCache,
     cachePath,
@@ -254,7 +254,7 @@ const main = async (): Promise<void> => {
     DUPLICATE_HEADERS,
     result.duplicates.map((duplicate) => [
       duplicate.source,
-      duplicate.storeNumber,
+      duplicate.serviceNumber,
       String(duplicate.duplicateCount),
       duplicate.dbId,
       duplicate.dbAddress,
@@ -294,17 +294,17 @@ const main = async (): Promise<void> => {
   console.log("");
   console.log("Reconciliation summary");
   console.log(`- Total official rows: ${result.stats.totalOfficialRows}`);
-  console.log(`- Total unique official store numbers: ${result.stats.totalUniqueOfficialStoreNumbers}`);
+  console.log(`- Total unique official service numbers: ${result.stats.totalUniqueOfficialServiceNumbers}`);
   console.log(`- Total DB rows: ${result.stats.totalDatabaseRows}`);
-  console.log(`- Numeric DB stores considered: ${result.stats.numericDatabaseStores}`);
+  console.log(`- Numeric DB services considered: ${result.stats.numericDatabaseServices}`);
   console.log(`- Ignored non-numeric DB rows: ${result.stats.ignoredNonNumericDatabaseRows}`);
   if (ignoredNames.length > 0) {
     console.log(`  Ignored names: ${ignoredNames.join(", ")}`);
   }
-  console.log(`- Matched stores: ${result.stats.matchedStores}`);
+  console.log(`- Matched services: ${result.stats.matchedServices}`);
   console.log(`- Missing in DB: ${result.stats.missingInDatabase}`);
   console.log(`- Extra in DB: ${result.stats.extraInDatabase}`);
-  console.log(`- Duplicate store number groups: ${result.stats.duplicateStoreNumberGroups}`);
+  console.log(`- Duplicate service number groups: ${result.stats.duplicateServiceNumberGroups}`);
   console.log(`- Address exact matches: ${result.stats.addressExactMatches}`);
   console.log(`- Address likely matches: ${result.stats.addressLikelyMatches}`);
   console.log(`- Address mismatches: ${result.stats.addressMismatches}`);

@@ -1,4 +1,4 @@
-.inventoryDetailLayout {
+.operationDetailLayout {
   display: grid;
   gap: var(--mantine-spacing-lg);
   grid-template-columns: minmax(0, 1fr);
@@ -22,7 +22,7 @@
 }
 
 @media (min-width: 62em) {
-  .inventoryDetailLayout {
+  .operationDetailLayout {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     grid-template-areas:
       "operational data"

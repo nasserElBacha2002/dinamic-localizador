@@ -1,15 +1,9 @@
--- Phase 3: Backfill audit entity types for operational domain rename.
+-- Phase 3: Operational domain rename — audit log presentation only.
 -- Permission keys (operations:read, services:read, etc.) are resolved in application code;
 -- no persisted permission rows require migration in this schema.
-
-IF EXISTS (SELECT 1 FROM sys.tables WHERE name = 'audit_logs')
-BEGIN
-    UPDATE audit_logs
-    SET entity_type = N'operation'
-    WHERE entity_type = N'inventory';
-
-    UPDATE audit_logs
-    SET entity_type = N'service'
-    WHERE entity_type = N'store';
-END;
-GO
+--
+-- Historical audit_logs.entity_type values (inventory, store) are intentionally left
+-- unchanged. The audit UI should map legacy labels at display time:
+--   inventory → Operación
+--   store     → Servicio
+-- Do not mutate audit history in the database.

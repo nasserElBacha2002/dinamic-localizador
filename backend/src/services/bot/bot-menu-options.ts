@@ -7,7 +7,7 @@ import {
   getUpcomingAssignmentsModuleBlockedMessage,
   getWorkdayModuleBlockedMessage,
 } from "../whatsapp-module-gate";
-import { parseInventorySelection } from "../../utils/intent";
+import { parseOperationSelection } from "../../utils/intent";
 
 export type BotMenuOptionKey =
   | "check_in"
@@ -91,7 +91,7 @@ export const buildAvailableMenuOptions = (
 export const formatMenuOptionsLines = (options: BotMenuOption[]): string[] =>
   options.map((option, index) => `${index + 1}. ${option.label} — ${option.hint}`);
 
-export const parseMenuNumberInput = (body: string): number | null => parseInventorySelection(body);
+export const parseMenuNumberInput = (body: string): number | null => parseOperationSelection(body);
 
 export const resolveMenuNumberSelection = (
   body: string,

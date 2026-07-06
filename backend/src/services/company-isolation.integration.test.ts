@@ -77,7 +77,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
     assert.equal(employee, null);
   });
 
-  it("scopes store lookups by company", async () => {
+  it("scopes service lookups by company", async () => {
     const dinamicStores = await serviceRepository.list(dinamicCompanyId, { page: 1, limit: 1 });
     if (!dinamicStores.items[0]) {
       return;

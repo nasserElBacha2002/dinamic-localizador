@@ -211,17 +211,17 @@ export const botSimulatorService = {
 
     let serviceId = input.serviceId ?? null;
     if (input.operationId) {
-      const inventory = await operationRepository.findById(companyId, input.operationId);
-      if (!inventory) {
-        throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado.");
+      const operation = await operationRepository.findById(companyId, input.operationId);
+      if (!operation) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada.");
       }
-      serviceId = inventory.serviceId;
+      serviceId = operation.serviceId;
     }
 
     if (serviceId) {
-      const store = await serviceRepository.findById(companyId, serviceId);
-      if (!store) {
-        throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada.");
+      const service = await serviceRepository.findById(companyId, serviceId);
+      if (!service) {
+        throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado.");
       }
     }
 
@@ -415,22 +415,22 @@ export const botSimulatorService = {
 
     await runWithBotRuntimeContext(context, async () => {
       if (session.serviceId) {
-        const store = await serviceRepository.findById(companyId, session.serviceId);
-        if (store) {
+        const service = await serviceRepository.findById(companyId, session.serviceId);
+        if (service) {
           const geo = geolocationService.evaluateDistance(
             input.latitude,
             input.longitude,
-            store.latitude,
-            store.longitude,
-            store.allowedRadiusMeters,
+            service.latitude,
+            service.longitude,
+            service.allowedRadiusMeters,
           );
           const geoEvaluation = evaluateGeofence(
             geo.distanceMeters,
-            store.allowedRadiusMeters,
+            service.allowedRadiusMeters,
             env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
           );
           context.technicalDetails.calculatedDistance = Math.round(geo.distanceMeters * 100) / 100;
-          context.technicalDetails.allowedRadius = store.allowedRadiusMeters;
+          context.technicalDetails.allowedRadius = service.allowedRadiusMeters;
           context.technicalDetails.reviewMargin = env.BOT_GEOFENCE_REVIEW_MARGIN_METERS;
           context.technicalDetails.expectedResult = geoEvaluation.geoValidationStatus;
         }
@@ -466,7 +466,7 @@ export const botSimulatorService = {
   },
 
   async getLocationPresets(companyId: string, sessionId: string): Promise<{
-    storeLocation: { latitude: number; longitude: number } | null;
+    serviceLocation: { latitude: number; longitude: number } | null;
     outsideRadius: { latitude: number; longitude: number } | null;
     nearRadiusLimit: { latitude: number; longitude: number } | null;
     allowedRadiusMeters: number | null;
@@ -476,7 +476,7 @@ export const botSimulatorService = {
     const session = await botSimulationSessionRepository.findById(companyId, sessionId);
     if (!session?.serviceId) {
       return {
-        storeLocation: null,
+        serviceLocation: null,
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
@@ -484,10 +484,10 @@ export const botSimulatorService = {
       };
     }
 
-    const store = await serviceRepository.findById(companyId, session.serviceId);
-    if (!store) {
+    const service = await serviceRepository.findById(companyId, session.serviceId);
+    if (!service) {
       return {
-        storeLocation: null,
+        serviceLocation: null,
         outsideRadius: null,
         nearRadiusLimit: null,
         allowedRadiusMeters: null,
@@ -495,20 +495,20 @@ export const botSimulatorService = {
       };
     }
 
-    const radius = store.allowedRadiusMeters > 0 ? store.allowedRadiusMeters : runtimeSettings.defaultRadiusMeters;
+    const radius = service.allowedRadiusMeters > 0 ? service.allowedRadiusMeters : runtimeSettings.defaultRadiusMeters;
     const margin = runtimeSettings.geofenceReviewMarginMeters;
     const outsideOffset = (radius + margin + 50) / 111_320;
     const nearOffset = (radius + Math.max(1, margin - 5)) / 111_320;
 
     return {
-      storeLocation: { latitude: store.latitude, longitude: store.longitude },
+      serviceLocation: { latitude: service.latitude, longitude: service.longitude },
       outsideRadius: {
-        latitude: store.latitude + outsideOffset,
-        longitude: store.longitude,
+        latitude: service.latitude + outsideOffset,
+        longitude: service.longitude,
       },
       nearRadiusLimit: {
-        latitude: store.latitude + nearOffset,
-        longitude: store.longitude,
+        latitude: service.latitude + nearOffset,
+        longitude: service.longitude,
       },
       allowedRadiusMeters: radius,
       reviewMarginMeters: margin,

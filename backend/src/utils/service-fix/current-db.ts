@@ -1,52 +1,52 @@
 import { calculateDistanceMeters } from "../haversine";
-import { compareAddresses, normalizeAddress } from "../store-reconciliation/address";
-import type { CurrentDbState, CurrentDbStore, ReconciliationReportRow } from "./types";
+import { compareAddresses, normalizeAddress } from "../service-reconciliation/address";
+import type { CurrentDbService, CurrentDbState, ReconciliationReportRow } from "./types";
 
 const REPORT_COORDINATE_DRIFT_METERS = 25;
 
-export const isNumericStoreName = (name: string): boolean => /^\d+$/.test(name.trim());
+export const isNumericServiceName = (name: string): boolean => /^\d+$/.test(name.trim());
 
-export const buildCurrentDbState = (stores: CurrentDbStore[]): CurrentDbState => {
-  const byStoreNumber = new Map<string, CurrentDbStore[]>();
-  const nonNumericStores: CurrentDbStore[] = [];
+export const buildCurrentDbState = (services: CurrentDbService[]): CurrentDbState => {
+  const byServiceNumber = new Map<string, CurrentDbService[]>();
+  const nonNumericServices: CurrentDbService[] = [];
 
-  for (const store of stores) {
-    if (isNumericStoreName(store.name)) {
-      const key = store.name.trim();
-      const bucket = byStoreNumber.get(key) ?? [];
-      bucket.push(store);
-      byStoreNumber.set(key, bucket);
+  for (const service of services) {
+    if (isNumericServiceName(service.name)) {
+      const key = service.name.trim();
+      const bucket = byServiceNumber.get(key) ?? [];
+      bucket.push(service);
+      byServiceNumber.set(key, bucket);
     } else {
-      nonNumericStores.push(store);
+      nonNumericServices.push(service);
     }
   }
 
-  const duplicateNumericGroups = new Map<string, CurrentDbStore[]>();
-  for (const [storeNumber, rows] of byStoreNumber.entries()) {
+  const duplicateNumericGroups = new Map<string, CurrentDbService[]>();
+  for (const [serviceNumber, rows] of byServiceNumber.entries()) {
     if (rows.length > 1) {
-      duplicateNumericGroups.set(storeNumber, rows);
+      duplicateNumericGroups.set(serviceNumber, rows);
     }
   }
 
   return {
-    stores,
-    byStoreNumber,
-    nonNumericStores,
+    services,
+    byServiceNumber,
+    nonNumericServices,
     duplicateNumericGroups,
   };
 };
 
-export const getCurrentRowsForStoreNumber = (
+export const getCurrentRowsForServiceNumber = (
   currentDb: CurrentDbState,
-  storeNumber: string,
-): CurrentDbStore[] => currentDb.byStoreNumber.get(storeNumber.trim()) ?? [];
+  serviceNumber: string,
+): CurrentDbService[] => currentDb.byServiceNumber.get(serviceNumber.trim()) ?? [];
 
-export const pickReportRowForStore = (
-  storeNumber: string,
+export const pickReportRowForService = (
+  serviceNumber: string,
   reportRows: ReconciliationReportRow[],
-  currentRow?: CurrentDbStore,
+  currentRow?: CurrentDbService,
 ): ReconciliationReportRow | undefined => {
-  const candidates = reportRows.filter((row) => row.storeNumber === storeNumber);
+  const candidates = reportRows.filter((row) => row.serviceNumber === serviceNumber);
   if (candidates.length === 0) {
     return undefined;
   }
@@ -72,7 +72,7 @@ export interface ReportDriftResult {
 }
 
 export const detectReportDrift = (
-  current: CurrentDbStore,
+  current: CurrentDbService,
   report: ReconciliationReportRow,
 ): ReportDriftResult => {
   const notes: string[] = [];
@@ -140,7 +140,7 @@ export const recomputeCoordinateStatus = (
 };
 
 export const recomputeCoordinateDistance = (
-  current: CurrentDbStore,
+  current: CurrentDbService,
   geocodedLatitude: string,
   geocodedLongitude: string,
 ): number | null => {

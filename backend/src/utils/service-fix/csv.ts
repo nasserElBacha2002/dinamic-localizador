@@ -32,7 +32,7 @@ const field = (record: Record<string, string>, key: string, ...fallbackKeys: str
 
 export const loadReconciliationRows = (filePath: string): ReconciliationReportRow[] =>
   readCsvRecords(filePath).map((record) => ({
-    storeNumber: field(record, "store_number"),
+    serviceNumber: field(record, "store_number"),
     status: field(record, "status"),
     carrefourOfficialAddress: field(record, "carrefour_official_address"),
     dbAddress: field(record, "db_address"),
@@ -58,7 +58,7 @@ export const loadReconciliationRows = (filePath: string): ReconciliationReportRo
 export const loadDuplicateRows = (filePath: string): DuplicateReportRow[] =>
   readCsvRecords(filePath).map((record) => ({
     source: field(record, "source"),
-    storeNumber: field(record, "store_number"),
+    serviceNumber: field(record, "store_number"),
     duplicateCount: field(record, "duplicate_count"),
     dbId: field(record, "db_id"),
     dbAddress: field(record, "db_address"),
@@ -93,7 +93,7 @@ export const loadDatabaseExportRows = (filePath?: string): DatabaseExportRow[] =
 };
 
 export interface OfficialSourceRow {
-  storeNumber: string;
+  serviceNumber: string;
   officialAddress: string;
   neighborhood: string;
   locality: string;
@@ -106,14 +106,14 @@ export const loadOfficialSourceRows = (filePath?: string): OfficialSourceRow[] =
 
   return readCsvRecords(filePath).flatMap((record) => {
     const rawStoreId = field(record, "store_id");
-    const storeNumber = rawStoreId.replace(/\.0+$/, "").trim();
-    if (!/^\d+$/.test(storeNumber)) {
+    const serviceNumber = rawStoreId.replace(/\.0+$/, "").trim();
+    if (!/^\d+$/.test(serviceNumber)) {
       return [];
     }
 
     return [
       {
-        storeNumber,
+        serviceNumber,
         officialAddress: field(record, "official_address"),
         neighborhood: field(record, "neighborhood", "barrio"),
         locality: field(record, "locality", "localidad"),

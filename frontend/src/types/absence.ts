@@ -68,7 +68,7 @@ export interface AbsenceRequestListItem extends AbsenceRequest {
     name: string;
   };
   reviewerName?: string | null;
-  affectedInventoriesCount: number;
+  affectedOperationsCount: number;
 }
 
 export interface AffectedOperationWarning {
@@ -82,7 +82,7 @@ export interface AffectedOperationWarning {
 
 export interface AbsenceRequestDetail extends AbsenceRequestListItem {
   events: AbsenceRequestEvent[];
-  affectedInventories: AffectedOperationWarning[];
+  affectedOperations: AffectedOperationWarning[];
   balanceImpact?: AbsenceBalanceImpact | null;
 }
 

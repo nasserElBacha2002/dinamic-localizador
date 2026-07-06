@@ -33,7 +33,7 @@ function buildRow(
     attendance: attendanceId
       ? {
           id: attendanceId,
-          operationId: "inventory-1",
+          operationId: "operation-1",
           employeeId: id,
           receivedLatitude: -34.6,
           receivedLongitude: -58.4,
@@ -70,14 +70,14 @@ function buildRow(
 
 function renderTable(rows: OperationAttendanceSummaryEmployee[], onReviewApprove = () => {}) {
   return render(
-    <MemoryRouter initialEntries={["/operations/inventory-1"]}>
+    <MemoryRouter initialEntries={["/operations/operation-1"]}>
       <Routes>
         <Route
           path="/operations/:id"
           element={
             <MantineProvider>
               <OperationEmployeeTable
-                operationId="inventory-1"
+                operationId="operation-1"
                 rows={rows}
                 scheduledStart="2026-07-15T23:30:00.000Z"
                 canAssign={false}

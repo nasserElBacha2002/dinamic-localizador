@@ -21,26 +21,26 @@ interface ServiceSearchAutocompleteProps {
   placeholder?: string;
 }
 
-function mapServiceToOption(store: Service): SearchAutocompleteOption {
+function mapServiceToOption(service: Service): SearchAutocompleteOption {
   return {
-    id: store.id,
-    label: store.name,
-    description: store.address,
-    disabled: !store.active,
+    id: service.id,
+    label: service.name,
+    description: service.address,
+    disabled: !service.active,
   };
 }
 
 export function ServiceSearchAutocomplete({
   value,
   onChange,
-  label = "Tienda",
+  label = "Servicio",
   activeOnly = true,
   allowCreate = true,
   error = false,
   helperText,
   disabled = false,
   required = false,
-  placeholder = "Nombre o dirección de la tienda",
+  placeholder = "Nombre o dirección del servicio",
 }: ServiceSearchAutocompleteProps) {
   const navigate = useNavigate();
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
@@ -60,7 +60,7 @@ export function ServiceSearchAutocomplete({
     [activeOnly],
   );
 
-  const mapToOption = useCallback((store: Service) => mapServiceToOption(store), []);
+  const mapToOption = useCallback((service: Service) => mapServiceToOption(service), []);
 
   const {
     inputValue,
@@ -69,7 +69,7 @@ export function ServiceSearchAutocomplete({
     isLoading,
     hasSearched,
   } = useAsyncSearchOptions({
-    queryKey: "store-search",
+    queryKey: "service-search",
     fetchItems: fetchServices,
     mapToOption,
     enabled: companyReady,
@@ -103,8 +103,8 @@ export function ServiceSearchAutocomplete({
       createOption={
         allowCreate
           ? {
-              getLabel: (query) => `Crear tienda "${query}"`,
-              getDescription: () => "No se encontraron tiendas con ese criterio",
+              getLabel: (query) => `Crear servicio "${query}"`,
+              getDescription: () => "No se encontraron servicios con ese criterio",
               onSelect: (query) => {
                 const params = new URLSearchParams();
                 if (query) {

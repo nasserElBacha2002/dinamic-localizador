@@ -20,11 +20,11 @@ interface ServiceLookupAutocompleteProps {
   placeholder?: string;
 }
 
-function mapServiceLookupToOption(store: ServiceLookup): SearchAutocompleteOption {
+function mapServiceLookupToOption(service: ServiceLookup): SearchAutocompleteOption {
   return {
-    id: store.id,
-    label: store.name,
-    description: store.address ?? undefined,
+    id: service.id,
+    label: service.name,
+    description: service.address ?? undefined,
   };
 }
 
@@ -51,10 +51,10 @@ export function ServiceLookupAutocomplete({
     [activeOnly],
   );
 
-  const mapToOption = useCallback((store: ServiceLookup) => mapServiceLookupToOption(store), []);
+  const mapToOption = useCallback((service: ServiceLookup) => mapServiceLookupToOption(service), []);
 
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
-    queryKey: "store-lookup-search",
+    queryKey: "service-lookup-search",
     fetchItems: fetchServices,
     mapToOption,
     enabled: companyReady,

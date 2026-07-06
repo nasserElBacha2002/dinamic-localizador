@@ -36,9 +36,9 @@ const formatLocalDateTime = (value: string | Date | null | undefined): string =>
 
 export const attendanceService = {
   async create(companyId: string, input: CreateAttendanceInput) {
-    const inventory = await operationRepository.findById(companyId, input.operationId);
-    if (!inventory) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+    const operation = await operationRepository.findById(companyId, input.operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
 
     const employee = await employeeRepository.findById(companyId, input.employeeId);
@@ -54,8 +54,8 @@ export const attendanceService = {
     if (!isAssigned) {
       throw new AppError(
         409,
-        "EMPLOYEE_NOT_ASSIGNED_TO_INVENTORY",
-        "El empleado no está asignado al inventario",
+        "EMPLOYEE_NOT_ASSIGNED_TO_OPERATION",
+        "El empleado no está asignado a la operación",
       );
     }
 
@@ -68,7 +68,7 @@ export const attendanceService = {
       throw new AppError(
         409,
         "ATTENDANCE_ALREADY_EXISTS",
-        "Ya existe un registro de asistencia válido o pendiente para este empleado e inventario",
+        "Ya existe un registro de asistencia válido o pendiente para este empleado y operación",
       );
     }
 
@@ -262,12 +262,12 @@ export const attendanceService = {
       row.employee_document_number ? String(row.employee_document_number) : "",
       String(row.employee_phone_number ?? ""),
       String(row.service_name ?? ""),
-      row.store_address ? String(row.store_address) : "",
+      row.service_address ? String(row.service_address) : "",
       String(row.operation_id ?? ""),
-      formatLocalDateTime(row.inventory_scheduled_start as string),
+      formatLocalDateTime(row.operation_scheduled_start as string),
       formatLocalDateTime(row.received_at as string),
       row.distance_meters !== undefined ? Number(row.distance_meters) : "",
-      row.store_allowed_radius_meters !== undefined ? Number(row.store_allowed_radius_meters) : "",
+      row.service_allowed_radius_meters !== undefined ? Number(row.service_allowed_radius_meters) : "",
       String(row.validation_status ?? ""),
       String(row.location_status ?? ""),
       String(row.punctuality_status ?? ""),
@@ -281,9 +281,9 @@ export const attendanceService = {
         "Empleado",
         "Documento",
         "Teléfono",
-        "Tienda",
+        "Servicio",
         "Dirección",
-        "Inventario",
+        "Operación",
         "Inicio programado",
         "Check-in",
         "Distancia",

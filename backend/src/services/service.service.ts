@@ -25,11 +25,11 @@ export const serviceService = {
   },
 
   async getById(companyId: string, id: string) {
-    const store = await serviceRepository.findById(companyId, id);
-    if (!store) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+    const service = await serviceRepository.findById(companyId, id);
+    if (!service) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
     }
-    return store;
+    return service;
   },
 
   async update(companyId: string, id: string, input: UpdateServiceInput) {
@@ -45,7 +45,7 @@ export const serviceService = {
         throw new AppError(
           409,
           "SERVICE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-          "No se puede desactivar una tienda con inventarios activos o programados",
+          "No se puede desactivar un servicio con operaciones activas o programadas",
         );
       }
     }
@@ -56,7 +56,7 @@ export const serviceService = {
         input.storeFormat !== undefined ? input.storeFormat?.trim() ?? null : undefined,
     });
     if (!updated) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
     }
     return updated;
   },
@@ -68,13 +68,13 @@ export const serviceService = {
       throw new AppError(
         409,
         "SERVICE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-        "No se puede desactivar una tienda con inventarios activos o programados",
+        "No se puede desactivar un servicio con operaciones activas o programadas",
       );
     }
 
     const updated = await serviceRepository.deactivate(companyId, id);
     if (!updated) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
     }
     return updated;
   },

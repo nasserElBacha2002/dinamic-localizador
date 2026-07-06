@@ -1,7 +1,7 @@
 import sql from "mssql";
 import { connectDatabase, closeDatabase } from "../../database/connection";
 import { env } from "../../config/env";
-import type { CurrentDbStore, EnvironmentSnapshot, StoresSchema } from "./types";
+import type { CurrentDbService, EnvironmentSnapshot, ServicesSchema } from "./types";
 
 const TABLE_NAME = "operational_locations";
 
@@ -18,7 +18,7 @@ const pickColumn = (
   return null;
 };
 
-export const detectStoresSchema = async (pool: sql.ConnectionPool): Promise<StoresSchema> => {
+export const detectServicesSchema = async (pool: sql.ConnectionPool): Promise<ServicesSchema> => {
   const result = await pool.request().query(`
     SELECT COLUMN_NAME
     FROM INFORMATION_SCHEMA.COLUMNS
@@ -31,7 +31,7 @@ export const detectStoresSchema = async (pool: sql.ConnectionPool): Promise<Stor
 
   const neighborhoodColumn = pickColumn(availableColumns, ["neighborhood", "barrio"]);
   const localityColumn = pickColumn(availableColumns, ["locality", "localidad"]);
-  const storeFormatColumn = pickColumn(availableColumns, ["store_format", "formato", "format"]);
+  const serviceFormatColumn = pickColumn(availableColumns, ["store_format", "formato", "format"]);
 
   if (!availableColumns.has("id") || !availableColumns.has("name") || !availableColumns.has("address")) {
     throw new Error("operational_locations table is missing required columns: id, name, address");
@@ -41,7 +41,7 @@ export const detectStoresSchema = async (pool: sql.ConnectionPool): Promise<Stor
     tableName: TABLE_NAME,
     neighborhoodColumn,
     localityColumn,
-    storeFormatColumn,
+    serviceFormatColumn,
     availableColumns,
   };
 };
@@ -66,11 +66,11 @@ const toNullableNumber = (value: unknown): number | null => {
 
 const toBoolean = (value: unknown): boolean => value === true || value === 1 || value === "1";
 
-const buildSelectQuery = (schema: StoresSchema): string => {
+const buildSelectQuery = (schema: ServicesSchema): string => {
   const optionalColumns = [
     schema.neighborhoodColumn,
     schema.localityColumn,
-    schema.storeFormatColumn,
+    schema.serviceFormatColumn,
   ].filter((column): column is string => column !== null);
 
   const selectList = [
@@ -93,17 +93,17 @@ const buildSelectQuery = (schema: StoresSchema): string => {
   `;
 };
 
-export const loadCurrentStoresFromDatabase = async (): Promise<{
-  stores: CurrentDbStore[];
-  schema: StoresSchema;
+export const loadCurrentServicesFromDatabase = async (): Promise<{
+  services: CurrentDbService[];
+  schema: ServicesSchema;
 }> => {
   const pool = await connectDatabase();
 
   try {
-    const schema = await detectStoresSchema(pool);
+    const schema = await detectServicesSchema(pool);
     const result = await pool.request().query(buildSelectQuery(schema));
 
-    const stores = result.recordset.map((row: Record<string, unknown>) => ({
+    const services = result.recordset.map((row: Record<string, unknown>) => ({
       id: String(row.id),
       name: String(row.name ?? "").trim(),
       address: String(row.address ?? "").trim(),
@@ -118,19 +118,19 @@ export const loadCurrentStoresFromDatabase = async (): Promise<{
         ? toNullableString(row[schema.neighborhoodColumn])
         : null,
       locality: schema.localityColumn ? toNullableString(row[schema.localityColumn]) : null,
-      storeFormat: schema.storeFormatColumn
-        ? toNullableString(row[schema.storeFormatColumn])
+      serviceFormat: schema.serviceFormatColumn
+        ? toNullableString(row[schema.serviceFormatColumn])
         : null,
     }));
 
-    return { stores, schema };
+    return { services, schema };
   } finally {
     await closeDatabase();
   }
 };
 
 export const buildEnvironmentSnapshot = (
-  stores: CurrentDbStore[],
+  services: CurrentDbService[],
   duplicateNumericGroups: number,
 ): EnvironmentSnapshot => ({
   nodeEnv: env.NODE_ENV,
@@ -139,10 +139,10 @@ export const buildEnvironmentSnapshot = (
   dbName: env.DB_NAME,
   dbUser: env.DB_USER,
   tableName: TABLE_NAME,
-  totalCurrentDbRows: stores.length,
-  totalNumericCurrentDbStores: stores.filter((store) => /^\d+$/.test(store.name)).length,
-  totalNonNumericCurrentDbRows: stores.filter((store) => !/^\d+$/.test(store.name)).length,
-  duplicateNumericStoreGroups: duplicateNumericGroups,
+  totalCurrentDbRows: services.length,
+  totalNumericCurrentDbServices: services.filter((service) => /^\d+$/.test(service.name)).length,
+  totalNonNumericCurrentDbRows: services.filter((service) => !/^\d+$/.test(service.name)).length,
+  duplicateNumericServiceGroups: duplicateNumericGroups,
   generatedAt: new Date().toISOString(),
 });
 
@@ -160,8 +160,8 @@ export const printStartupSummary = (input: {
   console.log(`- target table: ${input.snapshot.tableName}`);
   console.log(`- mode: ${input.mode}`);
   console.log(`- current DB rows: ${input.snapshot.totalCurrentDbRows}`);
-  console.log(`- numeric stores: ${input.snapshot.totalNumericCurrentDbStores}`);
-  console.log(`- non-numeric stores: ${input.snapshot.totalNonNumericCurrentDbRows}`);
-  console.log(`- duplicate numeric groups: ${input.snapshot.duplicateNumericStoreGroups}`);
+  console.log(`- numeric services: ${input.snapshot.totalNumericCurrentDbServices}`);
+  console.log(`- non-numeric services: ${input.snapshot.totalNonNumericCurrentDbRows}`);
+  console.log(`- duplicate numeric groups: ${input.snapshot.duplicateNumericServiceGroups}`);
   console.log("");
 };

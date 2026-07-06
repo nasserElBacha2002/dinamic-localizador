@@ -335,9 +335,9 @@ export const botSessionRepository = {
 
     const activeStateGuard =
       input.state === "WAITING_LOCATION" ||
-      input.state === "WAITING_INVENTORY_SELECTION" ||
+      input.state === "WAITING_OPERATION_SELECTION" ||
       input.state === "WAITING_CHECKOUT_LOCATION" ||
-      input.state === "WAITING_CHECKOUT_INVENTORY_SELECTION" ||
+      input.state === "WAITING_CHECKOUT_OPERATION_SELECTION" ||
       input.state === "WAITING_ABSENCE_TYPE" ||
       input.state === "WAITING_ABSENCE_START_DATE" ||
       input.state === "WAITING_ABSENCE_END_DATE" ||

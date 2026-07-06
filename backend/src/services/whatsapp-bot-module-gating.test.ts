@@ -27,7 +27,7 @@ const simulationContext = () => ({
 const enabledStates = () =>
   new Map([
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
-    [COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, true],
+    [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
     [COMPANY_MODULE_KEYS.REPORTS, true],
     [COMPANY_MODULE_KEYS.BOT_SIMULATOR, true],
@@ -256,7 +256,7 @@ const buildBotSession = (
   state:
     | "WAITING_LOCATION"
     | "WAITING_CHECKOUT_LOCATION"
-    | "WAITING_CHECKOUT_INVENTORY_SELECTION"
+    | "WAITING_CHECKOUT_OPERATION_SELECTION"
     | "WAITING_ABSENCE_TYPE"
     | "WAITING_ABSENCE_START_DATE"
     | "WAITING_ABSENCE_END_DATE"
@@ -270,7 +270,7 @@ const buildBotSession = (
     state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? operationId : null,
   phoneNumber: "+5491111111111",
   state,
-  contextJson: state === "WAITING_CHECKOUT_INVENTORY_SELECTION" ? JSON.stringify({ inventoryOptions: [] }) : null,
+  contextJson: state === "WAITING_CHECKOUT_OPERATION_SELECTION" ? JSON.stringify({ operationOptions: [] }) : null,
   expiresAt: "2099-01-01T00:00:00.000Z",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -321,14 +321,14 @@ describe("whatsapp bot session module gating", () => {
     assert.equal(attendanceCreates, 0);
   });
 
-  it("blocks location check-in when inventory_operations is disabled", async () => {
+  it("blocks location check-in when operations is disabled", async () => {
     setupUnitTestEnv();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
     const { attendanceRepository } = await import("../repositories/attendance.repository");
 
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let attendanceCreates = 0;
 
     mock.method(botSessionService, "getSessionResolutionByPhone", async () => ({
@@ -399,7 +399,7 @@ describe("whatsapp bot session module gating", () => {
     assert.equal(sessionCompleted, 0);
   });
 
-  it("blocks checkout inventory selection location prompt when attendance is disabled", async () => {
+  it("blocks checkout operation selection location prompt when attendance is disabled", async () => {
     setupUnitTestEnv();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { botSessionService } = await import("./bot-session.service");
@@ -408,7 +408,7 @@ describe("whatsapp bot session module gating", () => {
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
 
     mock.method(botSessionService, "getSessionResolutionByPhone", async () => ({
-      activeSession: buildBotSession("WAITING_CHECKOUT_INVENTORY_SELECTION"),
+      activeSession: buildBotSession("WAITING_CHECKOUT_OPERATION_SELECTION"),
       recentlyExpired: false,
     }));
 

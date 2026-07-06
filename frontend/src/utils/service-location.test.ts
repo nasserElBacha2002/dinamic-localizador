@@ -63,11 +63,11 @@ describe("applyPlaceSelection", () => {
       {
         googlePlaceId: "place-123",
         address: "Av. Corrientes 1234",
-        displayName: "Tienda Demo",
+        displayName: "Servicio Demo",
         latitude: -34.61,
         longitude: -58.39,
       },
-      "Mi tienda",
+      "Mi servicio",
     );
 
     assert.equal(result.state, "SELECTED");
@@ -82,14 +82,14 @@ describe("applyPlaceSelection", () => {
       {
         googlePlaceId: "place-123",
         address: "Av. Corrientes 1234",
-        displayName: "Tienda Demo",
+        displayName: "Servicio Demo",
         latitude: -34.61,
         longitude: -58.39,
       },
       "",
     );
 
-    assert.equal(result.fields.name, "Tienda Demo");
+    assert.equal(result.fields.name, "Servicio Demo");
   });
 
   it("fills neighborhood and locality from place selection", () => {
@@ -104,7 +104,7 @@ describe("applyPlaceSelection", () => {
         latitude: -34.61,
         longitude: -58.39,
       },
-      "Mi tienda",
+      "Mi servicio",
     );
 
     assert.equal(result.fields.neighborhood, "San Nicolás");

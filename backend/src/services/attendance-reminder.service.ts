@@ -545,7 +545,7 @@ export const attendanceReminderService = {
   ): Promise<ReminderSendOutcome> {
     const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);
     if (!candidate) {
-      throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado al inventario");
+      throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado a la operación");
     }
 
     if (input.notificationType === "EXIT_REMINDER_15_MIN") {

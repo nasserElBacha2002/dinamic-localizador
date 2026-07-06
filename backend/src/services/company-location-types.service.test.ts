@@ -211,7 +211,7 @@ describe("companyLocationTypesService", () => {
     assert.equal(disabled.isActive, false);
   });
 
-  it("rejects inactive location type for store assignment", async () => {
+  it("rejects inactive location type for service assignment", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesRepository } = await import(
       "../repositories/company-location-types.repository"

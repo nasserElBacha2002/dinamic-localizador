@@ -5,8 +5,8 @@ import { requireRequestCompanyId } from "../utils/request-company";
 export const serviceController = {
   async create(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const store = await serviceService.create(companyId, req.body);
-    res.status(201).json({ data: store });
+    const service = await serviceService.create(companyId, req.body);
+    res.status(201).json({ data: service });
   },
 
   async list(req: Request, res: Response) {
@@ -17,19 +17,19 @@ export const serviceController = {
 
   async getById(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const store = await serviceService.getById(companyId, String(req.params.id));
-    res.status(200).json({ data: store });
+    const service = await serviceService.getById(companyId, String(req.params.id));
+    res.status(200).json({ data: service });
   },
 
   async update(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const store = await serviceService.update(companyId, String(req.params.id), req.body);
-    res.status(200).json({ data: store });
+    const service = await serviceService.update(companyId, String(req.params.id), req.body);
+    res.status(200).json({ data: service });
   },
 
   async deactivate(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const store = await serviceService.deactivate(companyId, String(req.params.id));
-    res.status(200).json({ data: store });
+    const service = await serviceService.deactivate(companyId, String(req.params.id));
+    res.status(200).json({ data: service });
   },
 };

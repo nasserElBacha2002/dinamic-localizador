@@ -12,7 +12,7 @@ import {
 const allEnabled = () =>
   new Map([
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
-    [COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, true],
+    [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
   ]);
 
@@ -33,9 +33,9 @@ describe("whatsappModuleGate", () => {
     assert.equal(getCheckInModuleBlockedMessage(states), MODULE_DISABLED_MESSAGE);
   });
 
-  it("blocks check-in when inventory operations module is disabled", () => {
+  it("blocks check-in when operations module is disabled", () => {
     const states = allEnabled();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
 
     assert.equal(getAttendanceModuleBlockedMessage(states), null);
     assert.equal(getCheckInModuleBlockedMessage(states), MODULE_DISABLED_MESSAGE);

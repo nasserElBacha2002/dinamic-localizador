@@ -23,7 +23,7 @@ export const CLIENT_IMPORT_TEMPLATE_HEADERS = ["PUNTO", "Fecha"] as const;
 
 export const CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS = ["Sucursal", "Fecha"] as const;
 
-export const INVENTORY_IMPORT_COLUMN_ALIASES = {
+export const OPERATION_IMPORT_COLUMN_ALIASES = {
   location: [
     "PUNTO",
     "punto",

@@ -41,7 +41,7 @@ export const STATISTICS_EMPLOYEE_SORT_FIELDS = [
   "lastAttendanceDate",
 ] as const;
 
-export const STATISTICS_INVENTORY_SORT_FIELDS = [
+export const STATISTICS_OPERATION_SORT_FIELDS = [
   "serviceName",
   "scheduledStart",
   "assignedEmployeesCount",
@@ -79,16 +79,16 @@ export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
     ...dateFields,
     empPage: 1,
     empPageSize: 10,
-    invPage: 1,
-    invPageSize: 10,
-    locPage: 1,
-    locPageSize: 10,
+    opPage: 1,
+    opPageSize: 10,
+    svcPage: 1,
+    svcPageSize: 10,
     empSortBy: "attendancePercentage",
     empSortOrder: "desc" as SortOrder,
-    invSortBy: "scheduledStart",
-    invSortOrder: "desc" as SortOrder,
-    locSortBy: "averageAttendancePercentage",
-    locSortOrder: "desc" as SortOrder,
+    opSortBy: "scheduledStart",
+    opSortOrder: "desc" as SortOrder,
+    svcSortBy: "averageAttendancePercentage",
+    svcSortOrder: "desc" as SortOrder,
   };
 }
 
@@ -99,14 +99,14 @@ export const STATISTICS_TABLE_FIELDS = {
   punctualityStatus: { type: "enum", values: STATISTICS_PUNCTUALITY_STATUS_VALUES },
   empPage: { type: "number", min: 1, resetPageOnChange: false },
   empPageSize: { type: "number", min: 1, resetPageOnChange: false },
-  invPage: { type: "number", min: 1, resetPageOnChange: false },
-  invPageSize: { type: "number", min: 1, resetPageOnChange: false },
-  locPage: { type: "number", min: 1, resetPageOnChange: false },
-  locPageSize: { type: "number", min: 1, resetPageOnChange: false },
+  opPage: { type: "number", min: 1, resetPageOnChange: false },
+  opPageSize: { type: "number", min: 1, resetPageOnChange: false },
+  svcPage: { type: "number", min: 1, resetPageOnChange: false },
+  svcPageSize: { type: "number", min: 1, resetPageOnChange: false },
   empSortBy: { type: "enum", values: STATISTICS_EMPLOYEE_SORT_FIELDS },
-  invSortBy: { type: "enum", values: STATISTICS_INVENTORY_SORT_FIELDS },
-  locSortBy: { type: "enum", values: STATISTICS_LOCATION_SORT_FIELDS },
+  opSortBy: { type: "enum", values: STATISTICS_OPERATION_SORT_FIELDS },
+  svcSortBy: { type: "enum", values: STATISTICS_LOCATION_SORT_FIELDS },
   empSortOrder: { type: "enum", values: ["asc", "desc"] },
-  invSortOrder: { type: "enum", values: ["asc", "desc"] },
-  locSortOrder: { type: "enum", values: ["asc", "desc"] },
+  opSortOrder: { type: "enum", values: ["asc", "desc"] },
+  svcSortOrder: { type: "enum", values: ["asc", "desc"] },
 } satisfies TableUrlFieldMap<ReturnType<typeof buildStatisticsTableDefaults>>;

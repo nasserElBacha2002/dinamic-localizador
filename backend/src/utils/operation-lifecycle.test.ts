@@ -1,12 +1,12 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  getInventoryEffectiveEnd,
-  isInventoryStartInPast,
+  getOperationEffectiveEnd,
+  isOperationStartInPast,
   resolveLifecycleOperationStatus,
 } from "./operation-lifecycle";
 
-describe("inventory lifecycle", () => {
+describe("operation lifecycle", () => {
   const baseOperation = {
     status: "SCHEDULED" as const,
     scheduledStart: "2026-06-22T14:29:00.000Z",
@@ -37,7 +37,7 @@ describe("inventory lifecycle", () => {
   });
 
   it("uses late tolerance as effective end when scheduled end is missing", () => {
-    const end = getInventoryEffectiveEnd(
+    const end = getOperationEffectiveEnd(
       "2026-06-22T14:29:00.000Z",
       null,
       90,
@@ -57,11 +57,11 @@ describe("inventory lifecycle", () => {
 
   it("detects past start dates", () => {
     assert.equal(
-      isInventoryStartInPast("2020-01-01T10:00:00.000Z", new Date("2026-01-01T10:00:00.000Z")),
+      isOperationStartInPast("2020-01-01T10:00:00.000Z", new Date("2026-01-01T10:00:00.000Z")),
       true,
     );
     assert.equal(
-      isInventoryStartInPast("2026-12-01T10:00:00.000Z", new Date("2026-01-01T10:00:00.000Z")),
+      isOperationStartInPast("2026-12-01T10:00:00.000Z", new Date("2026-01-01T10:00:00.000Z")),
       false,
     );
   });

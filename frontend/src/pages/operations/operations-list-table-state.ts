@@ -3,9 +3,9 @@ import type { TableUrlFieldMap } from "../../utils/table-url-state";
 import type { DateRangeUrlFields } from "../../utils/date-range-url";
 import { areDateRangeUrlFieldsEqual } from "../../utils/date-range-url";
 
-export const INVENTORY_STATUS_VALUES = ["", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
+export const OPERATION_STATUS_VALUES = ["", "SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"] as const;
 
-export const INVENTORY_SORT_FIELDS = [
+export const OPERATION_SORT_FIELDS = [
   "serviceName",
   "serviceAddress",
   "scheduledStart",
@@ -27,10 +27,10 @@ export function buildOperationTableDefaults(dateFields: DateRangeUrlFields) {
   };
 }
 
-export const INVENTORY_TABLE_FIELDS = {
-  sortBy: { type: "enum", values: INVENTORY_SORT_FIELDS },
+export const OPERATION_TABLE_FIELDS = {
+  sortBy: { type: "enum", values: OPERATION_SORT_FIELDS },
   sortOrder: { type: "enum", values: ["asc", "desc"] },
-  status: { type: "enum", values: INVENTORY_STATUS_VALUES },
+  status: { type: "enum", values: OPERATION_STATUS_VALUES },
 } satisfies TableUrlFieldMap<ReturnType<typeof buildOperationTableDefaults>>;
 
 export function shouldOmitOperationTableValue(

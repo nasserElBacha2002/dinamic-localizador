@@ -51,7 +51,7 @@ export function BotSessionPanel({
   return (
     <SectionCard
       title="Contexto de prueba"
-      description="Configurá empleado, operación, tienda y escenario antes de iniciar."
+      description="Configurá empleado, operación, servicio y escenario antes de iniciar."
     >
       <Stack gap="md">
         <TextInput

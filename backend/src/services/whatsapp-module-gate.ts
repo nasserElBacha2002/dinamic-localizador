@@ -29,7 +29,7 @@ export function getCheckInModuleBlockedMessage(
     return attendanceBlocked;
   }
 
-  if (!isModuleEnabledInStates(moduleStates, COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS)) {
+  if (!isModuleEnabledInStates(moduleStates, COMPANY_MODULE_KEYS.OPERATIONS)) {
     return MODULE_DISABLED_MESSAGE;
   }
 
@@ -55,7 +55,7 @@ export function getWorkdayModuleBlockedMessage(
 export function getUpcomingAssignmentsModuleBlockedMessage(
   moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
 ): string | null {
-  if (!isModuleEnabledInStates(moduleStates, COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS)) {
+  if (!isModuleEnabledInStates(moduleStates, COMPANY_MODULE_KEYS.OPERATIONS)) {
     return MODULE_DISABLED_MESSAGE;
   }
 

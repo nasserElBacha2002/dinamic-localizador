@@ -1,4 +1,4 @@
-// Phase 2.3/2.7: Operation remains the technical API model; physical table is scheduled_operations (inventories view).
+// Phase 2.3/2.7: Operation remains the technical API model; physical table is scheduled_operations.
 // Conceptually this represents a ScheduledOperation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
@@ -19,7 +19,7 @@ import type {
   UpdateOperationInput,
 } from "../schemas/operation.schema";
 
-const INVENTORY_LIST_SORT_FIELDS: Record<string, string> = {
+const OPERATION_LIST_SORT_FIELDS: Record<string, string> = {
   serviceName: "s.name",
   serviceAddress: "s.address",
   scheduledStart: "i.scheduled_start",
@@ -85,7 +85,7 @@ export const operationRepository = {
     return mapOperationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async existsActiveForStoreAtStart(
+  async existsActiveForServiceAtStart(
     companyId: string,
     serviceId: string,
     scheduledStart: string,
@@ -203,20 +203,20 @@ export const operationRepository = {
   },
 
   async findDetailById(companyId: string, id: string): Promise<OperationDetail | null> {
-    const inventory = await this.findById(companyId, id);
-    if (!inventory) {
+    const operation = await this.findById(companyId, id);
+    if (!operation) {
       return null;
     }
 
     const pool = getPool();
 
-    const storeResult = await pool
+    const serviceResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("serviceId", sql.UniqueIdentifier, inventory.serviceId)
+      .input("serviceId", sql.UniqueIdentifier, operation.serviceId)
       .query("SELECT * FROM operational_locations WHERE id = @serviceId AND company_id = @companyId");
 
-    if (!storeResult.recordset[0]) {
+    if (!serviceResult.recordset[0]) {
       return null;
     }
 
@@ -246,8 +246,8 @@ export const operationRepository = {
       `);
 
     return mapOperationDetail(
-      inventory,
-      mapServiceRow(storeResult.recordset[0] as Record<string, unknown>),
+      operation,
+      mapServiceRow(serviceResult.recordset[0] as Record<string, unknown>),
       employeesResult.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>)),
       Number(attendanceCountResult.recordset[0].total),
     );
@@ -321,7 +321,7 @@ export const operationRepository = {
 
     const orderBy = resolveSqlSort(
       query.sortBy,
-      INVENTORY_LIST_SORT_FIELDS,
+      OPERATION_LIST_SORT_FIELDS,
       "i.scheduled_start",
       query.sortDirection ?? "asc",
     );
@@ -363,7 +363,7 @@ export const operationRepository = {
 
     if (input.serviceId !== undefined) {
       request.input("serviceId", sql.UniqueIdentifier, input.serviceId);
-      fields.push("store_id = @serviceId");
+      fields.push("service_id = @serviceId");
     }
 
     if (input.scheduledStart !== undefined) {
@@ -441,8 +441,10 @@ export const operationRepository = {
           i.late_tolerance_minutes,
           i.status,
           s.name AS service_name,
-          s.latitude AS store_latitude,
-          s.longitude AS store_longitude,
+          s.address AS service_address,
+          s.locality AS service_locality,
+          s.latitude AS service_latitude,
+          s.longitude AS service_longitude,
           s.allowed_radius_meters
         FROM scheduled_operations i
         INNER JOIN operation_assignments ie
@@ -460,8 +462,10 @@ export const operationRepository = {
       id: String(row.id),
       serviceId: String(row.service_id),
       serviceName: String(row.service_name),
-      serviceLatitude: Number(row.store_latitude),
-      serviceLongitude: Number(row.store_longitude),
+      serviceAddress: row.service_address ? String(row.service_address) : null,
+      serviceLocality: row.service_locality ? String(row.service_locality) : null,
+      serviceLatitude: Number(row.service_latitude),
+      serviceLongitude: Number(row.service_longitude),
       allowedRadiusMeters: Number(row.allowed_radius_meters),
       scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
       scheduledEnd: row.scheduled_end

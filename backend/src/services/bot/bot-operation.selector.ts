@@ -1,36 +1,42 @@
 import { attendanceRepository } from "../../repositories/attendance.repository";
 import { operationRepository } from "../../repositories/operation.repository";
 import type { CheckoutEligibleOperation, CompatibleOperation } from "../../types/twilio.types";
-import { parseInventorySelection } from "../../utils/intent";
+import { parseOperationSelection } from "../../utils/intent";
 
-export type InventorySessionOption = {
+export type OperationSessionOption = {
   operationId: string;
   serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
   scheduledStart: string;
 };
 
-export const mapCompatibleInventoriesToSessionOptions = (
-  inventories: CompatibleOperation[],
-): InventorySessionOption[] =>
-  inventories.map((inventory) => ({
-    operationId: inventory.id,
-    serviceName: inventory.serviceName,
-    scheduledStart: inventory.scheduledStart,
+export const mapCompatibleOperationsToSessionOptions = (
+  operations: CompatibleOperation[],
+): OperationSessionOption[] =>
+  operations.map((operation) => ({
+    operationId: operation.id,
+    serviceName: operation.serviceName,
+    serviceAddress: operation.serviceAddress,
+    serviceLocality: operation.serviceLocality,
+    scheduledStart: operation.scheduledStart,
   }));
 
-export const mapCheckoutInventoriesToSessionOptions = (
-  inventories: CheckoutEligibleOperation[],
-): InventorySessionOption[] =>
-  inventories.map((inventory) => ({
-    operationId: inventory.id,
-    serviceName: inventory.serviceName,
-    scheduledStart: inventory.scheduledStart,
+export const mapCheckoutOperationsToSessionOptions = (
+  operations: CheckoutEligibleOperation[],
+): OperationSessionOption[] =>
+  operations.map((operation) => ({
+    operationId: operation.id,
+    serviceName: operation.serviceName,
+    serviceAddress: operation.serviceAddress,
+    serviceLocality: operation.serviceLocality,
+    scheduledStart: operation.scheduledStart,
   }));
 
-export const parseInventorySelectionIndex = (body: string): number | null =>
-  parseInventorySelection(body);
+export const parseOperationSelectionIndex = (body: string): number | null =>
+  parseOperationSelection(body);
 
-export const isValidInventorySelection = (
+export const isValidOperationSelection = (
   selection: number | null,
   optionsLength: number,
 ): selection is number =>
@@ -42,28 +48,28 @@ export const findCompatibleOperationById = async (
   operationId: string,
   at: Date,
 ): Promise<CompatibleOperation | null> => {
-  const inventories = await operationRepository.findCompatibleForEmployee(companyId, employeeId, at);
-  return inventories.find((inventory) => inventory.id === operationId) ?? null;
+  const operations = await operationRepository.findCompatibleForEmployee(companyId, employeeId, at);
+  return operations.find((operation) => operation.id === operationId) ?? null;
 };
 
-export const findCheckoutEligibleInventoryById = async (
+export const findCheckoutEligibleOperationById = async (
   companyId: string,
   employeeId: string,
   operationId: string,
 ): Promise<CheckoutEligibleOperation | null> => {
-  const inventories = await attendanceRepository.findCheckoutEligibleInventories(companyId, employeeId);
-  return inventories.find((inventory) => inventory.id === operationId) ?? null;
+  const operations = await attendanceRepository.findCheckoutEligibleOperations(companyId, employeeId);
+  return operations.find((operation) => operation.id === operationId) ?? null;
 };
 
-export const listCompatibleInventories = async (
+export const listCompatibleOperations = async (
   companyId: string,
   employeeId: string,
   at: Date,
 ): Promise<CompatibleOperation[]> =>
   operationRepository.findCompatibleForEmployee(companyId, employeeId, at);
 
-export const listCheckoutEligibleInventories = async (
+export const listCheckoutEligibleOperations = async (
   companyId: string,
   employeeId: string,
 ): Promise<CheckoutEligibleOperation[]> =>
-  attendanceRepository.findCheckoutEligibleInventories(companyId, employeeId);
+  attendanceRepository.findCheckoutEligibleOperations(companyId, employeeId);

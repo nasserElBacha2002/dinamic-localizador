@@ -63,13 +63,13 @@ describe("company permissions by role", () => {
     assert.ok(!roleHasPermission("HR", "attendance:review"));
   });
 
-  it("maps SUPERVISOR to attendance review and inventory read", () => {
+  it("maps SUPERVISOR to attendance review and operation read", () => {
     assert.ok(roleHasPermission("SUPERVISOR", "attendance:review"));
     assert.ok(roleHasPermission("SUPERVISOR", "operations:read"));
     assert.ok(!roleHasPermission("SUPERVISOR", "employees:manage"));
   });
 
-  it("maps OPERATOR to inventories and attendance read only", () => {
+  it("maps OPERATOR to operations and attendance read only", () => {
     assert.ok(roleHasPermission("OPERATOR", "operations:read"));
     assert.ok(roleHasPermission("OPERATOR", "attendance:read"));
     assert.ok(!roleHasPermission("OPERATOR", "employees:read"));

@@ -59,7 +59,7 @@ afterEach(() => {
 });
 
 describe("buildOperationCreateDefaultValues", () => {
-  it("uses inventory operation tolerances instead of WhatsApp tolerances", () => {
+  it("uses operation tolerances instead of WhatsApp tolerances", () => {
     const settings = createMockCompanySettings({
       defaultEarlyArrivalToleranceMinutes: 15,
       defaultLateArrivalToleranceMinutes: 20,
@@ -77,7 +77,7 @@ describe("buildOperationCreateDefaultValues", () => {
 });
 
 describe("Operation create tolerance prefill", () => {
-  it("renders prefilled tolerances from inventory operation settings", () => {
+  it("renders prefilled tolerances from operation settings", () => {
     const settings = createMockCompanySettings({
       defaultEarlyArrivalToleranceMinutes: 15,
       defaultLateArrivalToleranceMinutes: 20,
@@ -102,7 +102,7 @@ describe("Operation create tolerance prefill", () => {
 });
 
 describe("OperationImportPage defaults banner", () => {
-  it("mentions inventory configuration explicitly", async () => {
+  it("mentions operation configuration explicitly", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
     const pageFile = readFileSync(
@@ -110,6 +110,6 @@ describe("OperationImportPage defaults banner", () => {
       "utf8",
     );
 
-    assert.ok(pageFile.includes("configuración de inventarios"));
+    assert.ok(pageFile.includes("configuración de operaciones"));
   });
 });

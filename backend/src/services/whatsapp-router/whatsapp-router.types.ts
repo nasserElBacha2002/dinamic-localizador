@@ -39,7 +39,7 @@ export interface WhatsAppRouterHandlers {
     phoneTo: string;
     messageSid: string;
   }) => Promise<string>;
-  handleInventorySelection: (input: {
+  handleOperationSelection: (input: {
     companyId: string;
     session: BotSession;
     body: string;
@@ -47,7 +47,7 @@ export interface WhatsAppRouterHandlers {
     phoneFrom: string;
     phoneTo: string;
   }) => Promise<string>;
-  handleCheckoutInventorySelection: (input: {
+  handleCheckoutOperationSelection: (input: {
     companyId: string;
     session: BotSession;
     body: string;

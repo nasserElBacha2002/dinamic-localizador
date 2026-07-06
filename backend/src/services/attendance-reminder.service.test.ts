@@ -15,6 +15,8 @@ const candidate = {
   employeeName: "Ana",
   employeePhoneNumber: "+5491112345678",
   serviceName: "Centro",
+  serviceAddress: null,
+  serviceLocality: null,
   scheduledStart: "2026-06-23T14:00:00.000Z",
   scheduledEnd: "2026-06-23T22:00:00.000Z",
 };

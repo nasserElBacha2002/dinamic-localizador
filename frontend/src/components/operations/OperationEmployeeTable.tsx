@@ -64,7 +64,7 @@ export function OperationEmployeeTable({
 }: OperationEmployeeTableProps) {
   const navigate = useNavigate();
   const location = useLocation();
-  const inventoryDetailPath = `/operations/${operationId}`;
+  const operationDetailPath = `/operations/${operationId}`;
   const expectedArrivalTime = formatTime(scheduledStart);
 
   const columns = useMemo<DataTableColumn<OperationAttendanceSummaryEmployee>[]>(
@@ -152,7 +152,7 @@ export function OperationEmployeeTable({
         navigateWithListContext(
           navigate,
           `/attendance/${row.attendance.id}`,
-          inventoryDetailPath,
+          operationDetailPath,
           location,
         );
       }}

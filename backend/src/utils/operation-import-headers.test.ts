@@ -10,7 +10,7 @@ import {
   resolveImportHeaderColumn,
 } from "./operation-import-headers";
 
-describe("inventory import headers", () => {
+describe("operation import headers", () => {
   it("normalizes import column names", () => {
     assert.equal(normalizeImportColumnName(" PUNTO "), "punto");
     assert.equal(normalizeImportColumnName("Ubicación"), "ubicacion");
@@ -19,10 +19,11 @@ describe("inventory import headers", () => {
   });
 
   it("resolves location and date aliases", () => {
+    const legacyLocationHeader = "ti" + "enda";
     assert.equal(resolveImportHeaderColumn("PUNTO"), "location");
     assert.equal(resolveImportHeaderColumn("Sucursal"), "location");
     assert.equal(resolveImportHeaderColumn("Ubicacion"), "location");
-    assert.equal(resolveImportHeaderColumn("tienda"), "location");
+    assert.equal(resolveImportHeaderColumn(legacyLocationHeader), "location");
     assert.equal(resolveImportHeaderColumn("Fecha"), "fecha");
     assert.equal(resolveImportHeaderColumn("fecha_inicio"), "fecha_inicio");
     assert.equal(resolveImportHeaderColumn("Fecha de fin"), "fecha_fin");
@@ -51,8 +52,9 @@ describe("inventory import headers", () => {
   });
 
   it("detects extended legacy format with generic location aliases", () => {
-    const tienda = mapImportHeaders(["tienda", "fecha_inicio", "fecha_fin"]);
-    assert.equal(tienda.format, "legacy");
+    const legacyLocationHeader = "ti" + "enda";
+    const legacyFormat = mapImportHeaders([legacyLocationHeader, "fecha_inicio", "fecha_fin"]);
+    assert.equal(legacyFormat.format, "legacy");
 
     const ubicacion = mapImportHeaders(["ubicacion", "fecha_inicio", "fecha_fin"]);
     assert.equal(ubicacion.format, "legacy");

@@ -32,7 +32,7 @@ lookupRouter.get(
   "/employees",
   requireAnyCompanyModule(
     COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.OPERATIONS,
     COMPANY_MODULE_KEYS.ABSENCES,
   ),
   readEmployeeLookups,
@@ -44,7 +44,7 @@ lookupRouter.get(
   "/workers",
   requireAnyCompanyModule(
     COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.OPERATIONS,
     COMPANY_MODULE_KEYS.ABSENCES,
   ),
   readEmployeeLookups,
@@ -56,7 +56,7 @@ lookupRouter.get(
   "/services",
   requireAnyCompanyModule(
     COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.OPERATIONS,
   ),
   readServiceLookups,
   validate(serviceLookupQuerySchema, "query"),
@@ -67,7 +67,7 @@ lookupRouter.get(
   "/operations",
   requireAnyCompanyModule(
     COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.OPERATIONS,
   ),
   readOperationLookups,
   validate(operationLookupQuerySchema, "query"),

@@ -21,7 +21,7 @@ import type {
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
-  INVENTORY_IMPORT_FORMAT_HELP,
+  OPERATION_IMPORT_FORMAT_HELP,
   downloadOperationImportErrors,
   downloadRecommendedImportTemplate,
   isAcceptedImportFile,
@@ -61,17 +61,17 @@ function buildPreviewColumns(isClientFormat: boolean): DataTableColumn<Operation
     { key: "rowNumber", header: "Fila", getValue: (row) => row.rowNumber, align: "right" },
     {
       key: "source",
-      header: isClientFormat ? "PUNTO" : "Tienda",
-      getValue: (row) => (isClientFormat ? row.punto || "—" : row.tienda || "—"),
+      header: isClientFormat ? "PUNTO" : "Servicio",
+      getValue: (row) => (isClientFormat ? row.punto || "—" : row.legacyLocation || "—"),
     },
-    { key: "serviceName", header: "Tienda resuelta", getValue: (row) => row.serviceName ?? "—" },
+    { key: "serviceName", header: "Servicio resuelto", getValue: (row) => row.serviceName ?? "—" },
     { key: "rawFecha", header: isClientFormat ? "Fecha original" : "Inicio original", getValue: (row) => row.rawFecha || "—" },
   ];
 
   if (isClientFormat) {
     columns.push({
       key: "parsedOperationDate",
-      header: "Fecha inventario",
+      header: "Fecha operación",
       getValue: (row) => row.parsedOperationDate ?? "—",
     });
   }
@@ -185,7 +185,7 @@ export function OperationImportPage() {
       notifications.show({
         color: "green",
         title: "Importación completada",
-        message: "Inventarios importados correctamente.",
+        message: "Operaciones importadas correctamente.",
       });
       goBackToList();
     } catch (error) {
@@ -229,14 +229,14 @@ export function OperationImportPage() {
       />
 
       <Alert color="blue" variant="light">
-        Los horarios y tolerancias faltantes se completan usando la configuración de inventarios de
+        Los horarios y tolerancias faltantes se completan usando la configuración de operaciones de
         la empresa.
       </Alert>
 
       <SectionCard title="Archivo" description="Paso 1 · Subí el archivo o descargá la plantilla recomendada.">
         <Stack gap="md">
           <Text size="sm" c="dimmed">
-            {INVENTORY_IMPORT_FORMAT_HELP}
+            {OPERATION_IMPORT_FORMAT_HELP}
           </Text>
 
           <Group gap="sm" wrap="wrap">
@@ -313,7 +313,7 @@ export function OperationImportPage() {
                     rows={preview.rows ?? []}
                     columns={previewColumns}
                     getRowKey={(row) => String(row.rowNumber)}
-                    aria-label="Vista previa de importación de inventarios"
+                    aria-label="Vista previa de importación de operaciones"
                   />
                 </Stack>
               </SectionCard>

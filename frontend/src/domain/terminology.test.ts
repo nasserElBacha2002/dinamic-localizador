@@ -37,6 +37,7 @@ describe("terminology", () => {
     assert.equal(terminology.operation.legacyPlural, "Inventarios");
     assert.equal(terminology.worker.legacySingular, "Empleado");
     assert.equal(terminology.worker.legacyPlural, "Empleados");
+    assert.deepEqual(legacyTerminology.operation, { singular: "Inventario", plural: "Inventarios" });
     assert.deepEqual(legacyTerminology.service, { singular: "Tienda", plural: "Tiendas" });
   });
 

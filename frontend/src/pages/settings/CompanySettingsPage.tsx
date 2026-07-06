@@ -99,7 +99,7 @@ export function CompanySettingsPage() {
 
         <SettingsSummaryCard
           title="Tipos de ubicación / servicio"
-          description="Clasificación de tiendas, depósitos y otros puntos operativos."
+          description="Clasificación de servicios, depósitos y otros puntos operativos."
           summaryItems={
             locationTypesQuery.data
               ? buildLocationTypesSummary(locationTypesQuery.data).summaryItems

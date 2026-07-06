@@ -55,18 +55,18 @@ export const writeFixPlanOutputs = (outDir: string, plan: FixPlan, sqlFixes: Pro
 
   const missingMeta = new Map(
     plan.missingInserts.map((row) => [
-      row.storeNumber,
+      row.serviceNumber,
       { neighborhood: row.neighborhood, locality: row.locality },
     ]),
   );
 
   writeFile(
     outDir,
-    "proposed_store_fixes.csv",
+    "proposed_service_fixes.csv",
     buildReportCsv(
       PROPOSED_HEADERS,
       plan.proposed.map((fix) => [
-        fix.storeNumber,
+        fix.serviceNumber,
         fix.dbId,
         fix.fixType,
         fix.oldAddress,
@@ -85,10 +85,10 @@ export const writeFixPlanOutputs = (outDir: string, plan: FixPlan, sqlFixes: Pro
 
   writeFile(
     outDir,
-    "skipped_store_fixes.csv",
+    "skipped_service_fixes.csv",
     buildReportCsv(
       SKIPPED_HEADERS,
-      plan.skipped.map((row) => [row.storeNumber, row.dbId, row.skippedReason, row.details]),
+      plan.skipped.map((row) => [row.serviceNumber, row.dbId, row.skippedReason, row.details]),
     ),
   );
 
@@ -98,7 +98,7 @@ export const writeFixPlanOutputs = (outDir: string, plan: FixPlan, sqlFixes: Pro
     buildReportCsv(
       DUPLICATE_HEADERS,
       plan.duplicateResolution.map((row) => [
-        row.storeNumber,
+        row.serviceNumber,
         row.dbId,
         row.address,
         row.latitude,
@@ -113,11 +113,11 @@ export const writeFixPlanOutputs = (outDir: string, plan: FixPlan, sqlFixes: Pro
 
   writeFile(
     outDir,
-    "missing_store_insert_plan.csv",
+    "missing_service_insert_plan.csv",
     buildReportCsv(
       MISSING_HEADERS,
       plan.missingInserts.map((row) => [
-        row.storeNumber,
+        row.serviceNumber,
         row.officialAddress,
         row.neighborhood,
         row.locality,
@@ -136,7 +136,7 @@ export const writeFixPlanOutputs = (outDir: string, plan: FixPlan, sqlFixes: Pro
       buildReportCsv(
         MISSING_HEADERS,
         plan.missingRequiresCoordinates.map((row) => [
-          row.storeNumber,
+          row.serviceNumber,
           row.officialAddress,
           row.neighborhood,
           row.locality,
@@ -159,7 +159,7 @@ export const writeFixPlanOutputs = (outDir: string, plan: FixPlan, sqlFixes: Pro
   const environmentLabel = `${plan.environmentSnapshot.nodeEnv}@${plan.environmentSnapshot.dbName}`;
   writeFile(
     outDir,
-    "proposed_store_updates.sql",
+    "proposed_service_updates.sql",
     buildProposedSqlScript(sqlFixes, missingMeta, environmentLabel),
   );
 };

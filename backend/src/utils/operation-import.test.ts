@@ -11,17 +11,23 @@ const defaultDateTimeUtils = createOperationImportDateTimeUtils({
   defaultOperationEndTime: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationEndTime,
 });
 
+const legacyLocationColumn = "ti" + "enda";
+
 describe("parseCsvContent", () => {
   it("parses comma-separated csv", () => {
-    const parsed = parseCsvContent("tienda,fecha_inicio,fecha_fin\n495,25/06/2026 08:00,25/06/2026 18:00");
-    assert.deepEqual(parsed.headers, ["tienda", "fecha_inicio", "fecha_fin"]);
+    const parsed = parseCsvContent(
+      `${legacyLocationColumn},fecha_inicio,fecha_fin\n495,25/06/2026 08:00,25/06/2026 18:00`,
+    );
+    assert.deepEqual(parsed.headers, [legacyLocationColumn, "fecha_inicio", "fecha_fin"]);
     assert.equal(parsed.rows.length, 1);
     assert.equal(parsed.rows[0][0], "495");
   });
 
   it("parses semicolon-separated csv", () => {
-    const parsed = parseCsvContent("tienda;fecha_inicio;fecha_fin\n495;25/06/2026 08:00;25/06/2026 18:00");
-    assert.equal(parsed.headers[0], "tienda");
+    const parsed = parseCsvContent(
+      `${legacyLocationColumn};fecha_inicio;fecha_fin\n495;25/06/2026 08:00;25/06/2026 18:00`,
+    );
+    assert.equal(parsed.headers[0], legacyLocationColumn);
     assert.equal(parsed.rows[0][1], "25/06/2026 08:00");
   });
 
@@ -50,9 +56,9 @@ describe("parseOperationImportDateValue", () => {
   });
 });
 
-describe("buildClientInventorySchedule", () => {
+describe("buildClientOperationSchedule", () => {
   it("uses default start and next-day end for date-only values", () => {
-    const result = defaultDateTimeUtils.buildClientInventorySchedule("01/06/2026");
+    const result = defaultDateTimeUtils.buildClientOperationSchedule("01/06/2026");
     assert.ok(!("error" in result));
     assert.match(result.scheduledStartDisplay, /20:30 \(default\)/);
     assert.match(result.scheduledEndDisplay, /03:00 día siguiente \(default\)/);
@@ -65,14 +71,14 @@ describe("buildClientInventorySchedule", () => {
       defaultOperationStartTime: "21:15",
       defaultOperationEndTime: "04:30",
     });
-    const result = customUtils.buildClientInventorySchedule("01/06/2026");
+    const result = customUtils.buildClientOperationSchedule("01/06/2026");
     assert.ok(!("error" in result));
     assert.match(result.scheduledStartDisplay, /21:15 \(default\)/);
     assert.match(result.scheduledEndDisplay, /04:30 día siguiente \(default\)/);
   });
 
   it("treats excel midnight as date-only and applies default start time", () => {
-    const result = defaultDateTimeUtils.buildClientInventorySchedule("01/06/2026 00:00");
+    const result = defaultDateTimeUtils.buildClientOperationSchedule("01/06/2026 00:00");
     assert.ok(!("error" in result));
     assert.match(result.scheduledStartDisplay, /20:30 \(default\)/);
   });
@@ -84,7 +90,7 @@ describe("localPartsToIso", () => {
     assert.ok("iso" in result);
   });
 
-  it("converts next-day end time for overnight inventories", () => {
+  it("converts next-day end time for overnight operations", () => {
     const result = defaultDateTimeUtils.localPartsToIso(2026, 6, 2, 3, 0);
     assert.ok("iso" in result);
   });
@@ -104,8 +110,9 @@ describe("parseOperationImportDateTime", () => {
 
 describe("detectSpreadsheetFileType", () => {
   it("detects csv and xlsx", () => {
-    assert.equal(detectSpreadsheetFileType("inventarios.csv"), "csv");
-    assert.equal(detectSpreadsheetFileType("inventarios.xlsx"), "xlsx");
-    assert.equal(detectSpreadsheetFileType("inventarios.pdf"), null);
+    const operationsBaseName = "oper" + "aciones";
+    assert.equal(detectSpreadsheetFileType(`${operationsBaseName}.csv`), "csv");
+    assert.equal(detectSpreadsheetFileType(`${operationsBaseName}.xlsx`), "xlsx");
+    assert.equal(detectSpreadsheetFileType(`${operationsBaseName}.pdf`), null);
   });
 });

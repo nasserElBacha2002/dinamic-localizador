@@ -36,19 +36,19 @@ apiRouter.use("/companies", authenticate, companyRouter);
 apiRouter.use("/platform", authenticate, platformCompanyRouter);
 
 const mountInventoryOperationsServiceRoutes = (router: Router) => {
-  const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS);
+  const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS);
   router.use("/services", moduleGuard, serviceRouter);
 };
 
 const mountInventoryOperationsOperationRoutes = (router: Router) => {
-  const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS);
+  const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS);
   router.use("/operations", moduleGuard, operationRouter);
 };
 
 const mountEmployeeRoutes = (router: Router) => {
   const moduleGuard = requireAnyCompanyModule(
     COMPANY_MODULE_KEYS.ATTENDANCE,
-    COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS,
+    COMPANY_MODULE_KEYS.OPERATIONS,
     COMPANY_MODULE_KEYS.ABSENCES,
   );
   router.use("/employees", moduleGuard, employeeRouter);
@@ -65,7 +65,7 @@ mountInventoryOperationsServiceRoutes(companyScopedOperationalRouter);
 mountInventoryOperationsOperationRoutes(companyScopedOperationalRouter);
 companyScopedOperationalRouter.use(
   "/operations/:operationId/employees",
-  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
   operationAssignmentRouter,
 );
 companyScopedOperationalRouter.use(
@@ -110,7 +110,7 @@ mountInventoryOperationsServiceRoutes(operationalRouter);
 mountInventoryOperationsOperationRoutes(operationalRouter);
 operationalRouter.use(
   "/operations/:operationId/employees",
-  requireCompanyModule(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS),
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
   operationAssignmentRouter,
 );
 operationalRouter.use(

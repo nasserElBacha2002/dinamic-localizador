@@ -12,7 +12,7 @@ import { operationAttendanceRepository } from "../repositories/operation-attenda
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
 
-describeDatabaseIntegration("inventory attendance confirmation summary integration", () => {
+describeDatabaseIntegration("operation attendance confirmation summary integration", () => {
   before(async () => {
     await setupDatabaseIntegration();
   });
@@ -29,7 +29,7 @@ describeDatabaseIntegration("inventory attendance confirmation summary integrati
     const companyId = String(companyResult.recordset[0]?.id ?? "");
     assert.ok(companyId);
 
-    const storeResult = await pool
+    const serviceResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -37,11 +37,11 @@ describeDatabaseIntegration("inventory attendance confirmation summary integrati
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
-    const serviceId = String(storeResult.recordset[0]?.id ?? "");
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
     const futureStart = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000).toISOString();
-    const inventoryInsert = await pool
+    const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
@@ -53,7 +53,7 @@ describeDatabaseIntegration("inventory attendance confirmation summary integrati
         OUTPUT INSERTED.id
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const operationId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(operationInsert.recordset[0].id);
 
     const employees = await pool
       .request()

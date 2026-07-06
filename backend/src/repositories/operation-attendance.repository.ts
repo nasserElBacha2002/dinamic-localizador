@@ -47,8 +47,8 @@ export const operationAttendanceRepository = {
     page = 1,
     limit = 10,
   ): Promise<{
-    inventory: Operation;
-    store: Service;
+    operation: Operation;
+    service: Service;
     summary: OperationAttendanceSummaryCounts;
     employees: OperationAttendanceSummaryRow[];
     total: number;
@@ -56,46 +56,46 @@ export const operationAttendanceRepository = {
     const pool = getPool();
     const { offset } = getPagination(page, limit);
 
-    const inventoryResult = await pool
+    const operationResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .query(`
         SELECT
           i.*,
-          s.id AS store_ref_id,
+          s.id AS service_ref_id,
           s.name AS service_name,
-          s.address AS store_address,
-          s.latitude AS store_latitude,
-          s.longitude AS store_longitude,
-          s.allowed_radius_meters AS store_allowed_radius_meters,
-          s.google_place_id AS store_google_place_id,
-          s.active AS store_active,
-          s.created_at AS store_created_at,
-          s.updated_at AS store_updated_at
+          s.address AS service_address,
+          s.latitude AS service_latitude,
+          s.longitude AS service_longitude,
+          s.allowed_radius_meters AS service_allowed_radius_meters,
+          s.google_place_id AS service_google_place_id,
+          s.active AS service_active,
+          s.created_at AS service_created_at,
+          s.updated_at AS service_updated_at
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
         WHERE i.id = @operationId
           AND i.company_id = @companyId
       `);
 
-    if (!inventoryResult.recordset[0]) {
+    if (!operationResult.recordset[0]) {
       return null;
     }
 
-    const inventoryRow = inventoryResult.recordset[0] as Record<string, unknown>;
-    const inventory = mapOperationRow(inventoryRow);
-    const store = mapServiceRow({
-      id: inventoryRow.store_ref_id,
-      name: inventoryRow.service_name,
-      address: inventoryRow.store_address,
-      latitude: inventoryRow.store_latitude,
-      longitude: inventoryRow.store_longitude,
-      allowed_radius_meters: inventoryRow.store_allowed_radius_meters,
-      google_place_id: inventoryRow.store_google_place_id,
-      active: inventoryRow.store_active,
-      created_at: inventoryRow.store_created_at,
-      updated_at: inventoryRow.store_updated_at,
+    const operationRow = operationResult.recordset[0] as Record<string, unknown>;
+    const operation = mapOperationRow(operationRow);
+    const service = mapServiceRow({
+      id: operationRow.service_ref_id,
+      name: operationRow.service_name,
+      address: operationRow.service_address,
+      latitude: operationRow.service_latitude,
+      longitude: operationRow.service_longitude,
+      allowed_radius_meters: operationRow.service_allowed_radius_meters,
+      google_place_id: operationRow.service_google_place_id,
+      active: operationRow.service_active,
+      created_at: operationRow.service_created_at,
+      updated_at: operationRow.service_updated_at,
     });
 
     const summaryResult = await pool
@@ -176,8 +176,8 @@ export const operationAttendanceRepository = {
     );
 
     return {
-      inventory,
-      store,
+      operation,
+      service,
       summary,
       employees,
       total: summary.assigned,

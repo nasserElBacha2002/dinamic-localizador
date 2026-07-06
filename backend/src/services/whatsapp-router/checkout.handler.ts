@@ -15,8 +15,8 @@ export const handleActiveCheckoutTextSession = async (
   session: BotSession,
   handlers: WhatsAppRouterHandlers,
 ): Promise<string | null> => {
-  if (session.state === "WAITING_CHECKOUT_INVENTORY_SELECTION") {
-    return handlers.handleCheckoutInventorySelection({
+  if (session.state === "WAITING_CHECKOUT_OPERATION_SELECTION") {
+    return handlers.handleCheckoutOperationSelection({
       companyId: ctx.companyId,
       session,
       body: ctx.body,
@@ -79,7 +79,7 @@ export const handleCheckoutLocation = async (
   session: BotSession,
   handlers: WhatsAppRouterHandlers,
 ): Promise<string | null> => {
-  if (session.state === "WAITING_CHECKOUT_INVENTORY_SELECTION") {
+  if (session.state === "WAITING_CHECKOUT_OPERATION_SELECTION") {
     return handlers.respond(ctx.companyId, {
       message: LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
       employeeId: ctx.employeeId,

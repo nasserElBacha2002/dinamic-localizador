@@ -1,17 +1,17 @@
 import { env } from "../config/env";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
-import type { AffectedInventoryWarning } from "../types/absence";
+import type { AffectedOperationWarning } from "../types/absence";
 import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../utils/absence-date";
 
 export const absenceOperationImpactService = {
-  async findAffectedInventories(
+  async findAffectedOperations(
     companyId: string,
     input: {
       employeeId: string;
       startDate: string;
       endDate: string;
     },
-  ): Promise<AffectedInventoryWarning[]> {
+  ): Promise<AffectedOperationWarning[]> {
     const timezone = env.BOT_OPERATION_TIMEZONE;
     const utcOffsetHours = getUtcOffsetHoursFromTimezone(timezone);
     const { startAt, endAt } = absenceDateRangeToUtcBounds(
@@ -20,20 +20,20 @@ export const absenceOperationImpactService = {
       utcOffsetHours,
     );
 
-    const inventories = await absenceRequestRepository.findAffectedInventories(
+    const operations = await absenceRequestRepository.findAffectedOperations(
       companyId,
       input.employeeId,
       startAt,
       endAt,
     );
 
-    return inventories.map((inventory) => ({
-      operationId: inventory.operationId,
-      serviceId: inventory.serviceId,
-      serviceName: inventory.serviceName,
-      scheduledStart: inventory.scheduledStart,
-      scheduledEnd: inventory.scheduledEnd,
-      status: inventory.status,
+    return operations.map((operation) => ({
+      operationId: operation.operationId,
+      serviceId: operation.serviceId,
+      serviceName: operation.serviceName,
+      scheduledStart: operation.scheduledStart,
+      scheduledEnd: operation.scheduledEnd,
+      status: operation.status,
     }));
   },
 

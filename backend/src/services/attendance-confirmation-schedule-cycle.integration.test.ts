@@ -53,7 +53,7 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
     const initialStart = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     const rescheduledStart = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000);
 
-    const inventoryInsert = await pool
+    const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
@@ -65,7 +65,7 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
         OUTPUT INSERTED.id
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const operationId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(operationInsert.recordset[0].id);
 
     const employeeInsert = await pool
       .request()

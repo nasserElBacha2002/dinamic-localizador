@@ -14,7 +14,7 @@ import {
   type StatusBadgeTone,
 } from "../../design-system";
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
-import { OperationForm, INVENTORY_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
+import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import { OperationWorkforceSection } from "../../components/operations/OperationWorkforceSection";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
@@ -30,7 +30,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
 import { operationStatusLabels } from "../../utils/labels";
 
-function inventoryStatusTone(status: OperationStatus): StatusBadgeTone {
+function operationStatusTone(status: OperationStatus): StatusBadgeTone {
   switch (status) {
     case "SCHEDULED":
       return "info";
@@ -48,7 +48,7 @@ function inventoryStatusTone(status: OperationStatus): StatusBadgeTone {
 export function OperationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { goBackToList } = useListBackNavigation("/operations");
-  const inventoryQuery = useOperation(id);
+  const operationQuery = useOperation(id);
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
 
@@ -60,48 +60,48 @@ export function OperationDetailPage() {
     notifications.show({ color: severity === "error" ? "red" : "green", message });
   };
 
-  const inventory = inventoryQuery.data;
+  const operation = operationQuery.data;
 
   const assignedEmployeeIds = useMemo(
-    () => inventory?.assignedEmployees.map((employee) => employee.id) ?? [],
-    [inventory?.assignedEmployees],
+    () => operation?.assignedEmployees.map((employee) => employee.id) ?? [],
+    [operation?.assignedEmployees],
   );
 
   if (!id) {
     return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
   }
 
-  if (inventoryQuery.isLoading) {
+  if (operationQuery.isLoading) {
     return <LoadingState />;
   }
 
-  if (inventoryQuery.isError || !inventory) {
+  if (operationQuery.isError || !operation) {
     return (
       <ErrorState
         message={getApiErrorMessage(
-          inventoryQuery.error,
+          operationQuery.error,
           `${terminology.operation.singular} no encontrada.`,
         )}
       />
     );
   }
 
-  const canAssign = isOperationAssignable(inventory.status);
-  const canEdit = isOperationEditable(inventory.status);
-  const storeDisplayName = inventory.service?.name ?? "—";
-  const storeDetailId = inventory.serviceId || inventory.service?.id;
-  const storeFieldValue =
-    storeDetailId && storeDisplayName !== "—" ? (
-      <Anchor component={RouterLink} to={`/services/${storeDetailId}`} size="sm">
-        {storeDisplayName}
+  const canAssign = isOperationAssignable(operation.status);
+  const canEdit = isOperationEditable(operation.status);
+  const serviceDisplayName = operation.service?.name ?? "—";
+  const serviceDetailId = operation.serviceId || operation.service?.id;
+  const serviceFieldValue =
+    serviceDetailId && serviceDisplayName !== "—" ? (
+      <Anchor component={RouterLink} to={`/services/${serviceDetailId}`} size="sm">
+        {serviceDisplayName}
       </Anchor>
     ) : (
-      storeDisplayName
+      serviceDisplayName
     );
 
-  const geofenceSummary = inventory.service?.allowedRadiusMeters
-    ? `${inventory.service.allowedRadiusMeters} m · tolerancias ${inventory.earlyToleranceMinutes}/${inventory.lateToleranceMinutes} min`
-    : `Tolerancias ${inventory.earlyToleranceMinutes}/${inventory.lateToleranceMinutes} min`;
+  const geofenceSummary = operation.service?.allowedRadiusMeters
+    ? `${operation.service.allowedRadiusMeters} m · tolerancias ${operation.earlyToleranceMinutes}/${operation.lateToleranceMinutes} min`
+    : `Tolerancias ${operation.earlyToleranceMinutes}/${operation.lateToleranceMinutes} min`;
 
   const handleUpdate = async (values: OperationFormValues) => {
     setErrorMessage(null);
@@ -137,13 +137,13 @@ export function OperationDetailPage() {
     <>
       <PageHeader
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
-        description={`${inventory.service.name} · ${formatDateTime(inventory.scheduledStart)}`}
+        description={`${operation.service.name} · ${formatDateTime(operation.scheduledStart)}`}
         action={
           <Group gap="sm" wrap="wrap">
             {editing && canEdit ? (
               <Button
                 type="submit"
-                form={INVENTORY_DETAIL_FORM_ID}
+                form={OPERATION_DETAIL_FORM_ID}
                 loading={updateMutation.isPending}
               >
                 Guardar cambios
@@ -178,34 +178,34 @@ export function OperationDetailPage() {
             title="Estado"
             value={
               <StatusBadge
-                label={operationStatusLabels[inventory.status]}
-                tone={inventoryStatusTone(inventory.status)}
+                label={operationStatusLabels[operation.status]}
+                tone={operationStatusTone(operation.status)}
               />
             }
           />
           <MetricCard
             title="Asistencias registradas"
-            value={inventory.attendanceRecordsCount}
+            value={operation.attendanceRecordsCount}
             description="Registros vinculados a esta operación"
           />
           <MetricCard
             title="Horario de operación"
-            value={formatDateTime(inventory.scheduledStart)}
+            value={formatDateTime(operation.scheduledStart)}
             description={
-              inventory.scheduledEnd
-                ? `Fin: ${formatDateTime(inventory.scheduledEnd)}`
+              operation.scheduledEnd
+                ? `Fin: ${formatDateTime(operation.scheduledEnd)}`
                 : "Sin horario de fin"
             }
           />
           <MetricCard title="Geocerca" value={geofenceSummary} description="Radio y tolerancias horarias" />
         </SimpleGrid>
 
-        <Box className={layoutClasses.inventoryDetailLayout}>
+        <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
             <OperationWorkforceSection
-              operationId={inventory.id}
+              operationId={operation.id}
               canAssign={canAssign}
-              scheduledStart={inventory.scheduledStart}
+              scheduledStart={operation.scheduledStart}
               assignedEmployeeIds={assignedEmployeeIds}
               onFeedback={(message, severity) => showFeedback(message, severity)}
             />
@@ -222,19 +222,19 @@ export function OperationDetailPage() {
                     label: "Estado",
                     value: (
                       <StatusBadge
-                        label={operationStatusLabels[inventory.status]}
-                        tone={inventoryStatusTone(inventory.status)}
+                        label={operationStatusLabels[operation.status]}
+                        tone={operationStatusTone(operation.status)}
                       />
                     ),
                   },
-                  { label: terminology.service.singular, value: storeFieldValue },
-                  { label: "Dirección", value: inventory.service?.address ?? "—" },
-                  { label: operationScheduleLabel, value: formatDateTime(inventory.scheduledStart) },
-                  { label: "Fin", value: formatDateTime(inventory.scheduledEnd) },
-                  { label: "Tolerancia temprana", value: `${inventory.earlyToleranceMinutes} min` },
-                  { label: "Tolerancia tardía", value: `${inventory.lateToleranceMinutes} min` },
-                  { label: "Asistencias registradas", value: inventory.attendanceRecordsCount },
-                  { label: "Notas", value: inventory.notes ?? "—" },
+                  { label: terminology.service.singular, value: serviceFieldValue },
+                  { label: "Dirección", value: operation.service?.address ?? "—" },
+                  { label: operationScheduleLabel, value: formatDateTime(operation.scheduledStart) },
+                  { label: "Fin", value: formatDateTime(operation.scheduledEnd) },
+                  { label: "Tolerancia temprana", value: `${operation.earlyToleranceMinutes} min` },
+                  { label: "Tolerancia tardía", value: `${operation.lateToleranceMinutes} min` },
+                  { label: "Asistencias registradas", value: operation.attendanceRecordsCount },
+                  { label: "Notas", value: operation.notes ?? "—" },
                 ]}
               />
             </SectionCard>
@@ -245,23 +245,23 @@ export function OperationDetailPage() {
               <SectionCard title={`Editar ${terminology.operation.singular.toLowerCase()}`}>
                 <OperationForm
                   mode="edit"
-                  currentStatus={inventory.status}
+                  currentStatus={operation.status}
                   defaultValues={{
-                    serviceId: inventory.serviceId,
-                    scheduledStart: isoToDatetimeLocal(inventory.scheduledStart),
-                    scheduledEnd: inventory.scheduledEnd ? isoToDatetimeLocal(inventory.scheduledEnd) : "",
-                    earlyToleranceMinutes: inventory.earlyToleranceMinutes,
-                    lateToleranceMinutes: inventory.lateToleranceMinutes,
-                    notes: inventory.notes ?? "",
-                    status: inventory.status,
+                    serviceId: operation.serviceId,
+                    scheduledStart: isoToDatetimeLocal(operation.scheduledStart),
+                    scheduledEnd: operation.scheduledEnd ? isoToDatetimeLocal(operation.scheduledEnd) : "",
+                    earlyToleranceMinutes: operation.earlyToleranceMinutes,
+                    lateToleranceMinutes: operation.lateToleranceMinutes,
+                    notes: operation.notes ?? "",
+                    status: operation.status,
                   }}
                   submitLabel="Guardar cambios"
-                  cancelTo={`/operations/${inventory.id}`}
+                  cancelTo={`/operations/${operation.id}`}
                   loading={updateMutation.isPending}
                   errorMessage={errorMessage}
                   onSubmit={handleUpdate}
                   embedded
-                  formId={INVENTORY_DETAIL_FORM_ID}
+                  formId={OPERATION_DETAIL_FORM_ID}
                   hideActions
                 />
               </SectionCard>

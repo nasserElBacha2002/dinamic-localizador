@@ -70,12 +70,12 @@ export interface AbsenceRequestWithRelations extends AbsenceRequest {
   employee: Pick<Employee, "id" | "name" | "phoneNumber" | "active">;
   absenceType: Pick<AbsenceType, "id" | "code" | "name">;
   reviewerName?: string | null;
-  affectedInventoriesCount: number;
+  affectedOperationsCount: number;
 }
 
 export interface AbsenceRequestDetail extends AbsenceRequestWithRelations {
   events: AbsenceRequestEvent[];
-  affectedInventories: AffectedInventoryWarning[];
+  affectedOperations: AffectedOperationWarning[];
   balanceImpact: AbsenceBalanceImpact | null;
 }
 
@@ -116,7 +116,7 @@ export interface AbsenceBalanceImpact {
   message?: string;
 }
 
-export interface AffectedInventoryWarning {
+export interface AffectedOperationWarning {
   operationId: string;
   serviceId: string;
   serviceName: string;

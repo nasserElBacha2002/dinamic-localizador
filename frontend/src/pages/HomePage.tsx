@@ -62,10 +62,10 @@ function HealthMetricCard({ title, status, details }: HealthMetricCardProps) {
   );
 }
 
-function UpcomingOperationCard({ inventory }: { inventory: OperationWithService }) {
+function UpcomingOperationCard({ operation }: { operation: OperationWithService }) {
   const navigate = useNavigate();
-  const destination = `/operations/${inventory.id}`;
-  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${inventory.service.name}`;
+  const destination = `/operations/${operation.id}`;
+  const ariaLabel = `Ver ${terminology.operation.singular.toLowerCase()} de ${operation.service.name}`;
 
   const handleNavigate = () => {
     navigate(destination);
@@ -78,9 +78,9 @@ function UpcomingOperationCard({ inventory }: { inventory: OperationWithService 
     }
   };
 
-  const scheduleText = inventory.scheduledEnd
-    ? `${formatDateTime(inventory.scheduledStart)} – ${formatDateTime(inventory.scheduledEnd)}`
-    : formatDateTime(inventory.scheduledStart);
+  const scheduleText = operation.scheduledEnd
+    ? `${formatDateTime(operation.scheduledStart)} – ${formatDateTime(operation.scheduledEnd)}`
+    : formatDateTime(operation.scheduledStart);
 
   return (
     <Card
@@ -95,12 +95,12 @@ function UpcomingOperationCard({ inventory }: { inventory: OperationWithService 
       style={{ cursor: "pointer" }}
     >
       <Stack gap={4}>
-        <Text fw={600}>{inventory.service.name}</Text>
+        <Text fw={600}>{operation.service.name}</Text>
         <Text size="sm" c="dimmed">
-          {inventory.service.address ?? "—"} · {scheduleText}
+          {operation.service.address ?? "—"} · {scheduleText}
         </Text>
         <StatusBadge
-          label={operationStatusLabels[inventory.status] ?? inventory.status}
+          label={operationStatusLabels[operation.status] ?? operation.status}
           tone="info"
           variant="light"
         />
@@ -115,14 +115,14 @@ export function HomePage() {
   const permissionsQuery = useCompanyPermissions();
   const healthReady = databaseHealth.data?.database === "connected";
 
-  const canReadInventories = hasAnyPermission(permissionsQuery.data?.permissions, [
+  const canReadOperations = hasAnyPermission(permissionsQuery.data?.permissions, [
     "operations:read",
     "operations:manage",
   ]);
 
-  const upcomingInventoriesQuery = useOperations(
+  const upcomingOperationsQuery = useOperations(
     { status: "SCHEDULED", page: 1, limit: 5 },
-    healthReady && canReadInventories,
+    healthReady && canReadOperations,
   );
 
   const apiStatus: HealthStatus = apiHealth.isLoading
@@ -137,9 +137,9 @@ export function HomePage() {
       ? "ok"
       : "error";
 
-  const upcomingSummaryStatus: HealthStatus = upcomingInventoriesQuery.isLoading
+  const upcomingSummaryStatus: HealthStatus = upcomingOperationsQuery.isLoading
     ? "loading"
-    : upcomingInventoriesQuery.isError
+    : upcomingOperationsQuery.isError
       ? "error"
       : "ok";
 
@@ -150,7 +150,7 @@ export function HomePage() {
         description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
       />
 
-      <SimpleGrid cols={{ base: 1, md: 2, lg: canReadInventories ? 3 : 2 }} spacing="md" mb="xl">
+      <SimpleGrid cols={{ base: 1, md: 2, lg: canReadOperations ? 3 : 2 }} spacing="md" mb="xl">
         <HealthMetricCard
           title="Backend"
           status={apiStatus}
@@ -171,42 +171,42 @@ export function HomePage() {
               : databaseHealth.data?.message ?? "Verificando conexión..."
           }
         />
-        {canReadInventories ? (
+        {canReadOperations ? (
           <HealthMetricCard
             title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
             status={upcomingSummaryStatus}
             details={
-              upcomingInventoriesQuery.data
-                ? `${upcomingInventoriesQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
+              upcomingOperationsQuery.data
+                ? `${upcomingOperationsQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
                 : "No disponible"
             }
           />
         ) : null}
       </SimpleGrid>
 
-      {canReadInventories ? (
+      {canReadOperations ? (
         <SectionCard
           title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
           description={`${terminology.operation.plural} programadas a continuación.`}
         >
-          {upcomingInventoriesQuery.isLoading ? <LoadingState height={160} /> : null}
-          {upcomingInventoriesQuery.isError ? (
+          {upcomingOperationsQuery.isLoading ? <LoadingState height={160} /> : null}
+          {upcomingOperationsQuery.isError ? (
             <ErrorState
               message={`No se pudieron cargar las ${terminology.operation.plural.toLowerCase()} programadas.`}
             />
           ) : null}
-          {!upcomingInventoriesQuery.isLoading &&
-          !upcomingInventoriesQuery.isError &&
-          upcomingInventoriesQuery.data?.data.length === 0 ? (
+          {!upcomingOperationsQuery.isLoading &&
+          !upcomingOperationsQuery.isError &&
+          upcomingOperationsQuery.data?.data.length === 0 ? (
             <EmptyState
               title={`No hay ${terminology.operation.plural.toLowerCase()} programadas`}
               description={`Cuando programes ${terminology.operation.plural.toLowerCase()}, aparecerán aquí.`}
             />
           ) : null}
-          {upcomingInventoriesQuery.data && upcomingInventoriesQuery.data.data.length > 0 ? (
+          {upcomingOperationsQuery.data && upcomingOperationsQuery.data.data.length > 0 ? (
             <Stack gap="sm">
-              {upcomingInventoriesQuery.data.data.map((inventory) => (
-                <UpcomingOperationCard key={inventory.id} inventory={inventory} />
+              {upcomingOperationsQuery.data.data.map((operation) => (
+                <UpcomingOperationCard key={operation.id} operation={operation} />
               ))}
             </Stack>
           ) : null}

@@ -6,7 +6,7 @@ import type { CompanyModule } from "../types/company-module";
 
 const allEnabledModules: CompanyModule[] = [
   "attendance",
-  "inventory_operations",
+  "operations",
   "absences",
   "reports",
   "bot_simulator",

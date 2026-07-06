@@ -37,7 +37,7 @@ export function useBotSimulatorSession() {
   const chatEndRef = useRef<HTMLDivElement>(null);
 
   const { data: employee } = useEmployee(employeeId ?? undefined);
-  const { data: inventory } = useOperation(operationId ?? undefined);
+  const { data: operation } = useOperation(operationId ?? undefined);
 
   const createSessionMutation = useCreateBotSimulationSession();
   const restartSessionMutation = useRestartBotSimulationSession();
@@ -48,7 +48,7 @@ export function useBotSimulatorSession() {
   const resolvedPhoneNumber = phoneManuallySet
     ? manualPhoneNumber
     : (employee?.phoneNumber ?? manualPhoneNumber);
-  const resolvedServiceId = serviceManuallySet ? manualServiceId : (inventory?.serviceId ?? manualServiceId);
+  const resolvedServiceId = serviceManuallySet ? manualServiceId : (operation?.serviceId ?? manualServiceId);
 
   useEffect(() => {
     chatEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -182,8 +182,8 @@ export function useBotSimulatorSession() {
       ["companyId", "Empresa"],
       ["employeeName", "Empleado"],
       ["employeeId", "ID empleado"],
-      ["operationId", "Inventario"],
-      ["serviceId", "Tienda"],
+      ["operationId", "Operación"],
+      ["serviceId", "Servicio"],
       ["phoneNumber", "Teléfono simulado"],
       ["lastDetectedIntent", "Última intención"],
       ["calculatedDistance", "Distancia calculada (m)"],

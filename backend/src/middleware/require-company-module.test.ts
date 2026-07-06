@@ -64,7 +64,7 @@ describe("requireAnyCompanyModule middleware", () => {
       nextCalled = true;
     };
 
-    requireAnyCompanyModule("attendance", "inventory_operations", "absences")(req, res, next);
+    requireAnyCompanyModule("attendance", "operations", "absences")(req, res, next);
     assert.equal(nextCalled, true);
   });
 
@@ -72,7 +72,7 @@ describe("requireAnyCompanyModule middleware", () => {
     const disabledCore = new Map(
       ALL_COMPANY_MODULE_KEYS.map((moduleKey) => [
         moduleKey,
-        !["attendance", "inventory_operations", "absences"].includes(moduleKey),
+        !["attendance", "operations", "absences"].includes(moduleKey),
       ]),
     );
     const req = { companyModuleStates: disabledCore } as Request;
@@ -82,7 +82,7 @@ describe("requireAnyCompanyModule middleware", () => {
       nextCalled = true;
     };
 
-    requireAnyCompanyModule("attendance", "inventory_operations", "absences")(req, res, next);
+    requireAnyCompanyModule("attendance", "operations", "absences")(req, res, next);
     assert.equal(nextCalled, false);
     assert.equal(res.statusCode, 403);
     assert.equal((res.body as { error?: { code?: string } }).error?.code, "MODULE_DISABLED");

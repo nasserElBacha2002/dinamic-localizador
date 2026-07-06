@@ -22,30 +22,30 @@ interface OperationSearchAutocompleteProps {
   placeholder?: string;
 }
 
-function mapOperationToOption(inventory: OperationWithService): SearchAutocompleteOption {
+function mapOperationToOption(operation: OperationWithService): SearchAutocompleteOption {
   return {
-    id: inventory.id,
-    label: `${inventory.service.name} · ${formatDateTime(inventory.scheduledStart)}`,
-    description: inventory.service.address ?? operationStatusLabels[inventory.status],
+    id: operation.id,
+    label: `${operation.service.name} · ${formatDateTime(operation.scheduledStart)}`,
+    description: operation.service.address ?? operationStatusLabels[operation.status],
   };
 }
 
 export function OperationSearchAutocomplete({
   value,
   onChange,
-  label = "Inventario",
+  label = "Operación",
   allowCreate = true,
   error = false,
   helperText,
   disabled = false,
   required = false,
-  placeholder = "Tienda o dirección del inventario",
+  placeholder = "Servicio o dirección de la operación",
 }: OperationSearchAutocompleteProps) {
   const navigate = useNavigate();
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
   const selectedOperationQuery = useOperation(value ?? undefined);
 
-  const fetchInventories = useCallback(async (search: string) => {
+  const fetchOperations = useCallback(async (search: string) => {
     const response = await getOperations({
       search: search || undefined,
       page: 1,
@@ -56,7 +56,7 @@ export function OperationSearchAutocomplete({
   }, []);
 
   const mapToOption = useCallback(
-    (inventory: OperationWithService) => mapOperationToOption(inventory),
+    (operation: OperationWithService) => mapOperationToOption(operation),
     [],
   );
 
@@ -67,8 +67,8 @@ export function OperationSearchAutocomplete({
     isLoading,
     hasSearched,
   } = useAsyncSearchOptions({
-    queryKey: "inventory-search",
-    fetchItems: fetchInventories,
+    queryKey: "operation-search",
+    fetchItems: fetchOperations,
     mapToOption,
     enabled: companyReady,
     queryExtra: { companyId },
@@ -105,11 +105,11 @@ export function OperationSearchAutocomplete({
       createOption={
         allowCreate
           ? {
-              getLabel: () => "Crear inventario",
+              getLabel: () => "Crear operación",
               getDescription: (query) =>
                 query
-                  ? `No se encontraron inventarios para "${query}"`
-                  : "No se encontraron inventarios",
+                  ? `No se encontraron operaciones para "${query}"`
+                  : "No se encontraron operaciones",
               onSelect: () => navigate("/operations/new"),
             }
           : undefined

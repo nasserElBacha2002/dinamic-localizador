@@ -7,12 +7,12 @@ import { serviceRepository } from "../repositories/service.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
 const COMPANY_ID = "company-1";
-const STORE_ID = "store-1";
+const SERVICE_ID = "service-1";
 const FUTURE_START = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 const FUTURE_END = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString();
 
-const activeStore = {
-  id: STORE_ID,
+const activeService = {
+  id: SERVICE_ID,
   name: "Service 1",
   address: "Addr",
   neighborhood: null,
@@ -28,8 +28,8 @@ const activeStore = {
 };
 
 const createdOperation = {
-  id: "inventory-1",
-  serviceId: STORE_ID,
+  id: "operation-1",
+  serviceId: SERVICE_ID,
   scheduledStart: FUTURE_START,
   scheduledEnd: FUTURE_END,
   earlyToleranceMinutes: 45,
@@ -53,7 +53,7 @@ describe("operationService.create", () => {
     const { operationService } = await import("./operation.service");
 
     let resolverCompanyId = "";
-    mock.method(companyOperationalDefaultsResolver, "getInventoryDefaults", async (companyId) => {
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async (companyId) => {
       resolverCompanyId = companyId;
       return {
         companyId,
@@ -62,7 +62,7 @@ describe("operationService.create", () => {
         source: "company_settings" as const,
       };
     });
-    mock.method(serviceRepository, "findById", async () => activeStore);
+    mock.method(serviceRepository, "findById", async () => activeService);
     mock.method(operationRepository, "create", async (_companyId, input) => ({
       ...createdOperation,
       earlyToleranceMinutes: input.earlyToleranceMinutes!,
@@ -70,7 +70,7 @@ describe("operationService.create", () => {
     }));
 
     const result = await operationService.create(COMPANY_ID, {
-      serviceId: STORE_ID,
+      serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
     });
@@ -88,7 +88,7 @@ describe("operationService.create", () => {
     const { operationService } = await import("./operation.service");
 
     let resolverCalls = 0;
-    mock.method(companyOperationalDefaultsResolver, "getInventoryDefaults", async () => {
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => {
       resolverCalls += 1;
       return {
         companyId: COMPANY_ID,
@@ -97,7 +97,7 @@ describe("operationService.create", () => {
         source: "company_settings" as const,
       };
     });
-    mock.method(serviceRepository, "findById", async () => activeStore);
+    mock.method(serviceRepository, "findById", async () => activeService);
     mock.method(operationRepository, "create", async (_companyId, input) => ({
       ...createdOperation,
       earlyToleranceMinutes: input.earlyToleranceMinutes!,
@@ -105,7 +105,7 @@ describe("operationService.create", () => {
     }));
 
     const result = await operationService.create(COMPANY_ID, {
-      serviceId: STORE_ID,
+      serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
       earlyToleranceMinutes: 10,
@@ -119,10 +119,10 @@ describe("operationService.create", () => {
 
   it("rejects negative tolerances at schema validation layer", async () => {
     setupUnitTestEnv();
-    const { createInventorySchema } = await import("../schemas/operation.schema");
+    const { createOperationSchema } = await import("../schemas/operation.schema");
 
-    const parsed = createInventorySchema.safeParse({
-      serviceId: STORE_ID,
+    const parsed = createOperationSchema.safeParse({
+      serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
       earlyToleranceMinutes: -1,
@@ -132,7 +132,7 @@ describe("operationService.create", () => {
     assert.equal(parsed.success, false);
   });
 
-  it("rejects inactive stores before resolving defaults", async () => {
+  it("rejects inactive services before resolving defaults", async () => {
     setupUnitTestEnv();
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
@@ -140,7 +140,7 @@ describe("operationService.create", () => {
     const { operationService } = await import("./operation.service");
 
     let resolverCalls = 0;
-    mock.method(companyOperationalDefaultsResolver, "getInventoryDefaults", async () => {
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => {
       resolverCalls += 1;
       return {
         companyId: COMPANY_ID,
@@ -149,16 +149,16 @@ describe("operationService.create", () => {
         source: "company_settings" as const,
       };
     });
-    mock.method(serviceRepository, "findById", async () => ({ ...activeStore, active: false }));
+    mock.method(serviceRepository, "findById", async () => ({ ...activeService, active: false }));
 
     await assert.rejects(
       () =>
         operationService.create(COMPANY_ID, {
-          serviceId: STORE_ID,
+          serviceId: SERVICE_ID,
           scheduledStart: FUTURE_START,
           scheduledEnd: FUTURE_END,
         }),
-      (error: unknown) => error instanceof AppError && error.code === "STORE_INACTIVE",
+      (error: unknown) => error instanceof AppError && error.code === "SERVICE_INACTIVE",
     );
     assert.equal(resolverCalls, 0);
   });
@@ -169,7 +169,7 @@ describe("operationService.create", () => {
     const { operationService } = await import("./operation.service");
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);
-    mock.method(serviceRepository, "findById", async () => activeStore);
+    mock.method(serviceRepository, "findById", async () => activeService);
     mock.method(operationRepository, "create", async (_companyId, input) => ({
       ...createdOperation,
       earlyToleranceMinutes: input.earlyToleranceMinutes!,
@@ -177,7 +177,7 @@ describe("operationService.create", () => {
     }));
 
     const result = await operationService.create(COMPANY_ID, {
-      serviceId: STORE_ID,
+      serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
     });

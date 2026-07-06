@@ -2,7 +2,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { botSessionRepository } from "../repositories/bot-session.repository";
-import type { BotSession, BotSessionContext, InventorySelectionOption } from "../types/twilio.types";
+import type { BotSession, BotSessionContext, OperationSelectionOption } from "../types/twilio.types";
 import {
   buildSessionExpiresAt,
   isSessionActive,
@@ -185,12 +185,12 @@ export const botSessionService = {
     }
   },
 
-  async createInventorySelectionSession(
+  async createOperationSelectionSession(
     companyId: string,
     input: {
     employeeId: string;
     phoneNumber: string;
-    options: InventorySelectionOption[];
+    options: OperationSelectionOption[];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -201,15 +201,15 @@ export const botSessionService = {
             employeeId: input.employeeId,
             operationId: null,
             phoneNumber: input.phoneNumber,
-            state: "WAITING_INVENTORY_SELECTION",
-            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            state: "WAITING_OPERATION_SELECTION",
+            contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
           transaction,
         );
       });
 
-      console.info("[bot-session] inventory selection session created", {
+      console.info("[bot-session] operation selection session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
         options: input.options.length,
@@ -234,7 +234,7 @@ export const botSessionService = {
     }
   },
 
-  async selectInventoryAndRenewExpiration(
+  async selectOperationAndRenewExpiration(
     companyId: string,
     sessionId: string,
     operationId: string,
@@ -252,7 +252,7 @@ export const botSessionService = {
         return { kind: "expired" };
       }
 
-      if (valid.state !== "WAITING_INVENTORY_SELECTION") {
+      if (valid.state !== "WAITING_OPERATION_SELECTION") {
         return { kind: "invalid" };
       }
 
@@ -273,7 +273,7 @@ export const botSessionService = {
         return { kind: "invalid" };
       }
 
-      console.info("[bot-session] session renewed after inventory selection", {
+      console.info("[bot-session] session renewed after operation selection", {
         sessionId: updated.id,
         operationId,
         expiresAt: updated.expiresAt,
@@ -328,12 +328,12 @@ export const botSessionService = {
     }
   },
 
-  async createCheckoutInventorySelectionSession(
+  async createCheckoutOperationSelectionSession(
     companyId: string,
     input: {
     employeeId: string;
     phoneNumber: string;
-    options: InventorySelectionOption[];
+    options: OperationSelectionOption[];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -344,15 +344,15 @@ export const botSessionService = {
             employeeId: input.employeeId,
             operationId: null,
             phoneNumber: input.phoneNumber,
-            state: "WAITING_CHECKOUT_INVENTORY_SELECTION",
-            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            state: "WAITING_CHECKOUT_OPERATION_SELECTION",
+            contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
           transaction,
         );
       });
 
-      console.info("[bot-session] checkout inventory selection session created", {
+      console.info("[bot-session] checkout operation selection session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
         options: input.options.length,
@@ -373,7 +373,7 @@ export const botSessionService = {
     }
   },
 
-  async selectCheckoutInventoryAndRenewExpiration(
+  async selectCheckoutOperationAndRenewExpiration(
     companyId: string,
     sessionId: string,
     operationId: string,
@@ -388,7 +388,7 @@ export const botSessionService = {
         return { kind: "expired" };
       }
 
-      if (valid.state !== "WAITING_CHECKOUT_INVENTORY_SELECTION") {
+      if (valid.state !== "WAITING_CHECKOUT_OPERATION_SELECTION") {
         return { kind: "invalid" };
       }
 
@@ -418,7 +418,7 @@ export const botSessionService = {
     input: {
       employeeId: string;
       phoneNumber: string;
-      options: InventorySelectionOption[];
+      options: OperationSelectionOption[];
     },
   ): Promise<BotSession> {
     try {
@@ -431,7 +431,7 @@ export const botSessionService = {
             operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CONFIRM_ATTENDANCE_SELECTION",
-            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
           transaction,
@@ -464,7 +464,7 @@ export const botSessionService = {
     input: {
       employeeId: string;
       phoneNumber: string;
-      options: InventorySelectionOption[];
+      options: OperationSelectionOption[];
     },
   ): Promise<BotSession> {
     try {
@@ -477,7 +477,7 @@ export const botSessionService = {
             operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_UNAVAILABILITY_SELECTION",
-            contextJson: JSON.stringify({ inventoryOptions: input.options }),
+            contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
           transaction,

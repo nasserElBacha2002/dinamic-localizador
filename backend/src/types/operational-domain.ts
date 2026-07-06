@@ -8,30 +8,6 @@ import type {
 } from "./domain";
 
 /**
- * Legacy documentation aliases — do not use in new code.
- * @deprecated Use {@link Service}
- */
-export type Store = Service;
-
-/**
- * Legacy documentation aliases — do not use in new code.
- * @deprecated Use {@link Operation}
- */
-export type Inventory = Operation;
-
-/**
- * Legacy documentation aliases — do not use in new code.
- * @deprecated Use {@link OperationWithService}
- */
-export type InventoryWithStore = OperationWithService;
-
-/**
- * Legacy documentation aliases — do not use in new code.
- * @deprecated Use {@link OperationEmployeeAssignment}
- */
-export type InventoryEmployeeAssignment = OperationEmployeeAssignment;
-
-/**
  * Conceptual alias for {@link Service}.
  *
  * Physical table: `operational_locations`. Product term: "Servicio".

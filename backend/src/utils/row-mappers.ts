@@ -33,13 +33,13 @@ export const mapEmployeeRow = (row: Record<string, unknown>): Employee => ({
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
 
-const parseStoreFormat = (value: unknown): string | null => {
+const parseServiceFormat = (value: unknown): string | null => {
   if (!value) {
     return null;
   }
 
-  const storeFormat = String(value).trim();
-  return storeFormat.length > 0 ? storeFormat : null;
+  const serviceFormat = String(value).trim();
+  return serviceFormat.length > 0 ? serviceFormat : null;
 };
 
 export const mapServiceRow = (row: Record<string, unknown>): Service => ({
@@ -48,7 +48,7 @@ export const mapServiceRow = (row: Record<string, unknown>): Service => ({
   address: row.address ? String(row.address) : null,
   neighborhood: row.neighborhood ? String(row.neighborhood) : null,
   locality: row.locality ? String(row.locality) : null,
-  storeFormat: parseStoreFormat(row.store_format),
+  storeFormat: parseServiceFormat(row.store_format),
   latitude: Number(row.latitude),
   longitude: Number(row.longitude),
   allowedRadiusMeters: Number(row.allowed_radius_meters),

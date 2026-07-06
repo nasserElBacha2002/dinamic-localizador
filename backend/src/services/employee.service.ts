@@ -87,8 +87,8 @@ export const employeeService = {
       if (hasSchedules) {
         throw new AppError(
           409,
-          "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_INVENTORIES",
-          "No se puede desactivar un empleado con inventarios activos o programados",
+          "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
+          "No se puede desactivar un empleado con operaciones activas o programadas",
         );
       }
     }
@@ -106,8 +106,8 @@ export const employeeService = {
     if (hasSchedules) {
       throw new AppError(
         409,
-        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_INVENTORIES",
-        "No se puede desactivar un empleado con inventarios activos o programados",
+        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
+        "No se puede desactivar un empleado con operaciones activas o programadas",
       );
     }
 

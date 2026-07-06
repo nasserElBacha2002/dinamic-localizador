@@ -6,15 +6,15 @@ import { isOperationAssignable } from "../utils/operation-status";
 
 export const operationAssignmentService = {
   async assignEmployee(companyId: string, operationId: string, employeeId: string) {
-    const inventory = await operationRepository.findById(companyId, operationId);
-    if (!inventory) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
-    if (!isOperationAssignable(inventory.status)) {
+    if (!isOperationAssignable(operation.status)) {
       throw new AppError(
         409,
-        "INVENTORY_NOT_ASSIGNABLE",
-        "No se puede asignar empleados a inventarios cancelados o completados",
+        "OPERATION_NOT_ASSIGNABLE",
+        "No se puede asignar empleados a operaciones canceladas o completadas",
       );
     }
 
@@ -28,24 +28,24 @@ export const operationAssignmentService = {
 
     const exists = await operationEmployeeRepository.exists(companyId, operationId, employeeId);
     if (exists) {
-      throw new AppError(409, "INVENTORY_EMPLOYEE_ALREADY_ASSIGNED", "La asignación ya existe");
+      throw new AppError(409, "OPERATION_EMPLOYEE_ALREADY_ASSIGNED", "La asignación ya existe");
     }
 
     return operationEmployeeRepository.assign(companyId, operationId, employeeId);
   },
 
   async listAssignedEmployees(companyId: string, operationId: string) {
-    const inventory = await operationRepository.findById(companyId, operationId);
-    if (!inventory) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
     return operationEmployeeRepository.listByOperation(companyId, operationId);
   },
 
   async unassignEmployee(companyId: string, operationId: string, employeeId: string) {
-    const inventory = await operationRepository.findById(companyId, operationId);
-    if (!inventory) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
 
     const hasAttendance = await operationEmployeeRepository.hasAttendanceRecord(
@@ -63,7 +63,7 @@ export const operationAssignmentService = {
 
     const removed = await operationEmployeeRepository.remove(companyId, operationId, employeeId);
     if (!removed) {
-      throw new AppError(404, "INVENTORY_EMPLOYEE_NOT_ASSIGNED", "La asignación no existe");
+      throw new AppError(404, "OPERATION_EMPLOYEE_NOT_ASSIGNED", "La asignación no existe");
     }
   },
 };

@@ -1,3 +1,4 @@
+import { resolveOperationOptionsFromSessionContext } from "../../utils/legacy-operation-session-context";
 import { botSessionService } from "../bot-session.service";
 import { employeeWorkdayService } from "../employee-workday.service";
 import { INVALID_SELECTION_MESSAGE } from "../bot/bot-response.builder";
@@ -6,8 +7,8 @@ import { isAssignmentSelectionSessionState } from "../../utils/bot-session-state
 import { parseOptionalAssignmentSelection } from "../../utils/assignment-intent";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import {
-  isValidInventorySelection,
-  parseInventorySelectionIndex,
+  isValidOperationSelection,
+  parseOperationSelectionIndex,
 } from "../bot/bot-operation.selector";
 import { logModuleBlocked } from "./module-session-gate";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
@@ -41,10 +42,10 @@ export const handleActiveAssignmentSelectionSession = async (
     return null;
   }
 
-  const selection = parseInventorySelectionIndex(ctx.body);
-  const options = botSessionService.parseContext(session.contextJson).inventoryOptions ?? [];
+  const selection = parseOperationSelectionIndex(ctx.body);
+  const options = resolveOperationOptionsFromSessionContext(botSessionService.parseContext(session.contextJson)) ?? [];
 
-  if (!isValidInventorySelection(selection, options.length)) {
+  if (!isValidOperationSelection(selection, options.length)) {
     return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
   }
 
@@ -89,7 +90,7 @@ const handleAssignmentSelectionFlow = async (
 
   const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
   if (explicitSelection !== null) {
-    if (!isValidInventorySelection(explicitSelection, assignments.length)) {
+    if (!isValidOperationSelection(explicitSelection, assignments.length)) {
       return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
     }
 
@@ -122,7 +123,7 @@ export const handleConfirmAttendanceIntent = async (
   setLastDetectedIntent("confirm-attendance");
   const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
-    logModuleBlocked(ctx.companyId, "inventory_operations");
+    logModuleBlocked(ctx.companyId, "operations");
     return respond(ctx, handlers, blockedMessage);
   }
 
@@ -155,7 +156,7 @@ export const handleUnavailabilityIntent = async (
   setLastDetectedIntent("report-unavailability");
   const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
-    logModuleBlocked(ctx.companyId, "inventory_operations");
+    logModuleBlocked(ctx.companyId, "operations");
     return respond(ctx, handlers, blockedMessage);
   }
 

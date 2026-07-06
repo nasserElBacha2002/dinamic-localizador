@@ -33,17 +33,17 @@ export function BotQuickActions({
       <Button
         size="compact-xs"
         variant="default"
-        disabled={isBusy || !locationPresets?.storeLocation}
+        disabled={isBusy || !locationPresets?.serviceLocation}
         onClick={() => {
-          if (locationPresets?.storeLocation) {
+          if (locationPresets?.serviceLocation) {
             void onSendLocation(
-              locationPresets.storeLocation.latitude,
-              locationPresets.storeLocation.longitude,
+              locationPresets.serviceLocation.latitude,
+              locationPresets.serviceLocation.longitude,
             );
           }
         }}
       >
-        Ubicación de tienda
+        Ubicación del servicio
       </Button>
       <Button
         size="compact-xs"

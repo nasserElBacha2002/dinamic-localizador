@@ -33,7 +33,7 @@ type _OperationAttendanceRecordIsAttendanceRecord = AssertAssignable<
 >;
 
 const sampleStore: Service = {
-  id: "store-1",
+  id: "service-1",
   name: "Centro",
   address: "Calle 1",
   neighborhood: null,
@@ -49,7 +49,7 @@ const sampleStore: Service = {
 };
 
 const sampleOperation: Operation = {
-  id: "inventory-1",
+  id: "operation-1",
   serviceId: sampleStore.id,
   scheduledStart: "2026-01-01T20:30:00.000Z",
   scheduledEnd: "2026-01-02T03:00:00.000Z",
@@ -112,7 +112,7 @@ const sampleAttendance: AttendanceRecord = {
 describe("operational domain aliases", () => {
   it("assigns Service-shaped objects to OperationalLocation", () => {
     const location: OperationalLocation = sampleStore;
-    assert.equal(location.id, "store-1");
+    assert.equal(location.id, "service-1");
     assert.equal(location.allowedRadiusMeters, 150);
   });
 

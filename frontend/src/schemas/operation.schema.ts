@@ -4,7 +4,7 @@ import { datetimeLocalToIso } from "../utils/dates";
 const operationStatusSchema = z.enum(["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 
 const operationFormBaseSchema = z.object({
-  serviceId: z.string().uuid("Seleccioná una tienda"),
+  serviceId: z.string().uuid("Seleccioná un servicio"),
   scheduledStart: z.string().min(1, "La fecha de inicio es obligatoria"),
   scheduledEnd: z.string().optional().or(z.literal("")),
   earlyToleranceMinutes: z.number().int().min(0, "No puede ser negativa"),

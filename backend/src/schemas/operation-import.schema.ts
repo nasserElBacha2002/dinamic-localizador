@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-export const inventoryImportPreviewSchema = z
+export const operationImportPreviewSchema = z
   .object({
     fileName: z.string().trim().min(1, "El nombre del archivo es obligatorio"),
     fileContentBase64: z.string().min(1, "El archivo es obligatorio"),
@@ -11,8 +11,8 @@ export const inventoryImportPreviewSchema = z
     }),
   );
 
-export const inventoryImportConfirmRowSchema = z.object({
-  serviceId: z.string().uuid("UUID de tienda inválido"),
+export const operationImportConfirmRowSchema = z.object({
+  serviceId: z.string().uuid("UUID de servicio inválido"),
   scheduledStart: z.string().datetime({ offset: true }),
   scheduledEnd: z.string().datetime({ offset: true }),
   earlyToleranceMinutes: z.number().int().min(0),
@@ -20,9 +20,9 @@ export const inventoryImportConfirmRowSchema = z.object({
   notes: z.string().trim().max(1000).nullable().optional(),
 });
 
-export const inventoryImportConfirmSchema = z.object({
-  rows: z.array(inventoryImportConfirmRowSchema).min(1, "Debe enviar al menos una fila"),
+export const operationImportConfirmSchema = z.object({
+  rows: z.array(operationImportConfirmRowSchema).min(1, "Debe enviar al menos una fila"),
 });
 
-export type OperationImportPreviewInput = z.infer<typeof inventoryImportPreviewSchema>;
-export type OperationImportConfirmInput = z.infer<typeof inventoryImportConfirmSchema>;
+export type OperationImportPreviewInput = z.infer<typeof operationImportPreviewSchema>;
+export type OperationImportConfirmInput = z.infer<typeof operationImportConfirmSchema>;

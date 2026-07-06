@@ -1,4 +1,4 @@
-.storeFormLayout {
+.serviceFormLayout {
   display: grid;
   gap: var(--mantine-spacing-lg);
   grid-template-columns: minmax(0, 1fr);
@@ -27,7 +27,7 @@
 }
 
 @media (min-width: 62em) {
-  .storeFormLayout {
+  .serviceFormLayout {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
     grid-template-areas:
       "info map"

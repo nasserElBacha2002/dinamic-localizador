@@ -105,7 +105,7 @@ export const evaluatePunctuality = (
   };
 };
 
-export const isWithinInventoryWindow = (
+export const isWithinOperationWindow = (
   at: Date,
   scheduledStart: Date,
   earlyToleranceMinutes: number,

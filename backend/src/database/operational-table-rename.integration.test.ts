@@ -55,10 +55,10 @@ describeDatabaseIntegration("operational table rename schema (Phase 2.7)", () =>
     assert.ok(await objectId("dbo.operation_assignments", "U"));
   });
 
-  it("has legacy compatibility views", async () => {
-    assert.ok(await objectId("dbo.stores", "V"));
-    assert.ok(await objectId("dbo.inventories", "V"));
-    assert.ok(await objectId("dbo.inventory_employees", "V"));
+  it("does not expose legacy compatibility views after migration 037", async () => {
+    assert.equal(await objectId("dbo.stores", "V"), null);
+    assert.equal(await objectId("dbo.inventories", "V"), null);
+    assert.equal(await objectId("dbo.inventory_employees", "V"), null);
   });
 
   it("keeps employees and attendance_records as physical tables", async () => {
@@ -74,26 +74,19 @@ describeDatabaseIntegration("operational table rename schema (Phase 2.7)", () =>
     assert.ok(await columnExists("attendance_records", "employee_id"));
   });
 
-  it("can SELECT from legacy compatibility views", async () => {
-    const pool = getPool();
-    await pool.request().query("SELECT TOP 1 * FROM dbo.stores");
-    await pool.request().query("SELECT TOP 1 * FROM dbo.inventories");
-    await pool.request().query("SELECT TOP 1 * FROM dbo.inventory_employees");
-  });
-
   it("repository list methods work against physical tables", async () => {
     const companyId = await requireDinamicCompanyId();
 
-    const stores = await serviceRepository.list(companyId, { page: 1, limit: 5 });
-    assert.ok(Array.isArray(stores.items));
+    const services = await serviceRepository.list(companyId, { page: 1, limit: 5 });
+    assert.ok(Array.isArray(services.items));
 
-    const inventories = await operationRepository.list(companyId, { page: 1, limit: 5 });
-    assert.ok(Array.isArray(inventories.items));
+    const operations = await operationRepository.list(companyId, { page: 1, limit: 5 });
+    assert.ok(Array.isArray(operations.items));
 
-    const storeLookups = await lookupRepository.listServices(companyId, { limit: 5 });
-    assert.ok(Array.isArray(storeLookups));
+    const serviceLookups = await lookupRepository.listServices(companyId, { limit: 5 });
+    assert.ok(Array.isArray(serviceLookups));
 
-    const inventoryLookups = await lookupRepository.listOperations(companyId, { limit: 5 });
-    assert.ok(Array.isArray(inventoryLookups));
+    const operationLookups = await lookupRepository.listOperations(companyId, { limit: 5 });
+    assert.ok(Array.isArray(operationLookups));
   });
 });

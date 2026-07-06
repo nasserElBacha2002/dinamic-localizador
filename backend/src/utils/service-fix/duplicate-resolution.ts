@@ -1,27 +1,27 @@
-import { compareCurrentAddressToOfficial, pickReportRowForStore, recomputeCoordinateDistance } from "./current-db";
+import { compareCurrentAddressToOfficial, pickReportRowForService, recomputeCoordinateDistance } from "./current-db";
 import type { CurrentDbState, DuplicateResolutionRow, ReconciliationReportRow } from "./types";
 import type { OfficialSourceRow } from "./csv";
 
 export const officialDuplicateNumbers = (
-  duplicateRows: Array<{ source: string; storeNumber: string }>,
+  duplicateRows: Array<{ source: string; serviceNumber: string }>,
   officialRows: OfficialSourceRow[],
 ): Set<string> => {
   const numbers = new Set<string>();
 
   for (const row of duplicateRows) {
-    if (row.source === "official" && row.storeNumber) {
-      numbers.add(row.storeNumber);
+    if (row.source === "official" && row.serviceNumber) {
+      numbers.add(row.serviceNumber);
     }
   }
 
   const officialCounts = new Map<string, number>();
   for (const row of officialRows) {
-    officialCounts.set(row.storeNumber, (officialCounts.get(row.storeNumber) ?? 0) + 1);
+    officialCounts.set(row.serviceNumber, (officialCounts.get(row.serviceNumber) ?? 0) + 1);
   }
 
-  for (const [storeNumber, count] of officialCounts.entries()) {
+  for (const [serviceNumber, count] of officialCounts.entries()) {
     if (count > 1) {
-      numbers.add(storeNumber);
+      numbers.add(serviceNumber);
     }
   }
 
@@ -35,12 +35,12 @@ export const buildDuplicateResolutionFromCurrentDb = (
 ): DuplicateResolutionRow[] => {
   const resolution: DuplicateResolutionRow[] = [];
 
-  for (const [storeNumber, rows] of currentDb.duplicateNumericGroups.entries()) {
+  for (const [serviceNumber, rows] of currentDb.duplicateNumericGroups.entries()) {
     if (rows.length <= 1) {
       continue;
     }
 
-    const report = pickReportRowForStore(storeNumber, reportRows);
+    const report = pickReportRowForService(serviceNumber, reportRows);
     const officialAddress = report?.carrefourOfficialAddress ?? "";
 
     const scored = rows.map((row) => {
@@ -82,7 +82,7 @@ export const buildDuplicateResolutionFromCurrentDb = (
     const winner = scored[0];
     const runnerUp = scored[1];
     const ambiguous =
-      officialDupes.has(storeNumber) ||
+      officialDupes.has(serviceNumber) ||
       (winner &&
         runnerUp &&
         Math.abs(winner.score - runnerUp.score) < 50 &&
@@ -93,7 +93,7 @@ export const buildDuplicateResolutionFromCurrentDb = (
     for (const entry of scored) {
       const isWinner = entry.row.id === winner?.row.id;
       resolution.push({
-        storeNumber,
+        serviceNumber,
         dbId: entry.row.id,
         address: entry.row.address,
         latitude: entry.row.latitude === null ? "" : String(entry.row.latitude),
@@ -108,8 +108,8 @@ export const buildDuplicateResolutionFromCurrentDb = (
           : ambiguous
             ? "review"
             : "deactivate",
-        reason: officialDupes.has(storeNumber)
-          ? "Official source has duplicate store numbers"
+        reason: officialDupes.has(serviceNumber)
+          ? "Official source has duplicate service numbers"
           : isWinner
             ? ambiguous
               ? "Top candidate but duplicate group is ambiguous"

@@ -15,7 +15,7 @@ const punctualityStatusSchema = z.enum([
 ]);
 
 export const createAttendanceSchema = z.object({
-  operationId: z.string().uuid("UUID de inventario inválido"),
+  operationId: z.string().uuid("UUID de operación inválido"),
   employeeId: z.string().uuid("UUID de empleado inválido"),
   receivedLatitude: z.number().min(-90).max(90),
   receivedLongitude: z.number().min(-180).max(180),

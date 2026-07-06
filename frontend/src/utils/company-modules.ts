@@ -5,13 +5,13 @@ import { hasAnyPermission } from "./permissions";
 
 export const CORE_COMPANY_MODULE_KEYS: CompanyModuleKey[] = [
   "attendance",
-  "inventory_operations",
+  "operations",
   "absences",
 ];
 
 export const COMPANY_MODULE_LABELS: Record<CompanyModuleKey, string> = {
   attendance: terminology.attendance.plural,
-  inventory_operations: terminology.operation.plural,
+  operations: terminology.operation.plural,
   absences: terminology.absence.plural,
   reports: "Reportes",
   bot_simulator: "Simulador de Bot",
@@ -19,7 +19,7 @@ export const COMPANY_MODULE_LABELS: Record<CompanyModuleKey, string> = {
 
 export const COMPANY_MODULE_DESCRIPTIONS: Record<CompanyModuleKey, string> = {
   attendance: "Permite registrar y revisar asistencias.",
-  inventory_operations: `Habilita ${terminology.service.plural.toLowerCase()}, ${terminology.operation.plural.toLowerCase()} y asignaciones.`,
+  operations: `Habilita ${terminology.service.plural.toLowerCase()}, ${terminology.operation.plural.toLowerCase()} y asignaciones.`,
   absences: "Permite gestionar tipos y solicitudes de ausencia.",
   reports: "Habilita estadísticas y reportes.",
   bot_simulator: "Permite probar flujos conversacionales del bot.",
@@ -98,7 +98,7 @@ export function getAdminNavItems({
 
   if (!modulesLoading) {
     if (
-      canShowNavItem(modules, permissions, ["attendance", "inventory_operations", "absences"], [
+      canShowNavItem(modules, permissions, ["attendance", "operations", "absences"], [
         "employees:read",
         "employees:manage",
       ])
@@ -107,7 +107,7 @@ export function getAdminNavItems({
     }
 
     if (
-      canShowNavItem(modules, permissions, ["inventory_operations"], [
+      canShowNavItem(modules, permissions, ["operations"], [
         "services:read",
         "services:manage",
       ])
@@ -116,7 +116,7 @@ export function getAdminNavItems({
     }
 
     if (
-      canShowNavItem(modules, permissions, ["inventory_operations"], [
+      canShowNavItem(modules, permissions, ["operations"], [
         "operations:read",
         "operations:manage",
       ])
@@ -151,7 +151,7 @@ export function getAdminNavItems({
     }
 
     if (
-      canShowNavItem(modules, permissions, ["inventory_operations"], ["operations:manage"])
+      canShowNavItem(modules, permissions, ["operations"], ["operations:manage"])
     ) {
       items.push({ label: "Importación", path: "/operations/import", section: "tools" });
     }

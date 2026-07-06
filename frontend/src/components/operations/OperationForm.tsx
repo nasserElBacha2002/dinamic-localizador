@@ -23,7 +23,7 @@ import { getAllowedStatusOptions, isOperationEditable } from "../../utils/operat
 import { operationStatusLabels } from "../../utils/labels";
 import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
 
-export const INVENTORY_DETAIL_FORM_ID = "inventory-detail-form";
+export const OPERATION_DETAIL_FORM_ID = "operation-detail-form";
 
 interface OperationFormProps {
   mode: "create" | "edit";
@@ -79,7 +79,7 @@ export function OperationForm({
     [currentStatus, mode],
   );
 
-  const storeFieldDisabled = mode === "edit" && !isOperationEditable(currentStatus);
+  const serviceFieldDisabled = mode === "edit" && !isOperationEditable(currentStatus);
   const minScheduledStart = mode === "create" ? getCurrentDatetimeLocal() : undefined;
 
   const formContent = (
@@ -98,7 +98,7 @@ export function OperationForm({
                 activeOnly={mode === "create"}
                 error={Boolean(fieldState.error)}
                 helperText={fieldState.error?.message ?? "Buscá por nombre o dirección"}
-                disabled={storeFieldDisabled}
+                disabled={serviceFieldDisabled}
                 required
               />
             )}

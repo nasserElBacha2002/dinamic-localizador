@@ -15,7 +15,7 @@ import type { CompanyModule } from "../types/company-module";
 
 const allEnabledModules: CompanyModule[] = [
   "attendance",
-  "inventory_operations",
+  "operations",
   "absences",
   "reports",
   "bot_simulator",
@@ -120,8 +120,8 @@ describe("company modules frontend module", () => {
     assert.ok(labels.includes(terminology.attendance.plural));
   });
 
-  it("exposes generic module labels while keeping inventory_operations key", () => {
-    assert.equal(COMPANY_MODULE_LABELS.inventory_operations, terminology.operation.plural);
+  it("exposes generic module labels while keeping operations key", () => {
+    assert.equal(COMPANY_MODULE_LABELS.operations, terminology.operation.plural);
     assert.equal(COMPANY_MODULE_LABELS.attendance, terminology.attendance.plural);
   });
 
@@ -139,7 +139,7 @@ describe("company modules frontend module", () => {
   it("validates at least one core module remains enabled", () => {
     const disabledCore = allEnabledModules.map((module) => ({
       ...module,
-      isEnabled: !["attendance", "inventory_operations", "absences"].includes(module.moduleKey),
+      isEnabled: !["attendance", "operations", "absences"].includes(module.moduleKey),
     }));
     assert.equal(
       validateCompanyModulesUpdate(disabledCore),
@@ -154,7 +154,7 @@ describe("company modules frontend module", () => {
     assert.equal(isModuleEnabled(modules, "attendance"), true);
     assert.equal(isModuleEnabled(modules, "reports"), false);
     assert.equal(
-      isAnyModuleEnabled(modules, ["attendance", "inventory_operations", "absences"]),
+      isAnyModuleEnabled(modules, ["attendance", "operations", "absences"]),
       true,
     );
   });

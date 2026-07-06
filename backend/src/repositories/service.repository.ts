@@ -1,4 +1,4 @@
-// Phase 2.3/2.7: Service remains the technical API model; physical table is operational_locations (stores view).
+// Phase 2.3/2.7: Service remains the technical API model; physical table is operational_locations.
 // Conceptually this represents an OperationalLocation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";

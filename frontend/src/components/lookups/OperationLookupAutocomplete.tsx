@@ -20,11 +20,11 @@ interface OperationLookupAutocompleteProps {
   placeholder?: string;
 }
 
-function mapOperationLookupToOption(inventory: OperationLookup): SearchAutocompleteOption {
+function mapOperationLookupToOption(operation: OperationLookup): SearchAutocompleteOption {
   return {
-    id: inventory.id,
-    label: `${inventory.serviceName} · ${formatDateTime(inventory.startDate)}`,
-    description: inventory.endDate ? formatDateTime(inventory.endDate) : undefined,
+    id: operation.id,
+    label: `${operation.serviceName} · ${formatDateTime(operation.startDate)}`,
+    description: operation.endDate ? formatDateTime(operation.endDate) : undefined,
   };
 }
 
@@ -40,7 +40,7 @@ export function OperationLookupAutocomplete({
 }: OperationLookupAutocompleteProps) {
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 
-  const fetchInventories = useCallback(
+  const fetchOperations = useCallback(
     async (search: string) =>
       getOperationLookups({
         search: search || undefined,
@@ -50,13 +50,13 @@ export function OperationLookupAutocomplete({
   );
 
   const mapToOption = useCallback(
-    (inventory: OperationLookup) => mapOperationLookupToOption(inventory),
+    (operation: OperationLookup) => mapOperationLookupToOption(operation),
     [],
   );
 
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
     queryKey: "operation-lookup-search",
-    fetchItems: fetchInventories,
+    fetchItems: fetchOperations,
     mapToOption,
     enabled: companyReady,
     queryExtra: { companyId },

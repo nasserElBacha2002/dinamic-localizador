@@ -14,6 +14,7 @@ const baseAssignment = (
   operationId: "inv-1",
   serviceName: "Carrefour Palermo",
   serviceAddress: "Av. Santa Fe 1234, Palermo",
+  serviceLocality: "Buenos Aires",
   serviceLatitude: -34.6037,
   serviceLongitude: -58.3816,
   scheduledStart: "2026-07-08T23:30:00.000Z",
@@ -55,8 +56,7 @@ describe("employee assignment formatting", () => {
       true,
     );
     const text = lines.join("\n");
-    assert.match(text, /Carrefour Palermo/);
-    assert.match(text, /Dirección: Av\. Santa Fe 1234, Palermo/);
+    assert.match(text, /Carrefour Palermo - Av\. Santa Fe 1234, Palermo - Buenos Aires/);
     assert.match(text, /Mapa: https:\/\/www\.google\.com\/maps\/search/);
     assert.match(text, /Llegada: pendiente/);
   });
@@ -68,8 +68,7 @@ describe("employee assignment formatting", () => {
       "America/Argentina/Buenos_Aires",
     );
     const text = lines.join("\n");
-    assert.match(text, /Fecha:/);
-    assert.match(text, /Dirección:/);
+    assert.match(text, /Carrefour Palermo - Av\. Santa Fe 1234, Palermo - Buenos Aires/);
     assert.match(text, /Mapa:/);
   });
 });

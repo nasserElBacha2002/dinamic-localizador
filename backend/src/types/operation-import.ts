@@ -5,11 +5,11 @@ export interface OperationImportPreviewRow {
   rowNumber: number;
   format: OperationImportFormat;
   punto: string;
-  tienda: string;
+  legacyLocation: string;
   serviceId: string | null;
   serviceName: string | null;
   rawFecha: string;
-  parsedInventoryDate: string | null;
+  parsedOperationDate: string | null;
   fechaInicio: string;
   fechaFin: string;
   scheduledStart: string | null;

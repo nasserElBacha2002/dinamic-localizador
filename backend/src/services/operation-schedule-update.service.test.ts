@@ -5,13 +5,13 @@ import { operationRepository } from "../repositories/operation.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
 const COMPANY_ID = "company-1";
-const INVENTORY_ID = "inventory-1";
-const STORE_ID = "store-1";
+const OPERATION_ID = "operation-1";
+const SERVICE_ID = "service-1";
 const ORIGINAL_START = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString();
 
 const editableOperation = {
-  id: INVENTORY_ID,
-  serviceId: STORE_ID,
+  id: OPERATION_ID,
+  serviceId: SERVICE_ID,
   scheduledStart: ORIGINAL_START,
   scheduledEnd: null,
   earlyToleranceMinutes: 60,
@@ -40,7 +40,7 @@ describe("operationService.update schedule confirmation reset", () => {
     }));
     mock.method(
       employeeAssignmentQueryRepository,
-      "resetConfirmationsForInventoryScheduleChange",
+      "resetConfirmationsForOperationScheduleChange",
       async () => {
         resetCalls += 1;
         return 1;
@@ -48,7 +48,7 @@ describe("operationService.update schedule confirmation reset", () => {
     );
     mock.method(auditService, "log", async () => undefined);
 
-    await operationService.update(COMPANY_ID, INVENTORY_ID, {
+    await operationService.update(COMPANY_ID, OPERATION_ID, {
       notes: "updated notes",
     });
 

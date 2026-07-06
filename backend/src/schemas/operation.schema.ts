@@ -8,9 +8,9 @@ const operationStatusSchema = z.enum([
   "CANCELLED",
 ]);
 
-export const createInventorySchema = z
+export const createOperationSchema = z
   .object({
-    serviceId: z.string().uuid("UUID de tienda inválido"),
+    serviceId: z.string().uuid("UUID de servicio inválido"),
     scheduledStart: z.string().datetime({ offset: true }),
     scheduledEnd: z.string().datetime({ offset: true }).optional().nullable(),
     earlyToleranceMinutes: z.number().int().min(0).optional(),
@@ -31,7 +31,7 @@ export const createInventorySchema = z
     },
   );
 
-export const updateInventorySchema = z
+export const updateOperationSchema = z
   .object({
     serviceId: z.string().uuid().optional(),
     scheduledStart: z.string().datetime({ offset: true }).optional(),
@@ -49,9 +49,9 @@ export const operationIdParamSchema = z.object({
   id: z.string().uuid("UUID inválido"),
 });
 
-export const inventoryAttendanceSummaryQuerySchema = paginationQuerySchema;
+export const operationAttendanceSummaryQuerySchema = paginationQuerySchema;
 
-export const listInventoriesQuerySchema = paginationQuerySchema
+export const listOperationsQuerySchema = paginationQuerySchema
   .merge(dateRangeSchema)
   .merge(searchFilterSchema)
   .merge(tableSortSchema)
@@ -60,6 +60,6 @@ export const listInventoriesQuerySchema = paginationQuerySchema
     serviceId: z.string().uuid().optional(),
   });
 
-export type CreateOperationInput = z.infer<typeof createInventorySchema>;
-export type UpdateOperationInput = z.infer<typeof updateInventorySchema>;
-export type ListOperationsQuery = z.infer<typeof listInventoriesQuerySchema>;
+export type CreateOperationInput = z.infer<typeof createOperationSchema>;
+export type UpdateOperationInput = z.infer<typeof updateOperationSchema>;
+export type ListOperationsQuery = z.infer<typeof listOperationsQuerySchema>;

@@ -23,6 +23,8 @@ export interface AttendanceReminderCandidate {
   employeeName: string;
   employeePhoneNumber: string;
   serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
   scheduledStart: string;
   scheduledEnd: string | null;
   scheduleVersion: number;

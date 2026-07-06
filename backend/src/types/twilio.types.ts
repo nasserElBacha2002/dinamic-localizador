@@ -1,8 +1,8 @@
 export type BotSessionState =
   | "WAITING_LOCATION"
-  | "WAITING_INVENTORY_SELECTION"
+  | "WAITING_OPERATION_SELECTION"
   | "WAITING_CHECKOUT_LOCATION"
-  | "WAITING_CHECKOUT_INVENTORY_SELECTION"
+  | "WAITING_CHECKOUT_OPERATION_SELECTION"
   | "WAITING_ABSENCE_TYPE"
   | "WAITING_ABSENCE_START_DATE"
   | "WAITING_ABSENCE_END_DATE"
@@ -31,14 +31,18 @@ export interface BotSession {
   updatedAt: string;
 }
 
-export interface InventorySelectionOption {
+export interface OperationSelectionOption {
   operationId: string;
   serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
   scheduledStart: string;
 }
 
 export interface BotSessionContext {
-  inventoryOptions?: InventorySelectionOption[];
+  operationOptions?: OperationSelectionOption[];
+  /** @deprecated Read compat — see legacy-operation-session-context.ts */
+  inventoryOptions?: OperationSelectionOption[];
   flow?: "ABSENCE_REQUEST";
   attendanceConfirmation?: {
     operationId: string;
@@ -93,6 +97,8 @@ export interface CompatibleOperation {
   id: string;
   serviceId: string;
   serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
   serviceLatitude: number;
   serviceLongitude: number;
   allowedRadiusMeters: number;

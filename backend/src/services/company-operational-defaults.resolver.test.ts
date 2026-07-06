@@ -28,7 +28,7 @@ describe("companyOperationalDefaultsResolver", () => {
     mock.restoreAll();
   });
 
-  it("getInventoryDefaults returns persisted company tolerances", async () => {
+  it("getOperationDefaults returns persisted company tolerances", async () => {
     setupUnitTestEnv();
     const { companySettingsRepository } = await import("../repositories/company-settings.repository");
     const { companyOperationalDefaultsResolver } = await import(
@@ -37,13 +37,13 @@ describe("companyOperationalDefaultsResolver", () => {
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => fullSettings);
 
-    const defaults = await companyOperationalDefaultsResolver.getInventoryDefaults(companyId);
+    const defaults = await companyOperationalDefaultsResolver.getOperationDefaults(companyId);
     assert.equal(defaults.earlyToleranceMinutes, 45);
     assert.equal(defaults.lateToleranceMinutes, 75);
     assert.equal(defaults.source, "company_settings");
   });
 
-  it("getInventoryDefaults falls back to application defaults when row is missing", async () => {
+  it("getOperationDefaults falls back to application defaults when row is missing", async () => {
     setupUnitTestEnv();
     const { companySettingsRepository } = await import("../repositories/company-settings.repository");
     const { companyOperationalDefaultsResolver } = await import(
@@ -52,7 +52,7 @@ describe("companyOperationalDefaultsResolver", () => {
 
     mock.method(companySettingsRepository, "findByCompanyId", async () => null);
 
-    const defaults = await companyOperationalDefaultsResolver.getInventoryDefaults(companyId);
+    const defaults = await companyOperationalDefaultsResolver.getOperationDefaults(companyId);
     assert.equal(
       defaults.earlyToleranceMinutes,
       DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultEarlyArrivalToleranceMinutes,

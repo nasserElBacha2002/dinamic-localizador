@@ -1,7 +1,7 @@
 import * as XLSX from "xlsx";
 import { isValidHHmm } from "./sql-time";
 
-export interface InventoryDateParts {
+export interface OperationImportDateParts {
   year: number;
   month: number;
   day: number;
@@ -32,7 +32,7 @@ const parseScheduleTime = (time: string): { hour: number; minute: number } => {
   };
 };
 
-export const normalizeInventoryDateParts = (parts: InventoryDateParts): InventoryDateParts => {
+export const normalizeOperationImportDateParts = (parts: OperationImportDateParts): OperationImportDateParts => {
   if (!parts.hasTime || isMidnight(parts.hour, parts.minute)) {
     return {
       ...parts,
@@ -62,7 +62,7 @@ const addDays = (year: number, month: number, day: number, days: number) => {
   };
 };
 
-export const parseExcelSerialNumber = (serial: number): InventoryDateParts | null => {
+export const parseExcelSerialNumber = (serial: number): OperationImportDateParts | null => {
   if (!Number.isFinite(serial) || serial <= 0) {
     return null;
   }
@@ -72,7 +72,7 @@ export const parseExcelSerialNumber = (serial: number): InventoryDateParts | nul
     return null;
   }
 
-  return normalizeInventoryDateParts({
+  return normalizeOperationImportDateParts({
     year: parsed.y,
     month: parsed.m,
     day: parsed.d,
@@ -82,7 +82,7 @@ export const parseExcelSerialNumber = (serial: number): InventoryDateParts | nul
   });
 };
 
-export const formatInventoryDateParts = (parts: InventoryDateParts): string => {
+export const formatOperationImportDateParts = (parts: OperationImportDateParts): string => {
   const date = `${pad2(parts.day)}/${pad2(parts.month)}/${parts.year}`;
   if (!parts.hasTime) {
     return date;
@@ -121,9 +121,9 @@ export const createOperationImportDateTimeUtils = (
     };
   };
 
-  const dateToInventoryDateParts = (value: Date): InventoryDateParts => {
+  const dateToOperationImportDateParts = (value: Date): OperationImportDateParts => {
     const parts = dateTimeFormatter.formatToParts(value);
-    return normalizeInventoryDateParts({
+    return normalizeOperationImportDateParts({
       year: Number(getPart(parts, "year")),
       month: Number(getPart(parts, "month")),
       day: Number(getPart(parts, "day")),
@@ -164,7 +164,7 @@ export const createOperationImportDateTimeUtils = (
 
   const parseOperationImportDateValue = (
     raw: string,
-  ): { parts: InventoryDateParts } | { error: string } => {
+  ): { parts: OperationImportDateParts } | { error: string } => {
     const value = raw.trim();
     if (!value) {
       return { error: "La fecha es obligatoria" };
@@ -185,13 +185,13 @@ export const createOperationImportDateTimeUtils = (
         return { error: "Fecha inválida" };
       }
 
-      return { parts: dateToInventoryDateParts(parsed) };
+      return { parts: dateToOperationImportDateParts(parsed) };
     }
 
     const isoDateMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})$/);
     if (isoDateMatch) {
       return {
-        parts: normalizeInventoryDateParts({
+        parts: normalizeOperationImportDateParts({
           year: Number(isoDateMatch[1]),
           month: Number(isoDateMatch[2]),
           day: Number(isoDateMatch[3]),
@@ -205,7 +205,7 @@ export const createOperationImportDateTimeUtils = (
     const isoDateTimeMatch = value.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{1,2}):(\d{2})$/);
     if (isoDateTimeMatch) {
       return {
-        parts: normalizeInventoryDateParts({
+        parts: normalizeOperationImportDateParts({
           year: Number(isoDateTimeMatch[1]),
           month: Number(isoDateTimeMatch[2]),
           day: Number(isoDateTimeMatch[3]),
@@ -219,7 +219,7 @@ export const createOperationImportDateTimeUtils = (
     const latinDateMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
     if (latinDateMatch) {
       return {
-        parts: normalizeInventoryDateParts({
+        parts: normalizeOperationImportDateParts({
           year: Number(latinDateMatch[3]),
           month: Number(latinDateMatch[2]),
           day: Number(latinDateMatch[1]),
@@ -233,7 +233,7 @@ export const createOperationImportDateTimeUtils = (
     const latinDateTimeMatch = value.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})\s+(\d{1,2}):(\d{2})$/);
     if (latinDateTimeMatch) {
       return {
-        parts: normalizeInventoryDateParts({
+        parts: normalizeOperationImportDateParts({
           year: Number(latinDateTimeMatch[3]),
           month: Number(latinDateTimeMatch[2]),
           day: Number(latinDateTimeMatch[1]),
@@ -265,13 +265,13 @@ export const createOperationImportDateTimeUtils = (
     return localPartsToIso(year, month, day, hour, minute);
   };
 
-  const buildClientInventorySchedule = (
+  const buildClientOperationSchedule = (
     rawFecha: string,
   ):
     | {
         scheduledStart: string;
         scheduledEnd: string;
-        parsedInventoryDate: string;
+        parsedOperationDate: string;
         scheduledStartDisplay: string;
         scheduledEndDisplay: string;
       }
@@ -308,7 +308,7 @@ export const createOperationImportDateTimeUtils = (
     return {
       scheduledStart: startIso.iso,
       scheduledEnd: endIso.iso,
-      parsedInventoryDate: formatInventoryDateParts({
+      parsedOperationDate: formatOperationImportDateParts({
         year,
         month,
         day,
@@ -326,8 +326,8 @@ export const createOperationImportDateTimeUtils = (
   return {
     parseOperationImportDateValue,
     parseOperationImportDateTime,
-    buildClientInventorySchedule,
+    buildClientOperationSchedule,
     localPartsToIso,
-    dateToInventoryDateParts,
+    dateToOperationImportDateParts,
   };
 };

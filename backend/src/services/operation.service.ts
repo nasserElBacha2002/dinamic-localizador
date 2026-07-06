@@ -16,12 +16,12 @@ import { auditService } from "./audit.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
 import { canTransitionOperationStatus, isOperationEditable } from "../utils/operation-status";
 import {
-  isInventoryStartInPast,
+  isOperationStartInPast,
   resolveLifecycleOperationStatus,
 } from "../utils/operation-lifecycle";
 import { buildPaginationMeta } from "../utils/pagination";
 
-const validateInventoryDates = (
+const validateOperationDates = (
   scheduledStart: string,
   scheduledEnd: string | null | undefined,
 ): void => {
@@ -31,35 +31,35 @@ const validateInventoryDates = (
   if (new Date(scheduledEnd) <= new Date(scheduledStart)) {
     throw new AppError(
       400,
-      "INVALID_INVENTORY_DATE_RANGE",
+      "INVALID_OPERATION_DATE_RANGE",
       "scheduledEnd debe ser posterior a scheduledStart",
     );
   }
 };
 
-const validateInventoryStartNotInPast = (scheduledStart: string): void => {
-  if (isInventoryStartInPast(scheduledStart)) {
+const validateOperationStartNotInPast = (scheduledStart: string): void => {
+  if (isOperationStartInPast(scheduledStart)) {
     throw new AppError(
       400,
-      "INVENTORY_START_IN_PAST",
-      "No se puede programar un inventario con fecha de inicio en el pasado",
+      "OPERATION_START_IN_PAST",
+      "No se puede programar una operación con fecha de inicio en el pasado",
     );
   }
 };
 
-type InventoryRecord = NonNullable<Awaited<ReturnType<typeof operationRepository.findById>>>;
+type OperationRecord = NonNullable<Awaited<ReturnType<typeof operationRepository.findById>>>;
 
 const syncLifecycleStatus = async (
   companyId: string,
-  inventory: InventoryRecord,
-): Promise<InventoryRecord> => {
-  const resolvedStatus = resolveLifecycleOperationStatus(inventory);
-  if (resolvedStatus === inventory.status || !canTransitionOperationStatus(inventory.status, resolvedStatus)) {
-    return inventory;
+  operation: OperationRecord,
+): Promise<OperationRecord> => {
+  const resolvedStatus = resolveLifecycleOperationStatus(operation);
+  if (resolvedStatus === operation.status || !canTransitionOperationStatus(operation.status, resolvedStatus)) {
+    return operation;
   }
 
-  const updated = await operationRepository.update(companyId, inventory.id, { status: resolvedStatus });
-  return updated ?? inventory;
+  const updated = await operationRepository.update(companyId, operation.id, { status: resolvedStatus });
+  return updated ?? operation;
 };
 
 type ResolvedCreateOperationInput = CreateOperationInput & {
@@ -71,29 +71,29 @@ const resolveCreateOperationInput = async (
   companyId: string,
   input: CreateOperationInput,
 ): Promise<ResolvedCreateOperationInput> => {
-  const inventoryDefaults =
-    await companyOperationalDefaultsResolver.getInventoryDefaults(companyId);
+  const operationDefaults =
+    await companyOperationalDefaultsResolver.getOperationDefaults(companyId);
 
   return {
     ...input,
     earlyToleranceMinutes:
-      input.earlyToleranceMinutes ?? inventoryDefaults.earlyToleranceMinutes,
-    lateToleranceMinutes: input.lateToleranceMinutes ?? inventoryDefaults.lateToleranceMinutes,
+      input.earlyToleranceMinutes ?? operationDefaults.earlyToleranceMinutes,
+    lateToleranceMinutes: input.lateToleranceMinutes ?? operationDefaults.lateToleranceMinutes,
   };
 };
 
 export const operationService = {
   async create(companyId: string, input: CreateOperationInput) {
-    const store = await serviceRepository.findById(companyId, input.serviceId);
-    if (!store) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+    const service = await serviceRepository.findById(companyId, input.serviceId);
+    if (!service) {
+      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
     }
-    if (!store.active) {
-      throw new AppError(409, "STORE_INACTIVE", "No se puede crear inventario para una tienda inactiva");
+    if (!service.active) {
+      throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
     }
 
-    validateInventoryDates(input.scheduledStart, input.scheduledEnd);
-    validateInventoryStartNotInPast(input.scheduledStart);
+    validateOperationDates(input.scheduledStart, input.scheduledEnd);
+    validateOperationStartNotInPast(input.scheduledStart);
 
     const resolvedInput = await resolveCreateOperationInput(companyId, input);
     return operationRepository.create(companyId, resolvedInput);
@@ -109,17 +109,17 @@ export const operationService = {
   },
 
   async getById(companyId: string, id: string) {
-    const inventory = await operationRepository.findById(companyId, id);
-    if (!inventory) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+    const operation = await operationRepository.findById(companyId, id);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
-    return syncLifecycleStatus(companyId, inventory);
+    return syncLifecycleStatus(companyId, operation);
   },
 
   async getDetailById(companyId: string, id: string) {
     const detail = await operationRepository.findDetailById(companyId, id);
     if (!detail) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
 
     const synced = await syncLifecycleStatus(companyId, detail);
@@ -135,43 +135,43 @@ export const operationService = {
     if (!isOperationEditable(current.status)) {
       throw new AppError(
         409,
-        "INVENTORY_NOT_EDITABLE",
-        "No se puede modificar un inventario completado o cancelado",
+        "OPERATION_NOT_EDITABLE",
+        "No se puede modificar una operación completada o cancelada",
       );
     }
 
     if (input.serviceId) {
-      const store = await serviceRepository.findById(companyId, input.serviceId);
-      if (!store) {
-        throw new AppError(404, "SERVICE_NOT_FOUND", "Tienda no encontrada");
+      const service = await serviceRepository.findById(companyId, input.serviceId);
+      if (!service) {
+        throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
       }
-      if (!store.active) {
-        throw new AppError(409, "STORE_INACTIVE", "No se puede asociar una tienda inactiva");
+      if (!service.active) {
+        throw new AppError(409, "SERVICE_INACTIVE", "No se puede asociar un servicio inactivo");
       }
     }
 
     if (input.status && !canTransitionOperationStatus(current.status, input.status)) {
       throw new AppError(
         409,
-        "INVALID_INVENTORY_STATUS_TRANSITION",
-        "Transición de estado de inventario no permitida",
+        "INVALID_OPERATION_STATUS_TRANSITION",
+        "Transición de estado de operación no permitida",
       );
     }
 
-    validateInventoryDates(
+    validateOperationDates(
       input.scheduledStart ?? current.scheduledStart,
       input.scheduledEnd === undefined ? current.scheduledEnd : input.scheduledEnd,
     );
 
     if (input.scheduledStart && input.scheduledStart !== current.scheduledStart) {
-      validateInventoryStartNotInPast(input.scheduledStart);
+      validateOperationStartNotInPast(input.scheduledStart);
     }
 
     const scheduleChanged =
       input.scheduledStart !== undefined &&
       new Date(input.scheduledStart).getTime() !== new Date(current.scheduledStart).getTime();
 
-    let updated: InventoryRecord | null;
+    let updated: OperationRecord | null;
     let resetCount = 0;
 
     if (scheduleChanged) {
@@ -182,10 +182,10 @@ export const operationService = {
       try {
         updated = await operationRepository.update(companyId, id, input, transaction);
         if (!updated) {
-          throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
         }
 
-        resetCount = await employeeAssignmentQueryRepository.resetConfirmationsForInventoryScheduleChange(
+        resetCount = await employeeAssignmentQueryRepository.resetConfirmationsForOperationScheduleChange(
           companyId,
           id,
           transaction,
@@ -199,12 +199,12 @@ export const operationService = {
     } else {
       updated = await operationRepository.update(companyId, id, input);
       if (!updated) {
-        throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
     }
 
     if (resetCount > 0) {
-      console.info("[inventory] confirmation state reset after schedule change", {
+      console.info("[operation] confirmation state reset after schedule change", {
         companyId,
         operationId: id,
         resetAssignments: resetCount,
@@ -228,14 +228,14 @@ export const operationService = {
     if (!canTransitionOperationStatus(current.status, "CANCELLED")) {
       throw new AppError(
         409,
-        "INVALID_INVENTORY_STATUS_TRANSITION",
-        "No se puede cancelar un inventario en este estado",
+        "INVALID_OPERATION_STATUS_TRANSITION",
+        "No se puede cancelar una operación en este estado",
       );
     }
 
     const cancelled = await operationRepository.cancel(companyId, id);
     if (!cancelled) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
 
     await auditService.log(companyId, {
@@ -258,16 +258,16 @@ export const operationService = {
       limit,
     );
     if (!summary) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Inventario no encontrado");
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
 
-    const syncedOperation = await syncLifecycleStatus(companyId, summary.inventory);
+    const syncedOperation = await syncLifecycleStatus(companyId, summary.operation);
 
     return {
-      inventory: {
-        ...summary.inventory,
+      operation: {
+        ...summary.operation,
         ...syncedOperation,
-        store: summary.store,
+        service: summary.service,
       },
       summary: summary.summary,
       employees: summary.employees,

@@ -1,11 +1,11 @@
-export const INVENTORY_STATUSES = [
+export const OPERATION_STATUSES = [
   "SCHEDULED",
   "IN_PROGRESS",
   "COMPLETED",
   "CANCELLED",
 ] as const;
 
-export type OperationStatus = (typeof INVENTORY_STATUSES)[number];
+export type OperationStatus = (typeof OPERATION_STATUSES)[number];
 
 const ALLOWED_TRANSITIONS: Record<OperationStatus, OperationStatus[]> = {
   SCHEDULED: ["IN_PROGRESS", "CANCELLED"],

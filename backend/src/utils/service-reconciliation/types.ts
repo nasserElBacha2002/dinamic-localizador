@@ -1,12 +1,12 @@
-export interface OfficialStore {
-  storeNumber: string;
+export interface OfficialService {
+  serviceNumber: string;
   rawStoreId: string;
   officialAddress: string;
   neighborhood: string;
   locality: string;
 }
 
-export interface DatabaseStore {
+export interface DatabaseService {
   id: string;
   name: string;
   address: string;
@@ -16,7 +16,7 @@ export interface DatabaseStore {
   longitudeRaw: string;
   neighborhood: string;
   locality: string;
-  storeFormat: string;
+  serviceFormat: string;
   active: string;
   googlePlaceId: string;
   createdAt: string;
@@ -46,7 +46,7 @@ export interface GeocodingDiagnostics {
 }
 
 export interface ReconciliationRow {
-  storeNumber: string;
+  serviceNumber: string;
   status: ReconciliationStatus;
   carrefourOfficialAddress: string;
   dbAddress: string;
@@ -69,9 +69,9 @@ export interface ReconciliationRow {
   notes: string;
 }
 
-export interface DuplicateStoreReport {
+export interface DuplicateServiceReport {
   source: "official" | "database";
-  storeNumber: string;
+  serviceNumber: string;
   duplicateCount: number;
   dbId: string;
   dbAddress: string;
@@ -89,14 +89,14 @@ export interface DuplicateStoreReport {
 
 export interface ReconciliationStats {
   totalOfficialRows: number;
-  totalUniqueOfficialStoreNumbers: number;
+  totalUniqueOfficialServiceNumbers: number;
   totalDatabaseRows: number;
-  numericDatabaseStores: number;
+  numericDatabaseServices: number;
   ignoredNonNumericDatabaseRows: number;
-  matchedStores: number;
+  matchedServices: number;
   missingInDatabase: number;
   extraInDatabase: number;
-  duplicateStoreNumberGroups: number;
+  duplicateServiceNumberGroups: number;
   addressExactMatches: number;
   addressLikelyMatches: number;
   addressMismatches: number;
@@ -113,7 +113,7 @@ export interface ReconciliationResult {
   summary: ReconciliationRow[];
   missingInDatabase: ReconciliationRow[];
   extraInDatabase: ReconciliationRow[];
-  duplicates: DuplicateStoreReport[];
+  duplicates: DuplicateServiceReport[];
   addressMismatches: ReconciliationRow[];
   coordinateMismatches: ReconciliationRow[];
   stats: ReconciliationStats;

@@ -1,4 +1,4 @@
-export const normalizeStoreNumber = (value: string): string | null => {
+export const normalizeServiceNumber = (value: string): string | null => {
   const trimmed = value.trim();
   if (!trimmed) {
     return null;
@@ -16,4 +16,4 @@ export const normalizeStoreNumber = (value: string): string | null => {
   return null;
 };
 
-export const isNumericStoreName = (name: string): boolean => normalizeStoreNumber(name) !== null;
+export const isNumericServiceName = (name: string): boolean => normalizeServiceNumber(name) !== null;

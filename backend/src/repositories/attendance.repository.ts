@@ -330,10 +330,10 @@ export const attendanceRepository = {
         e.name AS employee_name,
         e.document_number AS employee_document_number,
         e.phone_number AS employee_phone_number,
-        i.scheduled_start AS inventory_scheduled_start,
+        i.scheduled_start AS operation_scheduled_start,
         s.name AS service_name,
-        s.address AS store_address,
-        s.allowed_radius_meters AS store_allowed_radius_meters,
+        s.address AS service_address,
+        s.allowed_radius_meters AS service_allowed_radius_meters,
         reviewer.name AS reviewer_name
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
@@ -377,7 +377,7 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findCheckoutEligibleInventories(
+  async findCheckoutEligibleOperations(
     companyId: string,
     employeeId: string,
   ): Promise<CheckoutEligibleOperation[]> {
@@ -397,8 +397,10 @@ export const attendanceRepository = {
         i.status,
         ar.id AS attendance_id,
         s.name AS service_name,
-        s.latitude AS store_latitude,
-        s.longitude AS store_longitude,
+        s.address AS service_address,
+        s.locality AS service_locality,
+        s.latitude AS service_latitude,
+        s.longitude AS service_longitude,
         s.allowed_radius_meters
       FROM attendance_records ar
       INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = @companyId
@@ -418,8 +420,10 @@ export const attendanceRepository = {
       id: String(row.id),
       serviceId: String(row.service_id),
       serviceName: String(row.service_name),
-      serviceLatitude: Number(row.store_latitude),
-      serviceLongitude: Number(row.store_longitude),
+      serviceAddress: row.service_address ? String(row.service_address) : null,
+      serviceLocality: row.service_locality ? String(row.service_locality) : null,
+      serviceLatitude: Number(row.service_latitude),
+      serviceLongitude: Number(row.service_longitude),
       allowedRadiusMeters: Number(row.allowed_radius_meters),
       scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
       scheduledEnd: row.scheduled_end

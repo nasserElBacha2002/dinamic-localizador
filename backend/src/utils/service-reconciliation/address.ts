@@ -36,7 +36,7 @@ const ABBREVIATION_RULES: Array<{ pattern: RegExp; replacement: string }> = [
 const stripAccents = (value: string): string =>
   value.normalize("NFD").replace(/\p{M}/gu, "");
 
-const stripStoreNumberPrefix = (value: string): string =>
+const stripServiceNumberPrefix = (value: string): string =>
   value.replace(/^\d+_/u, "").trim();
 
 const removePostalCodes = (value: string): string =>
@@ -59,7 +59,7 @@ const normalizeStreetNumberRanges = (value: string): string =>
 export const normalizeAddress = (address: string): string => {
   let normalized = stripAccents(address.trim().toLowerCase());
   normalized = normalized.replace(/_/g, " ");
-  normalized = stripStoreNumberPrefix(normalized);
+  normalized = stripServiceNumberPrefix(normalized);
   normalized = normalized.replace(/[.,;:!?'"()[\]]/g, " ");
   normalized = normalized.replace(/\s+/g, " ").trim();
   normalized = removePostalCodes(normalized);

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useParams } from "react-router-dom";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
@@ -69,6 +69,16 @@ function LazyPage({
   );
 }
 
+function LegacyOperationRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/operations/${id}` : "/operations"} replace />;
+}
+
+function LegacyServiceRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/services/${id}` : "/services"} replace />;
+}
+
 function ProtectedLayout() {
   return (
     <ProtectedRoute>
@@ -82,7 +92,7 @@ function ProtectedLayout() {
 }
 
 const employeeAccess = {
-  anyModuleOf: ["attendance", "inventory_operations", "absences"] as const,
+  anyModuleOf: ["attendance", "operations", "absences"] as const,
   requiredAnyPermission: ["employees:read", "employees:manage"] as const,
 };
 
@@ -92,7 +102,7 @@ const employeeManage = {
 };
 
 const serviceAccess = {
-  moduleKey: "inventory_operations" as const,
+  moduleKey: "operations" as const,
   requiredAnyPermission: ["services:read", "services:manage"] as const,
 };
 
@@ -102,7 +112,7 @@ const serviceManage = {
 };
 
 const operationAccess = {
-  moduleKey: "inventory_operations" as const,
+  moduleKey: "operations" as const,
   requiredAnyPermission: ["operations:read", "operations:manage"] as const,
 };
 
@@ -127,6 +137,13 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/inventories" element={<Navigate to="/operations" replace />} />
+        <Route path="/inventories/new" element={<Navigate to="/operations/new" replace />} />
+        <Route path="/inventories/import" element={<Navigate to="/operations/import" replace />} />
+        <Route path="/inventories/:id" element={<LegacyOperationRedirect />} />
+        <Route path="/stores" element={<Navigate to="/services" replace />} />
+        <Route path="/stores/new" element={<Navigate to="/services/new" replace />} />
+        <Route path="/stores/:id" element={<LegacyServiceRedirect />} />
         <Route
           path="/employees"
           element={

@@ -40,7 +40,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
     const serviceId = String(storeResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
-    const inventoryInsert = await pool
+    const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
@@ -52,7 +52,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         OUTPUT INSERTED.id
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const operationId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(operationInsert.recordset[0].id);
 
     const employeeInsert = await pool
       .request()
@@ -84,7 +84,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
       errorMessage: "markSent failed",
     });
 
-    const row = await attendanceNotificationRepository.findByInventoryEmployeeType(companyId, {
+    const row = await attendanceNotificationRepository.findByOperationEmployeeType(companyId, {
       operationId,
       employeeId,
       notificationType: "ATTENDANCE_CONFIRMATION_REMINDER",
@@ -126,7 +126,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
     const referenceAt = new Date();
     const scheduledStart = new Date(referenceAt.getTime() + 24 * 60 * 60 * 1000);
 
-    const inventoryInsert = await pool
+    const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
@@ -138,7 +138,7 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         OUTPUT INSERTED.id
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const operationId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(operationInsert.recordset[0].id);
 
     const employeeInsert = await pool
       .request()

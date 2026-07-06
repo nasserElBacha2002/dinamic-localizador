@@ -1,4 +1,4 @@
-import { normalizeAddress } from "../store-reconciliation/address";
+import { normalizeAddress } from "../service-reconciliation/address";
 import {
   isLabelOnlyOfficialAddress,
   isMalformedOfficialAddress,
@@ -6,8 +6,8 @@ import {
 import {
   compareCurrentAddressToOfficial,
   detectReportDrift,
-  getCurrentRowsForStoreNumber,
-  pickReportRowForStore,
+  getCurrentRowsForServiceNumber,
+  pickReportRowForService,
   recomputeCoordinateDistance,
   recomputeCoordinateStatus,
 } from "./current-db";
@@ -72,11 +72,11 @@ const classifyCoordinateFix = (
   };
 };
 
-const uniqueStoreNumbers = (rows: ReconciliationReportRow[]): string[] => {
+const uniqueServiceNumbers = (rows: ReconciliationReportRow[]): string[] => {
   const numbers = new Set<string>();
   for (const row of rows) {
-    if (row.storeNumber) {
-      numbers.add(row.storeNumber);
+    if (row.serviceNumber) {
+      numbers.add(row.serviceNumber);
     }
   }
   return [...numbers];
@@ -94,11 +94,11 @@ const appendNote = (base: string, notes: string[]): string => {
 };
 
 const resolveKeeperForDuplicateGroup = (
-  storeNumber: string,
+  serviceNumber: string,
   duplicateResolution: ReturnType<typeof buildDuplicateResolutionFromCurrentDb>,
 ): string | undefined =>
   duplicateResolution.find(
-    (entry) => entry.storeNumber === storeNumber && entry.recommendation === "keep",
+    (entry) => entry.serviceNumber === serviceNumber && entry.recommendation === "keep",
   )?.dbId;
 
 export const buildFixPlan = (
@@ -122,31 +122,31 @@ export const buildFixPlan = (
     officialDupes,
   );
 
-  const coordinateStoreNumbers = uniqueStoreNumbers([...summaryRows, ...coordinateMismatchRows]);
+  const coordinateServiceNumbers = uniqueServiceNumbers([...summaryRows, ...coordinateMismatchRows]);
   const processedCoordinateDbIds = new Set<string>();
 
-  for (const storeNumber of coordinateStoreNumbers) {
-    const currentRows = getCurrentRowsForStoreNumber(currentDb, storeNumber);
+  for (const serviceNumber of coordinateServiceNumbers) {
+    const currentRows = getCurrentRowsForServiceNumber(currentDb, serviceNumber);
 
     if (currentRows.length === 0) {
       skipped.push({
-        storeNumber,
+        serviceNumber,
         dbId: "",
-        skippedReason: "current_store_not_found",
+        skippedReason: "current_service_not_found",
         details: "Service number is not present in the connected database",
       });
       continue;
     }
 
     if (currentRows.length > 1) {
-      const keeperId = resolveKeeperForDuplicateGroup(storeNumber, duplicateResolution);
+      const keeperId = resolveKeeperForDuplicateGroup(serviceNumber, duplicateResolution);
       if (!keeperId) {
         for (const row of currentRows) {
           skipped.push({
-            storeNumber,
+            serviceNumber,
             dbId: row.id,
-            skippedReason: "current_store_duplicate_ambiguous",
-            details: "Multiple DB rows share this store number in the current environment",
+            skippedReason: "current_service_duplicate_ambiguous",
+            details: "Multiple DB rows share this service number in the current environment",
           });
         }
         continue;
@@ -155,9 +155,9 @@ export const buildFixPlan = (
       const nonKeepers = currentRows.filter((row) => row.id.toUpperCase() !== keeperId.toUpperCase());
       for (const row of nonKeepers) {
         skipped.push({
-          storeNumber,
+          serviceNumber,
           dbId: row.id,
-          skippedReason: "current_store_duplicate_ambiguous",
+          skippedReason: "current_service_duplicate_ambiguous",
           details: "Duplicate row is not the recommended keeper in the current environment",
         });
       }
@@ -169,7 +169,7 @@ export const buildFixPlan = (
         : currentRows.filter(
             (row) =>
               row.id.toUpperCase() ===
-              resolveKeeperForDuplicateGroup(storeNumber, duplicateResolution)?.toUpperCase(),
+              resolveKeeperForDuplicateGroup(serviceNumber, duplicateResolution)?.toUpperCase(),
           );
 
     for (const currentRow of targetRows) {
@@ -178,14 +178,14 @@ export const buildFixPlan = (
       }
       processedCoordinateDbIds.add(currentRow.id.toUpperCase());
 
-      const report = pickReportRowForStore(storeNumber, allReportRows, currentRow);
+      const report = pickReportRowForService(serviceNumber, allReportRows, currentRow);
       if (!report) {
         continue;
       }
 
       if (report.geocodingStatus !== "OK") {
         skipped.push({
-          storeNumber,
+          serviceNumber,
           dbId: currentRow.id,
           skippedReason: "geocoding_not_ok",
           details: report.geocodingErrorMessage || report.geocodingStatus,
@@ -195,7 +195,7 @@ export const buildFixPlan = (
 
       if (!hasCoordinates(report.geocodedLatitude, report.geocodedLongitude)) {
         skipped.push({
-          storeNumber,
+          serviceNumber,
           dbId: currentRow.id,
           skippedReason: "missing_geocoded_coordinates",
           details: "Geocoded latitude/longitude are required",
@@ -216,7 +216,7 @@ export const buildFixPlan = (
 
       if (distance === null) {
         skipped.push({
-          storeNumber,
+          serviceNumber,
           dbId: currentRow.id,
           skippedReason: "missing_distance",
           details: "Current DB coordinates are required to recompute distance",
@@ -227,7 +227,7 @@ export const buildFixPlan = (
       const coordinateStatus = recomputeCoordinateStatus(distance);
       if (coordinateStatus === "ok") {
         skipped.push({
-          storeNumber,
+          serviceNumber,
           dbId: currentRow.id,
           skippedReason: "current_coordinates_already_ok",
           details: `Recomputed distance to geocoded official address is ${distance.toFixed(2)} m`,
@@ -237,7 +237,7 @@ export const buildFixPlan = (
 
       if (coordinateStatus === "review" && !options.includeReviewCoordinates) {
         proposed.push({
-          storeNumber,
+          serviceNumber,
           dbId: currentRow.id,
           fixType: "REVIEW_COORDINATE_FIX",
           oldAddress: drift.currentAddress,
@@ -253,7 +253,7 @@ export const buildFixPlan = (
             `Update coordinates from geocoded official address (${distance.toFixed(2)} m away)`,
             drift.notes,
           ),
-          sqlComment: `store_number=${storeNumber} | REVIEW_COORDINATE_FIX | distance=${distance.toFixed(2)}m`,
+          sqlComment: `store_number=${serviceNumber} | REVIEW_COORDINATE_FIX | distance=${distance.toFixed(2)}m`,
         });
         continue;
       }
@@ -264,7 +264,7 @@ export const buildFixPlan = (
 
       const classification = classifyCoordinateFix(distance, options.includeReviewCoordinates);
       proposed.push({
-        storeNumber,
+        serviceNumber,
         dbId: currentRow.id,
         fixType: classification.fixType,
         oldAddress: drift.currentAddress,
@@ -280,22 +280,22 @@ export const buildFixPlan = (
           `Update coordinates from geocoded official address (${distance.toFixed(2)} m away)`,
           drift.notes,
         ),
-        sqlComment: `store_number=${storeNumber} | ${classification.fixType} | distance=${distance.toFixed(2)}m`,
+        sqlComment: `store_number=${serviceNumber} | ${classification.fixType} | distance=${distance.toFixed(2)}m`,
       });
     }
   }
 
-  const addressStoreNumbers = uniqueStoreNumbers([...summaryRows, ...addressMismatchRows]);
+  const addressServiceNumbers = uniqueServiceNumbers([...summaryRows, ...addressMismatchRows]);
   const processedAddressDbIds = new Set<string>();
 
-  for (const storeNumber of addressStoreNumbers) {
-    const currentRows = getCurrentRowsForStoreNumber(currentDb, storeNumber);
+  for (const serviceNumber of addressServiceNumbers) {
+    const currentRows = getCurrentRowsForServiceNumber(currentDb, serviceNumber);
     if (currentRows.length !== 1) {
       if (currentRows.length > 1) {
         skipped.push({
-          storeNumber,
+          serviceNumber,
           dbId: "",
-          skippedReason: "current_store_duplicate_ambiguous",
+          skippedReason: "current_service_duplicate_ambiguous",
           details: "Address update skipped for ambiguous duplicate group in current DB",
         });
       }
@@ -308,7 +308,7 @@ export const buildFixPlan = (
     }
     processedAddressDbIds.add(currentRow.id.toUpperCase());
 
-    const report = pickReportRowForStore(storeNumber, allReportRows, currentRow);
+    const report = pickReportRowForService(serviceNumber, allReportRows, currentRow);
     if (!report) {
       continue;
     }
@@ -321,7 +321,7 @@ export const buildFixPlan = (
 
     if (addressComparison.status === "exact_match" || addressComparison.status === "likely_match") {
       skipped.push({
-        storeNumber,
+        serviceNumber,
         dbId: currentRow.id,
         skippedReason: "current_address_already_ok",
         details: `Current DB address already matches official source (${addressComparison.status})`,
@@ -331,7 +331,7 @@ export const buildFixPlan = (
 
     if (addressComparison.addressDifferenceReason === "range_or_format_difference") {
       skipped.push({
-        storeNumber,
+        serviceNumber,
         dbId: currentRow.id,
         skippedReason: "range_or_format_difference",
         details: "Address difference is only formatting/range",
@@ -344,7 +344,7 @@ export const buildFixPlan = (
       isMalformedOfficialAddress(report.carrefourOfficialAddress)
     ) {
       skipped.push({
-        storeNumber,
+        serviceNumber,
         dbId: currentRow.id,
         skippedReason: "official_address_not_safe_to_apply",
         details: report.carrefourOfficialAddress,
@@ -352,18 +352,18 @@ export const buildFixPlan = (
       continue;
     }
 
-    if (officialDupes.has(storeNumber)) {
+    if (officialDupes.has(serviceNumber)) {
       skipped.push({
-        storeNumber,
+        serviceNumber,
         dbId: currentRow.id,
-        skippedReason: "official_duplicate_store_number",
-        details: "Official source has duplicate store numbers",
+        skippedReason: "official_duplicate_service_number",
+        details: "Official source has duplicate service numbers",
       });
       continue;
     }
 
     proposed.push({
-      storeNumber,
+      serviceNumber,
       dbId: currentRow.id,
       fixType: "AUTO_FIX_ADDRESS",
       oldAddress: drift.currentAddress,
@@ -380,35 +380,35 @@ export const buildFixPlan = (
       confidence: "medium",
       applyByDefault: false,
       reason: appendNote("Align DB address with Carrefour official source", drift.notes),
-      sqlComment: `store_number=${storeNumber} | AUTO_FIX_ADDRESS`,
+      sqlComment: `store_number=${serviceNumber} | AUTO_FIX_ADDRESS`,
     });
   }
 
-  const officialByNumber = new Map(officialRows.map((row) => [row.storeNumber, row]));
+  const officialByNumber = new Map(officialRows.map((row) => [row.serviceNumber, row]));
   const missingInserts: MissingInsertPlanRow[] = [];
   const missingRequiresCoordinates: MissingInsertPlanRow[] = [];
 
   for (const row of missingRows) {
-    if (getCurrentRowsForStoreNumber(currentDb, row.storeNumber).length > 0) {
+    if (getCurrentRowsForServiceNumber(currentDb, row.serviceNumber).length > 0) {
       skipped.push({
-        storeNumber: row.storeNumber,
+        serviceNumber: row.serviceNumber,
         dbId: "",
-        skippedReason: "missing_store_already_exists_in_current_db",
+        skippedReason: "missing_service_already_exists_in_current_db",
         details: "Service number already exists in the connected database",
       });
       continue;
     }
 
-    const official = officialByNumber.get(row.storeNumber);
+    const official = officialByNumber.get(row.serviceNumber);
     const officialAddress = official?.officialAddress || row.carrefourOfficialAddress;
-    const geocodedFromSummary = pickReportRowForStore(row.storeNumber, summaryRows);
+    const geocodedFromSummary = pickReportRowForService(row.serviceNumber, summaryRows);
 
     const latitude = geocodedFromSummary?.geocodedLatitude ?? "";
     const longitude = geocodedFromSummary?.geocodedLongitude ?? "";
     const canInsert = hasCoordinates(latitude, longitude) && !isLabelOnlyOfficialAddress(officialAddress);
 
     const planRow: MissingInsertPlanRow = {
-      storeNumber: row.storeNumber,
+      serviceNumber: row.serviceNumber,
       officialAddress,
       neighborhood: official?.neighborhood ?? "",
       locality: official?.locality ?? "",
@@ -426,7 +426,7 @@ export const buildFixPlan = (
       missingInserts.push(planRow);
       if (options.insertMissing) {
         proposed.push({
-          storeNumber: row.storeNumber,
+          serviceNumber: row.serviceNumber,
           dbId: "",
           fixType: "INSERT_MISSING",
           oldAddress: "",
@@ -438,8 +438,8 @@ export const buildFixPlan = (
           distanceMeters: null,
           confidence: "medium",
           applyByDefault: false,
-          reason: "Insert missing store from Carrefour official source",
-          sqlComment: `store_number=${row.storeNumber} | INSERT_MISSING`,
+          reason: "Insert missing service from Carrefour official source",
+          sqlComment: `store_number=${row.serviceNumber} | INSERT_MISSING`,
         });
       }
     } else {
@@ -447,7 +447,7 @@ export const buildFixPlan = (
     }
   }
 
-  for (const currentRow of currentDb.nonNumericStores) {
+  for (const currentRow of currentDb.nonNumericServices) {
     const normalizedDbAddress = normalizeAddress(currentRow.address);
     const missingMatch = missingRows.find(
       (row) => normalizeAddress(row.carrefourOfficialAddress) === normalizedDbAddress,
@@ -457,12 +457,12 @@ export const buildFixPlan = (
       continue;
     }
 
-    if (getCurrentRowsForStoreNumber(currentDb, missingMatch.storeNumber).length > 0) {
+    if (getCurrentRowsForServiceNumber(currentDb, missingMatch.serviceNumber).length > 0) {
       continue;
     }
 
     proposed.push({
-      storeNumber: missingMatch.storeNumber,
+      serviceNumber: missingMatch.serviceNumber,
       dbId: currentRow.id,
       fixType: "RENAME_NONNUMERIC",
       oldAddress: currentRow.address,
@@ -475,14 +475,14 @@ export const buildFixPlan = (
       confidence: "medium",
       applyByDefault: false,
       reason: options.fixNonnumericNames
-        ? `Rename non-numeric store '${currentRow.name}' to official store number ${missingMatch.storeNumber}`
-        : `Possible non-numeric match '${currentRow.name}' for missing store ${missingMatch.storeNumber}`,
-      sqlComment: `store_number=${missingMatch.storeNumber} | RENAME_NONNUMERIC | old_name=${currentRow.name}`,
+        ? `Rename non-numeric service '${currentRow.name}' to official service number ${missingMatch.serviceNumber}`
+        : `Possible non-numeric match '${currentRow.name}' for missing service ${missingMatch.serviceNumber}`,
+      sqlComment: `store_number=${missingMatch.serviceNumber} | RENAME_NONNUMERIC | old_name=${currentRow.name}`,
     });
 
     if (!options.fixNonnumericNames) {
       skipped.push({
-        storeNumber: missingMatch.storeNumber,
+        serviceNumber: missingMatch.serviceNumber,
         dbId: currentRow.id,
         skippedReason: "possible_nonnumeric_match_requires_manual_or_flag",
         details: `Current DB row '${currentRow.name}' matches missing official address`,
@@ -495,17 +495,17 @@ export const buildFixPlan = (
       continue;
     }
 
-    if (officialDupes.has(entry.storeNumber)) {
+    if (officialDupes.has(entry.serviceNumber)) {
       continue;
     }
 
-    const currentRow = currentDb.stores.find((row) => row.id.toUpperCase() === entry.dbId.toUpperCase());
+    const currentRow = currentDb.services.find((row) => row.id.toUpperCase() === entry.dbId.toUpperCase());
     if (!currentRow?.active) {
       continue;
     }
 
     const keeper = duplicateResolution.find(
-      (row) => row.storeNumber === entry.storeNumber && row.recommendation === "keep",
+      (row) => row.serviceNumber === entry.serviceNumber && row.recommendation === "keep",
     );
     const keeperDistance = parseNumber(keeper?.coordinateDistanceMeters ?? "");
     const entryDistance = parseNumber(entry.coordinateDistanceMeters ?? "");
@@ -519,7 +519,7 @@ export const buildFixPlan = (
 
     if (!highConfidence) {
       skipped.push({
-        storeNumber: entry.storeNumber,
+        serviceNumber: entry.serviceNumber,
         dbId: entry.dbId,
         skippedReason: "ambiguous_duplicate_group",
         details: "Duplicate deactivation requires high confidence",
@@ -528,7 +528,7 @@ export const buildFixPlan = (
     }
 
     proposed.push({
-      storeNumber: entry.storeNumber,
+      serviceNumber: entry.serviceNumber,
       dbId: entry.dbId,
       fixType: "DEACTIVATE_DUPLICATE",
       oldAddress: entry.address,
@@ -541,20 +541,20 @@ export const buildFixPlan = (
       confidence: "high",
       applyByDefault: false,
       reason: "Deactivate duplicate DB row with worse coordinate/address match",
-      sqlComment: `store_number=${entry.storeNumber} | DEACTIVATE_DUPLICATE`,
+      sqlComment: `store_number=${entry.serviceNumber} | DEACTIVATE_DUPLICATE`,
     });
   }
 
   const extraRows = summaryRows.filter((row) => row.status === "extra_in_database");
   for (const row of extraRows) {
-    const currentRows = getCurrentRowsForStoreNumber(currentDb, row.storeNumber);
+    const currentRows = getCurrentRowsForServiceNumber(currentDb, row.serviceNumber);
     const currentRow = currentRows[0];
     if (!currentRow || !options.deactivateExtra) {
       continue;
     }
 
     proposed.push({
-      storeNumber: row.storeNumber,
+      serviceNumber: row.serviceNumber,
       dbId: currentRow.id,
       fixType: "DEACTIVATE_EXTRA",
       oldAddress: currentRow.address,
@@ -566,8 +566,8 @@ export const buildFixPlan = (
       distanceMeters: null,
       confidence: "low",
       applyByDefault: false,
-      reason: "Deactivate extra store not present in Carrefour official source",
-      sqlComment: `store_number=${row.storeNumber} | DEACTIVATE_EXTRA`,
+      reason: "Deactivate extra service not present in Carrefour official source",
+      sqlComment: `store_number=${row.serviceNumber} | DEACTIVATE_EXTRA`,
     });
   }
 

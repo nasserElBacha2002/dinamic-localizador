@@ -3,7 +3,7 @@ import {
   IMPORT_MISSING_DATE_MESSAGE,
   IMPORT_MISSING_LEGACY_END_DATE_MESSAGE,
   IMPORT_MISSING_LOCATION_MESSAGE,
-  INVENTORY_IMPORT_COLUMN_ALIASES,
+  OPERATION_IMPORT_COLUMN_ALIASES,
 } from "../constants/operation-import";
 import type { OperationImportFormat } from "../types/operation-import";
 import { normalizeCsvHeader } from "./csv-parse";
@@ -11,25 +11,25 @@ import { normalizeCsvHeader } from "./csv-parse";
 export const normalizeImportColumnName = normalizeCsvHeader;
 
 const LOCATION_ALIASES = new Set(
-  INVENTORY_IMPORT_COLUMN_ALIASES.location.map((header) => normalizeImportColumnName(header)),
+  OPERATION_IMPORT_COLUMN_ALIASES.location.map((header) => normalizeImportColumnName(header)),
 );
 
 const CLIENT_DATE_ALIASES = new Set(
-  INVENTORY_IMPORT_COLUMN_ALIASES.startDate.map((header) => normalizeImportColumnName(header)),
+  OPERATION_IMPORT_COLUMN_ALIASES.startDate.map((header) => normalizeImportColumnName(header)),
 );
 
 const EXTENDED_START_DATE_ALIASES = new Set(
-  INVENTORY_IMPORT_COLUMN_ALIASES.startDateExtended.map((header) =>
+  OPERATION_IMPORT_COLUMN_ALIASES.startDateExtended.map((header) =>
     normalizeImportColumnName(header),
   ),
 );
 
 const EXTENDED_END_DATE_ALIASES = new Set(
-  INVENTORY_IMPORT_COLUMN_ALIASES.endDate.map((header) => normalizeImportColumnName(header)),
+  OPERATION_IMPORT_COLUMN_ALIASES.endDate.map((header) => normalizeImportColumnName(header)),
 );
 
 const LOCATION_TYPE_ALIASES = new Set(
-  INVENTORY_IMPORT_COLUMN_ALIASES.locationType.map((header) => normalizeImportColumnName(header)),
+  OPERATION_IMPORT_COLUMN_ALIASES.locationType.map((header) => normalizeImportColumnName(header)),
 );
 
 const OPTIONAL_HEADER_ALIASES = new Set([

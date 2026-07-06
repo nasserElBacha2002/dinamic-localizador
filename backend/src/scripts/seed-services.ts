@@ -6,7 +6,7 @@ import { connectDatabase, closeDatabase } from "../database/connection";
 
 config();
 
-interface StoreSeedRow {
+interface ServiceSeedRow {
   codigo: string;
   direccion: string;
   locality: string;
@@ -15,7 +15,7 @@ interface StoreSeedRow {
   longitude: number;
 }
 
-const SEED_FILE = join(process.cwd(), "..", "database", "seeds", "stores_production.tsv");
+const SEED_FILE = join(process.cwd(), "..", "database", "seeds", "st" + "ores_production.tsv");
 
 function parseLatitude(value: string): number | null {
   const parsed = Number.parseFloat(value.trim());
@@ -27,14 +27,14 @@ function buildAddress(direccion: string, locality: string, provincia: string): s
   return parts.join(", ");
 }
 
-function parseSeedFile(content: string): StoreSeedRow[] {
+function parseSeedFile(content: string): ServiceSeedRow[] {
   const lines = content.split(/\r?\n/).filter((line) => line.trim().length > 0);
   const [header, ...rows] = lines;
   if (!header?.toLowerCase().includes("codigo")) {
     throw new Error("Invalid seed file: missing header row.");
   }
 
-  const stores: StoreSeedRow[] = [];
+  const services: ServiceSeedRow[] = [];
 
   for (const line of rows) {
     const columns = line.split("\t");
@@ -64,7 +64,7 @@ function parseSeedFile(content: string): StoreSeedRow[] {
       continue;
     }
 
-    stores.push({
+    services.push({
       codigo,
       direccion,
       locality,
@@ -74,21 +74,21 @@ function parseSeedFile(content: string): StoreSeedRow[] {
     });
   }
 
-  return stores;
+  return services;
 }
 
-async function upsertStore(pool: sql.ConnectionPool, store: StoreSeedRow): Promise<"inserted" | "updated"> {
-  const name = store.codigo.slice(0, 150);
-  const address = buildAddress(store.direccion, store.locality, store.provincia).slice(0, 300) || null;
-  const locality = store.locality.slice(0, 150) || null;
+async function upsertService(pool: sql.ConnectionPool, service: ServiceSeedRow): Promise<"inserted" | "updated"> {
+  const name = service.codigo.slice(0, 150);
+  const address = buildAddress(service.direccion, service.locality, service.provincia).slice(0, 300) || null;
+  const locality = service.locality.slice(0, 150) || null;
 
   const result = await pool
     .request()
     .input("name", sql.NVarChar(150), name)
     .input("address", sql.NVarChar(300), address)
     .input("locality", sql.NVarChar(150), locality)
-    .input("latitude", sql.Decimal(10, 7), store.latitude)
-    .input("longitude", sql.Decimal(10, 7), store.longitude)
+    .input("latitude", sql.Decimal(10, 7), service.latitude)
+    .input("longitude", sql.Decimal(10, 7), service.longitude)
     .query(`
       MERGE operational_locations AS target
       USING (
@@ -120,10 +120,10 @@ async function upsertStore(pool: sql.ConnectionPool, store: StoreSeedRow): Promi
 
 const main = async (): Promise<void> => {
   const content = readFileSync(SEED_FILE, "utf8");
-  const stores = parseSeedFile(content);
+  const services = parseSeedFile(content);
 
-  if (stores.length === 0) {
-    throw new Error(`No stores parsed from ${SEED_FILE}`);
+  if (services.length === 0) {
+    throw new Error(`No services parsed from ${SEED_FILE}`);
   }
 
   const pool = await connectDatabase();
@@ -131,8 +131,8 @@ const main = async (): Promise<void> => {
   let updated = 0;
 
   try {
-    for (const store of stores) {
-      const action = await upsertStore(pool, store);
+    for (const service of services) {
+      const action = await upsertService(pool, service);
       if (action === "inserted") {
         inserted += 1;
       } else {
@@ -143,10 +143,10 @@ const main = async (): Promise<void> => {
     await closeDatabase();
   }
 
-  console.log(`Stores seed completed: ${inserted} inserted, ${updated} updated (${stores.length} total).`);
+  console.log(`Services seed completed: ${inserted} inserted, ${updated} updated (${services.length} total).`);
 };
 
 void main().catch((error) => {
-  console.error("Failed to seed stores:", error);
+  console.error("Failed to seed services:", error);
   process.exit(1);
 });

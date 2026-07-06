@@ -2,297 +2,266 @@
 
 ## 1. Executive Summary
 
-The platform domain terminology was standardized from **Inventory/Store** to **Operation/Service** across backend, frontend, API contracts, database active columns, WhatsApp copy, statistics, and tests. Physical tables `scheduled_operations`, `operational_locations`, and `operation_assignments` remain canonical; active FK columns were renamed via migration `035`. Legacy API routes `/inventories`, `/stores`, and `/locations` were removed; canonical routes are `/operations` and `/services`.
+Final review pass completed the Operation/Service domain rename across backend, frontend, bot/WhatsApp, schemas, scripts, and migrations. Active application code now uses canonical `operation` / `service` terminology. Migration 035 was rewritten to discover FK/index dependencies via SQL Server catalogs. Migration 036 no longer mutates historical `audit_logs`. Migration 037 drops hollow legacy views and completes `bot_sessions` column rename. An automated terminology guard (`npm run check:terminology`) passes on `backend/src` and `frontend/src`.
 
 ## 2. Canonical Domain Model
 
 ### Operation
-
-Scheduled work (`scheduledStart`, `scheduledEnd`, tolerances, status). Belongs to a Service. Code: `Operation`, API: `operationId`, UI: Operación/Operaciones.
+Scheduled work assignment (`scheduled_operations`). Admin UI: **Operación**. WhatsApp employee-facing: **trabajo** / **jornada**.
 
 ### Service
-
-Operational location/context (e.g. Carrefour Caballito). Physical table: `operational_locations`. Code: `Service`, API: `serviceId`, UI: Servicio/Servicios.
+Operational location (`operational_locations`). Admin UI: **Servicio**. WhatsApp: **Servicio** when referring to the location entity.
 
 ### Operation Assignment
-
-Employee assignment to an operation with confirmation status. Physical table: `operation_assignments`. Column: `operation_id`.
+Employee-to-operation link (`operation_assignments`).
 
 ### Attendance
+Check-in/check-out records (`attendance_records`) tied to `operation_id`.
 
-Unchanged entity name. Association field: `operationId` / `operation_id`.
+## 3. Migration 035 Hardening
 
-## 3. Initial Legacy Reference Audit
+### Reachable Schema States
+Idempotent for fresh DBs through 034 and dev DBs where 021/035 partial states may use alternate constraint names.
 
-### Inventory References
+### Dependency Discovery
+Per-column dynamic loops over `sys.foreign_keys` + `sys.foreign_key_columns` and `sys.indexes` + `sys.index_columns` before `sp_rename`.
 
-Found across ~60 backend files, ~50 frontend files, routes, hooks, types, bot handlers, statistics, bulk import, and tests. Classified as **active domain code** requiring rename.
+### Foreign Keys
+Recreated with canonical names (`FK_scheduled_operations_service_id`, `FK_operation_assignments_operation_id`, etc.).
 
-### Store References
+### Indexes
+Dropped via catalog discovery; recreated with `operation`/`service` naming including notification idempotency indexes.
 
-Found across repositories, services, frontend pages/components, statistics, geolocation, and import parsers. Classified as **active domain code** requiring rename.
+### Column Rename Validation
+Targets: `scheduled_operations.service_id`, `operation_assignments.operation_id`, `attendance_records.operation_id`, `whatsapp_attendance_notifications.operation_id`, `bot_simulation_sessions.operation_id`/`service_id`, `bot_sessions.operation_id`.
 
-### Spanish Product Copy
+## 4. Inventory to Operation Final Cleanup
 
-`Inventarios`, `Tienda`, `inventario asignado` replaced with `Operaciones`, `Servicio`, `trabajo/jornada asignada` in admin UI and WhatsApp.
+### Active Symbols Removed
+`Inventory`, `InventoryRecord`, `inventoryDefaults`, `handleInventorySelection`, `buildInventorySelectionPrompt`, `createInventorySelectionSession`, schema names `createInventorySchema`, etc.
 
-### Database
+### Methods Renamed
+`findByOperationForEmployee`, `findCheckoutEligibleOperations`, `resetConfirmationsForOperationScheduleChange`, `handleOperationSelection`, `parseOperationSelection`, etc.
 
-Physical tables already renamed in migration `021`. Active columns still used `inventory_id` / `store_id` until migration `035`.
+### Error Codes Renamed
+`OPERATION_NOT_FOUND`, `OPERATION_NOT_EDITABLE`, `INVALID_OPERATION_STATUS_TRANSITION`, `OPERATION_START_IN_PAST`, `EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS`.
 
-### API
+### SQL Aliases Renamed
+`operation_*`, `service_*` in repositories and `row-mappers.ts`.
 
-Dual aliases (`/inventories` + `/operations`, `/stores` + `/locations`) replaced with canonical `/operations` and `/services` only.
+### Product Copy Renamed
+Spanish admin copy uses Operación; WhatsApp uses trabajo/jornada for scheduled work.
 
-### Bot
+## 5. Store to Service Final Cleanup
 
-Session context used `inventoryId`; updated to `operationId` with read-compat `operationId ?? inventoryId` for in-flight sessions.
+### Active Symbols Removed
+`Store`, `storeService`, `CurrentDbStore`, `loadCurrentStoresFromDatabase`, `storeLocation` API field.
 
-### Documentation
+### Methods Renamed
+`loadCurrentServicesFromDatabase`, `detectServicesSchema`, `reconcileServices`, `serviceNumber` types.
 
-Historical reports retain old terminology. This report documents the new canonical model.
+### Error Codes Renamed
+`SERVICE_NOT_FOUND`, `SERVICE_INACTIVE`, `SERVICE_NAME_ALREADY_EXISTS`.
 
-## 4. Inventory to Operation Rename
+### SQL Aliases Renamed
+`service_id`, `service_name`, `service_latitude`, etc.
 
-### Backend Files
+### Product Copy Renamed
+"Servicio no encontrado", "Servicio:" in bot confirmation messages.
 
-Renamed: `inventory.*` → `operation.*` (controller, service, repository, routes, schema, import, assignment, attendance, bot selector, lifecycle utils, tests).
+## 6. Backend Active-Code Audit
 
-### Symbols
+`npm run check:terminology` → **PASS** (0 violations outside explicit allowlist).
 
-`Inventory` → `Operation`, `inventoryId` → `operationId`, `inventoryService` → `operationService`, `inventoryRepository` → `operationRepository`, etc.
+## 7. Frontend Active-Code Audit
+
+`npm run check:terminology` → **PASS**. Canonical routes `/operations`, `/services`. Legacy browser redirects preserved in `AppRoutes.tsx`.
+
+## 8. Bot and WhatsApp Audit
+
+### Internal Domain
+`operationId`, `operationOptions`, `serviceId`, `serviceLatitude`, `serviceAllowedRadiusMeters`.
+
+### Employee-Facing Operation Terminology
+trabajo/jornada; no inventario in active bot copy.
+
+### Service Terminology
+"Servicio: {name}" in location context.
+
+### Legacy Session Compatibility
+Centralized in `legacy-operation-session-context.ts` (`inventoryId`/`inventoryOptions` read-only).
+
+## 9. API Contract Audit
+
+### Operations
+`/operations`, `operationId`, `createOperationSchema`, `operationImportPreviewSchema`.
 
 ### Services
+`/services`, `serviceId`, `serviceLocation` in bot simulator presets.
 
-`operation.service.ts`, `operation-import.service.ts`, `operation-assignment.service.ts`, `absence-operation-impact.service.ts`.
+### Attendance
+`operationId` in schemas and CSV export headers.
 
-### Repositories
+### Statistics
+`/statistics/by-operation`, `/statistics/by-service`.
 
-`operation.repository.ts`, `operation-attendance.repository.ts`, `operation-employee.repository.ts`.
-
-### Types
-
-`Operation`, `OperationWithService`, `OperationStatus`, `CreateOperationInput`, `UpdateOperationInput`, `ListOperationsQuery`.
-
-### Schemas
-
-`operation.schema.ts`, `operation-import.schema.ts`.
-
-## 5. Store to Service Rename
-
-### Backend Files
-
-Renamed: `store.*` → `service.*` (controller, service, repository, routes, schema, tests).
-
-### Symbols
-
-`Store` → `Service`, `storeId` → `serviceId`, `storeName` → `serviceName`, `storeFormat` → `serviceFormat`.
-
-### Services
-
-`service.service.ts` (module `services/service.service.ts`).
-
-### Repositories
-
-`service.repository.ts` — queries `operational_locations` with service terminology in aliases.
-
-### Types
-
-`Service`, `CreateServiceInput`, `UpdateServiceInput`, `ListServicesQuery`.
-
-### Schemas
-
-`service.schema.ts`.
-
-## 6. API Contract Rename
-
-### Operations Routes
-
-`GET/POST /api/operations`, `GET/PATCH/DELETE /api/operations/:id`, nested `/operations/:operationId/employees`, `/operations/:id/attendance-summary`.
-
-### Services Routes
-
-`GET/POST /api/services`, `GET/PATCH/DELETE /api/services/:id`.
-
-### DTO Changes
-
-Payloads/responses use `operationId`, `serviceId`, `operation`, `service`. No mixed `storeId` on operation objects.
-
-### Legacy Endpoint Policy
-
-**Removed** `/inventories`, `/stores`, `/locations` mounts from `routes/index.ts`. No duplicate business logic adapters. Frontend consumes only `/operations` and `/services`. Employee `/workers` alias retained (out of scope).
-
-## 7. Frontend Operations Rename
-
-### Routes
-
-`/inventories` → `/operations` (list, create, import, detail).
-
-### Pages
-
-`pages/operations/` — `OperationsListPage`, `OperationCreatePage`, `OperationDetailPage`, `OperationImportPage`.
-
-### Components
-
-`components/operations/` — `OperationForm`, `OperationWorkforceSection`, `OperationEmployeeTable`, etc.
-
-### API Client
-
-`operations.api.ts`, `useOperations` hook, query keys `["operations"]`, `["operation", id]`.
-
-### Query Keys
-
-All inventory keys migrated to operation keys.
-
-## 8. Frontend Services Rename
-
-### Routes
-
-`/stores` → `/services`.
-
-### Pages
-
-`pages/services/` — `ServicesListPage`, `ServiceCreatePage`, `ServiceEditPage`.
-
-### Components
-
-`components/services/` — `ServiceForm`, `ServiceLocationPicker`, `ServiceSearchAutocomplete`.
-
-### Forms
-
-Labels use Servicio; payload `serviceId`.
-
-### API Client
-
-`services.api.ts`, `useServices`, keys `["services"]`, `["service", id]`.
-
-### Query Keys
-
-All store keys migrated to service keys.
-
-## 9. Bot and WhatsApp Terminology
-
-### Operation Employee-Facing Term
-
-`trabajo asignado` / `jornada asignada` — not `inventario` or generic `servicio` for operations.
-
-### Service Employee-Facing Term
-
-`servicio` / service name (e.g. Carrefour Caballito) when referring to the Service entity location.
-
-### Session Context
-
-Writes `operationId`; reads `operationId ?? inventoryId` for legacy in-flight sessions.
-
-### Reminder Variables
-
-Template uses employee name, service name (location), operation date/time. Contextual replies updated per spec.
+### Lookups
+`/lookups/operations`, `/lookups/services`.
 
 ## 10. Database Active Schema Audit
 
-### Existing Operation Tables
+Pending operator validation on target SQL Server after `npm run migrate`. Migrations 035–037 are idempotent. Legacy physical tables renamed in 021; 037 drops compatibility views.
 
-`scheduled_operations`, `operation_assignments` — unchanged physical names.
+### Tables
+Canonical: `scheduled_operations`, `operational_locations`, `operation_assignments`.
 
-### Operation Foreign Key Columns
+### Columns
+Canonical FK columns per migration 035.
 
-Migration `035`: `inventory_id` → `operation_id` on `operation_assignments`, `attendance_records`, `whatsapp_attendance_notifications`, `bot_simulation_sessions`; `store_id` → `service_id` on `scheduled_operations`, `bot_simulation_sessions`.
-
-### Operational Locations Decision
-
-Physical table **`operational_locations` retained** — accurately represents domain responsibility. Code domain uses `Service`; SQL aliases use `service_id`, `service_name`.
-
-### Constraints
-
-New FK/index names use `operation` / `service` prefixes. Legacy views `stores`, `inventories`, `inventory_employees` recreated after column rename.
+### Foreign Keys
+Catalog-discovered drops + canonical recreation.
 
 ### Indexes
+Canonical operation/service names.
 
-Recreated with operation/service naming (e.g. `IX_scheduled_operations_company_service_scheduled_start`).
+### Constraints
+`CK_bot_sessions_state` updated in 037 for `WAITING_OPERATION_SELECTION`.
 
-## 11. Permissions and Module Keys
+### Compatibility Views
+Dropped in 037 (`stores`, `inventories`, `inventory_employees`).
 
-Permissions renamed in code: `operations:read/manage`, `services:read/manage` (replacing `inventories:*`, `stores:*`). Module key `inventory_operations` **retained** — covers both operations and services features; no DB migration required for `company_modules`. Audit entity types backfilled in migration `036`.
+## 11. Legacy Database View Policy
 
-## 12. Attendance and Reminder Associations
+No demonstrated external SQL consumer. Hollow views removed in 037 (no column-alias compatibility).
 
-`attendance.operationId`, reminder candidates use `operationId` and `serviceName`. Repositories query `operation_id` / `service_id` columns post-migration.
+## 12. Audit History Policy
 
-## 13. Statistics and Dashboard
+Migration 036 no longer updates `audit_logs.entity_type`. UI should map `inventory`→Operación, `store`→Servicio at display time.
 
-API: `/statistics/attendance/by-operation`, `/by-service`. DTO fields: `totalOperations`, `assignedOperationsCount`, `AttendanceByServiceRow`. Dashboard copy uses Operaciones/Servicios.
+## 13. Permissions and Modules
 
-## 14. Bulk Upload
+Canonical keys: `operations`, `services`, `operations:read`, `operations:manage`, `services:read`, `services:manage`. Module key `inventory_operations` → `operations` in 037.
 
-`operation-import` service and headers; import aliases accept legacy spreadsheet headings (`Tienda`, `Punto`) where documented; canonical preview output uses Servicio.
+## 14. Browser Route Compatibility
 
-## 15. Files Renamed
+`/inventories/*` → `/operations/*`, `/stores/*` → `/services/*` via `<Navigate replace />`.
 
-~38 backend files git-renamed (inventory→operation, store→service). Frontend directories: `inventories`→`operations`, `stores`→`services`. See git diffstat for full list (233 files touched).
+## 15. Files and Directories Renamed
 
-## 16. Files Modified
+- `export-database-stores.ts` → `export-database-services.ts`
+- `service-fix/db-stores.ts` → `db-services.ts`
+- `service-reconciliation/store-number.ts` → `service-number.ts`
+- Frontend canonical: `pages/operations`, `pages/services`, `components/operations`, `components/services`
 
-Backend services, repositories, routes, types, row-mappers, WhatsApp handlers, statistics, permissions, tests. Frontend routes, API client, hooks, terminology, statistics components, settings copy/tests.
+## 16. Automated Terminology Guard
 
-## 17. API Breaking Changes
+### Scanned Paths
+`backend/src`, `frontend/src` (`.ts`, `.tsx`)
 
-- `/inventories` → `/operations` (removed legacy)
-- `/stores`, `/locations` → `/services` (removed legacy)
-- `inventoryId` → `operationId`, `storeId` → `serviceId` in all active JSON contracts
-- Statistics: `by-inventory` → `by-operation`, `by-location` → `by-service`
-- Permissions: `inventories:read` → `operations:read`, `stores:read` → `services:read`
+### Forbidden Tokens
+inventory, inventories, inventario, inventarios, store, stores, tienda, tiendas (word boundaries)
 
-## 18. Database Migrations Added
+### Explicit Allowlist
+- `legacy-operation-session-context.ts`
+- `operation-import.ts` (spreadsheet header aliases)
+- `AppRoutes.tsx` (redirect paths)
+- `terminology.ts` / `terminology.test.ts`
+- Negative assertion tests
+- `storeFormat` DB field references
+- Mantine `store={combobox}` prop
 
-| Migration | Purpose |
-|-----------|---------|
-| `035_rename_operational_foreign_key_columns.sql` | `operation_id`, `service_id` column renames + FK/index recreation |
-| `036_operational_domain_permission_audit_backfill.sql` | Audit `entity_type` inventory→operation, store→service |
+### Result
+**PASS**
 
-## 19. Remaining Legacy References
+## 17. Remaining Legacy References
 
-| File | Reference | Classification | Reason | Removal plan |
-|------|-----------|----------------|--------|--------------|
-| `operational-domain.ts` | `ScheduledOperation = Inventory` alias | Documentation alias | Backward type documentation only | Remove when aliases unused |
-| `operational-tables.ts` | `LEGACY_*_VIEW` constants | Compatibility boundary | SQL Server views for external tools | Keep until views dropped |
-| `bot-session-states.ts` | `WAITING_INVENTORY_SELECTION` | Session compat | In-flight bot sessions | Rename states in follow-up with session invalidation |
-| `bot-session.service.ts` | `inventoryOptions` in JSON | Session compat | TTL-expiring sessions | Read-compat only; write `operationOptions` later |
-| `store-reconciliation/`, `store-fix/` scripts | store naming | Utility scripts | Offline reconciliation tooling | Rename in dedicated tooling pass |
-| `company-modules.ts` | `inventory_operations` module key | Persisted module key | DB records use this key | Optional alias migration later |
-| Historical migrations 001–034 | inventory/store columns | Historical immutable | Applied schema history | Never edit |
-| `docs/attendance-confirmation-*.md` | inventory terminology | Historical documentation | Prior implementation reports | Intentionally preserved |
+| File | Context | Token | Classification | Why | Removal plan |
+|------|---------|-------|----------------|-----|--------------|
+| `database/migrations/001–034` | Historical DDL | inventory/store | HISTORICAL_IMMUTABLE_MIGRATION | Immutable migration history | Never rewrite |
+| `database/migrations/035.sql` | DROP VIEW | inventories/stores | HISTORICAL_IMMUTABLE_MIGRATION | Drops legacy views before rename | N/A |
+| `database/migrations/036.sql` | Comment | inventory/store | HISTORICAL_IMMUTABLE_MIGRATION | Documents audit display policy | N/A |
+| `database/migrations/037.sql` | DROP VIEW | inventories/stores | HISTORICAL_IMMUTABLE_MIGRATION | Final view removal | N/A |
+| `legacy-operation-session-context.ts` | Read compat | inventoryId | EXPLICIT_BOT_SESSION_READ_COMPATIBILITY | Active session TTL | Remove after TTL window |
+| `operation-import.ts` | CSV headers | tienda | EXTERNAL_IMPORT_ALIAS | Legacy spreadsheet format | Keep for import compat |
+| `AppRoutes.tsx` | Redirects | /inventories | EXPLICIT_API_COMPATIBILITY_ADAPTER | Browser bookmarks | Keep indefinitely |
+| `terminology.ts` | legacySingular | Tienda | EXPLICIT_API_COMPATIBILITY_ADAPTER | Display map for old audit rows | Keep |
+| `types/service.ts` | API field | storeFormat | THIRD_PARTY_CONTRACT | Physical DB column `store_format` | Rename column in future migration |
+| `docs/attendance-confirmation-*.md` | Historical report | inventory | HISTORICAL_DOCUMENTATION | Prior implementation report | Archive only |
 
-## 20. Validation Results
+## 18. Validation Results
 
 | Command | Result |
 |---------|--------|
 | `cd backend && npm run build` | PASS |
-| `cd backend && npm test` | PASS (472 unit) |
-| `RUN_DB_INTEGRATION_TESTS=true` (4 suites, 6 tests) | PASS |
-| `npm run migrate` | PASS (035, 036 applied) |
+| `cd backend && npm test` | PASS (471/471) |
+| `cd backend && npm run check:terminology` | PASS |
 | `cd frontend && npm run build` | PASS |
-| `cd frontend && npm test` | PASS (205 tests) |
+| `cd frontend && npm test` | PASS (205/205) |
+| `cd backend && npm run migrate` | SKIPPED (not run in this session) |
+| `RUN_DB_INTEGRATION_TESTS=true npm test` | SKIPPED (env not configured in agent session) |
 
-## 21. Regression Results
+## 19. Regression Results
 
-Core flows validated via build + test suites:
+Unit/integration logic covered by passing test suites. Full manual regression checklist (create operation/service, WhatsApp flows, statistics, redirects) requires staging validation after migrate.
 
-- Operation CRUD, list, import paths compile and route correctly
-- Service CRUD, location picker preserved
-- Attendance/reminder integration tests pass with new column names
-- Statistics API aligned end-to-end
-- Settings operational copy uses operación terminology
-- Frontend navigation: `/operations`, `/services`
+## 20. Known Limitations
 
-Manual QA recommended for: Maps geofence, bulk upload with legacy spreadsheet headers, live WhatsApp session migration.
+- `store_format` physical column name retained in DB and API (`storeFormat`).
+- Carrefour reconciliation CSV uses `store_number` column header (external format).
+- DB constraint `UX_attendance_records_inventory_employee_active` retains historical name.
+- Migration apply + metadata assertions must be run on staging/production SQL Server before deploy.
 
-## 22. Known Limitations
+## 21. Final Status
 
-- Bot session state enum names still contain `INVENTORY` internally
-- `inventory_operations` module key unchanged in DB
-- Store reconciliation CLI scripts not renamed
-- Some local variable names in statistics hook still use `inv*` / `loc*` URL state keys (behavior correct)
+**READY FOR CODE REVIEW**
 
-## 23. Final Status
+---
 
-READY FOR CODE REVIEW
+## WhatsApp Canonical Service Reference
+
+### Business Rule
+
+Every Service displayed in WhatsApp uses `Name - Address - Locality` with safe omission of missing values and deduplication of equivalent parts.
+
+### Canonical Formatter
+
+- **File:** `backend/src/utils/format-service-reference.ts`
+- **Functions:** `formatServiceReference`, `formatServiceReferenceFromFields`, `buildReminderServiceReference` (template layer)
+- **Missing-value behavior:** Trims whitespace; omits null/blank address and locality
+- **Duplicate-value behavior:** Skips address when equal to name; skips locality when already present in assembled parts (case-insensitive `es-AR`)
+- **Locality field:** `operational_locations.locality` (not `neighborhood`)
+
+### Bot Flows Updated
+
+- Attendance confirmation positive/negative replies
+- Assignment confirmation / unavailability selection and messages
+- Arrival / check-in location request and registration messages
+- Checkout location request, selection, and registration messages
+- Operation selection prompts (multi-line readable format)
+- Employee workday today/upcoming blocks
+
+### Twilio Templates Updated
+
+All proactive templates use canonical `{{2}}` service reference via `buildAttendanceReminderTemplateVariables`:
+
+- `ARRIVAL_REMINDER_15_MIN`
+- `EXIT_REMINDER_15_MIN`
+- `NO_CHECKIN_AT_START`
+- `ATTENDANCE_CONFIRMATION_REMINDER`
+
+### Query / Type Changes
+
+- `EmployeeAssignedOperation`, `CompatibleOperation`, `AttendanceReminderCandidate`, `OperationSelectionOption` → `serviceAddress`, `serviceLocality`
+- SQL aliases: `service_address`, `service_locality` in assignment, operation, attendance, and notification repositories
+
+### Tests
+
+- `format-service-reference.test.ts` — formatter edge cases
+- `attendance-reminder-template.test.ts` — all template types + fallback
+- `employee-assignment-row-mapper.test.ts` — SQL mapping
+- `bot-response.builder.test.ts`, `employee-assignment-format.test.ts` — message output
+
+### Remaining Limitations
+
+- `neighborhood` is not shown in WhatsApp service reference (locality only per business rule)
+- Geofence continues to use coordinates, not formatted address text

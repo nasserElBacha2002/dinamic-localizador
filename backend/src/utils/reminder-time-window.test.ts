@@ -19,7 +19,7 @@ describe("buildReminderDueWindow", () => {
     );
   });
 
-  it("allows a late worker tick to still catch inventories near the window edge", () => {
+  it("allows a late worker tick to still catch operations near the window edge", () => {
     const referenceAt = new Date("2026-06-23T14:00:00.000Z");
     const window = buildReminderDueWindow(referenceAt, ATTENDANCE_REMINDER_LEAD_MINUTES);
     const inventoryStart = new Date(referenceAt.getTime() + 14 * 60_000 + 30_000);
@@ -42,7 +42,7 @@ describe("buildInventoryStartDueWindow", () => {
     assert.equal(window.windowEnd.toISOString(), referenceAt.toISOString());
   });
 
-  it("does not include inventories scheduled in the future", () => {
+  it("does not include operations scheduled in the future", () => {
     const referenceAt = new Date("2026-06-23T14:00:00.000Z");
     const window = buildInventoryStartDueWindow(referenceAt, NO_CHECKIN_AT_START_WINDOW_MINUTES);
     const futureInventoryStart = new Date(referenceAt.getTime() + 30_000);

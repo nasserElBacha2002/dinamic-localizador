@@ -5,6 +5,7 @@ export interface EmployeeAssignedOperation {
   operationId: string;
   serviceName: string;
   serviceAddress: string | null;
+  serviceLocality: string | null;
   serviceLatitude: number | null;
   serviceLongitude: number | null;
   scheduledStart: string;

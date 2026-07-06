@@ -18,7 +18,7 @@ const applyCoordinateFix = async (
 ): Promise<number> => {
   const result = await new sql.Request(transaction)
     .input("id", sql.UniqueIdentifier, fix.dbId)
-    .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
+    .input("serviceNumber", sql.NVarChar(150), fix.serviceNumber)
     .input("latitude", sql.Decimal(10, 7), formatDecimal(fix.newLatitude))
     .input("longitude", sql.Decimal(10, 7), formatDecimal(fix.newLongitude))
     .query(`
@@ -27,7 +27,7 @@ const applyCoordinateFix = async (
           longitude = @longitude,
           updated_at = SYSUTCDATETIME()
       WHERE id = @id
-        AND name = @storeNumber
+        AND name = @serviceNumber
     `);
 
   return result.rowsAffected[0] ?? 0;
@@ -36,14 +36,14 @@ const applyCoordinateFix = async (
 const applyAddressFix = async (transaction: sql.Transaction, fix: ProposedFix): Promise<number> => {
   const result = await new sql.Request(transaction)
     .input("id", sql.UniqueIdentifier, fix.dbId)
-    .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
+    .input("serviceNumber", sql.NVarChar(150), fix.serviceNumber)
     .input("address", sql.NVarChar(300), fix.newAddress)
     .query(`
       UPDATE operational_locations
       SET address = @address,
           updated_at = SYSUTCDATETIME()
       WHERE id = @id
-        AND name = @storeNumber
+        AND name = @serviceNumber
     `);
 
   return result.rowsAffected[0] ?? 0;
@@ -52,7 +52,7 @@ const applyAddressFix = async (transaction: sql.Transaction, fix: ProposedFix): 
 const applyRenameFix = async (transaction: sql.Transaction, fix: ProposedFix): Promise<number> => {
   const result = await new sql.Request(transaction)
     .input("id", sql.UniqueIdentifier, fix.dbId)
-    .input("name", sql.NVarChar(150), fix.storeNumber)
+    .input("name", sql.NVarChar(150), fix.serviceNumber)
     .query(`
       UPDATE operational_locations
       SET name = @name,
@@ -66,13 +66,13 @@ const applyRenameFix = async (transaction: sql.Transaction, fix: ProposedFix): P
 const applyDeactivateFix = async (transaction: sql.Transaction, fix: ProposedFix): Promise<number> => {
   const result = await new sql.Request(transaction)
     .input("id", sql.UniqueIdentifier, fix.dbId)
-    .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
+    .input("serviceNumber", sql.NVarChar(150), fix.serviceNumber)
     .query(`
       UPDATE operational_locations
       SET active = 0,
           updated_at = SYSUTCDATETIME()
       WHERE id = @id
-        AND name = @storeNumber
+        AND name = @serviceNumber
     `);
 
   return result.rowsAffected[0] ?? 0;
@@ -85,7 +85,7 @@ const applyInsertFix = async (
   locality: string,
 ): Promise<number> => {
   const result = await new sql.Request(transaction)
-    .input("name", sql.NVarChar(150), fix.storeNumber)
+    .input("name", sql.NVarChar(150), fix.serviceNumber)
     .input("address", sql.NVarChar(300), fix.newAddress)
     .input("neighborhood", sql.NVarChar(150), neighborhood || null)
     .input("locality", sql.NVarChar(150), locality || null)
@@ -138,7 +138,7 @@ export const applyFixes = async (
           affected = await applyDeactivateFix(transaction, fix);
           break;
         case "INSERT_MISSING": {
-          const meta = missingMeta.get(fix.storeNumber) ?? { neighborhood: "", locality: "" };
+          const meta = missingMeta.get(fix.serviceNumber) ?? { neighborhood: "", locality: "" };
           affected = await applyInsertFix(transaction, fix, meta.neighborhood, meta.locality);
           break;
         }
@@ -148,12 +148,12 @@ export const applyFixes = async (
 
       if (affected !== 1) {
         throw new Error(
-          `Expected to affect exactly 1 row for ${fix.fixType} on store ${fix.storeNumber} (${fix.dbId}), got ${affected}. SQL: ${buildSqlForFix(fix)}`,
+          `Expected to affect exactly 1 row for ${fix.fixType} on service ${fix.serviceNumber} (${fix.dbId}), got ${affected}. SQL: ${buildSqlForFix(fix)}`,
         );
       }
 
       applied += 1;
-      details.push(`${fix.fixType} applied for store ${fix.storeNumber} (${fix.dbId})`);
+      details.push(`${fix.fixType} applied for service ${fix.serviceNumber} (${fix.dbId})`);
     }
 
     await transaction.commit();
@@ -181,12 +181,12 @@ export const verifyAppliedFixes = async (
       const result = await pool
         .request()
         .input("id", sql.UniqueIdentifier, fix.dbId)
-        .input("storeNumber", sql.NVarChar(150), fix.storeNumber)
+        .input("serviceNumber", sql.NVarChar(150), fix.serviceNumber)
         .query(`
           SELECT name, address, latitude, longitude, active
           FROM operational_locations
           WHERE id = @id
-            AND name = @storeNumber
+            AND name = @serviceNumber
         `);
 
       const row = result.recordset[0];
@@ -220,7 +220,7 @@ export const verifyAppliedFixes = async (
       }
 
       if (fix.fixType === "RENAME_NONNUMERIC") {
-        verified = String(row.name) === fix.storeNumber;
+        verified = String(row.name) === fix.serviceNumber;
         details.push(`name=${row.name}`);
       }
 

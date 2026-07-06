@@ -5,8 +5,8 @@ import { requireRequestCompanyId } from "../utils/request-company";
 export const operationController = {
   async create(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const inventory = await operationService.create(companyId, req.body);
-    res.status(201).json({ data: inventory });
+    const operation = await operationService.create(companyId, req.body);
+    res.status(201).json({ data: operation });
   },
 
   async list(req: Request, res: Response) {
@@ -17,20 +17,20 @@ export const operationController = {
 
   async getById(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const inventory = await operationService.getDetailById(companyId, String(req.params.id));
-    res.status(200).json({ data: inventory });
+    const operation = await operationService.getDetailById(companyId, String(req.params.id));
+    res.status(200).json({ data: operation });
   },
 
   async update(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const inventory = await operationService.update(companyId, String(req.params.id), req.body);
-    res.status(200).json({ data: inventory });
+    const operation = await operationService.update(companyId, String(req.params.id), req.body);
+    res.status(200).json({ data: operation });
   },
 
   async cancel(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const inventory = await operationService.cancel(companyId, String(req.params.id));
-    res.status(200).json({ data: inventory });
+    const operation = await operationService.cancel(companyId, String(req.params.id));
+    res.status(200).json({ data: operation });
   },
 
   async getAttendanceSummary(req: Request, res: Response) {

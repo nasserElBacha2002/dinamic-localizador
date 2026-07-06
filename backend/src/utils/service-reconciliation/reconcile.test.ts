@@ -7,21 +7,21 @@ import {
   normalizeAddressForRangeComparison,
 } from "./address";
 import { buildGeocodeCacheKey, buildGeocodeQuery } from "./geocoding";
-import { reconcileStores } from "./reconcile";
-import { normalizeStoreNumber } from "./store-number";
-import type { DatabaseStore, OfficialStore } from "./types";
+import { reconcileServices } from "./reconcile";
+import { normalizeServiceNumber } from "./service-number";
+import type { DatabaseService, OfficialService } from "./types";
 import { MISSING_API_KEY_ERROR_CODE } from "./types";
 
-const baseDatabaseStore = (
-  overrides: Partial<DatabaseStore> & Pick<DatabaseStore, "id" | "name" | "address">,
-): DatabaseStore => ({
+const baseDatabaseService = (
+  overrides: Partial<DatabaseService> & Pick<DatabaseService, "id" | "name" | "address">,
+): DatabaseService => ({
   latitude: -34.6037,
   longitude: -58.3816,
   latitudeRaw: "-34.6037000",
   longitudeRaw: "-58.3816000",
   neighborhood: "",
   locality: "",
-  storeFormat: "",
+  serviceFormat: "",
   active: "1",
   googlePlaceId: "",
   createdAt: "",
@@ -30,16 +30,16 @@ const baseDatabaseStore = (
   ...overrides,
 });
 
-describe("normalizeStoreNumber", () => {
-  it("normalizes numeric store ids as strings", () => {
-    assert.equal(normalizeStoreNumber("557"), "557");
-    assert.equal(normalizeStoreNumber("0557"), "557");
-    assert.equal(normalizeStoreNumber("557.0"), "557");
+describe("normalizeServiceNumber", () => {
+  it("normalizes numeric service ids as strings", () => {
+    assert.equal(normalizeServiceNumber("557"), "557");
+    assert.equal(normalizeServiceNumber("0557"), "557");
+    assert.equal(normalizeServiceNumber("557.0"), "557");
   });
 
-  it("rejects non-numeric store names", () => {
-    assert.equal(normalizeStoreNumber("prueba-casa"), null);
-    assert.equal(normalizeStoreNumber("carrefour-formosa"), null);
+  it("rejects non-numeric service names", () => {
+    assert.equal(normalizeServiceNumber("prueba-casa"), null);
+    assert.equal(normalizeServiceNumber("carrefour-formosa"), null);
   });
 });
 
@@ -57,7 +57,7 @@ describe("normalizeAddress", () => {
     );
   });
 
-  it("strips store number prefixes and postal codes", () => {
+  it("strips service number prefixes and postal codes", () => {
     const normalized = normalizeAddress(
       "6037_Ejército de los Andes 2222_GBA, C1424, Provincia de Buenos Aires",
     );
@@ -105,8 +105,8 @@ describe("compareAddresses", () => {
 
 describe("geocoding helpers", () => {
   it("builds a stable cache key and geocode query", () => {
-    const store: OfficialStore = {
-      storeNumber: "557",
+    const service: OfficialService = {
+      serviceNumber: "557",
       rawStoreId: "557",
       officialAddress: "Av. Corrientes 1234",
       neighborhood: "San Nicolas",
@@ -114,24 +114,24 @@ describe("geocoding helpers", () => {
     };
 
     assert.equal(
-      buildGeocodeQuery(store),
+      buildGeocodeQuery(service),
       "Av. Corrientes 1234, San Nicolas, Buenos Aires, Argentina",
     );
-    assert.match(buildGeocodeCacheKey(store), /av\. corrientes 1234/);
+    assert.match(buildGeocodeCacheKey(service), /av\. corrientes 1234/);
   });
 });
 
-describe("reconcileStores", () => {
-  const officialStores: OfficialStore[] = [
+describe("reconcileServices", () => {
+  const officialServices: OfficialService[] = [
     {
-      storeNumber: "557",
+      serviceNumber: "557",
       rawStoreId: "557",
       officialAddress: "Av. Corrientes 1234",
       neighborhood: "Centro",
       locality: "Buenos Aires",
     },
     {
-      storeNumber: "729",
+      serviceNumber: "729",
       rawStoreId: "729",
       officialAddress: "Calle Oficial 100",
       neighborhood: "Norte",
@@ -139,18 +139,18 @@ describe("reconcileStores", () => {
     },
   ];
 
-  const databaseStores: DatabaseStore[] = [
-    baseDatabaseStore({
+  const databaseServices: DatabaseService[] = [
+    baseDatabaseService({
       id: "db-557",
       name: "557",
       address: "Avenida Corrientes 1234",
     }),
-    baseDatabaseStore({
+    baseDatabaseService({
       id: "db-test",
       name: "prueba-casa",
       address: "Test",
     }),
-    baseDatabaseStore({
+    baseDatabaseService({
       id: "db-999",
       name: "999",
       address: "Extra Service",
@@ -158,9 +158,9 @@ describe("reconcileStores", () => {
   ];
 
   it("identifies missing, extra and ignored rows without geocoding", async () => {
-    const result = await reconcileStores(
-      officialStores,
-      databaseStores,
+    const result = await reconcileServices(
+      officialServices,
+      databaseServices,
       {
         likelyMatchThreshold: 0.85,
         coordinateOkMeters: 100,
@@ -174,14 +174,14 @@ describe("reconcileStores", () => {
     );
 
     assert.equal(result.stats.totalOfficialRows, 2);
-    assert.equal(result.stats.numericDatabaseStores, 2);
+    assert.equal(result.stats.numericDatabaseServices, 2);
     assert.equal(result.stats.ignoredNonNumericDatabaseRows, 1);
     assert.equal(result.stats.missingInDatabase, 1);
     assert.equal(result.stats.extraInDatabase, 1);
-    assert.equal(result.missingInDatabase[0]?.storeNumber, "729");
-    assert.equal(result.extraInDatabase[0]?.storeNumber, "999");
+    assert.equal(result.missingInDatabase[0]?.serviceNumber, "729");
+    assert.equal(result.extraInDatabase[0]?.serviceNumber, "999");
 
-    const matched = result.summary.find((row) => row.storeNumber === "557");
+    const matched = result.summary.find((row) => row.serviceNumber === "557");
     assert.ok(matched);
     assert.equal(matched?.addressMatchStatus, "exact_match");
     assert.equal(matched?.coordinateStatus, "geocoding_skipped");

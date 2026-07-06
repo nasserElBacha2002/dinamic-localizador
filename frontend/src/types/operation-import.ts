@@ -6,7 +6,7 @@ export interface OperationImportPreviewRow {
   rowNumber: number;
   format: OperationImportFormat;
   punto: string;
-  tienda: string;
+  legacyLocation: string;
   serviceId: string | null;
   serviceName: string | null;
   rawFecha: string;

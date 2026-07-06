@@ -14,6 +14,7 @@ const ASSIGNED_OPERATION_SELECT = `
     i.status AS operation_status,
     s.name AS service_name,
     s.address AS service_address,
+    s.locality AS service_locality,
     s.latitude AS service_latitude,
     s.longitude AS service_longitude,
     ie.confirmation_status,
@@ -88,7 +89,7 @@ export const employeeAssignmentQueryRepository = {
     );
   },
 
-  async findByInventoryForEmployee(
+  async findByOperationForEmployee(
     companyId: string,
     employeeId: string,
     operationId: string,
@@ -142,7 +143,7 @@ export const employeeAssignmentQueryRepository = {
     return (result.rowsAffected[0] ?? 0) > 0;
   },
 
-  async resetConfirmationsForInventoryScheduleChange(
+  async resetConfirmationsForOperationScheduleChange(
     companyId: string,
     operationId: string,
     transaction?: sql.Transaction,

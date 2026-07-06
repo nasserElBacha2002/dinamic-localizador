@@ -190,15 +190,15 @@ describe("Company modules permissions", () => {
 
 describe("Regression: related modules still use company settings APIs", () => {
   it("ServiceForm still loads location types from API hook", () => {
-    const storeFormFile = readFileSync(
+    const serviceFormFile = readFileSync(
       join(process.cwd(), "src/components/services/ServiceForm.tsx"),
       "utf8",
     );
-    assert.match(storeFormFile, /useCompanyLocationTypes/);
-    assert.doesNotMatch(storeFormFile, /STORE_FORMATS/);
+    assert.match(serviceFormFile, /useCompanyLocationTypes/);
+    assert.doesNotMatch(serviceFormFile, /STORE_FORMATS/);
   });
 
-  it("inventory create defaults still use operation tolerances", () => {
+  it("operation create defaults still use operation tolerances", () => {
     const defaultsFile = readFileSync(
       join(process.cwd(), "src/utils/operation-create-defaults.ts"),
       "utf8",

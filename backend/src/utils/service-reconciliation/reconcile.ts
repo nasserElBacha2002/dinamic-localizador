@@ -6,13 +6,13 @@ import {
   toGeocodingDiagnostics,
   type GeocodeCache,
 } from "./geocoding";
-import { normalizeStoreNumber } from "./store-number";
+import { normalizeServiceNumber } from "./service-number";
 import type {
   CoordinateStatus,
-  DatabaseStore,
-  DuplicateStoreReport,
+  DatabaseService,
+  DuplicateServiceReport,
   GeocodingDiagnostics,
-  OfficialStore,
+  OfficialService,
   ReconcileOptions,
   ReconciliationResult,
   ReconciliationRow,
@@ -53,7 +53,7 @@ const buildRowGeocodingFields = (diagnostics: GeocodingDiagnostics) => ({
 });
 
 const evaluateCoordinateStatus = (
-  databaseStore: DatabaseStore,
+  databaseService: DatabaseService,
   diagnostics: GeocodingDiagnostics,
   options: ReconcileOptions,
 ): {
@@ -81,7 +81,7 @@ const evaluateCoordinateStatus = (
     };
   }
 
-  if (databaseStore.latitude === null || databaseStore.longitude === null) {
+  if (databaseService.latitude === null || databaseService.longitude === null) {
     return {
       coordinateStatus: "missing_coordinates",
       coordinateDistanceMeters: null,
@@ -89,8 +89,8 @@ const evaluateCoordinateStatus = (
   }
 
   const distance = calculateDistanceMeters(
-    databaseStore.latitude,
-    databaseStore.longitude,
+    databaseService.latitude,
+    databaseService.longitude,
     diagnostics.latitude!,
     diagnostics.longitude!,
   );
@@ -109,22 +109,22 @@ const evaluateCoordinateStatus = (
 };
 
 const buildDuplicateReports = (
-  officialByNumber: Map<string, OfficialStore[]>,
-  databaseByNumber: Map<string, DatabaseStore[]>,
-  rowByStoreAndDbId: Map<string, ReconciliationRow>,
-): DuplicateStoreReport[] => {
-  const duplicates: DuplicateStoreReport[] = [];
+  officialByNumber: Map<string, OfficialService[]>,
+  databaseByNumber: Map<string, DatabaseService[]>,
+  rowByServiceAndDbId: Map<string, ReconciliationRow>,
+): DuplicateServiceReport[] => {
+  const duplicates: DuplicateServiceReport[] = [];
 
-  for (const [storeNumber, stores] of officialByNumber.entries()) {
-    if (stores.length <= 1) {
+  for (const [serviceNumber, services] of officialByNumber.entries()) {
+    if (services.length <= 1) {
       continue;
     }
 
-    for (const store of stores) {
+    for (const service of services) {
       duplicates.push({
         source: "official",
-        storeNumber,
-        duplicateCount: stores.length,
+        serviceNumber,
+        duplicateCount: services.length,
         dbId: "",
         dbAddress: "",
         googlePlaceId: "",
@@ -135,48 +135,48 @@ const buildDuplicateReports = (
         active: "",
         addressMatchesOfficial: "",
         coordinateStatus: "",
-        officialAddress: store.officialAddress,
-        details: `raw_store_id=${store.rawStoreId}`,
+        officialAddress: service.officialAddress,
+        details: `raw_store_id=${service.rawStoreId}`,
       });
     }
   }
 
-  for (const [storeNumber, stores] of databaseByNumber.entries()) {
-    if (stores.length <= 1) {
+  for (const [serviceNumber, services] of databaseByNumber.entries()) {
+    if (services.length <= 1) {
       continue;
     }
 
-    const official = officialByNumber.get(storeNumber)?.[0];
-    for (const store of stores) {
-      const matchedRow = rowByStoreAndDbId.get(`${storeNumber}:${store.id}`);
+    const official = officialByNumber.get(serviceNumber)?.[0];
+    for (const service of services) {
+      const matchedRow = rowByServiceAndDbId.get(`${serviceNumber}:${service.id}`);
       const addressComparison = official
-        ? compareAddresses(official.officialAddress, store.address)
+        ? compareAddresses(official.officialAddress, service.address)
         : null;
 
       duplicates.push({
         source: "database",
-        storeNumber,
-        duplicateCount: stores.length,
-        dbId: store.id,
-        dbAddress: store.address,
-        googlePlaceId: store.googlePlaceId,
-        latitude: store.latitudeRaw,
-        longitude: store.longitudeRaw,
-        createdAt: store.createdAt,
-        updatedAt: store.updatedAt,
-        active: store.active,
+        serviceNumber,
+        duplicateCount: services.length,
+        dbId: service.id,
+        dbAddress: service.address,
+        googlePlaceId: service.googlePlaceId,
+        latitude: service.latitudeRaw,
+        longitude: service.longitudeRaw,
+        createdAt: service.createdAt,
+        updatedAt: service.updatedAt,
+        active: service.active,
         addressMatchesOfficial: addressComparison?.status ?? "",
         coordinateStatus: matchedRow?.coordinateStatus ?? "",
         officialAddress: official?.officialAddress ?? "",
-        details: `duplicate_db_ids=${stores.map((entry) => entry.id).join(",")}`,
+        details: `duplicate_db_ids=${services.map((entry) => entry.id).join(",")}`,
       });
     }
   }
 
   return duplicates.sort((left, right) => {
-    const byStore = left.storeNumber.localeCompare(right.storeNumber, "es", { numeric: true });
-    if (byStore !== 0) {
-      return byStore;
+    const byService = left.serviceNumber.localeCompare(right.serviceNumber, "es", { numeric: true });
+    if (byService !== 0) {
+      return byService;
     }
 
     return left.dbId.localeCompare(right.dbId);
@@ -187,23 +187,23 @@ const buildStats = (
   summary: ReconciliationRow[],
   duplicateGroups: number,
   totalOfficialRows: number,
-  totalUniqueOfficialStoreNumbers: number,
+  totalUniqueOfficialServiceNumbers: number,
   totalDatabaseRows: number,
-  numericDatabaseStores: number,
+  numericDatabaseServices: number,
   ignoredNonNumericDatabaseRows: number,
 ): ReconciliationStats => {
   const matchedRows = summary.filter((row) => row.status === "matched");
 
   return {
     totalOfficialRows,
-    totalUniqueOfficialStoreNumbers,
+    totalUniqueOfficialServiceNumbers,
     totalDatabaseRows,
-    numericDatabaseStores,
+    numericDatabaseServices,
     ignoredNonNumericDatabaseRows,
-    matchedStores: matchedRows.length,
+    matchedServices: matchedRows.length,
     missingInDatabase: summary.filter((row) => row.status === "missing_in_database").length,
     extraInDatabase: summary.filter((row) => row.status === "extra_in_database").length,
-    duplicateStoreNumberGroups: duplicateGroups,
+    duplicateServiceNumberGroups: duplicateGroups,
     addressExactMatches: matchedRows.filter((row) => row.addressMatchStatus === "exact_match").length,
     addressLikelyMatches: matchedRows.filter((row) => row.addressMatchStatus === "likely_match").length,
     addressMismatches: matchedRows.filter((row) => row.addressMatchStatus === "mismatch").length,
@@ -221,10 +221,10 @@ const buildStats = (
 };
 
 const createBaseRow = (
-  storeNumber: string,
+  serviceNumber: string,
   status: ReconciliationRow["status"],
 ): ReconciliationRow => ({
-  storeNumber,
+  serviceNumber,
   status,
   carrefourOfficialAddress: "",
   dbAddress: "",
@@ -247,53 +247,53 @@ const createBaseRow = (
   notes: "",
 });
 
-export const reconcileStores = async (
-  officialStores: OfficialStore[],
-  databaseStores: DatabaseStore[],
+export const reconcileServices = async (
+  officialServices: OfficialService[],
+  databaseServices: DatabaseService[],
   options: ReconcileOptions,
   geocodeCache: GeocodeCache,
   geocodeCachePath: string,
   googleMapsApiKey: string | null,
 ): Promise<ReconciliationResult> => {
-  const ignoredDatabaseStores = databaseStores.filter((store) => !normalizeStoreNumber(store.name));
-  const numericDatabaseStores = databaseStores.filter((store) => normalizeStoreNumber(store.name));
+  const ignoredDatabaseServices = databaseServices.filter((service) => !normalizeServiceNumber(service.name));
+  const numericDatabaseServices = databaseServices.filter((service) => normalizeServiceNumber(service.name));
 
-  const officialByNumber = new Map<string, OfficialStore[]>();
-  for (const store of officialStores) {
-    const bucket = officialByNumber.get(store.storeNumber) ?? [];
-    bucket.push(store);
-    officialByNumber.set(store.storeNumber, bucket);
+  const officialByNumber = new Map<string, OfficialService[]>();
+  for (const service of officialServices) {
+    const bucket = officialByNumber.get(service.serviceNumber) ?? [];
+    bucket.push(service);
+    officialByNumber.set(service.serviceNumber, bucket);
   }
 
-  const databaseByNumber = new Map<string, DatabaseStore[]>();
-  for (const store of numericDatabaseStores) {
-    const storeNumber = normalizeStoreNumber(store.name);
-    if (!storeNumber) {
+  const databaseByNumber = new Map<string, DatabaseService[]>();
+  for (const service of numericDatabaseServices) {
+    const serviceNumber = normalizeServiceNumber(service.name);
+    if (!serviceNumber) {
       continue;
     }
 
-    const bucket = databaseByNumber.get(storeNumber) ?? [];
-    bucket.push(store);
-    databaseByNumber.set(storeNumber, bucket);
+    const bucket = databaseByNumber.get(serviceNumber) ?? [];
+    bucket.push(service);
+    databaseByNumber.set(serviceNumber, bucket);
   }
 
   const summary: ReconciliationRow[] = [];
-  const rowByStoreAndDbId = new Map<string, ReconciliationRow>();
+  const rowByServiceAndDbId = new Map<string, ReconciliationRow>();
   const officialNumbers = new Set(officialByNumber.keys());
   const databaseNumbers = new Set(databaseByNumber.keys());
 
-  for (const storeNumber of [...officialNumbers].sort((left, right) =>
+  for (const serviceNumber of [...officialNumbers].sort((left, right) =>
     left.localeCompare(right, "es", { numeric: true }),
   )) {
-    const official = officialByNumber.get(storeNumber)?.[0];
+    const official = officialByNumber.get(serviceNumber)?.[0];
     if (!official) {
       continue;
     }
 
-    const databaseMatches = databaseByNumber.get(storeNumber) ?? [];
+    const databaseMatches = databaseByNumber.get(serviceNumber) ?? [];
     if (databaseMatches.length === 0) {
       summary.push({
-        ...createBaseRow(storeNumber, "missing_in_database"),
+        ...createBaseRow(serviceNumber, "missing_in_database"),
         carrefourOfficialAddress: official.officialAddress,
         notes: "Present in Carrefour official CSV but missing from database export",
       });
@@ -317,15 +317,15 @@ export const reconcileStores = async (
       geocodingDiagnostics = skippedGeocodingDiagnostics(buildGeocodeQuery(official));
     }
 
-    for (const databaseStore of databaseMatches) {
+    for (const databaseService of databaseMatches) {
       const addressComparison = compareAddresses(
         official.officialAddress,
-        databaseStore.address,
+        databaseService.address,
         options.likelyMatchThreshold,
       );
 
       const coordinateEvaluation = evaluateCoordinateStatus(
-        databaseStore,
+        databaseService,
         geocodingDiagnostics,
         options,
       );
@@ -333,63 +333,63 @@ export const reconcileStores = async (
       const notes: string[] = [];
       if (databaseMatches.length > 1) {
         notes.push(
-          `duplicate_db_rows: ${databaseMatches.map((store) => store.id).join(", ")}`,
+          `duplicate_db_rows: ${databaseMatches.map((service) => service.id).join(", ")}`,
         );
       }
 
-      if ((officialByNumber.get(storeNumber)?.length ?? 0) > 1) {
+      if ((officialByNumber.get(serviceNumber)?.length ?? 0) > 1) {
         notes.push("duplicate_official_rows");
       }
 
       const row: ReconciliationRow = {
-        storeNumber,
+        serviceNumber,
         status: "matched",
         carrefourOfficialAddress: official.officialAddress,
-        dbAddress: databaseStore.address,
+        dbAddress: databaseService.address,
         addressMatchStatus: addressComparison.status,
         addressSimilarity: addressComparison.similarity,
         normalizedOfficialAddress: addressComparison.normalizedOfficialAddress,
         normalizedDbAddress: addressComparison.normalizedDbAddress,
         addressDifferenceReason: addressComparison.addressDifferenceReason,
-        dbLatitude: databaseStore.latitudeRaw,
-        dbLongitude: databaseStore.longitudeRaw,
+        dbLatitude: databaseService.latitudeRaw,
+        dbLongitude: databaseService.longitudeRaw,
         coordinateDistanceMeters: coordinateEvaluation.coordinateDistanceMeters,
         coordinateStatus: coordinateEvaluation.coordinateStatus,
         ...buildRowGeocodingFields(geocodingDiagnostics),
-        dbId: databaseStore.id,
+        dbId: databaseService.id,
         notes: notes.join("; "),
       };
 
       summary.push(row);
-      rowByStoreAndDbId.set(`${storeNumber}:${databaseStore.id}`, row);
+      rowByServiceAndDbId.set(`${serviceNumber}:${databaseService.id}`, row);
     }
   }
 
-  for (const storeNumber of [...databaseNumbers].sort((left, right) =>
+  for (const serviceNumber of [...databaseNumbers].sort((left, right) =>
     left.localeCompare(right, "es", { numeric: true }),
   )) {
-    if (officialNumbers.has(storeNumber)) {
+    if (officialNumbers.has(serviceNumber)) {
       continue;
     }
 
-    const databaseMatches = databaseByNumber.get(storeNumber) ?? [];
-    for (const databaseStore of databaseMatches) {
+    const databaseMatches = databaseByNumber.get(serviceNumber) ?? [];
+    for (const databaseService of databaseMatches) {
       summary.push({
-        ...createBaseRow(storeNumber, "extra_in_database"),
-        dbAddress: databaseStore.address,
-        dbLatitude: databaseStore.latitudeRaw,
-        dbLongitude: databaseStore.longitudeRaw,
-        dbId: databaseStore.id,
+        ...createBaseRow(serviceNumber, "extra_in_database"),
+        dbAddress: databaseService.address,
+        dbLatitude: databaseService.latitudeRaw,
+        dbLongitude: databaseService.longitudeRaw,
+        dbId: databaseService.id,
         notes: "Present in database export but missing from Carrefour official CSV",
       });
     }
   }
 
   const duplicateGroups =
-    [...officialByNumber.entries()].filter(([, stores]) => stores.length > 1).length +
-    [...databaseByNumber.entries()].filter(([, stores]) => stores.length > 1).length;
+    [...officialByNumber.entries()].filter(([, services]) => services.length > 1).length +
+    [...databaseByNumber.entries()].filter(([, services]) => services.length > 1).length;
 
-  const duplicates = buildDuplicateReports(officialByNumber, databaseByNumber, rowByStoreAndDbId);
+  const duplicates = buildDuplicateReports(officialByNumber, databaseByNumber, rowByServiceAndDbId);
   const missingInDatabase = summary.filter((row) => row.status === "missing_in_database");
   const extraInDatabase = summary.filter((row) => row.status === "extra_in_database");
   const addressMismatches = summary.filter(
@@ -404,11 +404,11 @@ export const reconcileStores = async (
   const stats = buildStats(
     summary,
     duplicateGroups,
-    officialStores.length,
+    officialServices.length,
     officialByNumber.size,
-    databaseStores.length,
-    numericDatabaseStores.length,
-    ignoredDatabaseStores.length,
+    databaseServices.length,
+    numericDatabaseServices.length,
+    ignoredDatabaseServices.length,
   );
 
   return {
@@ -422,10 +422,10 @@ export const reconcileStores = async (
   };
 };
 
-export const getIgnoredDatabaseStoreNames = (databaseStores: DatabaseStore[]): string[] =>
-  databaseStores
-    .filter((store) => !normalizeStoreNumber(store.name))
-    .map((store) => store.name)
+export const getIgnoredDatabaseServiceNames = (databaseServices: DatabaseService[]): string[] =>
+  databaseServices
+    .filter((service) => !normalizeServiceNumber(service.name))
+    .map((service) => service.name)
     .sort((left, right) => left.localeCompare(right, "es"));
 
 export const countMatchedGeocodingFailures = (summary: ReconciliationRow[]): number =>

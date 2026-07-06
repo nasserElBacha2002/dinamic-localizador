@@ -36,6 +36,8 @@ const mapCandidateRow = (row: Record<string, unknown>): AttendanceReminderCandid
   employeeName: String(row.employee_name),
   employeePhoneNumber: String(row.employee_phone_number),
   serviceName: String(row.service_name),
+  serviceAddress: row.service_address ? String(row.service_address) : null,
+  serviceLocality: row.service_locality ? String(row.service_locality) : null,
   scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
   scheduledEnd: row.scheduled_end
     ? new Date(row.scheduled_end as Date | string).toISOString()
@@ -70,7 +72,7 @@ const getRetryThresholds = () => ({
 });
 
 export const attendanceNotificationRepository = {
-  async findByInventoryEmployeeType(
+  async findByOperationEmployeeType(
     companyId: string,
     input: {
       operationId: string;
@@ -127,6 +129,8 @@ export const attendanceNotificationRepository = {
           i.scheduled_start,
           i.scheduled_end,
           s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
@@ -174,6 +178,8 @@ export const attendanceNotificationRepository = {
           i.scheduled_start,
           i.scheduled_end,
           s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
@@ -256,6 +262,8 @@ export const attendanceNotificationRepository = {
           i.scheduled_start,
           i.scheduled_end,
           s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
@@ -341,6 +349,8 @@ export const attendanceNotificationRepository = {
           i.scheduled_start,
           i.scheduled_end,
           s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number
@@ -440,7 +450,7 @@ export const attendanceNotificationRepository = {
         return reclaimedAfterRace;
       }
 
-      const existing = await this.findByInventoryEmployeeType(companyId, input);
+      const existing = await this.findByOperationEmployeeType(companyId, input);
       if (!existing) {
         return null;
       }
@@ -704,6 +714,8 @@ export const attendanceNotificationRepository = {
           i.scheduled_start,
           i.scheduled_end,
           s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
           e.phone_number AS employee_phone_number,

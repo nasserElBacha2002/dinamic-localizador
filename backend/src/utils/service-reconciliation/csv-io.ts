@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { normalizeCsvHeader, parseCsvContent } from "../csv-parse";
-import { normalizeStoreNumber } from "./store-number";
-import type { DatabaseStore, OfficialStore, ReconciliationRow } from "./types";
+import { normalizeServiceNumber } from "./service-number";
+import type { DatabaseService, OfficialService, ReconciliationRow } from "./types";
 
 const readCsvRecords = (filePath: string): Record<string, string>[] => {
   const content = readFileSync(filePath, "utf8");
@@ -37,17 +37,17 @@ const parseCoordinate = (value: string): number | null => {
   return Number.isFinite(parsed) ? parsed : null;
 };
 
-export const loadOfficialStores = (filePath: string): OfficialStore[] =>
+export const loadOfficialServices = (filePath: string): OfficialService[] =>
   readCsvRecords(filePath).flatMap((record) => {
     const rawStoreId = readField(record, "store_id");
-    const storeNumber = normalizeStoreNumber(rawStoreId);
-    if (!storeNumber) {
+    const serviceNumber = normalizeServiceNumber(rawStoreId);
+    if (!serviceNumber) {
       return [];
     }
 
     return [
       {
-        storeNumber,
+        serviceNumber,
         rawStoreId,
         officialAddress: readField(record, "official_address"),
         neighborhood: readField(record, "neighborhood"),
@@ -56,7 +56,7 @@ export const loadOfficialStores = (filePath: string): OfficialStore[] =>
     ];
   });
 
-export const loadDatabaseStores = (filePath: string): DatabaseStore[] =>
+export const loadDatabaseServices = (filePath: string): DatabaseService[] =>
   readCsvRecords(filePath).map((record) => {
     const latitudeRaw = readField(record, "latitude");
     const longitudeRaw = readField(record, "longitude");
@@ -71,7 +71,7 @@ export const loadDatabaseStores = (filePath: string): DatabaseStore[] =>
       longitudeRaw,
       neighborhood: readField(record, "neighborhood", "barrio"),
       locality: readField(record, "locality", "localidad"),
-      storeFormat: readField(record, "store_format", "formato"),
+      serviceFormat: readField(record, "store_format", "formato"),
       active: readField(record, "active"),
       googlePlaceId: readField(record, "google_place_id"),
       createdAt: readField(record, "created_at"),
@@ -142,7 +142,7 @@ const formatDistanceMeters = (value: number | null): string =>
   value === null ? "" : String(Math.round(value * 100) / 100);
 
 export const reconciliationRowToCsv = (row: ReconciliationRow): string[] => [
-  row.storeNumber,
+  row.serviceNumber,
   row.status,
   row.carrefourOfficialAddress,
   row.dbAddress,

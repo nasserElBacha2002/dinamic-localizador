@@ -8,7 +8,7 @@ import {
   isGlobalHelpCommand,
   isGlobalMenuCommand,
   normalizeIntentText,
-  parseInventorySelection,
+  parseOperationSelection,
 } from "./intent";
 import { normalizeWhatsAppPhone } from "./phone";
 
@@ -46,14 +46,14 @@ describe("isCheckoutIntent", () => {
   });
 });
 
-describe("parseInventorySelection", () => {
+describe("parseOperationSelection", () => {
   it("parses valid numeric selection", () => {
-    assert.equal(parseInventorySelection("2"), 2);
+    assert.equal(parseOperationSelection("2"), 2);
   });
 
   it("rejects invalid selection", () => {
-    assert.equal(parseInventorySelection("abc"), null);
-    assert.equal(parseInventorySelection("0"), null);
+    assert.equal(parseOperationSelection("abc"), null);
+    assert.equal(parseOperationSelection("0"), null);
   });
 });
 

@@ -49,8 +49,8 @@ interface StatisticsOperationTableProps {
 }
 
 const EXPORT_HEADERS = [
-  "Inventario",
-  "Tienda",
+  "Operación",
+  "Servicio",
   "Dirección",
   "Programado",
   "Asignados",
@@ -193,12 +193,12 @@ export function StatisticsOperationTable({
     <Stack gap="md">
       <Group justify="flex-end">
         <ExportActionButtons
-          baseName="attendance-by-inventory"
+          baseName="attendance-by-operation"
           headers={EXPORT_HEADERS}
           rows={exportData}
           dateFrom={dateFrom}
           dateTo={dateTo}
-          sheetName="Por inventario"
+          sheetName="Por operación"
           disabled={exportsDisabled}
         />
       </Group>

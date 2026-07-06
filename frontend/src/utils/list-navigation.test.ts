@@ -41,7 +41,7 @@ describe("resolveListReturnPath", () => {
     assert.equal(path, "/operations");
   });
 
-  it("returns inventory detail when navigating from operational view to attendance", () => {
+  it("returns operation detail when navigating from operational view to attendance", () => {
     const path = resolveListReturnPath("/attendance", {
       fromList: "/operations/inv-123",
       listPath: "/operations/inv-123",

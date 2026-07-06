@@ -4,21 +4,21 @@ import { stdin as input, stdout as output } from "node:process";
 import { resolve } from "node:path";
 import { config } from "dotenv";
 import { env } from "../config/env";
-import { applyFixes, verifyAppliedFixes } from "../utils/store-fix/apply";
-import { buildCurrentDbState } from "../utils/store-fix/current-db";
+import { applyFixes, verifyAppliedFixes } from "../utils/service-fix/apply";
+import { buildCurrentDbState } from "../utils/service-fix/current-db";
 import {
   buildEnvironmentSnapshot,
-  loadCurrentStoresFromDatabase,
+  loadCurrentServicesFromDatabase,
   printStartupSummary,
-} from "../utils/store-fix/db-stores";
+} from "../utils/service-fix/db-services";
 import {
   loadDuplicateRows,
   loadOfficialSourceRows,
   loadReconciliationRows,
-} from "../utils/store-fix/csv";
-import { writeFixPlanOutputs } from "../utils/store-fix/output";
-import { buildFixPlan, selectFixesToApply } from "../utils/store-fix/plan";
-import type { FixPlanOptions } from "../utils/store-fix/types";
+} from "../utils/service-fix/csv";
+import { writeFixPlanOutputs } from "../utils/service-fix/output";
+import { buildFixPlan, selectFixesToApply } from "../utils/service-fix/plan";
+import type { FixPlanOptions } from "../utils/service-fix/types";
 
 config();
 
@@ -45,27 +45,27 @@ interface CliOptions {
 
 const printUsage = (): void => {
   console.log(`Usage:
-  npm run fix:stores -- \\
+  npm run fix:services -- \\
     --summary ./reports/store_reconciliation_summary.csv \\
     --missing ./reports/missing_in_database.csv \\
     --duplicates ./reports/duplicate_store_numbers.csv \\
     --address-mismatches ./reports/address_mismatches.csv \\
     --coordinate-mismatches ./reports/coordinate_mismatches.csv \\
-    --out ./reports/store-fixes
+    --out ./reports/service-fixes
 
 Options:
   --official <path>              Carrefour official CSV (optional, for missing inserts)
-  --generate-sql                 Generate proposed_store_updates.sql (default in dry-run)
+  --generate-sql                 Generate proposed_service_updates.sql (default in dry-run)
   --apply                        Apply selected fixes to the database
   --yes                          Skip interactive confirmation in apply mode
   --confirm-production           Required with --apply when NODE_ENV=production
   --verify-after-apply           Re-read affected rows after apply
   --include-review-coordinates   Include coordinate fixes with distance > 100m and <= 300m
   --fix-addresses                Include address updates in apply mode
-  --insert-missing               Include missing store inserts in apply mode
+  --insert-missing               Include missing service inserts in apply mode
   --deactivate-duplicates        Deactivate high-confidence duplicate rows
-  --fix-nonnumeric-names         Rename non-numeric store names when address matches missing official row
-  --deactivate-extra             Deactivate extra numeric stores (review only by default)
+  --fix-nonnumeric-names         Rename non-numeric service names when address matches missing official row
+  --deactivate-extra             Deactivate extra numeric services (review only by default)
 
 The script always connects to the current environment database before planning fixes.
 Default behavior is DRY RUN. Only coordinate fixes with recomputed distance > 300m are apply_by_default=true.
@@ -74,7 +74,7 @@ Default behavior is DRY RUN. Only coordinate fixes with recomputed distance > 30
 
 const parseCliOptions = (argv: string[]): CliOptions => {
   const options: Partial<CliOptions> = {
-    outDir: "./reports/store-fixes",
+    outDir: "./reports/service-fixes",
     generateSql: true,
     apply: false,
     yes: false,
@@ -213,7 +213,7 @@ const assertProductionApplyAllowed = (cli: CliOptions): void => {
 
   console.log("");
   console.log("=".repeat(72));
-  console.log("WARNING: APPLYING STORE FIXES TO PRODUCTION DATABASE");
+  console.log("WARNING: APPLYING SERVICE FIXES TO PRODUCTION DATABASE");
   console.log(`Target: ${env.DB_HOST}:${env.DB_PORT}/${env.DB_NAME}`);
   console.log("=".repeat(72));
   console.log("");
@@ -232,10 +232,10 @@ const main = async (): Promise<void> => {
     fixNonnumericNames: cli.fixNonnumericNames,
   };
 
-  const { stores } = await loadCurrentStoresFromDatabase();
-  const currentDb = buildCurrentDbState(stores);
+  const { services } = await loadCurrentServicesFromDatabase();
+  const currentDb = buildCurrentDbState(services);
   const environmentSnapshot = buildEnvironmentSnapshot(
-    stores,
+    services,
     currentDb.duplicateNumericGroups.size,
   );
 
@@ -272,7 +272,7 @@ const main = async (): Promise<void> => {
   if (!cli.apply) {
     console.log("");
     console.log("DRY RUN complete. No database changes were made.");
-    console.log("Review proposed_store_updates.sql and proposed_store_fixes.csv before applying.");
+    console.log("Review proposed_service_updates.sql and proposed_service_fixes.csv before applying.");
     return;
   }
 
@@ -291,7 +291,7 @@ const main = async (): Promise<void> => {
 
   const missingMeta = new Map(
     plan.missingInserts.map((row) => [
-      row.storeNumber,
+      row.serviceNumber,
       { neighborhood: row.neighborhood, locality: row.locality },
     ]),
   );

@@ -2,8 +2,8 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { config } from "dotenv";
-import { buildReportCsv } from "../utils/store-fix/csv";
-import { loadCurrentStoresFromDatabase } from "../utils/store-fix/db-stores";
+import { buildReportCsv } from "../utils/service-fix/csv";
+import { loadCurrentServicesFromDatabase } from "../utils/service-fix/db-services";
 
 config();
 
@@ -24,7 +24,7 @@ const HEADERS = [
 ] as const;
 
 const parseCliOptions = (argv: string[]): { outPath: string } => {
-  let outPath = "./data/database_stores.csv";
+  let outPath = "./data/database_services.csv";
 
   for (let index = 2; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -41,9 +41,10 @@ const parseCliOptions = (argv: string[]): { outPath: string } => {
 
     if (arg === "--help" || arg === "-h") {
       console.log(`Usage:
-  npm run export:stores -- [--out ./data/database_stores.csv]
+  npm run export:services -- [--out ./data/database_services.csv]
+  npm run export:stores -- [--out ./data/database_services.csv]
 
-Exports the connected database stores table to CSV for reconcile:stores.
+Exports the connected database services table to CSV for reconcile:services.
 `);
       process.exit(0);
     }
@@ -57,28 +58,28 @@ Exports the connected database stores table to CSV for reconcile:stores.
 const main = async (): Promise<void> => {
   const { outPath } = parseCliOptions(process.argv);
   const absolutePath = resolve(outPath);
-  const { stores } = await loadCurrentStoresFromDatabase();
+  const { services } = await loadCurrentServicesFromDatabase();
 
-  const rows = stores.map((store) => [
-    store.id,
-    store.name,
-    store.address,
-    store.latitude === null ? "" : String(store.latitude),
-    store.longitude === null ? "" : String(store.longitude),
-    store.allowedRadiusMeters === null ? "" : String(store.allowedRadiusMeters),
-    store.active ? "1" : "0",
-    store.createdAt,
-    store.updatedAt,
-    store.googlePlaceId ?? "",
-    store.neighborhood ?? "",
-    store.locality ?? "",
-    store.storeFormat ?? "",
+  const rows = services.map((service) => [
+    service.id,
+    service.name,
+    service.address,
+    service.latitude === null ? "" : String(service.latitude),
+    service.longitude === null ? "" : String(service.longitude),
+    service.allowedRadiusMeters === null ? "" : String(service.allowedRadiusMeters),
+    service.active ? "1" : "0",
+    service.createdAt,
+    service.updatedAt,
+    service.googlePlaceId ?? "",
+    service.neighborhood ?? "",
+    service.locality ?? "",
+    service.serviceFormat ?? "",
   ]);
 
   mkdirSync(dirname(absolutePath), { recursive: true });
   writeFileSync(absolutePath, buildReportCsv(HEADERS, rows), "utf8");
 
-  console.log(`Exported ${stores.length} store(s) to ${absolutePath}`);
+  console.log(`Exported ${services.length} service(s) to ${absolutePath}`);
 };
 
 void main().catch((error) => {

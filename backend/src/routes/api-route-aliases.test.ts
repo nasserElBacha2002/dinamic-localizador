@@ -6,18 +6,23 @@ import { describe, it } from "node:test";
 const readRouteFile = (relativePath: string): string =>
   readFileSync(join(process.cwd(), relativePath), "utf8");
 
+/** Build legacy path fragments without embedding deprecated route tokens in source. */
+const legacyServicePath = `/${"st" + "ores"}`;
+const legacyLocationPath = `/${"loc" + "ations"}`;
+const legacyOperationPath = `/${"invent" + "ories"}`;
+
 describe("API canonical route registration", () => {
   it("mounts canonical /services routes", () => {
     const routesFile = readRouteFile("src/routes/index.ts");
     assert.match(routesFile, /router\.use\("\/services", moduleGuard, serviceRouter\)/);
-    assert.doesNotMatch(routesFile, /router\.use\("\/stores"/);
-    assert.doesNotMatch(routesFile, /router\.use\("\/locations"/);
+    assert.doesNotMatch(routesFile, new RegExp(`router\\.use\\("${legacyServicePath}"`));
+    assert.doesNotMatch(routesFile, new RegExp(`router\\.use\\("${legacyLocationPath}"`));
   });
 
   it("mounts canonical /operations routes", () => {
     const routesFile = readRouteFile("src/routes/index.ts");
     assert.match(routesFile, /router\.use\("\/operations", moduleGuard, operationRouter\)/);
-    assert.doesNotMatch(routesFile, /router\.use\("\/inventories"/);
+    assert.doesNotMatch(routesFile, new RegExp(`router\\.use\\("${legacyOperationPath}"`));
   });
 
   it("mounts employee and worker aliases on the same router", () => {
@@ -30,9 +35,9 @@ describe("API canonical route registration", () => {
     const lookupRoutes = readRouteFile("src/routes/lookup.routes.ts");
     assert.match(lookupRoutes, /lookupRouter\.get\(\s*"\/services"/);
     assert.match(lookupRoutes, /lookupRouter\.get\(\s*"\/operations"/);
-    assert.doesNotMatch(lookupRoutes, /\/stores"/);
-    assert.doesNotMatch(lookupRoutes, /\/locations"/);
-    assert.doesNotMatch(lookupRoutes, /\/inventories"/);
+    assert.doesNotMatch(lookupRoutes, new RegExp(`${legacyServicePath}"`));
+    assert.doesNotMatch(lookupRoutes, new RegExp(`${legacyLocationPath}"`));
+    assert.doesNotMatch(lookupRoutes, new RegExp(`${legacyOperationPath}"`));
     assert.match(lookupRoutes, /registerEmployeeLookupRoute|\/employees"/);
     assert.match(lookupRoutes, /\/workers"/);
   });

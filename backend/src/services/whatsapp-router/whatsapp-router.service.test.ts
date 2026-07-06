@@ -30,7 +30,7 @@ const operationId = "00000000-0000-4000-8000-000000000003";
 const enabledStates = () =>
   new Map([
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
-    [COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, true],
+    [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
     [COMPANY_MODULE_KEYS.REPORTS, true],
     [COMPANY_MODULE_KEYS.BOT_SIMULATOR, true],
@@ -48,8 +48,8 @@ const buildSession = (
   phoneNumber: "+5491111111111",
   state,
   contextJson:
-    state === "WAITING_CHECKOUT_INVENTORY_SELECTION" || state === "WAITING_INVENTORY_SELECTION"
-      ? JSON.stringify({ inventoryOptions: [] })
+    state === "WAITING_CHECKOUT_OPERATION_SELECTION" || state === "WAITING_OPERATION_SELECTION"
+      ? JSON.stringify({ operationOptions: [] })
       : null,
   expiresAt: "2099-01-01T00:00:00.000Z",
   createdAt: "2026-01-01T00:00:00.000Z",
@@ -80,8 +80,8 @@ type HandlerCalls = {
   respond: number;
   startCheckIn: number;
   startCheckout: number;
-  handleInventorySelection: number;
-  handleCheckoutInventorySelection: number;
+  handleOperationSelection: number;
+  handleCheckoutOperationSelection: number;
   processLocationCheckIn: number;
   processLocationCheckout: number;
 };
@@ -91,8 +91,8 @@ const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: Handle
     respond: 0,
     startCheckIn: 0,
     startCheckout: 0,
-    handleInventorySelection: 0,
-    handleCheckoutInventorySelection: 0,
+    handleOperationSelection: 0,
+    handleCheckoutOperationSelection: 0,
     processLocationCheckIn: 0,
     processLocationCheckout: 0,
   };
@@ -110,13 +110,13 @@ const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: Handle
       calls.startCheckout += 1;
       return "<Response><Message>CHECKOUT_STARTED</Message></Response>";
     },
-    handleInventorySelection: async () => {
-      calls.handleInventorySelection += 1;
-      return "<Response><Message>INVENTORY_SELECTED</Message></Response>";
+    handleOperationSelection: async () => {
+      calls.handleOperationSelection += 1;
+      return "<Response><Message>OPERATION_SELECTED</Message></Response>";
     },
-    handleCheckoutInventorySelection: async () => {
-      calls.handleCheckoutInventorySelection += 1;
-      return "<Response><Message>CHECKOUT_INVENTORY_SELECTED</Message></Response>";
+    handleCheckoutOperationSelection: async () => {
+      calls.handleCheckoutOperationSelection += 1;
+      return "<Response><Message>CHECKOUT_OPERATION_SELECTED</Message></Response>";
     },
     processLocationCheckIn: async () => {
       calls.processLocationCheckIn += 1;
@@ -182,12 +182,12 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("blocks Llegué when inventory_operations is disabled", async () => {
+  it("blocks Llegué when operations is disabled", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
 
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({ body: "Llegué", moduleStates: states }),
@@ -309,7 +309,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     assert.match(response, new RegExp(EXPIRED_SESSION_USER_MESSAGE));
     assert.equal(calls.startCheckIn, 0);
-    assert.equal(calls.handleInventorySelection, 0);
+    assert.equal(calls.handleOperationSelection, 0);
   });
 
   for (const command of ["menú", "menu", "inicio"] as const) {
@@ -491,7 +491,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.match(response, /Marcar llegada — escribí "Llegué"/);
   });
 
-  it("routes active check-in inventory selection to attendance handler", async () => {
+  it("routes active check-in operation selection to attendance handler", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -499,13 +499,13 @@ describe("whatsappRouterService.routeTextMessage", () => {
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({
         body: "1",
-        session: buildSession("WAITING_INVENTORY_SELECTION"),
+        session: buildSession("WAITING_OPERATION_SELECTION"),
       }),
       handlers,
     );
 
-    assert.match(response, /INVENTORY_SELECTED/);
-    assert.equal(calls.handleInventorySelection, 1);
+    assert.match(response, /OPERATION_SELECTED/);
+    assert.equal(calls.handleOperationSelection, 1);
   });
 
   it("routes active check-in location wait to attendance handler", async () => {
@@ -525,7 +525,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("routes active checkout inventory selection to checkout handler", async () => {
+  it("routes active checkout operation selection to checkout handler", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -533,13 +533,13 @@ describe("whatsappRouterService.routeTextMessage", () => {
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({
         body: "1",
-        session: buildSession("WAITING_CHECKOUT_INVENTORY_SELECTION"),
+        session: buildSession("WAITING_CHECKOUT_OPERATION_SELECTION"),
       }),
       handlers,
     );
 
-    assert.match(response, /CHECKOUT_INVENTORY_SELECTED/);
-    assert.equal(calls.handleCheckoutInventorySelection, 1);
+    assert.match(response, /CHECKOUT_OPERATION_SELECTED/);
+    assert.equal(calls.handleCheckoutOperationSelection, 1);
   });
 
   it("routes active checkout location wait to checkout handler", async () => {
@@ -655,7 +655,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.equal(calls.processLocationCheckout, 0);
   });
 
-  it("returns selection prompt for location during check-in inventory selection", async () => {
+  it("returns selection prompt for location during check-in operation selection", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -663,7 +663,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     const response = await whatsappRouterService.routeLocationMessage(
       baseContext({
         messageType: "LOCATION",
-        session: buildSession("WAITING_INVENTORY_SELECTION"),
+        session: buildSession("WAITING_OPERATION_SELECTION"),
         payload: {
           MessageSid: "SM-LOC-2",
           From: "whatsapp:+5491111111111",
@@ -703,7 +703,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.equal(calls.processLocationCheckout, 1);
   });
 
-  it("returns selection prompt for location during checkout inventory selection", async () => {
+  it("returns selection prompt for location during checkout operation selection", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -711,7 +711,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     const response = await whatsappRouterService.routeLocationMessage(
       baseContext({
         messageType: "LOCATION",
-        session: buildSession("WAITING_CHECKOUT_INVENTORY_SELECTION"),
+        session: buildSession("WAITING_CHECKOUT_OPERATION_SELECTION"),
         payload: {
           MessageSid: "SM-LOC-4",
           From: "whatsapp:+5491111111111",
@@ -826,12 +826,12 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     assert.equal(calls.respond, 1);
   });
 
-  it("blocks mi jornada when inventory_operations is disabled", async () => {
+  it("blocks mi jornada when operations is disabled", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
 
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({ body: "hoy", moduleStates: states }),
@@ -918,7 +918,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
       baseContext({
         body: "1",
         session: buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION", {
-          contextJson: JSON.stringify({ inventoryOptions: options }),
+          contextJson: JSON.stringify({ operationOptions: options }),
         }),
       }),
       handlers,
@@ -932,13 +932,13 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
-    let confirmedInventoryId: string | null = null;
+    let confirmedOperationId: string | null = null;
 
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => [
       sampleAssignedOperation(),
     ]);
     mock.method(employeeWorkdayService, "confirmAssignment", async (_companyId, _employeeId, invId) => {
-      confirmedInventoryId = invId;
+      confirmedOperationId = invId;
       return { kind: "ok" as const, message: "CONFIRMED_OK" };
     });
 
@@ -948,7 +948,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     );
 
     assert.match(response, /CONFIRMED_OK/);
-    assert.equal(confirmedInventoryId, operationId);
+    assert.equal(confirmedOperationId, operationId);
   });
 
   it("returns invalid selection for explicit out-of-range confirm with one assignment", async () => {
@@ -987,7 +987,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
-    let unavailableInventoryId: string | null = null;
+    let unavailableOperationId: string | null = null;
 
     mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => [
       sampleAssignedOperation(),
@@ -996,7 +996,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
       employeeWorkdayService,
       "markAssignmentUnavailable",
       async (_companyId, _employeeId, invId) => {
-        unavailableInventoryId = invId;
+        unavailableOperationId = invId;
         return { kind: "ok" as const, message: "UNAVAILABLE_OK" };
       },
     );
@@ -1007,7 +1007,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     );
 
     assert.match(response, /UNAVAILABLE_OK/);
-    assert.equal(unavailableInventoryId, operationId);
+    assert.equal(unavailableOperationId, operationId);
   });
 
   it("returns invalid selection for explicit out-of-range unavailability with one assignment", async () => {
@@ -1073,13 +1073,13 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     assert.equal(sessionCalls, 0);
   });
 
-  it("blocks confirm attendance when inventory_operations is disabled", async () => {
+  it("blocks confirm attendance when operations is disabled", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let listCalls = 0;
 
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => {
@@ -1096,13 +1096,13 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     assert.equal(listCalls, 0);
   });
 
-  it("blocks report unavailability when inventory_operations is disabled", async () => {
+  it("blocks report unavailability when operations is disabled", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let listCalls = 0;
 
     mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => {
@@ -1119,14 +1119,14 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     assert.equal(listCalls, 0);
   });
 
-  it("blocks numeric confirm selection when inventory_operations is disabled", async () => {
+  it("blocks numeric confirm selection when operations is disabled", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let confirmCalls = 0;
     let completeCalls = 0;
 
@@ -1144,7 +1144,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
         moduleStates: states,
         session: buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION", {
           contextJson: JSON.stringify({
-            inventoryOptions: [
+            operationOptions: [
               {
                 operationId,
                 serviceName: "Carrefour Palermo",
@@ -1162,14 +1162,14 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
     assert.equal(completeCalls, 0);
   });
 
-  it("blocks numeric unavailability selection when inventory_operations is disabled", async () => {
+  it("blocks numeric unavailability selection when operations is disabled", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let unavailableCalls = 0;
     let completeCalls = 0;
 
@@ -1187,7 +1187,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
         moduleStates: states,
         session: buildSession("WAITING_UNAVAILABILITY_SELECTION", {
           contextJson: JSON.stringify({
-            inventoryOptions: [
+            operationOptions: [
               {
                 operationId,
                 serviceName: "Carrefour Palermo",
@@ -1306,7 +1306,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       handlers,
     );
 
-    assert.match(response, /No tenés inventarios próximos para confirmar asistencia/);
+    assert.match(response, /No tenés trabajos próximos para confirmar asistencia/);
   });
 
   it("routes 7 to report unavailability when all modules are enabled", async () => {
@@ -1322,7 +1322,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       handlers,
     );
 
-    assert.match(response, /No tenés inventarios próximos para reportar no disponibilidad/);
+    assert.match(response, /No tenés trabajos próximos para reportar no disponibilidad/);
   });
 
   it("routes 3 to workday when absences is disabled", async () => {
@@ -1359,7 +1359,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("keeps inventory selection during WAITING_INVENTORY_SELECTION", async () => {
+  it("keeps operation selection during WAITING_OPERATION_SELECTION", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -1367,17 +1367,17 @@ describe("whatsappRouterService numeric menu selection", () => {
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({
         body: "1",
-        session: buildSession("WAITING_INVENTORY_SELECTION"),
+        session: buildSession("WAITING_OPERATION_SELECTION"),
       }),
       handlers,
     );
 
-    assert.match(response, /INVENTORY_SELECTED/);
-    assert.equal(calls.handleInventorySelection, 1);
+    assert.match(response, /OPERATION_SELECTED/);
+    assert.equal(calls.handleOperationSelection, 1);
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("keeps checkout inventory selection during WAITING_CHECKOUT_INVENTORY_SELECTION", async () => {
+  it("keeps checkout operation selection during WAITING_CHECKOUT_OPERATION_SELECTION", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -1385,22 +1385,22 @@ describe("whatsappRouterService numeric menu selection", () => {
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({
         body: "1",
-        session: buildSession("WAITING_CHECKOUT_INVENTORY_SELECTION"),
+        session: buildSession("WAITING_CHECKOUT_OPERATION_SELECTION"),
       }),
       handlers,
     );
 
-    assert.match(response, /CHECKOUT_INVENTORY_SELECTED/);
-    assert.equal(calls.handleCheckoutInventorySelection, 1);
+    assert.match(response, /CHECKOUT_OPERATION_SELECTED/);
+    assert.equal(calls.handleCheckoutOperationSelection, 1);
     assert.equal(calls.startCheckout, 0);
   });
 
-  it("routes 1 to checkout when inventory_operations is disabled", async () => {
+  it("routes 1 to checkout when operations is disabled", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
 
     const response = await whatsappRouterService.routeTextMessage(
       baseContext({ body: "1", moduleStates: states }),
@@ -1412,13 +1412,13 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("routes 2 to absence when inventory_operations is disabled", async () => {
+  it("routes 2 to absence when operations is disabled", async () => {
     setupUnitTestEnv();
     const { absenceBotService } = await import("../absence-bot.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
     const states = enabledStates();
-    states.set(COMPANY_MODULE_KEYS.INVENTORY_OPERATIONS, false);
+    states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     let absenceStarted = 0;
 
     mock.method(absenceBotService, "startAbsenceFlow", async () => {
@@ -1486,7 +1486,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       baseContext({
         body: "1",
         session: buildSession("WAITING_CONFIRM_ATTENDANCE_SELECTION", {
-          contextJson: JSON.stringify({ inventoryOptions: options }),
+          contextJson: JSON.stringify({ operationOptions: options }),
         }),
       }),
       handlers,
@@ -1520,7 +1520,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       baseContext({
         body: "1",
         session: buildSession("WAITING_UNAVAILABILITY_SELECTION", {
-          contextJson: JSON.stringify({ inventoryOptions: options }),
+          contextJson: JSON.stringify({ operationOptions: options }),
         }),
       }),
       handlers,
@@ -1530,7 +1530,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("confirms exact inventory during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
+  it("confirms exact operation during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");

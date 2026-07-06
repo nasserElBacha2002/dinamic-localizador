@@ -3,7 +3,7 @@ import type { OperationImportPreviewResult } from "../types/operation-import";
 
 export const RECOMMENDED_IMPORT_TEMPLATE_HEADERS = ["Sucursal", "Fecha"] as const;
 
-export const INVENTORY_IMPORT_FORMAT_HELP = [
+export const OPERATION_IMPORT_FORMAT_HELP = [
   "Formatos admitidos: CSV y XLSX.",
   "Formato mínimo recomendado: Sucursal, Fecha.",
   "También se acepta el formato legacy: PUNTO, Fecha.",
@@ -11,7 +11,7 @@ export const INVENTORY_IMPORT_FORMAT_HELP = [
   "Las columnas LOCAL, Formato y PROVEEDOR pueden venir en el archivo, pero se ignoran.",
   "Si solo se informa una fecha, la operación empieza a las 20:30 y finaliza al día siguiente a las 03:00.",
   "Las tolerancias usan 60 y 90 minutos por defecto si no se informan.",
-  "También se acepta el formato extendido: tienda, fecha_inicio, fecha_fin (o ubicacion/sucursal).",
+  "También se acepta el formato extendido legacy: servicio/ubicación, fecha_inicio, fecha_fin (o ubicacion/sucursal).",
 ].join(" ");
 
 export function downloadRecommendedImportTemplate(): void {
@@ -50,21 +50,21 @@ export function downloadOperationImportErrors(
 
   const isClientFormat = preview.format === "client";
   const headers = isClientFormat
-    ? ["Fila", "PUNTO", "Tienda resuelta", "Fecha original", "Errores"]
-    : ["Fila", "Tienda", "Tienda resuelta", "Inicio original", "Fin original", "Errores"];
+    ? ["Fila", "PUNTO", "Servicio resuelto", "Fecha original", "Errores"]
+    : ["Fila", "Servicio", "Servicio resuelto", "Inicio original", "Fin original", "Errores"];
 
   const rows = errorRows.map((row) =>
     isClientFormat
       ? [
           row.rowNumber,
-          row.punto || row.tienda,
+          row.punto || row.legacyLocation,
           row.serviceName ?? "",
           row.rawFecha,
           row.errors.join(" | "),
         ]
       : [
           row.rowNumber,
-          row.tienda,
+          row.legacyLocation,
           row.serviceName ?? "",
           row.fechaInicio,
           row.fechaFin,

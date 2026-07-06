@@ -37,13 +37,13 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
 }
 
 describe("Company settings summaries", () => {
-  it("builds inventory operation summary from company settings", () => {
+  it("builds operation summary from company settings", () => {
     const summary = buildOperationOperationSummary(createMockSettings());
     const schedule = summary.find((item) => item.label === "Horario");
     assert.equal(schedule?.value, "20:30 → 03:00");
   });
 
-  it("builds WhatsApp summary separately from inventory tolerances", () => {
+  it("builds WhatsApp summary separately from operation tolerances", () => {
     const settings = createMockSettings({
       lateGraceMinutes: 15,
       earlyLeaveToleranceMinutes: 20,

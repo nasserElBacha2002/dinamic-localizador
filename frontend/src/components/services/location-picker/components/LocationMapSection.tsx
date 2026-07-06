@@ -93,7 +93,7 @@ export function ServiceInteractiveMapPanel({
         />
         <Group gap="xs">
           <Badge variant="light" color="red">
-            Centro tienda
+            Centro del servicio
           </Badge>
           <Badge variant="light" color="blue">
             Área validada

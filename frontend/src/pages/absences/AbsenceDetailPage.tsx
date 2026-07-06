@@ -35,7 +35,7 @@ import {
 import { operationStatusLabels } from "../../utils/labels";
 
 const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
-  { key: "service", header: "Tienda", getValue: (row) => row.serviceName },
+  { key: "service", header: "Servicio", getValue: (row) => row.serviceName },
   { key: "start", header: "Inicio", getValue: (row) => formatDateTime(row.scheduledStart) },
   {
     key: "end",
@@ -54,7 +54,7 @@ const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
     align: "right",
     render: (row) => (
       <Button component={RouterLink} to={`/operations/${row.operationId}`} size="compact-xs" variant="light">
-        Ver inventario
+        Ver operación
       </Button>
     ),
   },
@@ -234,19 +234,19 @@ export function AbsenceDetailPage() {
         <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
       </SectionCard>
 
-      <SectionCard title="Inventarios afectados">
-        {request.affectedInventories.length === 0 ? (
+      <SectionCard title="Operaciones afectadas">
+        {request.affectedOperations.length === 0 ? (
           <Text c="dimmed">
-            No se detectaron inventarios asignados que se superpongan con esta ausencia.
+            No se detectaron operaciones asignadas que se superpongan con esta ausencia.
           </Text>
         ) : (
           <Stack gap="md">
             <Alert color="yellow">
-              Esta solicitud se superpone con {request.affectedInventories.length} inventario(s)
+              Esta solicitud se superpone con {request.affectedOperations.length} operación(es)
               asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
             </Alert>
             <DataTable
-              rows={request.affectedInventories}
+              rows={request.affectedOperations}
               columns={affectedOperationColumns}
               getRowKey={(row) => row.operationId}
             />

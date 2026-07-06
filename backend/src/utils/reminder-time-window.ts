@@ -36,7 +36,7 @@ export const buildInventoryStartDueWindow = (
   };
 };
 
-/** Inventories whose reminder threshold (start - hoursBefore) is due at referenceAt. */
+/** Operations whose reminder threshold (start - hoursBefore) is due at referenceAt. */
 export const buildConfirmationReminderDueWindow = (
   referenceAt: Date,
   hoursBefore: number,

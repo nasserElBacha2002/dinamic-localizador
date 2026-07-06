@@ -21,7 +21,7 @@ const statisticsKeys = {
   byEmployee: (companyId: string | undefined, filters: StatisticsFilters) =>
     [...statisticsKeys.all, companyId, "by-employee", filters] as const,
   byOperation: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "by-inventory", filters] as const,
+    [...statisticsKeys.all, companyId, "by-operation", filters] as const,
   byLocation: (companyId: string | undefined, filters: StatisticsFilters) =>
     [...statisticsKeys.all, companyId, "by-service", filters] as const,
 };

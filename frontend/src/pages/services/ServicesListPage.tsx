@@ -22,29 +22,29 @@ import { activeStatusLabel } from "../../utils/labels";
 import { navigateWithListContext } from "../../utils/list-navigation";
 import { hasPermission } from "../../utils/permissions";
 
-const STORES_LIST_PATH = "/services";
+const SERVICES_LIST_PATH = "/services";
 
-const STORE_TABLE_DEFAULTS = {
+const SERVICE_TABLE_DEFAULTS = {
   page: 1,
   pageSize: 10,
   search: "",
   active: "all" as "all" | "true" | "false",
 };
 
-const STORE_TABLE_FIELDS = {
+const SERVICE_TABLE_FIELDS = {
   active: { type: "enum", values: ["all", "true", "false"] },
 } as const;
 
 export function ServicesListPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const listNav = useListNavigationState(STORES_LIST_PATH);
+  const listNav = useListNavigationState(SERVICES_LIST_PATH);
   const permissionsQuery = useCompanyPermissions();
   const canManageServices = hasPermission(permissionsQuery.data?.permissions, "services:manage");
 
   const table = useTableUrlState({
-    defaults: STORE_TABLE_DEFAULTS,
-    fields: STORE_TABLE_FIELDS,
+    defaults: SERVICE_TABLE_DEFAULTS,
+    fields: SERVICE_TABLE_FIELDS,
   });
 
   const { data, isPending, isError, error } = useServices({
@@ -140,7 +140,7 @@ export function ServicesListPage() {
         emptyTitle={`No hay ${terminology.service.plural.toLowerCase()}`}
         emptyDescription={`Creá la primera ${terminology.service.singular.toLowerCase()} para comenzar.`}
         onRowClick={(row) =>
-          navigateWithListContext(navigate, `/services/${row.id}`, STORES_LIST_PATH, location)
+          navigateWithListContext(navigate, `/services/${row.id}`, SERVICES_LIST_PATH, location)
         }
         aria-label={`Listado de ${terminology.service.plural.toLowerCase()}`}
         pagination={

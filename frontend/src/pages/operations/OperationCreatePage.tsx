@@ -76,7 +76,7 @@ export function OperationCreatePage() {
       {settingsError ? (
         <Alert color="yellow" variant="light" mb="md">
           No se pudieron cargar los valores por defecto de la empresa. El servidor aplicará la
-          configuración de inventarios al crear la operación.
+          configuración de operaciones al crear la operación.
         </Alert>
       ) : null}
       {defaultValues ? (

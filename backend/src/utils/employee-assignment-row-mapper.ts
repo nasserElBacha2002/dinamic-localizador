@@ -16,6 +16,7 @@ export const mapEmployeeAssignedOperationRow = (
   operationId: String(row.operation_id),
   serviceName: String(row.service_name),
   serviceAddress: row.service_address ? String(row.service_address) : null,
+  serviceLocality: row.service_locality ? String(row.service_locality) : null,
   serviceLatitude: row.service_latitude === null || row.service_latitude === undefined ? null : Number(row.service_latitude),
   serviceLongitude:
     row.service_longitude === null || row.service_longitude === undefined ? null : Number(row.service_longitude),

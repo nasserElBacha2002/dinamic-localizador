@@ -34,16 +34,16 @@ import { operationStatusLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 import {
   buildOperationTableDefaults,
-  INVENTORY_TABLE_FIELDS,
+  OPERATION_TABLE_FIELDS,
   shouldOmitOperationTableValue,
 } from "./operations-list-table-state";
 
-const INVENTORIES_LIST_PATH = "/operations";
+const OPERATIONS_LIST_PATH = "/operations";
 
 export function OperationsListPage() {
   const navigate = useNavigate();
   const location = useLocation();
-  const listNav = useListNavigationState(INVENTORIES_LIST_PATH);
+  const listNav = useListNavigationState(OPERATIONS_LIST_PATH);
   const permissionsQuery = useCompanyPermissions();
   const canManageInventories = hasPermission(
     permissionsQuery.data?.permissions,
@@ -70,7 +70,7 @@ export function OperationsListPage() {
 
   const table = useTableUrlState({
     defaults: tableDefaults,
-    fields: INVENTORY_TABLE_FIELDS,
+    fields: OPERATION_TABLE_FIELDS,
     shouldOmitFromUrl,
   });
 
@@ -223,7 +223,7 @@ export function OperationsListPage() {
         emptyTitle={`No hay ${terminology.operation.plural.toLowerCase()}`}
         emptyDescription={`Creá la primera ${terminology.operation.singular.toLowerCase()} para comenzar.`}
         onRowClick={(row) =>
-          navigateWithListContext(navigate, `/operations/${row.id}`, INVENTORIES_LIST_PATH, location)
+          navigateWithListContext(navigate, `/operations/${row.id}`, OPERATIONS_LIST_PATH, location)
         }
         aria-label={`Listado de ${terminology.operation.plural.toLowerCase()}`}
         sortBy={table.state.sortBy}

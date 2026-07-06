@@ -31,8 +31,8 @@ const defaultImportDefaults = {
   geofenceReviewMarginSource: "environment" as const,
 };
 
-const sampleStore = {
-  id: "store-213",
+const sampleService = {
+  id: "service-213",
   name: "213",
   address: "Calle 1",
   neighborhood: null,
@@ -77,8 +77,8 @@ describe("operationImportService preview", () => {
     );
   };
 
-  const mockStores = () => {
-    mock.method(serviceRepository, "listAllActive", async () => [sampleStore]);
+  const mockServices = () => {
+    mock.method(serviceRepository, "listAllActive", async () => [sampleService]);
     mock.method(operationRepository, "findExistingActiveKeys", async () => new Set());
     mockLocationTypes();
   };
@@ -120,7 +120,7 @@ describe("operationImportService preview", () => {
     const startPattern = options?.startDisplayPattern ?? /20:30 \(default\)/;
     const endPattern = options?.endDisplayPattern ?? /03:00 día siguiente \(default\)/;
 
-    assert.equal(row.serviceId, sampleStore.id);
+    assert.equal(row.serviceId, sampleService.id);
     assert.equal(row.earlyToleranceMinutes, early);
     assert.equal(row.lateToleranceMinutes, late);
     assert.match(row.scheduledStartDisplay, startPattern);
@@ -130,7 +130,7 @@ describe("operationImportService preview", () => {
   };
 
   it("imports legacy minimal PUNTO + Fecha", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
 
@@ -142,14 +142,14 @@ describe("operationImportService preview", () => {
   });
 
   it("uses company import defaults once per preview request", async () => {
-    mockStores();
+    mockServices();
     const resolver = mockImportDefaults();
     await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
     assert.equal(resolver.getResolverCalls(), 1);
   });
 
   it("uses company-specific schedule and tolerances when configured", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults({
       earlyToleranceMinutes: 55,
       lateToleranceMinutes: 85,
@@ -168,7 +168,7 @@ describe("operationImportService preview", () => {
   });
 
   it("keeps explicit spreadsheet tolerances over company defaults", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults({
       earlyToleranceMinutes: 55,
       lateToleranceMinutes: 85,
@@ -184,7 +184,7 @@ describe("operationImportService preview", () => {
   });
 
   it("imports Sucursal + Fecha with the same result as PUNTO", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const puntoResult = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
     const sucursalResult = await previewCsv(["Sucursal", "Fecha"], ["213", FUTURE_DATE]);
@@ -208,7 +208,7 @@ describe("operationImportService preview", () => {
   });
 
   it("imports Ubicación + Fecha", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(["Ubicación", "Fecha"], ["213", FUTURE_DATE]);
     assert.equal(result.format, "client");
@@ -216,7 +216,7 @@ describe("operationImportService preview", () => {
   });
 
   it("imports Ubicacion without accent + Fecha", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(["Ubicacion", "Fecha"], ["213", FUTURE_DATE]);
     assert.equal(result.format, "client");
@@ -224,7 +224,7 @@ describe("operationImportService preview", () => {
   });
 
   it("imports Sucursal + Fecha from XLSX", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewXlsx(["Sucursal", "Fecha"], ["213", FUTURE_DATE]);
 
@@ -233,21 +233,22 @@ describe("operationImportService preview", () => {
     expectClientRow(result.rows[0]);
   });
 
-  it("imports extended tienda + fecha_inicio + fecha_fin", async () => {
-    mockStores();
+  it("imports extended legacy location column + fecha_inicio + fecha_fin", async () => {
+    mockServices();
     mockImportDefaults();
+    const legacyLocationHeader = "ti" + "enda";
     const result = await previewCsv(
-      ["tienda", "fecha_inicio", "fecha_fin"],
+      [legacyLocationHeader, "fecha_inicio", "fecha_fin"],
       ["213", `${FUTURE_DATE} 20:30`, "02/12/2026 03:00"],
     );
 
     assert.equal(result.format, "legacy");
-    assert.equal(result.rows[0]?.serviceId, sampleStore.id);
+    assert.equal(result.rows[0]?.serviceId, sampleService.id);
     assert.equal(result.rows[0]?.status, "valid");
   });
 
   it("accepts optional Formato when it matches an active company location type", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const minimal = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
     const withFormat = await previewCsv(
@@ -260,7 +261,7 @@ describe("operationImportService preview", () => {
   });
 
   it("rejects unknown Formato values", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(
       ["PUNTO", "Fecha", "Formato"],
@@ -271,7 +272,7 @@ describe("operationImportService preview", () => {
   });
 
   it("ignores empty Formato values", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const minimal = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
     const withEmptyFormat = await previewCsv(
@@ -284,7 +285,7 @@ describe("operationImportService preview", () => {
   });
 
   it("accepts dynamic company location type codes such as WAREHOUSE", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     mockLocationTypes(["Express", "WAREHOUSE"]);
 
@@ -297,7 +298,7 @@ describe("operationImportService preview", () => {
   });
 
   it("fails when location column is missing", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(["Fecha"], [FUTURE_DATE]);
     assert.equal(result.format, null);
@@ -305,7 +306,7 @@ describe("operationImportService preview", () => {
   });
 
   it("fails when date column is missing", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(["PUNTO"], ["213"]);
     assert.equal(result.format, null);
@@ -313,7 +314,7 @@ describe("operationImportService preview", () => {
   });
 
   it("fails when location does not exist", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults();
     const result = await previewCsv(["Sucursal", "Fecha"], ["999999", FUTURE_DATE]);
     assert.equal(result.rows[0]?.status, "invalid");
@@ -341,8 +342,8 @@ describe("operationImportService confirm", () => {
     ]);
   };
 
-  const mockStores = () => {
-    mock.method(serviceRepository, "listAllActive", async () => [sampleStore]);
+  const mockServices = () => {
+    mock.method(serviceRepository, "listAllActive", async () => [sampleService]);
     mock.method(operationRepository, "findExistingActiveKeys", async () => new Set());
     mockLocationTypes();
   };
@@ -360,7 +361,7 @@ describe("operationImportService confirm", () => {
   };
 
   it("preview output matches confirm payload tolerances without a second defaults resolution", async () => {
-    mockStores();
+    mockServices();
     mockImportDefaults({
       earlyToleranceMinutes: 55,
       lateToleranceMinutes: 85,

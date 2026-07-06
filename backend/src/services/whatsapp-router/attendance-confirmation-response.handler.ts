@@ -1,7 +1,9 @@
+import { resolveOperationIdFromSessionContext } from "../../utils/legacy-operation-session-context";
 import { botSessionService } from "../bot-session.service";
 import { employeeWorkdayService } from "../employee-workday.service";
 import {
   formatAssignmentDateTimeLine,
+  formatAssignmentServiceReference,
 } from "../../utils/employee-assignment-format";
 import { companyOperationalSettingsService } from "../company-operational-settings.service";
 import { parseAttendanceConfirmationReply } from "../../utils/attendance-confirmation-reply";
@@ -47,9 +49,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
   }
 
   const context = botSessionService.parseContext(session.contextJson);
-  const operationId =
-    context.attendanceConfirmation?.operationId ??
-    context.attendanceConfirmation?.inventoryId;
+  const operationId = resolveOperationIdFromSessionContext(context);
   if (!operationId || !ctx.employeeId) {
     await botSessionService.completeSession(ctx.companyId, session.id);
     return respond(ctx, handlers, AMBIGUOUS_REPLY_MESSAGE);
@@ -88,7 +88,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
           [
             "✅ Asistencia confirmada.",
             "",
-            `Te esperamos en ${assignment.serviceName} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
+            `Te esperamos en ${formatAssignmentServiceReference(assignment)} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
             "",
             'Cuando llegues, recordá enviar "Llegué" y compartir tu ubicación.',
           ].join("\n"),
@@ -123,7 +123,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
       return respond(
         ctx,
         handlers,
-        `Registramos que no vas a poder asistir al trabajo asignado en ${assignment.serviceName} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
+        `Registramos que no vas a poder asistir al trabajo asignado en ${formatAssignmentServiceReference(assignment)} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
       );
     }
   }

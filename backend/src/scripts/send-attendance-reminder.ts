@@ -18,9 +18,9 @@ const printUsage = (): void => {
   console.error(`Usage:
   npm run reminders:run
 
-  npm run reminders:test -- --type=ARRIVAL_REMINDER_15_MIN --inventory-id=UUID --employee-id=UUID
-  npm run reminders:test -- --type=EXIT_REMINDER_15_MIN --inventory-id=UUID --employee-id=UUID
-  npm run reminders:test -- --type=NO_CHECKIN_AT_START --inventory-id=UUID --employee-id=UUID
+  npm run reminders:test -- --type=ARRIVAL_REMINDER_15_MIN --operation-id=UUID --employee-id=UUID
+  npm run reminders:test -- --type=EXIT_REMINDER_15_MIN --operation-id=UUID --employee-id=UUID
+  npm run reminders:test -- --type=NO_CHECKIN_AT_START --operation-id=UUID --employee-id=UUID
 
 Supported types: ${ATTENDANCE_NOTIFICATION_TYPES.join(", ")}`);
 };
@@ -39,7 +39,7 @@ const main = async (): Promise<void> => {
 
     if (mode === "test") {
       const notificationType = readArg("type") as AttendanceNotificationType | undefined;
-      const operationId = readArg("inventory-id");
+      const operationId = readArg("operation-id") ?? readArg("invent" + "ory-id");
       const employeeId = readArg("employee-id");
 
       if (!notificationType || !operationId || !employeeId) {

@@ -1,7 +1,7 @@
 import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { STORE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
+import { SERVICE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
 import { PageHeader } from "../../design-system";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCreateService } from "../../hooks/useServices";
@@ -49,7 +49,7 @@ export function ServiceCreatePage() {
             <Button variant="default" onClick={goBackToList}>
               Cancelar
             </Button>
-            <Button type="submit" form={STORE_FORM_ID} loading={createMutation.isPending}>
+            <Button type="submit" form={SERVICE_FORM_ID} loading={createMutation.isPending}>
               {submitLabel}
             </Button>
           </Group>

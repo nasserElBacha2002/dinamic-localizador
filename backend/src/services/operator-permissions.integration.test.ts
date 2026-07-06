@@ -88,7 +88,7 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
       role: "ADMIN",
     });
 
-  it("denies OPERATOR access to full employees and stores APIs", async () => {
+  it("denies OPERATOR access to full employees and services APIs", async () => {
     const token = operatorToken();
     const employeesResponse = await apiRequest(
       baseUrl,
@@ -144,12 +144,12 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
     );
     assert.equal(storesLookup.status, 200);
 
-    const inventoriesLookup = await apiRequest(
+    const operationsLookup = await apiRequest(
       baseUrl,
       `/api/companies/${dinamicCompanyId}/lookups/operations`,
       { token },
     );
-    assert.equal(inventoriesLookup.status, 200);
+    assert.equal(operationsLookup.status, 200);
   });
 
   it("denies OPERATOR bot simulator and statistics APIs", async () => {

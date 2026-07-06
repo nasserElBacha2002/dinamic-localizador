@@ -11,7 +11,7 @@ import { getPool } from "../database/connection";
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
 
-describeDatabaseIntegration("inventory schedule confirmation reset integration", () => {
+describeDatabaseIntegration("operation schedule confirmation reset integration", () => {
   before(async () => {
     await setupDatabaseIntegration();
   });
@@ -43,7 +43,7 @@ describeDatabaseIntegration("inventory schedule confirmation reset integration",
     const futureStart = new Date(Date.now() + 8 * 24 * 60 * 60 * 1000);
     const rescheduledStart = new Date(Date.now() + 12 * 24 * 60 * 60 * 1000);
 
-    const inventoryInsert = await pool
+    const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
@@ -55,7 +55,7 @@ describeDatabaseIntegration("inventory schedule confirmation reset integration",
         OUTPUT INSERTED.id, INSERTED.scheduled_start
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const operationId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(operationInsert.recordset[0].id);
 
     const employees = await pool
       .request()
@@ -125,7 +125,7 @@ describeDatabaseIntegration("inventory schedule confirmation reset integration",
     }
   });
 
-  it("rolls back inventory schedule and assignment confirmations when reset fails", async () => {
+  it("rolls back operation schedule and assignment confirmations when reset fails", async () => {
     const pool = getPool();
     const companyResult = await pool.request().query(`
       SELECT TOP 1 id FROM companies WHERE status = 'ACTIVE' ORDER BY created_at ASC
@@ -147,7 +147,7 @@ describeDatabaseIntegration("inventory schedule confirmation reset integration",
     const oldStart = new Date(Date.now() + 9 * 24 * 60 * 60 * 1000);
     const newStart = new Date(Date.now() + 13 * 24 * 60 * 60 * 1000);
 
-    const inventoryInsert = await pool
+    const operationInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
@@ -159,7 +159,7 @@ describeDatabaseIntegration("inventory schedule confirmation reset integration",
         OUTPUT INSERTED.id
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
-    const operationId = String(inventoryInsert.recordset[0].id);
+    const operationId = String(operationInsert.recordset[0].id);
 
     const employeeInsert = await pool
       .request()
@@ -191,7 +191,7 @@ describeDatabaseIntegration("inventory schedule confirmation reset integration",
 
     mock.method(
       employeeAssignmentQueryRepository,
-      "resetConfirmationsForInventoryScheduleChange",
+      "resetConfirmationsForOperationScheduleChange",
       async () => {
         throw new Error("forced reset failure");
       },

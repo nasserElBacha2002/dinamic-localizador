@@ -34,7 +34,7 @@ export const respondIfActiveSessionModuleBlocked = async (
   } else if (isAbsenceSessionState(session.state)) {
     logModuleBlocked(companyId, "absences");
   } else if (isAssignmentSelectionSessionState(session.state)) {
-    logModuleBlocked(companyId, "inventory_operations");
+    logModuleBlocked(companyId, "operations");
   }
 
   const input: WhatsAppRouterRespondInput = {

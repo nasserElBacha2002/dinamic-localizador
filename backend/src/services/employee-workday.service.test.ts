@@ -18,6 +18,7 @@ const assignment = (
   operationId,
   serviceName: "Carrefour Palermo",
   serviceAddress: "Av. Santa Fe 1234",
+  serviceLocality: "Palermo",
   serviceLatitude: -34.6,
   serviceLongitude: -58.4,
   scheduledStart: "2026-07-08T23:30:00.000Z",
@@ -55,7 +56,7 @@ describe("employeeWorkdayService", () => {
     mock.restoreAll();
   });
 
-  it("returns no-assignment message when today has no inventories", async () => {
+  it("returns no-assignment message when today has no operations", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
@@ -111,7 +112,7 @@ describe("employeeWorkdayService", () => {
       employeeWorkdayService.buildUpcomingAssignmentsMessage(companyId, employeeId),
     );
 
-    assert.match(message, /Tus próximos inventarios:/);
+    assert.match(message, /Tus próximos trabajos:/);
     assert.match(message, /Carrefour Palermo/);
   });
 
@@ -139,7 +140,7 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "CONFIRMED" }),
     );
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -164,7 +165,7 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "UNAVAILABLE" }),
     );
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
@@ -188,7 +189,7 @@ describe("employeeWorkdayService", () => {
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ scheduledStart: "2026-07-08T10:00:00.000Z" }),
     );
 
@@ -264,7 +265,7 @@ describe("employeeWorkdayService", () => {
     const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () => null);
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => null);
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
       updateCalls += 1;
       return true;
@@ -288,7 +289,7 @@ describe("employeeWorkdayService", () => {
     const { INVALID_SELECTION_MESSAGE } = await import("./bot/bot-response.builder");
 
     let updateCalls = 0;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () => null);
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => null);
     mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
       updateCalls += 1;
       return true;
@@ -311,7 +312,7 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updatedStatus: string | null = null;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "UNAVAILABLE" }),
     );
     mock.method(
@@ -339,7 +340,7 @@ describe("employeeWorkdayService", () => {
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
     let updatedStatus: string | null = null;
-    mock.method(employeeAssignmentQueryRepository, "findByInventoryForEmployee", async () =>
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "CONFIRMED" }),
     );
     mock.method(

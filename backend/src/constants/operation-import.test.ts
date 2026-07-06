@@ -5,7 +5,7 @@ import {
   CLIENT_IMPORT_TEMPLATE_HEADERS,
 } from "../constants/operation-import";
 
-describe("inventory import template constants", () => {
+describe("operation import template constants", () => {
   it("recommends Sucursal, Fecha for downloadable client template", () => {
     assert.deepEqual([...CLIENT_IMPORT_RECOMMENDED_TEMPLATE_HEADERS], ["Sucursal", "Fecha"]);
   });

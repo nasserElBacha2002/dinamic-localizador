@@ -12,13 +12,13 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
-import { storeFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
+import { serviceFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
 import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
 import { ServiceInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
 import { useLocationPickerState } from "./location-picker/hooks/useLocationPickerState";
 import classes from "./service-form-layout.module.css";
 
-export const STORE_FORM_ID = "store-form";
+export const SERVICE_FORM_ID = "service-form";
 
 interface ServiceFormProps {
   defaultValues: ServiceFormValues;
@@ -42,11 +42,11 @@ export function ServiceForm({
   errorMessage,
   isEditMode = false,
   onSubmit,
-  formId = STORE_FORM_ID,
+  formId = SERVICE_FORM_ID,
   showBottomActions = true,
 }: ServiceFormProps) {
   const { control, handleSubmit, setValue, trigger } = useForm<ServiceFormValues>({
-    resolver: zodResolver(storeFormSchema),
+    resolver: zodResolver(serviceFormSchema),
     defaultValues,
   });
 
@@ -67,7 +67,7 @@ export function ServiceForm({
     trigger,
   });
 
-  const storeFormatOptions = useMemo(() => {
+  const serviceFormatOptions = useMemo(() => {
     const activeOptions = locationTypes
       .filter((type) => type.isActive)
       .map((type) => ({ value: type.code, label: type.name }));
@@ -91,7 +91,7 @@ export function ServiceForm({
     <form id={formId} onSubmit={handleSubmit(onSubmit)} noValidate>
       <FormErrorAlert message={errorMessage} />
 
-      <Box className={classes.storeFormLayout} mt="md">
+      <Box className={classes.serviceFormLayout} mt="md">
         <Box className={classes.infoSection}>
           <FormSection
             title="Información general"
@@ -108,7 +108,7 @@ export function ServiceForm({
                 control={control}
                 name="storeFormat"
                 label="Tipo de ubicación / servicio"
-                data={storeFormatOptions}
+                data={serviceFormatOptions}
                 clearable
               />
             </FormGrid>

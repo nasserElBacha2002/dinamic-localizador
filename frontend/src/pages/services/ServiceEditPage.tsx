@@ -3,7 +3,7 @@ import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
-import { STORE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
+import { SERVICE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
 import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useService, useUpdateService } from "../../hooks/useServices";
 import type { ServiceFormValues } from "../../schemas/service.schema";
@@ -14,7 +14,7 @@ import { getApiErrorMessage } from "../../utils/errors";
 export function ServiceEditPage() {
   const { goBackToList } = useListBackNavigation("/services");
   const { id } = useParams<{ id: string }>();
-  const storeQuery = useService(id);
+  const serviceQuery = useService(id);
   const updateMutation = useUpdateService(id ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -22,22 +22,22 @@ export function ServiceEditPage() {
     return <ErrorState message={`${terminology.service.singular} no encontrada.`} />;
   }
 
-  if (storeQuery.isLoading) {
+  if (serviceQuery.isLoading) {
     return <LoadingState />;
   }
 
-  if (storeQuery.isError || !storeQuery.data) {
+  if (serviceQuery.isError || !serviceQuery.data) {
     return (
       <ErrorState
         message={getApiErrorMessage(
-          storeQuery.error,
+          serviceQuery.error,
           `${terminology.service.singular} no encontrada.`,
         )}
       />
     );
   }
 
-  const store = storeQuery.data;
+  const service = serviceQuery.data;
 
   const handleSubmit = async (values: ServiceFormValues) => {
     setErrorMessage(null);
@@ -75,7 +75,7 @@ export function ServiceEditPage() {
             <Button variant="default" onClick={goBackToList}>
               Cancelar
             </Button>
-            <Button type="submit" form={STORE_FORM_ID} loading={updateMutation.isPending}>
+            <Button type="submit" form={SERVICE_FORM_ID} loading={updateMutation.isPending}>
               Guardar cambios
             </Button>
           </Group>
@@ -83,16 +83,16 @@ export function ServiceEditPage() {
       />
       <ServiceForm
         defaultValues={{
-          name: store.name,
-          address: store.address ?? "",
-          neighborhood: store.neighborhood ?? "",
-          locality: store.locality ?? "",
-          storeFormat: store.storeFormat ?? "",
-          latitude: store.latitude,
-          longitude: store.longitude,
-          allowedRadiusMeters: store.allowedRadiusMeters,
-          googlePlaceId: store.googlePlaceId ?? "",
-          active: store.active,
+          name: service.name,
+          address: service.address ?? "",
+          neighborhood: service.neighborhood ?? "",
+          locality: service.locality ?? "",
+          storeFormat: service.storeFormat ?? "",
+          latitude: service.latitude,
+          longitude: service.longitude,
+          allowedRadiusMeters: service.allowedRadiusMeters,
+          googlePlaceId: service.googlePlaceId ?? "",
+          active: service.active,
         }}
         submitLabel="Guardar cambios"
         cancelTo="/services"

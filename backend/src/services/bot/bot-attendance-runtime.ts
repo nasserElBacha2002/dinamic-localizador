@@ -16,7 +16,7 @@ export function buildCheckInValidation(input: {
   employeeLongitude: number;
   serviceLatitude: number;
   serviceLongitude: number;
-  storeAllowedRadiusMeters: number;
+  serviceAllowedRadiusMeters: number;
   receivedAt: Date;
   scheduledStart: Date;
   earlyToleranceMinutes: number;
@@ -28,8 +28,8 @@ export function buildCheckInValidation(input: {
   effectiveRadiusMeters: number;
 } {
   const effectiveRadiusMeters =
-    input.storeAllowedRadiusMeters > 0
-      ? input.storeAllowedRadiusMeters
+    input.serviceAllowedRadiusMeters > 0
+      ? input.serviceAllowedRadiusMeters
       : input.runtimeSettings.defaultRadiusMeters;
 
   const geo = evaluateAttendanceGeofence({
@@ -62,7 +62,7 @@ export function buildCheckoutValidation(input: {
   employeeLongitude: number;
   serviceLatitude: number;
   serviceLongitude: number;
-  storeAllowedRadiusMeters: number;
+  serviceAllowedRadiusMeters: number;
   checkoutAt: Date;
   scheduledEnd: Date | null;
   runtimeSettings: BotRuntimeSettings;
@@ -72,8 +72,8 @@ export function buildCheckoutValidation(input: {
   effectiveRadiusMeters: number;
 } {
   const effectiveRadiusMeters =
-    input.storeAllowedRadiusMeters > 0
-      ? input.storeAllowedRadiusMeters
+    input.serviceAllowedRadiusMeters > 0
+      ? input.serviceAllowedRadiusMeters
       : input.runtimeSettings.defaultRadiusMeters;
 
   const geo = evaluateAttendanceGeofence({

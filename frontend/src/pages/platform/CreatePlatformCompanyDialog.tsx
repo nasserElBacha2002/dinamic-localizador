@@ -36,7 +36,7 @@ import { SettingsFormField } from "../settings/components/SettingsFormField";
 
 const MODULE_OPTIONS: CompanyModuleKey[] = [
   "attendance",
-  "inventory_operations",
+  "operations",
   "absences",
   "reports",
   "bot_simulator",

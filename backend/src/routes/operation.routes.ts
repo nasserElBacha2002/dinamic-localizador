@@ -5,15 +5,15 @@ import { asyncHandler } from "../middleware/async-handler";
 import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
-  inventoryImportConfirmSchema,
-  inventoryImportPreviewSchema,
+  operationImportConfirmSchema,
+  operationImportPreviewSchema,
 } from "../schemas/operation-import.schema";
 import {
-  createInventorySchema,
-  inventoryAttendanceSummaryQuerySchema,
+  createOperationSchema,
+  operationAttendanceSummaryQuerySchema,
   operationIdParamSchema,
-  listInventoriesQuerySchema,
-  updateInventorySchema,
+  listOperationsQuerySchema,
+  updateOperationSchema,
 } from "../schemas/operation.schema";
 
 export const operationRouter = Router();
@@ -21,32 +21,32 @@ export const operationRouter = Router();
 operationRouter.post(
   "/",
   requirePermission("operations:manage"),
-  validate(createInventorySchema),
+  validate(createOperationSchema),
   asyncHandler(operationController.create),
 );
 operationRouter.post(
   "/import/preview",
   requirePermission("operations:manage"),
-  validate(inventoryImportPreviewSchema),
+  validate(operationImportPreviewSchema),
   asyncHandler(operationImportController.preview),
 );
 operationRouter.post(
   "/import/confirm",
   requirePermission("operations:manage"),
-  validate(inventoryImportConfirmSchema),
+  validate(operationImportConfirmSchema),
   asyncHandler(operationImportController.confirm),
 );
 operationRouter.get(
   "/",
   requirePermission("operations:read"),
-  validate(listInventoriesQuerySchema, "query"),
+  validate(listOperationsQuerySchema, "query"),
   asyncHandler(operationController.list),
 );
 operationRouter.get(
   "/:id/attendance-summary",
   requirePermission("operations:read"),
   validate(operationIdParamSchema, "params"),
-  validate(inventoryAttendanceSummaryQuerySchema, "query"),
+  validate(operationAttendanceSummaryQuerySchema, "query"),
   asyncHandler(operationController.getAttendanceSummary),
 );
 operationRouter.get(
@@ -59,7 +59,7 @@ operationRouter.put(
   "/:id",
   requirePermission("operations:manage"),
   validate(operationIdParamSchema, "params"),
-  validate(updateInventorySchema),
+  validate(updateOperationSchema),
   asyncHandler(operationController.update),
 );
 operationRouter.delete(

@@ -23,7 +23,7 @@ const runtimeSettings = (overrides: Partial<BotRuntimeSettings> = {}): BotRuntim
 
 const eligibleOperation = {
   id: operationId,
-  serviceName: "Tienda Centro",
+  serviceName: "Servicio Centro",
   scheduledStart: "2026-07-05T15:00:00.000Z",
   scheduledEnd: "2026-07-05T21:00:00.000Z",
   serviceLatitude: -34.6,
@@ -96,7 +96,7 @@ describe("whatsapp bot runtime settings integration", () => {
       employeeLongitude: -58.4,
       serviceLatitude: -34.6,
       serviceLongitude: -58.4,
-      storeAllowedRadiusMeters: 0,
+      serviceAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:01:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
       earlyToleranceMinutes: 15,
@@ -115,7 +115,7 @@ describe("whatsapp bot runtime settings integration", () => {
     const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import("../utils/bot-runtime-context");
 
-    mock.method(attendanceRepository, "findCheckoutEligibleInventories", async () => [eligibleOperation]);
+    mock.method(attendanceRepository, "findCheckoutEligibleOperations", async () => [eligibleOperation]);
     mock.method(botSessionService, "completeSession", async () => undefined);
 
     const context = {

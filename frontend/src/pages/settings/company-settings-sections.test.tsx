@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-describe("Company settings inventory vs WhatsApp labels", () => {
+describe("Company settings operation vs WhatsApp labels", () => {
   it("keeps operation and WhatsApp tolerances in separate labeled fields", () => {
     const sectionFile = readFileSync(
       join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),

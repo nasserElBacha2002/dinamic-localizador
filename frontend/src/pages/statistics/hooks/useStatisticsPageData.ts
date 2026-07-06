@@ -135,46 +135,46 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.empSortBy, table.state.empSortOrder],
   );
 
-  const inventoryFilters = useMemo(
+  const operationFilters = useMemo(
     () => ({
       ...baseFilters,
-      page: table.state.invPage,
-      limit: table.state.invPageSize,
-      sortBy: table.state.invSortBy,
-      sortDirection: table.state.invSortOrder,
+      page: table.state.opPage,
+      limit: table.state.opPageSize,
+      sortBy: table.state.opSortBy,
+      sortDirection: table.state.opSortOrder,
     }),
-    [baseFilters, table.state.invPage, table.state.invPageSize, table.state.invSortBy, table.state.invSortOrder],
+    [baseFilters, table.state.opPage, table.state.opPageSize, table.state.opSortBy, table.state.opSortOrder],
   );
 
-  const inventoryExportFilters = useMemo(
+  const operationExportFilters = useMemo(
     () => ({
       ...baseFilters,
       export: true,
-      sortBy: table.state.invSortBy,
-      sortDirection: table.state.invSortOrder,
+      sortBy: table.state.opSortBy,
+      sortDirection: table.state.opSortOrder,
     }),
-    [baseFilters, table.state.invSortBy, table.state.invSortOrder],
+    [baseFilters, table.state.opSortBy, table.state.opSortOrder],
   );
 
   const serviceFilters = useMemo(
     () => ({
       ...baseFilters,
-      page: table.state.locPage,
-      limit: table.state.locPageSize,
-      sortBy: table.state.locSortBy,
-      sortDirection: table.state.locSortOrder,
+      page: table.state.svcPage,
+      limit: table.state.svcPageSize,
+      sortBy: table.state.svcSortBy,
+      sortDirection: table.state.svcSortOrder,
     }),
-    [baseFilters, table.state.locPage, table.state.locPageSize, table.state.locSortBy, table.state.locSortOrder],
+    [baseFilters, table.state.svcPage, table.state.svcPageSize, table.state.svcSortBy, table.state.svcSortOrder],
   );
 
   const serviceExportFilters = useMemo(
     () => ({
       ...baseFilters,
       export: true,
-      sortBy: table.state.locSortBy,
-      sortDirection: table.state.locSortOrder,
+      sortBy: table.state.svcSortBy,
+      sortDirection: table.state.svcSortOrder,
     }),
-    [baseFilters, table.state.locSortBy, table.state.locSortOrder],
+    [baseFilters, table.state.svcSortBy, table.state.svcSortOrder],
   );
 
   const summaryQuery = useStatisticsSummary(baseFilters);
@@ -182,13 +182,13 @@ export function useStatisticsPageData() {
   const distributionQuery = useStatisticsStatusDistribution(baseFilters);
   const employeeQuery = useStatisticsByEmployee(employeeFilters);
   const employeeExportQuery = useStatisticsByEmployee(employeeExportFilters);
-  const inventoryQuery = useStatisticsByOperation(inventoryFilters);
-  const inventoryExportQuery = useStatisticsByOperation(inventoryExportFilters);
+  const operationQuery = useStatisticsByOperation(operationFilters);
+  const operationExportQuery = useStatisticsByOperation(operationExportFilters);
   const serviceQuery = useStatisticsByService(serviceFilters);
   const serviceExportQuery = useStatisticsByService(serviceExportFilters);
 
   const chartEmployeeData = employeeExportQuery.data?.data ?? [];
-  const chartOperationData = inventoryExportQuery.data?.data ?? [];
+  const chartOperationData = operationExportQuery.data?.data ?? [];
   const chartServiceData = serviceExportQuery.data?.data ?? [];
 
   const topEmployeesByAttendance = [...chartEmployeeData]
@@ -200,7 +200,7 @@ export function useStatisticsPageData() {
     .filter((row) => row.lateCount > 0)
     .slice(0, 10);
 
-  const topInventoriesByAttendance = [...chartOperationData]
+  const topOperationsByAttendance = [...chartOperationData]
     .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
     .slice(0, 10);
 
@@ -255,8 +255,8 @@ export function useStatisticsPageData() {
     table.setState(
       {
         empPage: 1,
-        invPage: 1,
-        locPage: 1,
+        opPage: 1,
+        svcPage: 1,
       },
       { resetPage: false },
     );
@@ -276,29 +276,29 @@ export function useStatisticsPageData() {
   };
 
   const handleOperationSort = (field: string) => {
-    if (table.state.invSortBy === field) {
+    if (table.state.opSortBy === field) {
       table.setState({
-        invSortBy: field,
-        invSortOrder: table.state.invSortOrder === "asc" ? "desc" : "asc",
-        invPage: 1,
+        opSortBy: field,
+        opSortOrder: table.state.opSortOrder === "asc" ? "desc" : "asc",
+        opPage: 1,
       });
       return;
     }
 
-    table.setState({ invSortBy: field, invSortOrder: "desc", invPage: 1 });
+    table.setState({ opSortBy: field, opSortOrder: "desc", opPage: 1 });
   };
 
   const handleLocationSort = (field: string) => {
-    if (table.state.locSortBy === field) {
+    if (table.state.svcSortBy === field) {
       table.setState({
-        locSortBy: field,
-        locSortOrder: table.state.locSortOrder === "asc" ? "desc" : "asc",
-        locPage: 1,
+        svcSortBy: field,
+        svcSortOrder: table.state.svcSortOrder === "asc" ? "desc" : "asc",
+        svcPage: 1,
       });
       return;
     }
 
-    table.setState({ locSortBy: field, locSortOrder: "desc", locPage: 1 });
+    table.setState({ svcSortBy: field, svcSortOrder: "desc", svcPage: 1 });
   };
 
   const employeePagination = {
@@ -310,22 +310,22 @@ export function useStatisticsPageData() {
     resetPage: () => table.setField("empPage", 1, { resetPage: false }),
   };
 
-  const inventoryPagination = {
-    page: table.state.invPage,
-    pageSize: table.state.invPageSize,
-    onPageChange: (page: number) => table.setField("invPage", page, { resetPage: false }),
+  const operationPagination = {
+    page: table.state.opPage,
+    pageSize: table.state.opPageSize,
+    onPageChange: (page: number) => table.setField("opPage", page, { resetPage: false }),
     onPageSizeChange: (pageSize: number) =>
-      table.setState({ invPageSize: pageSize, invPage: 1 }, { resetPage: false }),
-    resetPage: () => table.setField("invPage", 1, { resetPage: false }),
+      table.setState({ opPageSize: pageSize, opPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("opPage", 1, { resetPage: false }),
   };
 
-  const locationPagination = {
-    page: table.state.locPage,
-    pageSize: table.state.locPageSize,
-    onPageChange: (page: number) => table.setField("locPage", page, { resetPage: false }),
+  const servicePagination = {
+    page: table.state.svcPage,
+    pageSize: table.state.svcPageSize,
+    onPageChange: (page: number) => table.setField("svcPage", page, { resetPage: false }),
     onPageSizeChange: (pageSize: number) =>
-      table.setState({ locPageSize: pageSize, locPage: 1 }, { resetPage: false }),
-    resetPage: () => table.setField("locPage", 1, { resetPage: false }),
+      table.setState({ svcPageSize: pageSize, svcPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("svcPage", 1, { resetPage: false }),
   };
 
   return {
@@ -355,19 +355,19 @@ export function useStatisticsPageData() {
     distributionQuery,
     employeeQuery,
     employeeExportQuery,
-    inventoryQuery,
-    inventoryExportQuery,
+    operationQuery,
+    operationExportQuery,
     serviceQuery,
     serviceExportQuery,
     employeePagination,
-    inventoryPagination,
-    locationPagination,
+    operationPagination,
+    servicePagination,
     employeeSortBy: table.state.empSortBy,
     employeeSortDirection: table.state.empSortOrder,
-    inventorySortBy: table.state.invSortBy,
-    inventorySortDirection: table.state.invSortOrder,
-    locationSortBy: table.state.locSortBy,
-    locationSortDirection: table.state.locSortOrder,
+    operationSortBy: table.state.opSortBy,
+    operationSortDirection: table.state.opSortOrder,
+    serviceSortBy: table.state.svcSortBy,
+    serviceSortDirection: table.state.svcSortOrder,
     handleEmployeeSort,
     handleOperationSort,
     handleLocationSort,
@@ -381,7 +381,7 @@ export function useStatisticsPageData() {
     distributionOption,
     topEmployeesByAttendance,
     topLateEmployees,
-    topInventoriesByAttendance,
+    topOperationsByAttendance,
     topServicesByAttendance,
   };
 }

@@ -284,7 +284,7 @@ describeDatabaseIntegration("company modules API integration", () => {
   it("rejects disabling all core modules", async () => {
     const response = await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "attendance", isEnabled: false },
-      { moduleKey: "inventory_operations", isEnabled: false },
+      { moduleKey: "operations", isEnabled: false },
       { moduleKey: "absences", isEnabled: false },
     ]);
     assert.equal(response.status, 400);
@@ -441,7 +441,7 @@ describeDatabaseIntegration("company modules API integration", () => {
     await restoreAllModules(dinamicCompanyId);
   });
 
-  it("returns MODULE_DISABLED for stores when inventory_operations is disabled", async () => {
+  it("returns MODULE_DISABLED for services when operations module is disabled", async () => {
     const token = signTestToken({
       userId: ownerUserId,
       email: ownerUserEmail,
@@ -449,7 +449,7 @@ describeDatabaseIntegration("company modules API integration", () => {
     });
 
     await patchModules(platformAdminToken(), dinamicCompanyId, [
-      { moduleKey: "inventory_operations", isEnabled: false },
+      { moduleKey: "operations", isEnabled: false },
     ]);
 
     const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/services`, {
@@ -488,7 +488,7 @@ describeDatabaseIntegration("company modules API integration", () => {
 
     await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "attendance", isEnabled: true },
-      { moduleKey: "inventory_operations", isEnabled: false },
+      { moduleKey: "operations", isEnabled: false },
       { moduleKey: "absences", isEnabled: false },
     ]);
 

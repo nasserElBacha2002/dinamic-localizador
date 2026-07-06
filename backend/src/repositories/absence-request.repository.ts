@@ -30,7 +30,7 @@ const mapListRow = (row: Record<string, unknown>): AbsenceRequestWithRelations =
       name: String(row.absence_type_name),
     },
     reviewerName: row.reviewer_name ? String(row.reviewer_name) : null,
-    affectedInventoriesCount: Number(row.affected_inventories_count ?? 0),
+    affectedOperationsCount: Number(row.affected_operations_count ?? 0),
   };
 };
 
@@ -158,7 +158,7 @@ export const absenceRequestRepository = {
         at.code AS absence_type_code,
         at.name AS absence_type_name,
         u.name AS reviewer_name,
-        0 AS affected_inventories_count
+        0 AS affected_operations_count
       FROM absence_requests ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
       INNER JOIN absence_types at ON at.id = ar.absence_type_id AND at.company_id = @companyId
@@ -252,7 +252,7 @@ export const absenceRequestRepository = {
         at.code AS absence_type_code,
         at.name AS absence_type_name,
         u.name AS reviewer_name,
-        0 AS affected_inventories_count
+        0 AS affected_operations_count
       FROM absence_requests ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
       INNER JOIN absence_types at ON at.id = ar.absence_type_id AND at.company_id = @companyId
@@ -421,7 +421,7 @@ export const absenceRequestRepository = {
     );
   },
 
-  async findAffectedInventories(
+  async findAffectedOperations(
     companyId: string,
     employeeId: string,
     absenceStartAt: Date,

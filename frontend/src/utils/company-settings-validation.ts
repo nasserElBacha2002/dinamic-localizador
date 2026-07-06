@@ -5,7 +5,7 @@ const LIMITS = {
   geofenceReviewMarginMeters: { min: 0, max: 500 },
   lateGraceMinutes: { min: 0, max: 240 },
   earlyLeaveToleranceMinutes: { min: 0, max: 240 },
-  inventoryToleranceMinutes: { min: 0, max: 240 },
+  operationToleranceMinutes: { min: 0, max: 240 },
   operationTimezoneMaxLength: 80,
 } as const;
 
@@ -139,8 +139,8 @@ export function validateOperationOperationSettingsForm(
   const earlyArrivalError = validateIntegerField(
     values.defaultEarlyArrivalToleranceMinutes,
     "La tolerancia de llegada temprana para operaciones",
-    LIMITS.inventoryToleranceMinutes.min,
-    LIMITS.inventoryToleranceMinutes.max,
+    LIMITS.operationToleranceMinutes.min,
+    LIMITS.operationToleranceMinutes.max,
   );
   if (earlyArrivalError) {
     errors.push(earlyArrivalError);
@@ -149,8 +149,8 @@ export function validateOperationOperationSettingsForm(
   const lateArrivalError = validateIntegerField(
     values.defaultLateArrivalToleranceMinutes,
     "La tolerancia de llegada tardía para operaciones",
-    LIMITS.inventoryToleranceMinutes.min,
-    LIMITS.inventoryToleranceMinutes.max,
+    LIMITS.operationToleranceMinutes.min,
+    LIMITS.operationToleranceMinutes.max,
   );
   if (lateArrivalError) {
     errors.push(lateArrivalError);
@@ -388,7 +388,7 @@ export function generalSettingsEqual(
   return left.operationTimezone === right.operationTimezone;
 }
 
-export function inventoryOperationSettingsEqual(
+export function operationSettingsEqual(
   left: Pick<
     CompanySettingsFormValues,
     | "defaultRadiusMeters"

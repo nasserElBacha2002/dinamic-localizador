@@ -34,7 +34,7 @@ export type CreateBotSimulationSessionInput = {
 };
 
 export type LocationPresets = {
-  storeLocation: { latitude: number; longitude: number } | null;
+  serviceLocation: { latitude: number; longitude: number } | null;
   outsideRadius: { latitude: number; longitude: number } | null;
   nearRadiusLimit: { latitude: number; longitude: number } | null;
   allowedRadiusMeters: number | null;

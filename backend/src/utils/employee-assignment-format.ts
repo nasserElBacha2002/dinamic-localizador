@@ -1,16 +1,22 @@
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { PunctualityStatus } from "../types/domain";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
+import type { ServiceReferenceFields } from "./format-service-reference";
+import { formatServiceReferenceFromFields } from "./format-service-reference";
 import { formatLocalTime, punctualityLabel } from "./attendance-validation";
 
-export const NO_TODAY_ASSIGNMENTS_MESSAGE = "No tenés inventarios asignados para hoy.";
-export const NO_UPCOMING_ASSIGNMENTS_MESSAGE = "No tenés próximos inventarios asignados.";
+export const NO_TODAY_ASSIGNMENTS_MESSAGE = "No tenés trabajos asignados para hoy.";
+export const NO_UPCOMING_ASSIGNMENTS_MESSAGE = "No tenés próximos trabajos asignados.";
 export const NO_CONFIRMABLE_ASSIGNMENTS_MESSAGE =
-  "No tenés inventarios próximos para confirmar asistencia.";
+  "No tenés trabajos próximos para confirmar asistencia.";
 export const NO_UNAVAILABILITY_ASSIGNMENTS_MESSAGE =
-  "No tenés inventarios próximos para reportar no disponibilidad.";
+  "No tenés trabajos próximos para reportar no disponibilidad.";
 export const PAST_ASSIGNMENT_MESSAGE =
-  "Ese inventario ya comenzó o finalizó. No se puede modificar desde WhatsApp.";
+  "Ese trabajo ya comenzó o finalizó. No se puede modificar desde WhatsApp.";
+
+export const formatAssignmentServiceReference = (
+  assignment: ServiceReferenceFields,
+): string => formatServiceReferenceFromFields(assignment);
 
 export const formatAssignmentAddress = (assignment: EmployeeAssignedOperation): string => {
   if (assignment.serviceAddress?.trim()) {
@@ -61,6 +67,16 @@ export const formatAssignmentDateTimeLine = (
   timeZone: string,
 ): string => `${formatAssignmentDate(assignment, timeZone)} — ${formatLocalTime(assignment.scheduledStart, timeZone)}`;
 
+export const formatOperationScheduleLine = (scheduledStart: string, timeZone: string): string => {
+  const date = new Intl.DateTimeFormat("es-AR", {
+    timeZone,
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+  }).format(new Date(scheduledStart));
+  return `${date} — ${formatLocalTime(scheduledStart, timeZone)}`;
+};
+
 const confirmationStatusLabel = (status: AssignmentConfirmationStatus): string => {
   const labels: Record<AssignmentConfirmationStatus, string> = {
     PENDING: "Asignado",
@@ -91,14 +107,24 @@ const formatAttendanceState = (punctualityStatus: PunctualityStatus | null): str
   return `Llegada ${punctualityLabel(punctualityStatus).toLowerCase()}`;
 };
 
+export const formatAssignmentMapLines = (assignment: EmployeeAssignedOperation): string[] => {
+  const mapUrl = buildGoogleMapsSearchUrl(assignment);
+  return mapUrl ? [`Mapa: ${mapUrl}`] : [];
+};
+
 export const formatAssignmentLocationLines = (assignment: EmployeeAssignedOperation): string[] => {
   const lines = [`Dirección: ${formatAssignmentAddress(assignment)}`];
-  const mapUrl = buildGoogleMapsSearchUrl(assignment);
-  if (mapUrl) {
-    lines.push(`Mapa: ${mapUrl}`);
-  }
-  return lines;
+  return [...lines, ...formatAssignmentMapLines(assignment)];
 };
+
+export const formatBotOperationSelectionLines = (
+  index: number,
+  fields: ServiceReferenceFields & { scheduledStart: string },
+  timeZone: string,
+): string[] => [
+  `${index}. ${formatServiceReferenceFromFields(fields)}`,
+  `   ${formatOperationScheduleLine(fields.scheduledStart, timeZone)}`,
+];
 
 export const formatTodayAssignmentBlock = (
   assignment: EmployeeAssignedOperation,
@@ -107,9 +133,9 @@ export const formatTodayAssignmentBlock = (
   includeAttendance: boolean,
 ): string[] => {
   const lines = [
-    `${index}. ${assignment.serviceName}`,
+    `${index}. ${formatAssignmentServiceReference(assignment)}`,
     `   Horario: ${formatAssignmentSchedule(assignment, timeZone)}`,
-    ...formatAssignmentLocationLines(assignment).map((line) => `   ${line}`),
+    ...formatAssignmentMapLines(assignment).map((line) => `   ${line}`),
     `   Estado: ${confirmationStatusLabel(assignment.confirmationStatus)}`,
   ];
 
@@ -130,10 +156,10 @@ export const formatUpcomingAssignmentBlock = (
   index: number,
   timeZone: string,
 ): string[] => [
-  `${index}. ${assignment.serviceName}`,
+  `${index}. ${formatAssignmentServiceReference(assignment)}`,
   `   Fecha: ${formatAssignmentDate(assignment, timeZone)}`,
   `   Horario: ${formatAssignmentSchedule(assignment, timeZone)}`,
-  ...formatAssignmentLocationLines(assignment).map((line) => `   ${line}`),
+  ...formatAssignmentMapLines(assignment).map((line) => `   ${line}`),
 ];
 
 export const formatUpcomingSelectionLine = (
@@ -141,4 +167,4 @@ export const formatUpcomingSelectionLine = (
   index: number,
   timeZone: string,
 ): string =>
-  `${index}. ${assignment.serviceName} — ${formatAssignmentDateTimeLine(assignment, timeZone)}`;
+  formatBotOperationSelectionLines(index, assignment, timeZone).join("\n");

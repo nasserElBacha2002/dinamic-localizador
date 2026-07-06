@@ -14,7 +14,7 @@ const baseRow = {
   attendance_id: null,
 };
 
-describe("inventory attendance summary mapper", () => {
+describe("operation attendance summary mapper", () => {
   it("maps pending confirmation without timestamps", () => {
     const mapped = mapOperationAttendanceSummaryRow({
       ...baseRow,

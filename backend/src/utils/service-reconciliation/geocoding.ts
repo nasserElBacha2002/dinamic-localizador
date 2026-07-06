@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
-import type { GeocodingDiagnostics, OfficialStore } from "./types";
+import type { GeocodingDiagnostics, OfficialService } from "./types";
 
 export interface GeocodedCoordinates {
   latitude: number;
@@ -37,13 +37,13 @@ interface GoogleGeocodeResponse {
 
 export const TEST_GEOCODING_ADDRESS = "Av. Rivadavia 3751, Almagro, Buenos Aires, Argentina";
 
-export const buildGeocodeCacheKey = (store: OfficialStore): string =>
-  [store.officialAddress, store.neighborhood, store.locality, "Argentina"]
+export const buildGeocodeCacheKey = (service: OfficialService): string =>
+  [service.officialAddress, service.neighborhood, service.locality, "Argentina"]
     .map((part) => part.trim().toLowerCase())
     .join("|");
 
-export const buildGeocodeQuery = (store: OfficialStore): string =>
-  [store.officialAddress, store.neighborhood, store.locality, "Argentina"]
+export const buildGeocodeQuery = (service: OfficialService): string =>
+  [service.officialAddress, service.neighborhood, service.locality, "Argentina"]
     .map((part) => part.trim())
     .filter(Boolean)
     .join(", ");
@@ -130,10 +130,10 @@ export const geocodeQuery = async (
   return toSuccess(query, Number(latitude), Number(longitude));
 };
 
-export const geocodeOfficialStore = async (
-  store: OfficialStore,
+export const geocodeOfficialService = async (
+  service: OfficialService,
   apiKey: string,
-): Promise<GeocodeCacheEntry> => geocodeQuery(buildGeocodeQuery(store), apiKey);
+): Promise<GeocodeCacheEntry> => geocodeQuery(buildGeocodeQuery(service), apiKey);
 
 export const loadGeocodeCache = (cachePath: string): GeocodeCache => {
   try {
@@ -162,13 +162,13 @@ export const saveGeocodeCache = (cachePath: string, cache: GeocodeCache): void =
 };
 
 export const resolveGeocodedCoordinates = async (
-  store: OfficialStore,
+  service: OfficialService,
   apiKey: string,
   cache: GeocodeCache,
   cachePath: string,
   delayMs: number,
 ): Promise<GeocodeCacheEntry> => {
-  const cacheKey = buildGeocodeCacheKey(store);
+  const cacheKey = buildGeocodeCacheKey(service);
   const cached = cache[cacheKey];
   if (cached) {
     return cached;
@@ -180,7 +180,7 @@ export const resolveGeocodedCoordinates = async (
     });
   }
 
-  const result = await geocodeOfficialStore(store, apiKey);
+  const result = await geocodeOfficialService(service, apiKey);
   cache[cacheKey] = result;
   saveGeocodeCache(cachePath, cache);
   return result;

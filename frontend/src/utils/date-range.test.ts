@@ -224,7 +224,7 @@ describe("isInvalidCustomDateRange", () => {
 });
 
 describe("default date ranges", () => {
-  it("uses today for inventories", () => {
+  it("uses today for operations", () => {
     const value = getDefaultOperationDateRange(REFERENCE_DATE);
     assert.equal(value.preset, "today");
     assert.equal(getDateRangePresetLabel(value.preset!), "Hoy");

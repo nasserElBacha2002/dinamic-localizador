@@ -11,7 +11,7 @@ export type FixType =
 export type FixConfidence = "high" | "medium" | "low";
 
 export interface ReconciliationReportRow {
-  storeNumber: string;
+  serviceNumber: string;
   status: string;
   carrefourOfficialAddress: string;
   dbAddress: string;
@@ -36,7 +36,7 @@ export interface ReconciliationReportRow {
 
 export interface DuplicateReportRow {
   source: string;
-  storeNumber: string;
+  serviceNumber: string;
   duplicateCount: string;
   dbId: string;
   dbAddress: string;
@@ -53,7 +53,7 @@ export interface DuplicateReportRow {
 }
 
 export interface ProposedFix {
-  storeNumber: string;
+  serviceNumber: string;
   dbId: string;
   fixType: FixType;
   oldAddress: string;
@@ -70,14 +70,14 @@ export interface ProposedFix {
 }
 
 export interface SkippedFix {
-  storeNumber: string;
+  serviceNumber: string;
   dbId: string;
   skippedReason: string;
   details: string;
 }
 
 export interface DuplicateResolutionRow {
-  storeNumber: string;
+  serviceNumber: string;
   dbId: string;
   address: string;
   latitude: string;
@@ -89,7 +89,7 @@ export interface DuplicateResolutionRow {
 }
 
 export interface MissingInsertPlanRow {
-  storeNumber: string;
+  serviceNumber: string;
   officialAddress: string;
   neighborhood: string;
   locality: string;
@@ -113,7 +113,7 @@ export interface FixPlanSummary {
   dbHost?: string;
 }
 
-export interface CurrentDbStore {
+export interface CurrentDbService {
   id: string;
   name: string;
   address: string;
@@ -126,21 +126,21 @@ export interface CurrentDbStore {
   googlePlaceId: string | null;
   neighborhood: string | null;
   locality: string | null;
-  storeFormat: string | null;
+  serviceFormat: string | null;
 }
 
 export interface CurrentDbState {
-  stores: CurrentDbStore[];
-  byStoreNumber: Map<string, CurrentDbStore[]>;
-  nonNumericStores: CurrentDbStore[];
-  duplicateNumericGroups: Map<string, CurrentDbStore[]>;
+  services: CurrentDbService[];
+  byServiceNumber: Map<string, CurrentDbService[]>;
+  nonNumericServices: CurrentDbService[];
+  duplicateNumericGroups: Map<string, CurrentDbService[]>;
 }
 
-export interface StoresSchema {
+export interface ServicesSchema {
   tableName: string;
   neighborhoodColumn: string | null;
   localityColumn: string | null;
-  storeFormatColumn: string | null;
+  serviceFormatColumn: string | null;
   availableColumns: Set<string>;
 }
 
@@ -152,9 +152,9 @@ export interface EnvironmentSnapshot {
   dbUser: string;
   tableName: string;
   totalCurrentDbRows: number;
-  totalNumericCurrentDbStores: number;
+  totalNumericCurrentDbServices: number;
   totalNonNumericCurrentDbRows: number;
-  duplicateNumericStoreGroups: number;
+  duplicateNumericServiceGroups: number;
   generatedAt: string;
 }
 

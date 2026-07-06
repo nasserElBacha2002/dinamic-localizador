@@ -20,7 +20,7 @@ import type {
 } from "../types/operation-import";
 import { mapImportHeaders } from "../utils/operation-import-headers";
 import { createOperationImportDateTimeUtils } from "../utils/operation-import-datetime";
-import { isInventoryStartInPast } from "../utils/operation-lifecycle";
+import { isOperationStartInPast } from "../utils/operation-lifecycle";
 import {
   detectSpreadsheetFileType,
   isLikelyBinaryUpload,
@@ -33,7 +33,7 @@ import {
 } from "./company-operational-defaults.resolver";
 import { companyLocationTypesService } from "./company-location-types.service";
 
-const normalizeStoreKey = (value: string): string => {
+const normalizeServiceKey = (value: string): string => {
   const trimmed = value.trim();
   if (/^\d+(\.0+)?$/.test(trimmed)) {
     return String(Math.trunc(Number(trimmed)));
@@ -64,13 +64,13 @@ const validateOptionalLocationType = (
   return [];
 };
 
-const buildStoreLookup = (stores: Service[]): Map<string, Service[]> => {
+const buildServiceLookup = (services: Service[]): Map<string, Service[]> => {
   const lookup = new Map<string, Service[]>();
 
-  for (const store of stores) {
-    const key = normalizeStoreKey(store.name);
+  for (const service of services) {
+    const key = normalizeServiceKey(service.name);
     const current = lookup.get(key) ?? [];
-    current.push(store);
+    current.push(service);
     lookup.set(key, current);
   }
 
@@ -128,10 +128,10 @@ const getCell = (row: string[], headers: string[], key: string): string => {
   return row[index] ?? "";
 };
 
-const buildInventoryDuplicateKey = (serviceId: string, scheduledStart: string): string =>
+const buildOperationDuplicateKey = (serviceId: string, scheduledStart: string): string =>
   `${serviceId}|${new Date(scheduledStart).toISOString()}`;
 
-const markExistingInventoryConflicts = (
+const markExistingOperationConflicts = (
   rows: OperationImportPreviewRow[],
   existingKeys: Set<string>,
 ): void => {
@@ -140,7 +140,7 @@ const markExistingInventoryConflicts = (
       continue;
     }
 
-    if (existingKeys.has(buildInventoryDuplicateKey(row.serviceId, row.scheduledStart))) {
+    if (existingKeys.has(buildOperationDuplicateKey(row.serviceId, row.scheduledStart))) {
       row.errors.push("Ya existe una operación programada para esa ubicación y fecha de inicio");
       row.status = "invalid";
       row.earlyToleranceMinutes = null;
@@ -149,9 +149,9 @@ const markExistingInventoryConflicts = (
   }
 };
 
-const resolveStore = (
+const resolveService = (
   lookupKey: string,
-  storeLookup: Map<string, Service[]>,
+  serviceLookup: Map<string, Service[]>,
   emptyError: string,
   notFoundError: string,
   ambiguousError: string,
@@ -160,7 +160,7 @@ const resolveStore = (
     return { serviceId: null, serviceName: null, errors: [emptyError] };
   }
 
-  const matches = storeLookup.get(normalizeStoreKey(lookupKey)) ?? [];
+  const matches = serviceLookup.get(normalizeServiceKey(lookupKey)) ?? [];
   if (matches.length === 0) {
     return { serviceId: null, serviceName: null, errors: [notFoundError] };
   }
@@ -176,7 +176,7 @@ const validateClientRow = (
   rowNumber: number,
   row: string[],
   headers: string[],
-  storeLookup: Map<string, Service[]>,
+  serviceLookup: Map<string, Service[]>,
   seenKeys: Set<string>,
   normalization: ImportNormalizationContext,
 ): OperationImportPreviewRow => {
@@ -190,14 +190,14 @@ const validateClientRow = (
   const errors: string[] = [];
   errors.push(...validateOptionalLocationType(locationTypeRaw, normalization.activeLocationTypes));
 
-  const storeResolution = resolveStore(
+  const serviceResolution = resolveService(
     locationValue,
-    storeLookup,
+    serviceLookup,
     IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
     IMPORT_LOCATION_NOT_FOUND_MESSAGE,
     IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
   );
-  errors.push(...storeResolution.errors);
+  errors.push(...serviceResolution.errors);
 
   if (!rawFecha) {
     errors.push("La columna Fecha es obligatoria");
@@ -217,29 +217,29 @@ const validateClientRow = (
 
   let scheduledStart: string | null = null;
   let scheduledEnd: string | null = null;
-  let parsedInventoryDate: string | null = null;
+  let parsedOperationDate: string | null = null;
   let scheduledStartDisplay = "";
   let scheduledEndDisplay = "";
 
   if (rawFecha) {
-    const schedule = normalization.dateTimeUtils.buildClientInventorySchedule(rawFecha);
+    const schedule = normalization.dateTimeUtils.buildClientOperationSchedule(rawFecha);
     if ("error" in schedule) {
       errors.push(schedule.error);
     } else {
       scheduledStart = schedule.scheduledStart;
       scheduledEnd = schedule.scheduledEnd;
-      parsedInventoryDate = schedule.parsedInventoryDate;
+      parsedOperationDate = schedule.parsedOperationDate;
       scheduledStartDisplay = schedule.scheduledStartDisplay;
       scheduledEndDisplay = schedule.scheduledEndDisplay;
 
-      if (isInventoryStartInPast(scheduledStart)) {
+      if (isOperationStartInPast(scheduledStart)) {
         errors.push("La fecha de inicio no puede estar en el pasado");
       }
     }
   }
 
-  if (storeResolution.serviceId && scheduledStart) {
-    const duplicateKey = buildInventoryDuplicateKey(storeResolution.serviceId, scheduledStart);
+  if (serviceResolution.serviceId && scheduledStart) {
+    const duplicateKey = buildOperationDuplicateKey(serviceResolution.serviceId, scheduledStart);
     if (seenKeys.has(duplicateKey)) {
       errors.push("Fila duplicada en el archivo para la misma ubicación y fecha de inicio");
     } else {
@@ -248,17 +248,17 @@ const validateClientRow = (
   }
 
   const isValid =
-    errors.length === 0 && storeResolution.serviceId && scheduledStart && scheduledEnd;
+    errors.length === 0 && serviceResolution.serviceId && scheduledStart && scheduledEnd;
 
   return {
     rowNumber,
     format: "client",
     punto: locationValue,
-    tienda: locationValue,
-    serviceId: storeResolution.serviceId,
-    serviceName: storeResolution.serviceName,
+    legacyLocation: locationValue,
+    serviceId: serviceResolution.serviceId,
+    serviceName: serviceResolution.serviceName,
     rawFecha,
-    parsedInventoryDate,
+    parsedOperationDate,
     fechaInicio: rawFecha,
     fechaFin: "",
     scheduledStart,
@@ -281,7 +281,7 @@ const validateLegacyRow = (
   rowNumber: number,
   row: string[],
   headers: string[],
-  storeLookup: Map<string, Service[]>,
+  serviceLookup: Map<string, Service[]>,
   seenKeys: Set<string>,
   normalization: ImportNormalizationContext,
 ): OperationImportPreviewRow => {
@@ -296,14 +296,14 @@ const validateLegacyRow = (
   const errors: string[] = [];
   errors.push(...validateOptionalLocationType(locationTypeRaw, normalization.activeLocationTypes));
 
-  const storeResolution = resolveStore(
+  const serviceResolution = resolveService(
     locationValue,
-    storeLookup,
+    serviceLookup,
     IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
     IMPORT_LOCATION_NOT_FOUND_MESSAGE,
     IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
   );
-  errors.push(...storeResolution.errors);
+  errors.push(...serviceResolution.errors);
 
   if (!fechaInicio) {
     errors.push("La fecha de inicio es obligatoria");
@@ -333,7 +333,7 @@ const validateLegacyRow = (
       errors.push(`Fecha de inicio: ${parsedStart.error}`);
     } else {
       scheduledStart = parsedStart.iso;
-      if (isInventoryStartInPast(parsedStart.iso)) {
+      if (isOperationStartInPast(parsedStart.iso)) {
         errors.push("La fecha de inicio no puede estar en el pasado");
       }
     }
@@ -352,8 +352,8 @@ const validateLegacyRow = (
     errors.push("La fecha de fin debe ser posterior a la fecha de inicio");
   }
 
-  if (storeResolution.serviceId && scheduledStart) {
-    const duplicateKey = buildInventoryDuplicateKey(storeResolution.serviceId, scheduledStart);
+  if (serviceResolution.serviceId && scheduledStart) {
+    const duplicateKey = buildOperationDuplicateKey(serviceResolution.serviceId, scheduledStart);
     if (seenKeys.has(duplicateKey)) {
       errors.push("Fila duplicada en el archivo para la misma ubicación y fecha de inicio");
     } else {
@@ -362,17 +362,17 @@ const validateLegacyRow = (
   }
 
   const isValid =
-    errors.length === 0 && storeResolution.serviceId && scheduledStart && scheduledEnd;
+    errors.length === 0 && serviceResolution.serviceId && scheduledStart && scheduledEnd;
 
   return {
     rowNumber,
     format: "legacy",
     punto: "",
-    tienda: locationValue,
-    serviceId: storeResolution.serviceId,
-    serviceName: storeResolution.serviceName,
+    legacyLocation: locationValue,
+    serviceId: serviceResolution.serviceId,
+    serviceName: serviceResolution.serviceName,
     rawFecha: fechaInicio,
-    parsedInventoryDate: null,
+    parsedOperationDate: null,
     fechaInicio,
     fechaFin,
     scheduledStart,
@@ -458,8 +458,8 @@ export const operationImportService = {
       return emptyPreview(["El archivo no contiene filas de datos"], fileType);
     }
 
-    const stores = await serviceRepository.listAllActive(companyId);
-    const storeLookup = buildStoreLookup(stores);
+    const services = await serviceRepository.listAllActive(companyId);
+    const serviceLookup = buildServiceLookup(services);
     const seenKeys = new Set<string>();
 
     const rows: OperationImportPreviewRow[] = [];
@@ -472,8 +472,8 @@ export const operationImportService = {
 
       const previewRow =
         format === "client"
-          ? validateClientRow(index + 2, row, mapped, storeLookup, seenKeys, normalization)
-          : validateLegacyRow(index + 2, row, mapped, storeLookup, seenKeys, normalization);
+          ? validateClientRow(index + 2, row, mapped, serviceLookup, seenKeys, normalization)
+          : validateLegacyRow(index + 2, row, mapped, serviceLookup, seenKeys, normalization);
       rows.push(previewRow);
     }
 
@@ -484,7 +484,7 @@ export const operationImportService = {
         scheduledStart: row.scheduledStart as string,
       }));
     const existingKeys = await operationRepository.findExistingActiveKeys(companyId, pairsToCheck);
-    markExistingInventoryConflicts(rows, existingKeys);
+    markExistingOperationConflicts(rows, existingKeys);
 
     const fileErrors: string[] = [];
     if (rows.length === 0) {
@@ -513,46 +513,46 @@ export const operationImportService = {
   },
 
   async confirm(companyId: string, rows: OperationImportConfirmRow[]) {
-    const stores = await serviceRepository.listAllActive(companyId);
-    const storeById = new Map(stores.map((store) => [store.id, store]));
+    const services = await serviceRepository.listAllActive(companyId);
+    const serviceById = new Map(services.map((service) => [service.id, service]));
     const seenKeys = new Set<string>();
 
     for (const row of rows) {
-      const store = storeById.get(row.serviceId);
-      if (!store) {
+      const service = serviceById.get(row.serviceId);
+      if (!service) {
         throw new AppError(
           400,
-          "INVENTORY_IMPORT_INVALID",
+          "OPERATION_IMPORT_INVALID",
           "La importación contiene filas inválidas. Revisá el archivo y volvé a intentar.",
         );
       }
 
-      if (!store.active) {
-        throw new AppError(409, "STORE_INACTIVE", "No se puede crear inventario para una tienda inactiva");
+      if (!service.active) {
+        throw new AppError(409, "SERVICE_INACTIVE", "No se puede crear operación para un servicio inactivo");
       }
 
-      if (isInventoryStartInPast(row.scheduledStart)) {
+      if (isOperationStartInPast(row.scheduledStart)) {
         throw new AppError(
           400,
-          "INVENTORY_START_IN_PAST",
-          "No se puede programar un inventario con fecha de inicio en el pasado",
+          "OPERATION_START_IN_PAST",
+          "No se puede programar una operación con fecha de inicio en el pasado",
         );
       }
 
       if (new Date(row.scheduledEnd) <= new Date(row.scheduledStart)) {
         throw new AppError(
           400,
-          "INVALID_INVENTORY_DATE_RANGE",
+          "INVALID_OPERATION_DATE_RANGE",
           "scheduledEnd debe ser posterior a scheduledStart",
         );
       }
 
-      const duplicateKey = buildInventoryDuplicateKey(row.serviceId, row.scheduledStart);
+      const duplicateKey = buildOperationDuplicateKey(row.serviceId, row.scheduledStart);
       if (seenKeys.has(duplicateKey)) {
         throw new AppError(
           400,
-          "INVENTORY_IMPORT_INVALID",
-          "La importación contiene filas duplicadas para la misma tienda y fecha de inicio",
+          "OPERATION_IMPORT_INVALID",
+          "La importación contiene filas duplicadas para el mismo servicio y fecha de inicio",
         );
       }
       seenKeys.add(duplicateKey);
@@ -568,8 +568,8 @@ export const operationImportService = {
     if (existingKeys.size > 0) {
       throw new AppError(
         409,
-        "INVENTORY_DUPLICATE",
-        "Ya existe un inventario para esa tienda y fecha de inicio",
+        "OPERATION_DUPLICATE",
+        "Ya existe una operación para ese servicio y fecha de inicio",
       );
     }
 

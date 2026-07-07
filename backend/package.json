@@ -22,6 +22,7 @@
     "backfill:absence-balances": "tsx src/scripts/backfill-employee-absence-balances.ts",
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
+    "audit:statistics-grain": "tsx src/scripts/audit-statistics-grain.ts",
     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
     "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts"
   },

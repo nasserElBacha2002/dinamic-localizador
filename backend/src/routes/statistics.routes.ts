@@ -48,3 +48,10 @@ statisticsRouter.get(
   validate(statisticsTableQuerySchema, "query"),
   asyncHandler(statisticsController.byService),
 );
+
+statisticsRouter.get(
+  "/attendance/workday-details",
+  requirePermission("reports:read"),
+  validate(statisticsTableQuerySchema, "query"),
+  asyncHandler(statisticsController.workdayDetails),
+);

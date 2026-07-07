@@ -4,12 +4,17 @@ import { OperationSearchAutocomplete } from "../operations/OperationSearchAutoco
 import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
 import { FilterBar, FilterDateRangeInput, FilterSelect } from "../../design-system";
 import type { DateRangeValue } from "../../types/date-range";
-import type { StatisticsValidationStatus } from "../../types/statistics";
+import type {
+  StatisticsEffectiveState,
+  StatisticsOperationKind,
+  StatisticsValidationStatus,
+} from "../../types/statistics";
 import {
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
+import { operationKindLabels } from "../../utils/operation-schedule-display";
 
 interface StatisticsFiltersBarProps {
   dateRange: DateRangeValue;
@@ -17,6 +22,8 @@ interface StatisticsFiltersBarProps {
   operationId: string;
   serviceId: string;
   employeeId: string;
+  operationKind: StatisticsOperationKind;
+  effectiveState: StatisticsEffectiveState;
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
   punctualityStatus: string;
@@ -24,10 +31,20 @@ interface StatisticsFiltersBarProps {
   onOperationChange: (value: string) => void;
   onServiceChange: (value: string) => void;
   onEmployeeChange: (value: string) => void;
+  onOperationKindChange: (value: StatisticsOperationKind) => void;
+  onEffectiveStateChange: (value: StatisticsEffectiveState) => void;
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
   onPunctualityStatusChange: (value: string) => void;
 }
+
+const EFFECTIVE_STATE_LABELS: Record<Exclude<StatisticsEffectiveState, "">, string> = {
+  EXPECTED: "Pendiente / esperada",
+  JUSTIFIED: "Justificada",
+  PRESENT: "Con asistencia",
+  ABSENT: "Ausente",
+  CANCELLED: "Cancelada",
+};
 
 export function StatisticsFiltersBar({
   dateRange,
@@ -35,6 +52,8 @@ export function StatisticsFiltersBar({
   operationId,
   serviceId,
   employeeId,
+  operationKind,
+  effectiveState,
   validationStatus,
   locationStatus,
   punctualityStatus,
@@ -42,6 +61,8 @@ export function StatisticsFiltersBar({
   onOperationChange,
   onServiceChange,
   onEmployeeChange,
+  onOperationKindChange,
+  onEffectiveStateChange,
   onValidationStatusChange,
   onLocationStatusChange,
   onPunctualityStatusChange,
@@ -74,6 +95,22 @@ export function StatisticsFiltersBar({
     [],
   );
 
+  const operationKindOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(operationKindLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
+  const effectiveStateOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(EFFECTIVE_STATE_LABELS).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
   return (
     <FilterBar>
       <FilterBar.Item minWidth={280}>
@@ -81,7 +118,7 @@ export function StatisticsFiltersBar({
           value={dateRange}
           onChange={onDateRangeChange}
           mode="past"
-          label="Fecha"
+          label="Fecha de jornada"
           defaultValue={defaultDateRange}
           allowCustomRange
         />
@@ -106,6 +143,22 @@ export function StatisticsFiltersBar({
           onChange={(id) => onEmployeeChange(id ?? "")}
           activeOnly={false}
           allowCreate={false}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Tipo de operación"
+          value={operationKind}
+          onChange={(value) => onOperationKindChange(value as StatisticsOperationKind)}
+          data={operationKindOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Estado de jornada"
+          value={effectiveState}
+          onChange={(value) => onEffectiveStateChange(value as StatisticsEffectiveState)}
+          data={effectiveStateOptions}
         />
       </FilterBar.Item>
       <FilterBar.Item>

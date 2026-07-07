@@ -42,4 +42,13 @@ export const statisticsController = {
     const result = await statisticsService.getByService(companyId, req.validatedQuery as StatisticsTableQuery);
     res.status(200).json(result);
   },
+
+  async workdayDetails(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await statisticsService.getWorkdayDetails(
+      companyId,
+      req.validatedQuery as StatisticsTableQuery,
+    );
+    res.status(200).json(result);
+  },
 };

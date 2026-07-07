@@ -24,6 +24,8 @@ export function StatisticsPage() {
         operationId={data.operationId}
         serviceId={data.serviceId}
         employeeId={data.employeeId}
+        operationKind={data.operationKind}
+        effectiveState={data.effectiveState}
         validationStatus={data.validationStatus}
         locationStatus={data.locationStatus}
         punctualityStatus={data.punctualityStatus}
@@ -42,6 +44,14 @@ export function StatisticsPage() {
         onEmployeeChange={(value) => {
           data.resetAllPages();
           data.setEmployeeId(value);
+        }}
+        onOperationKindChange={(value) => {
+          data.resetAllPages();
+          data.setOperationKind(value);
+        }}
+        onEffectiveStateChange={(value) => {
+          data.resetAllPages();
+          data.setEffectiveState(value);
         }}
         onValidationStatusChange={(value) => {
           data.resetAllPages();
@@ -93,7 +103,7 @@ export function StatisticsPage() {
           onPageChange={data.employeePagination.onPageChange}
           onPageSizeChange={data.employeePagination.onPageSizeChange}
           onSortChange={data.handleEmployeeSort as never}
-          exportRows={data.employeeExportQuery.data?.data ?? []}
+          loadExportRows={data.loadEmployeeExportRows}
           dateFrom={data.isoDateFrom}
           dateTo={data.isoDateTo}
           exportsDisabled={data.exportsDisabled}
@@ -114,7 +124,7 @@ export function StatisticsPage() {
           onPageChange={data.operationPagination.onPageChange}
           onPageSizeChange={data.operationPagination.onPageSizeChange}
           onSortChange={data.handleOperationSort as never}
-          exportRows={data.operationExportQuery.data?.data ?? []}
+          loadExportRows={data.loadOperationExportRows}
           dateFrom={data.isoDateFrom}
           dateTo={data.isoDateTo}
           exportsDisabled={data.exportsDisabled}
@@ -135,7 +145,7 @@ export function StatisticsPage() {
           onPageChange={data.servicePagination.onPageChange}
           onPageSizeChange={data.servicePagination.onPageSizeChange}
           onSortChange={data.handleLocationSort as never}
-          exportRows={data.serviceExportQuery.data?.data ?? []}
+          loadExportRows={data.loadServiceExportRows}
           dateFrom={data.isoDateFrom}
           dateTo={data.isoDateTo}
           exportsDisabled={data.exportsDisabled}

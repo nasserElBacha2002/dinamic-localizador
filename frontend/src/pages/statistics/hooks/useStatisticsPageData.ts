@@ -1,4 +1,4 @@
-import { useMemo, useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   useStatisticsByEmployee,
   useStatisticsByOperation,
@@ -8,7 +8,18 @@ import {
   useStatisticsTimeline,
 } from "../../../hooks/useStatistics";
 import { useTableUrlState } from "../../../hooks/useTableUrlState";
-import type { StatisticsFilters, StatisticsValidationStatus } from "../../../types/statistics";
+import {
+  getAttendanceByEmployee,
+  getAttendanceByOperation,
+  getAttendanceByService,
+  getAttendanceWorkdayDetails,
+} from "../../../api/statistics.api";
+import type {
+  StatisticsEffectiveState,
+  StatisticsFilters,
+  StatisticsOperationKind,
+  StatisticsValidationStatus,
+} from "../../../types/statistics";
 import type { StatisticsTabKey } from "../statistics-table-state";
 import type { DateRangeValue } from "../../../types/date-range";
 import {
@@ -25,17 +36,53 @@ import {
   getDateRangeQueryValue,
   isInvalidCustomDateRange,
 } from "../../../utils/date-range";
-import { dateInputToIsoEnd, dateInputToIsoStart } from "../../../utils/dates";
+import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../../utils/dates";
 import { formatPercent } from "../../../utils/export";
+import { formatDurationFromMinutes } from "../../../utils/duration";
 import { terminology } from "../../../domain/terminology";
+import { operationKindLabels } from "../../../utils/operation-schedule-display";
+import {
+  checkoutStatusLabels,
+  employeeTypeLabels,
+  punctualityStatusLabels,
+} from "../../../utils/labels";
+import { employeeWorkdayEffectiveStateLabels } from "../../../utils/statistics-display-labels";
 import {
   buildStatusDistributionOption,
   buildTimelineChartOption,
 } from "../../../components/statistics/statistics-chart-options";
+import {
+  buildEmployeeTableExportFilters,
+  buildOperationTableExportFilters,
+  buildServiceTableExportFilters,
+  buildTopEmployeesByAttendanceFilters,
+  buildTopLateEmployeesFilters,
+  buildTopOperationsByAttendanceFilters,
+  buildTopServicesByAttendanceFilters,
+  buildWorkdayDetailExportFilters,
+} from "../statistics-page-queries";
 
 export type { StatisticsTabKey } from "../statistics-table-state";
 
 const SUMMARY_HEADERS = ["Métrica", "Valor"];
+
+const WORKDAY_DETAIL_HEADERS = [
+  "Fecha de jornada",
+  "Empleado",
+  "Tipo de empleado",
+  "Servicio",
+  "Tipo de operación",
+  "Hora esperada de ingreso",
+  "Hora esperada de salida",
+  "Estado de jornada",
+  "Hora de ingreso",
+  "Estado de llegada",
+  "Hora de salida",
+  "Estado de salida",
+  "Minutos trabajados",
+  "Minutos extra",
+  "Tipo de ausencia",
+];
 
 export function useStatisticsPageData() {
   const [defaultDateRange] = useState<DateRangeValue>(() => getDefaultStatisticsDateRange());
@@ -98,6 +145,8 @@ export function useStatisticsPageData() {
       operationId: table.state.operationId || undefined,
       serviceId: table.state.serviceId || undefined,
       employeeId: table.state.employeeId || undefined,
+      operationKind: (table.state.operationKind as StatisticsOperationKind) || undefined,
+      effectiveState: (table.state.effectiveState as StatisticsEffectiveState) || undefined,
       validationStatus: (table.state.validationStatus as StatisticsValidationStatus) || undefined,
       locationStatus: table.state.locationStatus || undefined,
       punctualityStatus: table.state.punctualityStatus || undefined,
@@ -107,6 +156,8 @@ export function useStatisticsPageData() {
       isoDateTo,
       table.state.employeeId,
       table.state.operationId,
+      table.state.operationKind,
+      table.state.effectiveState,
       table.state.locationStatus,
       table.state.punctualityStatus,
       table.state.serviceId,
@@ -125,16 +176,6 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.empPage, table.state.empPageSize, table.state.empSortBy, table.state.empSortOrder],
   );
 
-  const employeeExportFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      export: true,
-      sortBy: table.state.empSortBy,
-      sortDirection: table.state.empSortOrder,
-    }),
-    [baseFilters, table.state.empSortBy, table.state.empSortOrder],
-  );
-
   const operationFilters = useMemo(
     () => ({
       ...baseFilters,
@@ -144,16 +185,6 @@ export function useStatisticsPageData() {
       sortDirection: table.state.opSortOrder,
     }),
     [baseFilters, table.state.opPage, table.state.opPageSize, table.state.opSortBy, table.state.opSortOrder],
-  );
-
-  const operationExportFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      export: true,
-      sortBy: table.state.opSortBy,
-      sortDirection: table.state.opSortOrder,
-    }),
-    [baseFilters, table.state.opSortBy, table.state.opSortOrder],
   );
 
   const serviceFilters = useMemo(
@@ -167,68 +198,59 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.svcPage, table.state.svcPageSize, table.state.svcSortBy, table.state.svcSortOrder],
   );
 
-  const serviceExportFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      export: true,
-      sortBy: table.state.svcSortBy,
-      sortDirection: table.state.svcSortOrder,
-    }),
-    [baseFilters, table.state.svcSortBy, table.state.svcSortOrder],
+  const topEmployeeChartFilters = useMemo(
+    () => buildTopEmployeesByAttendanceFilters(baseFilters),
+    [baseFilters],
+  );
+  const topLateEmployeeChartFilters = useMemo(
+    () => buildTopLateEmployeesFilters(baseFilters),
+    [baseFilters],
+  );
+  const topOperationChartFilters = useMemo(
+    () => buildTopOperationsByAttendanceFilters(baseFilters),
+    [baseFilters],
+  );
+  const topServiceChartFilters = useMemo(
+    () => buildTopServicesByAttendanceFilters(baseFilters),
+    [baseFilters],
   );
 
   const summaryQuery = useStatisticsSummary(baseFilters);
   const timelineQuery = useStatisticsTimeline(baseFilters);
   const distributionQuery = useStatisticsStatusDistribution(baseFilters);
   const employeeQuery = useStatisticsByEmployee(employeeFilters);
-  const employeeExportQuery = useStatisticsByEmployee(employeeExportFilters);
   const operationQuery = useStatisticsByOperation(operationFilters);
-  const operationExportQuery = useStatisticsByOperation(operationExportFilters);
   const serviceQuery = useStatisticsByService(serviceFilters);
-  const serviceExportQuery = useStatisticsByService(serviceExportFilters);
+  const topEmployeesByAttendanceQuery = useStatisticsByEmployee(topEmployeeChartFilters);
+  const topLateEmployeesQuery = useStatisticsByEmployee(topLateEmployeeChartFilters);
+  const topOperationsByAttendanceQuery = useStatisticsByOperation(topOperationChartFilters);
+  const topServicesByAttendanceQuery = useStatisticsByService(topServiceChartFilters);
 
-  const chartEmployeeData = employeeExportQuery.data?.data ?? [];
-  const chartOperationData = operationExportQuery.data?.data ?? [];
-  const chartServiceData = serviceExportQuery.data?.data ?? [];
-
-  const topEmployeesByAttendance = [...chartEmployeeData]
-    .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
-    .slice(0, 10);
-
-  const topLateEmployees = [...chartEmployeeData]
-    .sort((a, b) => b.lateCount - a.lateCount)
-    .filter((row) => row.lateCount > 0)
-    .slice(0, 10);
-
-  const topOperationsByAttendance = [...chartOperationData]
-    .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
-    .slice(0, 10);
-
-  const topServicesByAttendance = [...chartServiceData]
-    .sort((a, b) => b.averageAttendancePercentage - a.averageAttendancePercentage)
-    .slice(0, 10);
+  const topEmployeesByAttendance = topEmployeesByAttendanceQuery.data?.data ?? [];
+  const topLateEmployees = (topLateEmployeesQuery.data?.data ?? []).filter((row) => row.lateWorkdays > 0);
+  const topOperationsByAttendance = topOperationsByAttendanceQuery.data?.data ?? [];
+  const topServicesByAttendance = topServicesByAttendanceQuery.data?.data ?? [];
 
   const timeline = timelineQuery.data ?? [];
   const timelineOption = buildTimelineChartOption(
     timeline.map((point) => point.date),
     {
       present: timeline.map((point) => point.present),
-      late: timeline.map((point) => point.late),
-      outsideGeofence: timeline.map((point) => point.outsideGeofence),
-      pendingReview: timeline.map((point) => point.pendingReview),
-      rejected: timeline.map((point) => point.rejected),
+      absent: timeline.map((point) => point.absent),
+      justified: timeline.map((point) => point.justified),
+      expected: timeline.map((point) => point.expected),
     },
   );
 
   const timelineExportRows = timeline.map((point) => [
     point.date,
     point.present,
+    point.absent,
+    point.justified,
+    point.expected,
+    point.scheduled,
+    point.onTime,
     point.late,
-    point.outsideGeofence,
-    point.pendingReview,
-    point.rejected,
-    point.noShow,
-    point.total,
   ]);
 
   const distribution = distributionQuery.data ?? [];
@@ -237,19 +259,124 @@ export function useStatisticsPageData() {
   const summary = summaryQuery.data;
   const summaryExportRows = summary
     ? [
-        ["Registros de asistencia", summary.totalAttendanceRecords],
-        ["Empleados asignados", summary.totalAssignedEmployees],
-        ["% asistencia", formatPercent(summary.attendancePercentage)],
-        ["Presente / a tiempo", summary.presentCount],
-        ["Tarde", summary.lateCount],
-        ["Fuera de geocerca", summary.outsideGeofenceCount],
-        ["Pendiente de revisión", summary.pendingReviewCount],
-        ["Rechazados", summary.rejectedCount],
-        ["Aceptados manualmente", summary.manuallyAcceptedCount],
-        ["Sin asistencia", summary.noShowCount],
+        ["Jornadas programadas", summary.scheduledWorkdays],
+        ["Presentes", summary.presentWorkdays],
+        ["Ausentes", summary.absentWorkdays],
+        ["Justificadas", summary.justifiedWorkdays],
+        ["Pendientes / esperadas", summary.expectedOpenWorkdays],
+        ["Presentismo", formatPercent(summary.attendanceRate)],
+        ["Ausentismo", formatPercent(summary.absenceRate)],
+        ["Puntualidad", formatPercent(summary.punctualityRate)],
+        ["Horas trabajadas", formatDurationFromMinutes(summary.workedMinutes)],
+        ["Horas extra", formatDurationFromMinutes(summary.overtimeMinutes)],
+        ["Asistencias sin cierre", summary.openAttendanceWorkdays],
         [terminology.operation.plural, summary.totalOperations],
       ]
     : [];
+
+  const mapWorkdayDetailExportRows = useCallback(
+    (rows: Awaited<ReturnType<typeof getAttendanceWorkdayDetails>>["data"]) =>
+      rows.map((row) => [
+        row.workDate,
+        row.employeeName,
+        row.employeeType ? (employeeTypeLabels[row.employeeType] ?? row.employeeType) : "",
+        row.serviceName,
+        operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+        row.expectedStartAt ? formatDateTime(row.expectedStartAt) : "",
+        row.expectedEndAt ? formatDateTime(row.expectedEndAt) : "",
+        employeeWorkdayEffectiveStateLabels[row.effectiveState] ?? row.effectiveState,
+        row.checkInAt ? formatDateTime(row.checkInAt) : "",
+        row.arrivalStatus ? (punctualityStatusLabels[row.arrivalStatus] ?? row.arrivalStatus) : "",
+        row.checkOutAt ? formatDateTime(row.checkOutAt) : "",
+        row.checkoutStatus ? (checkoutStatusLabels[row.checkoutStatus] ?? row.checkoutStatus) : "",
+        row.workedMinutes,
+        row.overtimeMinutes,
+        row.absenceTypeName ?? "",
+      ]),
+    [],
+  );
+
+  const loadWorkdayDetailExportRows = useCallback(async () => {
+    const response = await getAttendanceWorkdayDetails(buildWorkdayDetailExportFilters(baseFilters));
+    return mapWorkdayDetailExportRows(response.data);
+  }, [baseFilters, mapWorkdayDetailExportRows]);
+
+  const loadEmployeeExportRows = useCallback(async () => {
+    const response = await getAttendanceByEmployee(
+      buildEmployeeTableExportFilters(
+        baseFilters,
+        table.state.empSortBy,
+        table.state.empSortOrder,
+      ),
+    );
+    return response.data.map((row) => [
+      row.employeeName,
+      row.phoneNumber,
+      row.scheduledWorkdays,
+      row.presentWorkdays,
+      row.absentWorkdays,
+      row.justifiedWorkdays,
+      row.expectedOpenWorkdays,
+      formatPercent(row.attendanceRate),
+      formatPercent(row.punctualityRate),
+      formatDurationFromMinutes(row.workedMinutes),
+      formatDurationFromMinutes(row.overtimeMinutes),
+      row.lateWorkdays,
+      row.earlyDepartureWorkdays,
+      row.lastAttendanceDate ? formatDateTime(row.lastAttendanceDate) : "—",
+    ]);
+  }, [baseFilters, table.state.empSortBy, table.state.empSortOrder]);
+
+  const loadOperationExportRows = useCallback(async () => {
+    const response = await getAttendanceByOperation(
+      buildOperationTableExportFilters(
+        baseFilters,
+        table.state.opSortBy,
+        table.state.opSortOrder,
+      ),
+    );
+    return response.data.map((row) => [
+      row.operationId,
+      operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+      row.serviceName,
+      row.serviceAddress ?? "",
+      row.scheduledStart ? formatDateTime(row.scheduledStart) : "—",
+      row.scheduledWorkdays,
+      row.presentWorkdays,
+      row.absentWorkdays,
+      row.justifiedWorkdays,
+      row.expectedOpenWorkdays,
+      formatPercent(row.attendanceRate),
+      formatPercent(row.punctualityRate),
+      formatDurationFromMinutes(row.workedMinutes),
+      formatDurationFromMinutes(row.overtimeMinutes),
+      row.operationalStatus,
+    ]);
+  }, [baseFilters, table.state.opSortBy, table.state.opSortOrder]);
+
+  const loadServiceExportRows = useCallback(async () => {
+    const response = await getAttendanceByService(
+      buildServiceTableExportFilters(
+        baseFilters,
+        table.state.svcSortBy,
+        table.state.svcSortOrder,
+      ),
+    );
+    return response.data.map((row) => [
+      row.serviceName,
+      row.address ?? "",
+      row.totalOperations,
+      row.scheduledWorkdays,
+      row.presentWorkdays,
+      row.absentWorkdays,
+      row.justifiedWorkdays,
+      row.expectedOpenWorkdays,
+      formatPercent(row.attendanceRate),
+      formatPercent(row.punctualityRate),
+      formatDurationFromMinutes(row.workedMinutes),
+      formatDurationFromMinutes(row.overtimeMinutes),
+    ]);
+  }, [baseFilters, table.state.svcSortBy, table.state.svcSortOrder]);
 
   const resetAllPages = () => {
     table.setState(
@@ -340,6 +467,10 @@ export function useStatisticsPageData() {
     setServiceId: (value: string) => table.setField("serviceId", value),
     employeeId: table.state.employeeId,
     setEmployeeId: (value: string) => table.setField("employeeId", value),
+    operationKind: table.state.operationKind as StatisticsOperationKind,
+    setOperationKind: (value: string) => table.setField("operationKind", value),
+    effectiveState: table.state.effectiveState as StatisticsEffectiveState,
+    setEffectiveState: (value: string) => table.setField("effectiveState", value),
     validationStatus: table.state.validationStatus as StatisticsValidationStatus,
     setValidationStatus: (value: string) => table.setField("validationStatus", value),
     locationStatus: table.state.locationStatus,
@@ -354,11 +485,12 @@ export function useStatisticsPageData() {
     timelineQuery,
     distributionQuery,
     employeeQuery,
-    employeeExportQuery,
     operationQuery,
-    operationExportQuery,
     serviceQuery,
-    serviceExportQuery,
+    topEmployeesByAttendanceQuery,
+    topLateEmployeesQuery,
+    topOperationsByAttendanceQuery,
+    topServicesByAttendanceQuery,
     employeePagination,
     operationPagination,
     servicePagination,
@@ -372,6 +504,7 @@ export function useStatisticsPageData() {
     handleOperationSort,
     handleLocationSort,
     summaryHeaders: SUMMARY_HEADERS,
+    workdayDetailHeaders: WORKDAY_DETAIL_HEADERS,
     summary,
     summaryExportRows,
     timeline,
@@ -383,6 +516,10 @@ export function useStatisticsPageData() {
     topLateEmployees,
     topOperationsByAttendance,
     topServicesByAttendance,
+    loadWorkdayDetailExportRows,
+    loadEmployeeExportRows,
+    loadOperationExportRows,
+    loadServiceExportRows,
   };
 }
 

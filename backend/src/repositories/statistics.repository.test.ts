@@ -3,19 +3,25 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-describe("statistics.repository recurring compatibility", () => {
+describe("statistics.repository EmployeeWorkday grain", () => {
   const repositorySource = readFileSync(
     join(process.cwd(), "src/repositories/statistics.repository.ts"),
     "utf8",
   );
 
-  it("keeps public statistics scoped to ONE_TIME operations until Phase 7", () => {
-    assert.match(repositorySource, /i\.operation_kind = N'ONE_TIME'/);
+  it("uses EmployeeWorkday statistics for ONE_TIME and RECURRING operations", () => {
+    assert.match(repositorySource, /employee_workday_statistics/);
+    assert.match(repositorySource, /buildEmployeeWorkdayStatisticsCte/);
+    assert.doesNotMatch(repositorySource, /operation_kind = N'ONE_TIME'/);
   });
 
-  it("appends dynamic filters with AND because the base FROM already has WHERE", () => {
-    assert.match(repositorySource, /buildAndClause\(sqlFilters\)/);
-    assert.doesNotMatch(repositorySource, /buildWhereClause\(sqlFilters\)/);
-    assert.doesNotMatch(repositorySource, /WHERE[\s\S]*WHERE/);
+  it("buckets trends by operation workday date", () => {
+    assert.match(repositorySource, /GROUP BY work_date/);
+    assert.doesNotMatch(repositorySource, /COALESCE\(ar\.received_at, i\.scheduled_start\)/);
+  });
+
+  it("exposes workday detail export rows", () => {
+    assert.match(repositorySource, /getWorkdayDetails/);
+    assert.match(repositorySource, /effective_state/);
   });
 });

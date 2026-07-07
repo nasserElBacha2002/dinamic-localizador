@@ -16,17 +16,21 @@ import { formatPercent } from "../../utils/export";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { operationStatusLabels } from "../../utils/labels";
+import { operationKindLabels } from "../../utils/operation-schedule-display";
 
 type SortableField =
   | "serviceName"
   | "scheduledStart"
-  | "assignedEmployeesCount"
-  | "presentCount"
-  | "noShowCount"
-  | "lateCount"
-  | "outsideGeofenceCount"
-  | "pendingReviewCount"
-  | "attendancePercentage"
+  | "operationKind"
+  | "scheduledWorkdays"
+  | "presentWorkdays"
+  | "absentWorkdays"
+  | "justifiedWorkdays"
+  | "expectedOpenWorkdays"
+  | "attendanceRate"
+  | "punctualityRate"
+  | "workedMinutes"
+  | "overtimeMinutes"
   | "operationalStatus";
 
 interface StatisticsOperationTableProps {
@@ -42,7 +46,7 @@ interface StatisticsOperationTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onSortChange: (field: SortableField) => void;
-  exportRows: AttendanceByOperationRow[];
+  loadExportRows: () => Promise<Array<Array<string | number | null | undefined>>>;
   dateFrom?: string;
   dateTo?: string;
   exportsDisabled?: boolean;
@@ -50,34 +54,28 @@ interface StatisticsOperationTableProps {
 
 const EXPORT_HEADERS = [
   "Operación",
+  "Tipo",
   "Servicio",
   "Dirección",
   "Programado",
-  "Asignados",
+  "Jornadas esperadas",
   "Presentes",
-  "Sin asistencia",
-  "Tarde",
-  "Fuera geocerca",
-  "Pendiente",
-  "% asistencia",
+  "Ausentes",
+  "Justificadas",
+  "Pendientes",
+  "Presentismo",
+  "Puntualidad",
+  "Horas trabajadas",
+  "Horas extra",
   "Estado",
 ];
 
-function toExportRows(rows: AttendanceByOperationRow[]) {
-  return rows.map((row) => [
-    row.operationId,
-    row.serviceName,
-    row.serviceAddress ?? "",
-    formatDateTime(row.scheduledStart),
-    row.assignedEmployeesCount,
-    row.presentCount,
-    row.noShowCount,
-    row.lateCount,
-    row.outsideGeofenceCount,
-    row.pendingReviewCount,
-    formatPercent(row.attendancePercentage),
-    operationStatusLabels[row.operationalStatus as keyof typeof operationStatusLabels] ?? row.operationalStatus,
-  ]);
+function formatOperationLabel(row: AttendanceByOperationRow): string {
+  if (row.operationKind === "RECURRING") {
+    return row.serviceName;
+  }
+
+  return row.scheduledStart ? formatDateTime(row.scheduledStart) : row.serviceName;
 }
 
 export function StatisticsOperationTable({
@@ -93,13 +91,11 @@ export function StatisticsOperationTable({
   onPageChange,
   onPageSizeChange,
   onSortChange,
-  exportRows,
+  loadExportRows,
   dateFrom,
   dateTo,
   exportsDisabled = false,
 }: StatisticsOperationTableProps) {
-  const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
-
   const columns = useMemo<DataTableColumn<AttendanceByOperationRow>[]>(
     () => [
       {
@@ -112,57 +108,58 @@ export function StatisticsOperationTable({
         ),
       },
       {
+        key: "operationKind",
+        header: "Tipo",
+        getValue: (row) =>
+          operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+        sortable: true,
+      },
+      {
         key: "serviceName",
         header: terminology.service.singular,
         getValue: (row) => row.serviceName,
         sortable: true,
       },
       {
-        key: "serviceAddress",
-        header: "Dirección",
-        getValue: (row) => row.serviceAddress ?? "—",
-      },
-      {
         key: "scheduledStart",
         header: "Programado",
-        getValue: (row) => formatDateTime(row.scheduledStart),
+        getValue: (row) => formatOperationLabel(row),
+        sortable: true,
       },
       {
-        key: "assignedEmployeesCount",
-        header: "Asignados",
-        getValue: (row) => row.assignedEmployeesCount,
+        key: "scheduledWorkdays",
+        header: "Jornadas esperadas",
+        getValue: (row) => row.scheduledWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "presentCount",
+        key: "presentWorkdays",
         header: "Presentes",
-        getValue: (row) => row.presentCount,
+        getValue: (row) => row.presentWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "noShowCount",
-        header: "Sin asistencia",
-        getValue: (row) => row.noShowCount,
+        key: "absentWorkdays",
+        header: "Ausentes",
+        getValue: (row) => row.absentWorkdays,
         align: "right",
-      },
-      { key: "lateCount", header: "Tarde", getValue: (row) => row.lateCount, align: "right" },
-      {
-        key: "outsideGeofenceCount",
-        header: "Fuera geocerca",
-        getValue: (row) => row.outsideGeofenceCount,
-        align: "right",
+        sortable: true,
       },
       {
-        key: "pendingReviewCount",
-        header: "Pendiente",
-        getValue: (row) => row.pendingReviewCount,
+        key: "attendanceRate",
+        header: "Presentismo",
+        getValue: (row) => formatPercent(row.attendanceRate),
         align: "right",
+        sortable: true,
       },
       {
-        key: "attendancePercentage",
-        header: "% asistencia",
-        getValue: (row) => formatPercent(row.attendancePercentage),
+        key: "punctualityRate",
+        header: "Puntualidad",
+        getValue: (row) => formatPercent(row.punctualityRate),
         align: "right",
+        sortable: true,
       },
       {
         key: "operationalStatus",
@@ -195,7 +192,7 @@ export function StatisticsOperationTable({
         <ExportActionButtons
           baseName="attendance-by-operation"
           headers={EXPORT_HEADERS}
-          rows={exportData}
+          loadRows={loadExportRows}
           dateFrom={dateFrom}
           dateTo={dateTo}
           sheetName="Por operación"

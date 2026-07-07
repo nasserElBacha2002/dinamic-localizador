@@ -18,6 +18,7 @@ import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { isOperationAssignable } from "../utils/operation-status";
 import { operationWorkDateService } from "./operation-work-date.service";
 import { workdayMaterializationService } from "./workday-materialization.service";
+import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 
 const withLifecycleState = (
   assignment: OperationEmployeeAssignment,
@@ -289,6 +290,24 @@ export const operationAssignmentService = {
       }
 
       await transaction.commit();
+
+      if (operationKind === "RECURRING") {
+        try {
+          await recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+            companyId,
+            operationId,
+            assignment,
+          );
+        } catch (error) {
+          console.error("[operation-assignment] recurring reconciliation failed", {
+            companyId,
+            operationId,
+            assignmentId: assignment.id,
+            error,
+          });
+        }
+      }
+
       return withLifecycleState(assignment, operationWorkDate ?? validFrom);
     } catch (error) {
       await transaction.rollback();
@@ -342,6 +361,24 @@ export const operationAssignmentService = {
       }
 
       await transaction.commit();
+
+      if ((operation.operationKind ?? "ONE_TIME") === "RECURRING") {
+        try {
+          await recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+            companyId,
+            operationId,
+            cancelled,
+          );
+        } catch (error) {
+          console.error("[operation-assignment] recurring cancellation reconciliation failed", {
+            companyId,
+            operationId,
+            assignmentId,
+            error,
+          });
+        }
+      }
+
       const referenceDate = await resolveLifecycleReferenceDate(
         companyId,
         operationId,
@@ -433,6 +470,24 @@ export const operationAssignmentService = {
       await reconcileEmployeeWorkdaysOutsideAssignment(companyId, transaction, updated);
 
       await transaction.commit();
+
+      if ((operation.operationKind ?? "ONE_TIME") === "RECURRING") {
+        try {
+          await recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+            companyId,
+            operationId,
+            updated,
+          );
+        } catch (error) {
+          console.error("[operation-assignment] recurring end reconciliation failed", {
+            companyId,
+            operationId,
+            assignmentId,
+            error,
+          });
+        }
+      }
+
       const referenceDate = await resolveLifecycleReferenceDate(
         companyId,
         operationId,

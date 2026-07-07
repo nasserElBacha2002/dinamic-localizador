@@ -28,6 +28,8 @@ const envSchema = z
     TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID: z.string().optional(),
     TWILIO_TEMPLATE_NO_CHECKIN_SID: z.string().optional(),
     ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
+    RECURRING_WORKDAY_HORIZON_DAYS: z.coerce.number().int().positive().default(60),
+    RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED: z.stringbool().default(true),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
     BOT_OPERATION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
     BOT_DEFAULT_RADIUS_METERS: z.coerce.number().int().positive().default(150),

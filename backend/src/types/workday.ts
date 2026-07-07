@@ -11,6 +11,8 @@ export interface OperationWorkday {
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   scheduleVersion: number;
+  scheduleSourceSnapshot: "COMPANY" | "CUSTOM" | null;
+  scheduleTimezoneSnapshot: string | null;
   status: OperationWorkdayStatus;
   createdAt: string;
   updatedAt: string;

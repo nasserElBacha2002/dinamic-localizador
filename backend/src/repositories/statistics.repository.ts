@@ -23,6 +23,7 @@ const ASSIGNMENT_BASE_FROM = `
    AND ar.company_id = ew.company_id
    AND ar.is_simulation = 0
   WHERE oa.cancelled_at IS NULL
+    AND i.operation_kind = N'ONE_TIME'
     AND ew.expectation_status <> 'CANCELLED'
     AND ow.work_date >= oa.valid_from
     AND (oa.valid_until IS NULL OR ow.work_date <= oa.valid_until)

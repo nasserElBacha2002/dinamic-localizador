@@ -351,4 +351,43 @@ export const operationScheduleRepository = {
     );
     return mapScheduleRow(scheduleRow, days);
   },
+
+  async listRecurringCompanySourceOperationIds(companyId: string): Promise<string[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT os.operation_id
+        FROM operation_schedules os
+        INNER JOIN scheduled_operations o
+          ON o.id = os.operation_id
+         AND o.company_id = os.company_id
+        WHERE os.company_id = @companyId
+          AND os.schedule_source = N'COMPANY'
+          AND o.operation_kind = N'RECURRING'
+          AND o.status NOT IN (N'CANCELLED', N'COMPLETED')
+      `);
+
+    return result.recordset.map((row) => String(row.operation_id));
+  },
+
+  async listMaterializableRecurringOperationIds(companyId: string): Promise<string[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT os.operation_id
+        FROM operation_schedules os
+        INNER JOIN scheduled_operations o
+          ON o.id = os.operation_id
+         AND o.company_id = os.company_id
+        WHERE os.company_id = @companyId
+          AND o.operation_kind = N'RECURRING'
+          AND o.status NOT IN (N'CANCELLED', N'COMPLETED')
+      `);
+
+    return result.recordset.map((row) => String(row.operation_id));
+  },
 };

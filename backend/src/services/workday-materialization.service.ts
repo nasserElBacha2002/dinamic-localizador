@@ -318,6 +318,20 @@ export const workdayMaterializationService = {
     );
   },
 
+  async ensureEmployeeWorkdayForRecurringAssignment(
+    companyId: string,
+    operationWorkday: OperationWorkday,
+    employeeId: string,
+    operationAssignmentId: string,
+  ): Promise<EmployeeWorkday> {
+    return ensureEmployeeWorkdayRow(
+      companyId,
+      operationWorkday,
+      employeeId,
+      operationAssignmentId,
+    );
+  },
+
   async ensureOneTimeOperationMaterialized(
     companyId: string,
     operationId: string,

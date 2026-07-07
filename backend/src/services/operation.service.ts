@@ -19,6 +19,7 @@ import { auditService } from "./audit.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
+import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable } from "../utils/operation-status";
 import {
@@ -208,6 +209,17 @@ export const operationService = {
       });
 
       await transaction.commit();
+
+      try {
+        await recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id);
+      } catch (error) {
+        console.error("[operation-service] initial recurring materialization failed", {
+          companyId,
+          operationId: operation.id,
+          error,
+        });
+      }
+
       return operation;
     } catch (error) {
       await transaction.rollback();
@@ -504,6 +516,19 @@ export const operationService = {
       }
 
       await transaction.commit();
+
+      if (scheduleChanged) {
+        try {
+          await recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id);
+        } catch (error) {
+          console.error("[operation-service] recurring schedule reconciliation failed", {
+            companyId,
+            operationId: id,
+            error,
+          });
+        }
+      }
+
       return updatedOperation;
     } catch (error) {
       await transaction.rollback();

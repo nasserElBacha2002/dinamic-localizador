@@ -30,5 +30,14 @@ export const operationAssignmentEndPath = (
 export const operationPath = (operationId: string): string =>
   `${API_ENDPOINTS.operations}/${operationId}`;
 
+export const operationWorkdaysPath = (operationId: string): string =>
+  `${operationPath(operationId)}/workdays`;
+
+export const operationWorkdayPath = (operationId: string, workdayId: string): string =>
+  `${operationWorkdaysPath(operationId)}/${workdayId}`;
+
+export const operationMaterializeWorkdaysPath = (operationId: string): string =>
+  `${operationPath(operationId)}/materialize-workdays`;
+
 export const servicePath = (serviceId: string): string =>
   `${API_ENDPOINTS.services}/${serviceId}`;

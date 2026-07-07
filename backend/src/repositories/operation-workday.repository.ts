@@ -25,6 +25,12 @@ export const mapOperationWorkdayRow = (row: Record<string, unknown>): OperationW
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
   lateToleranceMinutes: Number(row.late_tolerance_minutes),
   scheduleVersion: Number(row.schedule_version),
+  scheduleSourceSnapshot: row.schedule_source_snapshot
+    ? (String(row.schedule_source_snapshot) as OperationWorkday["scheduleSourceSnapshot"])
+    : null,
+  scheduleTimezoneSnapshot: row.schedule_timezone_snapshot
+    ? String(row.schedule_timezone_snapshot)
+    : null,
   status: String(row.status) as OperationWorkday["status"],
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
@@ -86,6 +92,8 @@ export const operationWorkdayRepository = {
       earlyToleranceMinutes: number;
       lateToleranceMinutes: number;
       scheduleVersion: number;
+      scheduleSourceSnapshot?: OperationWorkday["scheduleSourceSnapshot"];
+      scheduleTimezoneSnapshot?: string | null;
       status?: OperationWorkday["status"];
     },
   ): Promise<OperationWorkday> {
@@ -100,16 +108,20 @@ export const operationWorkdayRepository = {
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
       .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot ?? null)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot ?? null)
       .input("status", sql.NVarChar(20), input.status ?? "ACTIVE")
       .query(`
         INSERT INTO operation_workdays (
           company_id, operation_id, work_date, expected_start_at, expected_end_at,
-          early_tolerance_minutes, late_tolerance_minutes, schedule_version, status
+          early_tolerance_minutes, late_tolerance_minutes, schedule_version,
+          schedule_source_snapshot, schedule_timezone_snapshot, status
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @operationId, @workDate, @expectedStartAt, @expectedEndAt,
-          @earlyToleranceMinutes, @lateToleranceMinutes, @scheduleVersion, @status
+          @earlyToleranceMinutes, @lateToleranceMinutes, @scheduleVersion,
+          @scheduleSourceSnapshot, @scheduleTimezoneSnapshot, @status
         )
       `);
 
@@ -127,6 +139,8 @@ export const operationWorkdayRepository = {
       earlyToleranceMinutes: number;
       lateToleranceMinutes: number;
       scheduleVersion: number;
+      scheduleSourceSnapshot?: OperationWorkday["scheduleSourceSnapshot"];
+      scheduleTimezoneSnapshot?: string | null;
       status?: OperationWorkday["status"];
     },
   ): Promise<OperationWorkday> {
@@ -139,16 +153,20 @@ export const operationWorkdayRepository = {
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
       .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot ?? null)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot ?? null)
       .input("status", sql.NVarChar(20), input.status ?? "ACTIVE")
       .query(`
         INSERT INTO operation_workdays (
           company_id, operation_id, work_date, expected_start_at, expected_end_at,
-          early_tolerance_minutes, late_tolerance_minutes, schedule_version, status
+          early_tolerance_minutes, late_tolerance_minutes, schedule_version,
+          schedule_source_snapshot, schedule_timezone_snapshot, status
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @operationId, @workDate, @expectedStartAt, @expectedEndAt,
-          @earlyToleranceMinutes, @lateToleranceMinutes, @scheduleVersion, @status
+          @earlyToleranceMinutes, @lateToleranceMinutes, @scheduleVersion,
+          @scheduleSourceSnapshot, @scheduleTimezoneSnapshot, @status
         )
       `);
 
@@ -218,6 +236,208 @@ export const operationWorkdayRepository = {
     return result.recordset.map((row) =>
       mapOperationWorkdayRow(row as Record<string, unknown>),
     );
+  },
+
+  async listByOperationAndDateRange(
+    companyId: string,
+    operationId: string,
+    rangeStart: string,
+    rangeEnd: string,
+  ): Promise<OperationWorkday[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("rangeStart", sql.Date, rangeStart)
+      .input("rangeEnd", sql.Date, rangeEnd)
+      .query(`
+        SELECT *
+        FROM operation_workdays
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND work_date >= @rangeStart
+          AND work_date <= @rangeEnd
+        ORDER BY work_date ASC
+      `);
+
+    return result.recordset.map((row) =>
+      mapOperationWorkdayRow(row as Record<string, unknown>),
+    );
+  },
+
+  async hasAttendanceForWorkday(companyId: string, operationWorkdayId: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM employee_workdays ew
+        INNER JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+         AND ar.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.operation_workday_id = @operationWorkdayId
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
+  async updateSnapshot(
+    companyId: string,
+    operationWorkdayId: string,
+    input: {
+      expectedStartAt: Date;
+      expectedEndAt: Date | null;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      scheduleVersion: number;
+      scheduleSourceSnapshot: OperationWorkday["scheduleSourceSnapshot"];
+      scheduleTimezoneSnapshot: string;
+      status: OperationWorkday["status"];
+    },
+  ): Promise<OperationWorkday> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
+      .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
+      .input("status", sql.NVarChar(20), input.status)
+      .query(`
+        UPDATE operation_workdays
+        SET expected_start_at = @expectedStartAt,
+            expected_end_at = @expectedEndAt,
+            early_tolerance_minutes = @earlyToleranceMinutes,
+            late_tolerance_minutes = @lateToleranceMinutes,
+            schedule_version = @scheduleVersion,
+            schedule_source_snapshot = @scheduleSourceSnapshot,
+            schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
+            status = @status,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+      `);
+
+    if (!result.recordset[0]) {
+      throw new Error("OPERATION_WORKDAY_UPDATE_FAILED");
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async cancelWorkday(companyId: string, operationWorkdayId: string): Promise<OperationWorkday> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        UPDATE operation_workdays
+        SET status = 'CANCELLED',
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND status <> 'CANCELLED'
+      `);
+
+    if (!result.recordset[0]) {
+      const existing = await this.findById(companyId, operationWorkdayId);
+      if (!existing) {
+        throw new Error("OPERATION_WORKDAY_NOT_FOUND");
+      }
+      return existing;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listPaginated(
+    companyId: string,
+    operationId: string,
+    input: {
+      page: number;
+      limit: number;
+      dateFrom?: string;
+      dateTo?: string;
+      status?: OperationWorkday["status"];
+    },
+  ): Promise<{ items: OperationWorkday[]; total: number }> {
+    const pool = getPool();
+    const offset = (input.page - 1) * input.limit;
+    const filters: string[] = [
+      "company_id = @companyId",
+      "operation_id = @operationId",
+    ];
+    if (input.dateFrom) {
+      filters.push("work_date >= @dateFrom");
+    }
+    if (input.dateTo) {
+      filters.push("work_date <= @dateTo");
+    }
+    if (input.status) {
+      filters.push("status = @status");
+    }
+    const whereClause = filters.join(" AND ");
+
+    const countRequest = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId);
+    if (input.dateFrom) {
+      countRequest.input("dateFrom", sql.Date, input.dateFrom);
+    }
+    if (input.dateTo) {
+      countRequest.input("dateTo", sql.Date, input.dateTo);
+    }
+    if (input.status) {
+      countRequest.input("status", sql.NVarChar(20), input.status);
+    }
+    const countResult = await countRequest.query(`
+      SELECT COUNT(*) AS total
+      FROM operation_workdays
+      WHERE ${whereClause}
+    `);
+
+    const listRequest = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("offset", sql.Int, offset)
+      .input("limit", sql.Int, input.limit);
+    if (input.dateFrom) {
+      listRequest.input("dateFrom", sql.Date, input.dateFrom);
+    }
+    if (input.dateTo) {
+      listRequest.input("dateTo", sql.Date, input.dateTo);
+    }
+    if (input.status) {
+      listRequest.input("status", sql.NVarChar(20), input.status);
+    }
+    const listResult = await listRequest.query(`
+      SELECT *
+      FROM operation_workdays
+      WHERE ${whereClause}
+      ORDER BY work_date ASC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+    return {
+      total: Number(countResult.recordset[0]?.total ?? 0),
+      items: listResult.recordset.map((row) =>
+        mapOperationWorkdayRow(row as Record<string, unknown>),
+      ),
+    };
   },
 
   isDuplicateKeyError,

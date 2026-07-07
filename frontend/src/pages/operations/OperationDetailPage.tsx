@@ -5,6 +5,7 @@ import { Link as RouterLink, useParams } from "react-router-dom";
 import { WeeklySchedulePreview } from "../../components/schedules/WeeklySchedulePreview";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import {
   ConfirmDialog,
   ErrorState,
@@ -18,6 +19,7 @@ import {
 import { OperationAssignmentsSection } from "../../components/operations/OperationAssignmentsSection";
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
+import { OperationScheduledWorkdaysSection } from "../../components/operations/OperationScheduledWorkdaysSection";
 import { OperationWorkforceSection } from "../../components/operations/OperationWorkforceSection";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
@@ -30,6 +32,7 @@ import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
+import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
 import {
   buildOperationEditDefaultValues,
@@ -64,6 +67,7 @@ export function OperationDetailPage() {
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
   const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
+  const permissionsQuery = useCompanyPermissions();
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
 
@@ -107,6 +111,7 @@ export function OperationDetailPage() {
   }
 
   const canAssign = isOperationAssignable(operation.status);
+  const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
   const canEdit = isOperationEditable(operation.status);
   const serviceDisplayName = operation.service?.name ?? "—";
   const serviceDetailId = operation.serviceId || operation.service?.id;
@@ -231,6 +236,13 @@ export function OperationDetailPage() {
                 activeEmployeeIds={assignedEmployeeIds}
                 onFeedback={(message, severity) => showFeedback(message, severity)}
               />
+              {operation.operationKind === "RECURRING" ? (
+                <OperationScheduledWorkdaysSection
+                  operationId={operation.id}
+                  canManage={canManage}
+                  onFeedback={(message, severity) => showFeedback(message, severity)}
+                />
+              ) : null}
               <OperationWorkforceSection
                 operationId={operation.id}
                 canAssign={canAssign}

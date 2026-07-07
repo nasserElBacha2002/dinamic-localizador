@@ -17,13 +17,22 @@ import type {
   OperationImportPreviewPayload,
   OperationImportPreviewResult,
 } from "../types/operation-import";
+import type {
+  MaterializationResult,
+  OperationWorkdayDetail,
+  OperationWorkdayFilters,
+  OperationWorkdaySummary,
+} from "../types/operation-workday";
 import { buildParams } from "./client";
 import {
   API_ENDPOINTS,
   operationAssignmentCancelPath,
   operationAssignmentEndPath,
   operationAssignmentPath,
+  operationMaterializeWorkdaysPath,
   operationPath,
+  operationWorkdayPath,
+  operationWorkdaysPath,
 } from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
 
@@ -121,6 +130,38 @@ export async function getOperationAttendanceSummary(
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
+  );
+  return data.data;
+}
+
+export async function getOperationWorkdays(
+  operationId: string,
+  filters: OperationWorkdayFilters = {},
+): Promise<PaginatedResponse<OperationWorkdaySummary>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<OperationWorkdaySummary>>(
+    operationWorkdaysPath(operationId),
+    {
+      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+    },
+  );
+  return data;
+}
+
+export async function getOperationWorkdayDetail(
+  operationId: string,
+  workdayId: string,
+): Promise<OperationWorkdayDetail> {
+  const { data } = await scopedApiClient.get<SingleResponse<OperationWorkdayDetail>>(
+    operationWorkdayPath(operationId, workdayId),
+  );
+  return data.data;
+}
+
+export async function materializeOperationWorkdays(
+  operationId: string,
+): Promise<MaterializationResult> {
+  const { data } = await scopedApiClient.post<SingleResponse<MaterializationResult>>(
+    operationMaterializeWorkdaysPath(operationId),
   );
   return data.data;
 }

@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { operationImportController } from "../controllers/operation-import.controller";
 import { operationController } from "../controllers/operation.controller";
+import { operationWorkdayController } from "../controllers/operation-workday.controller";
 import { asyncHandler } from "../middleware/async-handler";
 import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
@@ -15,6 +16,10 @@ import {
   listOperationsQuerySchema,
   updateOperationSchema,
 } from "../schemas/operation.schema";
+import {
+  listOperationWorkdaysQuerySchema,
+  operationWorkdayIdParamSchema,
+} from "../schemas/operation-workday.schema";
 
 export const operationRouter = Router();
 
@@ -48,6 +53,25 @@ operationRouter.get(
   validate(operationIdParamSchema, "params"),
   validate(operationAttendanceSummaryQuerySchema, "query"),
   asyncHandler(operationController.getAttendanceSummary),
+);
+operationRouter.get(
+  "/:id/workdays",
+  requirePermission("operations:read"),
+  validate(operationIdParamSchema, "params"),
+  validate(listOperationWorkdaysQuerySchema, "query"),
+  asyncHandler(operationWorkdayController.list),
+);
+operationRouter.get(
+  "/:id/workdays/:workdayId",
+  requirePermission("operations:read"),
+  validate(operationWorkdayIdParamSchema, "params"),
+  asyncHandler(operationWorkdayController.getDetail),
+);
+operationRouter.post(
+  "/:id/materialize-workdays",
+  requirePermission("operations:manage"),
+  validate(operationIdParamSchema, "params"),
+  asyncHandler(operationWorkdayController.materialize),
 );
 operationRouter.get(
   "/:id",

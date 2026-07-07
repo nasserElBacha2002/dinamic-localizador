@@ -345,6 +345,32 @@ export const operationEmployeeRepository = {
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async listOverlappingForOperationInDateRange(
+    companyId: string,
+    operationId: string,
+    rangeStart: string,
+    rangeEnd: string,
+  ): Promise<OperationEmployeeAssignment[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("rangeStart", sql.Date, rangeStart)
+      .input("rangeEnd", sql.Date, rangeEnd)
+      .query(`
+        ${listSelectClause}
+        WHERE oa.operation_id = @operationId
+          AND oa.company_id = @companyId
+          AND oa.cancelled_at IS NULL
+          AND oa.valid_from <= @rangeEnd
+          AND (oa.valid_until IS NULL OR oa.valid_until >= @rangeStart)
+        ORDER BY oa.employee_id ASC, oa.valid_from ASC
+      `);
+
+    return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
+  },
+
   async countActiveForOperationOnWorkDate(
     companyId: string,
     operationId: string,

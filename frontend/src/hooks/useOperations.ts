@@ -9,6 +9,9 @@ import {
   getOperationAttendanceSummary,
   getOperationById,
   getOperationEmployees,
+  getOperationWorkdayDetail,
+  getOperationWorkdays,
+  materializeOperationWorkdays,
   updateOperation,
 } from "../api/operations.api";
 import type {
@@ -16,6 +19,7 @@ import type {
   UpdateOperationInput,
 } from "../types/operation";
 import type { OperationAttendanceSummaryFilters } from "../types/operation-attendance-summary";
+import type { OperationWorkdayFilters } from "../types/operation-workday";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useOperations(filters: OperationFilters, extraEnabled = true) {
@@ -68,6 +72,7 @@ export function useUpdateOperation(operationId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["operations"] });
       queryClient.invalidateQueries({ queryKey: ["operation"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
     },
   });
 }
@@ -94,6 +99,7 @@ export function useAssignOperationEmployee(operationId: string) {
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
       queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
     },
   });
 }
@@ -108,6 +114,7 @@ export function useCancelOperationAssignment(operationId: string) {
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
       queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
     },
   });
 }
@@ -122,6 +129,7 @@ export function useEndOperationAssignment(operationId: string) {
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
       queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
     },
   });
 }
@@ -137,5 +145,44 @@ export function useOperationAttendanceSummary(
     queryFn: () => getOperationAttendanceSummary(operationId!, filters),
     enabled,
     refetchInterval: enabled ? 30000 : false,
+  });
+}
+
+export function useOperationWorkdays(operationId?: string, filters: OperationWorkdayFilters = {}) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
+
+  return useQuery({
+    queryKey: ["operation-workdays", companyId, operationId, filters],
+    queryFn: () => getOperationWorkdays(operationId!, filters),
+    enabled,
+  });
+}
+
+export function useOperationWorkdayDetail(
+  operationId?: string,
+  workdayId?: string,
+  extraEnabled = true,
+) {
+  const { companyId, enabled } = useOperationalQueryEnabled(
+    Boolean(operationId && workdayId && extraEnabled),
+  );
+
+  return useQuery({
+    queryKey: ["operation-workday-detail", companyId, operationId, workdayId],
+    queryFn: () => getOperationWorkdayDetail(operationId!, workdayId!),
+    enabled,
+  });
+}
+
+export function useMaterializeOperationWorkdays(operationId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => materializeOperationWorkdays(operationId),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: ["operation"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
+    },
   });
 }

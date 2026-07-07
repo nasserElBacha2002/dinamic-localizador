@@ -314,5 +314,109 @@ export const employeeWorkdayRepository = {
     return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async hasAttendance(
+    companyId: string,
+    employeeWorkdayId: string,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_records
+        WHERE company_id = @companyId
+          AND employee_workday_id = @employeeWorkdayId
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
+  async cancelExpectedForWorkday(
+    companyId: string,
+    operationWorkdayId: string,
+  ): Promise<number> {
+    const employeeWorkdays = await this.listByOperationWorkdayId(companyId, operationWorkdayId);
+    let cancelled = 0;
+
+    for (const employeeWorkday of employeeWorkdays) {
+      if (employeeWorkday.expectationStatus !== "EXPECTED") {
+        continue;
+      }
+      if (await this.hasAttendance(companyId, employeeWorkday.id)) {
+        continue;
+      }
+
+      const pool = getPool();
+      await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkday.id)
+        .query(`
+          UPDATE employee_workdays
+          SET expectation_status = 'CANCELLED',
+              updated_at = SYSUTCDATETIME()
+          WHERE company_id = @companyId
+            AND id = @employeeWorkdayId
+            AND expectation_status = 'EXPECTED'
+        `);
+      cancelled += 1;
+    }
+
+    return cancelled;
+  },
+
+  async listByOperationWorkdayId(
+    companyId: string,
+    operationWorkdayId: string,
+  ): Promise<EmployeeWorkday[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        SELECT *
+        FROM employee_workdays
+        WHERE company_id = @companyId
+          AND operation_workday_id = @operationWorkdayId
+      `);
+
+    return result.recordset.map((row) => mapEmployeeWorkdayRow(row as Record<string, unknown>));
+  },
+
+  async countExpectedByWorkdayIds(
+    companyId: string,
+    operationWorkdayIds: string[],
+  ): Promise<Map<string, number>> {
+    if (operationWorkdayIds.length === 0) {
+      return new Map();
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const placeholders = operationWorkdayIds.map((id, index) => {
+      const param = `workdayId${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT operation_workday_id, COUNT(*) AS total
+      FROM employee_workdays
+      WHERE company_id = @companyId
+        AND operation_workday_id IN (${placeholders.join(", ")})
+        AND expectation_status <> 'CANCELLED'
+      GROUP BY operation_workday_id
+    `);
+
+    const counts = new Map<string, number>();
+    for (const row of result.recordset) {
+      counts.set(String(row.operation_workday_id), Number(row.total));
+    }
+    return counts;
+  },
+
   isDuplicateKeyError,
 };

@@ -11,6 +11,15 @@ import { WEEKDAYS } from "../constants/weekday";
 import { getDateIsoInTimezone } from "../utils/absence-date";
 import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 import type { OperationWorkday } from "../types/workday";
+import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+
+const emptyAbsenceReconciliation = async () => ({
+  justified: 0,
+  restored: 0,
+  relinked: 0,
+  unchanged: 0,
+  attendanceConflicts: 0,
+});
 
 const COMPANY_ID = "company-1";
 const OPERATION_ID = "op-1";
@@ -81,6 +90,11 @@ describe("recurringWorkdayMaterializationService orchestration", () => {
       [...storedWorkdays.values()],
     );
     mock.method(operationWorkdayRepository, "isDuplicateKeyError", () => false);
+    mock.method(
+      employeeWorkdayAbsenceReconciliationService,
+      "reconcileMaterializationRange",
+      emptyAbsenceReconciliation,
+    );
     mock.method(operationWorkdayRepository, "insert", async (_companyId, payload) => {
       insertCount += 1;
       const created = {
@@ -189,6 +203,11 @@ describe("recurringWorkdayMaterializationService orchestration", () => {
       updatedAt: new Date().toISOString(),
     }));
     mock.method(employeeWorkdayRepository, "isDuplicateKeyError", () => false);
+    mock.method(
+      employeeWorkdayAbsenceReconciliationService,
+      "reconcileMaterializationRange",
+      emptyAbsenceReconciliation,
+    );
 
     const { recurringWorkdayMaterializationService } = await import(
       "./recurring-workday-materialization.service"

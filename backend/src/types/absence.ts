@@ -73,10 +73,13 @@ export interface AbsenceRequestWithRelations extends AbsenceRequest {
   affectedOperationsCount: number;
 }
 
+import type { AbsenceWorkdayReconciliationResult } from "./absence-workday-reconciliation";
+
 export interface AbsenceRequestDetail extends AbsenceRequestWithRelations {
   events: AbsenceRequestEvent[];
   affectedOperations: AffectedOperationWarning[];
   balanceImpact: AbsenceBalanceImpact | null;
+  workdayReconciliation?: AbsenceWorkdayReconciliationResult;
 }
 
 export interface EmployeeAbsenceBalance {

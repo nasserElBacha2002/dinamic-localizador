@@ -1,0 +1,2099 @@
+diff --git a/backend/src/repositories/absence-request.repository.ts b/backend/src/repositories/absence-request.repository.ts
+index 7ed1685..48d8c45 100644
+--- a/backend/src/repositories/absence-request.repository.ts
++++ b/backend/src/repositories/absence-request.repository.ts
+@@ -483,4 +483,68 @@ export const absenceRequestRepository = {
+         status: String(row.status),
+       }));
+   },
++
++  async listApprovedByEmployeeAndDateRange(
++    companyId: string,
++    employeeId: string,
++    dateFrom: string,
++    dateTo: string,
++  ): Promise<AbsenceRequest[]> {
++    const pool = getPool();
++    const result = await pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("employeeId", sql.UniqueIdentifier, employeeId)
++      .input("dateFrom", sql.Date, dateFrom)
++      .input("dateTo", sql.Date, dateTo)
++      .query(`
++        SELECT *
++        FROM absence_requests
++        WHERE company_id = @companyId
++          AND employee_id = @employeeId
++          AND status = N'APPROVED'
++          AND start_date <= @dateTo
++          AND end_date >= @dateFrom
++        ORDER BY reviewed_at ASC, created_at ASC, id ASC
++      `);
++
++    return result.recordset.map((row) => mapAbsenceRequestRow(row as Record<string, unknown>));
++  },
++
++  async listApprovedByEmployeesAndDateRange(
++    companyId: string,
++    employeeIds: string[],
++    dateFrom: string,
++    dateTo: string,
++  ): Promise<AbsenceRequest[]> {
++    if (employeeIds.length === 0) {
++      return [];
++    }
++
++    const pool = getPool();
++    const request = pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("dateFrom", sql.Date, dateFrom)
++      .input("dateTo", sql.Date, dateTo);
++
++    const placeholders = employeeIds.map((employeeId, index) => {
++      const param = `employeeId${index}`;
++      request.input(param, sql.UniqueIdentifier, employeeId);
++      return `@${param}`;
++    });
++
++    const result = await request.query(`
++      SELECT *
++      FROM absence_requests
++      WHERE company_id = @companyId
++        AND employee_id IN (${placeholders.join(", ")})
++        AND status = N'APPROVED'
++        AND start_date <= @dateTo
++        AND end_date >= @dateFrom
++      ORDER BY reviewed_at ASC, created_at ASC, id ASC
++    `);
++
++    return result.recordset.map((row) => mapAbsenceRequestRow(row as Record<string, unknown>));
++  },
+ };
+diff --git a/backend/src/repositories/employee-workday.repository.ts b/backend/src/repositories/employee-workday.repository.ts
+index 12740f7..cc59377 100644
+--- a/backend/src/repositories/employee-workday.repository.ts
++++ b/backend/src/repositories/employee-workday.repository.ts
+@@ -493,10 +493,16 @@ export const employeeWorkdayRepository = {
+     operationWorkdayId: string,
+   ): Promise<
+     Array<{
++      employeeWorkdayId: string;
+       employeeId: string;
+       employeeName: string;
+       expectationStatus: string;
+       cancellationReason: string | null;
++      absenceRequestId: string | null;
++      absenceTypeName: string | null;
++      absenceStartDate: string | null;
++      absenceEndDate: string | null;
++      hasAttendance: boolean;
+     }>
+   > {
+     const pool = getPool();
+@@ -505,24 +511,47 @@ export const employeeWorkdayRepository = {
+       .input("companyId", sql.UniqueIdentifier, companyId)
+       .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+       .query(`
+-        SELECT ew.employee_id,
++        SELECT ew.id AS employee_workday_id,
++               ew.employee_id,
+                e.name AS employee_name,
+                ew.expectation_status,
+-               ew.cancellation_reason
++               ew.cancellation_reason,
++               ew.absence_request_id,
++               at.name AS absence_type_name,
++               ar_abs.start_date AS absence_start_date,
++               ar_abs.end_date AS absence_end_date,
++               CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END AS has_attendance
+         FROM employee_workdays ew
+         INNER JOIN employees e
+           ON e.id = ew.employee_id
+          AND e.company_id = ew.company_id
++        LEFT JOIN absence_requests ar_abs
++          ON ar_abs.id = ew.absence_request_id
++         AND ar_abs.company_id = ew.company_id
++        LEFT JOIN absence_types at
++          ON at.id = ar_abs.absence_type_id
++         AND at.company_id = ew.company_id
++        LEFT JOIN attendance_records ar
++          ON ar.employee_workday_id = ew.id
++         AND ar.company_id = ew.company_id
+         WHERE ew.company_id = @companyId
+           AND ew.operation_workday_id = @operationWorkdayId
+         ORDER BY e.name ASC
+       `);
+ 
+     return result.recordset.map((row) => ({
++      employeeWorkdayId: String(row.employee_workday_id),
+       employeeId: String(row.employee_id),
+       employeeName: String(row.employee_name),
+       expectationStatus: String(row.expectation_status),
+       cancellationReason: row.cancellation_reason ? String(row.cancellation_reason) : null,
++      absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
++      absenceTypeName: row.absence_type_name ? String(row.absence_type_name) : null,
++      absenceStartDate: row.absence_start_date
++        ? String(row.absence_start_date).slice(0, 10)
++        : null,
++      absenceEndDate: row.absence_end_date ? String(row.absence_end_date).slice(0, 10) : null,
++      hasAttendance: Boolean(row.has_attendance),
+     }));
+   },
+ 
+@@ -578,4 +607,248 @@ export const employeeWorkdayRepository = {
+   },
+ 
+   isDuplicateKeyError,
++
++  async justifyExpectation(
++    companyId: string,
++    employeeWorkdayId: string,
++    absenceRequestId: string,
++  ): Promise<EmployeeWorkday | null> {
++    const pool = getPool();
++    const result = await pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
++      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
++      .query(`
++        UPDATE employee_workdays
++        SET expectation_status = 'JUSTIFIED',
++            absence_request_id = @absenceRequestId,
++            updated_at = SYSUTCDATETIME()
++        OUTPUT INSERTED.*
++        WHERE company_id = @companyId
++          AND id = @employeeWorkdayId
++          AND expectation_status = 'EXPECTED'
++      `);
++
++    if (!result.recordset[0]) {
++      return null;
++    }
++
++    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
++  },
++
++  async relinkJustifiedExpectation(
++    companyId: string,
++    employeeWorkdayId: string,
++    absenceRequestId: string,
++  ): Promise<EmployeeWorkday | null> {
++    const pool = getPool();
++    const result = await pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
++      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
++      .query(`
++        UPDATE employee_workdays
++        SET absence_request_id = @absenceRequestId,
++            updated_at = SYSUTCDATETIME()
++        OUTPUT INSERTED.*
++        WHERE company_id = @companyId
++          AND id = @employeeWorkdayId
++          AND expectation_status = 'JUSTIFIED'
++      `);
++
++    if (!result.recordset[0]) {
++      return null;
++    }
++
++    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
++  },
++
++  async restoreJustifiedExpectation(
++    companyId: string,
++    employeeWorkdayId: string,
++    absenceRequestId: string,
++  ): Promise<EmployeeWorkday | null> {
++    const pool = getPool();
++    const result = await pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
++      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
++      .query(`
++        UPDATE employee_workdays
++        SET expectation_status = 'EXPECTED',
++            absence_request_id = NULL,
++            updated_at = SYSUTCDATETIME()
++        OUTPUT INSERTED.*
++        WHERE company_id = @companyId
++          AND id = @employeeWorkdayId
++          AND expectation_status = 'JUSTIFIED'
++          AND absence_request_id = @absenceRequestId
++          AND NOT EXISTS (
++            SELECT 1
++            FROM attendance_records ar
++            WHERE ar.company_id = @companyId
++              AND ar.employee_workday_id = @employeeWorkdayId
++          )
++      `);
++
++    if (!result.recordset[0]) {
++      return null;
++    }
++
++    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
++  },
++
++  async listWithWorkDatesByEmployeeAndDateRange(
++    companyId: string,
++    employeeId: string,
++    dateFrom: string,
++    dateTo: string,
++  ): Promise<
++    Array<
++      EmployeeWorkday & {
++        workDate: string;
++        expectedStartAt: string;
++        expectedEndAt: string | null;
++        earlyToleranceMinutes: number;
++        lateToleranceMinutes: number;
++      }
++    >
++  > {
++    const pool = getPool();
++    const result = await pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("employeeId", sql.UniqueIdentifier, employeeId)
++      .input("dateFrom", sql.Date, dateFrom)
++      .input("dateTo", sql.Date, dateTo)
++      .query(`
++        SELECT ew.*,
++               ow.work_date,
++               ow.expected_start_at,
++               ow.expected_end_at,
++               ow.early_tolerance_minutes,
++               ow.late_tolerance_minutes
++        FROM employee_workdays ew
++        INNER JOIN operation_workdays ow
++          ON ow.id = ew.operation_workday_id
++         AND ow.company_id = ew.company_id
++        WHERE ew.company_id = @companyId
++          AND ew.employee_id = @employeeId
++          AND ow.work_date >= @dateFrom
++          AND ow.work_date <= @dateTo
++      `);
++
++    return result.recordset.map((row) => ({
++      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
++      workDate: String(row.work_date).slice(0, 10),
++      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
++      expectedEndAt: row.expected_end_at
++        ? toIsoString(row.expected_end_at as Date | string)
++        : null,
++      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
++      lateToleranceMinutes: Number(row.late_tolerance_minutes),
++    }));
++  },
++
++  async listWithWorkDatesByAbsenceRequestId(
++    companyId: string,
++    absenceRequestId: string,
++  ): Promise<
++    Array<
++      EmployeeWorkday & {
++        workDate: string;
++        expectedStartAt: string;
++        expectedEndAt: string | null;
++        earlyToleranceMinutes: number;
++        lateToleranceMinutes: number;
++      }
++    >
++  > {
++    const pool = getPool();
++    const result = await pool
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
++      .query(`
++        SELECT ew.*,
++               ow.work_date,
++               ow.expected_start_at,
++               ow.expected_end_at,
++               ow.early_tolerance_minutes,
++               ow.late_tolerance_minutes
++        FROM employee_workdays ew
++        INNER JOIN operation_workdays ow
++          ON ow.id = ew.operation_workday_id
++         AND ow.company_id = ew.company_id
++        WHERE ew.company_id = @companyId
++          AND ew.absence_request_id = @absenceRequestId
++      `);
++
++    return result.recordset.map((row) => ({
++      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
++      workDate: String(row.work_date).slice(0, 10),
++      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
++      expectedEndAt: row.expected_end_at
++        ? toIsoString(row.expected_end_at as Date | string)
++        : null,
++      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
++      lateToleranceMinutes: Number(row.late_tolerance_minutes),
++    }));
++  },
++
++  async listWithWorkDatesByEmployeeWorkdayIds(
++    companyId: string,
++    employeeWorkdayIds: string[],
++  ): Promise<
++    Array<
++      EmployeeWorkday & {
++        workDate: string;
++        expectedStartAt: string;
++        expectedEndAt: string | null;
++        earlyToleranceMinutes: number;
++        lateToleranceMinutes: number;
++      }
++    >
++  > {
++    if (employeeWorkdayIds.length === 0) {
++      return [];
++    }
++
++    const pool = getPool();
++    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
++    const placeholders = employeeWorkdayIds.map((id, index) => {
++      const param = `employeeWorkdayId${index}`;
++      request.input(param, sql.UniqueIdentifier, id);
++      return `@${param}`;
++    });
++
++    const result = await request.query(`
++      SELECT ew.*,
++             ow.work_date,
++             ow.expected_start_at,
++             ow.expected_end_at,
++             ow.early_tolerance_minutes,
++             ow.late_tolerance_minutes
++      FROM employee_workdays ew
++      INNER JOIN operation_workdays ow
++        ON ow.id = ew.operation_workday_id
++       AND ow.company_id = ew.company_id
++      WHERE ew.company_id = @companyId
++        AND ew.id IN (${placeholders.join(", ")})
++    `);
++
++    return result.recordset.map((row) => ({
++      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
++      workDate: String(row.work_date).slice(0, 10),
++      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
++      expectedEndAt: row.expected_end_at
++        ? toIsoString(row.expected_end_at as Date | string)
++        : null,
++      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
++      lateToleranceMinutes: Number(row.late_tolerance_minutes),
++    }));
++  },
+ };
+diff --git a/backend/src/services/absence-review.service.ts b/backend/src/services/absence-review.service.ts
+index 954d339..a85ec84 100644
+--- a/backend/src/services/absence-review.service.ts
++++ b/backend/src/services/absence-review.service.ts
+@@ -10,6 +10,8 @@ import type { AbsenceRequestStatus } from "../types/absence";
+ import { auditService } from "./audit.service";
+ import { absenceBalanceService } from "./absence-balance.service";
+ import { absenceRequestService, REVIEWABLE_STATUSES } from "./absence-request.service";
++import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
++import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+ 
+ const ensureReviewable = (status: AbsenceRequestStatus) => {
+   if (!REVIEWABLE_STATUSES.includes(status as (typeof REVIEWABLE_STATUSES)[number])) {
+@@ -111,24 +113,46 @@ const transition = async (input: {
+ 
+ export const absenceReviewService = {
+   approve(companyId: string, requestId: string, userId: string) {
+-    return transition({
++    return absenceWorkdaySyncService.runAfterAbsenceMutation(
+       companyId,
+       requestId,
+-      userId,
+-      newStatus: "APPROVED",
+-      eventType: "APPROVED",
+-    });
++      () =>
++        transition({
++          companyId,
++          requestId,
++          userId,
++          newStatus: "APPROVED",
++          eventType: "APPROVED",
++        }),
++      () =>
++        employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++          companyId,
++          requestId,
++        ),
++      "approve",
++    );
+   },
+ 
+   reject(companyId: string, requestId: string, userId: string, input: RejectAbsenceRequestInput) {
+-    return transition({
++    return absenceWorkdaySyncService.runAfterAbsenceMutation(
+       companyId,
+       requestId,
+-      userId,
+-      newStatus: "REJECTED",
+-      eventType: "REJECTED",
+-      comment: input.reason,
+-    });
++      () =>
++        transition({
++          companyId,
++          requestId,
++          userId,
++          newStatus: "REJECTED",
++          eventType: "REJECTED",
++          comment: input.reason,
++        }),
++      () =>
++        employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
++          companyId,
++          requestId,
++        ),
++      "reject",
++    );
+   },
+ 
+   needsInfo(companyId: string, requestId: string, userId: string, input: NeedsInfoAbsenceRequestInput) {
+@@ -143,13 +167,24 @@ export const absenceReviewService = {
+   },
+ 
+   cancel(companyId: string, requestId: string, userId: string) {
+-    return transition({
++    return absenceWorkdaySyncService.runAfterAbsenceMutation(
+       companyId,
+       requestId,
+-      userId,
+-      newStatus: "CANCELLED",
+-      eventType: "CANCELLED",
+-      cancelledAt: new Date(),
+-    });
++      () =>
++        transition({
++          companyId,
++          requestId,
++          userId,
++          newStatus: "CANCELLED",
++          eventType: "CANCELLED",
++          cancelledAt: new Date(),
++        }),
++      () =>
++        employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
++          companyId,
++          requestId,
++        ),
++      "cancel",
++    );
+   },
+ };
+diff --git a/backend/src/services/absence-workday-sync.service.ts b/backend/src/services/absence-workday-sync.service.ts
+new file mode 100644
+index 0000000..dc1b962
+--- /dev/null
++++ b/backend/src/services/absence-workday-sync.service.ts
+@@ -0,0 +1,34 @@
++import { AppError } from "../errors/app-error";
++import type { AbsenceWorkdayReconciliationResult } from "../types/absence-workday-reconciliation";
++
++const SYNC_FAILED_MESSAGE =
++  "La ausencia fue guardada, pero no se pudieron actualizar las jornadas programadas.";
++
++export const absenceWorkdaySyncService = {
++  async runAfterAbsenceMutation<T extends { workdayReconciliation?: AbsenceWorkdayReconciliationResult }>(
++    companyId: string,
++    absenceRequestId: string,
++    loadResult: () => Promise<T>,
++    reconcile: () => Promise<AbsenceWorkdayReconciliationResult>,
++    context: string,
++  ): Promise<T & { workdayReconciliation: AbsenceWorkdayReconciliationResult }> {
++    const result = await loadResult();
++
++    try {
++      const workdayReconciliation = await reconcile();
++      return { ...result, workdayReconciliation };
++    } catch (error) {
++      console.error(`[absence-workday-sync] ${context} failed`, {
++        companyId,
++        absenceRequestId,
++        error,
++      });
++      if (error instanceof AppError && error.code === "ABSENCE_WORKDAY_SYNC_FAILED") {
++        throw error;
++      }
++      throw new AppError(503, "ABSENCE_WORKDAY_SYNC_FAILED", SYNC_FAILED_MESSAGE, {
++        absenceRequestId,
++      });
++    }
++  },
++};
+diff --git a/backend/src/services/employee-workday-absence-reconciliation.service.test.ts b/backend/src/services/employee-workday-absence-reconciliation.service.test.ts
+new file mode 100644
+index 0000000..7a5eb52
+--- /dev/null
++++ b/backend/src/services/employee-workday-absence-reconciliation.service.test.ts
+@@ -0,0 +1,285 @@
++import assert from "node:assert/strict";
++import { afterEach, describe, it, mock } from "node:test";
++import { absenceRequestRepository } from "../repositories/absence-request.repository";
++import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
++import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
++import type { AbsenceRequest } from "../types/absence";
++import type { EmployeeWorkday } from "../types/workday";
++
++const COMPANY_ID = "company-1";
++const EMPLOYEE_ID = "emp-1";
++const OTHER_EMPLOYEE_ID = "emp-2";
++const ABSENCE_A = "absence-a";
++const ABSENCE_B = "absence-b";
++
++const approvedAbsence = (overrides: Partial<AbsenceRequest> = {}): AbsenceRequest => ({
++  id: ABSENCE_A,
++  employeeId: EMPLOYEE_ID,
++  absenceTypeId: "type-1",
++  startDate: "2026-08-01",
++  endDate: "2026-08-10",
++  startPeriod: "FULL_DAY",
++  endPeriod: "FULL_DAY",
++  totalDays: 10,
++  reason: "Vacaciones",
++  status: "APPROVED",
++  requestedVia: "ADMIN",
++  sourceMessageSid: null,
++  reviewedByUserId: "user-1",
++  reviewedAt: "2026-07-01T12:00:00.000Z",
++  reviewComment: null,
++  cancelledAt: null,
++  createdAt: "2026-06-20T12:00:00.000Z",
++  updatedAt: "2026-07-01T12:00:00.000Z",
++  ...overrides,
++});
++
++const workdayWithSchedule = (
++  overrides: Partial<EmployeeWorkday> & {
++    workDate?: string;
++    expectedStartAt?: string;
++    expectedEndAt?: string | null;
++  } = {},
++) => ({
++  id: "ew-1",
++  companyId: COMPANY_ID,
++  operationWorkdayId: "ow-1",
++  employeeId: EMPLOYEE_ID,
++  operationAssignmentId: "assign-1",
++  expectationStatus: "EXPECTED" as const,
++  absenceRequestId: null,
++  cancellationReason: null,
++  createdAt: "2026-08-01T00:00:00.000Z",
++  updatedAt: "2026-08-01T00:00:00.000Z",
++  workDate: "2026-08-03",
++  expectedStartAt: "2026-08-03T01:00:00.000Z",
++  expectedEndAt: "2026-08-03T09:00:00.000Z",
++  earlyToleranceMinutes: 15,
++  lateToleranceMinutes: 20,
++  ...overrides,
++});
++
++describe("employeeWorkdayAbsenceReconciliationService", () => {
++  afterEach(() => {
++    mock.restoreAll();
++  });
++
++  it("justifies EXPECTED workdays when absence is approved after materialization", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
++      workdayWithSchedule(),
++    ]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
++      approvedAbsence(),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++    mock.method(employeeWorkdayRepository, "justifyExpectation", async () =>
++      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_A }),
++    );
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(result.justified, 1);
++    assert.equal(result.attendanceConflicts, 0);
++  });
++
++  it("leaves EXPECTED unchanged when absence does not cover work date", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(absenceRequestRepository, "findById", async () =>
++      approvedAbsence({ startDate: "2026-08-20", endDate: "2026-08-25" }),
++    );
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
++      workdayWithSchedule({ workDate: "2026-08-03" }),
++    ]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => []);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(result.justified, 0);
++    assert.equal(result.unchanged, 1);
++  });
++
++  it("does not justify workdays for a different employee", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
++      workdayWithSchedule({ employeeId: OTHER_EMPLOYEE_ID }),
++    ]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
++      approvedAbsence(),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileEmployeeDateRange(
++      COMPANY_ID,
++      EMPLOYEE_ID,
++      "2026-08-01",
++      "2026-08-10",
++    );
++
++    assert.equal(result.justified, 0);
++    assert.equal(result.unchanged, 1);
++  });
++
++  it("reports attendance conflicts for retroactive approval without rewriting workday", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
++      workdayWithSchedule(),
++    ]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
++      approvedAbsence(),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () =>
++      new Set(["ew-1"]),
++    );
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(result.attendanceConflicts, 1);
++    assert.equal(result.justified, 0);
++    assert.equal(result.unchanged, 1);
++  });
++
++  it("restores JUSTIFIED workdays when absence is revoked", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByAbsenceRequestId", async () => [
++      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_A }),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++    mock.method(absenceRequestRepository, "findById", async () =>
++      approvedAbsence({ status: "CANCELLED" }),
++    );
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => []);
++    mock.method(employeeWorkdayRepository, "restoreJustifiedExpectation", async () =>
++      workdayWithSchedule(),
++    );
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(result.restored, 1);
++  });
++
++  it("relinks to another approved absence when one is removed", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByAbsenceRequestId", async () => [
++      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_A }),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++    mock.method(absenceRequestRepository, "findById", async () =>
++      approvedAbsence({ status: "CANCELLED" }),
++    );
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
++      approvedAbsence({
++        id: ABSENCE_B,
++        reviewedAt: "2026-07-02T12:00:00.000Z",
++        createdAt: "2026-06-21T12:00:00.000Z",
++      }),
++    ]);
++    mock.method(employeeWorkdayRepository, "relinkJustifiedExpectation", async () =>
++      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_B }),
++    );
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(result.relinked, 1);
++    assert.equal(result.restored, 0);
++  });
++
++  it("is idempotent on repeated reconciliation", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    const justified = workdayWithSchedule({
++      expectationStatus: "JUSTIFIED",
++      absenceRequestId: ABSENCE_A,
++    });
++
++    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [justified]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
++      approvedAbsence(),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++
++    const first = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++    const second = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(first.justified, 0);
++    assert.equal(second.justified, 0);
++    assert.equal(second.unchanged, 1);
++  });
++
++  it("keeps cancelled workdays unchanged", async () => {
++    setupUnitTestEnv();
++    const { employeeWorkdayAbsenceReconciliationService } = await import(
++      "./employee-workday-absence-reconciliation.service"
++    );
++
++    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
++    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
++      workdayWithSchedule({ expectationStatus: "CANCELLED", cancellationReason: "ASSIGNMENT" }),
++    ]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
++      approvedAbsence(),
++    ]);
++    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
++
++    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
++      COMPANY_ID,
++      ABSENCE_A,
++    );
++
++    assert.equal(result.justified, 0);
++    assert.equal(result.unchanged, 1);
++  });
++});
+diff --git a/backend/src/services/employee-workday-absence-reconciliation.service.ts b/backend/src/services/employee-workday-absence-reconciliation.service.ts
+new file mode 100644
+index 0000000..1808a84
+--- /dev/null
++++ b/backend/src/services/employee-workday-absence-reconciliation.service.ts
+@@ -0,0 +1,287 @@
++import { absenceRequestRepository } from "../repositories/absence-request.repository";
++import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
++import type { AbsenceRequest } from "../types/absence";
++import {
++  emptyAbsenceWorkdayReconciliationResult,
++  mergeAbsenceWorkdayReconciliationResults,
++  type AbsenceWorkdayReconciliationResult,
++} from "../types/absence-workday-reconciliation";
++import type { EmployeeWorkday } from "../types/workday";
++import { isWorkDateCoveredByAbsence } from "../utils/absence-workday-coverage";
++
++type EmployeeWorkdayWithSchedule = EmployeeWorkday & {
++  workDate: string;
++  expectedStartAt: string;
++  expectedEndAt: string | null;
++  earlyToleranceMinutes: number;
++  lateToleranceMinutes: number;
++};
++
++const selectEffectiveAbsence = (
++  workDate: string,
++  absences: AbsenceRequest[],
++): AbsenceRequest | null => {
++  const covering = absences.filter((absence) => isWorkDateCoveredByAbsence(workDate, absence));
++  if (covering.length === 0) {
++    return null;
++  }
++
++  return covering[0] ?? null;
++};
++
++const buildAbsenceIndex = (
++  absences: AbsenceRequest[],
++): Map<string, AbsenceRequest[]> => {
++  const index = new Map<string, AbsenceRequest[]>();
++  for (const absence of absences) {
++    const existing = index.get(absence.employeeId) ?? [];
++    existing.push(absence);
++    index.set(absence.employeeId, existing);
++  }
++  return index;
++};
++
++const reconcileWorkdayBatch = async (
++  companyId: string,
++  workdays: EmployeeWorkdayWithSchedule[],
++  absences: AbsenceRequest[],
++  attendanceEmployeeWorkdayIds: Set<string>,
++): Promise<AbsenceWorkdayReconciliationResult> => {
++  const counters = emptyAbsenceWorkdayReconciliationResult();
++  const absenceIndex = buildAbsenceIndex(absences);
++
++  for (const workday of workdays) {
++    if (workday.expectationStatus === "CANCELLED") {
++      counters.unchanged += 1;
++      continue;
++    }
++
++    const employeeAbsences = absenceIndex.get(workday.employeeId) ?? [];
++    const effectiveAbsence = selectEffectiveAbsence(workday.workDate, employeeAbsences);
++    const hasAttendance = attendanceEmployeeWorkdayIds.has(workday.id);
++
++    if (effectiveAbsence) {
++      if (hasAttendance) {
++        counters.attendanceConflicts += 1;
++        counters.unchanged += 1;
++        continue;
++      }
++
++      if (workday.expectationStatus === "JUSTIFIED") {
++        if (workday.absenceRequestId === effectiveAbsence.id) {
++          counters.unchanged += 1;
++          continue;
++        }
++
++        const relinked = await employeeWorkdayRepository.relinkJustifiedExpectation(
++          companyId,
++          workday.id,
++          effectiveAbsence.id,
++        );
++        if (relinked) {
++          counters.relinked += 1;
++        } else {
++          counters.unchanged += 1;
++        }
++        continue;
++      }
++
++      if (workday.expectationStatus !== "EXPECTED") {
++        counters.unchanged += 1;
++        continue;
++      }
++
++      const justified = await employeeWorkdayRepository.justifyExpectation(
++        companyId,
++        workday.id,
++        effectiveAbsence.id,
++      );
++      if (justified) {
++        counters.justified += 1;
++      } else {
++        counters.unchanged += 1;
++      }
++      continue;
++    }
++
++    if (workday.expectationStatus === "JUSTIFIED") {
++      const restored = await employeeWorkdayRepository.restoreJustifiedExpectation(
++        companyId,
++        workday.id,
++        workday.absenceRequestId ?? "",
++      );
++      if (restored) {
++        counters.restored += 1;
++      } else {
++        counters.unchanged += 1;
++      }
++      continue;
++    }
++
++    counters.unchanged += 1;
++  }
++
++  return counters;
++};
++
++export const employeeWorkdayAbsenceReconciliationService = {
++  async reconcileForApprovedAbsence(
++    companyId: string,
++    absenceRequestId: string,
++  ): Promise<AbsenceWorkdayReconciliationResult> {
++    const absence = await absenceRequestRepository.findById(companyId, absenceRequestId);
++    if (!absence || absence.status !== "APPROVED") {
++      return emptyAbsenceWorkdayReconciliationResult();
++    }
++
++    return this.reconcileEmployeeDateRange(
++      companyId,
++      absence.employeeId,
++      absence.startDate,
++      absence.endDate,
++    );
++  },
++
++  async reconcileForRevokedAbsence(
++    companyId: string,
++    absenceRequestId: string,
++  ): Promise<AbsenceWorkdayReconciliationResult> {
++    const linkedWorkdays = await employeeWorkdayRepository.listWithWorkDatesByAbsenceRequestId(
++      companyId,
++      absenceRequestId,
++    );
++
++    if (linkedWorkdays.length === 0) {
++      return emptyAbsenceWorkdayReconciliationResult();
++    }
++
++    const attendanceIds = await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
++      companyId,
++      linkedWorkdays.map((workday) => workday.id),
++    );
++
++    const absence = await absenceRequestRepository.findById(companyId, absenceRequestId);
++    const employeeId = absence?.employeeId ?? linkedWorkdays[0]!.employeeId;
++
++    let dateFrom = linkedWorkdays[0]!.workDate;
++    let dateTo = linkedWorkdays[0]!.workDate;
++    for (const workday of linkedWorkdays) {
++      if (workday.workDate < dateFrom) {
++        dateFrom = workday.workDate;
++      }
++      if (workday.workDate > dateTo) {
++        dateTo = workday.workDate;
++      }
++    }
++
++    const approvedAbsences = await absenceRequestRepository.listApprovedByEmployeeAndDateRange(
++      companyId,
++      employeeId,
++      dateFrom,
++      dateTo,
++    );
++
++    return reconcileWorkdayBatch(companyId, linkedWorkdays, approvedAbsences, attendanceIds);
++  },
++
++  async reconcileEmployeeDateRange(
++    companyId: string,
++    employeeId: string,
++    dateFrom: string,
++    dateTo: string,
++  ): Promise<AbsenceWorkdayReconciliationResult> {
++    const [workdays, approvedAbsences] = await Promise.all([
++      employeeWorkdayRepository.listWithWorkDatesByEmployeeAndDateRange(
++        companyId,
++        employeeId,
++        dateFrom,
++        dateTo,
++      ),
++      absenceRequestRepository.listApprovedByEmployeeAndDateRange(
++        companyId,
++        employeeId,
++        dateFrom,
++        dateTo,
++      ),
++    ]);
++
++    if (workdays.length === 0) {
++      return emptyAbsenceWorkdayReconciliationResult();
++    }
++
++    const attendanceIds = await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
++      companyId,
++      workdays.map((workday) => workday.id),
++    );
++
++    return reconcileWorkdayBatch(companyId, workdays, approvedAbsences, attendanceIds);
++  },
++
++  async reconcileEmployeeWorkdays(
++    companyId: string,
++    employeeWorkdayIds: string[],
++  ): Promise<AbsenceWorkdayReconciliationResult> {
++    if (employeeWorkdayIds.length === 0) {
++      return emptyAbsenceWorkdayReconciliationResult();
++    }
++
++    const workdays = await employeeWorkdayRepository.listWithWorkDatesByEmployeeWorkdayIds(
++      companyId,
++      employeeWorkdayIds,
++    );
++    if (workdays.length === 0) {
++      return emptyAbsenceWorkdayReconciliationResult();
++    }
++
++    let dateFrom = workdays[0]!.workDate;
++    let dateTo = workdays[0]!.workDate;
++    const employeeIds = new Set<string>();
++    for (const workday of workdays) {
++      employeeIds.add(workday.employeeId);
++      if (workday.workDate < dateFrom) {
++        dateFrom = workday.workDate;
++      }
++      if (workday.workDate > dateTo) {
++        dateTo = workday.workDate;
++      }
++    }
++
++    const approvedAbsences = await absenceRequestRepository.listApprovedByEmployeesAndDateRange(
++      companyId,
++      [...employeeIds],
++      dateFrom,
++      dateTo,
++    );
++
++    const attendanceIds = await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
++      companyId,
++      workdays.map((workday) => workday.id),
++    );
++
++    return reconcileWorkdayBatch(companyId, workdays, approvedAbsences, attendanceIds);
++  },
++
++  async reconcileMaterializationRange(
++    companyId: string,
++    rangeStart: string,
++    rangeEnd: string,
++    employeeIds: string[],
++  ): Promise<AbsenceWorkdayReconciliationResult> {
++    if (employeeIds.length === 0) {
++      return emptyAbsenceWorkdayReconciliationResult();
++    }
++
++    const counters = emptyAbsenceWorkdayReconciliationResult();
++    for (const employeeId of employeeIds) {
++      const partial = await this.reconcileEmployeeDateRange(
++        companyId,
++        employeeId,
++        rangeStart,
++        rangeEnd,
++      );
++      mergeAbsenceWorkdayReconciliationResults(counters, partial);
++    }
++
++    return counters;
++  },
++};
+diff --git a/backend/src/services/operation-workday.service.test.ts b/backend/src/services/operation-workday.service.test.ts
+index a1e21c2..286f359 100644
+--- a/backend/src/services/operation-workday.service.test.ts
++++ b/backend/src/services/operation-workday.service.test.ts
+@@ -1,5 +1,6 @@
+ import assert from "node:assert/strict";
+ import { afterEach, describe, it, mock } from "node:test";
++import { absenceRequestRepository } from "../repositories/absence-request.repository";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+ import { operationRepository } from "../repositories/operation.repository";
+@@ -15,7 +16,7 @@ describe("operationWorkdayService.getDetail", () => {
+     mock.restoreAll();
+   });
+ 
+-  it("returns employee summaries from joined query without per-employee lookups", async () => {
++  it("returns derived effective state and absence context", async () => {
+     setupUnitTestEnv();
+     const { operationWorkdayService } = await import("./operation-workday.service");
+ 
+@@ -31,6 +32,8 @@ describe("operationWorkdayService.getDetail", () => {
+       workDate: "2026-08-10",
+       expectedStartAt: "2026-08-10T12:00:00.000Z",
+       expectedEndAt: "2026-08-10T21:00:00.000Z",
++      earlyToleranceMinutes: 15,
++      lateToleranceMinutes: 20,
+       status: "ACTIVE",
+       cancellationReason: null,
+     }));
+@@ -44,16 +47,25 @@ describe("operationWorkdayService.getDetail", () => {
+ 
+     mock.method(employeeWorkdayRepository, "listEmployeeSummariesByOperationWorkdayId", async () => [
+       {
++        employeeWorkdayId: "ew-1",
+         employeeId: "emp-1",
+         employeeName: "Ana Test",
+-        expectationStatus: "EXPECTED",
++        expectationStatus: "JUSTIFIED",
++        cancellationReason: null,
++        absenceRequestId: "absence-1",
++        absenceTypeName: "Vacaciones",
++        absenceStartDate: "2026-08-01",
++        absenceEndDate: "2026-08-14",
++        hasAttendance: false,
+       },
+     ]);
++    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => []);
+ 
+     const detail = await operationWorkdayService.getDetail(COMPANY_ID, OPERATION_ID, WORKDAY_ID);
+ 
+     assert.equal(detail.expectedEmployees.length, 1);
+-    assert.equal(detail.expectedEmployees[0]?.employeeName, "Ana Test");
++    assert.equal(detail.expectedEmployees[0]?.effectiveState, "JUSTIFIED");
++    assert.equal(detail.expectedEmployees[0]?.absenceContext?.absenceTypeName, "Vacaciones");
+     assert.equal(employeeFindByIdCalls, 0);
+   });
+ });
+diff --git a/backend/src/services/operation-workday.service.ts b/backend/src/services/operation-workday.service.ts
+index c15b249..e0e899a 100644
+--- a/backend/src/services/operation-workday.service.ts
++++ b/backend/src/services/operation-workday.service.ts
+@@ -1,7 +1,12 @@
+ import { AppError } from "../errors/app-error";
++import { absenceRequestRepository } from "../repositories/absence-request.repository";
+ import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+ import { operationRepository } from "../repositories/operation.repository";
+ import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
++import type { DerivedEmployeeWorkdayState } from "../types/employee-workday-state";
++import type { EmployeeWorkdayAbsenceContext } from "../types/employee-workday-state";
++import { isWorkDateCoveredByAbsence } from "../utils/absence-workday-coverage";
++import { deriveEmployeeWorkdayState } from "../utils/derive-employee-workday-state";
+ import { buildPaginationMeta } from "../utils/pagination";
+ import type { ListOperationWorkdaysQuery } from "../schemas/operation-workday.schema";
+ 
+@@ -18,6 +23,9 @@ export interface OperationWorkdayEmployeeSummary {
+   employeeId: string;
+   employeeName: string;
+   expectationStatus: string;
++  effectiveState: DerivedEmployeeWorkdayState;
++  absenceContext: EmployeeWorkdayAbsenceContext | null;
++  hasAttendanceConflict: boolean;
+ }
+ 
+ export const operationWorkdayService = {
+@@ -81,6 +89,71 @@ export const operationWorkdayService = {
+       workday.id,
+     );
+ 
++    const approvedAbsences = await absenceRequestRepository.listApprovedByEmployeesAndDateRange(
++      companyId,
++      employees.map((employee) => employee.employeeId),
++      workday.workDate,
++      workday.workDate,
++    );
++
++    const absencesByEmployee = new Map<string, typeof approvedAbsences>();
++    for (const absence of approvedAbsences) {
++      const existing = absencesByEmployee.get(absence.employeeId) ?? [];
++      existing.push(absence);
++      absencesByEmployee.set(absence.employeeId, existing);
++    }
++
++    const expectedEmployees: OperationWorkdayEmployeeSummary[] = employees.map((employee) => {
++      const effectiveState = deriveEmployeeWorkdayState({
++        employeeWorkday: { expectationStatus: employee.expectationStatus as never },
++        hasAttendance: employee.hasAttendance,
++        expectedStartAt: workday.expectedStartAt,
++        expectedEndAt: workday.expectedEndAt,
++        earlyToleranceMinutes: workday.earlyToleranceMinutes,
++        lateToleranceMinutes: workday.lateToleranceMinutes,
++      });
++
++      const employeeAbsences = absencesByEmployee.get(employee.employeeId) ?? [];
++      const hasCoveringApprovedAbsence = employeeAbsences.some((absence) =>
++        isWorkDateCoveredByAbsence(workday.workDate, absence),
++      );
++      const hasAttendanceConflict =
++        employee.hasAttendance &&
++        employee.expectationStatus === "EXPECTED" &&
++        hasCoveringApprovedAbsence;
++
++      const absenceContext: EmployeeWorkdayAbsenceContext | null =
++        employee.absenceRequestId &&
++        employee.absenceTypeName &&
++        employee.absenceStartDate &&
++        employee.absenceEndDate
++          ? {
++              absenceRequestId: employee.absenceRequestId,
++              absenceTypeName: employee.absenceTypeName,
++              absenceStartDate: employee.absenceStartDate,
++              absenceEndDate: employee.absenceEndDate,
++              hasAttendanceConflict,
++            }
++          : hasAttendanceConflict
++            ? {
++                absenceRequestId: employeeAbsences[0]!.id,
++                absenceTypeName: "",
++                absenceStartDate: employeeAbsences[0]!.startDate,
++                absenceEndDate: employeeAbsences[0]!.endDate,
++                hasAttendanceConflict: true,
++              }
++            : null;
++
++      return {
++        employeeId: employee.employeeId,
++        employeeName: employee.employeeName,
++        expectationStatus: employee.expectationStatus,
++        effectiveState,
++        absenceContext,
++        hasAttendanceConflict,
++      };
++    });
++
+     return {
+       workday: {
+         id: workday.id,
+@@ -90,7 +163,7 @@ export const operationWorkdayService = {
+         status: workday.status,
+         expectedEmployeesCount: counts.get(workday.id) ?? 0,
+       },
+-      expectedEmployees: employees,
++      expectedEmployees,
+     };
+   },
+ };
+diff --git a/backend/src/services/recurring-workday-materialization.service.test.ts b/backend/src/services/recurring-workday-materialization.service.test.ts
+index 9f57cc1..8f0dede 100644
+--- a/backend/src/services/recurring-workday-materialization.service.test.ts
++++ b/backend/src/services/recurring-workday-materialization.service.test.ts
+@@ -11,6 +11,15 @@ import { WEEKDAYS } from "../constants/weekday";
+ import { getDateIsoInTimezone } from "../utils/absence-date";
+ import { addDaysToDateIso } from "../utils/recurring-workday-instant";
+ import type { OperationWorkday } from "../types/workday";
++import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
++
++const emptyAbsenceReconciliation = async () => ({
++  justified: 0,
++  restored: 0,
++  relinked: 0,
++  unchanged: 0,
++  attendanceConflicts: 0,
++});
+ 
+ const COMPANY_ID = "company-1";
+ const OPERATION_ID = "op-1";
+@@ -81,6 +90,11 @@ describe("recurringWorkdayMaterializationService orchestration", () => {
+       [...storedWorkdays.values()],
+     );
+     mock.method(operationWorkdayRepository, "isDuplicateKeyError", () => false);
++    mock.method(
++      employeeWorkdayAbsenceReconciliationService,
++      "reconcileMaterializationRange",
++      emptyAbsenceReconciliation,
++    );
+     mock.method(operationWorkdayRepository, "insert", async (_companyId, payload) => {
+       insertCount += 1;
+       const created = {
+@@ -189,6 +203,11 @@ describe("recurringWorkdayMaterializationService orchestration", () => {
+       updatedAt: new Date().toISOString(),
+     }));
+     mock.method(employeeWorkdayRepository, "isDuplicateKeyError", () => false);
++    mock.method(
++      employeeWorkdayAbsenceReconciliationService,
++      "reconcileMaterializationRange",
++      emptyAbsenceReconciliation,
++    );
+ 
+     const { recurringWorkdayMaterializationService } = await import(
+       "./recurring-workday-materialization.service"
+diff --git a/backend/src/services/recurring-workday-materialization.service.ts b/backend/src/services/recurring-workday-materialization.service.ts
+index 2fedc77..26d6f5f 100644
+--- a/backend/src/services/recurring-workday-materialization.service.ts
++++ b/backend/src/services/recurring-workday-materialization.service.ts
+@@ -26,6 +26,7 @@ import {
+   buildEmployeeWorkdayIndex,
+   employeeWorkdayExpectationService,
+ } from "./employee-workday-expectation.service";
++import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+ import { recurringScheduleService } from "./recurring-schedule.service";
+ 
+ type WorkdaySnapshot = {
+@@ -428,6 +429,15 @@ export const recurringWorkdayMaterializationService = {
+       counters.employeeWorkdaysCancelled += cancelledEmployees;
+     }
+ 
++    const employeeIds = [...new Set(assignments.map((assignment) => assignment.employeeId))];
++    counters.absenceReconciliation =
++      await employeeWorkdayAbsenceReconciliationService.reconcileMaterializationRange(
++        companyId,
++        range.rangeStart,
++        range.rangeEnd,
++        employeeIds,
++      );
++
+     return counters;
+   },
+ 
+diff --git a/backend/src/types/absence-workday-reconciliation.ts b/backend/src/types/absence-workday-reconciliation.ts
+new file mode 100644
+index 0000000..e8e1bde
+--- /dev/null
++++ b/backend/src/types/absence-workday-reconciliation.ts
+@@ -0,0 +1,26 @@
++export interface AbsenceWorkdayReconciliationResult {
++  justified: number;
++  restored: number;
++  relinked: number;
++  unchanged: number;
++  attendanceConflicts: number;
++}
++
++export const emptyAbsenceWorkdayReconciliationResult = (): AbsenceWorkdayReconciliationResult => ({
++  justified: 0,
++  restored: 0,
++  relinked: 0,
++  unchanged: 0,
++  attendanceConflicts: 0,
++});
++
++export const mergeAbsenceWorkdayReconciliationResults = (
++  left: AbsenceWorkdayReconciliationResult,
++  right: AbsenceWorkdayReconciliationResult,
++): AbsenceWorkdayReconciliationResult => ({
++  justified: left.justified + right.justified,
++  restored: left.restored + right.restored,
++  relinked: left.relinked + right.relinked,
++  unchanged: left.unchanged + right.unchanged,
++  attendanceConflicts: left.attendanceConflicts + right.attendanceConflicts,
++});
+diff --git a/backend/src/types/absence.ts b/backend/src/types/absence.ts
+index 5c27a4e..a970bed 100644
+--- a/backend/src/types/absence.ts
++++ b/backend/src/types/absence.ts
+@@ -73,10 +73,13 @@ export interface AbsenceRequestWithRelations extends AbsenceRequest {
+   affectedOperationsCount: number;
+ }
+ 
++import type { AbsenceWorkdayReconciliationResult } from "./absence-workday-reconciliation";
++
+ export interface AbsenceRequestDetail extends AbsenceRequestWithRelations {
+   events: AbsenceRequestEvent[];
+   affectedOperations: AffectedOperationWarning[];
+   balanceImpact: AbsenceBalanceImpact | null;
++  workdayReconciliation?: AbsenceWorkdayReconciliationResult;
+ }
+ 
+ export interface EmployeeAbsenceBalance {
+diff --git a/backend/src/types/employee-workday-state.ts b/backend/src/types/employee-workday-state.ts
+new file mode 100644
+index 0000000..21af62b
+--- /dev/null
++++ b/backend/src/types/employee-workday-state.ts
+@@ -0,0 +1,14 @@
++export type DerivedEmployeeWorkdayState =
++  | "EXPECTED"
++  | "JUSTIFIED"
++  | "PRESENT"
++  | "ABSENT"
++  | "CANCELLED";
++
++export interface EmployeeWorkdayAbsenceContext {
++  absenceRequestId: string;
++  absenceTypeName: string;
++  absenceStartDate: string;
++  absenceEndDate: string;
++  hasAttendanceConflict: boolean;
++}
+diff --git a/backend/src/types/materialization.ts b/backend/src/types/materialization.ts
+index e5be56d..7d27614 100644
+--- a/backend/src/types/materialization.ts
++++ b/backend/src/types/materialization.ts
+@@ -18,6 +18,7 @@ export interface MaterializationResult {
+   employeeWorkdaysReactivated: number;
+   employeeWorkdaysCancelled: number;
+   unchanged: number;
++  absenceReconciliation?: import("./absence-workday-reconciliation").AbsenceWorkdayReconciliationResult;
+ }
+ 
+ export interface CompanyMaterializationSummary {
+diff --git a/backend/src/utils/absence-workday-coverage.test.ts b/backend/src/utils/absence-workday-coverage.test.ts
+new file mode 100644
+index 0000000..13cbe68
+--- /dev/null
++++ b/backend/src/utils/absence-workday-coverage.test.ts
+@@ -0,0 +1,57 @@
++import assert from "node:assert/strict";
++import { describe, it } from "node:test";
++import type { AbsenceDayPeriod } from "../types/absence";
++import { isWorkDateCoveredByAbsence } from "../utils/absence-workday-coverage";
++
++const absence = (input: {
++  startDate: string;
++  endDate: string;
++  startPeriod?: AbsenceDayPeriod;
++  endPeriod?: AbsenceDayPeriod;
++}) => ({
++  startDate: input.startDate,
++  endDate: input.endDate,
++  startPeriod: input.startPeriod ?? "FULL_DAY",
++  endPeriod: input.endPeriod ?? "FULL_DAY",
++});
++
++describe("isWorkDateCoveredByAbsence", () => {
++  it("covers inclusive start and end dates", () => {
++    const model = absence({ startDate: "2026-08-01", endDate: "2026-08-10" });
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-01", model), true);
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-10", model), true);
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-05", model), true);
++  });
++
++  it("excludes dates outside the range", () => {
++    const model = absence({ startDate: "2026-08-01", endDate: "2026-08-10" });
++    assert.equal(isWorkDateCoveredByAbsence("2026-07-31", model), false);
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-11", model), false);
++  });
++
++  it("uses operational work date for overnight shifts", () => {
++    const model = absence({ startDate: "2026-08-03", endDate: "2026-08-03" });
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-03", model), true);
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-04", model), false);
++  });
++
++  it("excludes start date when absence starts in PM", () => {
++    const model = absence({
++      startDate: "2026-08-03",
++      endDate: "2026-08-05",
++      startPeriod: "PM",
++    });
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-03", model), false);
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-04", model), true);
++  });
++
++  it("excludes end date when absence ends in AM", () => {
++    const model = absence({
++      startDate: "2026-08-03",
++      endDate: "2026-08-05",
++      endPeriod: "AM",
++    });
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-05", model), false);
++    assert.equal(isWorkDateCoveredByAbsence("2026-08-04", model), true);
++  });
++});
+diff --git a/backend/src/utils/absence-workday-coverage.ts b/backend/src/utils/absence-workday-coverage.ts
+new file mode 100644
+index 0000000..b67414d
+--- /dev/null
++++ b/backend/src/utils/absence-workday-coverage.ts
+@@ -0,0 +1,35 @@
++import type { AbsenceDayPeriod } from "../types/absence";
++import { compareAbsenceDates } from "./absence-date";
++
++export interface AbsenceDateCoverageInput {
++  startDate: string;
++  endDate: string;
++  startPeriod: AbsenceDayPeriod;
++  endPeriod: AbsenceDayPeriod;
++}
++
++/**
++ * Determines whether an approved absence covers a concrete operational work date.
++ * Matching is based on the local calendar work date (operation_workdays.work_date).
++ */
++export const isWorkDateCoveredByAbsence = (
++  workDate: string,
++  absence: AbsenceDateCoverageInput,
++): boolean => {
++  if (compareAbsenceDates(workDate, absence.startDate) < 0) {
++    return false;
++  }
++  if (compareAbsenceDates(workDate, absence.endDate) > 0) {
++    return false;
++  }
++
++  if (workDate === absence.startDate && absence.startPeriod === "PM") {
++    return false;
++  }
++
++  if (workDate === absence.endDate && absence.endPeriod === "AM") {
++    return false;
++  }
++
++  return true;
++};
+diff --git a/backend/src/utils/derive-employee-workday-state.test.ts b/backend/src/utils/derive-employee-workday-state.test.ts
+new file mode 100644
+index 0000000..cd4652e
+--- /dev/null
++++ b/backend/src/utils/derive-employee-workday-state.test.ts
+@@ -0,0 +1,69 @@
++import assert from "node:assert/strict";
++import { describe, it } from "node:test";
++import { deriveEmployeeWorkdayState } from "../utils/derive-employee-workday-state";
++
++describe("deriveEmployeeWorkdayState", () => {
++  const schedule = {
++    expectedStartAt: "2026-08-10T12:00:00.000Z",
++    expectedEndAt: "2026-08-10T21:00:00.000Z",
++    earlyToleranceMinutes: 15,
++    lateToleranceMinutes: 20,
++  };
++
++  it("returns CANCELLED for cancelled expectations", () => {
++    assert.equal(
++      deriveEmployeeWorkdayState({
++        employeeWorkday: { expectationStatus: "CANCELLED" },
++        hasAttendance: false,
++        ...schedule,
++      }),
++      "CANCELLED",
++    );
++  });
++
++  it("returns JUSTIFIED for justified expectations", () => {
++    assert.equal(
++      deriveEmployeeWorkdayState({
++        employeeWorkday: { expectationStatus: "JUSTIFIED" },
++        hasAttendance: false,
++        ...schedule,
++      }),
++      "JUSTIFIED",
++    );
++  });
++
++  it("returns PRESENT when attendance exists", () => {
++    assert.equal(
++      deriveEmployeeWorkdayState({
++        employeeWorkday: { expectationStatus: "EXPECTED" },
++        hasAttendance: true,
++        ...schedule,
++      }),
++      "PRESENT",
++    );
++  });
++
++  it("returns EXPECTED while attendance window is open", () => {
++    assert.equal(
++      deriveEmployeeWorkdayState({
++        employeeWorkday: { expectationStatus: "EXPECTED" },
++        hasAttendance: false,
++        ...schedule,
++        referenceAt: new Date("2026-08-10T20:00:00.000Z"),
++      }),
++      "EXPECTED",
++    );
++  });
++
++  it("returns ABSENT after attendance window closes without attendance", () => {
++    assert.equal(
++      deriveEmployeeWorkdayState({
++        employeeWorkday: { expectationStatus: "EXPECTED" },
++        hasAttendance: false,
++        ...schedule,
++        referenceAt: new Date("2026-08-11T10:00:00.000Z"),
++      }),
++      "ABSENT",
++    );
++  });
++});
+diff --git a/backend/src/utils/derive-employee-workday-state.ts b/backend/src/utils/derive-employee-workday-state.ts
+new file mode 100644
+index 0000000..e583aa5
+--- /dev/null
++++ b/backend/src/utils/derive-employee-workday-state.ts
+@@ -0,0 +1,55 @@
++import type { DerivedEmployeeWorkdayState } from "../types/employee-workday-state";
++import type { EmployeeWorkday } from "../types/workday";
++
++export const isAttendanceOpportunityOpen = (input: {
++  expectedStartAt: string;
++  expectedEndAt: string | null;
++  earlyToleranceMinutes: number;
++  lateToleranceMinutes: number;
++  referenceAt?: Date;
++}): boolean => {
++  const now = input.referenceAt ?? new Date();
++  const start = new Date(input.expectedStartAt);
++  const end = input.expectedEndAt
++    ? new Date(input.expectedEndAt)
++    : new Date(start.getTime() + input.lateToleranceMinutes * 60_000);
++
++  const opportunityEnd = new Date(end.getTime() + input.lateToleranceMinutes * 60_000);
++  return now <= opportunityEnd;
++};
++
++export const deriveEmployeeWorkdayState = (input: {
++  employeeWorkday: Pick<EmployeeWorkday, "expectationStatus">;
++  hasAttendance: boolean;
++  expectedStartAt: string;
++  expectedEndAt: string | null;
++  earlyToleranceMinutes: number;
++  lateToleranceMinutes: number;
++  referenceAt?: Date;
++}): DerivedEmployeeWorkdayState => {
++  if (input.employeeWorkday.expectationStatus === "CANCELLED") {
++    return "CANCELLED";
++  }
++
++  if (input.employeeWorkday.expectationStatus === "JUSTIFIED") {
++    return "JUSTIFIED";
++  }
++
++  if (input.hasAttendance) {
++    return "PRESENT";
++  }
++
++  if (
++    isAttendanceOpportunityOpen({
++      expectedStartAt: input.expectedStartAt,
++      expectedEndAt: input.expectedEndAt,
++      earlyToleranceMinutes: input.earlyToleranceMinutes,
++      lateToleranceMinutes: input.lateToleranceMinutes,
++      referenceAt: input.referenceAt,
++    })
++  ) {
++    return "EXPECTED";
++  }
++
++  return "ABSENT";
++};
+diff --git a/database/migrations/046_employee_workday_absence_integration.sql b/database/migrations/046_employee_workday_absence_integration.sql
+new file mode 100644
+index 0000000..3622adb
+--- /dev/null
++++ b/database/migrations/046_employee_workday_absence_integration.sql
+@@ -0,0 +1,53 @@
++-- Phase 5: absence / vacation integration with employee_workdays.
++
++USE dinamic_attendance;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.foreign_keys
++    WHERE name = 'FK_employee_workdays_absence_request'
++      AND parent_object_id = OBJECT_ID('dbo.employee_workdays')
++)
++BEGIN
++    ALTER TABLE dbo.employee_workdays
++        ADD CONSTRAINT FK_employee_workdays_absence_request
++        FOREIGN KEY (absence_request_id)
++        REFERENCES dbo.absence_requests(id);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = 'IX_employee_workdays_absence_request_id'
++      AND object_id = OBJECT_ID('dbo.employee_workdays')
++)
++BEGIN
++    CREATE NONCLUSTERED INDEX IX_employee_workdays_absence_request_id
++        ON dbo.employee_workdays (company_id, absence_request_id)
++        WHERE absence_request_id IS NOT NULL;
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = 'IX_employee_workdays_employee_workday_lookup'
++      AND object_id = OBJECT_ID('dbo.employee_workdays')
++)
++BEGIN
++    CREATE NONCLUSTERED INDEX IX_employee_workdays_employee_workday_lookup
++        ON dbo.employee_workdays (company_id, employee_id, operation_workday_id);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = 'IX_absence_requests_approved_employee_dates'
++      AND object_id = OBJECT_ID('dbo.absence_requests')
++)
++BEGIN
++    CREATE NONCLUSTERED INDEX IX_absence_requests_approved_employee_dates
++        ON dbo.absence_requests (company_id, employee_id, start_date, end_date)
++        INCLUDE (status, start_period, end_period, reviewed_at, created_at)
++        WHERE status = N'APPROVED';
++END;
++GO
+diff --git a/frontend/src/components/operations/OperationScheduledWorkdaysSection.tsx b/frontend/src/components/operations/OperationScheduledWorkdaysSection.tsx
+index 857c3f0..c51faf7 100644
+--- a/frontend/src/components/operations/OperationScheduledWorkdaysSection.tsx
++++ b/frontend/src/components/operations/OperationScheduledWorkdaysSection.tsx
+@@ -1,4 +1,5 @@
+-import { Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
++import { Alert, Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
++import { Link as RouterLink } from "react-router-dom";
+ import { useState } from "react";
+ import { ErrorState } from "../../design-system/components/ErrorState";
+ import { LoadingState } from "../../design-system/components/LoadingState";
+@@ -17,10 +18,13 @@ import { getApiErrorMessage } from "../../utils/errors";
+ 
+ import {
+   buildMaterializationSuccessMessage,
++  employeeWorkdayStateLabels,
++  employeeWorkdayStateTones,
+   formatExpectedTimeRange,
+   formatWorkdayDate,
+   workdayStatusLabels,
+ } from "./operation-workday-display";
++import { formatDate } from "../../utils/dates";
+ 
+ interface WorkdayRowProps {
+   operationId: string;
+@@ -68,7 +72,7 @@ function WorkdayRow({ operationId, workday }: WorkdayRowProps) {
+                   <Table.Thead>
+                     <Table.Tr>
+                       <Table.Th>Colaborador</Table.Th>
+-                      <Table.Th>Estado de expectativa</Table.Th>
++                      <Table.Th>Estado</Table.Th>
+                     </Table.Tr>
+                   </Table.Thead>
+                   <Table.Tbody>
+@@ -76,7 +80,42 @@ function WorkdayRow({ operationId, workday }: WorkdayRowProps) {
+                       <Table.Tr key={employee.employeeId}>
+                         <Table.Td>{employee.employeeName}</Table.Td>
+                         <Table.Td>
+-                          {employee.expectationStatus === "EXPECTED" ? "Esperado" : "Cancelado"}
++                          <Stack gap={4}>
++                            <StatusBadge
++                              label={employeeWorkdayStateLabels[employee.effectiveState]}
++                              tone={employeeWorkdayStateTones[employee.effectiveState]}
++                              variant="light"
++                            />
++                            {employee.absenceContext && employee.effectiveState === "JUSTIFIED" ? (
++                              <Text size="xs" c="dimmed">
++                                {employee.absenceContext.absenceTypeName}
++                                {" · "}
++                                {formatDate(employee.absenceContext.absenceStartDate)} →{" "}
++                                {formatDate(employee.absenceContext.absenceEndDate)}
++                                {employee.absenceContext.absenceRequestId ? (
++                                  <>
++                                    {" · "}
++                                    <Button
++                                      component={RouterLink}
++                                      to={`/absences/${employee.absenceContext.absenceRequestId}`}
++                                      variant="subtle"
++                                      size="compact-xs"
++                                      p={0}
++                                      h="auto"
++                                    >
++                                      Ver ausencia
++                                    </Button>
++                                  </>
++                                ) : null}
++                              </Text>
++                            ) : null}
++                            {employee.hasAttendanceConflict ? (
++                              <Alert color="yellow" p="xs">
++                                Existe una asistencia registrada para esta jornada. La ausencia aprobada
++                                no modificó automáticamente el registro.
++                              </Alert>
++                            ) : null}
++                          </Stack>
+                         </Table.Td>
+                       </Table.Tr>
+                     ))}
+diff --git a/frontend/src/components/operations/operation-workday-display.test.ts b/frontend/src/components/operations/operation-workday-display.test.ts
+index 0209e11..54ac684 100644
+--- a/frontend/src/components/operations/operation-workday-display.test.ts
++++ b/frontend/src/components/operations/operation-workday-display.test.ts
+@@ -1,7 +1,9 @@
+ import assert from "node:assert/strict";
+ import { describe, it } from "node:test";
+ import {
++  buildAbsenceApprovalSuccessMessage,
+   buildMaterializationSuccessMessage,
++  employeeWorkdayStateLabels,
+   formatExpectedTimeRange,
+   formatWorkdayDate,
+   workdayStatusLabels,
+@@ -67,4 +69,36 @@ describe("operation-workday-display", () => {
+     assert.match(message, /1 colaboradores incorporados/);
+     assert.match(message, /3 expectativas reactivadas/);
+   });
++
++  it("maps employee workday effective state labels in Spanish", () => {
++    assert.equal(employeeWorkdayStateLabels.JUSTIFIED, "Justificado");
++    assert.equal(employeeWorkdayStateLabels.ABSENT, "Ausente");
++    assert.equal(employeeWorkdayStateLabels.PRESENT, "Con asistencia");
++  });
++
++  it("builds absence approval feedback with justified and conflict counters", () => {
++    assert.match(
++      buildAbsenceApprovalSuccessMessage({ justified: 8, attendanceConflicts: 1 }),
++      /8 jornadas fueron justificadas/,
++    );
++    assert.match(
++      buildAbsenceApprovalSuccessMessage({ justified: 8, attendanceConflicts: 1 }),
++      /requiere revisión/,
++    );
++  });
++
++  it("maps absence workday sync failure through error helper", async () => {
++    const { isAbsenceWorkdaySyncError } = await import("../../utils/errors");
++    const { ApiError } = await import("../../utils/errors");
++    assert.equal(
++      isAbsenceWorkdaySyncError(
++        new ApiError(
++          "La ausencia fue guardada, pero no se pudieron actualizar las jornadas.",
++          "ABSENCE_WORKDAY_SYNC_FAILED",
++          503,
++        ),
++      ),
++      true,
++    );
++  });
+ });
+diff --git a/frontend/src/components/operations/operation-workday-display.ts b/frontend/src/components/operations/operation-workday-display.ts
+index ccafd31..3ee5c2c 100644
+--- a/frontend/src/components/operations/operation-workday-display.ts
++++ b/frontend/src/components/operations/operation-workday-display.ts
+@@ -1,4 +1,8 @@
+-import type { MaterializationResult, OperationWorkdaySummary } from "../../types/operation-workday";
++import type {
++  DerivedEmployeeWorkdayState,
++  MaterializationResult,
++  OperationWorkdaySummary,
++} from "../../types/operation-workday";
+ import { formatDate, formatTime } from "../../utils/dates";
+ 
+ export const workdayStatusLabels: Record<OperationWorkdaySummary["status"], string> = {
+@@ -6,6 +10,25 @@ export const workdayStatusLabels: Record<OperationWorkdaySummary["status"], stri
+   CANCELLED: "Cancelada",
+ };
+ 
++export const employeeWorkdayStateLabels: Record<DerivedEmployeeWorkdayState, string> = {
++  EXPECTED: "Esperado",
++  JUSTIFIED: "Justificado",
++  PRESENT: "Con asistencia",
++  ABSENT: "Ausente",
++  CANCELLED: "Cancelado",
++};
++
++export const employeeWorkdayStateTones: Record<
++  DerivedEmployeeWorkdayState,
++  "info" | "success" | "warning" | "danger" | "neutral"
++> = {
++  EXPECTED: "info",
++  JUSTIFIED: "warning",
++  PRESENT: "success",
++  ABSENT: "danger",
++  CANCELLED: "neutral",
++};
++
+ export function formatWorkdayDate(workDate: string): string {
+   const [year, month, day] = workDate.split("-").map(Number);
+   const date = new Date(Date.UTC(year, month - 1, day, 12, 0, 0));
+@@ -30,8 +53,33 @@ export function buildMaterializationSuccessMessage(result: MaterializationResult
+   if (result.employeeWorkdaysReactivated > 0) {
+     parts.push(`${result.employeeWorkdaysReactivated} expectativas reactivadas`);
+   }
++  if (result.absenceReconciliation?.justified) {
++    parts.push(`${result.absenceReconciliation.justified} jornadas justificadas`);
++  }
+ 
+   return parts.length > 0
+     ? `Jornadas actualizadas correctamente. ${parts.join(" · ")}.`
+     : "Jornadas actualizadas correctamente.";
+ }
++
++export function buildAbsenceApprovalSuccessMessage(input: {
++  justified?: number;
++  attendanceConflicts?: number;
++}): string {
++  if (input.attendanceConflicts && input.attendanceConflicts > 0) {
++    const conflictLabel =
++      input.attendanceConflicts === 1
++        ? "1 jornada conserva asistencia registrada y requiere revisión"
++        : `${input.attendanceConflicts} jornadas conservan asistencia registrada y requieren revisión`;
++    if (input.justified && input.justified > 0) {
++      return `Ausencia aprobada. ${input.justified} jornadas fueron justificadas. ${conflictLabel}.`;
++    }
++    return `Ausencia aprobada. ${conflictLabel}.`;
++  }
++
++  if (input.justified && input.justified > 0) {
++    return `Ausencia aprobada. ${input.justified} jornadas fueron justificadas.`;
++  }
++
++  return "Ausencia aprobada.";
++}
+diff --git a/frontend/src/hooks/useAbsences.ts b/frontend/src/hooks/useAbsences.ts
+index 69816a6..786f25b 100644
+--- a/frontend/src/hooks/useAbsences.ts
++++ b/frontend/src/hooks/useAbsences.ts
+@@ -65,6 +65,8 @@ export function useApproveAbsenceRequest(absenceRequestId: string) {
+     onSuccess: () => {
+       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
+       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
+     },
+   });
+ }
+@@ -76,6 +78,8 @@ export function useRejectAbsenceRequest(absenceRequestId: string) {
+     onSuccess: () => {
+       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
+       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
+     },
+   });
+ }
+@@ -87,6 +91,8 @@ export function useNeedsInfoAbsenceRequest(absenceRequestId: string) {
+     onSuccess: () => {
+       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
+       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
+     },
+   });
+ }
+@@ -98,6 +104,8 @@ export function useCancelAbsenceRequest(absenceRequestId: string) {
+     onSuccess: () => {
+       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
+       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
++      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
+     },
+   });
+ }
+diff --git a/frontend/src/pages/absences/AbsenceDetailPage.tsx b/frontend/src/pages/absences/AbsenceDetailPage.tsx
+index 0ed3cf8..0a1ff66 100644
+--- a/frontend/src/pages/absences/AbsenceDetailPage.tsx
++++ b/frontend/src/pages/absences/AbsenceDetailPage.tsx
+@@ -24,7 +24,8 @@ import {
+ } from "../../hooks/useAbsences";
+ import type { AffectedOperationWarning } from "../../types/absence";
+ import { formatDateTime } from "../../utils/dates";
+-import { getApiErrorMessage } from "../../utils/errors";
++import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
++import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
+ import {
+   absenceEventTypeLabels,
+   absenceRequestedViaLabels,
+@@ -119,9 +120,18 @@ export function AbsenceDetailPage() {
+ 
+   const handleApprove = async () => {
+     try {
+-      await approveMutation.mutateAsync();
+-      notify("Solicitud aprobada.");
++      const result = await approveMutation.mutateAsync();
++      notify(
++        buildAbsenceApprovalSuccessMessage({
++          justified: result.workdayReconciliation?.justified,
++          attendanceConflicts: result.workdayReconciliation?.attendanceConflicts,
++        }),
++      );
+     } catch (error) {
++      if (isAbsenceWorkdaySyncError(error)) {
++        notify(getApiErrorMessage(error), "red");
++        return;
++      }
+       notify(getApiErrorMessage(error), "red");
+     }
+   };
+diff --git a/frontend/src/types/absence.ts b/frontend/src/types/absence.ts
+index 64d8411..debcb30 100644
+--- a/frontend/src/types/absence.ts
++++ b/frontend/src/types/absence.ts
+@@ -84,6 +84,15 @@ export interface AbsenceRequestDetail extends AbsenceRequestListItem {
+   events: AbsenceRequestEvent[];
+   affectedOperations: AffectedOperationWarning[];
+   balanceImpact?: AbsenceBalanceImpact | null;
++  workdayReconciliation?: AbsenceWorkdayReconciliationResult;
++}
++
++export interface AbsenceWorkdayReconciliationResult {
++  justified: number;
++  restored: number;
++  relinked: number;
++  unchanged: number;
++  attendanceConflicts: number;
+ }
+ 
+ export interface EmployeeAbsenceBalanceSummary {
+diff --git a/frontend/src/types/operation-workday.ts b/frontend/src/types/operation-workday.ts
+index df8930d..341b298 100644
+--- a/frontend/src/types/operation-workday.ts
++++ b/frontend/src/types/operation-workday.ts
+@@ -9,10 +9,36 @@ export interface OperationWorkdaySummary {
+   expectedEmployeesCount: number;
+ }
+ 
++export type DerivedEmployeeWorkdayState =
++  | "EXPECTED"
++  | "JUSTIFIED"
++  | "PRESENT"
++  | "ABSENT"
++  | "CANCELLED";
++
++export interface EmployeeWorkdayAbsenceContext {
++  absenceRequestId: string;
++  absenceTypeName: string;
++  absenceStartDate: string;
++  absenceEndDate: string;
++  hasAttendanceConflict: boolean;
++}
++
++export interface AbsenceWorkdayReconciliationResult {
++  justified: number;
++  restored: number;
++  relinked: number;
++  unchanged: number;
++  attendanceConflicts: number;
++}
++
+ export interface OperationWorkdayEmployeeSummary {
+   employeeId: string;
+   employeeName: string;
+   expectationStatus: string;
++  effectiveState: DerivedEmployeeWorkdayState;
++  absenceContext: EmployeeWorkdayAbsenceContext | null;
++  hasAttendanceConflict: boolean;
+ }
+ 
+ export interface OperationWorkdayDetail {
+@@ -31,6 +57,7 @@ export interface MaterializationResult {
+   employeeWorkdaysReactivated: number;
+   employeeWorkdaysCancelled: number;
+   unchanged: number;
++  absenceReconciliation?: AbsenceWorkdayReconciliationResult;
+ }
+ 
+ export interface OperationWorkdayFilters {
+diff --git a/frontend/src/utils/errors.ts b/frontend/src/utils/errors.ts
+index 8fb9b07..53c2b4e 100644
+--- a/frontend/src/utils/errors.ts
++++ b/frontend/src/utils/errors.ts
+@@ -17,6 +17,10 @@ export function isRecurringWorkdaySyncError(error: unknown): boolean {
+   return parseApiError(error).code === "RECURRING_WORKDAY_SYNC_FAILED";
+ }
+ 
++export function isAbsenceWorkdaySyncError(error: unknown): boolean {
++  return parseApiError(error).code === "ABSENCE_WORKDAY_SYNC_FAILED";
++}
++
+ export function getApiErrorMessage(error: unknown, fallback = "Ocurrió un error inesperado"): string {
+   if (error instanceof ApiError) {
+     return error.message;

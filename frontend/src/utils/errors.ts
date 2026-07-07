@@ -17,6 +17,10 @@ export function isRecurringWorkdaySyncError(error: unknown): boolean {
   return parseApiError(error).code === "RECURRING_WORKDAY_SYNC_FAILED";
 }
 
+export function isAbsenceWorkdaySyncError(error: unknown): boolean {
+  return parseApiError(error).code === "ABSENCE_WORKDAY_SYNC_FAILED";
+}
+
 export function getApiErrorMessage(error: unknown, fallback = "Ocurrió un error inesperado"): string {
   if (error instanceof ApiError) {
     return error.message;

@@ -26,6 +26,7 @@ import {
   buildEmployeeWorkdayIndex,
   employeeWorkdayExpectationService,
 } from "./employee-workday-expectation.service";
+import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 import { recurringScheduleService } from "./recurring-schedule.service";
 
 type WorkdaySnapshot = {
@@ -427,6 +428,15 @@ export const recurringWorkdayMaterializationService = {
       );
       counters.employeeWorkdaysCancelled += cancelledEmployees;
     }
+
+    const employeeIds = [...new Set(assignments.map((assignment) => assignment.employeeId))];
+    counters.absenceReconciliation =
+      await employeeWorkdayAbsenceReconciliationService.reconcileMaterializationRange(
+        companyId,
+        range.rangeStart,
+        range.rangeEnd,
+        employeeIds,
+      );
 
     return counters;
   },

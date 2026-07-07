@@ -493,10 +493,16 @@ export const employeeWorkdayRepository = {
     operationWorkdayId: string,
   ): Promise<
     Array<{
+      employeeWorkdayId: string;
       employeeId: string;
       employeeName: string;
       expectationStatus: string;
       cancellationReason: string | null;
+      absenceRequestId: string | null;
+      absenceTypeName: string | null;
+      absenceStartDate: string | null;
+      absenceEndDate: string | null;
+      hasAttendance: boolean;
     }>
   > {
     const pool = getPool();
@@ -505,24 +511,47 @@ export const employeeWorkdayRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
       .query(`
-        SELECT ew.employee_id,
+        SELECT ew.id AS employee_workday_id,
+               ew.employee_id,
                e.name AS employee_name,
                ew.expectation_status,
-               ew.cancellation_reason
+               ew.cancellation_reason,
+               ew.absence_request_id,
+               at.name AS absence_type_name,
+               ar_abs.start_date AS absence_start_date,
+               ar_abs.end_date AS absence_end_date,
+               CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END AS has_attendance
         FROM employee_workdays ew
         INNER JOIN employees e
           ON e.id = ew.employee_id
          AND e.company_id = ew.company_id
+        LEFT JOIN absence_requests ar_abs
+          ON ar_abs.id = ew.absence_request_id
+         AND ar_abs.company_id = ew.company_id
+        LEFT JOIN absence_types at
+          ON at.id = ar_abs.absence_type_id
+         AND at.company_id = ew.company_id
+        LEFT JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+         AND ar.company_id = ew.company_id
         WHERE ew.company_id = @companyId
           AND ew.operation_workday_id = @operationWorkdayId
         ORDER BY e.name ASC
       `);
 
     return result.recordset.map((row) => ({
+      employeeWorkdayId: String(row.employee_workday_id),
       employeeId: String(row.employee_id),
       employeeName: String(row.employee_name),
       expectationStatus: String(row.expectation_status),
       cancellationReason: row.cancellation_reason ? String(row.cancellation_reason) : null,
+      absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
+      absenceTypeName: row.absence_type_name ? String(row.absence_type_name) : null,
+      absenceStartDate: row.absence_start_date
+        ? String(row.absence_start_date).slice(0, 10)
+        : null,
+      absenceEndDate: row.absence_end_date ? String(row.absence_end_date).slice(0, 10) : null,
+      hasAttendance: Boolean(row.has_attendance),
     }));
   },
 
@@ -578,4 +607,248 @@ export const employeeWorkdayRepository = {
   },
 
   isDuplicateKeyError,
+
+  async justifyExpectation(
+    companyId: string,
+    employeeWorkdayId: string,
+    absenceRequestId: string,
+  ): Promise<EmployeeWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = 'JUSTIFIED',
+            absence_request_id = @absenceRequestId,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'EXPECTED'
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async relinkJustifiedExpectation(
+    companyId: string,
+    employeeWorkdayId: string,
+    absenceRequestId: string,
+  ): Promise<EmployeeWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .query(`
+        UPDATE employee_workdays
+        SET absence_request_id = @absenceRequestId,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'JUSTIFIED'
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async restoreJustifiedExpectation(
+    companyId: string,
+    employeeWorkdayId: string,
+    absenceRequestId: string,
+  ): Promise<EmployeeWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = 'EXPECTED',
+            absence_request_id = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'JUSTIFIED'
+          AND absence_request_id = @absenceRequestId
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = @employeeWorkdayId
+          )
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listWithWorkDatesByEmployeeAndDateRange(
+    companyId: string,
+    employeeId: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<
+    Array<
+      EmployeeWorkday & {
+        workDate: string;
+        expectedStartAt: string;
+        expectedEndAt: string | null;
+        earlyToleranceMinutes: number;
+        lateToleranceMinutes: number;
+      }
+    >
+  > {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("dateFrom", sql.Date, dateFrom)
+      .input("dateTo", sql.Date, dateTo)
+      .query(`
+        SELECT ew.*,
+               ow.work_date,
+               ow.expected_start_at,
+               ow.expected_end_at,
+               ow.early_tolerance_minutes,
+               ow.late_tolerance_minutes
+        FROM employee_workdays ew
+        INNER JOIN operation_workdays ow
+          ON ow.id = ew.operation_workday_id
+         AND ow.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.employee_id = @employeeId
+          AND ow.work_date >= @dateFrom
+          AND ow.work_date <= @dateTo
+      `);
+
+    return result.recordset.map((row) => ({
+      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
+      workDate: String(row.work_date).slice(0, 10),
+      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
+      expectedEndAt: row.expected_end_at
+        ? toIsoString(row.expected_end_at as Date | string)
+        : null,
+      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
+      lateToleranceMinutes: Number(row.late_tolerance_minutes),
+    }));
+  },
+
+  async listWithWorkDatesByAbsenceRequestId(
+    companyId: string,
+    absenceRequestId: string,
+  ): Promise<
+    Array<
+      EmployeeWorkday & {
+        workDate: string;
+        expectedStartAt: string;
+        expectedEndAt: string | null;
+        earlyToleranceMinutes: number;
+        lateToleranceMinutes: number;
+      }
+    >
+  > {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .query(`
+        SELECT ew.*,
+               ow.work_date,
+               ow.expected_start_at,
+               ow.expected_end_at,
+               ow.early_tolerance_minutes,
+               ow.late_tolerance_minutes
+        FROM employee_workdays ew
+        INNER JOIN operation_workdays ow
+          ON ow.id = ew.operation_workday_id
+         AND ow.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.absence_request_id = @absenceRequestId
+      `);
+
+    return result.recordset.map((row) => ({
+      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
+      workDate: String(row.work_date).slice(0, 10),
+      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
+      expectedEndAt: row.expected_end_at
+        ? toIsoString(row.expected_end_at as Date | string)
+        : null,
+      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
+      lateToleranceMinutes: Number(row.late_tolerance_minutes),
+    }));
+  },
+
+  async listWithWorkDatesByEmployeeWorkdayIds(
+    companyId: string,
+    employeeWorkdayIds: string[],
+  ): Promise<
+    Array<
+      EmployeeWorkday & {
+        workDate: string;
+        expectedStartAt: string;
+        expectedEndAt: string | null;
+        earlyToleranceMinutes: number;
+        lateToleranceMinutes: number;
+      }
+    >
+  > {
+    if (employeeWorkdayIds.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const placeholders = employeeWorkdayIds.map((id, index) => {
+      const param = `employeeWorkdayId${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT ew.*,
+             ow.work_date,
+             ow.expected_start_at,
+             ow.expected_end_at,
+             ow.early_tolerance_minutes,
+             ow.late_tolerance_minutes
+      FROM employee_workdays ew
+      INNER JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id
+       AND ow.company_id = ew.company_id
+      WHERE ew.company_id = @companyId
+        AND ew.id IN (${placeholders.join(", ")})
+    `);
+
+    return result.recordset.map((row) => ({
+      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
+      workDate: String(row.work_date).slice(0, 10),
+      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
+      expectedEndAt: row.expected_end_at
+        ? toIsoString(row.expected_end_at as Date | string)
+        : null,
+      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
+      lateToleranceMinutes: Number(row.late_tolerance_minutes),
+    }));
+  },
 };

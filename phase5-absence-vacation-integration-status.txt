@@ -1,0 +1,30 @@
+ M backend/src/repositories/absence-request.repository.ts
+ M backend/src/repositories/employee-workday.repository.ts
+ M backend/src/services/absence-review.service.ts
+ A backend/src/services/absence-workday-sync.service.ts
+ A backend/src/services/employee-workday-absence-reconciliation.service.test.ts
+ A backend/src/services/employee-workday-absence-reconciliation.service.ts
+ M backend/src/services/operation-workday.service.test.ts
+ M backend/src/services/operation-workday.service.ts
+ M backend/src/services/recurring-workday-materialization.service.test.ts
+ M backend/src/services/recurring-workday-materialization.service.ts
+ A backend/src/types/absence-workday-reconciliation.ts
+ M backend/src/types/absence.ts
+ A backend/src/types/employee-workday-state.ts
+ M backend/src/types/materialization.ts
+ A backend/src/utils/absence-workday-coverage.test.ts
+ A backend/src/utils/absence-workday-coverage.ts
+ A backend/src/utils/derive-employee-workday-state.test.ts
+ A backend/src/utils/derive-employee-workday-state.ts
+ A database/migrations/046_employee_workday_absence_integration.sql
+ M frontend/src/components/operations/OperationScheduledWorkdaysSection.tsx
+ M frontend/src/components/operations/operation-workday-display.test.ts
+ M frontend/src/components/operations/operation-workday-display.ts
+ M frontend/src/hooks/useAbsences.ts
+ M frontend/src/pages/absences/AbsenceDetailPage.tsx
+ M frontend/src/types/absence.ts
+ M frontend/src/types/operation-workday.ts
+ M frontend/src/utils/errors.ts
+?? phase5-absence-vacation-integration-diff.txt
+?? phase5-absence-vacation-integration-diffstat.txt
+?? phase5-absence-vacation-integration-status.txt

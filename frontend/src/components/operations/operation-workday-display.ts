@@ -1,9 +1,32 @@
-import type { MaterializationResult, OperationWorkdaySummary } from "../../types/operation-workday";
+import type {
+  DerivedEmployeeWorkdayState,
+  MaterializationResult,
+  OperationWorkdaySummary,
+} from "../../types/operation-workday";
 import { formatDate, formatTime } from "../../utils/dates";
 
 export const workdayStatusLabels: Record<OperationWorkdaySummary["status"], string> = {
   ACTIVE: "Programada",
   CANCELLED: "Cancelada",
+};
+
+export const employeeWorkdayStateLabels: Record<DerivedEmployeeWorkdayState, string> = {
+  EXPECTED: "Esperado",
+  JUSTIFIED: "Justificado",
+  PRESENT: "Con asistencia",
+  ABSENT: "Ausente",
+  CANCELLED: "Cancelado",
+};
+
+export const employeeWorkdayStateTones: Record<
+  DerivedEmployeeWorkdayState,
+  "info" | "success" | "warning" | "danger" | "neutral"
+> = {
+  EXPECTED: "info",
+  JUSTIFIED: "warning",
+  PRESENT: "success",
+  ABSENT: "danger",
+  CANCELLED: "neutral",
 };
 
 export function formatWorkdayDate(workDate: string): string {
@@ -30,8 +53,33 @@ export function buildMaterializationSuccessMessage(result: MaterializationResult
   if (result.employeeWorkdaysReactivated > 0) {
     parts.push(`${result.employeeWorkdaysReactivated} expectativas reactivadas`);
   }
+  if (result.absenceReconciliation?.justified) {
+    parts.push(`${result.absenceReconciliation.justified} jornadas justificadas`);
+  }
 
   return parts.length > 0
     ? `Jornadas actualizadas correctamente. ${parts.join(" · ")}.`
     : "Jornadas actualizadas correctamente.";
+}
+
+export function buildAbsenceApprovalSuccessMessage(input: {
+  justified?: number;
+  attendanceConflicts?: number;
+}): string {
+  if (input.attendanceConflicts && input.attendanceConflicts > 0) {
+    const conflictLabel =
+      input.attendanceConflicts === 1
+        ? "1 jornada conserva asistencia registrada y requiere revisión"
+        : `${input.attendanceConflicts} jornadas conservan asistencia registrada y requieren revisión`;
+    if (input.justified && input.justified > 0) {
+      return `Ausencia aprobada. ${input.justified} jornadas fueron justificadas. ${conflictLabel}.`;
+    }
+    return `Ausencia aprobada. ${conflictLabel}.`;
+  }
+
+  if (input.justified && input.justified > 0) {
+    return `Ausencia aprobada. ${input.justified} jornadas fueron justificadas.`;
+  }
+
+  return "Ausencia aprobada.";
 }

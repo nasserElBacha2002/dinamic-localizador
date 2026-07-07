@@ -9,10 +9,36 @@ export interface OperationWorkdaySummary {
   expectedEmployeesCount: number;
 }
 
+export type DerivedEmployeeWorkdayState =
+  | "EXPECTED"
+  | "JUSTIFIED"
+  | "PRESENT"
+  | "ABSENT"
+  | "CANCELLED";
+
+export interface EmployeeWorkdayAbsenceContext {
+  absenceRequestId: string;
+  absenceTypeName: string;
+  absenceStartDate: string;
+  absenceEndDate: string;
+  hasAttendanceConflict: boolean;
+}
+
+export interface AbsenceWorkdayReconciliationResult {
+  justified: number;
+  restored: number;
+  relinked: number;
+  unchanged: number;
+  attendanceConflicts: number;
+}
+
 export interface OperationWorkdayEmployeeSummary {
   employeeId: string;
   employeeName: string;
   expectationStatus: string;
+  effectiveState: DerivedEmployeeWorkdayState;
+  absenceContext: EmployeeWorkdayAbsenceContext | null;
+  hasAttendanceConflict: boolean;
 }
 
 export interface OperationWorkdayDetail {
@@ -31,6 +57,7 @@ export interface MaterializationResult {
   employeeWorkdaysReactivated: number;
   employeeWorkdaysCancelled: number;
   unchanged: number;
+  absenceReconciliation?: AbsenceWorkdayReconciliationResult;
 }
 
 export interface OperationWorkdayFilters {

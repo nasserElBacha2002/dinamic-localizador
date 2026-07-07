@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
+  buildAbsenceApprovalSuccessMessage,
   buildMaterializationSuccessMessage,
+  employeeWorkdayStateLabels,
   formatExpectedTimeRange,
   formatWorkdayDate,
   workdayStatusLabels,
@@ -66,5 +68,37 @@ describe("operation-workday-display", () => {
     assert.match(message, /2 jornadas generadas/);
     assert.match(message, /1 colaboradores incorporados/);
     assert.match(message, /3 expectativas reactivadas/);
+  });
+
+  it("maps employee workday effective state labels in Spanish", () => {
+    assert.equal(employeeWorkdayStateLabels.JUSTIFIED, "Justificado");
+    assert.equal(employeeWorkdayStateLabels.ABSENT, "Ausente");
+    assert.equal(employeeWorkdayStateLabels.PRESENT, "Con asistencia");
+  });
+
+  it("builds absence approval feedback with justified and conflict counters", () => {
+    assert.match(
+      buildAbsenceApprovalSuccessMessage({ justified: 8, attendanceConflicts: 1 }),
+      /8 jornadas fueron justificadas/,
+    );
+    assert.match(
+      buildAbsenceApprovalSuccessMessage({ justified: 8, attendanceConflicts: 1 }),
+      /requiere revisión/,
+    );
+  });
+
+  it("maps absence workday sync failure through error helper", async () => {
+    const { isAbsenceWorkdaySyncError } = await import("../../utils/errors");
+    const { ApiError } = await import("../../utils/errors");
+    assert.equal(
+      isAbsenceWorkdaySyncError(
+        new ApiError(
+          "La ausencia fue guardada, pero no se pudieron actualizar las jornadas.",
+          "ABSENCE_WORKDAY_SYNC_FAILED",
+          503,
+        ),
+      ),
+      true,
+    );
   });
 });

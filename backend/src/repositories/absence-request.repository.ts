@@ -483,4 +483,68 @@ export const absenceRequestRepository = {
         status: String(row.status),
       }));
   },
+
+  async listApprovedByEmployeeAndDateRange(
+    companyId: string,
+    employeeId: string,
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<AbsenceRequest[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("dateFrom", sql.Date, dateFrom)
+      .input("dateTo", sql.Date, dateTo)
+      .query(`
+        SELECT *
+        FROM absence_requests
+        WHERE company_id = @companyId
+          AND employee_id = @employeeId
+          AND status = N'APPROVED'
+          AND start_date <= @dateTo
+          AND end_date >= @dateFrom
+        ORDER BY reviewed_at ASC, created_at ASC, id ASC
+      `);
+
+    return result.recordset.map((row) => mapAbsenceRequestRow(row as Record<string, unknown>));
+  },
+
+  async listApprovedByEmployeesAndDateRange(
+    companyId: string,
+    employeeIds: string[],
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<AbsenceRequest[]> {
+    if (employeeIds.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("dateFrom", sql.Date, dateFrom)
+      .input("dateTo", sql.Date, dateTo);
+
+    const placeholders = employeeIds.map((employeeId, index) => {
+      const param = `employeeId${index}`;
+      request.input(param, sql.UniqueIdentifier, employeeId);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT *
+      FROM absence_requests
+      WHERE company_id = @companyId
+        AND employee_id IN (${placeholders.join(", ")})
+        AND status = N'APPROVED'
+        AND start_date <= @dateTo
+        AND end_date >= @dateFrom
+      ORDER BY reviewed_at ASC, created_at ASC, id ASC
+    `);
+
+    return result.recordset.map((row) => mapAbsenceRequestRow(row as Record<string, unknown>));
+  },
 };

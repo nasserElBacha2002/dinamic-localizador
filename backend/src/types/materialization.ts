@@ -18,6 +18,7 @@ export interface MaterializationResult {
   employeeWorkdaysReactivated: number;
   employeeWorkdaysCancelled: number;
   unchanged: number;
+  absenceReconciliation?: import("./absence-workday-reconciliation").AbsenceWorkdayReconciliationResult;
 }
 
 export interface CompanyMaterializationSummary {

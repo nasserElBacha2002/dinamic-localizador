@@ -16,6 +16,7 @@ import type { OperationWorkdaySummary } from "../../types/operation-workday";
 import { getApiErrorMessage } from "../../utils/errors";
 
 import {
+  buildMaterializationSuccessMessage,
   formatExpectedTimeRange,
   formatWorkdayDate,
   workdayStatusLabels,
@@ -116,19 +117,7 @@ export function OperationScheduledWorkdaysSection({
   const handleMaterialize = async () => {
     try {
       const result = await materializeMutation.mutateAsync();
-      const parts: string[] = [];
-      if (result.operationWorkdaysCreated > 0) {
-        parts.push(`${result.operationWorkdaysCreated} jornadas generadas`);
-      }
-      if (result.employeeWorkdaysCreated > 0) {
-        parts.push(`${result.employeeWorkdaysCreated} colaboradores incorporados`);
-      }
-      onFeedback(
-        parts.length > 0
-          ? `Jornadas actualizadas correctamente. ${parts.join(" · ")}.`
-          : "Jornadas actualizadas correctamente.",
-        "success",
-      );
+      onFeedback(buildMaterializationSuccessMessage(result), "success");
     } catch (error) {
       onFeedback(getApiErrorMessage(error), "error");
     }

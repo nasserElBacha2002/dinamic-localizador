@@ -18,4 +18,8 @@ describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
     assert.doesNotMatch(repositorySource, /dayEndUtc/);
     assert.doesNotMatch(repositorySource, /<= @dayEndUtc/);
   });
+
+  it("keeps bot assignment availability scoped to ONE_TIME operations", () => {
+    assert.match(repositorySource, /i\.operation_kind = N'ONE_TIME'/);
+  });
 });

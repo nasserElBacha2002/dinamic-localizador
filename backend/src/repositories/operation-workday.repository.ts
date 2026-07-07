@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import type { OperationWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
 import type { OperationWorkday } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
@@ -32,6 +33,9 @@ export const mapOperationWorkdayRow = (row: Record<string, unknown>): OperationW
     ? String(row.schedule_timezone_snapshot)
     : null,
   status: String(row.status) as OperationWorkday["status"],
+  cancellationReason: row.cancellation_reason
+    ? (String(row.cancellation_reason) as OperationWorkdayCancellationReason)
+    : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -298,7 +302,7 @@ export const operationWorkdayRepository = {
       scheduleTimezoneSnapshot: string;
       status: OperationWorkday["status"];
     },
-  ): Promise<OperationWorkday> {
+  ): Promise<OperationWorkday | null> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -322,28 +326,88 @@ export const operationWorkdayRepository = {
             schedule_source_snapshot = @scheduleSourceSnapshot,
             schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
             status = @status,
+            cancellation_reason = CASE WHEN @status = 'ACTIVE' THEN NULL ELSE cancellation_reason END,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE company_id = @companyId
           AND id = @operationWorkdayId
+          AND schedule_version <= @scheduleVersion
       `);
 
     if (!result.recordset[0]) {
-      throw new Error("OPERATION_WORKDAY_UPDATE_FAILED");
+      return null;
     }
 
     return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async cancelWorkday(companyId: string, operationWorkdayId: string): Promise<OperationWorkday> {
+  async reactivateScheduleCancelledWorkday(
+    companyId: string,
+    operationWorkdayId: string,
+    input: {
+      expectedStartAt: Date;
+      expectedEndAt: Date | null;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      scheduleVersion: number;
+      scheduleSourceSnapshot: OperationWorkday["scheduleSourceSnapshot"];
+      scheduleTimezoneSnapshot: string;
+    },
+  ): Promise<OperationWorkday | null> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
+      .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("scheduleSourceSnapshot", sql.NVarChar(20), input.scheduleSourceSnapshot)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
+      .query(`
+        UPDATE operation_workdays
+        SET expected_start_at = @expectedStartAt,
+            expected_end_at = @expectedEndAt,
+            early_tolerance_minutes = @earlyToleranceMinutes,
+            late_tolerance_minutes = @lateToleranceMinutes,
+            schedule_version = @scheduleVersion,
+            schedule_source_snapshot = @scheduleSourceSnapshot,
+            schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
+            status = 'ACTIVE',
+            cancellation_reason = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND status = 'CANCELLED'
+          AND cancellation_reason = 'SCHEDULE'
+          AND schedule_version <= @scheduleVersion
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async cancelWorkday(
+    companyId: string,
+    operationWorkdayId: string,
+    reason: OperationWorkdayCancellationReason,
+  ): Promise<OperationWorkday> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("reason", sql.NVarChar(20), reason)
       .query(`
         UPDATE operation_workdays
         SET status = 'CANCELLED',
+            cancellation_reason = @reason,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE company_id = @companyId
@@ -360,6 +424,40 @@ export const operationWorkdayRepository = {
     }
 
     return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listFutureMutableByOperation(
+    companyId: string,
+    operationId: string,
+    referenceAt: Date,
+  ): Promise<OperationWorkday[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("referenceAt", sql.DateTime2, referenceAt)
+      .query(`
+        SELECT ow.*
+        FROM operation_workdays ow
+        WHERE ow.company_id = @companyId
+          AND ow.operation_id = @operationId
+          AND ow.expected_start_at > @referenceAt
+          AND ow.status = 'ACTIVE'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM employee_workdays ew
+            INNER JOIN attendance_records ar
+              ON ar.employee_workday_id = ew.id
+             AND ar.company_id = ew.company_id
+            WHERE ew.company_id = ow.company_id
+              AND ew.operation_workday_id = ow.id
+          )
+      `);
+
+    return result.recordset.map((row) =>
+      mapOperationWorkdayRow(row as Record<string, unknown>),
+    );
   },
 
   async listPaginated(

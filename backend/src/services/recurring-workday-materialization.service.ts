@@ -1,6 +1,4 @@
-import sql from "mssql";
 import { env } from "../config/env";
-import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
@@ -11,8 +9,12 @@ import { operationScheduleRepository } from "../repositories/operation-schedule.
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { OperationEmployeeAssignment } from "../types/domain";
 import type { CompanyMaterializationSummary, MaterializationResult } from "../types/materialization";
+import {
+  applyEmployeeWorkdayOutcome,
+  emptyMaterializationResult,
+} from "../types/materialization";
 import type { EffectiveRecurringSchedule, ResolvedScheduleDay } from "../types/schedule";
-import type { OperationWorkday } from "../types/workday";
+import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
 import { isAssignmentActiveOnWorkDate } from "../utils/assignment-period";
 import { recurringScheduleResolver } from "../utils/recurring-schedule-resolver";
 import { buildRecurringExpectedInstants } from "../utils/recurring-workday-instant";
@@ -20,8 +22,11 @@ import {
   computeMaterializationRange,
   iterateDateIsoRange,
 } from "../utils/recurring-workday-range";
+import {
+  buildEmployeeWorkdayIndex,
+  employeeWorkdayExpectationService,
+} from "./employee-workday-expectation.service";
 import { recurringScheduleService } from "./recurring-schedule.service";
-import { workdayMaterializationService } from "./workday-materialization.service";
 
 type WorkdaySnapshot = {
   workDate: string;
@@ -34,18 +39,6 @@ type WorkdaySnapshot = {
   scheduleTimezoneSnapshot: string;
   status: "ACTIVE";
 };
-
-const emptyResult = (operationId: string, rangeStart: string, rangeEnd: string): MaterializationResult => ({
-  operationId,
-  rangeStart,
-  rangeEnd,
-  operationWorkdaysCreated: 0,
-  operationWorkdaysUpdated: 0,
-  operationWorkdaysCancelled: 0,
-  employeeWorkdaysCreated: 0,
-  employeeWorkdaysCancelled: 0,
-  unchanged: 0,
-});
 
 const buildSnapshotPayload = (
   workDate: string,
@@ -91,15 +84,15 @@ const snapshotsSemanticallyEqual = (workday: OperationWorkday, snapshot: Workday
   workday.scheduleTimezoneSnapshot === snapshot.scheduleTimezoneSnapshot &&
   workday.status === snapshot.status;
 
-const isFutureMutableWorkday = async (
-  companyId: string,
+const isFutureMutableWorkday = (
   workday: OperationWorkday,
+  attendanceWorkdayIds: Set<string>,
   referenceAt = new Date(),
-): Promise<boolean> => {
+): boolean => {
   if (new Date(workday.expectedStartAt) <= referenceAt) {
     return false;
   }
-  return !(await operationWorkdayRepository.hasAttendanceForWorkday(companyId, workday.id));
+  return !attendanceWorkdayIds.has(workday.id);
 };
 
 const resolveActiveAssignmentsForWorkDate = (
@@ -134,90 +127,139 @@ const resolveActiveAssignmentsForWorkDate = (
   return activeByEmployee;
 };
 
-const cancelEmployeeExpectationsForWorkday = async (
-  companyId: string,
-  operationWorkdayId: string,
-  counters: MaterializationResult,
-): Promise<void> => {
-  const cancelled = await employeeWorkdayRepository.cancelExpectedForWorkday(
-    companyId,
-    operationWorkdayId,
-  );
-  counters.employeeWorkdaysCancelled += cancelled;
-};
-
-const materializeEmployeeWorkdaysForOperationWorkday = async (
+const reconcileEmployeeExpectationsForWorkday = async (
   companyId: string,
   operationWorkday: OperationWorkday,
   activeAssignments: Map<string, OperationEmployeeAssignment>,
+  employeeIndex: Map<string, EmployeeWorkday>,
+  attendanceEmployeeWorkdayIds: Set<string>,
   counters: MaterializationResult,
 ): Promise<void> => {
   if (operationWorkday.status !== "ACTIVE") {
     return;
   }
 
-  for (const assignment of activeAssignments.values()) {
-    const before = await employeeWorkdayRepository.findByWorkdayAndEmployee(
-      companyId,
-      operationWorkday.id,
-      assignment.employeeId,
-    );
+  const expectedEmployeeIds = new Set(activeAssignments.keys());
 
-    await workdayMaterializationService.ensureEmployeeWorkdayForRecurringAssignment(
+  for (const assignment of activeAssignments.values()) {
+    const existing = employeeIndex.get(assignment.employeeId);
+    const outcome = await employeeWorkdayExpectationService.ensureExpectedForRecurringAssignment({
       companyId,
       operationWorkday,
-      assignment.employeeId,
-      assignment.id,
-    );
-
-    const after = await employeeWorkdayRepository.findByWorkdayAndEmployee(
-      companyId,
-      operationWorkday.id,
-      assignment.employeeId,
-    );
-    if (!before && after?.expectationStatus === "EXPECTED") {
-      counters.employeeWorkdaysCreated += 1;
-    }
+      employeeId: assignment.employeeId,
+      operationAssignmentId: assignment.id,
+      existing,
+      hasAttendance: existing ? attendanceEmployeeWorkdayIds.has(existing.id) : false,
+    });
+    applyEmployeeWorkdayOutcome(counters, outcome);
+    employeeIndex.set(assignment.employeeId, outcome.employeeWorkday);
   }
 
-  const existingWorkdays = await employeeWorkdayRepository.listByOperationWorkdayId(
-    companyId,
-    operationWorkday.id,
-  );
-  for (const employeeWorkday of existingWorkdays) {
+  for (const [employeeId, employeeWorkday] of employeeIndex) {
+    if (expectedEmployeeIds.has(employeeId)) {
+      continue;
+    }
     if (employeeWorkday.expectationStatus !== "EXPECTED") {
       continue;
     }
-
-    const assignmentId = employeeWorkday.operationAssignmentId;
-    if (!assignmentId) {
+    if (attendanceEmployeeWorkdayIds.has(employeeWorkday.id)) {
       continue;
     }
 
-    const assignment = activeAssignments.get(employeeWorkday.employeeId);
-    if (assignment?.id === assignmentId) {
-      continue;
+    const cancelled = await employeeWorkdayRepository.cancelExpectationWithReason(
+      companyId,
+      employeeWorkday.id,
+      "ASSIGNMENT",
+    );
+    if (cancelled) {
+      counters.employeeWorkdaysCancelled += 1;
+      employeeIndex.set(employeeId, cancelled);
     }
-
-    if (await employeeWorkdayRepository.hasAttendance(companyId, employeeWorkday.id)) {
-      continue;
-    }
-
-    const pool = getPool();
-    await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkday.id)
-      .query(`
-        UPDATE employee_workdays
-        SET expectation_status = 'CANCELLED',
-            updated_at = SYSUTCDATETIME()
-        WHERE company_id = @companyId
-          AND id = @employeeWorkdayId
-          AND expectation_status = 'EXPECTED'
-      `);
-    counters.employeeWorkdaysCancelled += 1;
   }
+};
+
+const ensureOperationWorkdayRow = async (
+  companyId: string,
+  operationId: string,
+  snapshot: WorkdaySnapshot,
+  existingByDate: Map<string, OperationWorkday>,
+  attendanceWorkdayIds: Set<string>,
+  counters: MaterializationResult,
+): Promise<OperationWorkday | null> => {
+  const existing = existingByDate.get(snapshot.workDate);
+
+  if (!existing) {
+    try {
+      const created = await operationWorkdayRepository.insert(companyId, {
+        operationId,
+        ...snapshot,
+      });
+      existingByDate.set(snapshot.workDate, created);
+      counters.operationWorkdaysCreated += 1;
+      return created;
+    } catch (error) {
+      if (!operationWorkdayRepository.isDuplicateKeyError(error)) {
+        throw error;
+      }
+      const raced = await operationWorkdayRepository.findByOperationAndWorkDate(
+        companyId,
+        operationId,
+        snapshot.workDate,
+      );
+      if (!raced) {
+        throw error;
+      }
+      existingByDate.set(snapshot.workDate, raced);
+    }
+  }
+
+  const current = existingByDate.get(snapshot.workDate);
+  if (!current) {
+    return null;
+  }
+
+  if (current.status === "CANCELLED") {
+    if (
+      current.cancellationReason !== "SCHEDULE" ||
+      !isFutureMutableWorkday(current, attendanceWorkdayIds)
+    ) {
+      counters.unchanged += 1;
+      return null;
+    }
+
+    const reactivated = await operationWorkdayRepository.reactivateScheduleCancelledWorkday(
+      companyId,
+      current.id,
+      snapshot,
+    );
+    if (!reactivated) {
+      counters.unchanged += 1;
+      return current;
+    }
+    existingByDate.set(snapshot.workDate, reactivated);
+    counters.operationWorkdaysUpdated += 1;
+    return reactivated;
+  }
+
+  if (snapshotsSemanticallyEqual(current, snapshot)) {
+    counters.unchanged += 1;
+    return current;
+  }
+
+  if (!isFutureMutableWorkday(current, attendanceWorkdayIds)) {
+    counters.unchanged += 1;
+    return current;
+  }
+
+  const updated = await operationWorkdayRepository.updateSnapshot(companyId, current.id, snapshot);
+  if (!updated) {
+    counters.unchanged += 1;
+    return current;
+  }
+
+  existingByDate.set(snapshot.workDate, updated);
+  counters.operationWorkdaysUpdated += 1;
+  return updated;
 };
 
 export const recurringWorkdayMaterializationService = {
@@ -225,7 +267,10 @@ export const recurringWorkdayMaterializationService = {
     return env.RECURRING_WORKDAY_HORIZON_DAYS;
   },
 
-  async materializeOperationHorizon(companyId: string, operationId: string): Promise<MaterializationResult> {
+  async materializeOperationHorizon(
+    companyId: string,
+    operationId: string,
+  ): Promise<MaterializationResult> {
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
@@ -270,10 +315,10 @@ export const recurringWorkdayMaterializationService = {
     });
 
     if (!range) {
-      return emptyResult(operationId, schedule.validFrom, schedule.validFrom);
+      return emptyMaterializationResult(operationId, schedule.validFrom, schedule.validFrom);
     }
 
-    const counters = emptyResult(operationId, range.rangeStart, range.rangeEnd);
+    const counters = emptyMaterializationResult(operationId, range.rangeStart, range.rangeEnd);
     const existingWorkdays = await operationWorkdayRepository.listByOperationAndDateRange(
       companyId,
       operationId,
@@ -289,18 +334,45 @@ export const recurringWorkdayMaterializationService = {
       range.rangeEnd,
     );
 
+    const employeeWorkdays = await employeeWorkdayRepository.listByOperationWorkdayIds(
+      companyId,
+      existingWorkdays.map((workday) => workday.id),
+    );
+    const employeeWorkdayIndex = buildEmployeeWorkdayIndex(employeeWorkdays);
+    const attendanceEmployeeWorkdayIds =
+      await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
+        companyId,
+        employeeWorkdays.map((workday) => workday.id),
+      );
+    const attendanceWorkdayIds = new Set(
+      employeeWorkdays
+        .filter((workday) => attendanceEmployeeWorkdayIds.has(workday.id))
+        .map((workday) => workday.operationWorkdayId),
+    );
+
     const enabledDates = new Set<string>();
+    const referenceAt = new Date();
 
     for (const workDate of iterateDateIsoRange(range.rangeStart, range.rangeEnd)) {
       const resolvedDay = recurringScheduleResolver.resolveDay(workDate, effectiveSchedule);
       if (!resolvedDay.enabled) {
         const existing = existingByDate.get(workDate);
         if (existing && existing.status === "ACTIVE") {
-          if (await isFutureMutableWorkday(companyId, existing)) {
-            await operationWorkdayRepository.cancelWorkday(companyId, existing.id);
+          if (isFutureMutableWorkday(existing, attendanceWorkdayIds, referenceAt)) {
+            await operationWorkdayRepository.cancelWorkday(companyId, existing.id, "SCHEDULE");
             counters.operationWorkdaysCancelled += 1;
-            await cancelEmployeeExpectationsForWorkday(companyId, existing.id, counters);
-            existingByDate.set(workDate, { ...existing, status: "CANCELLED" });
+            const cancelledEmployees = await employeeWorkdayRepository.cancelExpectedForWorkday(
+              companyId,
+              existing.id,
+              "SCHEDULE",
+              attendanceEmployeeWorkdayIds,
+            );
+            counters.employeeWorkdaysCancelled += cancelledEmployees;
+            existingByDate.set(workDate, {
+              ...existing,
+              status: "CANCELLED",
+              cancellationReason: "SCHEDULE",
+            });
           } else {
             counters.unchanged += 1;
           }
@@ -315,17 +387,24 @@ export const recurringWorkdayMaterializationService = {
         operationId,
         snapshot,
         existingByDate,
+        attendanceWorkdayIds,
         counters,
       );
       if (!operationWorkday) {
         continue;
       }
 
+      if (!employeeWorkdayIndex.has(operationWorkday.id)) {
+        employeeWorkdayIndex.set(operationWorkday.id, new Map());
+      }
+
       const activeAssignments = resolveActiveAssignmentsForWorkDate(assignments, workDate);
-      await materializeEmployeeWorkdaysForOperationWorkday(
+      await reconcileEmployeeExpectationsForWorkday(
         companyId,
         operationWorkday,
         activeAssignments,
+        employeeWorkdayIndex.get(operationWorkday.id)!,
+        attendanceEmployeeWorkdayIds,
         counters,
       );
     }
@@ -334,13 +413,19 @@ export const recurringWorkdayMaterializationService = {
       if (enabledDates.has(workday.workDate) || workday.status !== "ACTIVE") {
         continue;
       }
-      if (!(await isFutureMutableWorkday(companyId, workday))) {
+      if (!isFutureMutableWorkday(workday, attendanceWorkdayIds, referenceAt)) {
         counters.unchanged += 1;
         continue;
       }
-      await operationWorkdayRepository.cancelWorkday(companyId, workday.id);
+      await operationWorkdayRepository.cancelWorkday(companyId, workday.id, "SCHEDULE");
       counters.operationWorkdaysCancelled += 1;
-      await cancelEmployeeExpectationsForWorkday(companyId, workday.id, counters);
+      const cancelledEmployees = await employeeWorkdayRepository.cancelExpectedForWorkday(
+        companyId,
+        workday.id,
+        "SCHEDULE",
+        attendanceEmployeeWorkdayIds,
+      );
+      counters.employeeWorkdaysCancelled += cancelledEmployees;
     }
 
     return counters;
@@ -349,104 +434,47 @@ export const recurringWorkdayMaterializationService = {
   async reconcileAfterAssignmentChange(
     companyId: string,
     operationId: string,
-    assignment: OperationEmployeeAssignment,
+    _assignment: OperationEmployeeAssignment,
   ): Promise<MaterializationResult> {
-    const operation = await operationRepository.findById(companyId, operationId);
-    if (!operation || (operation.operationKind ?? "ONE_TIME") !== "RECURRING") {
-      return emptyResult(operationId, assignment.validFrom, assignment.validUntil ?? assignment.validFrom);
-    }
+    return this.materializeOperationHorizon(companyId, operationId);
+  },
 
-    const schedule = await operationScheduleRepository.findByOperationId(companyId, operationId);
-    if (!schedule) {
-      return emptyResult(operationId, assignment.validFrom, assignment.validFrom);
-    }
-
-    const companySchedule =
-      schedule.scheduleSource === "COMPANY"
-        ? await companyWorkScheduleRepository.findByCompanyId(companyId)
-        : null;
-    const effectiveSchedule = await recurringScheduleService.resolveEffectiveSchedule(
-      companyId,
-      schedule,
-      companySchedule,
-    );
-
-    const horizonRange = computeMaterializationRange({
-      timezone: effectiveSchedule.timezone,
-      validFrom: schedule.validFrom,
-      validUntil: schedule.validUntil,
-      horizonDays: env.RECURRING_WORKDAY_HORIZON_DAYS,
-    });
-    if (!horizonRange) {
-      return emptyResult(operationId, assignment.validFrom, assignment.validFrom);
-    }
-
-    const rangeStart =
-      assignment.validFrom > horizonRange.rangeStart ? assignment.validFrom : horizonRange.rangeStart;
-    const rangeEnd = assignment.validUntil
-      ? assignment.validUntil < horizonRange.rangeEnd
-        ? assignment.validUntil
-        : horizonRange.rangeEnd
-      : horizonRange.rangeEnd;
-
-    const counters = emptyResult(operationId, rangeStart, rangeEnd);
-    const workdays = await operationWorkdayRepository.listByOperationAndDateRange(
+  async reconcileFutureWorkdaysForCancelledOperation(
+    companyId: string,
+    operationId: string,
+  ): Promise<MaterializationResult> {
+    const referenceAt = new Date();
+    const futureWorkdays = await operationWorkdayRepository.listFutureMutableByOperation(
       companyId,
       operationId,
-      rangeStart,
-      rangeEnd,
+      referenceAt,
     );
 
-    for (const workday of workdays) {
-      if (workday.status !== "ACTIVE") {
-        continue;
-      }
+    const counters = emptyMaterializationResult(operationId, "", "");
+    if (futureWorkdays.length === 0) {
+      return counters;
+    }
 
-      const active = isAssignmentActiveOnWorkDate({
-        validFrom: assignment.validFrom,
-        validUntil: assignment.validUntil,
-        workDate: workday.workDate,
-        cancelledAt: assignment.cancelledAt,
-      });
+    const employeeWorkdays = await employeeWorkdayRepository.listByOperationWorkdayIds(
+      companyId,
+      futureWorkdays.map((workday) => workday.id),
+    );
+    const attendanceEmployeeWorkdayIds =
+      await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
+        companyId,
+        employeeWorkdays.map((workday) => workday.id),
+      );
 
-      if (active) {
-        await workdayMaterializationService.ensureEmployeeWorkdayForRecurringAssignment(
-          companyId,
-          workday,
-          assignment.employeeId,
-          assignment.id,
-        );
-        counters.employeeWorkdaysCreated += 1;
-        continue;
-      }
-
-      const employeeWorkday = await employeeWorkdayRepository.findByWorkdayAndEmployee(
+    for (const workday of futureWorkdays) {
+      await operationWorkdayRepository.cancelWorkday(companyId, workday.id, "OPERATION");
+      counters.operationWorkdaysCancelled += 1;
+      const cancelledEmployees = await employeeWorkdayRepository.cancelExpectedForWorkday(
         companyId,
         workday.id,
-        assignment.employeeId,
+        "OPERATION",
+        attendanceEmployeeWorkdayIds,
       );
-      if (
-        employeeWorkday &&
-        employeeWorkday.operationAssignmentId === assignment.id &&
-        employeeWorkday.expectationStatus === "EXPECTED"
-      ) {
-        if (!(await employeeWorkdayRepository.hasAttendance(companyId, employeeWorkday.id))) {
-          const pool = getPool();
-          await pool
-            .request()
-            .input("companyId", sql.UniqueIdentifier, companyId)
-            .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkday.id)
-            .query(`
-              UPDATE employee_workdays
-              SET expectation_status = 'CANCELLED',
-                  updated_at = SYSUTCDATETIME()
-              WHERE company_id = @companyId
-                AND id = @employeeWorkdayId
-                AND expectation_status = 'EXPECTED'
-            `);
-          counters.employeeWorkdaysCancelled += 1;
-        }
-      }
+      counters.employeeWorkdaysCancelled += cancelledEmployees;
     }
 
     return counters;
@@ -518,70 +546,4 @@ export const recurringWorkdayMaterializationService = {
 
     return aggregate;
   },
-};
-
-const ensureOperationWorkdayRow = async (
-  companyId: string,
-  operationId: string,
-  snapshot: WorkdaySnapshot,
-  existingByDate: Map<string, OperationWorkday>,
-  counters: MaterializationResult,
-): Promise<OperationWorkday | null> => {
-  const existing = existingByDate.get(snapshot.workDate);
-
-  if (!existing) {
-    try {
-      const created = await operationWorkdayRepository.insert(companyId, {
-        operationId,
-        ...snapshot,
-      });
-      existingByDate.set(snapshot.workDate, created);
-      counters.operationWorkdaysCreated += 1;
-      return created;
-    } catch (error) {
-      if (!operationWorkdayRepository.isDuplicateKeyError(error)) {
-        throw error;
-      }
-      const raced = await operationWorkdayRepository.findByOperationAndWorkDate(
-        companyId,
-        operationId,
-        snapshot.workDate,
-      );
-      if (!raced) {
-        throw error;
-      }
-      existingByDate.set(snapshot.workDate, raced);
-    }
-  }
-
-  const current = existingByDate.get(snapshot.workDate);
-  if (!current) {
-    return null;
-  }
-
-  if (current.status === "CANCELLED") {
-    if (!(await isFutureMutableWorkday(companyId, current))) {
-      counters.unchanged += 1;
-      return null;
-    }
-    const reactivated = await operationWorkdayRepository.updateSnapshot(companyId, current.id, snapshot);
-    existingByDate.set(snapshot.workDate, reactivated);
-    counters.operationWorkdaysUpdated += 1;
-    return reactivated;
-  }
-
-  if (snapshotsSemanticallyEqual(current, snapshot)) {
-    counters.unchanged += 1;
-    return current;
-  }
-
-  if (!(await isFutureMutableWorkday(companyId, current))) {
-    counters.unchanged += 1;
-    return current;
-  }
-
-  const updated = await operationWorkdayRepository.updateSnapshot(companyId, current.id, snapshot);
-  existingByDate.set(snapshot.workDate, updated);
-  counters.operationWorkdaysUpdated += 1;
-  return updated;
 };

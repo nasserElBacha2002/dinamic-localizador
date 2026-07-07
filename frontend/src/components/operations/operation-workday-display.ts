@@ -1,4 +1,4 @@
-import type { OperationWorkdaySummary } from "../../types/operation-workday";
+import type { MaterializationResult, OperationWorkdaySummary } from "../../types/operation-workday";
 import { formatDate, formatTime } from "../../utils/dates";
 
 export const workdayStatusLabels: Record<OperationWorkdaySummary["status"], string> = {
@@ -17,4 +17,21 @@ export function formatExpectedTimeRange(workday: OperationWorkdaySummary): strin
   const start = formatTime(workday.expectedStartAt);
   const end = workday.expectedEndAt ? formatTime(workday.expectedEndAt) : "—";
   return `${start}–${end}`;
+}
+
+export function buildMaterializationSuccessMessage(result: MaterializationResult): string {
+  const parts: string[] = [];
+  if (result.operationWorkdaysCreated > 0) {
+    parts.push(`${result.operationWorkdaysCreated} jornadas generadas`);
+  }
+  if (result.employeeWorkdaysCreated > 0) {
+    parts.push(`${result.employeeWorkdaysCreated} colaboradores incorporados`);
+  }
+  if (result.employeeWorkdaysReactivated > 0) {
+    parts.push(`${result.employeeWorkdaysReactivated} expectativas reactivadas`);
+  }
+
+  return parts.length > 0
+    ? `Jornadas actualizadas correctamente. ${parts.join(" · ")}.`
+    : "Jornadas actualizadas correctamente.";
 }

@@ -1,3 +1,5 @@
+import type { EmployeeWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
+import type { OperationWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
 import type { OperationWorkdayStatus } from "../constants/workday-status";
 import type { EmployeeWorkdayExpectationStatus } from "../constants/workday-status";
 
@@ -14,6 +16,7 @@ export interface OperationWorkday {
   scheduleSourceSnapshot: "COMPANY" | "CUSTOM" | null;
   scheduleTimezoneSnapshot: string | null;
   status: OperationWorkdayStatus;
+  cancellationReason: OperationWorkdayCancellationReason | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -25,6 +28,7 @@ export interface EmployeeWorkday {
   operationAssignmentId: string | null;
   employeeId: string;
   expectationStatus: EmployeeWorkdayExpectationStatus;
+  cancellationReason: EmployeeWorkdayCancellationReason | null;
   absenceRequestId: string | null;
   createdAt: string;
   updatedAt: string;

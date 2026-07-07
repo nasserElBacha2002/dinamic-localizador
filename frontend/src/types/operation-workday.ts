@@ -28,6 +28,7 @@ export interface MaterializationResult {
   operationWorkdaysUpdated: number;
   operationWorkdaysCancelled: number;
   employeeWorkdaysCreated: number;
+  employeeWorkdaysReactivated: number;
   employeeWorkdaysCancelled: number;
   unchanged: number;
 }

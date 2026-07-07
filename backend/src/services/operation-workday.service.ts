@@ -1,5 +1,4 @@
 import { AppError } from "../errors/app-error";
-import { employeeRepository } from "../repositories/employee.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
@@ -77,20 +76,9 @@ export const operationWorkdayService = {
     }
 
     const counts = await employeeWorkdayRepository.countExpectedByWorkdayIds(companyId, [workday.id]);
-    const employeeWorkdays = await employeeWorkdayRepository.listByOperationWorkdayId(
+    const employees = await employeeWorkdayRepository.listEmployeeSummariesByOperationWorkdayId(
       companyId,
       workday.id,
-    );
-
-    const employees = await Promise.all(
-      employeeWorkdays.map(async (employeeWorkday) => {
-        const employee = await employeeRepository.findById(companyId, employeeWorkday.employeeId);
-        return {
-          employeeId: employeeWorkday.employeeId,
-          employeeName: employee?.name ?? "—",
-          expectationStatus: employeeWorkday.expectationStatus,
-        };
-      }),
     );
 
     return {

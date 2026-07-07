@@ -11,6 +11,7 @@ import {
   weeklySchedulesEqual,
 } from "../utils/weekly-schedule";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 
 export const companyWorkScheduleService = {
   async getByCompanyId(companyId: string): Promise<CompanyWorkSchedule> {
@@ -68,14 +69,10 @@ export const companyWorkScheduleService = {
       });
       await transaction.commit();
 
-      void recurringWorkdayMaterializationService
-        .reconcileCompanyScheduleOperations(companyId)
-        .catch((error) => {
-          console.error("[company-work-schedule] recurring reconciliation failed", {
-            companyId,
-            error,
-          });
-        });
+      const summary = await recurringWorkdayMaterializationService.reconcileCompanyScheduleOperations(
+        companyId,
+      );
+      recurringWorkdaySyncService.assertCompanySyncSucceeded(summary);
 
       return updated;
     } catch (error) {

@@ -47,6 +47,12 @@ export function setupDomEnvironment(): void {
     value: window.getComputedStyle.bind(window),
   });
 
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    writable: true,
+    value: window.localStorage,
+  });
+
   if (!globalThis.ResizeObserver) {
     Object.defineProperty(globalThis, "ResizeObserver", {
       configurable: true,

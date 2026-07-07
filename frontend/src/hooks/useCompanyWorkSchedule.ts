@@ -4,6 +4,7 @@ import {
   updateCompanyWorkSchedule,
 } from "../api/company-work-schedule.api";
 import type { WeeklyScheduleDay } from "../types/schedule";
+import { isRecurringWorkdaySyncError } from "../utils/errors";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useCompanyWorkSchedule(extraEnabled = true) {
@@ -22,8 +23,13 @@ export function useUpdateCompanyWorkSchedule() {
   return useMutation({
     mutationFn: (input: { timezone: string; days: WeeklyScheduleDay[] }) =>
       updateCompanyWorkSchedule(input),
-    onSuccess: () => {
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["company-work-schedule"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: ["operation"] });
     },
   });
 }

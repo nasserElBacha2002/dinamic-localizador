@@ -73,6 +73,6 @@ export const stopRecurringWorkdayMaterializationJob = (): void => {
   }
 };
 
-export const runRecurringWorkdayMaterializationJobOnce = async (): Promise<void> => {
-  await runJobSafely();
-};
+export const runRecurringWorkdayMaterializationJobHandler = runJobSafely;
+
+export const runRecurringWorkdayMaterializationJobOnce = runJobSafely;

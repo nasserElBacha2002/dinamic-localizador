@@ -20,6 +20,7 @@ import type {
 } from "../types/operation";
 import type { OperationAttendanceSummaryFilters } from "../types/operation-attendance-summary";
 import type { OperationWorkdayFilters } from "../types/operation-workday";
+import { isRecurringWorkdaySyncError } from "../utils/errors";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useOperations(filters: OperationFilters, extraEnabled = true) {
@@ -58,8 +59,13 @@ export function useCreateOperation() {
 
   return useMutation({
     mutationFn: createOperation,
-    onSuccess: () => {
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["operations"] });
+      queryClient.invalidateQueries({ queryKey: ["operation"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
     },
   });
 }
@@ -69,7 +75,10 @@ export function useUpdateOperation(operationId: string) {
 
   return useMutation({
     mutationFn: (input: UpdateOperationInput) => updateOperation(operationId, input),
-    onSuccess: () => {
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["operations"] });
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
@@ -82,9 +91,13 @@ export function useCancelOperation() {
 
   return useMutation({
     mutationFn: cancelOperation,
-    onSuccess: (_data, operationId) => {
+    onSettled: (_data, error, operationId) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["operations"] });
-      queryClient.invalidateQueries({ queryKey: ["operation", operationId] });
+      queryClient.invalidateQueries({ queryKey: ["operation", undefined, operationId] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
     },
   });
 }
@@ -95,7 +108,10 @@ export function useAssignOperationEmployee(operationId: string) {
   return useMutation({
     mutationFn: (input: { employeeId: string; validFrom?: string; validUntil?: string | null }) =>
       assignEmployeeToOperation(operationId, input),
-    onSuccess: () => {
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
       queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
@@ -110,7 +126,10 @@ export function useCancelOperationAssignment(operationId: string) {
   return useMutation({
     mutationFn: (assignmentId: string) =>
       cancelOperationAssignment(operationId, assignmentId),
-    onSuccess: () => {
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
       queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
@@ -125,7 +144,10 @@ export function useEndOperationAssignment(operationId: string) {
   return useMutation({
     mutationFn: (input: { assignmentId: string; effectiveDate: string }) =>
       endOperationAssignment(operationId, input.assignmentId, input.effectiveDate),
-    onSuccess: () => {
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
       queryClient.invalidateQueries({ queryKey: ["operation"] });
       queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
       queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });

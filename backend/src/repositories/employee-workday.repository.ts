@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import type { EmployeeWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
 import type { EmployeeWorkday } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
@@ -13,6 +14,9 @@ export const mapEmployeeWorkdayRow = (row: Record<string, unknown>): EmployeeWor
   operationAssignmentId: row.operation_assignment_id ? String(row.operation_assignment_id) : null,
   employeeId: String(row.employee_id),
   expectationStatus: String(row.expectation_status) as EmployeeWorkday["expectationStatus"],
+  cancellationReason: row.cancellation_reason
+    ? (String(row.cancellation_reason) as EmployeeWorkdayCancellationReason)
+    : null,
   absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
@@ -161,13 +165,16 @@ export const employeeWorkdayRepository = {
     companyId: string,
     transaction: sql.Transaction,
     employeeWorkdayId: string,
+    reason: EmployeeWorkdayCancellationReason,
   ): Promise<void> {
     await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("reason", sql.NVarChar(20), reason)
       .query(`
         UPDATE employee_workdays
         SET expectation_status = 'CANCELLED',
+            cancellation_reason = @reason,
             updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
           AND id = @employeeWorkdayId
@@ -336,6 +343,8 @@ export const employeeWorkdayRepository = {
   async cancelExpectedForWorkday(
     companyId: string,
     operationWorkdayId: string,
+    reason: EmployeeWorkdayCancellationReason,
+    excludeEmployeeWorkdayIdsWithAttendance: Set<string>,
   ): Promise<number> {
     const employeeWorkdays = await this.listByOperationWorkdayId(companyId, operationWorkdayId);
     let cancelled = 0;
@@ -344,27 +353,177 @@ export const employeeWorkdayRepository = {
       if (employeeWorkday.expectationStatus !== "EXPECTED") {
         continue;
       }
-      if (await this.hasAttendance(companyId, employeeWorkday.id)) {
+      if (excludeEmployeeWorkdayIdsWithAttendance.has(employeeWorkday.id)) {
         continue;
       }
 
-      const pool = getPool();
-      await pool
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkday.id)
-        .query(`
-          UPDATE employee_workdays
-          SET expectation_status = 'CANCELLED',
-              updated_at = SYSUTCDATETIME()
-          WHERE company_id = @companyId
-            AND id = @employeeWorkdayId
-            AND expectation_status = 'EXPECTED'
-        `);
-      cancelled += 1;
+      const updated = await this.cancelExpectationWithReason(
+        companyId,
+        employeeWorkday.id,
+        reason,
+      );
+      if (updated) {
+        cancelled += 1;
+      }
     }
 
     return cancelled;
+  },
+
+  async cancelExpectationWithReason(
+    companyId: string,
+    employeeWorkdayId: string,
+    reason: EmployeeWorkdayCancellationReason,
+  ): Promise<EmployeeWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("reason", sql.NVarChar(20), reason)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = 'CANCELLED',
+            cancellation_reason = @reason,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'EXPECTED'
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async reactivateScheduleCancelledExpectation(
+    companyId: string,
+    employeeWorkdayId: string,
+    operationAssignmentId: string,
+  ): Promise<EmployeeWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("operationAssignmentId", sql.UniqueIdentifier, operationAssignmentId)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = 'EXPECTED',
+            cancellation_reason = NULL,
+            operation_assignment_id = @operationAssignmentId,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'CANCELLED'
+          AND cancellation_reason = 'SCHEDULE'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = @employeeWorkdayId
+          )
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listByOperationWorkdayIds(
+    companyId: string,
+    operationWorkdayIds: string[],
+  ): Promise<EmployeeWorkday[]> {
+    if (operationWorkdayIds.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const placeholders = operationWorkdayIds.map((id, index) => {
+      const param = `workdayId${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT *
+      FROM employee_workdays
+      WHERE company_id = @companyId
+        AND operation_workday_id IN (${placeholders.join(", ")})
+    `);
+
+    return result.recordset.map((row) => mapEmployeeWorkdayRow(row as Record<string, unknown>));
+  },
+
+  async listAttendancePresenceForEmployeeWorkdayIds(
+    companyId: string,
+    employeeWorkdayIds: string[],
+  ): Promise<Set<string>> {
+    if (employeeWorkdayIds.length === 0) {
+      return new Set();
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const placeholders = employeeWorkdayIds.map((id, index) => {
+      const param = `employeeWorkdayId${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT DISTINCT employee_workday_id
+      FROM attendance_records
+      WHERE company_id = @companyId
+        AND employee_workday_id IN (${placeholders.join(", ")})
+    `);
+
+    return new Set(result.recordset.map((row) => String(row.employee_workday_id)));
+  },
+
+  async listEmployeeSummariesByOperationWorkdayId(
+    companyId: string,
+    operationWorkdayId: string,
+  ): Promise<
+    Array<{
+      employeeId: string;
+      employeeName: string;
+      expectationStatus: string;
+      cancellationReason: string | null;
+    }>
+  > {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        SELECT ew.employee_id,
+               e.name AS employee_name,
+               ew.expectation_status,
+               ew.cancellation_reason
+        FROM employee_workdays ew
+        INNER JOIN employees e
+          ON e.id = ew.employee_id
+         AND e.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.operation_workday_id = @operationWorkdayId
+        ORDER BY e.name ASC
+      `);
+
+    return result.recordset.map((row) => ({
+      employeeId: String(row.employee_id),
+      employeeName: String(row.employee_name),
+      expectationStatus: String(row.expectation_status),
+      cancellationReason: row.cancellation_reason ? String(row.cancellation_reason) : null,
+    }));
   },
 
   async listByOperationWorkdayId(

@@ -11,7 +11,7 @@ export const computeMaterializationRange = (input: {
   const localToday = getDateIsoInTimezone(input.referenceAt ?? new Date(), input.timezone);
   const rangeStart =
     compareDateIso(localToday, input.validFrom) > 0 ? localToday : input.validFrom;
-  const horizonEnd = addDaysToDateIso(localToday, input.horizonDays);
+  const horizonEnd = addDaysToDateIso(localToday, input.horizonDays - 1);
 
   let rangeEnd = horizonEnd;
   if (input.validUntil && compareDateIso(input.validUntil, rangeEnd) < 0) {

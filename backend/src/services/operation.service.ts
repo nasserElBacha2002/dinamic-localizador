@@ -20,6 +20,7 @@ import { companyOperationalDefaultsResolver } from "./company-operational-defaul
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable } from "../utils/operation-status";
 import {
@@ -210,15 +211,12 @@ export const operationService = {
 
       await transaction.commit();
 
-      try {
-        await recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id);
-      } catch (error) {
-        console.error("[operation-service] initial recurring materialization failed", {
-          companyId,
-          operationId: operation.id,
-          error,
-        });
-      }
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        operation.id,
+        () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id),
+        "recurring operation create",
+      );
 
       return operation;
     } catch (error) {
@@ -518,15 +516,12 @@ export const operationService = {
       await transaction.commit();
 
       if (scheduleChanged) {
-        try {
-          await recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id);
-        } catch (error) {
-          console.error("[operation-service] recurring schedule reconciliation failed", {
-            companyId,
-            operationId: id,
-            error,
-          });
-        }
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          id,
+          () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id),
+          "recurring schedule update",
+        );
       }
 
       return updatedOperation;
@@ -559,6 +554,19 @@ export const operationService = {
       newData: cancelled as unknown as Record<string, unknown>,
       reason: "Cancelación vía API",
     });
+
+    if ((cancelled.operationKind ?? "ONE_TIME") === "RECURRING") {
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        id,
+        () =>
+          recurringWorkdayMaterializationService.reconcileFutureWorkdaysForCancelledOperation(
+            companyId,
+            id,
+          ),
+        "recurring operation cancel",
+      );
+    }
 
     return cancelled;
   },

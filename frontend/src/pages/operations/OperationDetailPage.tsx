@@ -31,7 +31,7 @@ import type { OperationFormValues } from "../../schemas/operation.schema";
 import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
-import { getApiErrorMessage } from "../../utils/errors";
+import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
 import {
@@ -136,6 +136,11 @@ export function OperationDetailPage() {
       setEditing(false);
       showFeedback(`${terminology.operation.singular} actualizada correctamente.`);
     } catch (error) {
+      if (isRecurringWorkdaySyncError(error)) {
+        setEditing(false);
+        showFeedback(getApiErrorMessage(error), "error");
+        return;
+      }
       setErrorMessage(getApiErrorMessage(error));
     }
   };

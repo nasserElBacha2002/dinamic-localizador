@@ -2,7 +2,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { botSessionRepository } from "../repositories/bot-session.repository";
-import type { BotSession, BotSessionContext, OperationSelectionOption } from "../types/twilio.types";
+import type { BotSession, BotSessionContext, OperationSelectionOption, WorkdaySessionSelectionOption } from "../types/twilio.types";
 import {
   buildSessionExpiresAt,
   isSessionActive,
@@ -142,6 +142,7 @@ export const botSessionService = {
     employeeId: string;
     phoneNumber: string;
     operationId: string;
+    employeeWorkdayId: string;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -151,6 +152,8 @@ export const botSessionService = {
             companyId,
             employeeId: input.employeeId,
             operationId: input.operationId,
+            employeeWorkdayId: input.employeeWorkdayId,
+            attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_LOCATION",
             contextJson: null,
@@ -164,6 +167,7 @@ export const botSessionService = {
         sessionId: session.id,
         employeeId: input.employeeId,
         operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
         expiresAt: session.expiresAt,
       });
 
@@ -190,7 +194,7 @@ export const botSessionService = {
     input: {
     employeeId: string;
     phoneNumber: string;
-    options: OperationSelectionOption[];
+    options: WorkdaySessionSelectionOption[];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -200,16 +204,18 @@ export const botSessionService = {
             companyId,
             employeeId: input.employeeId,
             operationId: null,
+            employeeWorkdayId: null,
+            attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_OPERATION_SELECTION",
-            contextJson: JSON.stringify({ operationOptions: input.options }),
+            contextJson: JSON.stringify({ workdayOptions: input.options } satisfies BotSessionContext),
             expiresAt: buildExpiresAt(),
           },
           transaction,
         );
       });
 
-      console.info("[bot-session] operation selection session created", {
+      console.info("[bot-session] workday selection session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
         options: input.options.length,
@@ -237,7 +243,10 @@ export const botSessionService = {
   async selectOperationAndRenewExpiration(
     companyId: string,
     sessionId: string,
-    operationId: string,
+    input: {
+      operationId: string;
+      employeeWorkdayId: string;
+    },
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
       const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
@@ -261,7 +270,9 @@ export const botSessionService = {
         companyId,
         sessionId,
         {
-          operationId,
+          operationId: input.operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          attendanceRecordId: null,
           state: "WAITING_LOCATION",
           contextJson: null,
           expiresAt: renewedExpiresAt,
@@ -273,9 +284,10 @@ export const botSessionService = {
         return { kind: "invalid" };
       }
 
-      console.info("[bot-session] session renewed after operation selection", {
+      console.info("[bot-session] session renewed after workday selection", {
         sessionId: updated.id,
-        operationId,
+        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
         expiresAt: updated.expiresAt,
       });
 
@@ -289,6 +301,8 @@ export const botSessionService = {
     employeeId: string;
     phoneNumber: string;
     operationId: string;
+    employeeWorkdayId: string;
+    attendanceRecordId: string;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -298,6 +312,8 @@ export const botSessionService = {
             companyId,
             employeeId: input.employeeId,
             operationId: input.operationId,
+            employeeWorkdayId: input.employeeWorkdayId,
+            attendanceRecordId: input.attendanceRecordId,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_LOCATION",
             contextJson: null,
@@ -311,6 +327,8 @@ export const botSessionService = {
         sessionId: session.id,
         employeeId: input.employeeId,
         operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        attendanceRecordId: input.attendanceRecordId,
         expiresAt: session.expiresAt,
       });
 
@@ -333,7 +351,7 @@ export const botSessionService = {
     input: {
     employeeId: string;
     phoneNumber: string;
-    options: OperationSelectionOption[];
+    options: WorkdaySessionSelectionOption[];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -343,16 +361,18 @@ export const botSessionService = {
             companyId,
             employeeId: input.employeeId,
             operationId: null,
+            employeeWorkdayId: null,
+            attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_OPERATION_SELECTION",
-            contextJson: JSON.stringify({ operationOptions: input.options }),
+            contextJson: JSON.stringify({ workdayOptions: input.options } satisfies BotSessionContext),
             expiresAt: buildExpiresAt(),
           },
           transaction,
         );
       });
 
-      console.info("[bot-session] checkout operation selection session created", {
+      console.info("[bot-session] checkout workday selection session created", {
         sessionId: session.id,
         employeeId: input.employeeId,
         options: input.options.length,
@@ -376,7 +396,11 @@ export const botSessionService = {
   async selectCheckoutOperationAndRenewExpiration(
     companyId: string,
     sessionId: string,
-    operationId: string,
+    input: {
+      operationId: string;
+      employeeWorkdayId: string;
+      attendanceRecordId: string;
+    },
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
       const valid = await botSessionRepository.findValidActiveById(companyId, sessionId, transaction);
@@ -397,7 +421,9 @@ export const botSessionService = {
         companyId,
         sessionId,
         {
-          operationId,
+          operationId: input.operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          attendanceRecordId: input.attendanceRecordId,
           state: "WAITING_CHECKOUT_LOCATION",
           contextJson: null,
           expiresAt: renewedExpiresAt,

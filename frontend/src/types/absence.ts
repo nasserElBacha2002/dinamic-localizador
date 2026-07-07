@@ -84,6 +84,15 @@ export interface AbsenceRequestDetail extends AbsenceRequestListItem {
   events: AbsenceRequestEvent[];
   affectedOperations: AffectedOperationWarning[];
   balanceImpact?: AbsenceBalanceImpact | null;
+  workdayReconciliation?: AbsenceWorkdayReconciliationResult;
+}
+
+export interface AbsenceWorkdayReconciliationResult {
+  justified: number;
+  restored: number;
+  relinked: number;
+  unchanged: number;
+  attendanceConflicts: number;
 }
 
 export interface EmployeeAbsenceBalanceSummary {

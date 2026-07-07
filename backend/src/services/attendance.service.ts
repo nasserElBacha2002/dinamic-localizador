@@ -14,8 +14,10 @@ import { whatsappMessageRepository } from "../repositories/whatsapp-message.repo
 import type { ReviewAttendanceInput } from "../schemas/attendance-review.schema";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
 import { auditService } from "./audit.service";
+import { workdayMaterializationService } from "./workday-materialization.service";
 import { buildCsv } from "../utils/csv";
 import { buildPaginationMeta } from "../utils/pagination";
+import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
 
 const formatLocalDateTime = (value: string | Date | null | undefined): string => {
   if (!value) {
@@ -46,10 +48,16 @@ export const attendanceService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
+    const operationWorkday = await workdayMaterializationService.ensureOperationWorkday(
+      companyId,
+      input.operationId,
+    );
+
     const isAssigned = await operationEmployeeRepository.exists(
       companyId,
       input.operationId,
       input.employeeId,
+      operationWorkday.workDate,
     );
     if (!isAssigned) {
       throw new AppError(
@@ -59,10 +67,15 @@ export const attendanceService = {
       );
     }
 
-    const hasActiveRecord = await attendanceRepository.hasActiveRecord(
+    const employeeWorkday = await workdayMaterializationService.ensureEmployeeWorkday(
       companyId,
       input.operationId,
       input.employeeId,
+    );
+
+    const hasActiveRecord = await attendanceRepository.hasActiveRecordByEmployeeWorkday(
+      companyId,
+      employeeWorkday.id,
     );
     if (hasActiveRecord) {
       throw new AppError(
@@ -73,13 +86,24 @@ export const attendanceService = {
     }
 
     try {
-      return await attendanceRepository.create(companyId, input);
+      return await attendanceRepository.create(companyId, {
+        ...input,
+        employeeWorkdayId: employeeWorkday.id,
+      });
     } catch (error) {
       if (error instanceof Error && error.message.includes("UQ_attendance_records_source_message_sid")) {
         throw new AppError(
           409,
           "SOURCE_MESSAGE_SID_ALREADY_EXISTS",
           "El sourceMessageSid ya fue utilizado",
+        );
+      }
+
+      if (isActiveAttendanceDuplicateKeyError(error)) {
+        throw new AppError(
+          409,
+          "ATTENDANCE_ALREADY_EXISTS",
+          "Ya existe un registro de asistencia válido o pendiente para este empleado y operación",
         );
       }
 

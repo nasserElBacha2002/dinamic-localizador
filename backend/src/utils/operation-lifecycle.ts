@@ -2,10 +2,14 @@ import type { Operation } from "../types/domain";
 import type { OperationStatus } from "./operation-status";
 
 export const getOperationEffectiveEnd = (
-  scheduledStart: string,
+  scheduledStart: string | null,
   scheduledEnd: string | null,
   lateToleranceMinutes: number,
-): Date => {
+): Date | null => {
+  if (!scheduledStart) {
+    return null;
+  }
+
   if (scheduledEnd) {
     return new Date(scheduledEnd);
   }
@@ -17,12 +21,21 @@ export const getOperationEffectiveEnd = (
 export const resolveLifecycleOperationStatus = (
   operation: Pick<
     Operation,
-    "status" | "scheduledStart" | "scheduledEnd" | "earlyToleranceMinutes" | "lateToleranceMinutes"
+    | "operationKind"
+    | "status"
+    | "scheduledStart"
+    | "scheduledEnd"
+    | "earlyToleranceMinutes"
+    | "lateToleranceMinutes"
   >,
   at: Date = new Date(),
 ): OperationStatus => {
   if (operation.status === "CANCELLED" || operation.status === "COMPLETED") {
     return operation.status;
+  }
+
+  if (operation.operationKind === "RECURRING" || !operation.scheduledStart) {
+    return operation.status === "IN_PROGRESS" ? "IN_PROGRESS" : "SCHEDULED";
   }
 
   const start = new Date(operation.scheduledStart);
@@ -32,7 +45,7 @@ export const resolveLifecycleOperationStatus = (
     operation.lateToleranceMinutes,
   );
 
-  if (at >= end) {
+  if (end && at >= end) {
     return "COMPLETED";
   }
 

@@ -8,6 +8,7 @@ import { companyLocationTypesRepository } from "../repositories/company-location
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import type { CompanyAbsenceSetting, CompanyLocationType, CompanySettings } from "../types/company";
 import { companyOperationalSettingsService } from "./company-operational-settings.service";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
 
 export type OperationalDefaultsSource = "company_settings" | "operational_defaults" | "environment";
 
@@ -81,21 +82,17 @@ const resolveGeofenceReviewMargin = (
   return { value: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS, source: "environment" };
 };
 
-const resolveOperationTimezone = (
+const resolveOperationTimezoneWithSource = (
   companyValue: string | null | undefined,
 ): { value: string; source: OperationalDefaultsSource } => {
+  const resolved = resolveOperationTimezone(companyValue);
   if (companyValue?.trim()) {
-    return { value: companyValue.trim(), source: "company_settings" };
+    return { value: resolved, source: "company_settings" };
   }
-
   if (env.BOT_OPERATION_TIMEZONE?.trim()) {
-    return { value: env.BOT_OPERATION_TIMEZONE.trim(), source: "environment" };
+    return { value: resolved, source: "environment" };
   }
-
-  return {
-    value: DEFAULT_COMPANY_OPERATIONAL_SETTINGS.operationTimezone,
-    source: "operational_defaults",
-  };
+  return { value: resolved, source: "operational_defaults" };
 };
 
 const buildImportDefaults = (
@@ -103,7 +100,7 @@ const buildImportDefaults = (
   settings: CompanySettings | null,
 ): ImportOperationalDefaults => {
   const operationDefaults = buildOperationDefaults(companyId, settings);
-  const timezone = resolveOperationTimezone(settings?.operationTimezone);
+  const timezone = resolveOperationTimezoneWithSource(settings?.operationTimezone);
   const startTime = resolveTimeDefault(
     settings?.defaultOperationStartTime,
     DEFAULT_COMPANY_OPERATIONAL_SETTINGS.defaultOperationStartTime,

@@ -24,7 +24,8 @@ import {
 } from "../../hooks/useAbsences";
 import type { AffectedOperationWarning } from "../../types/absence";
 import { formatDateTime } from "../../utils/dates";
-import { getApiErrorMessage } from "../../utils/errors";
+import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
+import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
 import {
   absenceEventTypeLabels,
   absenceRequestedViaLabels,
@@ -119,9 +120,18 @@ export function AbsenceDetailPage() {
 
   const handleApprove = async () => {
     try {
-      await approveMutation.mutateAsync();
-      notify("Solicitud aprobada.");
+      const result = await approveMutation.mutateAsync();
+      notify(
+        buildAbsenceApprovalSuccessMessage({
+          justified: result.workdayReconciliation?.justified,
+          attendanceConflicts: result.workdayReconciliation?.attendanceConflicts,
+        }),
+      );
     } catch (error) {
+      if (isAbsenceWorkdaySyncError(error)) {
+        notify(getApiErrorMessage(error), "red");
+        return;
+      }
       notify(getApiErrorMessage(error), "red");
     }
   };

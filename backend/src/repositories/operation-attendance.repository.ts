@@ -6,8 +6,10 @@ import type { AttendanceRecord, Employee, Operation, Service } from "../types/do
 import { getPagination } from "../utils/pagination";
 import { mapOperationAttendanceSummaryRow } from "../utils/operation-attendance-summary.mapper";
 import { mapOperationRow, mapServiceRow } from "../utils/row-mappers";
+import { operationWorkdayRepository } from "./operation-workday.repository";
 
 export interface OperationAttendanceSummaryRow {
+  assignmentId: string;
   employee: Employee;
   attendance: AttendanceRecord | null;
   operationalStatus: OperationalStatus;
@@ -29,15 +31,26 @@ export interface OperationAttendanceSummaryCounts {
 }
 
 const employeesBaseQuery = `
-  FROM operation_assignments ie
-  INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+  FROM operation_assignments oa
+  INNER JOIN operation_workdays ow
+    ON ow.operation_id = oa.operation_id
+   AND ow.company_id = oa.company_id
+   AND ow.work_date = @workDate
+  INNER JOIN employee_workdays ew
+    ON ew.operation_assignment_id = oa.id
+   AND ew.company_id = oa.company_id
+   AND ew.operation_workday_id = ow.id
+   AND ew.expectation_status <> 'CANCELLED'
+  INNER JOIN employees e ON e.id = oa.employee_id AND e.company_id = @companyId
   LEFT JOIN attendance_records ar
-    ON ar.operation_id = ie.operation_id
-   AND ar.employee_id = ie.employee_id
-   AND ar.company_id = @companyId
+    ON ar.employee_workday_id = ew.id
+   AND ar.company_id = ew.company_id
    AND ar.is_simulation = 0
-  WHERE ie.operation_id = @operationId
-    AND ie.company_id = @companyId
+  WHERE oa.operation_id = @operationId
+    AND oa.company_id = @companyId
+    AND oa.cancelled_at IS NULL
+    AND @workDate >= oa.valid_from
+    AND (oa.valid_until IS NULL OR @workDate <= oa.valid_until)
 `;
 
 export const operationAttendanceRepository = {
@@ -85,6 +98,42 @@ export const operationAttendanceRepository = {
 
     const operationRow = operationResult.recordset[0] as Record<string, unknown>;
     const operation = mapOperationRow(operationRow);
+    const operationWorkdays = await operationWorkdayRepository.listByOperationId(
+      companyId,
+      operationId,
+    );
+    const workDate = operationWorkdays[0]?.workDate;
+    if (!workDate) {
+      return {
+        operation,
+        service: mapServiceRow({
+          id: operationRow.service_ref_id,
+          name: operationRow.service_name,
+          address: operationRow.service_address,
+          latitude: operationRow.service_latitude,
+          longitude: operationRow.service_longitude,
+          allowed_radius_meters: operationRow.service_allowed_radius_meters,
+          google_place_id: operationRow.service_google_place_id,
+          active: operationRow.service_active,
+          created_at: operationRow.service_created_at,
+          updated_at: operationRow.service_updated_at,
+        }),
+        summary: {
+          assigned: 0,
+          checkedIn: 0,
+          valid: 0,
+          pendingReview: 0,
+          rejected: 0,
+          withoutCheckIn: 0,
+          confirmedEmployees: 0,
+          pendingConfirmationEmployees: 0,
+          unavailableEmployees: 0,
+        },
+        employees: [],
+        total: 0,
+      };
+    }
+
     const service = mapServiceRow({
       id: operationRow.service_ref_id,
       name: operationRow.service_name,
@@ -102,6 +151,7 @@ export const operationAttendanceRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
       .query(`
         SELECT
           COUNT(*) AS assigned,
@@ -109,10 +159,10 @@ export const operationAttendanceRepository = {
           SUM(CASE WHEN ar.validation_status = 'VALID' THEN 1 ELSE 0 END) AS valid_count,
           SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
           SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
-          SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS without_check_in,
-          SUM(CASE WHEN ie.confirmation_status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
-          SUM(CASE WHEN ie.confirmation_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
-          SUM(CASE WHEN ie.confirmation_status = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
+          SUM(CASE WHEN ar.id IS NULL AND ew.expectation_status = 'EXPECTED' THEN 1 ELSE 0 END) AS without_check_in,
+          SUM(CASE WHEN oa.confirmation_status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
+          SUM(CASE WHEN oa.confirmation_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
+          SUM(CASE WHEN oa.confirmation_status = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
         ${employeesBaseQuery}
       `);
 
@@ -133,14 +183,17 @@ export const operationAttendanceRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
       .input("offset", sql.Int, offset)
       .input("limit", sql.Int, limit)
       .query(`
         SELECT
           e.*,
-          ie.confirmation_status,
-          ie.confirmed_at,
-          ie.unavailable_at,
+          oa.id AS assignment_id,
+          oa.confirmation_status,
+          oa.confirmed_at,
+          oa.unavailable_at,
+          ew.id AS employee_workday_id,
           ar.id AS attendance_id,
           ar.operation_id AS attendance_operation_id,
           ar.employee_id AS attendance_employee_id,

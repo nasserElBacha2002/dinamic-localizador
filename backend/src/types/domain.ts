@@ -1,5 +1,7 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { EmployeeType } from "../constants/employee-types";
+import type { OperationKind } from "../constants/operation-kind";
+import type { OperationScheduleSummary } from "./schedule";
 
 export type ServiceFormat = string;
 
@@ -39,7 +41,8 @@ export interface Service {
 export interface Operation {
   id: string;
   serviceId: string;
-  scheduledStart: string;
+  operationKind: OperationKind;
+  scheduledStart: string | null;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
@@ -49,22 +52,44 @@ export interface Operation {
   updatedAt: string;
 }
 
+export interface OperationScheduleView {
+  scheduleSource: "COMPANY" | "CUSTOM";
+  validFrom: string;
+  validUntil: string | null;
+  timezone: string;
+  version: number;
+  days: import("./schedule").WeeklyScheduleDay[];
+}
+
 export interface OperationWithService extends Operation {
   service: Pick<Service, "id" | "name" | "address" | "active">;
   assignedEmployeesCount?: number;
   attendanceRecordsCount?: number;
+  scheduleSummary?: OperationScheduleSummary;
 }
 
 export interface OperationDetail extends Operation {
   service: Service;
   assignedEmployees: Employee[];
   attendanceRecordsCount: number;
+  schedule?: OperationScheduleView;
 }
 
 export interface OperationEmployeeAssignment {
+  id: string;
+  companyId: string;
   operationId: string;
   employeeId: string;
+  validFrom: string;
+  validUntil: string | null;
   assignedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  confirmationStatus?: "PENDING" | "CONFIRMED" | "UNAVAILABLE";
+  confirmedAt?: string | null;
+  unavailableAt?: string | null;
+  cancelledAt?: string | null;
+  lifecycleState?: "CURRENT" | "FUTURE" | "ENDED";
   employee?: Employee;
 }
 
@@ -72,6 +97,7 @@ export interface AttendanceRecord {
   id: string;
   operationId: string;
   employeeId: string;
+  employeeWorkdayId: string | null;
   receivedLatitude: number;
   receivedLongitude: number;
   distanceMeters: number;

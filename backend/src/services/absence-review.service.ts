@@ -10,6 +10,8 @@ import type { AbsenceRequestStatus } from "../types/absence";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
 import { absenceRequestService, REVIEWABLE_STATUSES } from "./absence-request.service";
+import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
+import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 
 const ensureReviewable = (status: AbsenceRequestStatus) => {
   if (!REVIEWABLE_STATUSES.includes(status as (typeof REVIEWABLE_STATUSES)[number])) {
@@ -111,24 +113,46 @@ const transition = async (input: {
 
 export const absenceReviewService = {
   approve(companyId: string, requestId: string, userId: string) {
-    return transition({
+    return absenceWorkdaySyncService.runAfterAbsenceMutation(
       companyId,
       requestId,
-      userId,
-      newStatus: "APPROVED",
-      eventType: "APPROVED",
-    });
+      () =>
+        transition({
+          companyId,
+          requestId,
+          userId,
+          newStatus: "APPROVED",
+          eventType: "APPROVED",
+        }),
+      () =>
+        employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
+          companyId,
+          requestId,
+        ),
+      "approve",
+    );
   },
 
   reject(companyId: string, requestId: string, userId: string, input: RejectAbsenceRequestInput) {
-    return transition({
+    return absenceWorkdaySyncService.runAfterAbsenceMutation(
       companyId,
       requestId,
-      userId,
-      newStatus: "REJECTED",
-      eventType: "REJECTED",
-      comment: input.reason,
-    });
+      () =>
+        transition({
+          companyId,
+          requestId,
+          userId,
+          newStatus: "REJECTED",
+          eventType: "REJECTED",
+          comment: input.reason,
+        }),
+      () =>
+        employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
+          companyId,
+          requestId,
+        ),
+      "reject",
+    );
   },
 
   needsInfo(companyId: string, requestId: string, userId: string, input: NeedsInfoAbsenceRequestInput) {
@@ -143,13 +167,24 @@ export const absenceReviewService = {
   },
 
   cancel(companyId: string, requestId: string, userId: string) {
-    return transition({
+    return absenceWorkdaySyncService.runAfterAbsenceMutation(
       companyId,
       requestId,
-      userId,
-      newStatus: "CANCELLED",
-      eventType: "CANCELLED",
-      cancelledAt: new Date(),
-    });
+      () =>
+        transition({
+          companyId,
+          requestId,
+          userId,
+          newStatus: "CANCELLED",
+          eventType: "CANCELLED",
+          cancelledAt: new Date(),
+        }),
+      () =>
+        employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
+          companyId,
+          requestId,
+        ),
+      "cancel",
+    );
   },
 };

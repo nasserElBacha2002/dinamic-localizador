@@ -4,6 +4,7 @@ import { mapOperationAttendanceSummaryRow } from "./operation-attendance-summary
 
 const baseRow = {
   id: "emp-1",
+  assignment_id: "assignment-1",
   name: "Juan Pérez",
   document_number: null,
   phone_number: "+5491112345678",

@@ -13,6 +13,7 @@ const parseConfirmationStatus = (value: unknown): AssignmentConfirmationStatus =
 export const mapEmployeeAssignedOperationRow = (
   row: Record<string, unknown>,
 ): EmployeeAssignedOperation => ({
+  assignmentId: String(row.assignment_id),
   operationId: String(row.operation_id),
   serviceName: String(row.service_name),
   serviceAddress: row.service_address ? String(row.service_address) : null,

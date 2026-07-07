@@ -8,3 +8,7 @@ export const resolveOperationIdFromSessionContext = (
 export const resolveOperationOptionsFromSessionContext = (
   context: BotSessionContext,
 ) => context.operationOptions ?? context.inventoryOptions;
+
+export const resolveWorkdayOptionsFromSessionContext = (
+  context: BotSessionContext,
+) => context.workdayOptions;

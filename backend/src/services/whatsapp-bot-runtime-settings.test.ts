@@ -21,16 +21,29 @@ const runtimeSettings = (overrides: Partial<BotRuntimeSettings> = {}): BotRuntim
   ...overrides,
 });
 
-const eligibleOperation = {
-  id: operationId,
+const employeeWorkdayId = "00000000-0000-4000-8000-000000000004";
+const attendanceRecordId = "00000000-0000-4000-8000-000000000005";
+
+const checkoutCandidate = {
+  employeeWorkdayId,
+  operationWorkdayId: "00000000-0000-4000-8000-000000000006",
+  operationId,
+  serviceId: "00000000-0000-4000-8000-000000000007",
   serviceName: "Servicio Centro",
-  scheduledStart: "2026-07-05T15:00:00.000Z",
-  scheduledEnd: "2026-07-05T21:00:00.000Z",
+  serviceAddress: "Av. Corrientes 1234",
+  serviceLocality: "CABA",
   serviceLatitude: -34.6,
   serviceLongitude: -58.4,
   allowedRadiusMeters: 0,
+  operationKind: "ONE_TIME" as const,
+  workDate: "2026-07-05",
+  expectedStartAt: "2026-07-05T15:00:00.000Z",
+  expectedEndAt: "2026-07-05T21:00:00.000Z",
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 30,
+  scheduleTimezone: "America/Argentina/Buenos_Aires",
+  attendanceRecordId,
+  checkInAt: "2026-07-05T15:00:00.000Z",
 };
 
 describe("whatsapp bot runtime settings integration", () => {
@@ -111,11 +124,13 @@ describe("whatsapp bot runtime settings integration", () => {
   it("registers checkout without location in dry-run with correct message", async () => {
     setupUnitTestEnv();
     const { whatsappBotService } = await import("./whatsapp-bot.service");
-    const { attendanceRepository } = await import("../repositories/attendance.repository");
+    const { employeeWorkdayAvailabilityService } = await import(
+      "./employee-workday-availability.service"
+    );
     const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import("../utils/bot-runtime-context");
 
-    mock.method(attendanceRepository, "findCheckoutEligibleOperations", async () => [eligibleOperation]);
+    mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => checkoutCandidate);
     mock.method(botSessionService, "completeSession", async () => undefined);
 
     const context = {
@@ -138,6 +153,7 @@ describe("whatsapp bot runtime settings integration", () => {
       addVirtualCheckIn({
         operationId,
         employeeId,
+        employeeWorkdayId,
         receivedAt: "2026-07-05T15:00:00.000Z",
         validationStatus: "VALID",
         locationStatus: "INSIDE_GEOFENCE",
@@ -151,6 +167,8 @@ describe("whatsapp bot runtime settings integration", () => {
           const twiml = await whatsappBotService.processCheckoutWithoutLocation({
             companyId,
             employeeId,
+            employeeWorkdayId,
+            attendanceRecordId,
             operationId,
             phoneFrom: "+5491111111111",
             phoneTo: "+5491000000000",

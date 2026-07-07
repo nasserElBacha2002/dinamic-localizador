@@ -2,6 +2,8 @@ import type { CompanyAbsenceSetting } from "../../types/company-absence-settings
 import type { CompanyLocationType } from "../../types/company-location-type";
 import type { CompanyModule } from "../../types/company-module";
 import type { CompanySettings } from "../../types/company-settings";
+import type { CompanyWorkSchedule } from "../../types/schedule";
+import { buildCompanySchedulePreviewLabel } from "../../utils/operation-schedule-display";
 
 export function formatOperationSchedule(
   startTime: string | null | undefined,
@@ -107,6 +109,18 @@ export function buildLocationTypesSummary(locationTypes: CompanyLocationType[]) 
       { label: "Inactivos", value: `${inactive.length} inactivos` },
     ],
     chips,
+  };
+}
+
+export function buildWorkScheduleSummary(schedule: CompanyWorkSchedule) {
+  const enabledDays = schedule.days.filter((day) => day.isEnabled).length;
+
+  return {
+    summaryItems: [
+      { label: "Zona horaria", value: schedule.timezone },
+      { label: "Días laborables", value: `${enabledDays} de 7` },
+      { label: "Horario", value: buildCompanySchedulePreviewLabel(schedule.days) },
+    ],
   };
 }
 

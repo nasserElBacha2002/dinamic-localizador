@@ -86,7 +86,7 @@ export const handleCheckInLocation = async (
     });
   }
 
-  if (session.state !== "WAITING_LOCATION" || !session.operationId) {
+  if (session.state !== "WAITING_LOCATION" || !session.employeeWorkdayId || !session.operationId) {
     return null;
   }
 
@@ -94,6 +94,7 @@ export const handleCheckInLocation = async (
     companyId: ctx.companyId,
     session,
     employeeId: ctx.employeeId!,
+    employeeWorkdayId: session.employeeWorkdayId,
     operationId: session.operationId,
     latitude: Number(ctx.payload.Latitude),
     longitude: Number(ctx.payload.Longitude),

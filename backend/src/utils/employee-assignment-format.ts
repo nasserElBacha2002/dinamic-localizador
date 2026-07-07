@@ -117,6 +117,34 @@ export const formatAssignmentLocationLines = (assignment: EmployeeAssignedOperat
   return [...lines, ...formatAssignmentMapLines(assignment)];
 };
 
+export const formatBotWorkdaySelectionLines = (
+  index: number,
+  fields: ServiceReferenceFields & {
+    expectedStartAt: string;
+    expectedEndAt: string | null;
+    workDate: string;
+  },
+  timeZone: string,
+  checkInAt?: string,
+): string[] => {
+  const scheduleLine = checkInAt
+    ? `Llegada: ${formatLocalTime(checkInAt, timeZone)}`
+    : formatWorkdayScheduleLine(fields, timeZone);
+  return [`${index}. ${formatServiceReferenceFromFields(fields)}`, `   ${scheduleLine}`];
+};
+
+export const formatWorkdayScheduleLine = (
+  workday: { expectedStartAt: string; expectedEndAt: string | null; workDate: string },
+  timeZone: string,
+): string => {
+  const start = formatLocalTime(workday.expectedStartAt, timeZone);
+  if (!workday.expectedEndAt) {
+    return `${start}`;
+  }
+  const end = formatLocalTime(workday.expectedEndAt, timeZone);
+  return `${start} a ${end}`;
+};
+
 export const formatBotOperationSelectionLines = (
   index: number,
   fields: ServiceReferenceFields & { scheduledStart: string },

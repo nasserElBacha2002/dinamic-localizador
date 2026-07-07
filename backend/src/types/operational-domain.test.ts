@@ -51,6 +51,7 @@ const sampleService: Service = {
 const sampleOperation: Operation = {
   id: "operation-1",
   serviceId: sampleService.id,
+  operationKind: "ONE_TIME",
   scheduledStart: "2026-01-01T20:30:00.000Z",
   scheduledEnd: "2026-01-02T03:00:00.000Z",
   earlyToleranceMinutes: 60,
@@ -74,15 +75,22 @@ const sampleEmployee: Employee = {
 };
 
 const sampleAssignment: OperationEmployeeAssignment = {
+  id: "assignment-1",
+  companyId: "company-1",
   operationId: sampleOperation.id,
   employeeId: sampleEmployee.id,
+  validFrom: "2026-01-01",
+  validUntil: "2026-01-01",
   assignedAt: "2026-01-01T00:00:00.000Z",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
 };
 
 const sampleAttendance: AttendanceRecord = {
   id: "attendance-1",
   operationId: sampleOperation.id,
   employeeId: sampleEmployee.id,
+  employeeWorkdayId: "employee-workday-1",
   receivedLatitude: -34.6,
   receivedLongitude: -58.38,
   distanceMeters: 12,

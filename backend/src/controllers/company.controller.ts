@@ -36,6 +36,22 @@ export const companyController = {
     res.status(200).json({ data: settings });
   },
 
+  async getWorkSchedule(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const schedule = await companyService.getWorkSchedule(companyId);
+    res.status(200).json({ data: schedule });
+  },
+
+  async updateWorkSchedule(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const schedule = await companyService.updateWorkSchedule(
+      companyId,
+      req.companyRole!,
+      req.body,
+    );
+    res.status(200).json({ data: schedule });
+  },
+
   async getAbsenceSettings(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const settings = await companyService.getAbsenceSettings(companyId);

@@ -252,6 +252,8 @@ export const botSessionRepository = {
       companyId: string;
       employeeId: string;
       operationId: string | null;
+      employeeWorkdayId?: string | null;
+      attendanceRecordId?: string | null;
       phoneNumber: string;
       state: BotSessionState;
       contextJson: string | null;
@@ -267,6 +269,8 @@ export const botSessionRepository = {
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId ?? null)
+      .input("attendanceRecordId", sql.UniqueIdentifier, input.attendanceRecordId ?? null)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("state", sql.NVarChar(40), input.state)
       .input("contextJson", sql.NVarChar(sql.MAX), input.contextJson)
@@ -275,12 +279,14 @@ export const botSessionRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, createFlags.simulationSessionId)
       .query(`
         INSERT INTO bot_sessions (
-          company_id, employee_id, operation_id, phone_number, state, context_json, expires_at,
+          company_id, employee_id, operation_id, employee_workday_id, attendance_record_id,
+          phone_number, state, context_json, expires_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @employeeId, @operationId, @phoneNumber, @state, @contextJson, @expiresAt,
+          @companyId, @employeeId, @operationId, @employeeWorkdayId, @attendanceRecordId,
+          @phoneNumber, @state, @contextJson, @expiresAt,
           @isSimulation, @simulationSessionId
         )
       `);
@@ -293,6 +299,8 @@ export const botSessionRepository = {
     id: string,
     input: {
       operationId?: string | null;
+      employeeWorkdayId?: string | null;
+      attendanceRecordId?: string | null;
       state?: BotSessionState;
       contextJson?: string | null;
       expiresAt?: Date;
@@ -310,6 +318,16 @@ export const botSessionRepository = {
     if (input.operationId !== undefined) {
       request.input("operationId", sql.UniqueIdentifier, input.operationId);
       fields.push("operation_id = @operationId");
+    }
+
+    if (input.employeeWorkdayId !== undefined) {
+      request.input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId);
+      fields.push("employee_workday_id = @employeeWorkdayId");
+    }
+
+    if (input.attendanceRecordId !== undefined) {
+      request.input("attendanceRecordId", sql.UniqueIdentifier, input.attendanceRecordId);
+      fields.push("attendance_record_id = @attendanceRecordId");
     }
 
     if (input.state !== undefined) {

@@ -15,6 +15,7 @@ const operationId = "00000000-0000-4000-8000-000000000003";
 const assignment = (
   overrides: Partial<EmployeeAssignedOperation> = {},
 ): EmployeeAssignedOperation => ({
+  assignmentId: "assignment-1",
   operationId,
   serviceName: "Carrefour Palermo",
   serviceAddress: "Av. Santa Fe 1234",
@@ -343,8 +344,9 @@ describe("employeeWorkdayService", () => {
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
-      async (_companyId, _employeeId, _operationId, status) => {
+      async (_companyId, assignmentId, status) => {
         updatedStatus = status;
+        assert.equal(assignmentId, "assignment-1");
         return true;
       },
     );
@@ -371,8 +373,9 @@ describe("employeeWorkdayService", () => {
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
-      async (_companyId, _employeeId, _operationId, status) => {
+      async (_companyId, assignmentId, status) => {
         updatedStatus = status;
+        assert.equal(assignmentId, "assignment-1");
         return true;
       },
     );

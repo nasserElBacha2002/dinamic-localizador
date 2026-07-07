@@ -7,10 +7,9 @@ import { getPool } from "../database/connection";
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
-import { resolveOperationOptionsFromSessionContext } from "../utils/legacy-operation-session-context";
+import { resolveWorkdayOptionsFromSessionContext } from "../utils/legacy-operation-session-context";
 import { botSessionService } from "./bot-session.service";
 import type { BotSession } from "../types/twilio.types";
 import type { WhatsAppInboundContext } from "../types/whatsapp-company-context";
@@ -35,12 +34,14 @@ import {
   buildCheckoutValidationWithoutLocation,
 } from "./bot/bot-attendance-runtime";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
+import { employeeWorkdayAttendanceCommand } from "./employee-workday-attendance.command";
+import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
 import {
   buildArrivalRegisteredMessage,
-  buildCheckoutOperationSelectionPrompt,
+  buildCheckoutWorkdaySelectionPrompt,
   buildCheckoutLocationRequestMessage,
   buildCheckoutRegisteredMessage,
-  buildOperationSelectionPrompt,
+  buildWorkdaySelectionPrompt,
   buildLocationRequestMessage,
   DUPLICATE_ATTENDANCE_MESSAGE,
   DUPLICATE_CHECKOUT_MESSAGE,
@@ -49,18 +50,21 @@ import {
   INVALID_SELECTION_MESSAGE,
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
   NO_CHECKOUT_OPERATION_MESSAGE,
+  NO_JUSTIFIED_ONLY_MESSAGE,
   NO_OPERATION_MESSAGE,
+  WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
 } from "./bot/bot-response.builder";
 import {
-  findCheckoutEligibleOperationById,
-  findCompatibleOperationById,
-  isValidOperationSelection,
-  listCheckoutEligibleOperations,
-  listCompatibleOperations,
-  mapCheckoutOperationsToSessionOptions,
-  mapCompatibleOperationsToSessionOptions,
-  parseOperationSelectionIndex,
-} from "./bot/bot-operation.selector";
+  findCheckInCandidateByWorkdayId,
+  findCheckoutCandidateByAttendanceId,
+  isValidWorkdaySelection,
+  listAvailableCheckInWorkdays,
+  listOpenCheckoutWorkdays,
+  mapCheckInCandidatesToSessionOptions,
+  mapCheckoutCandidatesToSessionOptions,
+  parseWorkdaySelectionIndex,
+  resolveWorkdayOptionFromSession,
+} from "./bot/bot-workday.selector";
 import { whatsappRouterService } from "./whatsapp-router/whatsapp-router.service";
 import type { WhatsAppRouterHandlers } from "./whatsapp-router/whatsapp-router.types";
 import {
@@ -365,7 +369,7 @@ export const whatsappBotService = {
     messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
-    const eligible = await listCheckoutEligibleOperations(companyId, input.employeeId);
+    const eligible = await listOpenCheckoutWorkdays(companyId, input.employeeId);
 
     if (eligible.length === 0) {
       return respond(companyId, {
@@ -376,30 +380,34 @@ export const whatsappBotService = {
       });
     }
 
-    const finalizeWithoutLocation = async (operationId: string) =>
+    const finalizeWithoutLocation = async (candidate: (typeof eligible)[number]) =>
       this.processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
-        operationId,
+        employeeWorkdayId: candidate.employeeWorkdayId,
+        attendanceRecordId: candidate.attendanceRecordId,
+        operationId: candidate.operationId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
       });
 
     if (eligible.length === 1) {
-      const operation = eligible[0];
+      const candidate = eligible[0];
       if (!getRequireCheckoutLocation()) {
-        return finalizeWithoutLocation(operation.id);
+        return finalizeWithoutLocation(candidate);
       }
 
       await botSessionService.createWaitingCheckoutLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        operationId: operation.id,
+        operationId: candidate.operationId,
+        employeeWorkdayId: candidate.employeeWorkdayId,
+        attendanceRecordId: candidate.attendanceRecordId,
       });
 
       return respond(companyId, {
-        message: buildCheckoutLocationRequestMessage(operation),
+        message: buildCheckoutLocationRequestMessage(candidate),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -407,7 +415,7 @@ export const whatsappBotService = {
     }
 
     if (!getRequireCheckoutLocation()) {
-      const options = mapCheckoutOperationsToSessionOptions(eligible);
+      const options = mapCheckoutCandidatesToSessionOptions(eligible);
       await botSessionService.createCheckoutOperationSelectionSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
@@ -415,14 +423,14 @@ export const whatsappBotService = {
       });
 
       return respond(companyId, {
-        message: `${buildCheckoutOperationSelectionPrompt(eligible)}\n\nNo se requiere ubicación para registrar la salida.`,
+        message: `${buildCheckoutWorkdaySelectionPrompt(eligible)}\n\nNo se requiere ubicación para registrar la salida.`,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    const options = mapCheckoutOperationsToSessionOptions(eligible);
+    const options = mapCheckoutCandidatesToSessionOptions(eligible);
 
     await botSessionService.createCheckoutOperationSelectionSession(companyId, {
       employeeId: input.employeeId,
@@ -431,7 +439,7 @@ export const whatsappBotService = {
     });
 
     return respond(companyId, {
-      message: buildCheckoutOperationSelectionPrompt(eligible),
+      message: buildCheckoutWorkdaySelectionPrompt(eligible),
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
@@ -448,11 +456,11 @@ export const whatsappBotService = {
     messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
-    const selection = parseOperationSelectionIndex(input.body);
+    const selection = parseWorkdaySelectionIndex(input.body);
     const context = botSessionService.parseContext(input.session.contextJson);
-    const options = resolveOperationOptionsFromSessionContext(context) ?? [];
+    const options = resolveWorkdayOptionsFromSessionContext(context) ?? [];
 
-    if (!isValidOperationSelection(selection, options.length)) {
+    if (!isValidWorkdaySelection(selection, options.length)) {
       return respond(companyId, {
         message: INVALID_SELECTION_MESSAGE,
         employeeId: input.employeeId,
@@ -461,8 +469,21 @@ export const whatsappBotService = {
       });
     }
 
-    const selected = options[selection - 1];
-    const eligible = await findCheckoutEligibleOperationById(companyId, input.employeeId, selected.operationId);
+    const selected = resolveWorkdayOptionFromSession(options, selection);
+    if (!selected?.attendanceRecordId) {
+      return respond(companyId, {
+        message: NO_CHECKOUT_OPERATION_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const eligible = await findCheckoutCandidateByAttendanceId(
+      companyId,
+      input.employeeId,
+      selected.attendanceRecordId,
+    );
 
     if (!eligible) {
       return respond(companyId, {
@@ -477,7 +498,9 @@ export const whatsappBotService = {
       return this.processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
-        operationId: eligible.id,
+        employeeWorkdayId: eligible.employeeWorkdayId,
+        attendanceRecordId: eligible.attendanceRecordId,
+        operationId: eligible.operationId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
@@ -485,9 +508,14 @@ export const whatsappBotService = {
       });
     }
 
-    const selectionResult = await botSessionService.selectCheckoutOperationAndRenewExpiration(companyId, 
+    const selectionResult = await botSessionService.selectCheckoutOperationAndRenewExpiration(
+      companyId,
       input.session.id,
-      eligible.id,
+      {
+        operationId: eligible.operationId,
+        employeeWorkdayId: eligible.employeeWorkdayId,
+        attendanceRecordId: eligible.attendanceRecordId,
+      },
     );
 
     if (selectionResult.kind === "expired") {
@@ -524,40 +552,46 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const now = getBotNow();
-    const operations = await listCompatibleOperations(companyId, input.employeeId, now);
+    const { candidates, hasJustifiedWorkdayInWindow } = await listAvailableCheckInWorkdays(
+      companyId,
+      input.employeeId,
+      now,
+    );
 
-    if (operations.length === 0) {
-      console.info("[whatsapp-bot] no compatible operation", { employeeId: input.employeeId });
+    if (candidates.length === 0) {
+      console.info("[whatsapp-bot] no available employee workday", { employeeId: input.employeeId });
       return respond(companyId, {
-        message: NO_OPERATION_MESSAGE,
+        message: hasJustifiedWorkdayInWindow ? NO_JUSTIFIED_ONLY_MESSAGE : NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    if (operations.length === 1) {
-      const operation = operations[0];
+    if (candidates.length === 1) {
+      const workday = candidates[0];
       await botSessionService.createWaitingLocationSession(companyId, {
         employeeId: input.employeeId,
         phoneNumber: input.phoneFrom,
-        operationId: operation.id,
+        operationId: workday.operationId,
+        employeeWorkdayId: workday.employeeWorkdayId,
       });
 
       console.info("[whatsapp-bot] session created WAITING_LOCATION", {
         employeeId: input.employeeId,
-        operationId: operation.id,
+        employeeWorkdayId: workday.employeeWorkdayId,
+        operationId: workday.operationId,
       });
 
       return respond(companyId, {
-        message: buildLocationRequestMessage(operation),
+        message: buildLocationRequestMessage(workday),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
 
-    const options = mapCompatibleOperationsToSessionOptions(operations);
+    const options = mapCheckInCandidatesToSessionOptions(candidates);
 
     await botSessionService.createOperationSelectionSession(companyId, {
       employeeId: input.employeeId,
@@ -571,7 +605,7 @@ export const whatsappBotService = {
     });
 
     return respond(companyId, {
-      message: buildOperationSelectionPrompt(operations),
+      message: buildWorkdaySelectionPrompt(candidates),
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
@@ -587,11 +621,11 @@ export const whatsappBotService = {
     phoneTo: string;
   }): Promise<string> {
     const { companyId } = input;
-    const selection = parseOperationSelectionIndex(input.body);
+    const selection = parseWorkdaySelectionIndex(input.body);
     const context = botSessionService.parseContext(input.session.contextJson);
-    const options = resolveOperationOptionsFromSessionContext(context) ?? [];
+    const options = resolveWorkdayOptionsFromSessionContext(context) ?? [];
 
-    if (!isValidOperationSelection(selection, options.length)) {
+    if (!isValidWorkdaySelection(selection, options.length)) {
       return respond(companyId, {
         message: INVALID_SELECTION_MESSAGE,
         employeeId: input.employeeId,
@@ -600,15 +634,8 @@ export const whatsappBotService = {
       });
     }
 
-    const selected = options[selection - 1];
-    const now = getBotNow();
-    const compatible = await findCompatibleOperationById(companyId, 
-      input.employeeId,
-      selected.operationId,
-      now,
-    );
-
-    if (!compatible) {
+    const selected = resolveWorkdayOptionFromSession(options, selection);
+    if (!selected) {
       return respond(companyId, {
         message: NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
@@ -617,9 +644,30 @@ export const whatsappBotService = {
       });
     }
 
-    const selectionResult = await botSessionService.selectOperationAndRenewExpiration(companyId, 
+    const now = getBotNow();
+    const workday = await findCheckInCandidateByWorkdayId(
+      companyId,
+      input.employeeId,
+      selected.employeeWorkdayId,
+      now,
+    );
+
+    if (!workday) {
+      return respond(companyId, {
+        message: WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const selectionResult = await botSessionService.selectOperationAndRenewExpiration(
+      companyId,
       input.session.id,
-      compatible.id,
+      {
+        operationId: workday.operationId,
+        employeeWorkdayId: workday.employeeWorkdayId,
+      },
     );
 
     if (selectionResult.kind === "expired") {
@@ -641,7 +689,7 @@ export const whatsappBotService = {
     }
 
     return respond(companyId, {
-      message: buildLocationRequestMessage(compatible),
+      message: buildLocationRequestMessage(workday),
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
@@ -680,6 +728,7 @@ export const whatsappBotService = {
     companyId: string;
     session: BotSession;
     employeeId: string;
+    employeeWorkdayId: string;
     operationId: string;
     latitude: number;
     longitude: number;
@@ -689,28 +738,16 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const receivedAt = getBotNow();
-    const compatible = await findCompatibleOperationById(companyId, 
+    const workday = await employeeWorkdayAvailabilityService.revalidateCheckInCandidate(
+      companyId,
       input.employeeId,
-      input.operationId,
+      input.employeeWorkdayId,
       receivedAt,
     );
 
-    if (!compatible) {
+    if (!workday || workday.operationId !== input.operationId) {
       return respond(companyId, {
-        message: NO_OPERATION_MESSAGE,
-        employeeId: input.employeeId,
-        phoneFrom: input.phoneTo,
-        phoneTo: input.phoneFrom,
-      });
-    }
-
-    const isAssigned = await operationEmployeeRepository.exists(companyId, 
-      input.operationId,
-      input.employeeId,
-    );
-    if (!isAssigned) {
-      return respond(companyId, {
-        message: NO_OPERATION_MESSAGE,
+        message: WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
@@ -718,10 +755,12 @@ export const whatsappBotService = {
     }
 
     const hasActiveRecord = isSimulationDryRun()
-      ? hasVirtualActiveRecord(input.operationId, input.employeeId)
-      : await attendanceRepository.hasActiveRecord(companyId, input.operationId, input.employeeId, {
-          simulationSessionId: getSimulationSessionId(),
-        });
+      ? hasVirtualActiveRecord(input.employeeWorkdayId)
+      : await attendanceRepository.hasActiveRecordByEmployeeWorkday(
+          companyId,
+          input.employeeWorkdayId,
+          { simulationSessionId: getSimulationSessionId() },
+        );
     if (hasActiveRecord) {
       await botSessionService.completeSession(companyId, input.session.id);
       return respond(companyId, {
@@ -740,16 +779,17 @@ export const whatsappBotService = {
     const { validation, distanceMeters: geoDistance, effectiveRadiusMeters } = buildCheckInValidation({
       employeeLatitude: input.latitude,
       employeeLongitude: input.longitude,
-      serviceLatitude: compatible.serviceLatitude,
-      serviceLongitude: compatible.serviceLongitude,
-      serviceAllowedRadiusMeters: compatible.allowedRadiusMeters,
+      serviceLatitude: workday.serviceLatitude,
+      serviceLongitude: workday.serviceLongitude,
+      serviceAllowedRadiusMeters: workday.allowedRadiusMeters,
       receivedAt,
-      scheduledStart: new Date(compatible.scheduledStart),
-      earlyToleranceMinutes: compatible.earlyToleranceMinutes,
-      lateToleranceMinutes: compatible.lateToleranceMinutes,
+      scheduledStart: new Date(workday.expectedStartAt),
+      earlyToleranceMinutes: workday.earlyToleranceMinutes,
+      lateToleranceMinutes: workday.lateToleranceMinutes,
       runtimeSettings,
     });
 
+    setTechnicalDetail("employeeWorkdayId", input.employeeWorkdayId);
     setTechnicalDetail("distanceMeters", Math.round(geoDistance * 100) / 100);
     setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
     setTechnicalDetail("reviewMarginMeters", runtimeSettings.geofenceReviewMarginMeters);
@@ -758,7 +798,7 @@ export const whatsappBotService = {
 
     if (isSimulationDryRun()) {
       const responseMessage = buildArrivalRegisteredMessage({
-        compatible,
+        compatible: workday,
         distanceMeters: geoDistance,
         validationStatus: validation.validationStatus,
         punctualityStatus: validation.punctualityStatus,
@@ -767,8 +807,9 @@ export const whatsappBotService = {
       });
 
       const virtualRecord = addVirtualCheckIn({
-        operationId: input.operationId,
+        operationId: workday.operationId,
         employeeId: input.employeeId,
+        employeeWorkdayId: input.employeeWorkdayId,
         receivedAt: receivedAt.toISOString(),
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
@@ -780,7 +821,8 @@ export const whatsappBotService = {
         type: "check-in",
         persisted: false,
         virtualAttendanceId: virtualRecord.id,
-        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        operationId: workday.operationId,
         employeeId: input.employeeId,
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
@@ -799,62 +841,18 @@ export const whatsappBotService = {
       });
     }
 
-    const pool = getPool();
-    const transaction = new sql.Transaction(pool);
-
     try {
-      await transaction.begin();
-
-      const activeSession = await botSessionRepository.findValidActiveById(companyId, 
-        input.session.id,
-        transaction,
-      );
-
-      if (!activeSession || activeSession.state !== "WAITING_LOCATION") {
-        await transaction.rollback();
-        await botSessionService.getActiveSessionByPhone(companyId, input.phoneFrom);
-        console.info("[whatsapp-bot] location received for expired or invalid session", {
-          sessionId: input.session.id,
-        });
-        return respond(companyId, {
-          message: EXPIRED_SESSION_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-
-      const hasDuplicate = await attendanceRepository.hasActiveRecordInTransaction(companyId, transaction,
-        input.operationId,
-        input.employeeId,
-        getSimulationSessionId(),
-      );
-
-      if (hasDuplicate) {
-        await transaction.rollback();
-        await botSessionService.completeSession(companyId, input.session.id);
-        return respond(companyId, {
-          message: DUPLICATE_ATTENDANCE_MESSAGE,
-          employeeId: input.employeeId,
-          phoneFrom: input.phoneTo,
-          phoneTo: input.phoneFrom,
-        });
-      }
-
-      const created = await attendanceRepository.createInTransaction(companyId, transaction, {
-        operationId: input.operationId,
+      const created = await employeeWorkdayAttendanceCommand.createAttendanceForEmployeeWorkday({
+        companyId,
         employeeId: input.employeeId,
-        receivedLatitude: input.latitude,
-        receivedLongitude: input.longitude,
+        employeeWorkdayId: input.employeeWorkdayId,
+        sessionId: input.session.id,
+        receivedAt,
+        latitude: input.latitude,
+        longitude: input.longitude,
         distanceMeters: Math.round(geoDistance * 100) / 100,
-        validationStatus: validation.validationStatus,
-        locationStatus: validation.locationStatus,
-        punctualityStatus: validation.punctualityStatus,
-        sourceMessageSid: input.messageSid,
-        validationReason: validation.validationReason,
-        receivedAt: receivedAt.toISOString(),
-        isSimulation: Boolean(getSimulationSessionId()),
-        simulationSessionId: getSimulationSessionId(),
+        validation,
+        messageSid: input.messageSid,
       });
 
       if (getSimulationSessionId()) {
@@ -862,7 +860,8 @@ export const whatsappBotService = {
           type: "check-in",
           persisted: true,
           attendanceId: created.id,
-          operationId: input.operationId,
+          employeeWorkdayId: input.employeeWorkdayId,
+          operationId: workday.operationId,
           employeeId: input.employeeId,
           validationStatus: validation.validationStatus,
           locationStatus: validation.locationStatus,
@@ -872,22 +871,15 @@ export const whatsappBotService = {
         });
       }
 
-      await botSessionRepository.updateSession(companyId, 
-        input.session.id,
-        { state: "COMPLETED" },
-        transaction,
-      );
-
-      await transaction.commit();
-
       console.info("[whatsapp-bot] attendance created", {
         employeeId: input.employeeId,
-        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        operationId: workday.operationId,
         validationStatus: validation.validationStatus,
       });
 
       const responseMessage = buildArrivalRegisteredMessage({
-        compatible,
+        compatible: workday,
         distanceMeters: geoDistance,
         validationStatus: validation.validationStatus,
         punctualityStatus: validation.punctualityStatus,
@@ -902,10 +894,13 @@ export const whatsappBotService = {
         phoneTo: input.phoneFrom,
       });
     } catch (error) {
-      await transaction.rollback();
-
       if (error instanceof Error) {
-        if (error.message.includes("UQ_attendance_records_source_message_sid")) {
+        if (
+          error.message === "EMPLOYEE_WORKDAY_ALREADY_ATTENDED" ||
+          error.message.includes("UQ_attendance_records_source_message_sid") ||
+          error.message.includes("UX_attendance_records_inventory_employee_active") ||
+          error.message.includes("UX_attendance_records_employee_workday_active")
+        ) {
           await botSessionService.completeSession(companyId, input.session.id);
           return respond(companyId, {
             message: DUPLICATE_ATTENDANCE_MESSAGE,
@@ -915,10 +910,12 @@ export const whatsappBotService = {
           });
         }
 
-        if (error.message.includes("UX_attendance_records_inventory_employee_active")) {
-          await botSessionService.completeSession(companyId, input.session.id);
+        if (
+          error.message === "EMPLOYEE_WORKDAY_NOT_AVAILABLE" ||
+          error.message === "BOT_SESSION_STALE"
+        ) {
           return respond(companyId, {
-            message: DUPLICATE_ATTENDANCE_MESSAGE,
+            message: WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
             employeeId: input.employeeId,
             phoneFrom: input.phoneTo,
             phoneTo: input.phoneFrom,
@@ -940,6 +937,8 @@ export const whatsappBotService = {
     companyId: string;
     session: BotSession;
     employeeId: string;
+    employeeWorkdayId: string;
+    attendanceRecordId: string;
     operationId: string;
     latitude: number;
     longitude: number;
@@ -949,9 +948,17 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutEligibleOperationById(companyId, input.employeeId, input.operationId);
+    const eligible = await findCheckoutCandidateByAttendanceId(
+      companyId,
+      input.employeeId,
+      input.attendanceRecordId,
+    );
 
-    if (!eligible) {
+    if (
+      !eligible ||
+      eligible.employeeWorkdayId !== input.employeeWorkdayId ||
+      eligible.operationId !== input.operationId
+    ) {
       return respond(companyId, {
         message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
         employeeId: input.employeeId,
@@ -961,19 +968,27 @@ export const whatsappBotService = {
     }
 
     const simulationSessionId = getSimulationSessionId();
-    let attendance = isSimulationDryRun()
-      ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
-          simulationSessionId,
-        });
+    let attendance: AttendanceRecord | null = null;
+
+    if (!isSimulationDryRun()) {
+      attendance = await attendanceRepository.findCheckInForEmployeeWorkday(
+        companyId,
+        input.employeeWorkdayId,
+        { simulationSessionId },
+      );
+      if (attendance && attendance.id !== input.attendanceRecordId) {
+        attendance = null;
+      }
+    }
 
     if (isSimulationDryRun()) {
-      const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
+      const virtual = findVirtualCheckInForCheckout(input.employeeWorkdayId);
       if (virtual) {
         attendance = {
           id: virtual.id,
           operationId: virtual.operationId,
           employeeId: virtual.employeeId,
+          employeeWorkdayId: virtual.employeeWorkdayId,
           receivedLatitude: input.latitude,
           receivedLongitude: input.longitude,
           distanceMeters: virtual.distanceMeters,
@@ -1034,10 +1049,12 @@ export const whatsappBotService = {
       serviceLongitude: eligible.serviceLongitude,
       serviceAllowedRadiusMeters: eligible.allowedRadiusMeters,
       checkoutAt,
-      scheduledEnd: eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
+      scheduledEnd: eligible.expectedEndAt ? new Date(eligible.expectedEndAt) : null,
       runtimeSettings,
     });
 
+    setTechnicalDetail("employeeWorkdayId", input.employeeWorkdayId);
+    setTechnicalDetail("attendanceRecordId", input.attendanceRecordId);
     setTechnicalDetail("checkoutDistanceMeters", Math.round(checkoutDistance * 100) / 100);
     setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
     setTechnicalDetail("reviewMarginMeters", runtimeSettings.geofenceReviewMarginMeters);
@@ -1062,6 +1079,7 @@ export const whatsappBotService = {
         type: "check-out",
         persisted: false,
         virtualAttendanceId: attendance.id,
+        employeeWorkdayId: input.employeeWorkdayId,
         checkoutStatus: validation.checkoutStatus,
         distanceMeters: Math.round(checkoutDistance * 100) / 100,
         checkoutAt: checkoutAt.toISOString(),
@@ -1083,7 +1101,8 @@ export const whatsappBotService = {
     try {
       await transaction.begin();
 
-      const activeSession = await botSessionRepository.findValidActiveById(companyId, 
+      const activeSession = await botSessionRepository.findValidActiveById(
+        companyId,
         input.session.id,
         transaction,
       );
@@ -1092,6 +1111,24 @@ export const whatsappBotService = {
         await transaction.rollback();
         return respond(companyId, {
           message: EXPIRED_SESSION_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      const refreshedCandidate = await findCheckoutCandidateByAttendanceId(
+        companyId,
+        input.employeeId,
+        input.attendanceRecordId,
+      );
+      if (
+        !refreshedCandidate ||
+        refreshedCandidate.employeeWorkdayId !== input.employeeWorkdayId
+      ) {
+        await transaction.rollback();
+        return respond(companyId, {
+          message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
           employeeId: input.employeeId,
           phoneFrom: input.phoneTo,
           phoneTo: input.phoneFrom,
@@ -1127,13 +1164,15 @@ export const whatsappBotService = {
           type: "check-out",
           persisted: true,
           attendanceId: updated.id,
+          employeeWorkdayId: input.employeeWorkdayId,
           checkoutStatus: validation.checkoutStatus,
           distanceMeters: Math.round(checkoutDistance * 100) / 100,
           checkoutAt: checkoutAt.toISOString(),
         });
       }
 
-      await botSessionRepository.updateSession(companyId, 
+      await botSessionRepository.updateSession(
+        companyId,
         input.session.id,
         { state: "COMPLETED" },
         transaction,
@@ -1184,6 +1223,8 @@ export const whatsappBotService = {
   async processCheckoutWithoutLocation(input: {
     companyId: string;
     employeeId: string;
+    employeeWorkdayId: string;
+    attendanceRecordId: string;
     operationId: string;
     phoneFrom: string;
     phoneTo: string;
@@ -1198,13 +1239,17 @@ export const whatsappBotService = {
       }
     };
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutEligibleOperationById(
+    const eligible = await findCheckoutCandidateByAttendanceId(
       companyId,
       input.employeeId,
-      input.operationId,
+      input.attendanceRecordId,
     );
 
-    if (!eligible) {
+    if (
+      !eligible ||
+      eligible.employeeWorkdayId !== input.employeeWorkdayId ||
+      eligible.operationId !== input.operationId
+    ) {
       await completeSessionIfNeeded();
       return respond(companyId, {
         message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
@@ -1220,19 +1265,27 @@ export const whatsappBotService = {
     }
 
     const simulationSessionId = getSimulationSessionId();
-    let attendance = isSimulationDryRun()
-      ? null
-      : await attendanceRepository.findCheckInForCheckout(companyId, input.operationId, input.employeeId, {
-          simulationSessionId,
-        });
+    let attendance: AttendanceRecord | null = null;
+
+    if (!isSimulationDryRun()) {
+      attendance = await attendanceRepository.findCheckInForEmployeeWorkday(
+        companyId,
+        input.employeeWorkdayId,
+        { simulationSessionId },
+      );
+      if (attendance && attendance.id !== input.attendanceRecordId) {
+        attendance = null;
+      }
+    }
 
     if (isSimulationDryRun()) {
-      const virtual = findVirtualCheckInForCheckout(input.operationId, input.employeeId);
+      const virtual = findVirtualCheckInForCheckout(input.employeeWorkdayId);
       if (virtual) {
         attendance = {
           id: virtual.id,
           operationId: virtual.operationId,
           employeeId: virtual.employeeId,
+          employeeWorkdayId: virtual.employeeWorkdayId,
           receivedLatitude: 0,
           receivedLongitude: 0,
           distanceMeters: virtual.distanceMeters,
@@ -1284,7 +1337,7 @@ export const whatsappBotService = {
 
     const validation = buildCheckoutValidationWithoutLocation({
       checkoutAt,
-      scheduledEnd: eligible.scheduledEnd ? new Date(eligible.scheduledEnd) : null,
+      scheduledEnd: eligible.expectedEndAt ? new Date(eligible.expectedEndAt) : null,
       runtimeSettings,
     });
 

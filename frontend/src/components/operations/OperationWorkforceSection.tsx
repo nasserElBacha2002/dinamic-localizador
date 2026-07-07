@@ -1,14 +1,9 @@
-import { Alert, Button, Group } from "@mantine/core";
+import { Button } from "@mantine/core";
 import { useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
-import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
 import { SectionCard } from "../../design-system";
 import { useReviewAttendance } from "../../hooks/useAttendance";
-import {
-  useAssignOperationEmployee,
-  useOperationAttendanceSummary,
-  useUnassignOperationEmployee,
-} from "../../hooks/useOperations";
+import { useOperationAttendanceSummary, useCancelOperationAssignment } from "../../hooks/useOperations";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -19,8 +14,7 @@ import { OperationalSummaryMetrics } from "./OperationalSummaryMetrics";
 interface OperationWorkforceSectionProps {
   operationId: string;
   canAssign: boolean;
-  scheduledStart: string;
-  assignedEmployeeIds: string[];
+  scheduledStart: string | null;
   onFeedback: (message: string, severity: "success" | "error") => void;
 }
 
@@ -28,11 +22,9 @@ export function OperationWorkforceSection({
   operationId,
   canAssign,
   scheduledStart,
-  assignedEmployeeIds,
   onFeedback,
 }: OperationWorkforceSectionProps) {
   const pagination = usePaginationState(10);
-  const [selectedEmployeeId, setSelectedEmployeeId] = useState("");
   const [reviewTarget, setReviewTarget] = useState<{
     attendanceId: string;
     decision: "APPROVE" | "REJECT";
@@ -42,29 +34,13 @@ export function OperationWorkforceSection({
     page: pagination.page,
     limit: pagination.pageSize,
   });
-  const assignMutation = useAssignOperationEmployee(operationId);
-  const unassignMutation = useUnassignOperationEmployee(operationId);
+  const cancelMutation = useCancelOperationAssignment(operationId);
   const reviewMutation = useReviewAttendance();
 
-  const handleAssign = async () => {
-    if (!selectedEmployeeId) {
-      return;
-    }
-
+  const handleCancel = async (assignmentId: string) => {
     try {
-      await assignMutation.mutateAsync(selectedEmployeeId);
-      setSelectedEmployeeId("");
-      pagination.resetPage();
-      onFeedback(`${terminology.worker.singular} asignado correctamente.`, "success");
-    } catch (error) {
-      onFeedback(getApiErrorMessage(error), "error");
-    }
-  };
-
-  const handleUnassign = async (employeeId: string) => {
-    try {
-      await unassignMutation.mutateAsync(employeeId);
-      onFeedback(`${terminology.worker.singular} desasignado correctamente.`, "success");
+      await cancelMutation.mutateAsync(assignmentId);
+      onFeedback("Asignación cancelada correctamente.", "success");
     } catch (error) {
       onFeedback(getApiErrorMessage(error), "error");
     }
@@ -108,34 +84,6 @@ export function OperationWorkforceSection({
     >
       {summary ? <OperationalSummaryMetrics summary={summary} /> : null}
 
-      {canAssign ? (
-        <Group align="flex-end" gap="sm" mb="md" wrap="nowrap">
-          <div style={{ flex: 1, minWidth: 0 }}>
-            <EmployeeSearchAutocomplete
-              label={`${terminology.worker.singular} activo`}
-              value={selectedEmployeeId || null}
-              onChange={(id) => setSelectedEmployeeId(id ?? "")}
-              excludeIds={assignedEmployeeIds}
-              descriptionMode="assignment"
-              helperText="Buscá por nombre. Verás tipo y último día trabajado."
-              placeholder="Nombre o teléfono"
-            />
-          </div>
-          <Button
-            onClick={() => void handleAssign()}
-            disabled={!selectedEmployeeId || assignMutation.isPending}
-            loading={assignMutation.isPending}
-          >
-            Asignar
-          </Button>
-        </Group>
-      ) : (
-        <Alert color="blue" mb="md">
-          No se pueden asignar {terminology.worker.plural.toLowerCase()} a{" "}
-          {terminology.operation.plural.toLowerCase()} completadas o canceladas.
-        </Alert>
-      )}
-
       <OperationEmployeeTable
         operationId={operationId}
         rows={rows}
@@ -154,8 +102,8 @@ export function OperationWorkforceSection({
         onReviewReject={(attendanceId) =>
           setReviewTarget({ attendanceId, decision: "REJECT" })
         }
-        onUnassign={(employeeId) => void handleUnassign(employeeId)}
-        unassignPending={unassignMutation.isPending}
+        onUnassign={(assignmentId) => void handleCancel(assignmentId)}
+        unassignPending={cancelMutation.isPending}
         pagination={
           meta
             ? {

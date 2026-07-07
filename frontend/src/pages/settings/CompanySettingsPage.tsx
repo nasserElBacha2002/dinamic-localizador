@@ -5,16 +5,18 @@ import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useCompanyAbsenceSettings } from "../../hooks/useCompanyAbsenceSettings";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
+import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { companyRoleLabels } from "../../utils/labels";
 import { getApiErrorMessage } from "../../utils/errors";
-import { buildAbsenceSummary, buildLocationTypesSummary } from "./company-settings-summaries";
+import { buildAbsenceSummary, buildLocationTypesSummary, buildWorkScheduleSummary } from "./company-settings-summaries";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsSection } from "./components/CompanyOperationalSettingsSection";
+import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 
-type DialogKey = "absences" | "locationTypes";
+type DialogKey = "absences" | "locationTypes" | "workSchedule";
 
 export function CompanySettingsPage() {
   const permissionsQuery = useCompanyPermissions();
@@ -25,6 +27,7 @@ export function CompanySettingsPage() {
   const settingsQuery = useCompanySettings(canRead);
   const absenceSettingsQuery = useCompanyAbsenceSettings(canRead);
   const locationTypesQuery = useCompanyLocationTypes(false);
+  const workScheduleQuery = useCompanyWorkSchedule(canRead);
 
   const [openDialog, setOpenDialog] = useState<DialogKey | null>(null);
 
@@ -77,6 +80,24 @@ export function CompanySettingsPage() {
       />
 
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <SettingsSummaryCard
+          title="Horario laboral semanal"
+          description="Horario predeterminado para operaciones habituales con horario de la empresa."
+          summaryItems={
+            workScheduleQuery.data
+              ? buildWorkScheduleSummary(workScheduleQuery.data).summaryItems
+              : []
+          }
+          loading={workScheduleQuery.isLoading}
+          error={
+            workScheduleQuery.isError ? getApiErrorMessage(workScheduleQuery.error) : null
+          }
+          onRetry={() => void workScheduleQuery.refetch()}
+          actionLabel="Gestionar horario"
+          canEdit={canUpdate && !workScheduleQuery.isError}
+          onAction={() => setOpenDialog("workSchedule")}
+        />
+
         <SettingsSummaryCard
           title="Ausencias"
           description="Saldos predeterminados para nuevos empleados."
@@ -137,6 +158,16 @@ export function CompanySettingsPage() {
           onClose={() => setOpenDialog(null)}
           locationTypes={locationTypesQuery.data}
           canUpdate={canUpdate}
+        />
+      ) : null}
+
+      {openDialog === "workSchedule" && workScheduleQuery.data ? (
+        <CompanyWeeklyScheduleDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          schedule={workScheduleQuery.data}
+          canUpdate={canUpdate}
+          onSaved={handleSaved}
         />
       ) : null}
     </Stack>

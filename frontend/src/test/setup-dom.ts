@@ -47,6 +47,12 @@ export function setupDomEnvironment(): void {
     value: window.getComputedStyle.bind(window),
   });
 
+  Object.defineProperty(globalThis, "localStorage", {
+    configurable: true,
+    writable: true,
+    value: window.localStorage,
+  });
+
   if (!globalThis.ResizeObserver) {
     Object.defineProperty(globalThis, "ResizeObserver", {
       configurable: true,
@@ -56,6 +62,22 @@ export function setupDomEnvironment(): void {
         unobserve(): void {}
         disconnect(): void {}
       },
+    });
+  }
+
+  if (!globalThis.requestAnimationFrame) {
+    Object.defineProperty(globalThis, "requestAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: (callback: FrameRequestCallback) => setTimeout(() => callback(Date.now()), 0),
+    });
+  }
+
+  if (!globalThis.cancelAnimationFrame) {
+    Object.defineProperty(globalThis, "cancelAnimationFrame", {
+      configurable: true,
+      writable: true,
+      value: (handle: number) => clearTimeout(handle),
     });
   }
 }

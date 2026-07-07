@@ -7,6 +7,7 @@ import { validate } from "../middleware/validate";
 import {
   companyIdParamSchema,
   updateCompanySettingsSchema,
+  weeklySchedulePayloadSchema,
 } from "../schemas/company.schema";
 import { updateCompanyAbsenceSettingsSchema } from "../schemas/company-absence-settings.schema";
 import {
@@ -43,6 +44,23 @@ companyRouter.patch(
   resolveCompanyContext,
   requirePermission("company:settings:update"),
   asyncHandler(companyController.updateSettings),
+);
+
+companyRouter.get(
+  "/:companyId/settings/work-schedule",
+  validate(companyIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:read"),
+  asyncHandler(companyController.getWorkSchedule),
+);
+
+companyRouter.put(
+  "/:companyId/settings/work-schedule",
+  validate(companyIdParamSchema, "params"),
+  validate(weeklySchedulePayloadSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyController.updateWorkSchedule),
 );
 
 companyRouter.get(

@@ -92,13 +92,17 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
 };
 
 export const attendanceRepository = {
-  async create(companyId: string, input: CreateAttendanceInput): Promise<AttendanceRecord> {
+  async create(
+    companyId: string,
+    input: CreateAttendanceInput & { employeeWorkdayId: string },
+  ): Promise<AttendanceRecord> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
       .input("receivedLatitude", sql.Decimal(10, 7), input.receivedLatitude)
       .input("receivedLongitude", sql.Decimal(10, 7), input.receivedLongitude)
       .input("distanceMeters", sql.Decimal(10, 2), input.distanceMeters)
@@ -110,13 +114,15 @@ export const attendanceRepository = {
       .input("receivedAt", sql.DateTime2, new Date(input.receivedAt))
       .query(`
         INSERT INTO attendance_records (
-          company_id, operation_id, employee_id, received_latitude, received_longitude,
+          company_id, operation_id, employee_id, employee_workday_id,
+          received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @operationId, @employeeId, @receivedLatitude, @receivedLongitude,
+          @companyId, @operationId, @employeeId, @employeeWorkdayId,
+          @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt
         )
@@ -271,10 +277,67 @@ export const attendanceRepository = {
     return Boolean(result.recordset[0]);
   },
 
+  async hasActiveRecordByEmployeeWorkday(
+    companyId: string,
+    employeeWorkdayId: string,
+    options?: { simulationSessionId?: string | null },
+  ): Promise<boolean> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+
+    const simulationFilter = options?.simulationSessionId
+      ? "AND is_simulation = 1 AND simulation_session_id = @simulationSessionId"
+      : "AND is_simulation = 0";
+
+    if (options?.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, options.simulationSessionId);
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_records
+        WHERE employee_workday_id = @employeeWorkdayId
+          AND company_id = @companyId
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          ${simulationFilter}
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
+  async hasActiveRecordByEmployeeWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    employeeWorkdayId: string,
+    simulationSessionId: string | null,
+  ): Promise<boolean> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("simulationSessionId", sql.UniqueIdentifier, simulationSessionId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_records WITH (UPDLOCK, HOLDLOCK)
+        WHERE employee_workday_id = @employeeWorkdayId
+          AND company_id = @companyId
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND (
+            (@simulationSessionId IS NULL AND is_simulation = 0)
+            OR (is_simulation = 1 AND simulation_session_id = @simulationSessionId)
+          )
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
   async createInTransaction(
     companyId: string,
     transaction: sql.Transaction,
     input: CreateAttendanceInput & {
+      employeeWorkdayId: string;
       isSimulation?: boolean;
       simulationSessionId?: string | null;
     },
@@ -284,6 +347,7 @@ export const attendanceRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
       .input("receivedLatitude", sql.Decimal(10, 7), input.receivedLatitude)
       .input("receivedLongitude", sql.Decimal(10, 7), input.receivedLongitude)
       .input("distanceMeters", sql.Decimal(10, 2), input.distanceMeters)
@@ -297,14 +361,16 @@ export const attendanceRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId ?? null)
       .query(`
         INSERT INTO attendance_records (
-          company_id, operation_id, employee_id, received_latitude, received_longitude,
+          company_id, operation_id, employee_id, employee_workday_id,
+          received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @operationId, @employeeId, @receivedLatitude, @receivedLongitude,
+          @companyId, @operationId, @employeeId, @employeeWorkdayId,
+          @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt,
           @isSimulation, @simulationSessionId
@@ -436,6 +502,44 @@ export const attendanceRepository = {
     }));
   },
 
+  async findCheckInForEmployeeWorkday(
+    companyId: string,
+    employeeWorkdayId: string,
+    options?: { simulationSessionId?: string | null },
+  ): Promise<AttendanceRecord | null> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+
+    const simulationFilter = options?.simulationSessionId
+      ? "AND ar.is_simulation = 1 AND ar.simulation_session_id = @simulationSessionId"
+      : "AND ar.is_simulation = 0";
+
+    if (options?.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, options.simulationSessionId);
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1 ar.*
+        FROM attendance_records ar
+        WHERE ar.employee_workday_id = @employeeWorkdayId
+          AND ar.company_id = @companyId
+          AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND ar.checkout_at IS NULL
+          ${simulationFilter}
+        ORDER BY ar.received_at DESC
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /** @deprecated Prefer findCheckInForEmployeeWorkday for attendance identity. */
   async findCheckInForCheckout(
     companyId: string,
     operationId: string,

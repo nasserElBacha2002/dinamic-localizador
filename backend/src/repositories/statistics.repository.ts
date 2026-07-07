@@ -8,101 +8,21 @@ import type {
   AttendanceStatisticsSummary,
   AttendanceStatusDistributionItem,
   AttendanceTimelinePoint,
+  AttendanceWorkdayDetailRow,
 } from "../types/statistics";
-import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
-
-const ASSIGNMENT_BASE_FROM = `
-  FROM operation_assignments ie
-  INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = ie.company_id
-  INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
-  INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = ie.company_id
-  LEFT JOIN attendance_records ar
-    ON ar.operation_id = ie.operation_id
-   AND ar.employee_id = ie.employee_id
-   AND ar.company_id = ie.company_id
-`;
-
-const buildStatisticsFilters = (companyId: string, filters: StatisticsFilters): SqlFilter[] => {
-  const sqlFilters: SqlFilter[] = [
-    {
-      clause: "i.company_id = @companyId",
-      apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
-    },
-  ];
-
-  if (filters.dateFrom) {
-    sqlFilters.push({
-      clause: "i.scheduled_start >= @dateFrom",
-      apply: (request) => request.input("dateFrom", sql.DateTimeOffset, filters.dateFrom),
-    });
-  }
-
-  if (filters.dateTo) {
-    sqlFilters.push({
-      clause: "i.scheduled_start <= @dateTo",
-      apply: (request) => request.input("dateTo", sql.DateTimeOffset, filters.dateTo),
-    });
-  }
-
-  if (filters.operationId) {
-    sqlFilters.push({
-      clause: "i.id = @operationId",
-      apply: (request) => request.input("operationId", sql.UniqueIdentifier, filters.operationId),
-    });
-  }
-
-  if (filters.serviceId) {
-    sqlFilters.push({
-      clause: "s.id = @serviceId",
-      apply: (request) => request.input("serviceId", sql.UniqueIdentifier, filters.serviceId),
-    });
-  }
-
-  if (filters.employeeId) {
-    sqlFilters.push({
-      clause: "e.id = @employeeId",
-      apply: (request) => request.input("employeeId", sql.UniqueIdentifier, filters.employeeId),
-    });
-  }
-
-  if (filters.validationStatus === "NO_CHECK_IN") {
-    sqlFilters.push({
-      clause: "ar.id IS NULL",
-      apply: () => undefined,
-    });
-  } else if (filters.validationStatus) {
-    sqlFilters.push({
-      clause: "ar.validation_status = @validationStatus",
-      apply: (request) => request.input("validationStatus", sql.NVarChar, filters.validationStatus),
-    });
-  }
-
-  if (filters.locationStatus) {
-    sqlFilters.push({
-      clause: "ar.location_status = @locationStatus",
-      apply: (request) => request.input("locationStatus", sql.NVarChar, filters.locationStatus),
-    });
-  }
-
-  if (filters.punctualityStatus) {
-    sqlFilters.push({
-      clause: "ar.punctuality_status = @punctualityStatus",
-      apply: (request) => request.input("punctualityStatus", sql.NVarChar, filters.punctualityStatus),
-    });
-  }
-
-  return sqlFilters;
-};
+import {
+  calculateAbsenceRate,
+  calculateAttendanceRate,
+  calculatePunctualityRate,
+} from "../utils/attendance-statistics-metrics";
+import {
+  applyEmployeeWorkdayStatisticsFilters,
+  buildEmployeeWorkdayStatisticsCte,
+  buildEmployeeWorkdayStatisticsFilters,
+  buildStatisticsWhereFromFilters,
+} from "../utils/employee-workday-statistics-projection";
 
 const toNumber = (value: unknown): number => Number(value ?? 0);
-
-const toPercentage = (numerator: number, denominator: number): number => {
-  if (denominator === 0) {
-    return 0;
-  }
-
-  return Math.round((numerator / denominator) * 1000) / 10;
-};
 
 const toIsoDate = (value: unknown): string | null => {
   if (!value) {
@@ -114,57 +34,68 @@ const toIsoDate = (value: unknown): string | null => {
 };
 
 const toDateKey = (value: unknown): string => {
-  const date = value instanceof Date ? value : new Date(String(value));
-  return date.toISOString().slice(0, 10);
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  return String(value).slice(0, 10);
 };
 
 const STATUS_LABELS: Record<string, string> = {
-  present: "Presente / a tiempo",
-  late: "Tarde",
-  outsideGeofence: "Fuera de geocerca",
-  pendingReview: "Pendiente de revisión",
-  rejected: "Rechazado",
-  manuallyAccepted: "Aceptado manualmente",
-  noShow: "Sin asistencia",
+  present: "Con asistencia",
+  absent: "Ausente",
+  justified: "Justificado",
+  expected: "Pendiente / esperada",
+  cancelled: "Cancelada",
 };
 
 const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
-  employeeName: "e.name",
-  phoneNumber: "e.phone_number",
-  assignedOperationsCount: "assigned_operations_count",
-  confirmedAttendances: "confirmed_attendances",
-  noShowCount: "no_show_count",
-  lateCount: "late_count",
-  outsideGeofenceCount: "outside_geofence_count",
-  pendingReviewCount: "pending_review_count",
-  attendancePercentage: "attendance_percentage",
+  employeeName: "employee_name",
+  phoneNumber: "phone_number",
+  scheduledWorkdays: "scheduled_workdays",
+  presentWorkdays: "present_workdays",
+  absentWorkdays: "absent_workdays",
+  justifiedWorkdays: "justified_workdays",
+  expectedOpenWorkdays: "expected_open_workdays",
+  attendanceRate: "attendance_rate",
+  onTimeWorkdays: "on_time_workdays",
+  lateWorkdays: "late_workdays",
+  punctualityRate: "punctuality_rate",
+  workedMinutes: "worked_minutes",
+  overtimeMinutes: "overtime_minutes",
+  earlyDepartureWorkdays: "early_departure_workdays",
   lastAttendanceDate: "last_attendance_date",
 };
 
 const OPERATION_SORT_FIELDS: Record<string, string> = {
-  serviceName: "s.name",
-  scheduledStart: "i.scheduled_start",
-  assignedEmployeesCount: "assigned_employees_count",
-  presentCount: "present_count",
-  noShowCount: "no_show_count",
-  lateCount: "late_count",
-  outsideGeofenceCount: "outside_geofence_count",
-  pendingReviewCount: "pending_review_count",
-  attendancePercentage: "attendance_percentage",
-  operationalStatus: "i.status",
+  serviceName: "service_name",
+  scheduledStart: "operation_scheduled_start",
+  scheduledWorkdays: "scheduled_workdays",
+  presentWorkdays: "present_workdays",
+  absentWorkdays: "absent_workdays",
+  justifiedWorkdays: "justified_workdays",
+  expectedOpenWorkdays: "expected_open_workdays",
+  attendanceRate: "attendance_rate",
+  punctualityRate: "punctuality_rate",
+  workedMinutes: "worked_minutes",
+  overtimeMinutes: "overtime_minutes",
+  operationalStatus: "operation_status",
+  operationKind: "operation_kind",
 };
 
 const SERVICE_SORT_FIELDS: Record<string, string> = {
-  serviceName: "s.name",
-  address: "s.address",
+  serviceName: "service_name",
+  address: "service_address",
   totalOperations: "total_operations",
-  averageAttendancePercentage: "average_attendance_percentage",
-  totalAssignedEmployees: "total_assigned_employees",
-  totalConfirmedAttendances: "total_confirmed_attendances",
-  totalNoShows: "total_no_shows",
-  totalLateRecords: "total_late_records",
-  totalOutsideGeofenceRecords: "total_outside_geofence_records",
-  totalManualReviews: "total_manual_reviews",
+  scheduledWorkdays: "scheduled_workdays",
+  presentWorkdays: "present_workdays",
+  absentWorkdays: "absent_workdays",
+  justifiedWorkdays: "justified_workdays",
+  expectedOpenWorkdays: "expected_open_workdays",
+  attendanceRate: "attendance_rate",
+  punctualityRate: "punctuality_rate",
+  workedMinutes: "worked_minutes",
+  overtimeMinutes: "overtime_minutes",
 };
 
 const resolveSort = (
@@ -178,74 +109,114 @@ const resolveSort = (
   return `${column} ${direction}`;
 };
 
+const buildQueryContext = (companyId: string, filters: StatisticsFilters, referenceAt: Date) => {
+  const sqlFilters = buildEmployeeWorkdayStatisticsFilters(companyId, filters);
+  const whereClause = buildStatisticsWhereFromFilters(sqlFilters);
+  const cte = buildEmployeeWorkdayStatisticsCte(whereClause);
+
+  return { sqlFilters, cte, referenceAt };
+};
+
+const mapSummaryRow = (row: Record<string, unknown>): AttendanceStatisticsSummary => {
+  const presentWorkdays = toNumber(row.present_workdays);
+  const absentWorkdays = toNumber(row.absent_workdays);
+  const onTimeWorkdays = toNumber(row.on_time_workdays);
+  const lateWorkdays = toNumber(row.late_workdays);
+
+  return {
+    scheduledWorkdays: toNumber(row.scheduled_workdays),
+    attendanceRequiredWorkdays: toNumber(row.attendance_required_workdays),
+    presentWorkdays,
+    absentWorkdays,
+    justifiedWorkdays: toNumber(row.justified_workdays),
+    expectedOpenWorkdays: toNumber(row.expected_open_workdays),
+    cancelledWorkdays: toNumber(row.cancelled_workdays),
+    attendanceRate: calculateAttendanceRate(presentWorkdays, absentWorkdays),
+    absenceRate: calculateAbsenceRate(presentWorkdays, absentWorkdays),
+    onTimeWorkdays,
+    lateWorkdays,
+    punctualityRate: calculatePunctualityRate(onTimeWorkdays, lateWorkdays),
+    earlyDepartureWorkdays: toNumber(row.early_departure_workdays),
+    workedMinutes: toNumber(row.worked_minutes),
+    overtimeMinutes: toNumber(row.overtime_minutes),
+    openAttendanceWorkdays: toNumber(row.open_attendance_workdays),
+    outsideGeofenceCount: toNumber(row.outside_geofence_count),
+    pendingReviewCount: toNumber(row.pending_review_count),
+    rejectedCount: toNumber(row.rejected_count),
+    manuallyAcceptedCount: toNumber(row.manually_accepted_count),
+    totalOperations: toNumber(row.total_operations),
+  };
+};
+
+const SUMMARY_AGGREGATE_SELECT = `
+  SELECT
+    SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_workdays,
+    SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT', N'EXPECTED') THEN 1 ELSE 0 END) AS attendance_required_workdays,
+    SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_workdays,
+    SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_workdays,
+    SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_workdays,
+    SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_open_workdays,
+    SUM(CASE WHEN effective_state = N'CANCELLED' THEN 1 ELSE 0 END) AS cancelled_workdays,
+    SUM(is_on_time_workday) AS on_time_workdays,
+    SUM(is_late_workday) AS late_workdays,
+    SUM(is_early_departure_workday) AS early_departure_workdays,
+    SUM(worked_minutes) AS worked_minutes,
+    SUM(overtime_minutes) AS overtime_minutes,
+    SUM(is_open_attendance_workday) AS open_attendance_workdays,
+    SUM(CASE WHEN location_status = N'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
+    SUM(CASE WHEN validation_status = N'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
+    SUM(CASE WHEN validation_status = N'REJECTED' THEN 1 ELSE 0 END) AS rejected_count,
+    SUM(CASE WHEN reviewed_at IS NOT NULL AND validation_status = N'VALID' THEN 1 ELSE 0 END) AS manually_accepted_count,
+    COUNT(DISTINCT operation_id) AS total_operations
+  FROM employee_workday_statistics
+`;
+
 export const statisticsRepository = {
   async getSummary(
     companyId: string,
     filters: StatisticsFilters,
+    referenceAt: Date,
   ): Promise<AttendanceStatisticsSummary> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(companyId, filters);
+    const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
     const request = pool.request();
-    applySqlFilters(request, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(request, sqlFilters, referenceAt);
 
     const result = await request.query(`
-      SELECT
-        COUNT(*) AS total_assigned,
-        COUNT(DISTINCT i.id) AS total_operations,
-        SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS total_attendance_records,
-        SUM(CASE WHEN ar.punctuality_status IN ('ON_TIME', 'EARLY') THEN 1 ELSE 0 END) AS present_count,
-        SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,
-        SUM(CASE WHEN ar.location_status = 'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
-        SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
-        SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected_count,
-        SUM(CASE WHEN ar.reviewed_at IS NOT NULL AND ar.validation_status = 'VALID' THEN 1 ELSE 0 END) AS manually_accepted_count,
-        SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count
-      ${ASSIGNMENT_BASE_FROM}
-      ${buildWhereClause(sqlFilters)}
+      ${cte}
+      ${SUMMARY_AGGREGATE_SELECT}
     `);
 
-    const row = result.recordset[0] as Record<string, unknown>;
-    const totalAssigned = toNumber(row.total_assigned);
-    const totalAttendanceRecords = toNumber(row.total_attendance_records);
-
-    return {
-      totalAttendanceRecords,
-      totalAssignedEmployees: totalAssigned,
-      attendancePercentage: toPercentage(totalAttendanceRecords, totalAssigned),
-      presentCount: toNumber(row.present_count),
-      lateCount: toNumber(row.late_count),
-      outsideGeofenceCount: toNumber(row.outside_geofence_count),
-      pendingReviewCount: toNumber(row.pending_review_count),
-      rejectedCount: toNumber(row.rejected_count),
-      manuallyAcceptedCount: toNumber(row.manually_accepted_count),
-      noShowCount: toNumber(row.no_show_count),
-      totalOperations: toNumber(row.total_operations),
-    };
+    return mapSummaryRow(result.recordset[0] as Record<string, unknown>);
   },
 
   async getTimeline(
     companyId: string,
     filters: StatisticsFilters,
+    referenceAt: Date,
   ): Promise<AttendanceTimelinePoint[]> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(companyId, filters);
+    const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
     const request = pool.request();
-    applySqlFilters(request, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(request, sqlFilters, referenceAt);
 
     const result = await request.query(`
+      ${cte}
       SELECT
-        CAST(COALESCE(ar.received_at, i.scheduled_start) AS DATE) AS event_date,
-        SUM(CASE WHEN ar.punctuality_status IN ('ON_TIME', 'EARLY') THEN 1 ELSE 0 END) AS present_count,
-        SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,
-        SUM(CASE WHEN ar.location_status = 'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
-        SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
-        SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected_count,
-        SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count,
-        COUNT(*) AS total_count
-      ${ASSIGNMENT_BASE_FROM}
-      ${buildWhereClause(sqlFilters)}
-      GROUP BY CAST(COALESCE(ar.received_at, i.scheduled_start) AS DATE)
-      ORDER BY event_date ASC
+        work_date AS event_date,
+        SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_count,
+        SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_count,
+        SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_count,
+        SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_count,
+        SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_count,
+        SUM(is_on_time_workday) AS on_time_count,
+        SUM(is_late_workday) AS late_count,
+        SUM(CASE WHEN location_status = N'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
+        SUM(CASE WHEN validation_status = N'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
+        SUM(CASE WHEN validation_status = N'REJECTED' THEN 1 ELSE 0 END) AS rejected_count
+      FROM employee_workday_statistics
+      GROUP BY work_date
+      ORDER BY work_date ASC
     `);
 
     return result.recordset.map((row) => {
@@ -253,12 +224,15 @@ export const statisticsRepository = {
       return {
         date: toDateKey(record.event_date),
         present: toNumber(record.present_count),
+        absent: toNumber(record.absent_count),
+        justified: toNumber(record.justified_count),
+        expected: toNumber(record.expected_count),
+        scheduled: toNumber(record.scheduled_count),
+        onTime: toNumber(record.on_time_count),
         late: toNumber(record.late_count),
         outsideGeofence: toNumber(record.outside_geofence_count),
         pendingReview: toNumber(record.pending_review_count),
         rejected: toNumber(record.rejected_count),
-        noShow: toNumber(record.no_show_count),
-        total: toNumber(record.total_count),
       };
     });
   },
@@ -266,17 +240,16 @@ export const statisticsRepository = {
   async getStatusDistribution(
     companyId: string,
     filters: StatisticsFilters,
+    referenceAt: Date,
   ): Promise<AttendanceStatusDistributionItem[]> {
-    const summary = await this.getSummary(companyId, filters);
+    const summary = await this.getSummary(companyId, filters, referenceAt);
 
     const items: Array<{ status: string; count: number }> = [
-      { status: "present", count: summary.presentCount },
-      { status: "late", count: summary.lateCount },
-      { status: "outsideGeofence", count: summary.outsideGeofenceCount },
-      { status: "pendingReview", count: summary.pendingReviewCount },
-      { status: "rejected", count: summary.rejectedCount },
-      { status: "manuallyAccepted", count: summary.manuallyAcceptedCount },
-      { status: "noShow", count: summary.noShowCount },
+      { status: "present", count: summary.presentWorkdays },
+      { status: "absent", count: summary.absentWorkdays },
+      { status: "justified", count: summary.justifiedWorkdays },
+      { status: "expected", count: summary.expectedOpenWorkdays },
+      { status: "cancelled", count: summary.cancelledWorkdays },
     ];
 
     return items
@@ -295,52 +268,68 @@ export const statisticsRepository = {
     limit: number,
     sortBy?: string,
     sortDirection: "asc" | "desc" = "desc",
+    referenceAt: Date = new Date(),
   ): Promise<{ data: AttendanceByEmployeeRow[]; total: number }> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(companyId, filters);
-    const whereClause = buildWhereClause(sqlFilters);
-    const orderBy = resolveSort(sortBy, EMPLOYEE_SORT_FIELDS, "e.name", sortDirection);
+    const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
+    const orderBy = resolveSort(sortBy, EMPLOYEE_SORT_FIELDS, "employee_name", sortDirection);
     const offset = (page - 1) * limit;
 
     const countRequest = pool.request();
-    applySqlFilters(countRequest, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
     const countResult = await countRequest.query(`
-      SELECT COUNT(DISTINCT e.id) AS total
-      ${ASSIGNMENT_BASE_FROM}
-      ${whereClause}
+      ${cte}
+      SELECT COUNT(DISTINCT employee_id) AS total
+      FROM employee_workday_statistics
     `);
     const total = toNumber((countResult.recordset[0] as Record<string, unknown>).total);
 
     const dataRequest = pool.request();
-    applySqlFilters(dataRequest, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
     dataRequest.input("offset", sql.Int, offset);
     dataRequest.input("limit", sql.Int, limit);
 
     const dataResult = await dataRequest.query(`
+      ${cte}
       SELECT
-        e.id AS employee_id,
-        e.name AS employee_name,
-        e.phone_number,
-        COUNT(DISTINCT ie.operation_id) AS assigned_operations_count,
-        SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS confirmed_attendances,
-        SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count,
-        SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,
-        SUM(CASE WHEN ar.location_status = 'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
-        SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
+        employee_id,
+        employee_name,
+        phone_number,
+        SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_workdays,
+        SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_workdays,
+        SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_workdays,
+        SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_workdays,
+        SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_open_workdays,
+        SUM(is_on_time_workday) AS on_time_workdays,
+        SUM(is_late_workday) AS late_workdays,
+        SUM(is_early_departure_workday) AS early_departure_workdays,
+        SUM(worked_minutes) AS worked_minutes,
+        SUM(overtime_minutes) AS overtime_minutes,
+        SUM(CASE WHEN location_status = N'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
+        SUM(CASE WHEN validation_status = N'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
+        MAX(check_in_at) AS last_attendance_date,
         CASE
-          WHEN COUNT(*) = 0 THEN 0
+          WHEN SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END) = 0 THEN 0
           ELSE CAST(
             ROUND(
-              CAST(SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS FLOAT)
-              / CAST(COUNT(*) AS FLOAT) * 1000,
+              CAST(SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS FLOAT)
+              / CAST(SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END) AS FLOAT) * 1000,
               0
             ) AS INT
           ) / 10.0
-        END AS attendance_percentage,
-        MAX(ar.received_at) AS last_attendance_date
-      ${ASSIGNMENT_BASE_FROM}
-      ${whereClause}
-      GROUP BY e.id, e.name, e.phone_number
+        END AS attendance_rate,
+        CASE
+          WHEN SUM(is_punctuality_eligible) = 0 THEN 0
+          ELSE CAST(
+            ROUND(
+              CAST(SUM(is_on_time_workday) AS FLOAT)
+              / CAST(SUM(is_punctuality_eligible) AS FLOAT) * 1000,
+              0
+            ) AS INT
+          ) / 10.0
+        END AS punctuality_rate
+      FROM employee_workday_statistics
+      GROUP BY employee_id, employee_name, phone_number
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
@@ -351,13 +340,20 @@ export const statisticsRepository = {
         employeeId: String(record.employee_id),
         employeeName: String(record.employee_name),
         phoneNumber: String(record.phone_number),
-        assignedOperationsCount: toNumber(record.assigned_operations_count),
-        confirmedAttendances: toNumber(record.confirmed_attendances),
-        noShowCount: toNumber(record.no_show_count),
-        lateCount: toNumber(record.late_count),
+        scheduledWorkdays: toNumber(record.scheduled_workdays),
+        presentWorkdays: toNumber(record.present_workdays),
+        absentWorkdays: toNumber(record.absent_workdays),
+        justifiedWorkdays: toNumber(record.justified_workdays),
+        expectedOpenWorkdays: toNumber(record.expected_open_workdays),
+        attendanceRate: Number(record.attendance_rate ?? 0),
+        onTimeWorkdays: toNumber(record.on_time_workdays),
+        lateWorkdays: toNumber(record.late_workdays),
+        punctualityRate: Number(record.punctuality_rate ?? 0),
+        workedMinutes: toNumber(record.worked_minutes),
+        overtimeMinutes: toNumber(record.overtime_minutes),
+        earlyDepartureWorkdays: toNumber(record.early_departure_workdays),
         outsideGeofenceCount: toNumber(record.outside_geofence_count),
         pendingReviewCount: toNumber(record.pending_review_count),
-        attendancePercentage: Number(record.attendance_percentage ?? 0),
         lastAttendanceDate: toIsoDate(record.last_attendance_date),
       };
     });
@@ -372,53 +368,67 @@ export const statisticsRepository = {
     limit: number,
     sortBy?: string,
     sortDirection: "asc" | "desc" = "desc",
+    referenceAt: Date = new Date(),
   ): Promise<{ data: AttendanceByOperationRow[]; total: number }> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(companyId, filters);
-    const whereClause = buildWhereClause(sqlFilters);
-    const orderBy = resolveSort(sortBy, OPERATION_SORT_FIELDS, "i.scheduled_start", sortDirection);
+    const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
+    const orderBy = resolveSort(sortBy, OPERATION_SORT_FIELDS, "operation_scheduled_start", sortDirection);
     const offset = (page - 1) * limit;
 
     const countRequest = pool.request();
-    applySqlFilters(countRequest, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
     const countResult = await countRequest.query(`
-      SELECT COUNT(DISTINCT i.id) AS total
-      ${ASSIGNMENT_BASE_FROM}
-      ${whereClause}
+      ${cte}
+      SELECT COUNT(DISTINCT operation_id) AS total
+      FROM employee_workday_statistics
     `);
     const total = toNumber((countResult.recordset[0] as Record<string, unknown>).total);
 
     const dataRequest = pool.request();
-    applySqlFilters(dataRequest, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
     dataRequest.input("offset", sql.Int, offset);
     dataRequest.input("limit", sql.Int, limit);
 
     const dataResult = await dataRequest.query(`
+      ${cte}
       SELECT
-        i.id AS operation_id,
-        s.name AS service_name,
-        s.address AS service_address,
-        i.scheduled_start,
-        i.status AS operational_status,
-        COUNT(*) AS assigned_employees_count,
-        SUM(CASE WHEN ar.punctuality_status IN ('ON_TIME', 'EARLY') THEN 1 ELSE 0 END) AS present_count,
-        SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count,
-        SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS late_count,
-        SUM(CASE WHEN ar.location_status = 'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
-        SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
+        operation_id,
+        operation_kind,
+        service_name,
+        service_address,
+        MIN(operation_scheduled_start) AS operation_scheduled_start,
+        MAX(operation_status) AS operation_status,
+        SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_workdays,
+        SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_workdays,
+        SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_workdays,
+        SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_workdays,
+        SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_open_workdays,
+        SUM(is_on_time_workday) AS on_time_workdays,
+        SUM(is_late_workday) AS late_workdays,
+        SUM(worked_minutes) AS worked_minutes,
+        SUM(overtime_minutes) AS overtime_minutes,
         CASE
-          WHEN COUNT(*) = 0 THEN 0
+          WHEN SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END) = 0 THEN 0
           ELSE CAST(
             ROUND(
-              CAST(SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS FLOAT)
-              / CAST(COUNT(*) AS FLOAT) * 1000,
+              CAST(SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS FLOAT)
+              / CAST(SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END) AS FLOAT) * 1000,
               0
             ) AS INT
           ) / 10.0
-        END AS attendance_percentage
-      ${ASSIGNMENT_BASE_FROM}
-      ${whereClause}
-      GROUP BY i.id, s.name, s.address, i.scheduled_start, i.status
+        END AS attendance_rate,
+        CASE
+          WHEN SUM(is_punctuality_eligible) = 0 THEN 0
+          ELSE CAST(
+            ROUND(
+              CAST(SUM(is_on_time_workday) AS FLOAT)
+              / CAST(SUM(is_punctuality_eligible) AS FLOAT) * 1000,
+              0
+            ) AS INT
+          ) / 10.0
+        END AS punctuality_rate
+      FROM employee_workday_statistics
+      GROUP BY operation_id, operation_kind, service_name, service_address
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
@@ -427,17 +437,22 @@ export const statisticsRepository = {
       const record = row as Record<string, unknown>;
       return {
         operationId: String(record.operation_id),
+        operationKind: String(record.operation_kind),
         serviceName: String(record.service_name),
         serviceAddress: record.service_address ? String(record.service_address) : null,
-        scheduledStart: toIsoDate(record.scheduled_start) ?? "",
-        assignedEmployeesCount: toNumber(record.assigned_employees_count),
-        presentCount: toNumber(record.present_count),
-        noShowCount: toNumber(record.no_show_count),
-        lateCount: toNumber(record.late_count),
-        outsideGeofenceCount: toNumber(record.outside_geofence_count),
-        pendingReviewCount: toNumber(record.pending_review_count),
-        attendancePercentage: Number(record.attendance_percentage ?? 0),
-        operationalStatus: String(record.operational_status),
+        scheduledStart: toIsoDate(record.operation_scheduled_start),
+        scheduledWorkdays: toNumber(record.scheduled_workdays),
+        presentWorkdays: toNumber(record.present_workdays),
+        absentWorkdays: toNumber(record.absent_workdays),
+        justifiedWorkdays: toNumber(record.justified_workdays),
+        expectedOpenWorkdays: toNumber(record.expected_open_workdays),
+        attendanceRate: Number(record.attendance_rate ?? 0),
+        onTimeWorkdays: toNumber(record.on_time_workdays),
+        lateWorkdays: toNumber(record.late_workdays),
+        punctualityRate: Number(record.punctuality_rate ?? 0),
+        workedMinutes: toNumber(record.worked_minutes),
+        overtimeMinutes: toNumber(record.overtime_minutes),
+        operationalStatus: String(record.operation_status),
       };
     });
 
@@ -451,52 +466,67 @@ export const statisticsRepository = {
     limit: number,
     sortBy?: string,
     sortDirection: "asc" | "desc" = "desc",
+    referenceAt: Date = new Date(),
   ): Promise<{ data: AttendanceByServiceRow[]; total: number }> {
     const pool = getPool();
-    const sqlFilters = buildStatisticsFilters(companyId, filters);
-    const whereClause = buildWhereClause(sqlFilters);
-    const orderBy = resolveSort(sortBy, SERVICE_SORT_FIELDS, "s.name", sortDirection);
+    const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
+    const orderBy = resolveSort(sortBy, SERVICE_SORT_FIELDS, "service_name", sortDirection);
     const offset = (page - 1) * limit;
 
     const countRequest = pool.request();
-    applySqlFilters(countRequest, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
     const countResult = await countRequest.query(`
-      SELECT COUNT(DISTINCT s.id) AS total
-      ${ASSIGNMENT_BASE_FROM}
-      ${whereClause}
+      ${cte}
+      SELECT COUNT(DISTINCT service_id) AS total
+      FROM employee_workday_statistics
     `);
     const total = toNumber((countResult.recordset[0] as Record<string, unknown>).total);
 
     const dataRequest = pool.request();
-    applySqlFilters(dataRequest, sqlFilters);
+    applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
     dataRequest.input("offset", sql.Int, offset);
     dataRequest.input("limit", sql.Int, limit);
 
     const dataResult = await dataRequest.query(`
+      ${cte}
       SELECT
-        s.id AS service_id,
-        s.name AS service_name,
-        s.address,
-        COUNT(DISTINCT i.id) AS total_operations,
-        COUNT(*) AS total_assigned_employees,
-        SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS total_confirmed_attendances,
-        SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS total_no_shows,
-        SUM(CASE WHEN ar.punctuality_status = 'LATE' THEN 1 ELSE 0 END) AS total_late_records,
-        SUM(CASE WHEN ar.location_status = 'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS total_outside_geofence_records,
-        SUM(CASE WHEN ar.reviewed_at IS NOT NULL THEN 1 ELSE 0 END) AS total_manual_reviews,
+        service_id,
+        service_name,
+        service_address,
+        COUNT(DISTINCT operation_id) AS total_operations,
+        SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_workdays,
+        SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_workdays,
+        SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_workdays,
+        SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_workdays,
+        SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_open_workdays,
+        SUM(is_on_time_workday) AS on_time_workdays,
+        SUM(is_late_workday) AS late_workdays,
+        SUM(worked_minutes) AS worked_minutes,
+        SUM(overtime_minutes) AS overtime_minutes,
+        SUM(CASE WHEN location_status = N'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END) AS outside_geofence_count,
+        SUM(CASE WHEN validation_status = N'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review_count,
         CASE
-          WHEN COUNT(*) = 0 THEN 0
+          WHEN SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END) = 0 THEN 0
           ELSE CAST(
             ROUND(
-              CAST(SUM(CASE WHEN ar.id IS NOT NULL THEN 1 ELSE 0 END) AS FLOAT)
-              / CAST(COUNT(*) AS FLOAT) * 1000,
+              CAST(SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS FLOAT)
+              / CAST(SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END) AS FLOAT) * 1000,
               0
             ) AS INT
           ) / 10.0
-        END AS average_attendance_percentage
-      ${ASSIGNMENT_BASE_FROM}
-      ${whereClause}
-      GROUP BY s.id, s.name, s.address
+        END AS attendance_rate,
+        CASE
+          WHEN SUM(is_punctuality_eligible) = 0 THEN 0
+          ELSE CAST(
+            ROUND(
+              CAST(SUM(is_on_time_workday) AS FLOAT)
+              / CAST(SUM(is_punctuality_eligible) AS FLOAT) * 1000,
+              0
+            ) AS INT
+          ) / 10.0
+        END AS punctuality_rate
+      FROM employee_workday_statistics
+      GROUP BY service_id, service_name, service_address
       ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
@@ -506,15 +536,100 @@ export const statisticsRepository = {
       return {
         serviceId: String(record.service_id),
         serviceName: String(record.service_name),
-        address: record.address ? String(record.address) : null,
+        address: record.service_address ? String(record.service_address) : null,
         totalOperations: toNumber(record.total_operations),
-        averageAttendancePercentage: Number(record.average_attendance_percentage ?? 0),
-        totalAssignedEmployees: toNumber(record.total_assigned_employees),
-        totalConfirmedAttendances: toNumber(record.total_confirmed_attendances),
-        totalNoShows: toNumber(record.total_no_shows),
-        totalLateRecords: toNumber(record.total_late_records),
-        totalOutsideGeofenceRecords: toNumber(record.total_outside_geofence_records),
-        totalManualReviews: toNumber(record.total_manual_reviews),
+        scheduledWorkdays: toNumber(record.scheduled_workdays),
+        presentWorkdays: toNumber(record.present_workdays),
+        absentWorkdays: toNumber(record.absent_workdays),
+        justifiedWorkdays: toNumber(record.justified_workdays),
+        expectedOpenWorkdays: toNumber(record.expected_open_workdays),
+        attendanceRate: Number(record.attendance_rate ?? 0),
+        onTimeWorkdays: toNumber(record.on_time_workdays),
+        lateWorkdays: toNumber(record.late_workdays),
+        punctualityRate: Number(record.punctuality_rate ?? 0),
+        workedMinutes: toNumber(record.worked_minutes),
+        overtimeMinutes: toNumber(record.overtime_minutes),
+        outsideGeofenceCount: toNumber(record.outside_geofence_count),
+        pendingReviewCount: toNumber(record.pending_review_count),
+      };
+    });
+
+    return { data, total };
+  },
+
+  async getWorkdayDetails(
+    companyId: string,
+    filters: StatisticsFilters,
+    page: number,
+    limit: number,
+    referenceAt: Date,
+  ): Promise<{ data: AttendanceWorkdayDetailRow[]; total: number }> {
+    const pool = getPool();
+    const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
+    const offset = (page - 1) * limit;
+
+    const countRequest = pool.request();
+    applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
+    const countResult = await countRequest.query(`
+      ${cte}
+      SELECT COUNT(*) AS total
+      FROM employee_workday_statistics
+    `);
+    const total = toNumber((countResult.recordset[0] as Record<string, unknown>).total);
+
+    const dataRequest = pool.request();
+    applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
+    dataRequest.input("offset", sql.Int, offset);
+    dataRequest.input("limit", sql.Int, limit);
+
+    const dataResult = await dataRequest.query(`
+      ${cte}
+      SELECT
+        work_date,
+        employee_name,
+        employee_type,
+        service_name,
+        operation_kind,
+        expected_start_at,
+        expected_end_at,
+        effective_state,
+        check_in_at,
+        punctuality_status,
+        check_out_at,
+        checkout_status,
+        worked_minutes,
+        overtime_minutes,
+        absence_type_name,
+        CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END AS justified
+      FROM employee_workday_statistics
+      ORDER BY work_date DESC, employee_name ASC
+      OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+    `);
+
+    const data = dataResult.recordset.map((row) => {
+      const record = row as Record<string, unknown>;
+      const effectiveState = String(record.effective_state) as AttendanceWorkdayDetailRow["effectiveState"];
+      return {
+        workDate: toDateKey(record.work_date),
+        employeeName: String(record.employee_name),
+        employeeType: record.employee_type ? String(record.employee_type) : null,
+        serviceName: String(record.service_name),
+        operationKind: String(record.operation_kind) as AttendanceWorkdayDetailRow["operationKind"],
+        expectedStartAt: toIsoDate(record.expected_start_at) ?? "",
+        expectedEndAt: toIsoDate(record.expected_end_at),
+        effectiveState,
+        checkInAt: toIsoDate(record.check_in_at),
+        arrivalStatus: record.punctuality_status
+          ? (String(record.punctuality_status) as AttendanceWorkdayDetailRow["arrivalStatus"])
+          : null,
+        checkOutAt: toIsoDate(record.check_out_at),
+        checkoutStatus: record.checkout_status
+          ? (String(record.checkout_status) as AttendanceWorkdayDetailRow["checkoutStatus"])
+          : null,
+        workedMinutes: toNumber(record.worked_minutes),
+        overtimeMinutes: toNumber(record.overtime_minutes),
+        absenceTypeName: record.absence_type_name ? String(record.absence_type_name) : null,
+        justified: effectiveState === "JUSTIFIED",
       };
     });
 

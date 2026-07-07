@@ -27,14 +27,14 @@ import { navigateWithListContext } from "../../utils/list-navigation";
 export interface OperationEmployeeTableProps {
   operationId: string;
   rows: OperationAttendanceSummaryEmployee[];
-  scheduledStart: string;
+  scheduledStart: string | null;
   loading?: boolean;
   error?: string;
   canAssign: boolean;
   canReviewAttendance: (row: OperationAttendanceSummaryEmployee) => boolean;
   onReviewApprove: (attendanceId: string) => void;
   onReviewReject: (attendanceId: string) => void;
-  onUnassign: (employeeId: string) => void;
+  onUnassign: (assignmentId: string) => void;
   unassignPending?: boolean;
   pagination?: {
     meta: PaginationMeta;
@@ -65,7 +65,7 @@ export function OperationEmployeeTable({
   const navigate = useNavigate();
   const location = useLocation();
   const operationDetailPath = `/operations/${operationId}`;
-  const expectedArrivalTime = formatTime(scheduledStart);
+  const expectedArrivalTime = scheduledStart ? formatTime(scheduledStart) : "—";
 
   const columns = useMemo<DataTableColumn<OperationAttendanceSummaryEmployee>[]>(
     () => [
@@ -139,7 +139,7 @@ export function OperationEmployeeTable({
     <DataTable
       rows={rows}
       columns={columns}
-      getRowKey={(row) => row.employee.id}
+      getRowKey={(row) => row.assignmentId}
       loading={loading}
       error={error}
       emptyTitle={emptyTitle}
@@ -184,9 +184,9 @@ export function OperationEmployeeTable({
               variant="light"
               disabled={unassignPending}
               loading={unassignPending}
-              onClick={() => onUnassign(row.employee.id)}
+              onClick={() => onUnassign(row.assignmentId)}
             >
-              Desasignar
+              Quitar asignación
             </Button>
           ) : null}
         </Group>

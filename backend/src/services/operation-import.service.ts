@@ -10,7 +10,7 @@ import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { operationRepository } from "../repositories/operation.repository";
 import { serviceRepository } from "../repositories/service.repository";
-import type { CreateOperationInput } from "../schemas/operation.schema";
+import type { CreateOneTimeOperationInput } from "../schemas/operation.schema";
 import type { Service } from "../types/domain";
 import type {
   OperationImportConfirmRow,
@@ -391,7 +391,8 @@ const validateLegacyRow = (
   };
 };
 
-const toCreateInput = (row: OperationImportConfirmRow): CreateOperationInput => ({
+const toCreateInput = (row: OperationImportConfirmRow): CreateOneTimeOperationInput => ({
+  operationKind: "ONE_TIME",
   serviceId: row.serviceId,
   scheduledStart: row.scheduledStart,
   scheduledEnd: row.scheduledEnd,

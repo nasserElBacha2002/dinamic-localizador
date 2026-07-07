@@ -14,11 +14,30 @@ export const operationAssignmentPath = (operationId: string): string =>
 
 export const operationAssignmentMemberPath = (
   operationId: string,
-  employeeId: string,
-): string => `${operationAssignmentPath(operationId)}/${employeeId}`;
+  assignmentId: string,
+): string => `${operationAssignmentPath(operationId)}/${assignmentId}`;
+
+export const operationAssignmentCancelPath = (
+  operationId: string,
+  assignmentId: string,
+): string => `${operationAssignmentMemberPath(operationId, assignmentId)}/cancel`;
+
+export const operationAssignmentEndPath = (
+  operationId: string,
+  assignmentId: string,
+): string => `${operationAssignmentMemberPath(operationId, assignmentId)}/end`;
 
 export const operationPath = (operationId: string): string =>
   `${API_ENDPOINTS.operations}/${operationId}`;
+
+export const operationWorkdaysPath = (operationId: string): string =>
+  `${operationPath(operationId)}/workdays`;
+
+export const operationWorkdayPath = (operationId: string, workdayId: string): string =>
+  `${operationWorkdaysPath(operationId)}/${workdayId}`;
+
+export const operationMaterializeWorkdaysPath = (operationId: string): string =>
+  `${operationPath(operationId)}/materialize-workdays`;
 
 export const servicePath = (serviceId: string): string =>
   `${API_ENDPOINTS.services}/${serviceId}`;

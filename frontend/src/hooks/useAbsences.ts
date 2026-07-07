@@ -65,6 +65,8 @@ export function useApproveAbsenceRequest(absenceRequestId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
     },
   });
 }
@@ -76,6 +78,8 @@ export function useRejectAbsenceRequest(absenceRequestId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
     },
   });
 }
@@ -87,6 +91,8 @@ export function useNeedsInfoAbsenceRequest(absenceRequestId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
     },
   });
 }
@@ -98,6 +104,8 @@ export function useCancelAbsenceRequest(absenceRequestId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["absence-requests"] });
       queryClient.invalidateQueries({ queryKey: ["absence-request", absenceRequestId] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
     },
   });
 }

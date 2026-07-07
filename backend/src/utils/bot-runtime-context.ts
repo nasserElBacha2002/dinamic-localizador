@@ -17,6 +17,7 @@ export type VirtualAttendanceRecord = {
   id: string;
   operationId: string;
   employeeId: string;
+  employeeWorkdayId: string | null;
   receivedAt: string;
   validationStatus: string;
   locationStatus: string;
@@ -122,8 +123,7 @@ export function addVirtualCheckIn(record: Omit<VirtualAttendanceRecord, "id" | "
 }
 
 export function findVirtualCheckInForCheckout(
-  operationId: string,
-  employeeId: string,
+  employeeWorkdayId: string,
 ): VirtualAttendanceRecord | null {
   const context = getBotRuntimeContext();
   if (!context) {
@@ -135,16 +135,15 @@ export function findVirtualCheckInForCheckout(
       .reverse()
       .find(
         (record) =>
-          record.operationId === operationId &&
-          record.employeeId === employeeId &&
+          record.employeeWorkdayId === employeeWorkdayId &&
           record.checkoutAt === null &&
           (record.validationStatus === "VALID" || record.validationStatus === "PENDING_REVIEW"),
       ) ?? null
   );
 }
 
-export function hasVirtualActiveRecord(operationId: string, employeeId: string): boolean {
-  return findVirtualCheckInForCheckout(operationId, employeeId) !== null;
+export function hasVirtualActiveRecord(employeeWorkdayId: string): boolean {
+  return findVirtualCheckInForCheckout(employeeWorkdayId) !== null;
 }
 
 export function completeVirtualCheckOut(

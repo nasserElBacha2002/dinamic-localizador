@@ -22,6 +22,7 @@
     "backfill:absence-balances": "tsx src/scripts/backfill-employee-absence-balances.ts",
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
+    "audit:statistics-grain": "tsx src/scripts/audit-statistics-grain.ts",
     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
     "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts"
   },
@@ -32,6 +33,7 @@
     "express": "^5.1.0",
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
+    "luxon": "^3.7.2",
     "morgan": "^1.10.0",
     "mssql": "^12.1.0",
     "twilio": "^6.0.2",
@@ -44,6 +46,7 @@
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/jsonwebtoken": "^9.0.10",
+    "@types/luxon": "^3.7.2",
     "@types/morgan": "^1.9.10",
     "@types/mssql": "^12.3.0",
     "@types/node": "^24.6.0",

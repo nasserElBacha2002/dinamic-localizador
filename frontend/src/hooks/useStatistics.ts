@@ -6,6 +6,7 @@ import {
   getAttendanceStatisticsSummary,
   getAttendanceStatisticsTimeline,
   getAttendanceStatusDistribution,
+  getAttendanceWorkdayDetails,
 } from "../api/statistics.api";
 import type { StatisticsFilters } from "../types/statistics";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
@@ -24,6 +25,8 @@ const statisticsKeys = {
     [...statisticsKeys.all, companyId, "by-operation", filters] as const,
   byLocation: (companyId: string | undefined, filters: StatisticsFilters) =>
     [...statisticsKeys.all, companyId, "by-service", filters] as const,
+  workdayDetails: (companyId: string | undefined, filters: StatisticsFilters) =>
+    [...statisticsKeys.all, companyId, "workday-details", filters] as const,
 };
 
 export function useStatisticsSummary(filters: StatisticsFilters) {
@@ -82,6 +85,16 @@ export function useStatisticsByService(filters: StatisticsFilters) {
   return useQuery({
     queryKey: statisticsKeys.byLocation(companyId, filters),
     queryFn: () => getAttendanceByService(filters),
+    enabled,
+  });
+}
+
+export function useStatisticsWorkdayDetails(filters: StatisticsFilters) {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
+  return useQuery({
+    queryKey: statisticsKeys.workdayDetails(companyId, filters),
+    queryFn: () => getAttendanceWorkdayDetails(filters),
     enabled,
   });
 }

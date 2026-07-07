@@ -60,6 +60,7 @@ export interface WhatsAppRouterHandlers {
     companyId: string;
     session: BotSession;
     employeeId: string;
+    employeeWorkdayId: string;
     operationId: string;
     latitude: number;
     longitude: number;
@@ -71,6 +72,8 @@ export interface WhatsAppRouterHandlers {
     companyId: string;
     session: BotSession;
     employeeId: string;
+    employeeWorkdayId: string;
+    attendanceRecordId: string;
     operationId: string;
     latitude: number;
     longitude: number;

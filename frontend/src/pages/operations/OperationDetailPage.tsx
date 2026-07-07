@@ -1,8 +1,11 @@
-import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { Anchor, Box, Button, Divider, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { WeeklySchedulePreview } from "../../components/schedules/WeeklySchedulePreview";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
+import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import {
   ConfirmDialog,
   ErrorState,
@@ -13,8 +16,10 @@ import {
   StatusBadge,
   type StatusBadgeTone,
 } from "../../design-system";
+import { OperationAssignmentsSection } from "../../components/operations/OperationAssignmentsSection";
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
+import { OperationScheduledWorkdaysSection } from "../../components/operations/OperationScheduledWorkdaysSection";
 import { OperationWorkforceSection } from "../../components/operations/OperationWorkforceSection";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
@@ -24,10 +29,22 @@ import {
 } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
 import type { OperationStatus } from "../../types/operation";
-import { datetimeLocalToIso, formatDateTime, isoToDatetimeLocal } from "../../utils/dates";
+import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
-import { getApiErrorMessage } from "../../utils/errors";
+import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
+import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
+import {
+  buildOperationEditDefaultValues,
+  formatOperationDetailScheduleTitle,
+  resolveOperationReferenceDate,
+  toOperationUpdatePayload,
+} from "../../utils/operation-detail-display";
+import {
+  formatRecurringValidity,
+  operationKindLabels,
+  scheduleSourceLabels,
+} from "../../utils/operation-schedule-display";
 import { operationStatusLabels } from "../../utils/labels";
 
 function operationStatusTone(status: OperationStatus): StatusBadgeTone {
@@ -49,6 +66,8 @@ export function OperationDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
+  const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
+  const permissionsQuery = useCompanyPermissions();
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
 
@@ -65,6 +84,11 @@ export function OperationDetailPage() {
   const assignedEmployeeIds = useMemo(
     () => operation?.assignedEmployees.map((employee) => employee.id) ?? [],
     [operation?.assignedEmployees],
+  );
+
+  const operationWorkDate = useMemo(
+    () => (operation ? resolveOperationReferenceDate(operation) : ""),
+    [operation],
   );
 
   if (!id) {
@@ -87,6 +111,7 @@ export function OperationDetailPage() {
   }
 
   const canAssign = isOperationAssignable(operation.status);
+  const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
   const canEdit = isOperationEditable(operation.status);
   const serviceDisplayName = operation.service?.name ?? "—";
   const serviceDetailId = operation.serviceId || operation.service?.id;
@@ -107,18 +132,15 @@ export function OperationDetailPage() {
     setErrorMessage(null);
 
     try {
-      await updateMutation.mutateAsync({
-        serviceId: values.serviceId,
-        scheduledStart: datetimeLocalToIso(values.scheduledStart),
-        scheduledEnd: values.scheduledEnd ? datetimeLocalToIso(values.scheduledEnd) : null,
-        earlyToleranceMinutes: values.earlyToleranceMinutes,
-        lateToleranceMinutes: values.lateToleranceMinutes,
-        notes: values.notes?.trim() ? values.notes.trim() : null,
-        status: values.status,
-      });
+      await updateMutation.mutateAsync(toOperationUpdatePayload(operation, values));
       setEditing(false);
       showFeedback(`${terminology.operation.singular} actualizada correctamente.`);
     } catch (error) {
+      if (isRecurringWorkdaySyncError(error)) {
+        setEditing(false);
+        showFeedback(getApiErrorMessage(error), "error");
+        return;
+      }
       setErrorMessage(getApiErrorMessage(error));
     }
   };
@@ -137,7 +159,7 @@ export function OperationDetailPage() {
     <>
       <PageHeader
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
-        description={`${operation.service.name} · ${formatDateTime(operation.scheduledStart)}`}
+        description={formatOperationDetailScheduleTitle(operation)}
         action={
           <Group gap="sm" wrap="wrap">
             {editing && canEdit ? (
@@ -190,11 +212,19 @@ export function OperationDetailPage() {
           />
           <MetricCard
             title="Horario de operación"
-            value={formatDateTime(operation.scheduledStart)}
+            value={
+              operation.operationKind === "RECURRING"
+                ? operationKindLabels.RECURRING
+                : formatDateTime(operation.scheduledStart)
+            }
             description={
-              operation.scheduledEnd
-                ? `Fin: ${formatDateTime(operation.scheduledEnd)}`
-                : "Sin horario de fin"
+              operation.operationKind === "RECURRING"
+                ? operation.schedule
+                  ? formatRecurringValidity(operation.schedule.validFrom, operation.schedule.validUntil)
+                  : "Trabajo habitual"
+                : operation.scheduledEnd
+                  ? `Fin: ${formatDateTime(operation.scheduledEnd)}`
+                  : "Sin horario de fin"
             }
           />
           <MetricCard title="Geocerca" value={geofenceSummary} description="Radio y tolerancias horarias" />
@@ -202,13 +232,29 @@ export function OperationDetailPage() {
 
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
-            <OperationWorkforceSection
-              operationId={operation.id}
-              canAssign={canAssign}
-              scheduledStart={operation.scheduledStart}
-              assignedEmployeeIds={assignedEmployeeIds}
-              onFeedback={(message, severity) => showFeedback(message, severity)}
-            />
+            <Stack gap="lg">
+              <OperationAssignmentsSection
+                operationId={operation.id}
+                operationKind={operation.operationKind ?? "ONE_TIME"}
+                canAssign={canAssign}
+                operationWorkDate={operationWorkDate}
+                activeEmployeeIds={assignedEmployeeIds}
+                onFeedback={(message, severity) => showFeedback(message, severity)}
+              />
+              {operation.operationKind === "RECURRING" ? (
+                <OperationScheduledWorkdaysSection
+                  operationId={operation.id}
+                  canManage={canManage}
+                  onFeedback={(message, severity) => showFeedback(message, severity)}
+                />
+              ) : null}
+              <OperationWorkforceSection
+                operationId={operation.id}
+                canAssign={canAssign}
+                scheduledStart={operation.scheduledStart}
+                onFeedback={(message, severity) => showFeedback(message, severity)}
+              />
+            </Stack>
           </Box>
 
           <Box className={layoutClasses.dataSection}>
@@ -227,16 +273,55 @@ export function OperationDetailPage() {
                       />
                     ),
                   },
+                  { label: "Tipo", value: operationKindLabels[operation.operationKind ?? "ONE_TIME"] },
                   { label: terminology.service.singular, value: serviceFieldValue },
                   { label: "Dirección", value: operation.service?.address ?? "—" },
-                  { label: operationScheduleLabel, value: formatDateTime(operation.scheduledStart) },
-                  { label: "Fin", value: formatDateTime(operation.scheduledEnd) },
+                  ...(operation.operationKind === "RECURRING"
+                    ? [
+                        {
+                          label: "Vigencia",
+                          value: operation.schedule
+                            ? formatRecurringValidity(
+                                operation.schedule.validFrom,
+                                operation.schedule.validUntil,
+                              )
+                            : "—",
+                        },
+                      ]
+                    : [
+                        { label: operationScheduleLabel, value: formatDateTime(operation.scheduledStart) },
+                        { label: "Fin", value: formatDateTime(operation.scheduledEnd) },
+                      ]),
                   { label: "Tolerancia temprana", value: `${operation.earlyToleranceMinutes} min` },
                   { label: "Tolerancia tardía", value: `${operation.lateToleranceMinutes} min` },
                   { label: "Asistencias registradas", value: operation.attendanceRecordsCount },
                   { label: "Notas", value: operation.notes ?? "—" },
                 ]}
               />
+
+              {operation.operationKind === "RECURRING" && operation.schedule ? (
+                <>
+                  <Divider my="sm" />
+                  <Stack gap="sm">
+                    <Stack gap={2}>
+                      <Text size="sm" fw={600}>
+                        Horario de trabajo
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        Configuración semanal de la operación habitual.
+                      </Text>
+                    </Stack>
+                    <Group gap="xs">
+                      <StatusBadge
+                        label={scheduleSourceLabels[operation.schedule.scheduleSource]}
+                        tone="info"
+                        variant="light"
+                      />
+                    </Group>
+                    <WeeklySchedulePreview days={operation.schedule.days} />
+                  </Stack>
+                </>
+              ) : null}
             </SectionCard>
           </Box>
 
@@ -246,15 +331,9 @@ export function OperationDetailPage() {
                 <OperationForm
                   mode="edit"
                   currentStatus={operation.status}
-                  defaultValues={{
-                    serviceId: operation.serviceId,
-                    scheduledStart: isoToDatetimeLocal(operation.scheduledStart),
-                    scheduledEnd: operation.scheduledEnd ? isoToDatetimeLocal(operation.scheduledEnd) : "",
-                    earlyToleranceMinutes: operation.earlyToleranceMinutes,
-                    lateToleranceMinutes: operation.lateToleranceMinutes,
-                    notes: operation.notes ?? "",
-                    status: operation.status,
-                  }}
+                  currentOperationKind={operation.operationKind ?? "ONE_TIME"}
+                  companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
+                  defaultValues={buildOperationEditDefaultValues(operation)}
                   submitLabel="Guardar cambios"
                   cancelTo={`/operations/${operation.id}`}
                   loading={updateMutation.isPending}

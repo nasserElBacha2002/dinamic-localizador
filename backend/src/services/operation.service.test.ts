@@ -30,6 +30,7 @@ const activeService = {
 const createdOperation = {
   id: "operation-1",
   serviceId: SERVICE_ID,
+  operationKind: "ONE_TIME" as const,
   scheduledStart: FUTURE_START,
   scheduledEnd: FUTURE_END,
   earlyToleranceMinutes: 45,
@@ -70,6 +71,7 @@ describe("operationService.create", () => {
     }));
 
     const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -105,6 +107,7 @@ describe("operationService.create", () => {
     }));
 
     const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -122,6 +125,7 @@ describe("operationService.create", () => {
     const { createOperationSchema } = await import("../schemas/operation.schema");
 
     const parsed = createOperationSchema.safeParse({
+      operationKind: "ONE_TIME",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -154,6 +158,7 @@ describe("operationService.create", () => {
     await assert.rejects(
       () =>
         operationService.create(COMPANY_ID, {
+          operationKind: "ONE_TIME",
           serviceId: SERVICE_ID,
           scheduledStart: FUTURE_START,
           scheduledEnd: FUTURE_END,
@@ -177,6 +182,7 @@ describe("operationService.create", () => {
     }));
 
     const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,

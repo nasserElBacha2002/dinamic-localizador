@@ -8,6 +8,7 @@ import { mapEmployeeAssignedOperationRow } from "../utils/employee-assignment-ro
 
 const ASSIGNED_OPERATION_SELECT = `
   SELECT
+    ie.id AS assignment_id,
     i.id AS operation_id,
     i.scheduled_start,
     i.scheduled_end,
@@ -24,15 +25,24 @@ const ASSIGNED_OPERATION_SELECT = `
   FROM operation_assignments ie
   INNER JOIN scheduled_operations i
     ON i.id = ie.operation_id AND i.company_id = @companyId
+  INNER JOIN operation_workdays ow
+    ON ow.operation_id = i.id AND ow.company_id = i.company_id
+   AND ow.work_date >= ie.valid_from
+   AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
   INNER JOIN operational_locations s
     ON s.id = i.service_id AND s.company_id = @companyId
+  LEFT JOIN employee_workdays ew
+    ON ew.operation_assignment_id = ie.id
+   AND ew.company_id = ie.company_id
+   AND ew.operation_workday_id = ow.id
   LEFT JOIN attendance_records ar
-    ON ar.operation_id = ie.operation_id
-   AND ar.employee_id = ie.employee_id
+    ON ar.employee_workday_id = ew.id
    AND ar.company_id = @companyId
    AND ar.is_simulation = 0
   WHERE ie.company_id = @companyId
     AND ie.employee_id = @employeeId
+    AND ie.cancelled_at IS NULL
+    AND i.operation_kind = N'ONE_TIME'
     AND i.status NOT IN ('CANCELLED')
 `;
 
@@ -101,8 +111,12 @@ export const employeeAssignmentQueryRepository = {
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .query(`
-        ${ASSIGNED_OPERATION_SELECT}
-          AND ie.operation_id = @operationId
+        SELECT TOP 1 *
+        FROM (
+          ${ASSIGNED_OPERATION_SELECT}
+            AND ie.operation_id = @operationId
+        ) assigned_operations
+        ORDER BY scheduled_start ASC
       `);
 
     const row = result.recordset[0] as Record<string, unknown> | undefined;
@@ -111,16 +125,14 @@ export const employeeAssignmentQueryRepository = {
 
   async updateConfirmationStatus(
     companyId: string,
-    employeeId: string,
-    operationId: string,
+    assignmentId: string,
     status: AssignmentConfirmationStatus,
   ): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
       .input("status", sql.NVarChar(20), status)
       .query(`
         UPDATE operation_assignments
@@ -134,10 +146,11 @@ export const employeeAssignmentQueryRepository = {
               WHEN @status = 'UNAVAILABLE' THEN SYSUTCDATETIME()
               WHEN @status = 'CONFIRMED' THEN NULL
               ELSE unavailable_at
-            END
+            END,
+            updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
-          AND employee_id = @employeeId
-          AND operation_id = @operationId
+          AND id = @assignmentId
+          AND cancelled_at IS NULL
       `);
 
     return (result.rowsAffected[0] ?? 0) > 0;
@@ -163,6 +176,7 @@ export const employeeAssignmentQueryRepository = {
             confirmation_schedule_version = confirmation_schedule_version + 1
         WHERE company_id = @companyId
           AND operation_id = @operationId
+          AND cancelled_at IS NULL
       `);
 
     return result.rowsAffected[0] ?? 0;

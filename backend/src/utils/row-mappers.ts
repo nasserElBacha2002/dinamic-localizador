@@ -14,6 +14,22 @@ import type { AttendanceReview, User } from "../types/auth";
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+export const toDateOnlyString = (value: Date | string): string => {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value);
+  const isoPrefix = /^(\d{4}-\d{2}-\d{2})/.exec(text);
+  if (isoPrefix) {
+    return isoPrefix[1];
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  return text.slice(0, 10);
+};
+
 const parseEmployeeType = (value: unknown): EmployeeType => {
   const employeeType = String(value);
   return (EMPLOYEE_TYPES as readonly string[]).includes(employeeType)
@@ -61,7 +77,10 @@ export const mapServiceRow = (row: Record<string, unknown>): Service => ({
 export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   id: String(row.id),
   serviceId: String(row.service_id),
-  scheduledStart: toIsoString(row.scheduled_start as Date | string),
+  operationKind: (row.operation_kind ? String(row.operation_kind) : "ONE_TIME") as Operation["operationKind"],
+  scheduledStart: row.scheduled_start
+    ? toIsoString(row.scheduled_start as Date | string)
+    : null,
   scheduledEnd: row.scheduled_end ? toIsoString(row.scheduled_end as Date | string) : null,
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
   lateToleranceMinutes: Number(row.late_tolerance_minutes),
@@ -100,9 +119,21 @@ export const mapOperationDetail = (
 });
 
 export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmployeeAssignment => ({
+  id: String(row.id),
+  companyId: String(row.company_id),
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
+  validFrom: toDateOnlyString(row.valid_from as Date | string),
+  validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
   assignedAt: toIsoString(row.assigned_at as Date | string),
+  createdAt: toIsoString((row.created_at ?? row.assigned_at) as Date | string),
+  updatedAt: toIsoString((row.updated_at ?? row.assigned_at) as Date | string),
+  confirmationStatus: row.confirmation_status
+    ? (String(row.confirmation_status) as OperationEmployeeAssignment["confirmationStatus"])
+    : undefined,
+  confirmedAt: row.confirmed_at ? toIsoString(row.confirmed_at as Date | string) : null,
+  unavailableAt: row.unavailable_at ? toIsoString(row.unavailable_at as Date | string) : null,
+  cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at as Date | string) : null,
   employee: row.employee_name
     ? {
         id: String(row.employee_id),
@@ -124,6 +155,7 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
   id: String(row.id),
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
+  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
   receivedLatitude: Number(row.received_latitude),
   receivedLongitude: Number(row.received_longitude),
   distanceMeters: Number(row.distance_meters),
@@ -200,6 +232,8 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   companyId: String(row.company_id),
   employeeId: String(row.employee_id),
   operationId: row.operation_id ? String(row.operation_id) : null,
+  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
+  attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
   phoneNumber: String(row.phone_number),
   state: String(row.state) as import("../types/twilio.types").BotSessionState,
   contextJson: row.context_json ? String(row.context_json) : null,
@@ -259,13 +293,6 @@ export const mapAttendanceReviewRow = (row: Record<string, unknown>): Attendance
       }
     : undefined,
 });
-
-const toDateOnlyString = (value: Date | string): string => {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-  return String(value).slice(0, 10);
-};
 
 export const mapAbsenceTypeRow = (row: Record<string, unknown>) => ({
   id: String(row.id),

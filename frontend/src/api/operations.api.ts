@@ -17,12 +17,22 @@ import type {
   OperationImportPreviewPayload,
   OperationImportPreviewResult,
 } from "../types/operation-import";
+import type {
+  MaterializationResult,
+  OperationWorkdayDetail,
+  OperationWorkdayFilters,
+  OperationWorkdaySummary,
+} from "../types/operation-workday";
 import { buildParams } from "./client";
 import {
   API_ENDPOINTS,
-  operationAssignmentMemberPath,
+  operationAssignmentCancelPath,
+  operationAssignmentEndPath,
   operationAssignmentPath,
+  operationMaterializeWorkdaysPath,
   operationPath,
+  operationWorkdayPath,
+  operationWorkdaysPath,
 } from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
 
@@ -72,20 +82,43 @@ export async function getOperationEmployees(
 
 export async function assignEmployeeToOperation(
   operationId: string,
-  employeeId: string,
+  input: { employeeId: string; validFrom?: string; validUntil?: string | null },
 ): Promise<OperationEmployeeAssignment> {
   const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
     operationAssignmentPath(operationId),
-    { employeeId },
+    input,
   );
   return data.data;
 }
 
+export async function cancelOperationAssignment(
+  operationId: string,
+  assignmentId: string,
+): Promise<OperationEmployeeAssignment> {
+  const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
+    operationAssignmentCancelPath(operationId, assignmentId),
+  );
+  return data.data;
+}
+
+/** @deprecated Use cancelOperationAssignment */
 export async function unassignEmployeeFromOperation(
   operationId: string,
-  employeeId: string,
+  assignmentId: string,
 ): Promise<void> {
-  await scopedApiClient.delete(operationAssignmentMemberPath(operationId, employeeId));
+  await cancelOperationAssignment(operationId, assignmentId);
+}
+
+export async function endOperationAssignment(
+  operationId: string,
+  assignmentId: string,
+  effectiveDate: string,
+): Promise<OperationEmployeeAssignment> {
+  const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
+    operationAssignmentEndPath(operationId, assignmentId),
+    { effectiveDate },
+  );
+  return data.data;
 }
 
 export async function getOperationAttendanceSummary(
@@ -97,6 +130,38 @@ export async function getOperationAttendanceSummary(
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
     },
+  );
+  return data.data;
+}
+
+export async function getOperationWorkdays(
+  operationId: string,
+  filters: OperationWorkdayFilters = {},
+): Promise<PaginatedResponse<OperationWorkdaySummary>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<OperationWorkdaySummary>>(
+    operationWorkdaysPath(operationId),
+    {
+      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+    },
+  );
+  return data;
+}
+
+export async function getOperationWorkdayDetail(
+  operationId: string,
+  workdayId: string,
+): Promise<OperationWorkdayDetail> {
+  const { data } = await scopedApiClient.get<SingleResponse<OperationWorkdayDetail>>(
+    operationWorkdayPath(operationId, workdayId),
+  );
+  return data.data;
+}
+
+export async function materializeOperationWorkdays(
+  operationId: string,
+): Promise<MaterializationResult> {
+  const { data } = await scopedApiClient.post<SingleResponse<MaterializationResult>>(
+    operationMaterializeWorkdaysPath(operationId),
   );
   return data.data;
 }

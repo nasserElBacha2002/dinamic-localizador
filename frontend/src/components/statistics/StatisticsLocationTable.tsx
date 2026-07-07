@@ -10,6 +10,7 @@ import {
 } from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByServiceRow } from "../../types/statistics";
+import { formatDurationFromMinutes } from "../../utils/duration";
 import { formatPercent } from "../../utils/export";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -18,13 +19,15 @@ type SortableField =
   | "serviceName"
   | "address"
   | "totalOperations"
-  | "averageAttendancePercentage"
-  | "totalAssignedEmployees"
-  | "totalConfirmedAttendances"
-  | "totalNoShows"
-  | "totalLateRecords"
-  | "totalOutsideGeofenceRecords"
-  | "totalManualReviews";
+  | "scheduledWorkdays"
+  | "presentWorkdays"
+  | "absentWorkdays"
+  | "justifiedWorkdays"
+  | "expectedOpenWorkdays"
+  | "attendanceRate"
+  | "punctualityRate"
+  | "workedMinutes"
+  | "overtimeMinutes";
 
 interface StatisticsLocationTableProps {
   rows: AttendanceByServiceRow[];
@@ -39,7 +42,7 @@ interface StatisticsLocationTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onSortChange: (field: SortableField) => void;
-  exportRows: AttendanceByServiceRow[];
+  loadExportRows: () => Promise<Array<Array<string | number | null | undefined>>>;
   dateFrom?: string;
   dateTo?: string;
   exportsDisabled?: boolean;
@@ -49,29 +52,16 @@ const EXPORT_HEADERS = [
   "Servicio",
   "Dirección",
   "Operaciones",
-  "% asistencia promedio",
-  "Empleados asignados",
-  "Confirmadas",
-  "Sin asistencia",
-  "Tarde",
-  "Fuera geocerca",
-  "Revisiones manuales",
+  "Jornadas programadas",
+  "Presentes",
+  "Ausentes",
+  "Justificadas",
+  "Pendientes",
+  "Presentismo",
+  "Puntualidad",
+  "Horas trabajadas",
+  "Horas extra",
 ];
-
-function toExportRows(rows: AttendanceByServiceRow[]) {
-  return rows.map((row) => [
-    row.serviceName,
-    row.address ?? "",
-    row.totalOperations,
-    formatPercent(row.averageAttendancePercentage),
-    row.totalAssignedEmployees,
-    row.totalConfirmedAttendances,
-    row.totalNoShows,
-    row.totalLateRecords,
-    row.totalOutsideGeofenceRecords,
-    row.totalManualReviews,
-  ]);
-}
 
 export function StatisticsLocationTable({
   rows,
@@ -86,13 +76,11 @@ export function StatisticsLocationTable({
   onPageChange,
   onPageSizeChange,
   onSortChange,
-  exportRows,
+  loadExportRows,
   dateFrom,
   dateTo,
   exportsDisabled = false,
 }: StatisticsLocationTableProps) {
-  const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
-
   const columns = useMemo<DataTableColumn<AttendanceByServiceRow>[]>(
     () => [
       {
@@ -105,54 +93,56 @@ export function StatisticsLocationTable({
         key: "address",
         header: "Dirección",
         getValue: (row) => row.address ?? "—",
+        sortable: true,
       },
       {
         key: "totalOperations",
         header: terminology.operation.plural,
         getValue: (row) => row.totalOperations,
         align: "right",
+        sortable: true,
       },
       {
-        key: "averageAttendancePercentage",
-        header: "% promedio",
-        getValue: (row) => formatPercent(row.averageAttendancePercentage),
+        key: "scheduledWorkdays",
+        header: "Jornadas",
+        getValue: (row) => row.scheduledWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "totalAssignedEmployees",
-        header: "Asignados",
-        getValue: (row) => row.totalAssignedEmployees,
+        key: "presentWorkdays",
+        header: "Presentes",
+        getValue: (row) => row.presentWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "totalConfirmedAttendances",
-        header: "Confirmadas",
-        getValue: (row) => row.totalConfirmedAttendances,
+        key: "absentWorkdays",
+        header: "Ausentes",
+        getValue: (row) => row.absentWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "totalNoShows",
-        header: "Sin asistencia",
-        getValue: (row) => row.totalNoShows,
+        key: "attendanceRate",
+        header: "Presentismo",
+        getValue: (row) => formatPercent(row.attendanceRate),
         align: "right",
+        sortable: true,
       },
       {
-        key: "totalLateRecords",
-        header: "Tarde",
-        getValue: (row) => row.totalLateRecords,
+        key: "punctualityRate",
+        header: "Puntualidad",
+        getValue: (row) => formatPercent(row.punctualityRate),
         align: "right",
+        sortable: true,
       },
       {
-        key: "totalOutsideGeofenceRecords",
-        header: "Fuera geocerca",
-        getValue: (row) => row.totalOutsideGeofenceRecords,
+        key: "workedMinutes",
+        header: "Horas trabajadas",
+        getValue: (row) => formatDurationFromMinutes(row.workedMinutes),
         align: "right",
-      },
-      {
-        key: "totalManualReviews",
-        header: "Revisiones",
-        getValue: (row) => row.totalManualReviews,
-        align: "right",
+        sortable: true,
       },
     ],
     [],
@@ -172,7 +162,7 @@ export function StatisticsLocationTable({
         <ExportActionButtons
           baseName="attendance-by-service"
           headers={EXPORT_HEADERS}
-          rows={exportData}
+          loadRows={loadExportRows}
           dateFrom={dateFrom}
           dateTo={dateTo}
           sheetName="Por servicio"

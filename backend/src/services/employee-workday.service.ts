@@ -188,8 +188,7 @@ export const employeeWorkdayService = {
 
     await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
-      employeeId,
-      operationId,
+      assignment.assignmentId,
       "CONFIRMED",
     );
 
@@ -221,8 +220,7 @@ export const employeeWorkdayService = {
 
     await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
-      employeeId,
-      operationId,
+      assignment.assignmentId,
       "UNAVAILABLE",
     );
 

@@ -6,6 +6,7 @@ import type {
   AttendanceStatisticsSummary,
   AttendanceStatusDistributionItem,
   AttendanceTimelinePoint,
+  AttendanceWorkdayDetailRow,
   StatisticsFilters,
 } from "../types/statistics";
 import { buildParams } from "./client";
@@ -70,6 +71,16 @@ export async function getAttendanceByService(
 ): Promise<PaginatedResponse<AttendanceByServiceRow>> {
   const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceByServiceRow>>(
     "statistics/attendance/by-service",
+    { params: toParams(filters) },
+  );
+  return data;
+}
+
+export async function getAttendanceWorkdayDetails(
+  filters: StatisticsFilters,
+): Promise<PaginatedResponse<AttendanceWorkdayDetailRow>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceWorkdayDetailRow>>(
+    "statistics/attendance/workday-details",
     { params: toParams(filters) },
   );
   return data;

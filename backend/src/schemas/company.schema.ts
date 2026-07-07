@@ -138,3 +138,5 @@ export const updateCompanySettingsSchema = z
   });
 
 export type UpdateCompanySettingsInput = z.infer<typeof updateCompanySettingsSchema>;
+
+export { weeklySchedulePayloadSchema } from "./weekly-schedule.schema";

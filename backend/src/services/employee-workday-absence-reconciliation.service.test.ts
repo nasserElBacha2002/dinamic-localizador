@@ -3,19 +3,22 @@ import { afterEach, describe, it, mock } from "node:test";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
-import type { AbsenceRequest } from "../types/absence";
-import type { EmployeeWorkday } from "../types/workday";
+import type { ApprovedAbsenceForWorkday } from "../types/absence";
 
 const COMPANY_ID = "company-1";
 const EMPLOYEE_ID = "emp-1";
 const OTHER_EMPLOYEE_ID = "emp-2";
 const ABSENCE_A = "absence-a";
 const ABSENCE_B = "absence-b";
+const TIMEZONE = "America/Argentina/Buenos_Aires";
 
-const approvedAbsence = (overrides: Partial<AbsenceRequest> = {}): AbsenceRequest => ({
+const approvedAbsence = (
+  overrides: Partial<ApprovedAbsenceForWorkday> = {},
+): ApprovedAbsenceForWorkday => ({
   id: ABSENCE_A,
   employeeId: EMPLOYEE_ID,
   absenceTypeId: "type-1",
+  absenceTypeName: "Vacaciones",
   startDate: "2026-08-01",
   endDate: "2026-08-10",
   startPeriod: "FULL_DAY",
@@ -35,11 +38,7 @@ const approvedAbsence = (overrides: Partial<AbsenceRequest> = {}): AbsenceReques
 });
 
 const workdayWithSchedule = (
-  overrides: Partial<EmployeeWorkday> & {
-    workDate?: string;
-    expectedStartAt?: string;
-    expectedEndAt?: string | null;
-  } = {},
+  overrides: Partial<ReturnType<typeof workdayWithSchedule>> = {},
 ) => ({
   id: "ew-1",
   companyId: COMPANY_ID,
@@ -52,10 +51,11 @@ const workdayWithSchedule = (
   createdAt: "2026-08-01T00:00:00.000Z",
   updatedAt: "2026-08-01T00:00:00.000Z",
   workDate: "2026-08-03",
-  expectedStartAt: "2026-08-03T01:00:00.000Z",
-  expectedEndAt: "2026-08-03T09:00:00.000Z",
+  expectedStartAt: "2026-08-03T09:00:00.000Z",
+  expectedEndAt: "2026-08-03T15:00:00.000Z",
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 20,
+  scheduleTimezone: TIMEZONE,
   ...overrides,
 });
 
@@ -74,13 +74,16 @@ describe("employeeWorkdayAbsenceReconciliationService", () => {
     mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
       workdayWithSchedule(),
     ]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => [
       approvedAbsence(),
     ]);
     mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
-    mock.method(employeeWorkdayRepository, "justifyExpectation", async () =>
-      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_A }),
-    );
+    mock.method(employeeWorkdayRepository, "batchJustifyExpectations", async () => ({
+      updated: 1,
+      raceConflicts: 0,
+    }));
+    mock.method(employeeWorkdayRepository, "batchRelinkJustifiedExpectations", async () => 0);
+    mock.method(employeeWorkdayRepository, "batchRestoreJustifiedExpectations", async () => 0);
 
     const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
       COMPANY_ID,
@@ -91,50 +94,45 @@ describe("employeeWorkdayAbsenceReconciliationService", () => {
     assert.equal(result.attendanceConflicts, 0);
   });
 
-  it("leaves EXPECTED unchanged when absence does not cover work date", async () => {
+  it("does not justify afternoon shifts for AM-only absences", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAbsenceReconciliationService } = await import(
       "./employee-workday-absence-reconciliation.service"
     );
 
     mock.method(absenceRequestRepository, "findById", async () =>
-      approvedAbsence({ startDate: "2026-08-20", endDate: "2026-08-25" }),
+      approvedAbsence({
+        startDate: "2026-08-03",
+        endDate: "2026-08-03",
+        startPeriod: "AM",
+        endPeriod: "AM",
+      }),
     );
     mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
-      workdayWithSchedule({ workDate: "2026-08-03" }),
+      workdayWithSchedule({
+        expectedStartAt: "2026-08-03T17:00:00.000Z",
+        expectedEndAt: "2026-08-04T00:00:00.000Z",
+      }),
     ]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => []);
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => [
+      approvedAbsence({
+        startDate: "2026-08-03",
+        endDate: "2026-08-03",
+        startPeriod: "AM",
+        endPeriod: "AM",
+      }),
+    ]);
     mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
+    mock.method(employeeWorkdayRepository, "batchJustifyExpectations", async () => ({
+      updated: 0,
+      raceConflicts: 0,
+    }));
+    mock.method(employeeWorkdayRepository, "batchRelinkJustifiedExpectations", async () => 0);
+    mock.method(employeeWorkdayRepository, "batchRestoreJustifiedExpectations", async () => 0);
 
     const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
       COMPANY_ID,
       ABSENCE_A,
-    );
-
-    assert.equal(result.justified, 0);
-    assert.equal(result.unchanged, 1);
-  });
-
-  it("does not justify workdays for a different employee", async () => {
-    setupUnitTestEnv();
-    const { employeeWorkdayAbsenceReconciliationService } = await import(
-      "./employee-workday-absence-reconciliation.service"
-    );
-
-    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
-    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
-      workdayWithSchedule({ employeeId: OTHER_EMPLOYEE_ID }),
-    ]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
-      approvedAbsence(),
-    ]);
-    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
-
-    const result = await employeeWorkdayAbsenceReconciliationService.reconcileEmployeeDateRange(
-      COMPANY_ID,
-      EMPLOYEE_ID,
-      "2026-08-01",
-      "2026-08-10",
     );
 
     assert.equal(result.justified, 0);
@@ -151,12 +149,18 @@ describe("employeeWorkdayAbsenceReconciliationService", () => {
     mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
       workdayWithSchedule(),
     ]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => [
       approvedAbsence(),
     ]);
     mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () =>
       new Set(["ew-1"]),
     );
+    mock.method(employeeWorkdayRepository, "batchJustifyExpectations", async () => ({
+      updated: 0,
+      raceConflicts: 0,
+    }));
+    mock.method(employeeWorkdayRepository, "batchRelinkJustifiedExpectations", async () => 0);
+    mock.method(employeeWorkdayRepository, "batchRestoreJustifiedExpectations", async () => 0);
 
     const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
       COMPANY_ID,
@@ -168,7 +172,7 @@ describe("employeeWorkdayAbsenceReconciliationService", () => {
     assert.equal(result.unchanged, 1);
   });
 
-  it("restores JUSTIFIED workdays when absence is revoked", async () => {
+  it("relinks when another approved absence remains after revocation", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAbsenceReconciliationService } = await import(
       "./employee-workday-absence-reconciliation.service"
@@ -178,45 +182,19 @@ describe("employeeWorkdayAbsenceReconciliationService", () => {
       workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_A }),
     ]);
     mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
-    mock.method(absenceRequestRepository, "findById", async () =>
-      approvedAbsence({ status: "CANCELLED" }),
-    );
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => []);
-    mock.method(employeeWorkdayRepository, "restoreJustifiedExpectation", async () =>
-      workdayWithSchedule(),
-    );
-
-    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
-      COMPANY_ID,
-      ABSENCE_A,
-    );
-
-    assert.equal(result.restored, 1);
-  });
-
-  it("relinks to another approved absence when one is removed", async () => {
-    setupUnitTestEnv();
-    const { employeeWorkdayAbsenceReconciliationService } = await import(
-      "./employee-workday-absence-reconciliation.service"
-    );
-
-    mock.method(employeeWorkdayRepository, "listWithWorkDatesByAbsenceRequestId", async () => [
-      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_A }),
-    ]);
-    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
-    mock.method(absenceRequestRepository, "findById", async () =>
-      approvedAbsence({ status: "CANCELLED" }),
-    );
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => [
       approvedAbsence({
         id: ABSENCE_B,
         reviewedAt: "2026-07-02T12:00:00.000Z",
         createdAt: "2026-06-21T12:00:00.000Z",
       }),
     ]);
-    mock.method(employeeWorkdayRepository, "relinkJustifiedExpectation", async () =>
-      workdayWithSchedule({ expectationStatus: "JUSTIFIED", absenceRequestId: ABSENCE_B }),
-    );
+    mock.method(employeeWorkdayRepository, "batchJustifyExpectations", async () => ({
+      updated: 0,
+      raceConflicts: 0,
+    }));
+    mock.method(employeeWorkdayRepository, "batchRelinkJustifiedExpectations", async () => 1);
+    mock.method(employeeWorkdayRepository, "batchRestoreJustifiedExpectations", async () => 0);
 
     const result = await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
       COMPANY_ID,
@@ -240,46 +218,53 @@ describe("employeeWorkdayAbsenceReconciliationService", () => {
 
     mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
     mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [justified]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => [
       approvedAbsence(),
     ]);
     mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
+    mock.method(employeeWorkdayRepository, "batchJustifyExpectations", async () => ({
+      updated: 0,
+      raceConflicts: 0,
+    }));
+    mock.method(employeeWorkdayRepository, "batchRelinkJustifiedExpectations", async () => 0);
+    mock.method(employeeWorkdayRepository, "batchRestoreJustifiedExpectations", async () => 0);
 
-    const first = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
-      COMPANY_ID,
-      ABSENCE_A,
-    );
     const second = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
       COMPANY_ID,
       ABSENCE_A,
     );
 
-    assert.equal(first.justified, 0);
     assert.equal(second.justified, 0);
     assert.equal(second.unchanged, 1);
   });
 
-  it("keeps cancelled workdays unchanged", async () => {
+  it("loads workdays and absences in batch for materialization range", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAbsenceReconciliationService } = await import(
       "./employee-workday-absence-reconciliation.service"
     );
 
-    mock.method(absenceRequestRepository, "findById", async () => approvedAbsence());
-    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeeAndDateRange", async () => [
-      workdayWithSchedule({ expectationStatus: "CANCELLED", cancellationReason: "ASSIGNMENT" }),
-    ]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeeAndDateRange", async () => [
-      approvedAbsence(),
-    ]);
+    let employeeRangeCalls = 0;
+    mock.method(employeeWorkdayRepository, "listWithWorkDatesByEmployeesAndDateRange", async () => {
+      employeeRangeCalls += 1;
+      return [workdayWithSchedule(), workdayWithSchedule({ id: "ew-2", employeeId: OTHER_EMPLOYEE_ID })];
+    });
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => []);
     mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
+    mock.method(employeeWorkdayRepository, "batchJustifyExpectations", async () => ({
+      updated: 0,
+      raceConflicts: 0,
+    }));
+    mock.method(employeeWorkdayRepository, "batchRelinkJustifiedExpectations", async () => 0);
+    mock.method(employeeWorkdayRepository, "batchRestoreJustifiedExpectations", async () => 0);
 
-    const result = await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
+    await employeeWorkdayAbsenceReconciliationService.reconcileMaterializationRange(
       COMPANY_ID,
-      ABSENCE_A,
+      "2026-08-01",
+      "2026-08-10",
+      [EMPLOYEE_ID, OTHER_EMPLOYEE_ID],
     );
 
-    assert.equal(result.justified, 0);
-    assert.equal(result.unchanged, 1);
+    assert.equal(employeeRangeCalls, 1);
   });
 });

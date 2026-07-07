@@ -12,4 +12,10 @@ describe("statistics.repository recurring compatibility", () => {
   it("keeps public statistics scoped to ONE_TIME operations until Phase 7", () => {
     assert.match(repositorySource, /i\.operation_kind = N'ONE_TIME'/);
   });
+
+  it("appends dynamic filters with AND because the base FROM already has WHERE", () => {
+    assert.match(repositorySource, /buildAndClause\(sqlFilters\)/);
+    assert.doesNotMatch(repositorySource, /buildWhereClause\(sqlFilters\)/);
+    assert.doesNotMatch(repositorySource, /WHERE[\s\S]*WHERE/);
+  });
 });

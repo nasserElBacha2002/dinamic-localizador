@@ -9,7 +9,7 @@ import type {
   AttendanceStatusDistributionItem,
   AttendanceTimelinePoint,
 } from "../types/statistics";
-import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { applySqlFilters, buildAndClause, type SqlFilter } from "../utils/sql-list-query";
 
 const ASSIGNMENT_BASE_FROM = `
   FROM operation_assignments oa
@@ -208,7 +208,7 @@ export const statisticsRepository = {
         SUM(CASE WHEN ar.reviewed_at IS NOT NULL AND ar.validation_status = 'VALID' THEN 1 ELSE 0 END) AS manually_accepted_count,
         SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count
       ${ASSIGNMENT_BASE_FROM}
-      ${buildWhereClause(sqlFilters)}
+      ${buildAndClause(sqlFilters)}
     `);
 
     const row = result.recordset[0] as Record<string, unknown>;
@@ -250,7 +250,7 @@ export const statisticsRepository = {
         SUM(CASE WHEN ar.id IS NULL THEN 1 ELSE 0 END) AS no_show_count,
         COUNT(*) AS total_count
       ${ASSIGNMENT_BASE_FROM}
-      ${buildWhereClause(sqlFilters)}
+      ${buildAndClause(sqlFilters)}
       GROUP BY CAST(COALESCE(ar.received_at, i.scheduled_start) AS DATE)
       ORDER BY event_date ASC
     `);
@@ -305,7 +305,7 @@ export const statisticsRepository = {
   ): Promise<{ data: AttendanceByEmployeeRow[]; total: number }> {
     const pool = getPool();
     const sqlFilters = buildStatisticsFilters(companyId, filters);
-    const whereClause = buildWhereClause(sqlFilters);
+    const whereClause = buildAndClause(sqlFilters);
     const orderBy = resolveSort(sortBy, EMPLOYEE_SORT_FIELDS, "e.name", sortDirection);
     const offset = (page - 1) * limit;
 
@@ -382,7 +382,7 @@ export const statisticsRepository = {
   ): Promise<{ data: AttendanceByOperationRow[]; total: number }> {
     const pool = getPool();
     const sqlFilters = buildStatisticsFilters(companyId, filters);
-    const whereClause = buildWhereClause(sqlFilters);
+    const whereClause = buildAndClause(sqlFilters);
     const orderBy = resolveSort(sortBy, OPERATION_SORT_FIELDS, "i.scheduled_start", sortDirection);
     const offset = (page - 1) * limit;
 
@@ -461,7 +461,7 @@ export const statisticsRepository = {
   ): Promise<{ data: AttendanceByServiceRow[]; total: number }> {
     const pool = getPool();
     const sqlFilters = buildStatisticsFilters(companyId, filters);
-    const whereClause = buildWhereClause(sqlFilters);
+    const whereClause = buildAndClause(sqlFilters);
     const orderBy = resolveSort(sortBy, SERVICE_SORT_FIELDS, "s.name", sortDirection);
     const offset = (page - 1) * limit;
 

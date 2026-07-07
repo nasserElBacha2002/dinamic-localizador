@@ -1,11 +1,16 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { EmployeeWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
-import type { EmployeeWorkday } from "../types/workday";
+import type { EmployeeWorkday, EmployeeWorkdayScheduleContext } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
+import type { JustifyDelta, RelinkDelta, RestoreDelta } from "../utils/resolve-workday-absence-deltas";
+
+const BATCH_CHUNK_SIZE = 40;
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+
+export type EmployeeWorkdayWithSchedule = EmployeeWorkday & EmployeeWorkdayScheduleContext;
 
 export const mapEmployeeWorkdayRow = (row: Record<string, unknown>): EmployeeWorkday => ({
   id: String(row.id),
@@ -21,6 +26,31 @@ export const mapEmployeeWorkdayRow = (row: Record<string, unknown>): EmployeeWor
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
+
+const mapEmployeeWorkdayWithScheduleRow = (
+  row: Record<string, unknown>,
+): EmployeeWorkdayWithSchedule => ({
+  ...mapEmployeeWorkdayRow(row),
+  workDate: String(row.work_date).slice(0, 10),
+  expectedStartAt: toIsoString(row.expected_start_at as Date | string),
+  expectedEndAt: row.expected_end_at
+    ? toIsoString(row.expected_end_at as Date | string)
+    : null,
+  earlyToleranceMinutes: Number(row.early_tolerance_minutes),
+  lateToleranceMinutes: Number(row.late_tolerance_minutes),
+  scheduleTimezone: row.schedule_timezone_snapshot
+    ? String(row.schedule_timezone_snapshot)
+    : "America/Argentina/Buenos_Aires",
+});
+
+const WORKDAY_SCHEDULE_SELECT = `
+  ow.work_date,
+  ow.expected_start_at,
+  ow.expected_end_at,
+  ow.early_tolerance_minutes,
+  ow.late_tolerance_minutes,
+  ow.schedule_timezone_snapshot
+`;
 
 export const employeeWorkdayRepository = {
   async findByWorkdayAndEmployee(
@@ -574,7 +604,7 @@ export const employeeWorkdayRepository = {
     return result.recordset.map((row) => mapEmployeeWorkdayRow(row as Record<string, unknown>));
   },
 
-  async countExpectedByWorkdayIds(
+  async countScheduledEmployeesByWorkdayIds(
     companyId: string,
     operationWorkdayIds: string[],
   ): Promise<Map<string, number>> {
@@ -628,6 +658,12 @@ export const employeeWorkdayRepository = {
         WHERE company_id = @companyId
           AND id = @employeeWorkdayId
           AND expectation_status = 'EXPECTED'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = @employeeWorkdayId
+          )
       `);
 
     if (!result.recordset[0]) {
@@ -641,14 +677,23 @@ export const employeeWorkdayRepository = {
     companyId: string,
     employeeWorkdayId: string,
     absenceRequestId: string,
+    currentAbsenceRequestId?: string | null,
   ): Promise<EmployeeWorkday | null> {
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
-      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
-      .query(`
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId);
+
+    const currentAbsenceClause = currentAbsenceRequestId
+      ? "AND absence_request_id = @currentAbsenceRequestId"
+      : "";
+    if (currentAbsenceRequestId) {
+      request.input("currentAbsenceRequestId", sql.UniqueIdentifier, currentAbsenceRequestId);
+    }
+
+    const result = await request.query(`
         UPDATE employee_workdays
         SET absence_request_id = @absenceRequestId,
             updated_at = SYSUTCDATETIME()
@@ -656,6 +701,7 @@ export const employeeWorkdayRepository = {
         WHERE company_id = @companyId
           AND id = @employeeWorkdayId
           AND expectation_status = 'JUSTIFIED'
+          ${currentAbsenceClause}
       `);
 
     if (!result.recordset[0]) {
@@ -706,17 +752,7 @@ export const employeeWorkdayRepository = {
     employeeId: string,
     dateFrom: string,
     dateTo: string,
-  ): Promise<
-    Array<
-      EmployeeWorkday & {
-        workDate: string;
-        expectedStartAt: string;
-        expectedEndAt: string | null;
-        earlyToleranceMinutes: number;
-        lateToleranceMinutes: number;
-      }
-    >
-  > {
+  ): Promise<EmployeeWorkdayWithSchedule[]> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -726,11 +762,7 @@ export const employeeWorkdayRepository = {
       .input("dateTo", sql.Date, dateTo)
       .query(`
         SELECT ew.*,
-               ow.work_date,
-               ow.expected_start_at,
-               ow.expected_end_at,
-               ow.early_tolerance_minutes,
-               ow.late_tolerance_minutes
+               ${WORKDAY_SCHEDULE_SELECT}
         FROM employee_workdays ew
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
@@ -741,32 +773,56 @@ export const employeeWorkdayRepository = {
           AND ow.work_date <= @dateTo
       `);
 
-    return result.recordset.map((row) => ({
-      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
-      workDate: String(row.work_date).slice(0, 10),
-      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
-      expectedEndAt: row.expected_end_at
-        ? toIsoString(row.expected_end_at as Date | string)
-        : null,
-      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
-      lateToleranceMinutes: Number(row.late_tolerance_minutes),
-    }));
+    return result.recordset.map((row) =>
+      mapEmployeeWorkdayWithScheduleRow(row as Record<string, unknown>),
+    );
+  },
+
+  async listWithWorkDatesByEmployeesAndDateRange(
+    companyId: string,
+    employeeIds: string[],
+    dateFrom: string,
+    dateTo: string,
+  ): Promise<EmployeeWorkdayWithSchedule[]> {
+    if (employeeIds.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("dateFrom", sql.Date, dateFrom)
+      .input("dateTo", sql.Date, dateTo);
+
+    const placeholders = employeeIds.map((employeeId, index) => {
+      const param = `employeeId${index}`;
+      request.input(param, sql.UniqueIdentifier, employeeId);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT ew.*,
+             ${WORKDAY_SCHEDULE_SELECT}
+      FROM employee_workdays ew
+      INNER JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id
+       AND ow.company_id = ew.company_id
+      WHERE ew.company_id = @companyId
+        AND ew.employee_id IN (${placeholders.join(", ")})
+        AND ow.work_date >= @dateFrom
+        AND ow.work_date <= @dateTo
+    `);
+
+    return result.recordset.map((row) =>
+      mapEmployeeWorkdayWithScheduleRow(row as Record<string, unknown>),
+    );
   },
 
   async listWithWorkDatesByAbsenceRequestId(
     companyId: string,
     absenceRequestId: string,
-  ): Promise<
-    Array<
-      EmployeeWorkday & {
-        workDate: string;
-        expectedStartAt: string;
-        expectedEndAt: string | null;
-        earlyToleranceMinutes: number;
-        lateToleranceMinutes: number;
-      }
-    >
-  > {
+  ): Promise<EmployeeWorkdayWithSchedule[]> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -774,11 +830,7 @@ export const employeeWorkdayRepository = {
       .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
       .query(`
         SELECT ew.*,
-               ow.work_date,
-               ow.expected_start_at,
-               ow.expected_end_at,
-               ow.early_tolerance_minutes,
-               ow.late_tolerance_minutes
+               ${WORKDAY_SCHEDULE_SELECT}
         FROM employee_workdays ew
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
@@ -787,32 +839,15 @@ export const employeeWorkdayRepository = {
           AND ew.absence_request_id = @absenceRequestId
       `);
 
-    return result.recordset.map((row) => ({
-      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
-      workDate: String(row.work_date).slice(0, 10),
-      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
-      expectedEndAt: row.expected_end_at
-        ? toIsoString(row.expected_end_at as Date | string)
-        : null,
-      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
-      lateToleranceMinutes: Number(row.late_tolerance_minutes),
-    }));
+    return result.recordset.map((row) =>
+      mapEmployeeWorkdayWithScheduleRow(row as Record<string, unknown>),
+    );
   },
 
   async listWithWorkDatesByEmployeeWorkdayIds(
     companyId: string,
     employeeWorkdayIds: string[],
-  ): Promise<
-    Array<
-      EmployeeWorkday & {
-        workDate: string;
-        expectedStartAt: string;
-        expectedEndAt: string | null;
-        earlyToleranceMinutes: number;
-        lateToleranceMinutes: number;
-      }
-    >
-  > {
+  ): Promise<EmployeeWorkdayWithSchedule[]> {
     if (employeeWorkdayIds.length === 0) {
       return [];
     }
@@ -827,11 +862,7 @@ export const employeeWorkdayRepository = {
 
     const result = await request.query(`
       SELECT ew.*,
-             ow.work_date,
-             ow.expected_start_at,
-             ow.expected_end_at,
-             ow.early_tolerance_minutes,
-             ow.late_tolerance_minutes
+             ${WORKDAY_SCHEDULE_SELECT}
       FROM employee_workdays ew
       INNER JOIN operation_workdays ow
         ON ow.id = ew.operation_workday_id
@@ -840,15 +871,158 @@ export const employeeWorkdayRepository = {
         AND ew.id IN (${placeholders.join(", ")})
     `);
 
-    return result.recordset.map((row) => ({
-      ...mapEmployeeWorkdayRow(row as Record<string, unknown>),
-      workDate: String(row.work_date).slice(0, 10),
-      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
-      expectedEndAt: row.expected_end_at
-        ? toIsoString(row.expected_end_at as Date | string)
-        : null,
-      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
-      lateToleranceMinutes: Number(row.late_tolerance_minutes),
-    }));
+    return result.recordset.map((row) =>
+      mapEmployeeWorkdayWithScheduleRow(row as Record<string, unknown>),
+    );
+  },
+
+  async batchJustifyExpectations(
+    companyId: string,
+    deltas: JustifyDelta[],
+  ): Promise<{ updated: number; raceConflicts: number }> {
+    if (deltas.length === 0) {
+      return { updated: 0, raceConflicts: 0 };
+    }
+
+    let updated = 0;
+    for (let offset = 0; offset < deltas.length; offset += BATCH_CHUNK_SIZE) {
+      const chunk = deltas.slice(offset, offset + BATCH_CHUNK_SIZE);
+      const pool = getPool();
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const sourceRows = chunk
+        .map((delta, index) => {
+          const workdayParam = `employeeWorkdayId${index}`;
+          const absenceParam = `absenceRequestId${index}`;
+          request.input(workdayParam, sql.UniqueIdentifier, delta.employeeWorkdayId);
+          request.input(absenceParam, sql.UniqueIdentifier, delta.absenceRequestId);
+          return `(@${workdayParam}, @${absenceParam})`;
+        })
+        .join(", ");
+
+      const result = await request.query(`
+        UPDATE ew
+        SET expectation_status = 'JUSTIFIED',
+            absence_request_id = src.absence_request_id,
+            updated_at = SYSUTCDATETIME()
+        FROM employee_workdays ew
+        INNER JOIN (
+          SELECT *
+          FROM (VALUES ${sourceRows}) AS payload(employee_workday_id, absence_request_id)
+        ) AS src
+          ON src.employee_workday_id = ew.id
+        WHERE ew.company_id = @companyId
+          AND ew.expectation_status = 'EXPECTED'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = ew.id
+          )
+      `);
+
+      updated += Number(result.rowsAffected[0] ?? 0);
+    }
+
+    return {
+      updated,
+      raceConflicts: Math.max(deltas.length - updated, 0),
+    };
+  },
+
+  async batchRelinkJustifiedExpectations(
+    companyId: string,
+    deltas: RelinkDelta[],
+  ): Promise<number> {
+    if (deltas.length === 0) {
+      return 0;
+    }
+
+    let updated = 0;
+    for (let offset = 0; offset < deltas.length; offset += BATCH_CHUNK_SIZE) {
+      const chunk = deltas.slice(offset, offset + BATCH_CHUNK_SIZE);
+      const pool = getPool();
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const sourceRows = chunk
+        .map((delta, index) => {
+          const workdayParam = `employeeWorkdayId${index}`;
+          const nextAbsenceParam = `nextAbsenceRequestId${index}`;
+          const currentAbsenceParam = `currentAbsenceRequestId${index}`;
+          request.input(workdayParam, sql.UniqueIdentifier, delta.employeeWorkdayId);
+          request.input(nextAbsenceParam, sql.UniqueIdentifier, delta.nextAbsenceRequestId);
+          request.input(currentAbsenceParam, sql.UniqueIdentifier, delta.currentAbsenceRequestId);
+          return `(@${workdayParam}, @${nextAbsenceParam}, @${currentAbsenceParam})`;
+        })
+        .join(", ");
+
+      const result = await request.query(`
+        UPDATE ew
+        SET absence_request_id = src.next_absence_request_id,
+            updated_at = SYSUTCDATETIME()
+        FROM employee_workdays ew
+        INNER JOIN (
+          SELECT *
+          FROM (VALUES ${sourceRows}) AS payload(employee_workday_id, next_absence_request_id, current_absence_request_id)
+        ) AS src
+          ON src.employee_workday_id = ew.id
+         AND src.current_absence_request_id = ew.absence_request_id
+        WHERE ew.company_id = @companyId
+          AND ew.expectation_status = 'JUSTIFIED'
+      `);
+
+      updated += Number(result.rowsAffected[0] ?? 0);
+    }
+
+    return updated;
+  },
+
+  async batchRestoreJustifiedExpectations(
+    companyId: string,
+    deltas: RestoreDelta[],
+  ): Promise<number> {
+    if (deltas.length === 0) {
+      return 0;
+    }
+
+    let updated = 0;
+    for (let offset = 0; offset < deltas.length; offset += BATCH_CHUNK_SIZE) {
+      const chunk = deltas.slice(offset, offset + BATCH_CHUNK_SIZE);
+      const pool = getPool();
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const sourceRows = chunk
+        .map((delta, index) => {
+          const workdayParam = `employeeWorkdayId${index}`;
+          const absenceParam = `absenceRequestId${index}`;
+          request.input(workdayParam, sql.UniqueIdentifier, delta.employeeWorkdayId);
+          request.input(absenceParam, sql.UniqueIdentifier, delta.absenceRequestId);
+          return `(@${workdayParam}, @${absenceParam})`;
+        })
+        .join(", ");
+
+      const result = await request.query(`
+        UPDATE ew
+        SET expectation_status = 'EXPECTED',
+            absence_request_id = NULL,
+            updated_at = SYSUTCDATETIME()
+        FROM employee_workdays ew
+        INNER JOIN (
+          SELECT *
+          FROM (VALUES ${sourceRows}) AS payload(employee_workday_id, absence_request_id)
+        ) AS src
+          ON src.employee_workday_id = ew.id
+         AND src.absence_request_id = ew.absence_request_id
+        WHERE ew.company_id = @companyId
+          AND ew.expectation_status = 'JUSTIFIED'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = ew.id
+          )
+      `);
+
+      updated += Number(result.rowsAffected[0] ?? 0);
+    }
+
+    return updated;
   },
 };

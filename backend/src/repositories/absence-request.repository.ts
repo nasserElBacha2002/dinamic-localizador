@@ -7,6 +7,7 @@ import type {
   AbsenceRequestStatus,
   AbsenceRequestWithRelations,
   AbsenceRequestedVia,
+  ApprovedAbsenceForWorkday,
 } from "../types/absence";
 import type { ListAbsenceRequestsQuery } from "../schemas/absence-request.schema";
 import { getPagination } from "../utils/pagination";
@@ -33,6 +34,11 @@ const mapListRow = (row: Record<string, unknown>): AbsenceRequestWithRelations =
     affectedOperationsCount: Number(row.affected_operations_count ?? 0),
   };
 };
+
+const mapApprovedAbsenceRow = (row: Record<string, unknown>): ApprovedAbsenceForWorkday => ({
+  ...mapAbsenceRequestRow(row),
+  absenceTypeName: String(row.absence_type_name),
+});
 
 export const absenceRequestRepository = {
   async create(
@@ -489,7 +495,7 @@ export const absenceRequestRepository = {
     employeeId: string,
     dateFrom: string,
     dateTo: string,
-  ): Promise<AbsenceRequest[]> {
+  ): Promise<ApprovedAbsenceForWorkday[]> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -498,17 +504,20 @@ export const absenceRequestRepository = {
       .input("dateFrom", sql.Date, dateFrom)
       .input("dateTo", sql.Date, dateTo)
       .query(`
-        SELECT *
-        FROM absence_requests
-        WHERE company_id = @companyId
-          AND employee_id = @employeeId
-          AND status = N'APPROVED'
-          AND start_date <= @dateTo
-          AND end_date >= @dateFrom
-        ORDER BY reviewed_at ASC, created_at ASC, id ASC
+        SELECT ar.*, at.name AS absence_type_name
+        FROM absence_requests ar
+        INNER JOIN absence_types at
+          ON at.id = ar.absence_type_id
+         AND at.company_id = ar.company_id
+        WHERE ar.company_id = @companyId
+          AND ar.employee_id = @employeeId
+          AND ar.status = N'APPROVED'
+          AND ar.start_date <= @dateTo
+          AND ar.end_date >= @dateFrom
+        ORDER BY ar.reviewed_at ASC, ar.created_at ASC, ar.id ASC
       `);
 
-    return result.recordset.map((row) => mapAbsenceRequestRow(row as Record<string, unknown>));
+    return result.recordset.map((row) => mapApprovedAbsenceRow(row as Record<string, unknown>));
   },
 
   async listApprovedByEmployeesAndDateRange(
@@ -516,7 +525,7 @@ export const absenceRequestRepository = {
     employeeIds: string[],
     dateFrom: string,
     dateTo: string,
-  ): Promise<AbsenceRequest[]> {
+  ): Promise<ApprovedAbsenceForWorkday[]> {
     if (employeeIds.length === 0) {
       return [];
     }
@@ -535,16 +544,19 @@ export const absenceRequestRepository = {
     });
 
     const result = await request.query(`
-      SELECT *
-      FROM absence_requests
-      WHERE company_id = @companyId
-        AND employee_id IN (${placeholders.join(", ")})
-        AND status = N'APPROVED'
-        AND start_date <= @dateTo
-        AND end_date >= @dateFrom
-      ORDER BY reviewed_at ASC, created_at ASC, id ASC
+      SELECT ar.*, at.name AS absence_type_name
+      FROM absence_requests ar
+      INNER JOIN absence_types at
+        ON at.id = ar.absence_type_id
+       AND at.company_id = ar.company_id
+      WHERE ar.company_id = @companyId
+        AND ar.employee_id IN (${placeholders.join(", ")})
+        AND ar.status = N'APPROVED'
+        AND ar.start_date <= @dateTo
+        AND ar.end_date >= @dateFrom
+      ORDER BY ar.reviewed_at ASC, ar.created_at ASC, ar.id ASC
     `);
 
-    return result.recordset.map((row) => mapAbsenceRequestRow(row as Record<string, unknown>));
+    return result.recordset.map((row) => mapApprovedAbsenceRow(row as Record<string, unknown>));
   },
 };

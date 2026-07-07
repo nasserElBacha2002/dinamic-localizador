@@ -16,7 +16,7 @@ describe("operationWorkdayService.getDetail", () => {
     mock.restoreAll();
   });
 
-  it("returns derived effective state and absence context", async () => {
+  it("returns derived effective state and effective absence context", async () => {
     setupUnitTestEnv();
     const { operationWorkdayService } = await import("./operation-workday.service");
 
@@ -34,10 +34,13 @@ describe("operationWorkdayService.getDetail", () => {
       expectedEndAt: "2026-08-10T21:00:00.000Z",
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 20,
+      scheduleTimezoneSnapshot: "America/Argentina/Buenos_Aires",
       status: "ACTIVE",
       cancellationReason: null,
     }));
-    mock.method(employeeWorkdayRepository, "countExpectedByWorkdayIds", async () => new Map([[WORKDAY_ID, 1]]));
+    mock.method(employeeWorkdayRepository, "countScheduledEmployeesByWorkdayIds", async () =>
+      new Map([[WORKDAY_ID, 1]]),
+    );
 
     let employeeFindByIdCalls = 0;
     mock.method(employeeRepository, "findById", async () => {
@@ -59,7 +62,29 @@ describe("operationWorkdayService.getDetail", () => {
         hasAttendance: false,
       },
     ]);
-    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => []);
+    mock.method(absenceRequestRepository, "listApprovedByEmployeesAndDateRange", async () => [
+      {
+        id: "absence-1",
+        employeeId: "emp-1",
+        absenceTypeId: "type-1",
+        absenceTypeName: "Vacaciones",
+        startDate: "2026-08-01",
+        endDate: "2026-08-14",
+        startPeriod: "FULL_DAY",
+        endPeriod: "FULL_DAY",
+        totalDays: 14,
+        reason: "Vacaciones",
+        status: "APPROVED",
+        requestedVia: "ADMIN",
+        sourceMessageSid: null,
+        reviewedByUserId: "user-1",
+        reviewedAt: "2026-07-01T12:00:00.000Z",
+        reviewComment: null,
+        cancelledAt: null,
+        createdAt: "2026-06-20T12:00:00.000Z",
+        updatedAt: "2026-07-01T12:00:00.000Z",
+      },
+    ]);
 
     const detail = await operationWorkdayService.getDetail(COMPANY_ID, OPERATION_ID, WORKDAY_ID);
 

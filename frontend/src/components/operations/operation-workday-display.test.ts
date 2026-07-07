@@ -27,7 +27,7 @@ describe("operation-workday-display", () => {
       expectedStartAt: "2026-08-04T01:00:00.000Z",
       expectedEndAt: "2026-08-04T09:00:00.000Z",
       status: "ACTIVE",
-      expectedEmployeesCount: 1,
+      scheduledEmployeesCount: 1,
     });
 
     assert.match(range, /\d{2}:\d{2}–\d{2}:\d{2}/);

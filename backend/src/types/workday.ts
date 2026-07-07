@@ -34,6 +34,15 @@ export interface EmployeeWorkday {
   updatedAt: string;
 }
 
+export interface EmployeeWorkdayScheduleContext {
+  workDate: string;
+  expectedStartAt: string;
+  expectedEndAt: string | null;
+  earlyToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  scheduleTimezone: string;
+}
+
 export interface ResolvedOperationWorkday {
   workDate: string;
   expectedStartAt: Date;

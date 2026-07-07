@@ -30,6 +30,9 @@ const companyA = "11111111-1111-1111-1111-111111111111";
 const employeeA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const operationA = "cccccccc-cccc-cccc-cccc-cccccccccccc";
 const operationB = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+const employeeWorkdayA = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+const employeeWorkdayB = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+const attendanceA = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const phone = "+5491111111111";
 const botNumber = "whatsapp:+10000000000";
 
@@ -53,6 +56,41 @@ const checkoutEligibleOperation = (id: string, serviceName = "Servicio Centro") 
   serviceLatitude: -34.6,
   serviceLongitude: -58.4,
   allowedRadiusMeters: 150,
+});
+
+const checkInWorkdayCandidate = (
+  operationId: string,
+  employeeWorkdayId: string,
+  serviceName = "Servicio Centro",
+) => ({
+  employeeWorkdayId,
+  operationWorkdayId: "11111111-1111-1111-1111-111111111112",
+  operationId,
+  serviceId: "22222222-2222-2222-2222-222222222222",
+  serviceName,
+  serviceAddress: "Av. Corrientes 1234",
+  serviceLocality: "CABA",
+  serviceLatitude: -34.6,
+  serviceLongitude: -58.4,
+  allowedRadiusMeters: 150,
+  operationKind: "ONE_TIME" as const,
+  workDate: "2026-07-05",
+  expectedStartAt: "2026-07-05T15:00:00.000Z",
+  expectedEndAt: "2026-07-05T21:00:00.000Z",
+  earlyToleranceMinutes: 15,
+  lateToleranceMinutes: 30,
+  scheduleTimezone: "America/Argentina/Buenos_Aires",
+});
+
+const checkoutWorkdayCandidate = (
+  operationId: string,
+  employeeWorkdayId: string,
+  attendanceRecordId: string,
+  serviceName = "Servicio Centro",
+) => ({
+  ...checkInWorkdayCandidate(operationId, employeeWorkdayId, serviceName),
+  attendanceRecordId,
+  checkInAt: "2026-07-05T15:00:00.000Z",
 });
 
 const defaultEmployee = (companyId: string, id: string) => ({
@@ -135,16 +173,32 @@ const buildSession = (
   employeeId: employeeA,
   operationId:
     state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? operationA : null,
+  employeeWorkdayId:
+    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION"
+      ? employeeWorkdayA
+      : null,
+  attendanceRecordId: state === "WAITING_CHECKOUT_LOCATION" ? attendanceA : null,
   phoneNumber: phone,
   state,
   contextJson:
     state === "WAITING_OPERATION_SELECTION" || state === "WAITING_CHECKOUT_OPERATION_SELECTION"
       ? JSON.stringify({
-          operationOptions: [
+          workdayOptions: [
             {
+              employeeWorkdayId: employeeWorkdayA,
+              operationWorkdayId: "11111111-1111-1111-1111-111111111112",
               operationId: operationA,
               serviceName: "Servicio Centro",
-              scheduledStart: "2026-07-05T15:00:00.000Z",
+              serviceAddress: "Av. Corrientes 1234",
+              serviceLocality: "CABA",
+              expectedStartAt: "2026-07-05T15:00:00.000Z",
+              expectedEndAt: "2026-07-05T21:00:00.000Z",
+              workDate: "2026-07-05",
+              attendanceRecordId: state === "WAITING_CHECKOUT_OPERATION_SELECTION" ? attendanceA : undefined,
+              checkInAt:
+                state === "WAITING_CHECKOUT_OPERATION_SELECTION"
+                  ? "2026-07-05T15:00:00.000Z"
+                  : undefined,
             },
           ],
         })
@@ -497,33 +551,43 @@ describe("whatsapp webhook check-in regression", () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Llegué" }),
       setup: async () => {
-        const { operationRepository } = await import("../repositories/operation.repository");
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(operationRepository, "findCompatibleForEmployee", async () => [
-          compatibleOperation(operationA),
-        ]);
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [checkInWorkdayCandidate(operationA, employeeWorkdayA)],
+          hasJustifiedWorkdayInWindow: false,
+        }));
         mock.method(botSessionService, "createWaitingLocationSession", async (_companyId, input) => {
           assert.equal(input.operationId, operationA);
+          assert.equal(input.employeeWorkdayId, employeeWorkdayA);
         });
       },
     });
     assert.match(message, /ubicación actual/i);
+    assert.match(message, /Av\. Corrientes 1234 - CABA/);
   });
 
   it("asks for operation selection with multiple compatible operations", async () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Llegué" }),
       setup: async () => {
-        const { operationRepository } = await import("../repositories/operation.repository");
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(operationRepository, "findCompatibleForEmployee", async () => [
-          compatibleOperation(operationA, "Servicio A"),
-          compatibleOperation(operationB, "Servicio B"),
-        ]);
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [
+            checkInWorkdayCandidate(operationA, employeeWorkdayA, "Servicio A"),
+            checkInWorkdayCandidate(operationB, employeeWorkdayB, "Servicio B"),
+          ],
+          hasJustifiedWorkdayInWindow: false,
+        }));
         mock.method(botSessionService, "createOperationSelectionSession", async () => undefined);
       },
     });
-    assert.match(message, /seleccioná el trabajo|Respondé con el número/i);
+    assert.match(message, /seleccioná|Respondé con el número/i);
   });
 
   it("blocks check-in when attendance is disabled", async () => {
@@ -574,15 +638,18 @@ describe("whatsapp webhook checkout regression", () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Me voy" }),
       setup: async () => {
-        const { attendanceRepository } = await import("../repositories/attendance.repository");
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(attendanceRepository, "findCheckoutEligibleOperations", async () => [
-          checkoutEligibleOperation(operationA),
+        mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => [
+          checkoutWorkdayCandidate(operationA, employeeWorkdayA, attendanceA),
         ]);
         mock.method(botSessionService, "createWaitingCheckoutLocationSession", async () => undefined);
       },
     });
     assert.match(message, /ubicación actual/i);
+    assert.match(message, /Av\. Corrientes 1234 - CABA/);
   });
 
   it("blocks checkout when attendance is disabled", async () => {
@@ -708,11 +775,16 @@ describe("whatsapp webhook multi-company isolation", () => {
         mock.method(companyModuleService, "getModuleStates", async (resolvedCompanyId: string) =>
           resolvedCompanyId === companyA ? statesA : statesB,
         );
-        const { operationRepository } = await import("../repositories/operation.repository");
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(operationRepository, "findCompatibleForEmployee", async (resolvedCompanyId: string) => {
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async (resolvedCompanyId: string) => {
           assert.equal(resolvedCompanyId, companyA);
-          return [compatibleOperation(operationA)];
+          return {
+            candidates: [checkInWorkdayCandidate(operationA, employeeWorkdayA)],
+            hasJustifiedWorkdayInWindow: false,
+          };
         });
         mock.method(botSessionService, "createWaitingLocationSession", async () => undefined);
       },
@@ -929,11 +1001,14 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "Llegué" }),
       setup: async () => {
-        const { operationRepository } = await import("../repositories/operation.repository");
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
         const { botSessionService } = await import("./bot-session.service");
-        mock.method(operationRepository, "findCompatibleForEmployee", async () => [
-          compatibleOperation(operationA),
-        ]);
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [checkInWorkdayCandidate(operationA, employeeWorkdayA)],
+          hasJustifiedWorkdayInWindow: false,
+        }));
         mock.method(botSessionService, "createWaitingLocationSession", async () => undefined);
       },
     });

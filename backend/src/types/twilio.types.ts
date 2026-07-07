@@ -23,6 +23,8 @@ export interface BotSession {
   companyId: string;
   employeeId: string;
   operationId: string | null;
+  employeeWorkdayId: string | null;
+  attendanceRecordId: string | null;
   phoneNumber: string;
   state: BotSessionState;
   contextJson: string | null;
@@ -39,7 +41,22 @@ export interface OperationSelectionOption {
   scheduledStart: string;
 }
 
+export interface WorkdaySessionSelectionOption {
+  employeeWorkdayId: string;
+  operationWorkdayId: string;
+  operationId: string;
+  attendanceRecordId?: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
+  expectedStartAt: string;
+  expectedEndAt: string | null;
+  workDate: string;
+  checkInAt?: string;
+}
+
 export interface BotSessionContext {
+  workdayOptions?: WorkdaySessionSelectionOption[];
   operationOptions?: OperationSelectionOption[];
   /** @deprecated Read compat — see legacy-operation-session-context.ts */
   inventoryOptions?: OperationSelectionOption[];

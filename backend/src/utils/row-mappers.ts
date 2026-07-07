@@ -232,6 +232,8 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   companyId: String(row.company_id),
   employeeId: String(row.employee_id),
   operationId: row.operation_id ? String(row.operation_id) : null,
+  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
+  attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
   phoneNumber: String(row.phone_number),
   state: String(row.state) as import("../types/twilio.types").BotSessionState,
   contextJson: row.context_json ? String(row.context_json) : null,

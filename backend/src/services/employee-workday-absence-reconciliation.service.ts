@@ -1,127 +1,94 @@
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
-import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
-import type { AbsenceRequest } from "../types/absence";
+import {
+  employeeWorkdayRepository,
+  type EmployeeWorkdayWithSchedule,
+} from "../repositories/employee-workday.repository";
+import type { ApprovedAbsenceForWorkday } from "../types/absence";
 import {
   emptyAbsenceWorkdayReconciliationResult,
-  mergeAbsenceWorkdayReconciliationResults,
   type AbsenceWorkdayReconciliationResult,
 } from "../types/absence-workday-reconciliation";
-import type { EmployeeWorkday } from "../types/workday";
-import { isWorkDateCoveredByAbsence } from "../utils/absence-workday-coverage";
+import {
+  applyPersistedAbsenceDeltas,
+  resolveWorkdayAbsenceDeltas,
+} from "../utils/resolve-workday-absence-deltas";
+import { getAbsenceDateRangeForWorkday } from "../utils/absence-workday-coverage";
 
-type EmployeeWorkdayWithSchedule = EmployeeWorkday & {
-  workDate: string;
-  expectedStartAt: string;
-  expectedEndAt: string | null;
-  earlyToleranceMinutes: number;
-  lateToleranceMinutes: number;
-};
-
-const selectEffectiveAbsence = (
-  workDate: string,
-  absences: AbsenceRequest[],
-): AbsenceRequest | null => {
-  const covering = absences.filter((absence) => isWorkDateCoveredByAbsence(workDate, absence));
-  if (covering.length === 0) {
-    return null;
+const getDateRangeBounds = (workdays: EmployeeWorkdayWithSchedule[]): {
+  dateFrom: string;
+  dateTo: string;
+} => {
+  let dateFrom = workdays[0]!.workDate;
+  let dateTo = workdays[0]!.workDate;
+  for (const workday of workdays) {
+    const range = getAbsenceDateRangeForWorkday(workday);
+    if (range.dateFrom < dateFrom) {
+      dateFrom = range.dateFrom;
+    }
+    if (range.dateTo > dateTo) {
+      dateTo = range.dateTo;
+    }
   }
-
-  return covering[0] ?? null;
+  return { dateFrom, dateTo };
 };
 
-const buildAbsenceIndex = (
-  absences: AbsenceRequest[],
-): Map<string, AbsenceRequest[]> => {
-  const index = new Map<string, AbsenceRequest[]>();
-  for (const absence of absences) {
-    const existing = index.get(absence.employeeId) ?? [];
-    existing.push(absence);
-    index.set(absence.employeeId, existing);
-  }
-  return index;
-};
-
-const reconcileWorkdayBatch = async (
+const reconcileLoadedWorkdays = async (
   companyId: string,
   workdays: EmployeeWorkdayWithSchedule[],
-  absences: AbsenceRequest[],
+  approvedAbsences: ApprovedAbsenceForWorkday[],
   attendanceEmployeeWorkdayIds: Set<string>,
 ): Promise<AbsenceWorkdayReconciliationResult> => {
-  const counters = emptyAbsenceWorkdayReconciliationResult();
-  const absenceIndex = buildAbsenceIndex(absences);
-
-  for (const workday of workdays) {
-    if (workday.expectationStatus === "CANCELLED") {
-      counters.unchanged += 1;
-      continue;
-    }
-
-    const employeeAbsences = absenceIndex.get(workday.employeeId) ?? [];
-    const effectiveAbsence = selectEffectiveAbsence(workday.workDate, employeeAbsences);
-    const hasAttendance = attendanceEmployeeWorkdayIds.has(workday.id);
-
-    if (effectiveAbsence) {
-      if (hasAttendance) {
-        counters.attendanceConflicts += 1;
-        counters.unchanged += 1;
-        continue;
-      }
-
-      if (workday.expectationStatus === "JUSTIFIED") {
-        if (workday.absenceRequestId === effectiveAbsence.id) {
-          counters.unchanged += 1;
-          continue;
-        }
-
-        const relinked = await employeeWorkdayRepository.relinkJustifiedExpectation(
-          companyId,
-          workday.id,
-          effectiveAbsence.id,
-        );
-        if (relinked) {
-          counters.relinked += 1;
-        } else {
-          counters.unchanged += 1;
-        }
-        continue;
-      }
-
-      if (workday.expectationStatus !== "EXPECTED") {
-        counters.unchanged += 1;
-        continue;
-      }
-
-      const justified = await employeeWorkdayRepository.justifyExpectation(
-        companyId,
-        workday.id,
-        effectiveAbsence.id,
-      );
-      if (justified) {
-        counters.justified += 1;
-      } else {
-        counters.unchanged += 1;
-      }
-      continue;
-    }
-
-    if (workday.expectationStatus === "JUSTIFIED") {
-      const restored = await employeeWorkdayRepository.restoreJustifiedExpectation(
-        companyId,
-        workday.id,
-        workday.absenceRequestId ?? "",
-      );
-      if (restored) {
-        counters.restored += 1;
-      } else {
-        counters.unchanged += 1;
-      }
-      continue;
-    }
-
-    counters.unchanged += 1;
+  if (workdays.length === 0) {
+    return emptyAbsenceWorkdayReconciliationResult();
   }
 
-  return counters;
+  const resolution = resolveWorkdayAbsenceDeltas({
+    workdays,
+    absences: approvedAbsences,
+    attendanceEmployeeWorkdayIds,
+  });
+
+  const [justifyResult, relinked, restored] = await Promise.all([
+    employeeWorkdayRepository.batchJustifyExpectations(companyId, resolution.toJustify),
+    employeeWorkdayRepository.batchRelinkJustifiedExpectations(companyId, resolution.toRelink),
+    employeeWorkdayRepository.batchRestoreJustifiedExpectations(companyId, resolution.toRestore),
+  ]);
+
+  return applyPersistedAbsenceDeltas(
+    {
+      justified: justifyResult.updated,
+      relinked,
+      restored,
+      justifyRaceConflicts: justifyResult.raceConflicts,
+    },
+    resolution,
+  );
+};
+
+const loadReconciliationContext = async (
+  companyId: string,
+  workdays: EmployeeWorkdayWithSchedule[],
+): Promise<{
+  approvedAbsences: ApprovedAbsenceForWorkday[];
+  attendanceEmployeeWorkdayIds: Set<string>;
+}> => {
+  const employeeIds = [...new Set(workdays.map((workday) => workday.employeeId))];
+  const { dateFrom, dateTo } = getDateRangeBounds(workdays);
+
+  const [approvedAbsences, attendanceEmployeeWorkdayIds] = await Promise.all([
+    absenceRequestRepository.listApprovedByEmployeesAndDateRange(
+      companyId,
+      employeeIds,
+      dateFrom,
+      dateTo,
+    ),
+    employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
+      companyId,
+      workdays.map((workday) => workday.id),
+    ),
+  ]);
+
+  return { approvedAbsences, attendanceEmployeeWorkdayIds };
 };
 
 export const employeeWorkdayAbsenceReconciliationService = {
@@ -155,33 +122,17 @@ export const employeeWorkdayAbsenceReconciliationService = {
       return emptyAbsenceWorkdayReconciliationResult();
     }
 
-    const attendanceIds = await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
+    const { approvedAbsences, attendanceEmployeeWorkdayIds } = await loadReconciliationContext(
       companyId,
-      linkedWorkdays.map((workday) => workday.id),
+      linkedWorkdays,
     );
 
-    const absence = await absenceRequestRepository.findById(companyId, absenceRequestId);
-    const employeeId = absence?.employeeId ?? linkedWorkdays[0]!.employeeId;
-
-    let dateFrom = linkedWorkdays[0]!.workDate;
-    let dateTo = linkedWorkdays[0]!.workDate;
-    for (const workday of linkedWorkdays) {
-      if (workday.workDate < dateFrom) {
-        dateFrom = workday.workDate;
-      }
-      if (workday.workDate > dateTo) {
-        dateTo = workday.workDate;
-      }
-    }
-
-    const approvedAbsences = await absenceRequestRepository.listApprovedByEmployeeAndDateRange(
+    return reconcileLoadedWorkdays(
       companyId,
-      employeeId,
-      dateFrom,
-      dateTo,
+      linkedWorkdays,
+      approvedAbsences,
+      attendanceEmployeeWorkdayIds,
     );
-
-    return reconcileWorkdayBatch(companyId, linkedWorkdays, approvedAbsences, attendanceIds);
   },
 
   async reconcileEmployeeDateRange(
@@ -190,31 +141,28 @@ export const employeeWorkdayAbsenceReconciliationService = {
     dateFrom: string,
     dateTo: string,
   ): Promise<AbsenceWorkdayReconciliationResult> {
-    const [workdays, approvedAbsences] = await Promise.all([
-      employeeWorkdayRepository.listWithWorkDatesByEmployeeAndDateRange(
-        companyId,
-        employeeId,
-        dateFrom,
-        dateTo,
-      ),
-      absenceRequestRepository.listApprovedByEmployeeAndDateRange(
-        companyId,
-        employeeId,
-        dateFrom,
-        dateTo,
-      ),
-    ]);
+    const workdays = await employeeWorkdayRepository.listWithWorkDatesByEmployeeAndDateRange(
+      companyId,
+      employeeId,
+      dateFrom,
+      dateTo,
+    );
 
     if (workdays.length === 0) {
       return emptyAbsenceWorkdayReconciliationResult();
     }
 
-    const attendanceIds = await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
+    const { approvedAbsences, attendanceEmployeeWorkdayIds } = await loadReconciliationContext(
       companyId,
-      workdays.map((workday) => workday.id),
+      workdays,
     );
 
-    return reconcileWorkdayBatch(companyId, workdays, approvedAbsences, attendanceIds);
+    return reconcileLoadedWorkdays(
+      companyId,
+      workdays,
+      approvedAbsences,
+      attendanceEmployeeWorkdayIds,
+    );
   },
 
   async reconcileEmployeeWorkdays(
@@ -233,32 +181,17 @@ export const employeeWorkdayAbsenceReconciliationService = {
       return emptyAbsenceWorkdayReconciliationResult();
     }
 
-    let dateFrom = workdays[0]!.workDate;
-    let dateTo = workdays[0]!.workDate;
-    const employeeIds = new Set<string>();
-    for (const workday of workdays) {
-      employeeIds.add(workday.employeeId);
-      if (workday.workDate < dateFrom) {
-        dateFrom = workday.workDate;
-      }
-      if (workday.workDate > dateTo) {
-        dateTo = workday.workDate;
-      }
-    }
-
-    const approvedAbsences = await absenceRequestRepository.listApprovedByEmployeesAndDateRange(
+    const { approvedAbsences, attendanceEmployeeWorkdayIds } = await loadReconciliationContext(
       companyId,
-      [...employeeIds],
-      dateFrom,
-      dateTo,
+      workdays,
     );
 
-    const attendanceIds = await employeeWorkdayRepository.listAttendancePresenceForEmployeeWorkdayIds(
+    return reconcileLoadedWorkdays(
       companyId,
-      workdays.map((workday) => workday.id),
+      workdays,
+      approvedAbsences,
+      attendanceEmployeeWorkdayIds,
     );
-
-    return reconcileWorkdayBatch(companyId, workdays, approvedAbsences, attendanceIds);
   },
 
   async reconcileMaterializationRange(
@@ -271,17 +204,27 @@ export const employeeWorkdayAbsenceReconciliationService = {
       return emptyAbsenceWorkdayReconciliationResult();
     }
 
-    const counters = emptyAbsenceWorkdayReconciliationResult();
-    for (const employeeId of employeeIds) {
-      const partial = await this.reconcileEmployeeDateRange(
-        companyId,
-        employeeId,
-        rangeStart,
-        rangeEnd,
-      );
-      mergeAbsenceWorkdayReconciliationResults(counters, partial);
+    const workdays = await employeeWorkdayRepository.listWithWorkDatesByEmployeesAndDateRange(
+      companyId,
+      employeeIds,
+      rangeStart,
+      rangeEnd,
+    );
+
+    if (workdays.length === 0) {
+      return emptyAbsenceWorkdayReconciliationResult();
     }
 
-    return counters;
+    const { approvedAbsences, attendanceEmployeeWorkdayIds } = await loadReconciliationContext(
+      companyId,
+      workdays,
+    );
+
+    return reconcileLoadedWorkdays(
+      companyId,
+      workdays,
+      approvedAbsences,
+      attendanceEmployeeWorkdayIds,
+    );
   },
 };

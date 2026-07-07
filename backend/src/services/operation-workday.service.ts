@@ -3,9 +3,13 @@ import { absenceRequestRepository } from "../repositories/absence-request.reposi
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
+import type { EmployeeWorkdayExpectationStatus } from "../constants/workday-status";
 import type { DerivedEmployeeWorkdayState } from "../types/employee-workday-state";
 import type { EmployeeWorkdayAbsenceContext } from "../types/employee-workday-state";
-import { isWorkDateCoveredByAbsence } from "../utils/absence-workday-coverage";
+import {
+  getAbsenceDateRangeForWorkday,
+  resolveEffectiveAbsenceForWorkday,
+} from "../utils/absence-workday-coverage";
 import { deriveEmployeeWorkdayState } from "../utils/derive-employee-workday-state";
 import { buildPaginationMeta } from "../utils/pagination";
 import type { ListOperationWorkdaysQuery } from "../schemas/operation-workday.schema";
@@ -16,13 +20,13 @@ export interface OperationWorkdaySummary {
   expectedStartAt: string;
   expectedEndAt: string | null;
   status: string;
-  expectedEmployeesCount: number;
+  scheduledEmployeesCount: number;
 }
 
 export interface OperationWorkdayEmployeeSummary {
   employeeId: string;
   employeeName: string;
-  expectationStatus: string;
+  expectationStatus: EmployeeWorkdayExpectationStatus;
   effectiveState: DerivedEmployeeWorkdayState;
   absenceContext: EmployeeWorkdayAbsenceContext | null;
   hasAttendanceConflict: boolean;
@@ -47,7 +51,7 @@ export const operationWorkdayService = {
       status: query.status,
     });
 
-    const counts = await employeeWorkdayRepository.countExpectedByWorkdayIds(
+    const counts = await employeeWorkdayRepository.countScheduledEmployeesByWorkdayIds(
       companyId,
       items.map((item) => item.id),
     );
@@ -59,7 +63,7 @@ export const operationWorkdayService = {
         expectedStartAt: item.expectedStartAt,
         expectedEndAt: item.expectedEndAt,
         status: item.status,
-        expectedEmployeesCount: counts.get(item.id) ?? 0,
+        scheduledEmployeesCount: counts.get(item.id) ?? 0,
       })),
       meta: buildPaginationMeta(query.page, query.limit, total),
     };
@@ -83,17 +87,26 @@ export const operationWorkdayService = {
       throw new AppError(404, "OPERATION_WORKDAY_NOT_FOUND", "La jornada no existe");
     }
 
-    const counts = await employeeWorkdayRepository.countExpectedByWorkdayIds(companyId, [workday.id]);
+    const counts = await employeeWorkdayRepository.countScheduledEmployeesByWorkdayIds(companyId, [
+      workday.id,
+    ]);
     const employees = await employeeWorkdayRepository.listEmployeeSummariesByOperationWorkdayId(
       companyId,
       workday.id,
     );
 
+    const absenceDateRange = getAbsenceDateRangeForWorkday({
+      workDate: workday.workDate,
+      expectedStartAt: workday.expectedStartAt,
+      expectedEndAt: workday.expectedEndAt,
+      scheduleTimezone: workday.scheduleTimezoneSnapshot ?? "America/Argentina/Buenos_Aires",
+    });
+
     const approvedAbsences = await absenceRequestRepository.listApprovedByEmployeesAndDateRange(
       companyId,
       employees.map((employee) => employee.employeeId),
-      workday.workDate,
-      workday.workDate,
+      absenceDateRange.dateFrom,
+      absenceDateRange.dateTo,
     );
 
     const absencesByEmployee = new Map<string, typeof approvedAbsences>();
@@ -103,9 +116,18 @@ export const operationWorkdayService = {
       absencesByEmployee.set(absence.employeeId, existing);
     }
 
+    const scheduleTimezone = workday.scheduleTimezoneSnapshot ?? "America/Argentina/Buenos_Aires";
+    const workdaySchedule = {
+      workDate: workday.workDate,
+      expectedStartAt: workday.expectedStartAt,
+      expectedEndAt: workday.expectedEndAt,
+      scheduleTimezone,
+    };
+
     const expectedEmployees: OperationWorkdayEmployeeSummary[] = employees.map((employee) => {
+      const expectationStatus = employee.expectationStatus as EmployeeWorkdayExpectationStatus;
       const effectiveState = deriveEmployeeWorkdayState({
-        employeeWorkday: { expectationStatus: employee.expectationStatus as never },
+        employeeWorkday: { expectationStatus },
         hasAttendance: employee.hasAttendance,
         expectedStartAt: workday.expectedStartAt,
         expectedEndAt: workday.expectedEndAt,
@@ -114,19 +136,28 @@ export const operationWorkdayService = {
       });
 
       const employeeAbsences = absencesByEmployee.get(employee.employeeId) ?? [];
-      const hasCoveringApprovedAbsence = employeeAbsences.some((absence) =>
-        isWorkDateCoveredByAbsence(workday.workDate, absence),
-      );
+      const effectiveAbsence = resolveEffectiveAbsenceForWorkday({
+        workday: workdaySchedule,
+        approvedAbsences: employeeAbsences,
+      });
+
       const hasAttendanceConflict =
         employee.hasAttendance &&
-        employee.expectationStatus === "EXPECTED" &&
-        hasCoveringApprovedAbsence;
+        expectationStatus === "EXPECTED" &&
+        effectiveAbsence !== null;
 
-      const absenceContext: EmployeeWorkdayAbsenceContext | null =
-        employee.absenceRequestId &&
-        employee.absenceTypeName &&
-        employee.absenceStartDate &&
-        employee.absenceEndDate
+      const absenceContext: EmployeeWorkdayAbsenceContext | null = effectiveAbsence
+        ? {
+            absenceRequestId: effectiveAbsence.id,
+            absenceTypeName: effectiveAbsence.absenceTypeName,
+            absenceStartDate: effectiveAbsence.startDate,
+            absenceEndDate: effectiveAbsence.endDate,
+            hasAttendanceConflict,
+          }
+        : employee.absenceRequestId &&
+            employee.absenceTypeName &&
+            employee.absenceStartDate &&
+            employee.absenceEndDate
           ? {
               absenceRequestId: employee.absenceRequestId,
               absenceTypeName: employee.absenceTypeName,
@@ -134,20 +165,12 @@ export const operationWorkdayService = {
               absenceEndDate: employee.absenceEndDate,
               hasAttendanceConflict,
             }
-          : hasAttendanceConflict
-            ? {
-                absenceRequestId: employeeAbsences[0]!.id,
-                absenceTypeName: "",
-                absenceStartDate: employeeAbsences[0]!.startDate,
-                absenceEndDate: employeeAbsences[0]!.endDate,
-                hasAttendanceConflict: true,
-              }
-            : null;
+          : null;
 
       return {
         employeeId: employee.employeeId,
         employeeName: employee.employeeName,
-        expectationStatus: employee.expectationStatus,
+        expectationStatus,
         effectiveState,
         absenceContext,
         hasAttendanceConflict,
@@ -161,7 +184,7 @@ export const operationWorkdayService = {
         expectedStartAt: workday.expectedStartAt,
         expectedEndAt: workday.expectedEndAt,
         status: workday.status,
-        expectedEmployeesCount: counts.get(workday.id) ?? 0,
+        scheduledEmployeesCount: counts.get(workday.id) ?? 0,
       },
       expectedEmployees,
     };

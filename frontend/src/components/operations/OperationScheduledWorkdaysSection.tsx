@@ -1,5 +1,4 @@
-import { Alert, Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { Link as RouterLink } from "react-router-dom";
+import { Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
 import { useState } from "react";
 import { ErrorState } from "../../design-system/components/ErrorState";
 import { LoadingState } from "../../design-system/components/LoadingState";
@@ -18,13 +17,11 @@ import { getApiErrorMessage } from "../../utils/errors";
 
 import {
   buildMaterializationSuccessMessage,
-  employeeWorkdayStateLabels,
-  employeeWorkdayStateTones,
   formatExpectedTimeRange,
   formatWorkdayDate,
   workdayStatusLabels,
 } from "./operation-workday-display";
-import { formatDate } from "../../utils/dates";
+import { WorkdayEmployeeExpectationPanel } from "./WorkdayEmployeeExpectationPanel";
 
 interface WorkdayRowProps {
   operationId: string;
@@ -47,7 +44,7 @@ function WorkdayRow({ operationId, workday }: WorkdayRowProps) {
             variant="light"
           />
         </Table.Td>
-        <Table.Td>{workday.expectedEmployeesCount}</Table.Td>
+        <Table.Td>{workday.scheduledEmployeesCount}</Table.Td>
         <Table.Td>
           <Button variant="subtle" size="compact-xs" onClick={() => setExpanded((value) => !value)}>
             {expanded ? "Ocultar" : "Ver"}
@@ -80,42 +77,7 @@ function WorkdayRow({ operationId, workday }: WorkdayRowProps) {
                       <Table.Tr key={employee.employeeId}>
                         <Table.Td>{employee.employeeName}</Table.Td>
                         <Table.Td>
-                          <Stack gap={4}>
-                            <StatusBadge
-                              label={employeeWorkdayStateLabels[employee.effectiveState]}
-                              tone={employeeWorkdayStateTones[employee.effectiveState]}
-                              variant="light"
-                            />
-                            {employee.absenceContext && employee.effectiveState === "JUSTIFIED" ? (
-                              <Text size="xs" c="dimmed">
-                                {employee.absenceContext.absenceTypeName}
-                                {" · "}
-                                {formatDate(employee.absenceContext.absenceStartDate)} →{" "}
-                                {formatDate(employee.absenceContext.absenceEndDate)}
-                                {employee.absenceContext.absenceRequestId ? (
-                                  <>
-                                    {" · "}
-                                    <Button
-                                      component={RouterLink}
-                                      to={`/absences/${employee.absenceContext.absenceRequestId}`}
-                                      variant="subtle"
-                                      size="compact-xs"
-                                      p={0}
-                                      h="auto"
-                                    >
-                                      Ver ausencia
-                                    </Button>
-                                  </>
-                                ) : null}
-                              </Text>
-                            ) : null}
-                            {employee.hasAttendanceConflict ? (
-                              <Alert color="yellow" p="xs">
-                                Existe una asistencia registrada para esta jornada. La ausencia aprobada
-                                no modificó automáticamente el registro.
-                              </Alert>
-                            ) : null}
-                          </Stack>
+                          <WorkdayEmployeeExpectationPanel employee={employee} />
                         </Table.Td>
                       </Table.Tr>
                     ))}
@@ -210,7 +172,7 @@ export function OperationScheduledWorkdaysSection({
                   <Table.Th>Fecha</Table.Th>
                   <Table.Th>Horario esperado</Table.Th>
                   <Table.Th>Estado</Table.Th>
-                  <Table.Th>Colaboradores esperados</Table.Th>
+                  <Table.Th>Colaboradores programados</Table.Th>
                   <Table.Th />
                 </Table.Tr>
               </Table.Thead>

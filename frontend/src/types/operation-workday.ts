@@ -6,7 +6,7 @@ export interface OperationWorkdaySummary {
   expectedStartAt: string;
   expectedEndAt: string | null;
   status: OperationWorkdayStatus;
-  expectedEmployeesCount: number;
+  scheduledEmployeesCount: number;
 }
 
 export type DerivedEmployeeWorkdayState =

@@ -429,13 +429,13 @@ export const recurringWorkdayMaterializationService = {
       counters.employeeWorkdaysCancelled += cancelledEmployees;
     }
 
-    const employeeIds = [...new Set(assignments.map((assignment) => assignment.employeeId))];
+    const employeeWorkdayIds = [...employeeWorkdayIndex.values()].flatMap((byEmployee) =>
+      [...byEmployee.values()].map((workday) => workday.id),
+    );
     counters.absenceReconciliation =
-      await employeeWorkdayAbsenceReconciliationService.reconcileMaterializationRange(
+      await employeeWorkdayAbsenceReconciliationService.reconcileEmployeeWorkdays(
         companyId,
-        range.rangeStart,
-        range.rangeEnd,
-        employeeIds,
+        employeeWorkdayIds,
       );
 
     return counters;

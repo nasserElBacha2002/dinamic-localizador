@@ -1,11 +1,16 @@
 import type { CheckoutStatus } from "../../constants/checkout-status";
 import type { PunctualityStatus } from "../../types/domain";
+import type {
+  EmployeeWorkdayCheckInCandidate,
+  EmployeeWorkdayCheckoutCandidate,
+} from "../../types/employee-workday-availability";
 import type { CheckoutEligibleOperation, CompatibleOperation } from "../../types/twilio.types";
 import { formatLocalTime } from "../../utils/attendance-validation";
 import { getBotOperationTimezone } from "../../utils/bot-runtime-settings-scope";
 import {
   formatAssignmentServiceReference,
   formatBotOperationSelectionLines,
+  formatBotWorkdaySelectionLines,
 } from "../../utils/employee-assignment-format";
 import { formatServiceReferenceFromFields } from "../../utils/format-service-reference";
 import { checkoutStatusLabel } from "../../utils/checkout-validation";
@@ -52,7 +57,13 @@ export const CHECKOUT_REMINDER =
   "Cuando finalices el trabajo, enviá 'Me voy' para registrar tu salida.";
 
 export const NO_OPERATION_MESSAGE =
-  "No encontramos un trabajo asignado para vos en la fecha y horario actuales. Verificá con administración.";
+  "No tenés una jornada disponible para registrar llegada en este momento.";
+
+export const NO_JUSTIFIED_ONLY_MESSAGE =
+  "No tenés una jornada disponible para registrar llegada en este momento.";
+
+export const WORKDAY_NO_LONGER_AVAILABLE_MESSAGE =
+  "La jornada seleccionada ya no está disponible para registrar llegada. Volvé a escribir \"Llegué\".";
 
 export const LOCATION_WITHOUT_SESSION_MESSAGE =
   'Para registrar tu llegada, primero escribí "Llegué".';
@@ -85,10 +96,25 @@ export const buildSessionExpiredMessage = (message: string): string => message;
 
 export const buildNoOperationMessage = (): string => NO_OPERATION_MESSAGE;
 
-export const buildLocationRequestMessage = (operation: CompatibleOperation): string => {
-  const localTime = formatLocalTime(operation.scheduledStart, getBotOperationTimezone());
-  const serviceReference = formatServiceReferenceFromFields(operation);
-  return `Encontramos tu trabajo en ${serviceReference}, programado para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
+export const buildLocationRequestMessage = (
+  workday: EmployeeWorkdayCheckInCandidate | CompatibleOperation,
+): string => {
+  const scheduledStart =
+    "expectedStartAt" in workday ? workday.expectedStartAt : workday.scheduledStart;
+  const localTime = formatLocalTime(scheduledStart, getBotOperationTimezone());
+  const serviceReference = formatAssignmentServiceReference(workday);
+  return `Encontramos tu jornada en ${serviceReference}, programada para las ${localTime}.\n\nCompartí tu ubicación actual desde WhatsApp para registrar tu llegada.`;
+};
+
+export const buildWorkdaySelectionPrompt = (
+  workdays: EmployeeWorkdayCheckInCandidate[],
+): string => {
+  const timeZone = getBotOperationTimezone();
+  const lines = workdays.flatMap((workday, index) =>
+    formatBotWorkdaySelectionLines(index + 1, workday, timeZone),
+  );
+
+  return `Encontramos más de una jornada compatible:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente.`;
 };
 
 export const buildOperationSelectionPrompt = (operations: CompatibleOperation[]): string => {
@@ -101,26 +127,32 @@ export const buildOperationSelectionPrompt = (operations: CompatibleOperation[])
 };
 
 export const buildCheckoutLocationRequestMessage = (
-  operation: CheckoutEligibleOperation,
+  workday: EmployeeWorkdayCheckoutCandidate | CheckoutEligibleOperation,
 ): string => {
-  const localTime = formatLocalTime(operation.scheduledStart, getBotOperationTimezone());
-  const serviceReference = formatServiceReferenceFromFields(operation);
-  return `Perfecto. Para registrar tu salida del trabajo en ${serviceReference} (${localTime}), compartime tu ubicación actual.`;
+  const scheduledStart =
+    "checkInAt" in workday && workday.checkInAt
+      ? workday.checkInAt
+      : "expectedStartAt" in workday
+        ? workday.expectedStartAt
+        : workday.scheduledStart;
+  const localTime = formatLocalTime(scheduledStart, getBotOperationTimezone());
+  const serviceReference = formatAssignmentServiceReference(workday);
+  return `Perfecto. Para registrar tu salida de ${serviceReference} (${localTime}), compartime tu ubicación actual.`;
 };
 
-export const buildCheckoutOperationSelectionPrompt = (
-  operations: CheckoutEligibleOperation[],
+export const buildCheckoutWorkdaySelectionPrompt = (
+  workdays: EmployeeWorkdayCheckoutCandidate[],
 ): string => {
   const timeZone = getBotOperationTimezone();
-  const lines = operations.flatMap((operation, index) =>
-    formatBotOperationSelectionLines(index + 1, operation, timeZone),
+  const lines = workdays.flatMap((workday, index) =>
+    formatBotWorkdaySelectionLines(index + 1, workday, timeZone, workday.checkInAt),
   );
 
-  return `Encontramos más de un trabajo con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
+  return `Encontramos más de una jornada con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
 };
 
 export const buildArrivalRegisteredMessage = (input: {
-  compatible: CompatibleOperation;
+  compatible: EmployeeWorkdayCheckInCandidate | CompatibleOperation;
   distanceMeters: number;
   validationStatus: "VALID" | "PENDING_REVIEW" | "REJECTED";
   punctualityStatus: PunctualityStatus;
@@ -152,7 +184,7 @@ export const buildArrivalRegisteredMessage = (input: {
 };
 
 export const buildCheckoutRegisteredMessage = (input: {
-  eligible: CheckoutEligibleOperation;
+  eligible: EmployeeWorkdayCheckoutCandidate | CheckoutEligibleOperation;
   checkInAt: string;
   checkoutAt: Date;
   distanceMeters: number | null;

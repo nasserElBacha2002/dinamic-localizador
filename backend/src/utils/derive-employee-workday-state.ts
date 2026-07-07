@@ -10,12 +10,11 @@ export const isAttendanceOpportunityOpen = (input: {
 }): boolean => {
   const now = input.referenceAt ?? new Date();
   const start = new Date(input.expectedStartAt);
-  const end = input.expectedEndAt
-    ? new Date(input.expectedEndAt)
+  const opportunityEnd = input.expectedEndAt
+    ? new Date(new Date(input.expectedEndAt).getTime() + input.lateToleranceMinutes * 60_000)
     : new Date(start.getTime() + input.lateToleranceMinutes * 60_000);
 
-  const opportunityEnd = new Date(end.getTime() + input.lateToleranceMinutes * 60_000);
-  return now <= opportunityEnd;
+  return now.getTime() <= opportunityEnd.getTime();
 };
 
 export const deriveEmployeeWorkdayState = (input: {

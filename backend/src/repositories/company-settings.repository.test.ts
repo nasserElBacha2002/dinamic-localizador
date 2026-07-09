@@ -18,6 +18,7 @@ const sampleSettings = {
   geofenceReviewMarginMeters: null,
   confirmationReminderEnabled: true,
   confirmationReminderHoursBefore: 24,
+  pendingOperationExpirationHours: 12,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -36,6 +37,7 @@ const defaults = {
   geofenceReviewMarginMeters: null,
   confirmationReminderEnabled: true,
   confirmationReminderHoursBefore: 24,
+  pendingOperationExpirationHours: 12,
 };
 
 describe("companySettingsRepository.findOrCreateByCompanyId", () => {

@@ -50,13 +50,13 @@ import {
   INVALID_SELECTION_MESSAGE,
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
   NO_CHECKOUT_OPERATION_MESSAGE,
+  PENDING_CHECKOUT_EXPIRED_MESSAGE,
   NO_JUSTIFIED_ONLY_MESSAGE,
   NO_OPERATION_MESSAGE,
   WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
 } from "./bot/bot-response.builder";
 import {
   findCheckInCandidateByWorkdayId,
-  findCheckoutCandidateByAttendanceId,
   isValidWorkdaySelection,
   listAvailableCheckInWorkdays,
   listOpenCheckoutWorkdays,
@@ -64,7 +64,9 @@ import {
   mapCheckoutCandidatesToSessionOptions,
   parseWorkdaySelectionIndex,
   resolveWorkdayOptionFromSession,
+  revalidateCheckoutCandidateByAttendanceId,
 } from "./bot/bot-workday.selector";
+import type { CheckoutCandidateRevalidationResult } from "./bot/bot-workday.selector";
 import { whatsappRouterService } from "./whatsapp-router/whatsapp-router.service";
 import type { WhatsAppRouterHandlers } from "./whatsapp-router/whatsapp-router.types";
 import {
@@ -85,6 +87,13 @@ import {
 } from "../utils/bot-runtime-context";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
+
+const messageForCheckoutRevalidationFailure = (
+  result: CheckoutCandidateRevalidationResult,
+): string =>
+  result.kind === "expired"
+    ? PENDING_CHECKOUT_EXPIRED_MESSAGE
+    : NO_CHECKOUT_OPERATION_MESSAGE;
 
 const buildTwiml = (message: string): string => {
   const response = new twilio.twiml.MessagingResponse();
@@ -369,7 +378,11 @@ export const whatsappBotService = {
     messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
-    const eligible = await listOpenCheckoutWorkdays(companyId, input.employeeId);
+    const eligible = await listOpenCheckoutWorkdays(
+      companyId,
+      input.employeeId,
+      getBotNow(),
+    );
 
     if (eligible.length === 0) {
       return respond(companyId, {
@@ -479,20 +492,23 @@ export const whatsappBotService = {
       });
     }
 
-    const eligible = await findCheckoutCandidateByAttendanceId(
+    const revalidation = await revalidateCheckoutCandidateByAttendanceId(
       companyId,
       input.employeeId,
       selected.attendanceRecordId,
+      getBotNow(),
     );
 
-    if (!eligible) {
+    if (revalidation.kind !== "eligible") {
       return respond(companyId, {
-        message: NO_CHECKOUT_OPERATION_MESSAGE,
+        message: messageForCheckoutRevalidationFailure(revalidation),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
+
+    const eligible = revalidation.candidate;
 
     if (!getRequireCheckoutLocation()) {
       return this.processCheckoutWithoutLocation({
@@ -948,24 +964,31 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { companyId } = input;
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutCandidateByAttendanceId(
+    const revalidation = await revalidateCheckoutCandidateByAttendanceId(
       companyId,
       input.employeeId,
       input.attendanceRecordId,
+      checkoutAt,
     );
 
     if (
-      !eligible ||
-      eligible.employeeWorkdayId !== input.employeeWorkdayId ||
-      eligible.operationId !== input.operationId
+      revalidation.kind !== "eligible" ||
+      revalidation.candidate.employeeWorkdayId !== input.employeeWorkdayId ||
+      revalidation.candidate.operationId !== input.operationId
     ) {
+      const message =
+        revalidation.kind === "expired"
+          ? PENDING_CHECKOUT_EXPIRED_MESSAGE
+          : NO_CHECKOUT_OPERATION_MESSAGE;
       return respond(companyId, {
-        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        message,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
+
+    const eligible = revalidation.candidate;
 
     const simulationSessionId = getSimulationSessionId();
     let attendance: AttendanceRecord | null = null;
@@ -1117,18 +1140,19 @@ export const whatsappBotService = {
         });
       }
 
-      const refreshedCandidate = await findCheckoutCandidateByAttendanceId(
+      const refreshed = await revalidateCheckoutCandidateByAttendanceId(
         companyId,
         input.employeeId,
         input.attendanceRecordId,
+        checkoutAt,
       );
       if (
-        !refreshedCandidate ||
-        refreshedCandidate.employeeWorkdayId !== input.employeeWorkdayId
+        refreshed.kind !== "eligible" ||
+        refreshed.candidate.employeeWorkdayId !== input.employeeWorkdayId
       ) {
         await transaction.rollback();
         return respond(companyId, {
-          message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+          message: messageForCheckoutRevalidationFailure(refreshed),
           employeeId: input.employeeId,
           phoneFrom: input.phoneTo,
           phoneTo: input.phoneFrom,
@@ -1239,25 +1263,28 @@ export const whatsappBotService = {
       }
     };
     const checkoutAt = getBotNow();
-    const eligible = await findCheckoutCandidateByAttendanceId(
+    const revalidation = await revalidateCheckoutCandidateByAttendanceId(
       companyId,
       input.employeeId,
       input.attendanceRecordId,
+      checkoutAt,
     );
 
     if (
-      !eligible ||
-      eligible.employeeWorkdayId !== input.employeeWorkdayId ||
-      eligible.operationId !== input.operationId
+      revalidation.kind !== "eligible" ||
+      revalidation.candidate.employeeWorkdayId !== input.employeeWorkdayId ||
+      revalidation.candidate.operationId !== input.operationId
     ) {
       await completeSessionIfNeeded();
       return respond(companyId, {
-        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        message: messageForCheckoutRevalidationFailure(revalidation),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
       });
     }
+
+    const eligible = revalidation.candidate;
 
     const runtimeSettings = getBotRuntimeSettings();
     if (!runtimeSettings) {

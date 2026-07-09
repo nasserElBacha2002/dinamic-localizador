@@ -18,6 +18,9 @@ describe("validateOperationalSettingsForm", () => {
       defaultLateArrivalToleranceMinutes: "15",
       lateGraceMinutes: "15",
       earlyLeaveToleranceMinutes: "15",
+      pendingOperationExpirationHours: "12",
+      confirmationReminderEnabled: true,
+      confirmationReminderHoursBefore: "24",
     });
     assert.deepEqual(errors, []);
   });
@@ -32,6 +35,9 @@ describe("validateOperationalSettingsForm", () => {
       defaultLateArrivalToleranceMinutes: "15",
       lateGraceMinutes: "15",
       earlyLeaveToleranceMinutes: "15",
+      pendingOperationExpirationHours: "12",
+      confirmationReminderEnabled: true,
+      confirmationReminderHoursBefore: "24",
     });
 
     assert.equal("requireCheckoutLocation" in payload, false);

@@ -124,6 +124,7 @@ const runtimeSettings = (companyId: string): BotRuntimeSettings => ({
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
+  pendingOperationExpirationHours: 12,
   sessionTtlMinutes: 15,
 });
 

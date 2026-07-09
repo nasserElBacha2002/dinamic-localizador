@@ -30,6 +30,7 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
     geofenceReviewMarginMeters: 30,
     confirmationReminderEnabled: true,
     confirmationReminderHoursBefore: 24,
+    pendingOperationExpirationHours: 12,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,

@@ -29,6 +29,7 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
     geofenceReviewMarginMeters: 30,
     confirmationReminderEnabled: true,
     confirmationReminderHoursBefore: 24,
+    pendingOperationExpirationHours: 12,
     createdAt: "2026-01-01T00:00:00.000Z",
     updatedAt: "2026-01-01T00:00:00.000Z",
     ...overrides,
@@ -62,11 +63,16 @@ describe("CompanyOperationalSettingsSection", () => {
     );
     const activeSection = sectionFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
 
-    assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 9);
+    assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 10);
     assert.match(activeSection, /description="Zona horaria usada por operaciones y reportes\."/);
     assert.match(activeSection, /description="Ventana configurable por empresa antes del inicio de la operación\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
     assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
+    assert.match(
+      sectionFile,
+      /description="Cantidad de horas después del fin de una operación durante las que un empleado todavía puede registrar su salida\."/,
+    );
+    assert.match(sectionFile, /Vencimiento de salida pendiente \(horas\)/);
     assert.match(sectionFile, /getOperationTimezoneOptions/);
     assert.match(sectionFile, /OperationTimeInput/);
     assert.match(sectionFile, /searchable/);
@@ -103,8 +109,10 @@ describe("CompanyOperationalSettingsSection", () => {
       "earlyLeaveToleranceMinutes",
       "lateGraceMinutes",
       "operationTimezone",
+      "pendingOperationExpirationHours",
     ]);
     assert.equal(payload.lateGraceMinutes, 20);
+    assert.equal(payload.pendingOperationExpirationHours, 12);
     assert.equal("requireCheckoutLocation" in payload, false);
     assert.equal("allowManualAttendanceCorrections" in payload, false);
   });

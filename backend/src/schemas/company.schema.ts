@@ -120,6 +120,18 @@ export const updateCompanySettingsSchema = z
         "Las horas del recordatorio no pueden superar 168.",
       )
       .optional(),
+    pendingOperationExpirationHours: z.coerce
+      .number()
+      .int("Las horas de vencimiento de salida pendiente deben ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.pendingOperationExpirationHours.min,
+        "Las horas de vencimiento de salida pendiente deben ser al menos 1.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.pendingOperationExpirationHours.max,
+        "Las horas de vencimiento de salida pendiente no pueden superar 168.",
+      )
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

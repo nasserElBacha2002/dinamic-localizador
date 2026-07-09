@@ -13,8 +13,11 @@ const validForm = (): CompanySettingsFormValues => ({
   defaultLateArrivalToleranceMinutes: "90",
   lateGraceMinutes: "15",
   earlyLeaveToleranceMinutes: "15",
+  pendingOperationExpirationHours: "12",
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
+  confirmationReminderEnabled: true,
+  confirmationReminderHoursBefore: "24",
 });
 
 describe("validateCompanySettingsForm", () => {

@@ -211,19 +211,29 @@ export const employeeWorkdayAvailabilityRepository = {
   async listCheckoutCandidates(
     companyId: string,
     employeeId: string,
-    input?: { simulationSessionId?: string | null },
+    input: {
+      now: Date;
+      pendingOperationExpirationHours: number;
+      simulationSessionId?: string | null;
+    },
   ): Promise<EmployeeWorkdayCheckoutCandidate[]> {
     const pool = getPool();
     const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId);
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("now", sql.DateTime2, input.now)
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      );
 
-    const simulationFilter = input?.simulationSessionId
+    const simulationFilter = input.simulationSessionId
       ? "AND ar.is_simulation = 1 AND ar.simulation_session_id = @simulationSessionId"
       : "AND ar.is_simulation = 0";
 
-    if (input?.simulationSessionId) {
+    if (input.simulationSessionId) {
       request.input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId);
     }
 
@@ -252,6 +262,11 @@ export const employeeWorkdayAvailabilityRepository = {
         AND ar.checkout_at IS NULL
         AND i.status <> 'CANCELLED'
         AND s.active = 1
+        AND @now <= DATEADD(
+          HOUR,
+          @pendingOperationExpirationHours,
+          COALESCE(ow.expected_end_at, ow.expected_start_at)
+        )
         ${simulationFilter}
       ORDER BY ar.received_at ASC, s.name ASC, ew.id ASC
     `);
@@ -262,6 +277,82 @@ export const employeeWorkdayAvailabilityRepository = {
   },
 
   async findCheckoutCandidateByAttendanceId(
+    companyId: string,
+    employeeId: string,
+    attendanceRecordId: string,
+    input: {
+      now: Date;
+      pendingOperationExpirationHours: number;
+      simulationSessionId?: string | null;
+    },
+  ): Promise<EmployeeWorkdayCheckoutCandidate | null> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("attendanceRecordId", sql.UniqueIdentifier, attendanceRecordId)
+      .input("now", sql.DateTime2, input.now)
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      );
+
+    const simulationFilter = input.simulationSessionId
+      ? "AND ar.is_simulation = 1 AND ar.simulation_session_id = @simulationSessionId"
+      : "AND ar.is_simulation = 0";
+
+    if (input.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId);
+    }
+
+    const result = await request.query(`
+      SELECT
+        ar.id AS attendance_record_id,
+        ar.received_at AS check_in_at,
+        ${CHECK_IN_CANDIDATE_SELECT}
+      FROM attendance_records ar
+      INNER JOIN employee_workdays ew
+        ON ew.id = ar.employee_workday_id
+       AND ew.company_id = ar.company_id
+      INNER JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id
+       AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ar.company_id
+      INNER JOIN operational_locations s
+        ON s.id = i.service_id
+       AND s.company_id = ar.company_id
+      WHERE ar.company_id = @companyId
+        AND ar.employee_id = @employeeId
+        AND ar.id = @attendanceRecordId
+        AND ar.employee_workday_id IS NOT NULL
+        AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+        AND ar.checkout_at IS NULL
+        AND i.status <> 'CANCELLED'
+        AND s.active = 1
+        AND @now <= DATEADD(
+          HOUR,
+          @pendingOperationExpirationHours,
+          COALESCE(ow.expected_end_at, ow.expected_start_at)
+        )
+        ${simulationFilter}
+    `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapCheckoutCandidateRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Open checkout attendance context without pending-expiration filtering.
+   * Used to distinguish expired vs otherwise unavailable candidates.
+   */
+  async findOpenCheckoutAttendanceContext(
     companyId: string,
     employeeId: string,
     attendanceRecordId: string,

@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { getPool } from "../database/connection";
 import type { CompanySettings } from "../types/company";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
@@ -21,6 +22,7 @@ export type CompanySettingsInput = {
   geofenceReviewMarginMeters?: number | null;
   confirmationReminderEnabled: boolean;
   confirmationReminderHoursBefore: number;
+  pendingOperationExpirationHours: number;
 };
 
 const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
@@ -42,6 +44,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
       : Number(row.geofence_review_margin_meters),
   confirmationReminderEnabled: Boolean(row.confirmation_reminder_enabled ?? true),
   confirmationReminderHoursBefore: Number(row.confirmation_reminder_hours_before ?? 24),
+  pendingOperationExpirationHours: Number(
+    row.pending_operation_expiration_hours ??
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours,
+  ),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -102,6 +108,11 @@ export const companySettingsRepository = {
         sql.Int,
         input.confirmationReminderHoursBefore,
       )
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      )
       .query(`
         INSERT INTO company_settings (
           company_id, operation_timezone, default_radius_meters,
@@ -110,7 +121,8 @@ export const companySettingsRepository = {
           default_early_arrival_tolerance_minutes, default_late_arrival_tolerance_minutes,
           default_operation_start_time, default_operation_end_time,
           geofence_review_margin_meters,
-          confirmation_reminder_enabled, confirmation_reminder_hours_before
+          confirmation_reminder_enabled, confirmation_reminder_hours_before,
+          pending_operation_expiration_hours
         )
         OUTPUT INSERTED.*
         VALUES (
@@ -120,7 +132,8 @@ export const companySettingsRepository = {
           @defaultEarlyArrivalToleranceMinutes, @defaultLateArrivalToleranceMinutes,
           @defaultOperationStartTime, @defaultOperationEndTime,
           @geofenceReviewMarginMeters,
-          @confirmationReminderEnabled, @confirmationReminderHoursBefore
+          @confirmationReminderEnabled, @confirmationReminderHoursBefore,
+          @pendingOperationExpirationHours
         )
       `);
 
@@ -170,6 +183,7 @@ export const companySettingsRepository = {
         | "geofenceReviewMarginMeters"
         | "confirmationReminderEnabled"
         | "confirmationReminderHoursBefore"
+        | "pendingOperationExpirationHours"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -260,6 +274,14 @@ export const companySettingsRepository = {
         input.confirmationReminderHoursBefore,
       );
       fields.push("confirmation_reminder_hours_before = @confirmationReminderHoursBefore");
+    }
+    if (input.pendingOperationExpirationHours !== undefined) {
+      request.input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      );
+      fields.push("pending_operation_expiration_hours = @pendingOperationExpirationHours");
     }
 
     if (fields.length === 0) {

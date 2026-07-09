@@ -19,7 +19,7 @@ describe("attendance checkout identity", () => {
     assert.match(repositorySource, /employee_workday_id = @employeeWorkdayId/);
     assert.match(availabilitySource, /listCheckoutCandidates/);
     assert.match(availabilitySource, /ar\.employee_workday_id IS NOT NULL/);
-    assert.match(botSource, /findCheckoutCandidateByAttendanceId/);
+    assert.match(botSource, /revalidateCheckoutCandidateByAttendanceId/);
     assert.match(botSource, /employeeWorkdayId/);
   });
 });

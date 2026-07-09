@@ -50,4 +50,18 @@ describe("updateCompanySettingsSchema", () => {
     });
     assert.equal(result.success, true);
   });
+
+  it("accepts valid pendingOperationExpirationHours", () => {
+    const result = updateCompanySettingsSchema.safeParse({
+      pendingOperationExpirationHours: 12,
+    });
+    assert.equal(result.success, true);
+  });
+
+  it("rejects pendingOperationExpirationHours below 1", () => {
+    const result = updateCompanySettingsSchema.safeParse({
+      pendingOperationExpirationHours: 0,
+    });
+    assert.equal(result.success, false);
+  });
 });

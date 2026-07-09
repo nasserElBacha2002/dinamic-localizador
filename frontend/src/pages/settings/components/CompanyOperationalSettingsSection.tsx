@@ -236,6 +236,31 @@ export function CompanyOperationalSettingsSection({
               disabled={disabled}
             />
           </SettingsFormField>
+
+          <SettingsFormField
+            label="Vencimiento de salida pendiente (horas)"
+            description="Cantidad de horas después del fin de una operación durante las que un empleado todavía puede registrar su salida."
+          >
+            <NumberInput
+              value={
+                formValues.pendingOperationExpirationHours === ""
+                  ? ""
+                  : Number(formValues.pendingOperationExpirationHours)
+              }
+              onChange={(value) =>
+                setFormValues((current) => ({
+                  ...current,
+                  pendingOperationExpirationHours:
+                    value === "" || value === undefined ? "" : String(value),
+                }))
+              }
+              min={1}
+              max={168}
+              step={1}
+              hideControls
+              disabled={disabled}
+            />
+          </SettingsFormField>
         </FormGrid>
 
 {/*         <Text fw={600} size="sm">

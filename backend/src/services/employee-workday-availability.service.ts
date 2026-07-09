@@ -12,6 +12,41 @@ import {
   resolveCheckInCandidateRange,
 } from "../utils/resolve-check-in-availability-window";
 import { getSimulationSessionId } from "../utils/bot-runtime-context";
+import { getPendingOperationExpirationHours } from "../utils/bot-runtime-settings-scope";
+import {
+  isPendingCheckoutEligible,
+  resolveCheckoutEligibilityEndAt,
+} from "../utils/pending-checkout-eligibility";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
+
+const resolvePendingExpirationHours = (explicit?: number): number => {
+  if (explicit != null && Number.isFinite(explicit) && explicit >= 1) {
+    return explicit;
+  }
+  return (
+    getPendingOperationExpirationHours() ||
+    DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours
+  );
+};
+
+const isCheckoutCandidateStillEligible = (
+  candidate: EmployeeWorkdayCheckoutCandidate,
+  now: Date,
+  expirationHours: number,
+): boolean =>
+  isPendingCheckoutEligible({
+    expectedEndAt: resolveCheckoutEligibilityEndAt({
+      expectedEndAt: candidate.expectedEndAt,
+      expectedStartAt: candidate.expectedStartAt,
+    }),
+    expirationHours,
+    now,
+  });
+
+export type CheckoutCandidateRevalidationResult =
+  | { kind: "eligible"; candidate: EmployeeWorkdayCheckoutCandidate }
+  | { kind: "expired" }
+  | { kind: "not_available" };
 
 const sortCheckInCandidates = (
   candidates: EmployeeWorkdayCheckInCandidate[],
@@ -190,30 +225,83 @@ export const employeeWorkdayAvailabilityService = {
   async listOpenForCheckout(
     companyId: string,
     employeeId: string,
-    options?: { simulationSessionId?: string | null },
+    at: Date,
+    options?: {
+      simulationSessionId?: string | null;
+      pendingOperationExpirationHours?: number;
+    },
   ): Promise<EmployeeWorkdayCheckoutCandidate[]> {
     const simulationSessionId = options?.simulationSessionId ?? getSimulationSessionId();
+    const pendingOperationExpirationHours = resolvePendingExpirationHours(
+      options?.pendingOperationExpirationHours,
+    );
     const candidates = await employeeWorkdayAvailabilityRepository.listCheckoutCandidates(
       companyId,
       employeeId,
-      { simulationSessionId },
+      {
+        now: at,
+        pendingOperationExpirationHours,
+        simulationSessionId,
+      },
     );
-    return sortCheckoutCandidates(candidates);
+    return sortCheckoutCandidates(
+      candidates.filter((candidate) =>
+        isCheckoutCandidateStillEligible(candidate, at, pendingOperationExpirationHours),
+      ),
+    );
   },
 
   async revalidateCheckoutCandidate(
     companyId: string,
     employeeId: string,
     attendanceRecordId: string,
-    options?: { simulationSessionId?: string | null },
-  ): Promise<EmployeeWorkdayCheckoutCandidate | null> {
+    at: Date,
+    options?: {
+      simulationSessionId?: string | null;
+      pendingOperationExpirationHours?: number;
+    },
+  ): Promise<CheckoutCandidateRevalidationResult> {
     const simulationSessionId = options?.simulationSessionId ?? getSimulationSessionId();
-    return employeeWorkdayAvailabilityRepository.findCheckoutCandidateByAttendanceId(
-      companyId,
-      employeeId,
-      attendanceRecordId,
-      { simulationSessionId },
+    const pendingOperationExpirationHours = resolvePendingExpirationHours(
+      options?.pendingOperationExpirationHours,
     );
+
+    const openContext =
+      await employeeWorkdayAvailabilityRepository.findOpenCheckoutAttendanceContext(
+        companyId,
+        employeeId,
+        attendanceRecordId,
+        { simulationSessionId },
+      );
+
+    if (!openContext) {
+      return { kind: "not_available" };
+    }
+
+    if (
+      !isCheckoutCandidateStillEligible(openContext, at, pendingOperationExpirationHours)
+    ) {
+      return { kind: "expired" };
+    }
+
+    // Defense in depth: keep SQL expiration predicate aligned with service rule.
+    const eligible =
+      await employeeWorkdayAvailabilityRepository.findCheckoutCandidateByAttendanceId(
+        companyId,
+        employeeId,
+        attendanceRecordId,
+        {
+          now: at,
+          pendingOperationExpirationHours,
+          simulationSessionId,
+        },
+      );
+
+    if (!eligible || !isCheckoutCandidateStillEligible(eligible, at, pendingOperationExpirationHours)) {
+      return { kind: "expired" };
+    }
+
+    return { kind: "eligible", candidate: eligible };
   },
 
   mapCheckInCandidatesToSelectionOptions(

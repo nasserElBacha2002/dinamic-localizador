@@ -29,6 +29,9 @@ const existingSettings = {
   defaultOperationStartTime: "20:30",
   defaultOperationEndTime: "03:00",
   geofenceReviewMarginMeters: null,
+  confirmationReminderEnabled: true,
+  confirmationReminderHoursBefore: 24,
+  pendingOperationExpirationHours: 12,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

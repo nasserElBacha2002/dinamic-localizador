@@ -3,8 +3,13 @@ import type {
   EmployeeWorkdayCheckoutCandidate,
   WorkdaySelectionOption,
 } from "../../types/employee-workday-availability";
-import { employeeWorkdayAvailabilityService } from "../employee-workday-availability.service";
+import {
+  employeeWorkdayAvailabilityService,
+  type CheckoutCandidateRevalidationResult,
+} from "../employee-workday-availability.service";
 import { parseOperationSelection } from "../../utils/intent";
+
+export type { CheckoutCandidateRevalidationResult };
 
 export const parseWorkdaySelectionIndex = (body: string): number | null =>
   parseOperationSelection(body);
@@ -28,15 +33,17 @@ export const findCheckInCandidateByWorkdayId = async (
     at,
   );
 
-export const findCheckoutCandidateByAttendanceId = async (
+export const revalidateCheckoutCandidateByAttendanceId = async (
   companyId: string,
   employeeId: string,
   attendanceRecordId: string,
-): Promise<EmployeeWorkdayCheckoutCandidate | null> =>
+  at: Date,
+): Promise<CheckoutCandidateRevalidationResult> =>
   employeeWorkdayAvailabilityService.revalidateCheckoutCandidate(
     companyId,
     employeeId,
     attendanceRecordId,
+    at,
   );
 
 export const listAvailableCheckInWorkdays = async (
@@ -51,8 +58,9 @@ export const listAvailableCheckInWorkdays = async (
 export const listOpenCheckoutWorkdays = async (
   companyId: string,
   employeeId: string,
+  at: Date,
 ): Promise<EmployeeWorkdayCheckoutCandidate[]> =>
-  employeeWorkdayAvailabilityService.listOpenForCheckout(companyId, employeeId);
+  employeeWorkdayAvailabilityService.listOpenForCheckout(companyId, employeeId, at);
 
 export const mapCheckInCandidatesToSessionOptions = (
   candidates: EmployeeWorkdayCheckInCandidate[],

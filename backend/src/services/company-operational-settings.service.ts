@@ -11,6 +11,7 @@ export type CompanyOperationalSettings = Pick<
   | "earlyLeaveToleranceMinutes"
   | "requireCheckoutLocation"
   | "allowManualAttendanceCorrections"
+  | "pendingOperationExpirationHours"
 >;
 
 export type CompanyOperationalSettingsSource = "company_settings" | "operational_defaults";
@@ -23,6 +24,7 @@ const toOperationalSettings = (settings: CompanySettings): CompanyOperationalSet
   earlyLeaveToleranceMinutes: settings.earlyLeaveToleranceMinutes,
   requireCheckoutLocation: settings.requireCheckoutLocation,
   allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,
+  pendingOperationExpirationHours: settings.pendingOperationExpirationHours,
 });
 
 export const companyOperationalSettingsService = {

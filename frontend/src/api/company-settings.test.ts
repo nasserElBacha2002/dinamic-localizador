@@ -69,8 +69,11 @@ describe("company settings frontend module", () => {
       defaultLateArrivalToleranceMinutes: "90",
       lateGraceMinutes: "300",
       earlyLeaveToleranceMinutes: "-1",
+      pendingOperationExpirationHours: "12",
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
+      confirmationReminderEnabled: true,
+      confirmationReminderHoursBefore: "24",
     });
     assert.ok(errors.length >= 3);
   });

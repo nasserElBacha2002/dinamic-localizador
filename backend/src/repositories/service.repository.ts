@@ -52,6 +52,52 @@ export const serviceRepository = {
     return mapServiceRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async findByCompanyAndName(companyId: string, name: string): Promise<Service | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("name", sql.NVarChar(150), name)
+      .query(`
+        SELECT TOP 1 *
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND name = @name
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findByCompanyAndNameExcludingId(
+    companyId: string,
+    name: string,
+    excludeId: string,
+  ): Promise<Service | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("name", sql.NVarChar(150), name)
+      .input("excludeId", sql.UniqueIdentifier, excludeId)
+      .query(`
+        SELECT TOP 1 *
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND name = @name
+          AND id <> @excludeId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapServiceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async list(
     companyId: string,
     query: ListServicesQuery,

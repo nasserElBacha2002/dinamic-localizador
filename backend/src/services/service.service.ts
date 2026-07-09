@@ -2,18 +2,39 @@ import { AppError } from "../errors/app-error";
 import { serviceRepository } from "../repositories/service.repository";
 import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
 import { buildPaginationMeta } from "../utils/pagination";
+import { isOperationalLocationNameDuplicateKeyError } from "../utils/service-name-duplicate-errors";
 import { companyLocationTypesService } from "./company-location-types.service";
+
+const SERVICE_NAME_ALREADY_EXISTS_MESSAGE =
+  "Ya existe un servicio con este nombre en la compañía.";
+
+const throwIfDuplicateName = (error: unknown): never => {
+  if (isOperationalLocationNameDuplicateKeyError(error)) {
+    throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
+  }
+  throw error;
+};
 
 export const serviceService = {
   async create(companyId: string, input: CreateServiceInput) {
     await companyLocationTypesService.assertActiveServiceFormat(companyId, input.serviceFormat);
 
-    return serviceRepository.create(companyId, {
-      ...input,
-      name: input.name.trim(),
-      address: input.address?.trim() ?? null,
-      serviceFormat: input.serviceFormat?.trim() ?? null,
-    });
+    const name = input.name.trim();
+    const existing = await serviceRepository.findByCompanyAndName(companyId, name);
+    if (existing) {
+      throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
+    }
+
+    try {
+      return await serviceRepository.create(companyId, {
+        ...input,
+        name,
+        address: input.address?.trim() ?? null,
+        serviceFormat: input.serviceFormat?.trim() ?? null,
+      });
+    } catch (error) {
+      throwIfDuplicateName(error);
+    }
   },
 
   async list(companyId: string, query: ListServicesQuery) {
@@ -50,15 +71,36 @@ export const serviceService = {
       }
     }
 
-    const updated = await serviceRepository.update(companyId, id, {
+    const updatePayload: UpdateServiceInput = {
       ...input,
+      name: input.name !== undefined ? input.name.trim() : undefined,
       serviceFormat:
         input.serviceFormat !== undefined ? input.serviceFormat?.trim() ?? null : undefined,
-    });
-    if (!updated) {
-      throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+    };
+
+    if (updatePayload.name !== undefined) {
+      const duplicate = await serviceRepository.findByCompanyAndNameExcludingId(
+        companyId,
+        updatePayload.name,
+        id,
+      );
+      if (duplicate) {
+        throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
+      }
     }
-    return updated;
+
+    try {
+      const updated = await serviceRepository.update(companyId, id, updatePayload);
+      if (!updated) {
+        throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio no encontrado");
+      }
+      return updated;
+    } catch (error) {
+      if (error instanceof AppError) {
+        throw error;
+      }
+      throwIfDuplicateName(error);
+    }
   },
 
   async deactivate(companyId: string, id: string) {

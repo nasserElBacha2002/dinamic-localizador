@@ -31,6 +31,7 @@ describe("serviceService location type validation", () => {
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(serviceRepository, "findByCompanyAndName", async () => null);
     mock.method(serviceRepository, "create", async (_companyId, input) => ({
       ...sampleService,
       name: input.name,
@@ -176,5 +177,163 @@ describe("serviceService location type validation", () => {
 
     const service = await serviceService.getById("company-1", sampleService.id);
     assert.equal(service.serviceFormat, "LEGACY_INACTIVE");
+  });
+});
+
+describe("serviceService name uniqueness per company", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("rejects create when same company already has the name", async () => {
+    setupUnitTestEnv();
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(serviceRepository, "findByCompanyAndName", async (companyId, name) => {
+      assert.equal(companyId, "company-a");
+      assert.equal(name, "Central");
+      return { ...sampleService, id: "other-service", name: "Central" };
+    });
+
+    await assert.rejects(
+      () =>
+        serviceService.create("company-a", {
+          name: " Central ",
+          latitude: -34.6,
+          longitude: -58.38,
+        }),
+      (error: unknown) =>
+        error instanceof AppError &&
+        error.statusCode === 409 &&
+        error.code === "SERVICE_NAME_ALREADY_EXISTS",
+    );
+  });
+
+  it("allows create when name exists only in another company", async () => {
+    setupUnitTestEnv();
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(serviceRepository, "findByCompanyAndName", async (companyId) => {
+      assert.equal(companyId, "company-b");
+      return null;
+    });
+    mock.method(serviceRepository, "create", async (companyId, input) => ({
+      ...sampleService,
+      id: "service-b",
+      name: input.name,
+    }));
+
+    const created = await serviceService.create("company-b", {
+      name: "Central",
+      latitude: -34.6,
+      longitude: -58.38,
+    });
+    assert.equal(created.name, "Central");
+  });
+
+  it("maps SQL duplicate key race on create to SERVICE_NAME_ALREADY_EXISTS", async () => {
+    setupUnitTestEnv();
+    const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(serviceRepository, "findByCompanyAndName", async () => null);
+    mock.method(serviceRepository, "create", async () => {
+      throw Object.assign(
+        new Error(
+          "Cannot insert duplicate key row with unique index 'UQ_operational_locations_company_id_name'",
+        ),
+        { number: 2601 },
+      );
+    });
+
+    await assert.rejects(
+      () =>
+        serviceService.create("company-a", {
+          name: "Central",
+          latitude: -34.6,
+          longitude: -58.38,
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "SERVICE_NAME_ALREADY_EXISTS",
+    );
+  });
+
+  it("allows update when keeping the same name", async () => {
+    setupUnitTestEnv();
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(serviceRepository, "findById", async () => sampleService);
+    mock.method(serviceRepository, "findByCompanyAndNameExcludingId", async () => null);
+    mock.method(serviceRepository, "update", async (_companyId, _id, input) => ({
+      ...sampleService,
+      name: input.name ?? sampleService.name,
+    }));
+
+    const updated = await serviceService.update("company-1", sampleService.id, {
+      name: sampleService.name,
+    });
+    assert.equal(updated.name, sampleService.name);
+  });
+
+  it("rejects update when another service in the same company already has the name", async () => {
+    setupUnitTestEnv();
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(serviceRepository, "findById", async () => sampleService);
+    mock.method(
+      serviceRepository,
+      "findByCompanyAndNameExcludingId",
+      async (companyId, name, excludeId) => {
+        assert.equal(companyId, "company-1");
+        assert.equal(name, "Central");
+        assert.equal(excludeId, sampleService.id);
+        return { ...sampleService, id: "other-service", name: "Central" };
+      },
+    );
+
+    await assert.rejects(
+      () =>
+        serviceService.update("company-1", sampleService.id, {
+          name: "Central",
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "SERVICE_NAME_ALREADY_EXISTS",
+    );
+  });
+
+  it("maps SQL duplicate key race on update to SERVICE_NAME_ALREADY_EXISTS", async () => {
+    setupUnitTestEnv();
+    const { serviceRepository } = await import("../repositories/service.repository");
+    const { serviceService } = await import("./service.service");
+
+    mock.method(serviceRepository, "findById", async () => sampleService);
+    mock.method(serviceRepository, "findByCompanyAndNameExcludingId", async () => null);
+    mock.method(serviceRepository, "update", async () => {
+      throw Object.assign(
+        new Error(
+          "Violation of UNIQUE KEY constraint 'UQ_operational_locations_company_id_name'",
+        ),
+        { number: 2627 },
+      );
+    });
+
+    await assert.rejects(
+      () =>
+        serviceService.update("company-1", sampleService.id, {
+          name: "Central",
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "SERVICE_NAME_ALREADY_EXISTS",
+    );
   });
 });

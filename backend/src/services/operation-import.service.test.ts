@@ -148,6 +148,36 @@ describe("operationImportService preview", () => {
     assert.equal(resolver.getResolverCalls(), 1);
   });
 
+  it("resolves service names only within the authenticated company scope", async () => {
+    let listedCompanyId: string | null = null;
+    mock.method(serviceRepository, "listAllActive", async (companyId: string) => {
+      listedCompanyId = companyId;
+      return [sampleService];
+    });
+    mock.method(operationRepository, "findExistingActiveKeys", async () => new Set());
+    mockLocationTypes();
+    mockImportDefaults();
+
+    const result = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
+    assert.equal(listedCompanyId, COMPANY_ID);
+    assert.equal(result.rows[0]?.serviceId, sampleService.id);
+    assert.equal(result.rows[0]?.status, "valid");
+  });
+
+  it("does not resolve a service name that belongs only to another company", async () => {
+    mock.method(serviceRepository, "listAllActive", async (companyId: string) => {
+      assert.equal(companyId, COMPANY_ID);
+      return [];
+    });
+    mock.method(operationRepository, "findExistingActiveKeys", async () => new Set());
+    mockLocationTypes();
+    mockImportDefaults();
+
+    const result = await previewCsv(["PUNTO", "Fecha"], ["213", FUTURE_DATE]);
+    assert.equal(result.rows[0]?.status, "invalid");
+    assert.ok(result.rows[0]?.errors.includes(IMPORT_LOCATION_NOT_FOUND_MESSAGE));
+  });
+
   it("uses company-specific schedule and tolerances when configured", async () => {
     mockServices();
     mockImportDefaults({

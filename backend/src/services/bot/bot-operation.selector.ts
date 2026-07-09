@@ -56,8 +56,14 @@ export const findCheckoutEligibleOperationById = async (
   companyId: string,
   employeeId: string,
   operationId: string,
+  at: Date,
+  pendingOperationExpirationHours: number,
 ): Promise<CheckoutEligibleOperation | null> => {
-  const operations = await attendanceRepository.findCheckoutEligibleOperations(companyId, employeeId);
+  const operations = await attendanceRepository.findCheckoutEligibleOperations(
+    companyId,
+    employeeId,
+    { now: at, pendingOperationExpirationHours },
+  );
   return operations.find((operation) => operation.id === operationId) ?? null;
 };
 
@@ -71,5 +77,10 @@ export const listCompatibleOperations = async (
 export const listCheckoutEligibleOperations = async (
   companyId: string,
   employeeId: string,
+  at: Date,
+  pendingOperationExpirationHours: number,
 ): Promise<CheckoutEligibleOperation[]> =>
-  attendanceRepository.findCheckoutEligibleOperations(companyId, employeeId);
+  attendanceRepository.findCheckoutEligibleOperations(companyId, employeeId, {
+    now: at,
+    pendingOperationExpirationHours,
+  });

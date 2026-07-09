@@ -17,6 +17,7 @@ const runtimeSettings = (overrides: Partial<BotRuntimeSettings> = {}): BotRuntim
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
+  pendingOperationExpirationHours: 12,
   sessionTtlMinutes: 15,
   ...overrides,
 });
@@ -130,7 +131,10 @@ describe("whatsapp bot runtime settings integration", () => {
     const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext, addVirtualCheckIn } = await import("../utils/bot-runtime-context");
 
-    mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => checkoutCandidate);
+    mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
+      kind: "eligible" as const,
+      candidate: checkoutCandidate,
+    }));
     mock.method(botSessionService, "completeSession", async () => undefined);
 
     const context = {

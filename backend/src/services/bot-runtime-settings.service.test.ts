@@ -13,6 +13,7 @@ const existingSettings = {
   earlyLeaveToleranceMinutes: 10,
   requireCheckoutLocation: false,
   allowManualAttendanceCorrections: true,
+  pendingOperationExpirationHours: 12,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

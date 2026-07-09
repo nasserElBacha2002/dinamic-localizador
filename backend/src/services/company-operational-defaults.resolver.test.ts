@@ -19,6 +19,9 @@ const fullSettings = {
   defaultOperationStartTime: "21:00",
   defaultOperationEndTime: "04:00",
   geofenceReviewMarginMeters: 25,
+  confirmationReminderEnabled: true,
+  confirmationReminderHoursBefore: 24,
+  pendingOperationExpirationHours: 12,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -131,6 +134,7 @@ describe("companyOperationalDefaultsResolver", () => {
           earlyLeaveToleranceMinutes: 15,
           requireCheckoutLocation: true,
           allowManualAttendanceCorrections: true,
+          pendingOperationExpirationHours: 12,
         },
         source: "company_settings" as const,
       }),

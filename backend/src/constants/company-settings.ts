@@ -12,6 +12,7 @@ export const DEFAULT_COMPANY_OPERATIONAL_SETTINGS = {
   geofenceReviewMarginMeters: null as number | null,
   confirmationReminderEnabled: true,
   confirmationReminderHoursBefore: 24,
+  pendingOperationExpirationHours: 12,
 } as const;
 
 export type CompanyOperationalSettingsDefaults = typeof DEFAULT_COMPANY_OPERATIONAL_SETTINGS;
@@ -55,6 +56,9 @@ export const toCompanySettingsInput = (
   confirmationReminderHoursBefore:
     overrides.confirmationReminderHoursBefore ??
     DEFAULT_COMPANY_OPERATIONAL_SETTINGS.confirmationReminderHoursBefore,
+  pendingOperationExpirationHours:
+    overrides.pendingOperationExpirationHours ??
+    DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours,
 });
 
 export const COMPANY_SETTINGS_LIMITS = {
@@ -65,6 +69,7 @@ export const COMPANY_SETTINGS_LIMITS = {
   defaultLateArrivalToleranceMinutes: { min: 0, max: 240 },
   geofenceReviewMarginMeters: { min: 0, max: 5000 },
   confirmationReminderHoursBefore: { min: 1, max: 168 },
+  pendingOperationExpirationHours: { min: 1, max: 168 },
   operationTimezoneMaxLength: 80,
 } as const;
 

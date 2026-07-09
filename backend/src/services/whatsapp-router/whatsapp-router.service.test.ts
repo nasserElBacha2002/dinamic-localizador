@@ -1546,6 +1546,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       earlyLeaveToleranceMinutes: 30,
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
+      pendingOperationExpirationHours: 12,
     }));
 
     mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
@@ -1595,6 +1596,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       earlyLeaveToleranceMinutes: 30,
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
+      pendingOperationExpirationHours: 12,
     }));
 
     mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => ({
@@ -1706,6 +1708,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       earlyLeaveToleranceMinutes: 30,
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
+      pendingOperationExpirationHours: 12,
     }));
     mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
       kind: "ok" as const,

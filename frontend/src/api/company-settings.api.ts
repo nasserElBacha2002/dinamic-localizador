@@ -14,6 +14,7 @@ export function normalizeCompanySettings(raw: CompanySettings): CompanySettings 
     earlyLeaveToleranceMinutes: toNumber(raw.earlyLeaveToleranceMinutes, 15),
     defaultEarlyArrivalToleranceMinutes: toNumber(raw.defaultEarlyArrivalToleranceMinutes, 60),
     defaultLateArrivalToleranceMinutes: toNumber(raw.defaultLateArrivalToleranceMinutes, 90),
+    pendingOperationExpirationHours: toNumber(raw.pendingOperationExpirationHours, 12),
   };
 }
 

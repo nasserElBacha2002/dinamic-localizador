@@ -13,6 +13,7 @@ const buildRuntimeSettings = (
     earlyLeaveToleranceMinutes: number;
     requireCheckoutLocation: boolean;
     allowManualAttendanceCorrections: boolean;
+    pendingOperationExpirationHours: number;
   },
 ): BotRuntimeSettings => ({
   companyId,
@@ -35,6 +36,10 @@ const buildRuntimeSettings = (
       : env.BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES,
   requireCheckoutLocation: operational.requireCheckoutLocation,
   allowManualAttendanceCorrections: operational.allowManualAttendanceCorrections,
+  pendingOperationExpirationHours:
+    operational.pendingOperationExpirationHours >= 1
+      ? operational.pendingOperationExpirationHours
+      : DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours,
   sessionTtlMinutes: env.BOT_SESSION_TTL_MINUTES,
 });
 

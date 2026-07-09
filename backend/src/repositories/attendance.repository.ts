@@ -443,15 +443,29 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * @deprecated Prefer employeeWorkdayAvailabilityRepository checkout candidates.
+   * Kept aligned with pending checkout expiration for any residual callers.
+   */
   async findCheckoutEligibleOperations(
     companyId: string,
     employeeId: string,
+    input: {
+      now: Date;
+      pendingOperationExpirationHours: number;
+    },
   ): Promise<CheckoutEligibleOperation[]> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("now", sql.DateTime2, input.now)
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      )
       .query(`
       SELECT
         i.id,
@@ -473,12 +487,21 @@ export const attendanceRepository = {
       INNER JOIN operation_assignments ie
         ON ie.operation_id = i.id AND ie.employee_id = ar.employee_id AND ie.company_id = @companyId
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
+      LEFT JOIN employee_workdays ew
+        ON ew.id = ar.employee_workday_id AND ew.company_id = ar.company_id
+      LEFT JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id AND ow.company_id = ew.company_id
       WHERE ar.employee_id = @employeeId
         AND ar.company_id = @companyId
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         AND ar.checkout_at IS NULL
         AND i.status <> 'CANCELLED'
         AND s.active = 1
+        AND @now <= DATEADD(
+          HOUR,
+          @pendingOperationExpirationHours,
+          COALESCE(ow.expected_end_at, i.scheduled_end, i.scheduled_start)
+        )
       ORDER BY i.scheduled_start ASC
     `);
 

@@ -6,6 +6,7 @@ const LIMITS = {
   lateGraceMinutes: { min: 0, max: 240 },
   earlyLeaveToleranceMinutes: { min: 0, max: 240 },
   operationToleranceMinutes: { min: 0, max: 240 },
+  pendingOperationExpirationHours: { min: 1, max: 168 },
   operationTimezoneMaxLength: 80,
 } as const;
 
@@ -160,7 +161,10 @@ export function validateOperationOperationSettingsForm(
 }
 
 export function validateWhatsAppSettingsForm(
-  values: Pick<CompanySettingsFormValues, "lateGraceMinutes" | "earlyLeaveToleranceMinutes">,
+  values: Pick<
+    CompanySettingsFormValues,
+    "lateGraceMinutes" | "earlyLeaveToleranceMinutes" | "pendingOperationExpirationHours"
+  >,
 ): string[] {
   const errors: string[] = [];
 
@@ -182,6 +186,16 @@ export function validateWhatsAppSettingsForm(
   );
   if (earlyLeaveError) {
     errors.push(earlyLeaveError);
+  }
+
+  const pendingExpirationError = validateIntegerField(
+    values.pendingOperationExpirationHours,
+    "El vencimiento de salida pendiente",
+    LIMITS.pendingOperationExpirationHours.min,
+    LIMITS.pendingOperationExpirationHours.max,
+  );
+  if (pendingExpirationError) {
+    errors.push(pendingExpirationError);
   }
 
   return errors;
@@ -211,6 +225,7 @@ export type OperationalSettingsFormValues = Pick<
   | "defaultLateArrivalToleranceMinutes"
   | "lateGraceMinutes"
   | "earlyLeaveToleranceMinutes"
+  | "pendingOperationExpirationHours"
   | "confirmationReminderEnabled"
   | "confirmationReminderHoursBefore"
 >;
@@ -244,6 +259,7 @@ export function toOperationalSettingsFormValues(settings: {
   defaultRadiusMeters: number;
   lateGraceMinutes: number;
   earlyLeaveToleranceMinutes: number;
+  pendingOperationExpirationHours: number;
   defaultEarlyArrivalToleranceMinutes: number;
   defaultLateArrivalToleranceMinutes: number;
   defaultOperationStartTime: string | null;
@@ -260,6 +276,7 @@ export function toOperationalSettingsFormValues(settings: {
     defaultLateArrivalToleranceMinutes: String(settings.defaultLateArrivalToleranceMinutes),
     lateGraceMinutes: String(settings.lateGraceMinutes),
     earlyLeaveToleranceMinutes: String(settings.earlyLeaveToleranceMinutes),
+    pendingOperationExpirationHours: String(settings.pendingOperationExpirationHours),
     confirmationReminderEnabled: settings.confirmationReminderEnabled,
     confirmationReminderHoursBefore: String(settings.confirmationReminderHoursBefore),
   };
@@ -275,6 +292,7 @@ export function toOperationalSettingsUpdateInput(values: OperationalSettingsForm
     defaultLateArrivalToleranceMinutes: Number(values.defaultLateArrivalToleranceMinutes),
     lateGraceMinutes: Number(values.lateGraceMinutes),
     earlyLeaveToleranceMinutes: Number(values.earlyLeaveToleranceMinutes),
+    pendingOperationExpirationHours: Number(values.pendingOperationExpirationHours),
     confirmationReminderEnabled: values.confirmationReminderEnabled,
     confirmationReminderHoursBefore: Number(values.confirmationReminderHoursBefore),
   };
@@ -293,6 +311,7 @@ export function operationalSettingsEqual(
     left.defaultLateArrivalToleranceMinutes === right.defaultLateArrivalToleranceMinutes &&
     left.lateGraceMinutes === right.lateGraceMinutes &&
     left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes &&
+    left.pendingOperationExpirationHours === right.pendingOperationExpirationHours &&
     left.confirmationReminderEnabled === right.confirmationReminderEnabled &&
     left.confirmationReminderHoursBefore === right.confirmationReminderHoursBefore
   );
@@ -311,6 +330,7 @@ export function toCompanySettingsFormValues(settings: {
   defaultRadiusMeters: number;
   lateGraceMinutes: number;
   earlyLeaveToleranceMinutes: number;
+  pendingOperationExpirationHours: number;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;
   defaultEarlyArrivalToleranceMinutes: number;
@@ -335,6 +355,7 @@ export function toCompanySettingsFormValues(settings: {
     defaultLateArrivalToleranceMinutes: String(settings.defaultLateArrivalToleranceMinutes),
     lateGraceMinutes: String(settings.lateGraceMinutes),
     earlyLeaveToleranceMinutes: String(settings.earlyLeaveToleranceMinutes),
+    pendingOperationExpirationHours: String(settings.pendingOperationExpirationHours),
     requireCheckoutLocation: settings.requireCheckoutLocation,
     allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,
     confirmationReminderEnabled: settings.confirmationReminderEnabled,
@@ -355,6 +376,7 @@ export function toCompanySettingsUpdateInput(values: CompanySettingsFormValues) 
     defaultLateArrivalToleranceMinutes: Number(values.defaultLateArrivalToleranceMinutes),
     lateGraceMinutes: Number(values.lateGraceMinutes),
     earlyLeaveToleranceMinutes: Number(values.earlyLeaveToleranceMinutes),
+    pendingOperationExpirationHours: Number(values.pendingOperationExpirationHours),
     requireCheckoutLocation: values.requireCheckoutLocation,
     allowManualAttendanceCorrections: values.allowManualAttendanceCorrections,
     confirmationReminderEnabled: values.confirmationReminderEnabled,
@@ -376,6 +398,7 @@ export function formValuesEqual(
     left.defaultLateArrivalToleranceMinutes === right.defaultLateArrivalToleranceMinutes &&
     left.lateGraceMinutes === right.lateGraceMinutes &&
     left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes &&
+    left.pendingOperationExpirationHours === right.pendingOperationExpirationHours &&
     left.requireCheckoutLocation === right.requireCheckoutLocation &&
     left.allowManualAttendanceCorrections === right.allowManualAttendanceCorrections
   );
@@ -419,12 +442,19 @@ export function operationSettingsEqual(
 }
 
 export function whatsAppSettingsEqual(
-  left: Pick<CompanySettingsFormValues, "lateGraceMinutes" | "earlyLeaveToleranceMinutes">,
-  right: Pick<CompanySettingsFormValues, "lateGraceMinutes" | "earlyLeaveToleranceMinutes">,
+  left: Pick<
+    CompanySettingsFormValues,
+    "lateGraceMinutes" | "earlyLeaveToleranceMinutes" | "pendingOperationExpirationHours"
+  >,
+  right: Pick<
+    CompanySettingsFormValues,
+    "lateGraceMinutes" | "earlyLeaveToleranceMinutes" | "pendingOperationExpirationHours"
+  >,
 ): boolean {
   return (
     left.lateGraceMinutes === right.lateGraceMinutes &&
-    left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes
+    left.earlyLeaveToleranceMinutes === right.earlyLeaveToleranceMinutes &&
+    left.pendingOperationExpirationHours === right.pendingOperationExpirationHours
   );
 }
 

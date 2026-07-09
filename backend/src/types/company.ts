@@ -61,6 +61,7 @@ export interface CompanySettings {
   geofenceReviewMarginMeters: number | null;
   confirmationReminderEnabled: boolean;
   confirmationReminderHoursBefore: number;
+  pendingOperationExpirationHours: number;
   createdAt: string;
   updatedAt: string;
 }

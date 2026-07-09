@@ -42,6 +42,9 @@ export const NO_CHECK_IN_FOR_CHECKOUT_MESSAGE =
 export const NO_CHECKOUT_OPERATION_MESSAGE =
   "No encontramos un trabajo con llegada registrada pendiente de salida. Verificá con administración.";
 
+export const PENDING_CHECKOUT_EXPIRED_MESSAGE =
+  "Ya no hay una salida pendiente disponible para esta operación.";
+
 export const LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE =
   'Para registrar tu salida, primero escribí "Me voy".';
 

@@ -13,6 +13,7 @@ export interface CompanySettings {
   geofenceReviewMarginMeters: number | null;
   confirmationReminderEnabled: boolean;
   confirmationReminderHoursBefore: number;
+  pendingOperationExpirationHours: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -33,6 +34,7 @@ export type UpdateCompanySettingsInput = Partial<
     | "geofenceReviewMarginMeters"
     | "confirmationReminderEnabled"
     | "confirmationReminderHoursBefore"
+    | "pendingOperationExpirationHours"
   >
 >;
 
@@ -50,4 +52,5 @@ export interface CompanySettingsFormValues {
   allowManualAttendanceCorrections: boolean;
   confirmationReminderEnabled: boolean;
   confirmationReminderHoursBefore: string;
+  pendingOperationExpirationHours: string;
 }

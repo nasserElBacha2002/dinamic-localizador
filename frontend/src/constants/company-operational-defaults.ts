@@ -14,4 +14,5 @@ export const DEFAULT_COMPANY_OPERATIONAL_DEFAULTS = {
   geofenceReviewMarginMeters: null as number | null,
   confirmationReminderEnabled: true,
   confirmationReminderHoursBefore: 24,
+  pendingOperationExpirationHours: 12,
 } as const;

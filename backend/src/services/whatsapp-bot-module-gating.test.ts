@@ -208,6 +208,7 @@ describe("whatsapp bot module gating", () => {
       earlyLeaveToleranceMinutes: 15,
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
+      pendingOperationExpirationHours: 12,
       sessionTtlMinutes: 15,
     }));
     mock.method(whatsappMessageRepository, "findByMessageSid", async () => null);

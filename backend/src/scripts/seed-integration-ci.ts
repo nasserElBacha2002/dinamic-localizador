@@ -110,6 +110,63 @@ const ensureOperationalLocation = async (
   `);
 };
 
+const ensureRegularOwner = async (
+  pool: sql.ConnectionPool,
+  companyId: string,
+): Promise<void> => {
+  const email = normalizeEmail("owner@dinamicsystems.com");
+  const password = process.env.OWNER_PASSWORD ?? "ci-test-password-123";
+
+  const existing = await pool
+    .request()
+    .input("email", sql.NVarChar(255), email)
+    .query(`SELECT id FROM users WHERE email = @email`);
+
+  let userId = existing.recordset[0]?.id ? String(existing.recordset[0].id) : "";
+
+  if (!userId) {
+    const passwordHash = await hashPassword(password);
+    const created = await pool
+      .request()
+      .input("name", sql.NVarChar(150), "CI Company Owner")
+      .input("email", sql.NVarChar(255), email)
+      .input("passwordHash", sql.NVarChar(255), passwordHash)
+      .query(`
+        INSERT INTO users (name, email, password_hash, role, active, is_platform_admin)
+        OUTPUT INSERTED.id
+        VALUES (@name, @email, @passwordHash, N'ADMIN', 1, 0)
+      `);
+    userId = String(created.recordset[0].id);
+  } else {
+    await pool.request().input("email", sql.NVarChar(255), email).query(`
+      UPDATE users
+      SET is_platform_admin = 0, active = 1
+      WHERE email = @email
+    `);
+  }
+
+  await pool
+    .request()
+    .input("userId", sql.UniqueIdentifier, userId)
+    .input("companyId", sql.UniqueIdentifier, companyId)
+    .query(`
+      IF NOT EXISTS (
+        SELECT 1 FROM user_company_memberships
+        WHERE user_id = @userId AND company_id = @companyId
+      )
+      BEGIN
+        INSERT INTO user_company_memberships (user_id, company_id, role, status, is_default)
+        VALUES (@userId, @companyId, N'OWNER', N'ACTIVE', 0);
+      END
+      ELSE
+      BEGIN
+        UPDATE user_company_memberships
+        SET role = N'OWNER', status = N'ACTIVE'
+        WHERE user_id = @userId AND company_id = @companyId;
+      END
+    `);
+};
+
 const ensureEmployee = async (pool: sql.ConnectionPool, companyId: string): Promise<void> => {
   const existing = await pool
     .request()
@@ -151,6 +208,7 @@ const main = async (): Promise<void> => {
   try {
     const companyId = await ensureDinamicCompanyId(pool);
     await ensurePlatformAdmin(pool, companyId);
+    await ensureRegularOwner(pool, companyId);
     await ensureOperationalLocation(pool, companyId);
     await ensureEmployee(pool, companyId);
     console.log("CI integration seed completed.");

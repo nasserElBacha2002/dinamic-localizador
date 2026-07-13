@@ -83,11 +83,17 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("scheduledStart", sql.DateTime2, initialStart)
       .query(`
         INSERT INTO operation_assignments (
-          company_id, operation_id, employee_id, confirmation_status, confirmed_at, confirmation_schedule_version
+          id, company_id, operation_id, employee_id, valid_from, valid_until,
+          confirmation_status, confirmed_at, confirmation_schedule_version
         )
-        VALUES (@companyId, @operationId, @employeeId, 'CONFIRMED', SYSUTCDATETIME(), 1)
+        VALUES (
+          NEWID(), @companyId, @operationId, @employeeId,
+          CAST(@scheduledStart AS DATE), CAST(@scheduledStart AS DATE),
+          'CONFIRMED', SYSUTCDATETIME(), 1
+        )
       `);
 
     await pool

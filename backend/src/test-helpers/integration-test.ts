@@ -41,3 +41,12 @@ export const requireDinamicCompanyId = async (): Promise<string> => {
   }
   return company.id;
 };
+
+export const resolveCompanyTodayIso = async (companyId: string): Promise<string> => {
+  const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+  const { getDateIsoInTimezone } = await import("../utils/absence-date");
+  const { resolveOperationTimezone } = await import("../utils/operation-timezone");
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  const timezone = resolveOperationTimezone(settings?.operationTimezone);
+  return getDateIsoInTimezone(new Date(), timezone);
+};

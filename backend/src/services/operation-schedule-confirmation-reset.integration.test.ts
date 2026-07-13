@@ -83,15 +83,16 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
       .input("confirmedId", sql.UniqueIdentifier, confirmedId)
       .input("unavailableId", sql.UniqueIdentifier, unavailableId)
       .input("pendingId", sql.UniqueIdentifier, pendingId)
+      .input("scheduledStart", sql.DateTime2, futureStart)
       .query(`
         INSERT INTO operation_assignments (
-          company_id, operation_id, employee_id, confirmation_status,
-          confirmed_at, unavailable_at, confirmation_schedule_version
+          id, company_id, operation_id, employee_id, valid_from, valid_until,
+          confirmation_status, confirmed_at, unavailable_at, confirmation_schedule_version
         )
         VALUES
-          (@companyId, @operationId, @confirmedId, 'CONFIRMED', SYSUTCDATETIME(), NULL, 1),
-          (@companyId, @operationId, @unavailableId, 'UNAVAILABLE', NULL, SYSUTCDATETIME(), 1),
-          (@companyId, @operationId, @pendingId, 'PENDING', NULL, NULL, 1)
+          (NEWID(), @companyId, @operationId, @confirmedId, CAST(@scheduledStart AS DATE), CAST(@scheduledStart AS DATE), 'CONFIRMED', SYSUTCDATETIME(), NULL, 1),
+          (NEWID(), @companyId, @operationId, @unavailableId, CAST(@scheduledStart AS DATE), CAST(@scheduledStart AS DATE), 'UNAVAILABLE', NULL, SYSUTCDATETIME(), 1),
+          (NEWID(), @companyId, @operationId, @pendingId, CAST(@scheduledStart AS DATE), CAST(@scheduledStart AS DATE), 'PENDING', NULL, NULL, 1)
       `);
 
     const { operationService } = await import("./operation.service");
@@ -177,11 +178,17 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("scheduledStart", sql.DateTime2, oldStart)
       .query(`
         INSERT INTO operation_assignments (
-          company_id, operation_id, employee_id, confirmation_status, confirmed_at, confirmation_schedule_version
+          id, company_id, operation_id, employee_id, valid_from, valid_until,
+          confirmation_status, confirmed_at, confirmation_schedule_version
         )
-        VALUES (@companyId, @operationId, @employeeId, 'CONFIRMED', SYSUTCDATETIME(), 1)
+        VALUES (
+          NEWID(), @companyId, @operationId, @employeeId,
+          CAST(@scheduledStart AS DATE), CAST(@scheduledStart AS DATE),
+          'CONFIRMED', SYSUTCDATETIME(), 1
+        )
       `);
 
     const { employeeAssignmentQueryRepository } = await import(

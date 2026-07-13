@@ -4,6 +4,7 @@ import sql from "mssql";
 import { WEEKDAYS } from "../constants/weekday";
 import {
   describeDatabaseIntegration,
+  resolveCompanyTodayIso,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
@@ -12,6 +13,7 @@ import { operationAttendanceRepository } from "../repositories/operation-attenda
 import { operationAssignmentService } from "../services/operation-assignment.service";
 import { operationService } from "../services/operation.service";
 import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
+import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
@@ -91,12 +93,14 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
     const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
+    const today = await resolveCompanyTodayIso(companyId);
+
     const operation = await operationService.createRecurring(
       companyId,
       {
         operationKind: "RECURRING",
         serviceId,
-        validFrom: "2026-07-13",
+        validFrom: today,
         scheduleSource: "CUSTOM",
         scheduleDays: allDaysSchedule,
       },
@@ -118,11 +122,11 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       companyId,
       operation.id,
       employeeId,
-      { validFrom: "2026-07-13" },
+      { validFrom: today },
     );
 
     const afterAssign = await loadExpectationsForEmployee(companyId, operation.id, employeeId);
-    const todayExpectation = afterAssign.find((row) => String(row.work_date).slice(0, 10) === "2026-07-13");
+    const todayExpectation = afterAssign.find((row) => String(row.work_date).slice(0, 10) === today);
     assert.ok(todayExpectation);
     assert.equal(todayExpectation.expectation_status, "EXPECTED");
     assert.equal(todayExpectation.operation_assignment_id, assignmentA.id);
@@ -130,7 +134,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
     await operationAssignmentService.cancelAssignment(companyId, operation.id, assignmentA.id);
 
     const afterCancel = await loadExpectationsForEmployee(companyId, operation.id, employeeId);
-    const cancelledToday = afterCancel.find((row) => String(row.work_date).slice(0, 10) === "2026-07-13");
+    const cancelledToday = afterCancel.find((row) => String(row.work_date).slice(0, 10) === today);
     assert.ok(cancelledToday);
     assert.equal(cancelledToday.expectation_status, "CANCELLED");
     assert.equal(cancelledToday.cancellation_reason, "ASSIGNMENT");
@@ -139,7 +143,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       companyId,
       operation.id,
       employeeId,
-      { validFrom: "2026-07-13" },
+      { validFrom: today },
     );
     assert.notEqual(assignmentB.id, assignmentA.id);
 
@@ -147,7 +151,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
 
     const afterReassign = await loadExpectationsForEmployee(companyId, operation.id, employeeId);
     const reactivatedToday = afterReassign.find(
-      (row) => String(row.work_date).slice(0, 10) === "2026-07-13",
+      (row) => String(row.work_date).slice(0, 10) === today,
     );
     assert.ok(reactivatedToday);
     assert.equal(reactivatedToday.expectation_status, "EXPECTED");
@@ -160,7 +164,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       1,
       10,
       undefined,
-      "2026-07-13",
+      today,
     );
     assert.ok(summary);
     assert.equal(summary.summary.assigned, 1);

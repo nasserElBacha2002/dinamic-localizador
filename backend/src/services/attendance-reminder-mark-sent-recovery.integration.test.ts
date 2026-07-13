@@ -156,11 +156,17 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("scheduledStart", sql.DateTime2, scheduledStart)
       .query(`
         INSERT INTO operation_assignments (
-          company_id, operation_id, employee_id, confirmation_status, confirmation_schedule_version
+          id, company_id, operation_id, employee_id, valid_from, valid_until,
+          confirmation_status, confirmation_schedule_version
         )
-        VALUES (@companyId, @operationId, @employeeId, 'PENDING', 1)
+        VALUES (
+          NEWID(), @companyId, @operationId, @employeeId,
+          CAST(@scheduledStart AS DATE), CAST(@scheduledStart AS DATE),
+          'PENDING', 1
+        )
       `);
 
     const { env } = await import("../config/env");

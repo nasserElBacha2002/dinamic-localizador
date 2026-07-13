@@ -3,6 +3,7 @@ import { after, before, describe, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
+  resolveCompanyTodayIso,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
@@ -11,6 +12,7 @@ import { operationAttendanceRepository } from "../repositories/operation-attenda
 import { operationAssignmentService } from "../services/operation-assignment.service";
 import { operationService } from "../services/operation.service";
 import { WEEKDAYS } from "../constants/weekday";
+import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
@@ -155,12 +157,15 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     const serviceId = String(serviceResult.recordset[0]?.id ?? "");
     assert.ok(serviceId);
 
+    const today = await resolveCompanyTodayIso(companyId);
+    const laterDate = addDaysToDateIso(today, 7);
+
     const operation = await operationService.createRecurring(
       companyId,
       {
         operationKind: "RECURRING",
         serviceId,
-        validFrom: "2026-07-06",
+        validFrom: today,
         scheduleSource: "CUSTOM",
         scheduleDays: allDaysSchedule,
       },
@@ -187,13 +192,13 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     );
 
     await operationAssignmentService.assignEmployee(companyId, operation.id, employeeA, {
-      validFrom: "2026-07-06",
+      validFrom: today,
     });
     await operationAssignmentService.assignEmployee(companyId, operation.id, employeeB, {
-      validFrom: "2026-07-13",
+      validFrom: laterDate,
     });
     await operationAssignmentService.assignEmployee(companyId, operation.id, employeeC, {
-      validFrom: "2026-07-13",
+      validFrom: laterDate,
     });
 
     const summaryStart = await operationAttendanceRepository.getAttendanceSummary(
@@ -202,7 +207,7 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       1,
       10,
       undefined,
-      "2026-07-06",
+      today,
     );
     const summaryToday = await operationAttendanceRepository.getAttendanceSummary(
       companyId,
@@ -210,13 +215,13 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       1,
       10,
       undefined,
-      "2026-07-13",
+      laterDate,
     );
 
     assert.ok(summaryStart);
     assert.ok(summaryToday);
-    assert.equal(summaryStart.workDate, "2026-07-06");
-    assert.equal(summaryToday.workDate, "2026-07-13");
+    assert.equal(summaryStart.workDate, today);
+    assert.equal(summaryToday.workDate, laterDate);
     assert.equal(summaryStart.summary.assigned, 1);
     assert.equal(summaryToday.summary.assigned, 3);
     assert.equal(summaryStart.employees.length, 1);

@@ -140,7 +140,7 @@ describeDatabaseIntegration("company module key migration (038)", () => {
 
     const byCompany = new Map<string, Array<Record<string, unknown>>>();
     for (const row of modules.recordset as Array<Record<string, unknown>>) {
-      const companyId = String(row.company_id);
+      const companyId = String(row.company_id).toLowerCase();
       const rows = byCompany.get(companyId) ?? [];
       rows.push(row);
       byCompany.set(companyId, rows);
@@ -148,17 +148,17 @@ describeDatabaseIntegration("company module key migration (038)", () => {
 
     assert.equal(await countLegacyModuleRows(), 0);
 
-    const legacyOnlyRows = byCompany.get(companyIds.legacyOnly) ?? [];
+    const legacyOnlyRows = byCompany.get(companyIds.legacyOnly.toLowerCase()) ?? [];
     assert.equal(legacyOnlyRows.length, 1);
     assert.equal(legacyOnlyRows[0]?.module_key, "operations");
     assert.equal(Boolean(legacyOnlyRows[0]?.is_enabled), true);
 
-    const canonicalOnlyRows = byCompany.get(companyIds.canonicalOnly) ?? [];
+    const canonicalOnlyRows = byCompany.get(companyIds.canonicalOnly.toLowerCase()) ?? [];
     assert.equal(canonicalOnlyRows.length, 1);
     assert.equal(canonicalOnlyRows[0]?.module_key, "operations");
     assert.equal(Boolean(canonicalOnlyRows[0]?.is_enabled), true);
 
-    const duplicateRows = byCompany.get(companyIds.duplicate) ?? [];
+    const duplicateRows = byCompany.get(companyIds.duplicate.toLowerCase()) ?? [];
     assert.equal(duplicateRows.length, 1);
     assert.equal(duplicateRows[0]?.module_key, "operations");
     assert.equal(Boolean(duplicateRows[0]?.is_enabled), true);

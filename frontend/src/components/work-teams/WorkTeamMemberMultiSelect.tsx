@@ -130,7 +130,7 @@ export function WorkTeamMemberMultiSelect({
                 </Stack>
                 <Group gap="xs">
                   {display.isInactive ? <Badge color="gray">Inactivo</Badge> : null}
-                  {!display.isLoading && !display.isUnavailable ? (
+                  {!display.isLoading ? (
                     <Badge
                       variant="light"
                       color="red"

@@ -1,7 +1,10 @@
 import { Modal, Tabs } from "@mantine/core";
 import { useState } from "react";
 import type { OperationKind } from "../../types/operation";
-import { OperationIndividualAssignmentPanel } from "./OperationIndividualAssignmentPanel";
+import {
+  OperationIndividualAssignmentPanel,
+  type AssignEmployeesResult,
+} from "./OperationIndividualAssignmentPanel";
 import { WorkTeamAssignmentPanel } from "./WorkTeamAssignmentPanel";
 
 interface OperationTeamManageDialogProps {
@@ -16,7 +19,7 @@ interface OperationTeamManageDialogProps {
     employeeIds: string[];
     validFrom?: string;
     validUntil?: string | null;
-  }) => Promise<void>;
+  }) => Promise<AssignEmployeesResult>;
   onCompleted: (message: string, severity: "success" | "error") => void;
 }
 
@@ -48,11 +51,18 @@ export function OperationTeamManageDialog({
 
         <Tabs.Panel value="individual">
           <OperationIndividualAssignmentPanel
+            key={`${operationKind}:${operationWorkDate}`}
             operationKind={operationKind}
             operationWorkDate={operationWorkDate}
             excludeEmployeeIds={excludeEmployeeIds}
             loading={assignLoading}
             onAssign={onAssignEmployees}
+            onResult={(result) => {
+              // The dialog owns closing: only close when everything succeeded.
+              if (result.status === "success") {
+                handleClose();
+              }
+            }}
           />
         </Tabs.Panel>
 

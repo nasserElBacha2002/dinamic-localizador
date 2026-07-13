@@ -20,14 +20,42 @@ import type {
 } from "../types/operation";
 import type { OperationAttendanceSummaryFilters } from "../types/operation-attendance-summary";
 import type { OperationWorkdayFilters } from "../types/operation-workday";
+import {
+  operationAttendanceKeys,
+  operationEmployeeKeys,
+  operationKeys,
+  operationWorkdayKeys,
+} from "../queryKeys/operations";
 import { isRecurringWorkdaySyncError } from "../utils/errors";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
+
+/**
+ * Invalidates every query scoped to a single operation of the active company.
+ * Uses scoped prefixes so other companies and operations stay cached.
+ */
+export async function invalidateOperationScopedQueries(
+  queryClient: ReturnType<typeof useQueryClient>,
+  companyId: string | undefined,
+  operationId: string | undefined,
+): Promise<void> {
+  await Promise.all([
+    queryClient.invalidateQueries({ queryKey: operationKeys.detail(companyId, operationId) }),
+    queryClient.invalidateQueries({ queryKey: operationEmployeeKeys.list(companyId, operationId) }),
+    queryClient.invalidateQueries({
+      queryKey: operationAttendanceKeys.summary(companyId, operationId),
+    }),
+    queryClient.invalidateQueries({ queryKey: operationWorkdayKeys.list(companyId, operationId) }),
+    queryClient.invalidateQueries({
+      queryKey: operationWorkdayKeys.detail(companyId, operationId, undefined),
+    }),
+  ]);
+}
 
 export function useOperations(filters: OperationFilters, extraEnabled = true) {
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
 
   return useQuery({
-    queryKey: ["operations", companyId, filters],
+    queryKey: operationKeys.list(companyId, filters),
     queryFn: () => getOperations(filters),
     enabled,
     retry: 1,
@@ -38,7 +66,7 @@ export function useOperation(operationId?: string) {
   const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
 
   return useQuery({
-    queryKey: ["operation", companyId, operationId],
+    queryKey: operationKeys.detail(companyId, operationId),
     queryFn: () => getOperationById(operationId!),
     enabled,
   });
@@ -48,7 +76,7 @@ export function useOperationEmployees(operationId?: string) {
   const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
 
   return useQuery({
-    queryKey: ["operation-employees", companyId, operationId],
+    queryKey: operationEmployeeKeys.list(companyId, operationId),
     queryFn: () => getOperationEmployees(operationId!),
     enabled,
   });
@@ -56,6 +84,7 @@ export function useOperationEmployees(operationId?: string) {
 
 export function useCreateOperation() {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: createOperation,
@@ -63,15 +92,14 @@ export function useCreateOperation() {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["operations"] });
-      queryClient.invalidateQueries({ queryKey: ["operation"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: operationKeys.list(companyId) });
     },
   });
 }
 
 export function useUpdateOperation(operationId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (input: UpdateOperationInput) => updateOperation(operationId, input),
@@ -79,15 +107,18 @@ export function useUpdateOperation(operationId: string) {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["operations"] });
-      queryClient.invalidateQueries({ queryKey: ["operation"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: operationKeys.list(companyId) });
+      queryClient.invalidateQueries({ queryKey: operationKeys.detail(companyId, operationId) });
+      queryClient.invalidateQueries({
+        queryKey: operationWorkdayKeys.list(companyId, operationId),
+      });
     },
   });
 }
 
 export function useCancelOperation() {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: cancelOperation,
@@ -95,15 +126,18 @@ export function useCancelOperation() {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["operations"] });
-      queryClient.invalidateQueries({ queryKey: ["operation", undefined, operationId] });
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      queryClient.invalidateQueries({ queryKey: operationKeys.list(companyId) });
+      queryClient.invalidateQueries({ queryKey: operationKeys.detail(companyId, operationId) });
+      queryClient.invalidateQueries({
+        queryKey: operationWorkdayKeys.list(companyId, operationId),
+      });
     },
   });
 }
 
 export function useAssignOperationEmployee(operationId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (input: { employeeId: string; validFrom?: string; validUntil?: string | null }) =>
@@ -112,16 +146,14 @@ export function useAssignOperationEmployee(operationId: string) {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["operation"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
     },
   });
 }
 
 export function useCancelOperationAssignment(operationId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (assignmentId: string) =>
@@ -130,16 +162,14 @@ export function useCancelOperationAssignment(operationId: string) {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["operation"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
     },
   });
 }
 
 export function useEndOperationAssignment(operationId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (input: { assignmentId: string; effectiveDate: string }) =>
@@ -148,10 +178,7 @@ export function useEndOperationAssignment(operationId: string) {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      queryClient.invalidateQueries({ queryKey: ["operation"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
+      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
     },
   });
 }
@@ -163,7 +190,7 @@ export function useOperationAttendanceSummary(
   const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
 
   return useQuery({
-    queryKey: ["operation-attendance-summary", companyId, operationId, filters],
+    queryKey: operationAttendanceKeys.summary(companyId, operationId, filters),
     queryFn: () => getOperationAttendanceSummary(operationId!, filters),
     enabled,
     refetchInterval: enabled ? 30000 : false,
@@ -174,7 +201,7 @@ export function useOperationWorkdays(operationId?: string, filters: OperationWor
   const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
 
   return useQuery({
-    queryKey: ["operation-workdays", companyId, operationId, filters],
+    queryKey: operationWorkdayKeys.list(companyId, operationId, filters),
     queryFn: () => getOperationWorkdays(operationId!, filters),
     enabled,
   });
@@ -190,7 +217,7 @@ export function useOperationWorkdayDetail(
   );
 
   return useQuery({
-    queryKey: ["operation-workday-detail", companyId, operationId, workdayId],
+    queryKey: operationWorkdayKeys.detail(companyId, operationId, workdayId),
     queryFn: () => getOperationWorkdayDetail(operationId!, workdayId!),
     enabled,
   });
@@ -198,13 +225,12 @@ export function useOperationWorkdayDetail(
 
 export function useMaterializeOperationWorkdays(operationId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: () => materializeOperationWorkdays(operationId),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
-      queryClient.invalidateQueries({ queryKey: ["operation"] });
-      queryClient.invalidateQueries({ queryKey: ["operation-employees"] });
+      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
     },
   });
 }

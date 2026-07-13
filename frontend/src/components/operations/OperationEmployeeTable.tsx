@@ -179,12 +179,19 @@ export function OperationEmployeeTable({
       isRowClickable={(row) => Boolean(row.attendance)}
       rowActions={(row) => {
         const assignment = assignmentById?.get(row.assignmentId);
-        const assignmentAction =
+        const hasAttendanceDetail = Boolean(row.attendance);
+        const resolvedAction =
           canAssign && assignment
             ? resolveAssignmentAction(assignment, operationWorkDate)
             : null;
+        // Never offer destructive removal for a row with attendance: the backend
+        // rejects it (ASSIGNMENT_HAS_ATTENDANCE_RECORDS) to preserve history.
+        const assignmentAction =
+          hasAttendanceDetail &&
+          (resolvedAction === "cancel-current" || resolvedAction === "cancel-future")
+            ? null
+            : resolvedAction;
         const canReview = canReviewAttendance(row);
-        const hasAttendanceDetail = Boolean(row.attendance);
 
         if (!canReview && !assignmentAction && !hasAttendanceDetail) {
           return null;

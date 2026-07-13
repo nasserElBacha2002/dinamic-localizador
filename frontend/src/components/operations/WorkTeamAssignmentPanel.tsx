@@ -22,7 +22,16 @@ import type { OperationKind } from "../../types/operation";
 import type { WorkTeamAssignPreviewResult } from "../../types/work-team";
 import { formatDateInputDisplay } from "../../utils/date-range";
 import { getTodayDateInput } from "../../utils/dates";
-import { getApiErrorMessage, parseApiError } from "../../utils/errors";
+import {
+  operationAttendanceKeys,
+  operationEmployeeKeys,
+  operationKeys,
+} from "../../queryKeys/operations";
+import {
+  getApiErrorMessage,
+  isRecurringWorkdaySyncError,
+  parseApiError,
+} from "../../utils/errors";
 import { employeeTypeLabels } from "../../utils/labels";
 import {
   buildWorkTeamSelectOptions,
@@ -165,11 +174,17 @@ export function WorkTeamAssignmentPanel({
     try {
       const result = await confirmMutation.mutateAsync(preview.previewToken);
       try {
-        await invalidateOperationAssignmentQueries(queryClient);
-        await queryClient.refetchQueries({ queryKey: ["operation-employees"], type: "active" });
-        await queryClient.refetchQueries({ queryKey: ["operation"], type: "active" });
+        await invalidateOperationAssignmentQueries(queryClient, companyId ?? undefined, operationId);
         await queryClient.refetchQueries({
-          queryKey: ["operation-attendance-summary"],
+          queryKey: operationEmployeeKeys.list(companyId ?? undefined, operationId),
+          type: "active",
+        });
+        await queryClient.refetchQueries({
+          queryKey: operationKeys.detail(companyId ?? undefined, operationId),
+          type: "active",
+        });
+        await queryClient.refetchQueries({
+          queryKey: operationAttendanceKeys.summary(companyId ?? undefined, operationId),
           type: "active",
         });
       } catch {
@@ -190,6 +205,19 @@ export function WorkTeamAssignmentPanel({
       onFinished?.();
     } catch (error) {
       const parsed = parseApiError(error);
+      // Assignment persisted, but recurring workday materialization stayed
+      // pending. The confirm mutation already invalidated the operation caches;
+      // treat it as a success with a clear pending notice and close.
+      if (isRecurringWorkdaySyncError(error)) {
+        await invalidateOperationAssignmentQueries(queryClient, companyId ?? undefined, operationId);
+        onCompleted(
+          "La asignación fue realizada. La actualización de jornadas quedó pendiente.",
+          "success",
+        );
+        resetState();
+        onFinished?.();
+        return;
+      }
       if (parsed.code === "WORK_TEAM_PREVIEW_STALE" || parsed.code === "WORK_TEAM_PREVIEW_EXPIRED") {
         setPreview(null);
       }

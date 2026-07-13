@@ -39,7 +39,12 @@ export function formatDate(iso: string | null | undefined): string {
   }
 
   if (isDateOnlyString(iso)) {
-    return formatDateOnly(iso);
+    try {
+      return formatDateOnly(iso);
+    } catch {
+      // Impossible calendar date: never render a different day than received.
+      return iso;
+    }
   }
 
   return dateFormatter.format(new Date(iso));

@@ -8,9 +8,19 @@ import {
 } from "../test-helpers/integration-test";
 import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
+import { operationAssignmentService } from "../services/operation-assignment.service";
+import { operationService } from "../services/operation.service";
+import { WEEKDAYS } from "../constants/weekday";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+
+const allDaysSchedule = WEEKDAYS.map((dayOfWeek) => ({
+  dayOfWeek,
+  isEnabled: true,
+  startTime: "09:00",
+  endTime: "18:00",
+}));
 
 describeDatabaseIntegration("operation attendance confirmation summary integration", () => {
   before(async () => {
@@ -21,7 +31,7 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     await teardownDatabaseIntegration();
   });
 
-  it("maps confirmation summary counts and row-level statuses", async () => {
+  it("maps confirmation summary counts and row-level statuses from employee_workdays", async () => {
     const pool = getPool();
     const companyResult = await pool.request().query(`
       SELECT TOP 1 id FROM companies WHERE status = 'ACTIVE' ORDER BY created_at ASC
@@ -48,10 +58,10 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       .input("scheduledStart", sql.DateTime2, new Date(futureStart))
       .query(`
         INSERT INTO scheduled_operations (
-          company_id, service_id, scheduled_start, early_tolerance_minutes, late_tolerance_minutes, status
+          company_id, service_id, scheduled_start, early_tolerance_minutes, late_tolerance_minutes, status, operation_kind
         )
         OUTPUT INSERTED.id
-        VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
+        VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME')
       `);
     const operationId = String(operationInsert.recordset[0].id);
 
@@ -74,21 +84,35 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       String((row as { id: string }).id),
     );
 
+    const assignmentPending = await operationAssignmentService.assignEmployee(
+      companyId,
+      operationId,
+      pendingId,
+    );
+    const assignmentConfirmed = await operationAssignmentService.assignEmployee(
+      companyId,
+      operationId,
+      confirmedId,
+    );
+    const assignmentUnavailable = await operationAssignmentService.assignEmployee(
+      companyId,
+      operationId,
+      unavailableId,
+    );
+
     await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("pendingId", sql.UniqueIdentifier, pendingId)
-      .input("confirmedId", sql.UniqueIdentifier, confirmedId)
-      .input("unavailableId", sql.UniqueIdentifier, unavailableId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentConfirmed.id)
+      .input("assignmentId2", sql.UniqueIdentifier, assignmentUnavailable.id)
       .query(`
-        INSERT INTO operation_assignments (
-          company_id, operation_id, employee_id, confirmation_status, confirmed_at, unavailable_at
-        )
-        VALUES
-          (@companyId, @operationId, @pendingId, 'PENDING', NULL, NULL),
-          (@companyId, @operationId, @confirmedId, 'CONFIRMED', SYSUTCDATETIME(), NULL),
-          (@companyId, @operationId, @unavailableId, 'UNAVAILABLE', NULL, SYSUTCDATETIME())
+        UPDATE operation_assignments
+        SET confirmation_status = 'CONFIRMED', confirmed_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId AND id = @assignmentId;
+
+        UPDATE operation_assignments
+        SET confirmation_status = 'UNAVAILABLE', unavailable_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId AND id = @assignmentId2;
       `);
 
     const summary = await operationAttendanceRepository.getAttendanceSummary(
@@ -110,5 +134,100 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     assert.equal(byEmployeeId.get(unavailableId)?.confirmationStatus, "UNAVAILABLE");
     assert.ok(byEmployeeId.get(confirmedId)?.confirmedAt);
     assert.ok(byEmployeeId.get(unavailableId)?.unavailableAt);
+  });
+
+  it("returns workday-specific employee counts for recurring operations", async () => {
+    const pool = getPool();
+    const companyResult = await pool.request().query(`
+      SELECT TOP 1 id FROM companies WHERE status = 'ACTIVE' ORDER BY created_at ASC
+    `);
+    const companyId = String(companyResult.recordset[0]?.id ?? "");
+    assert.ok(companyId);
+
+    const serviceResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT TOP 1 id FROM operational_locations
+        WHERE company_id = @companyId AND active = 1
+        ORDER BY created_at ASC
+      `);
+    const serviceId = String(serviceResult.recordset[0]?.id ?? "");
+    assert.ok(serviceId);
+
+    const operation = await operationService.createRecurring(
+      companyId,
+      {
+        operationKind: "RECURRING",
+        serviceId,
+        validFrom: "2026-07-06",
+        scheduleSource: "CUSTOM",
+        scheduleDays: allDaysSchedule,
+      },
+      { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
+    );
+
+    const employees = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("phoneA", sql.NVarChar(20), uniquePhone(10))
+      .input("phoneB", sql.NVarChar(20), uniquePhone(11))
+      .input("phoneC", sql.NVarChar(20), uniquePhone(12))
+      .query(`
+        INSERT INTO employees (company_id, name, phone_number, employee_type, active)
+        OUTPUT INSERTED.id
+        VALUES
+          (@companyId, N'Emp A', @phoneA, 'fijo', 1),
+          (@companyId, N'Emp B', @phoneB, 'fijo', 1),
+          (@companyId, N'Emp C', @phoneC, 'fijo', 1)
+      `);
+
+    const [employeeA, employeeB, employeeC] = employees.recordset.map((row) =>
+      String((row as { id: string }).id),
+    );
+
+    await operationAssignmentService.assignEmployee(companyId, operation.id, employeeA, {
+      validFrom: "2026-07-06",
+    });
+    await operationAssignmentService.assignEmployee(companyId, operation.id, employeeB, {
+      validFrom: "2026-07-13",
+    });
+    await operationAssignmentService.assignEmployee(companyId, operation.id, employeeC, {
+      validFrom: "2026-07-13",
+    });
+
+    const summaryStart = await operationAttendanceRepository.getAttendanceSummary(
+      companyId,
+      operation.id,
+      1,
+      10,
+      undefined,
+      "2026-07-06",
+    );
+    const summaryToday = await operationAttendanceRepository.getAttendanceSummary(
+      companyId,
+      operation.id,
+      1,
+      10,
+      undefined,
+      "2026-07-13",
+    );
+
+    assert.ok(summaryStart);
+    assert.ok(summaryToday);
+    assert.equal(summaryStart.workDate, "2026-07-06");
+    assert.equal(summaryToday.workDate, "2026-07-13");
+    assert.equal(summaryStart.summary.assigned, 1);
+    assert.equal(summaryToday.summary.assigned, 3);
+    assert.equal(summaryStart.employees.length, 1);
+    assert.equal(summaryToday.employees.length, 3);
+    assert.deepEqual(
+      summaryStart.employees.map((row) => row.employee.id).sort(),
+      [employeeA],
+    );
+    assert.deepEqual(
+      summaryToday.employees.map((row) => row.employee.id).sort(),
+      [employeeA, employeeB, employeeC].sort(),
+    );
   });
 });

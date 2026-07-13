@@ -636,19 +636,8 @@ export const workTeamAssignmentService = {
       throw error;
     }
 
-    if (shouldSyncRecurring && committedBatchId) {
-      try {
-        await recurringWorkdaySyncService.runOperationSync(
-          companyId,
-          operationId,
-          () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operationId),
-          "recurring work team batch assignment",
-        );
-      } catch (error) {
-        console.error("[work-team-assignment] recurring sync failed after commit", error);
-      }
-    }
-
+    // Audit before surfacing any post-commit sync error: the batch is already
+    // committed (assignments persisted) regardless of reconciliation outcome.
     if (committedBatchId) {
       await logAuditSafe("work_team_assignment_batch.confirm", () =>
         auditService.log(companyId, {
@@ -658,6 +647,19 @@ export const workTeamAssignmentService = {
           newData: { operationId },
           userId,
         }),
+      );
+    }
+
+    if (shouldSyncRecurring && committedBatchId) {
+      // The assignment is committed. If horizon reconciliation fails we surface
+      // the specific RECURRING_WORKDAY_SYNC_FAILED code (no rollback after
+      // commit) so the client can refresh and inform the user the assignment
+      // succeeded while workday materialization stayed pending.
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        operationId,
+        () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operationId),
+        "recurring work team batch assignment",
       );
     }
 

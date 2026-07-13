@@ -4,17 +4,35 @@ export function isDateOnlyString(value: string): boolean {
   return DATE_ONLY_PATTERN.test(value);
 }
 
+/**
+ * Confirms a calendar date is real. JavaScript's Date normalizes impossible
+ * values (e.g. 2026-02-31 → 2026-03-03), so we must compare the reconstructed
+ * UTC parts against the requested ones to reject invalid dates.
+ */
+function isRealCalendarDate(year: number, month: number, day: number): boolean {
+  const utcDate = new Date(Date.UTC(year, month - 1, day));
+  return (
+    utcDate.getUTCFullYear() === year &&
+    utcDate.getUTCMonth() === month - 1 &&
+    utcDate.getUTCDate() === day
+  );
+}
+
 function parseDateOnlyParts(value: string): { year: number; month: number; day: number } {
   const match = DATE_ONLY_PATTERN.exec(value);
   if (!match) {
     throw new Error(`Formato de fecha calendario inválido: ${value}`);
   }
 
-  return {
-    year: Number(match[1]),
-    month: Number(match[2]),
-    day: Number(match[3]),
-  };
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+
+  if (!isRealCalendarDate(year, month, day)) {
+    throw new Error(`Fecha calendario inválida: ${value}`);
+  }
+
+  return { year, month, day };
 }
 
 export function formatDateOnly(value: string, locale = "es-AR"): string {

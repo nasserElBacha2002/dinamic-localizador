@@ -43,17 +43,70 @@ describe("useWorkTeams enabled guard", () => {
 });
 
 describe("operation assignment invalidation keys", () => {
-  it("uses prefix keys that include company scoped operation data", () => {
-    const keys = [
-      ["operation"],
-      ["operation-employees"],
-      ["operation-attendance-summary"],
-      ["operation-workdays"],
-      ["operation-workday-detail"],
+  it("scopes every invalidated key to companyId and operationId", async () => {
+    const {
+      operationKeys,
+      operationEmployeeKeys,
+      operationAttendanceKeys,
+      operationWorkdayKeys,
+    } = await import("../queryKeys/operations");
+
+    const companyId = "company-1";
+    const operationId = "operation-1";
+
+    const scopedKeys = [
+      operationKeys.detail(companyId, operationId),
+      operationEmployeeKeys.list(companyId, operationId),
+      operationAttendanceKeys.summary(companyId, operationId),
+      operationWorkdayKeys.list(companyId, operationId),
+      operationWorkdayKeys.detail(companyId, operationId, undefined),
     ];
 
-    for (const key of keys) {
-      assert.notDeepEqual(key, ["operation-employees", "operation-id-only"]);
+    for (const key of scopedKeys) {
+      assert.equal(key[1], companyId);
+      assert.equal(key[2], operationId);
     }
+  });
+
+  it("does not reuse cache across companies or operations", async () => {
+    const { operationAttendanceKeys } = await import("../queryKeys/operations");
+
+    assert.notDeepEqual(
+      operationAttendanceKeys.summary("company-a", "operation-1"),
+      operationAttendanceKeys.summary("company-b", "operation-1"),
+    );
+    assert.notDeepEqual(
+      operationAttendanceKeys.summary("company-a", "operation-1"),
+      operationAttendanceKeys.summary("company-a", "operation-2"),
+    );
+  });
+
+  it("isolates attendance summary cache by workday filters", async () => {
+    const { operationAttendanceKeys } = await import("../queryKeys/operations");
+
+    const companyId = "company-1";
+    const operationId = "operation-1";
+    const baseFilters = { page: 1, limit: 10 };
+
+    assert.notDeepEqual(
+      operationAttendanceKeys.summary(companyId, operationId, {
+        ...baseFilters,
+        workdayId: "workday-06",
+      }),
+      operationAttendanceKeys.summary(companyId, operationId, {
+        ...baseFilters,
+        workdayId: "workday-13",
+      }),
+    );
+    assert.notDeepEqual(
+      operationAttendanceKeys.summary(companyId, operationId, {
+        ...baseFilters,
+        workDate: "2026-07-06",
+      }),
+      operationAttendanceKeys.summary(companyId, operationId, {
+        ...baseFilters,
+        workDate: "2026-07-13",
+      }),
+    );
   });
 });

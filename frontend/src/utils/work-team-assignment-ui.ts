@@ -1,3 +1,45 @@
+import { isDateOnlyString } from "./date-only";
+
+export interface RecurringValidityErrors {
+  validFrom: string | null;
+  validUntil: string | null;
+}
+
+/**
+ * Shared recurring validity rules used by both the individual and group
+ * assignment panels so their date logic never diverges.
+ */
+export function getRecurringValidityErrors(
+  validFrom: string,
+  validUntil: string,
+): RecurringValidityErrors {
+  const from = validFrom.trim();
+  const until = validUntil.trim();
+
+  let validFromError: string | null = null;
+  let validUntilError: string | null = null;
+
+  if (!from) {
+    validFromError = "La fecha desde es obligatoria.";
+  } else if (!isDateOnlyString(from)) {
+    validFromError = "La fecha desde no es válida.";
+  }
+
+  if (until) {
+    if (!isDateOnlyString(until)) {
+      validUntilError = "La fecha hasta no es válida.";
+    } else if (from && until < from) {
+      validUntilError = "La fecha hasta no puede ser anterior a la fecha desde.";
+    }
+  }
+
+  return { validFrom: validFromError, validUntil: validUntilError };
+}
+
+export function hasRecurringValidityErrors(errors: RecurringValidityErrors): boolean {
+  return Boolean(errors.validFrom || errors.validUntil);
+}
+
 export function getWorkTeamPreviewDisabledReason(input: {
   isCompanyLoading: boolean;
   teamsLoading: boolean;
@@ -21,12 +63,12 @@ export function getWorkTeamPreviewDisabledReason(input: {
   }
 
   if (input.isRecurring) {
-    if (!input.validFrom.trim()) {
-      return "La fecha desde es obligatoria.";
+    const errors = getRecurringValidityErrors(input.validFrom, input.validUntil);
+    if (errors.validFrom) {
+      return errors.validFrom;
     }
-
-    if (input.validUntil.trim() && input.validUntil < input.validFrom) {
-      return "La fecha hasta no puede ser anterior a la fecha desde.";
+    if (errors.validUntil) {
+      return errors.validUntil;
     }
   }
 

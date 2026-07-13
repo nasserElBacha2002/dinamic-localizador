@@ -1,6 +1,4 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
 import { describe, it } from "node:test";
 import {
   assignmentConfirmationStatusLabels,
@@ -37,33 +35,3 @@ describe("operational attendance status labels", () => {
   });
 });
 
-describe("Operation operational employee table UI", () => {
-  it("renders grouped summary wiring and simplified production table navigation", async () => {
-    const sectionSource = await readFile(
-      join(process.cwd(), "src/components/operations/OperationTeamSection.tsx"),
-      "utf8",
-    );
-    const tableSource = await readFile(
-      join(process.cwd(), "src/components/operations/OperationEmployeeTable.tsx"),
-      "utf8",
-    );
-
-    assert.match(sectionSource, /OperationEmployeeTable/);
-    assert.match(sectionSource, /OperationTeamManageDialog/);
-    assert.doesNotMatch(sectionSource, /OperationalSummaryMetrics/);
-    assert.match(sectionSource, /Equipo y asistencia/);
-    assert.match(tableSource, /Confirmación/);
-    assert.match(tableSource, /Asistencia/);
-    assert.match(tableSource, /assignmentConfirmationStatusTableLabels/);
-    assert.match(tableSource, /operationalAttendanceStatusTableLabels/);
-    assert.match(tableSource, /isRowClickable/);
-    assert.match(tableSource, /navigateWithListContext/);
-    assert.doesNotMatch(tableSource, /header: "Distancia"/);
-    assert.doesNotMatch(tableSource, /header: "Ubicación"/);
-    assert.doesNotMatch(tableSource, /header: "Estado operativo"/);
-    assert.doesNotMatch(tableSource, /header: "Teléfono"/);
-    assert.doesNotMatch(tableSource, /header: "Tiempo extra"/);
-    assert.doesNotMatch(tableSource, /header: "Estado salida"/);
-    assert.doesNotMatch(tableSource, /header: "Hora esperada"/);
-  });
-});

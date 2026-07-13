@@ -35,6 +35,28 @@ describe("date-only helpers", () => {
     });
   }
 
+  const INVALID_DATES = [
+    "2026-02-29",
+    "2026-02-30",
+    "2026-02-31",
+    "2026-13-01",
+    "2026-00-10",
+    "2026-01-00",
+    "texto",
+  ];
+
+  for (const invalid of INVALID_DATES) {
+    it(`rejects impossible or malformed date ${invalid}`, () => {
+      assert.throws(() => formatDateOnly(invalid));
+      assert.throws(() => formatDateOnlyWithWeekday(invalid));
+    });
+  }
+
+  it("accepts a leap day in a leap year but rejects it otherwise", () => {
+    assert.equal(formatDateOnly("2028-02-29"), "29/02/2028");
+    assert.throws(() => formatDateOnly("2026-02-29"));
+  });
+
   it("keeps 2026-07-13 stable regardless of process timezone", () => {
     const previousTimezone = process.env.TZ;
     process.env.TZ = "UTC";

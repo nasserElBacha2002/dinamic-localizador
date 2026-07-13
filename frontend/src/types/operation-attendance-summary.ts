@@ -17,6 +17,8 @@ export interface OperationAttendanceSummaryEmployee {
 
 export interface OperationAttendanceSummaryResponse {
   operation: Operation & { service: Service };
+  operationWorkdayId: string | null;
+  workDate: string | null;
   summary: {
     assigned: number;
     checkedIn: number;
@@ -35,4 +37,7 @@ export interface OperationAttendanceSummaryResponse {
 export interface OperationAttendanceSummaryFilters {
   page?: number;
   limit?: number;
+  search?: string;
+  workDate?: string;
+  workdayId?: string;
 }

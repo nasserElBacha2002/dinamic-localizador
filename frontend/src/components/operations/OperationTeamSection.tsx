@@ -1,5 +1,6 @@
-import { Button, Collapse, Stack, Text, TextInput } from "@mantine/core";
-import { useMemo, useState } from "react";
+import { Button, Collapse, Group, Select, Stack, Text, TextInput } from "@mantine/core";
+import { useDebouncedValue } from "@mantine/hooks";
+import { useEffect, useMemo, useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
 import { SectionCard } from "../../design-system";
 import { useReviewAttendance } from "../../hooks/useAttendance";
@@ -12,15 +13,23 @@ import {
 } from "../../hooks/useOperations";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import type { OperationEmployeeAssignment, OperationKind } from "../../types/operation";
+import type { OperationWorkdaySummary } from "../../types/operation-workday";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage, parseApiError } from "../../utils/errors";
+import {
+  buildTeamWorkdaySelectOptions,
+  formatTeamWorkdayLabel,
+  type OperationTeamWorkdaySelection,
+} from "../../utils/operation-team-workday";
 import { EndAssignmentDialog } from "./EndAssignmentDialog";
 import { OperationAssignmentList } from "./OperationAssignmentList";
 import { OperationEmployeeTable } from "./OperationEmployeeTable";
 import { OperationTeamManageDialog } from "./OperationTeamManageDialog";
+import type { AssignEmployeesResult } from "./OperationIndividualAssignmentPanel";
 import {
   isCurrentOperationalAssignment,
   mapAssignmentErrorMessage,
+  resolveAssignmentBatchStatus,
 } from "./operation-assignment-display";
 import { canReviewOperationalAttendance } from "./operation-workforce-attendance";
 
@@ -29,23 +38,11 @@ interface OperationTeamSectionProps {
   operationKind: OperationKind;
   canAssign: boolean;
   operationWorkDate: string;
+  operationalToday: string;
+  workdayOptions: OperationWorkdaySummary[];
+  selectedWorkday: OperationTeamWorkdaySelection | null;
+  onWorkdayChange: (selection: OperationTeamWorkdaySelection | null) => void;
   onFeedback: (message: string, severity: "success" | "error") => void;
-}
-
-function matchesEmployeeSearch(
-  name: string,
-  phone: string | null | undefined,
-  query: string,
-): boolean {
-  const normalized = query.trim().toLowerCase();
-  if (!normalized) {
-    return true;
-  }
-
-  return (
-    name.toLowerCase().includes(normalized) ||
-    (phone ? phone.toLowerCase().includes(normalized) : false)
-  );
 }
 
 export function OperationTeamSection({
@@ -53,14 +50,31 @@ export function OperationTeamSection({
   operationKind,
   canAssign,
   operationWorkDate,
+  operationalToday,
+  workdayOptions,
+  selectedWorkday,
+  onWorkdayChange,
   onFeedback,
 }: OperationTeamSectionProps) {
+  const isRecurring = operationKind === "RECURRING";
   const pagination = usePaginationState(10);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
+  const trimmedSearch = debouncedSearch.trim();
+
+  const summaryFilters = useMemo(
+    () => ({
+      page: pagination.page,
+      limit: pagination.pageSize,
+      ...(trimmedSearch ? { search: trimmedSearch } : {}),
+      ...(selectedWorkday?.workdayId ? { workdayId: selectedWorkday.workdayId } : {}),
+      ...(selectedWorkday?.workDate ? { workDate: selectedWorkday.workDate } : {}),
+    }),
+    [pagination.page, pagination.pageSize, trimmedSearch, selectedWorkday],
+  );
+
   const assignmentsQuery = useOperationEmployees(operationId);
-  const summaryQuery = useOperationAttendanceSummary(operationId, {
-    page: pagination.page,
-    limit: pagination.pageSize,
-  });
+  const summaryQuery = useOperationAttendanceSummary(operationId, summaryFilters);
   const assignMutation = useAssignOperationEmployee(operationId);
   const cancelMutation = useCancelOperationAssignment(operationId);
   const endMutation = useEndOperationAssignment(operationId);
@@ -68,8 +82,13 @@ export function OperationTeamSection({
 
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
   const [endTarget, setEndTarget] = useState<OperationEmployeeAssignment | null>(null);
-  const [searchQuery, setSearchQuery] = useState("");
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  const { onPageChange } = pagination;
+  useEffect(() => {
+    onPageChange(1);
+  }, [trimmedSearch, selectedWorkday?.workdayId, onPageChange]);
+
   const [reviewTarget, setReviewTarget] = useState<{
     attendanceId: string;
     decision: "APPROVE" | "REJECT";
@@ -97,22 +116,23 @@ export function OperationTeamSection({
 
   const rows = summaryQuery.data?.employees ?? [];
   const meta = summaryQuery.data?.meta;
-
-  const filteredRows = useMemo(
-    () =>
-      rows.filter((row) =>
-        matchesEmployeeSearch(row.employee.name, row.employee.phoneNumber, searchQuery),
-      ),
-    [rows, searchQuery],
+  const isSearchPending = searchQuery.trim() !== trimmedSearch;
+  const workdaySelectOptions = useMemo(
+    () => buildTeamWorkdaySelectOptions(workdayOptions, operationalToday),
+    [workdayOptions, operationalToday],
   );
+  const selectedWorkdayLabel = selectedWorkday
+    ? formatTeamWorkdayLabel(selectedWorkday.workDate, operationalToday)
+    : null;
+  const noWorkdayForToday = isRecurring && !selectedWorkday;
 
   const handleAssignEmployees = async (input: {
     employeeIds: string[];
     validFrom?: string;
     validUntil?: string | null;
-  }) => {
-    let assignedCount = 0;
-    let lastError: string | null = null;
+  }): Promise<AssignEmployeesResult> => {
+    const added: string[] = [];
+    const skipped: AssignEmployeesResult["skipped"] = [];
 
     for (const employeeId of input.employeeIds) {
       try {
@@ -125,24 +145,32 @@ export function OperationTeamSection({
               }
             : {}),
         });
-        assignedCount += 1;
+        added.push(employeeId);
       } catch (error) {
         const parsed = parseApiError(error);
-        lastError = mapAssignmentErrorMessage(parsed.code, getApiErrorMessage(error));
+        skipped.push({
+          employeeId,
+          reason: mapAssignmentErrorMessage(parsed.code, getApiErrorMessage(error)),
+        });
       }
     }
 
-    if (assignedCount > 0) {
+    const status = resolveAssignmentBatchStatus(added.length, skipped.length);
+
+    if (added.length > 0) {
       onFeedback(
-        `${assignedCount} ${terminology.worker.plural.toLowerCase()} asignado(s) correctamente.`,
+        `${added.length} ${terminology.worker.plural.toLowerCase()} asignado(s) correctamente.`,
         "success",
       );
-      setManageDialogOpen(false);
+    }
+    if (status === "error") {
+      onFeedback(
+        skipped[0]?.reason ?? "No se pudo completar la asignación.",
+        "error",
+      );
     }
 
-    if (lastError) {
-      throw new Error(lastError);
-    }
+    return { status, added, skipped };
   };
 
   const handleCancelAssignment = async (assignment: OperationEmployeeAssignment) => {
@@ -200,7 +228,11 @@ export function OperationTeamSection({
   return (
     <SectionCard
       title="Equipo y asistencia"
-      description="Colaboradores asignados, confirmación y asistencia."
+      description={
+        isRecurring
+          ? "Colaboradores, confirmación y asistencia de la jornada seleccionada."
+          : "Colaboradores asignados, confirmación y asistencia."
+      }
       action={
         canAssign ? (
           <Button size="compact-sm" onClick={() => setManageDialogOpen(true)}>
@@ -218,17 +250,55 @@ export function OperationTeamSection({
         )
       }
     >
+      {isRecurring ? (
+        <Group align="flex-end" mb="sm" wrap="wrap">
+          <Select
+            label="Jornada"
+            placeholder="Seleccioná una jornada"
+            data={workdaySelectOptions}
+            value={selectedWorkday?.workdayId ?? null}
+            onChange={(workdayId) => {
+              if (!workdayId) {
+                onWorkdayChange(null);
+                return;
+              }
+              const workday = workdayOptions.find((item) => item.id === workdayId);
+              if (!workday) {
+                onWorkdayChange(null);
+                return;
+              }
+              onWorkdayChange({ workdayId: workday.id, workDate: workday.workDate });
+            }}
+            searchable
+            nothingFoundMessage="No hay jornadas materializadas"
+            style={{ minWidth: 280, flex: 1 }}
+          />
+          {selectedWorkdayLabel ? (
+            <Text size="sm" c="dimmed" pb={6}>
+              Mostrando {selectedWorkdayLabel}
+            </Text>
+          ) : null}
+        </Group>
+      ) : null}
+
+      {noWorkdayForToday ? (
+        <Text size="sm" c="dimmed" mb="sm">
+          No hay una jornada programada para hoy.
+        </Text>
+      ) : null}
+
       <TextInput
-        placeholder="Buscar por nombre o teléfono"
+        placeholder="Buscar por nombre, teléfono o documento"
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.currentTarget.value)}
         mb="sm"
+        disabled={isRecurring && !selectedWorkday}
       />
 
       <OperationEmployeeTable
         operationId={operationId}
-        rows={filteredRows}
-        loading={summaryQuery.isLoading}
+        rows={rows}
+        loading={summaryQuery.isLoading || isSearchPending}
         error={
           summaryQuery.isError
             ? getApiErrorMessage(summaryQuery.error, "No se pudo cargar el equipo asignado.")
@@ -237,7 +307,7 @@ export function OperationTeamSection({
         canAssign={canAssign}
         canReviewAttendance={canReviewOperationalAttendance}
         assignmentById={assignmentById}
-        operationWorkDate={operationWorkDate}
+        operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
         onReviewApprove={(attendanceId) =>
           setReviewTarget({ attendanceId, decision: "APPROVE" })
         }
@@ -258,11 +328,17 @@ export function OperationTeamSection({
               }
             : undefined
         }
-        emptyTitle={`No hay ${terminology.worker.plural.toLowerCase()} asignados`}
+        emptyTitle={
+          noWorkdayForToday
+            ? "No hay jornada para hoy"
+            : `No hay ${terminology.worker.plural.toLowerCase()} asignados`
+        }
         emptyDescription={
-          canAssign
-            ? "Usá Administrar equipo para incorporar colaboradores."
-            : `No hay ${terminology.worker.plural.toLowerCase()} asignados a esta operación.`
+          noWorkdayForToday
+            ? "Seleccioná otra jornada materializada o actualizá las jornadas programadas."
+            : canAssign
+              ? "Usá Administrar equipo para incorporar colaboradores."
+              : `No hay ${terminology.worker.plural.toLowerCase()} asignados a esta jornada.`
         }
       />
 
@@ -279,7 +355,7 @@ export function OperationTeamSection({
           <Collapse expanded={historyOpen}>
             <OperationAssignmentList
               assignments={historyAssignments}
-              operationWorkDate={operationWorkDate}
+              operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
               canAssign={false}
               onCancel={() => {}}
               onEnd={() => {}}
@@ -308,7 +384,7 @@ export function OperationTeamSection({
           onClose={() => setManageDialogOpen(false)}
           operationId={operationId}
           operationKind={operationKind}
-          operationWorkDate={operationWorkDate}
+          operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
           excludeEmployeeIds={currentlyAssignedEmployeeIds}
           assignLoading={assignMutation.isPending}
           onAssignEmployees={handleAssignEmployees}

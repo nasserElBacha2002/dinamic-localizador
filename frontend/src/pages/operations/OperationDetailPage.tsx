@@ -1,10 +1,11 @@
 import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useCompanySettings } from "../../hooks/useCompanySettings";
 import {
   ConfirmDialog,
   ErrorState,
@@ -23,6 +24,7 @@ import layoutClasses from "../../components/operations/operation-detail-layout.m
 import {
   useCancelOperation,
   useOperation,
+  useOperationWorkdays,
   useUpdateOperation,
 } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
@@ -42,7 +44,14 @@ import {
   formatRecurringValidity,
   operationKindLabels,
 } from "../../utils/operation-schedule-display";
+import {
+  getOperationalTodayDate,
+  pickDefaultTeamWorkday,
+  type OperationTeamWorkdaySelection,
+} from "../../utils/operation-team-workday";
 import { operationStatusLabels } from "../../utils/labels";
+
+const DEFAULT_OPERATION_TIMEZONE = "America/Argentina/Buenos_Aires";
 
 function operationStatusTone(status: OperationStatus): StatusBadgeTone {
   switch (status) {
@@ -64,6 +73,7 @@ export function OperationDetailPage() {
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
   const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
+  const companySettingsQuery = useCompanySettings(Boolean(id));
   const permissionsQuery = useCompanyPermissions();
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
@@ -71,12 +81,41 @@ export function OperationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [teamWorkday, setTeamWorkday] = useState<OperationTeamWorkdaySelection | null>(null);
+
+  const operation = operationQuery.data;
+  const isRecurring = operation?.operationKind === "RECURRING";
+  const operationalTimezone =
+    companySettingsQuery.data?.operationTimezone ?? DEFAULT_OPERATION_TIMEZONE;
+  const operationalToday = useMemo(
+    () => getOperationalTodayDate(operationalTimezone),
+    [operationalTimezone],
+  );
+  const teamWorkdaysQuery = useOperationWorkdays(
+    isRecurring ? operation?.id : undefined,
+    { page: 1, limit: 90 },
+  );
+  const teamWorkdayOptions = teamWorkdaysQuery.data?.data ?? [];
+
+  useEffect(() => {
+    if (!isRecurring) {
+      setTeamWorkday(null);
+      return;
+    }
+
+    if (
+      teamWorkday &&
+      teamWorkdayOptions.some((workday) => workday.id === teamWorkday.workdayId)
+    ) {
+      return;
+    }
+
+    setTeamWorkday(pickDefaultTeamWorkday(teamWorkdayOptions, operationalToday));
+  }, [isRecurring, operation?.id, teamWorkdayOptions, operationalToday, teamWorkday]);
 
   const showFeedback = (message: string, severity: "success" | "error" = "success") => {
     notifications.show({ color: severity === "error" ? "red" : "green", message });
   };
-
-  const operation = operationQuery.data;
 
   const operationWorkDate = useMemo(
     () => (operation ? resolveOperationReferenceDate(operation) : ""),
@@ -223,12 +262,20 @@ export function OperationDetailPage() {
                 operationKind={operation.operationKind ?? "ONE_TIME"}
                 canAssign={canAssign}
                 operationWorkDate={operationWorkDate}
+                operationalToday={operationalToday}
+                workdayOptions={teamWorkdayOptions}
+                selectedWorkday={teamWorkday}
+                onWorkdayChange={setTeamWorkday}
                 onFeedback={(message, severity) => showFeedback(message, severity)}
               />
               {operation.operationKind === "RECURRING" ? (
                 <OperationScheduledWorkdaysSection
                   operationId={operation.id}
                   canManage={canManage}
+                  highlightedWorkdayId={teamWorkday?.workdayId}
+                  onSelectWorkdayForTeam={(workday) =>
+                    setTeamWorkday({ workdayId: workday.id, workDate: workday.workDate })
+                  }
                   onFeedback={(message, severity) => showFeedback(message, severity)}
                 />
               ) : null}

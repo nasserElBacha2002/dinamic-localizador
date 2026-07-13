@@ -5,8 +5,8 @@ import type { OperationalStatus } from "../types/auth";
 import type { AttendanceRecord, Employee, Operation, Service } from "../types/domain";
 import { getPagination } from "../utils/pagination";
 import { mapOperationAttendanceSummaryRow } from "../utils/operation-attendance-summary.mapper";
+import { resolveAttendanceSummaryWorkday } from "../utils/operation-attendance-workday-resolver";
 import { mapOperationRow, mapServiceRow } from "../utils/row-mappers";
-import { operationWorkdayRepository } from "./operation-workday.repository";
 
 export interface OperationAttendanceSummaryRow {
   assignmentId: string;
@@ -30,27 +30,34 @@ export interface OperationAttendanceSummaryCounts {
   unavailableEmployees: number;
 }
 
-const employeesBaseQuery = `
-  FROM operation_assignments oa
+export const buildEmployeesBaseQuery = (hasSearch: boolean): string => `
+  FROM employee_workdays ew
   INNER JOIN operation_workdays ow
-    ON ow.operation_id = oa.operation_id
-   AND ow.company_id = oa.company_id
-   AND ow.work_date = @workDate
-  INNER JOIN employee_workdays ew
-    ON ew.operation_assignment_id = oa.id
-   AND ew.company_id = oa.company_id
-   AND ew.operation_workday_id = ow.id
-   AND ew.expectation_status <> 'CANCELLED'
-  INNER JOIN employees e ON e.id = oa.employee_id AND e.company_id = @companyId
+    ON ow.id = ew.operation_workday_id
+   AND ow.company_id = ew.company_id
+  INNER JOIN employees e
+    ON e.id = ew.employee_id
+   AND e.company_id = @companyId
+  LEFT JOIN operation_assignments oa
+    ON oa.id = ew.operation_assignment_id
+   AND oa.company_id = ew.company_id
   LEFT JOIN attendance_records ar
     ON ar.employee_workday_id = ew.id
    AND ar.company_id = ew.company_id
    AND ar.is_simulation = 0
-  WHERE oa.operation_id = @operationId
-    AND oa.company_id = @companyId
-    AND oa.cancelled_at IS NULL
-    AND @workDate >= oa.valid_from
-    AND (oa.valid_until IS NULL OR @workDate <= oa.valid_until)
+  WHERE ow.operation_id = @operationId
+    AND ow.company_id = @companyId
+    AND ow.id = @operationWorkdayId
+    AND ew.expectation_status <> 'CANCELLED'
+${
+  hasSearch
+    ? `    AND (
+      e.name LIKE @search
+      OR e.phone_number LIKE @search
+      OR e.document_number LIKE @search
+    )`
+    : ""
+}
 `;
 
 export const operationAttendanceRepository = {
@@ -59,15 +66,24 @@ export const operationAttendanceRepository = {
     operationId: string,
     page = 1,
     limit = 10,
+    search?: string,
+    workDate?: string,
+    workdayId?: string,
   ): Promise<{
     operation: Operation;
     service: Service;
+    operationWorkdayId: string | null;
+    workDate: string | null;
     summary: OperationAttendanceSummaryCounts;
     employees: OperationAttendanceSummaryRow[];
     total: number;
   } | null> {
     const pool = getPool();
     const { offset } = getPagination(page, limit);
+    const normalizedSearch = search?.trim();
+    const hasSearch = Boolean(normalizedSearch);
+    const searchLike = hasSearch ? `%${normalizedSearch}%` : null;
+    const employeesBaseQuery = buildEmployeesBaseQuery(hasSearch);
 
     const operationResult = await pool
       .request()
@@ -98,26 +114,32 @@ export const operationAttendanceRepository = {
 
     const operationRow = operationResult.recordset[0] as Record<string, unknown>;
     const operation = mapOperationRow(operationRow);
-    const operationWorkdays = await operationWorkdayRepository.listByOperationId(
+    const service = mapServiceRow({
+      id: operationRow.service_ref_id,
+      name: operationRow.service_name,
+      address: operationRow.service_address,
+      latitude: operationRow.service_latitude,
+      longitude: operationRow.service_longitude,
+      allowed_radius_meters: operationRow.service_allowed_radius_meters,
+      google_place_id: operationRow.service_google_place_id,
+      active: operationRow.service_active,
+      created_at: operationRow.service_created_at,
+      updated_at: operationRow.service_updated_at,
+    });
+
+    const resolvedWorkday = await resolveAttendanceSummaryWorkday(
       companyId,
       operationId,
+      operation,
+      { workDate, workdayId },
     );
-    const workDate = operationWorkdays[0]?.workDate;
-    if (!workDate) {
+
+    if (!resolvedWorkday) {
       return {
         operation,
-        service: mapServiceRow({
-          id: operationRow.service_ref_id,
-          name: operationRow.service_name,
-          address: operationRow.service_address,
-          latitude: operationRow.service_latitude,
-          longitude: operationRow.service_longitude,
-          allowed_radius_meters: operationRow.service_allowed_radius_meters,
-          google_place_id: operationRow.service_google_place_id,
-          active: operationRow.service_active,
-          created_at: operationRow.service_created_at,
-          updated_at: operationRow.service_updated_at,
-        }),
+        service,
+        operationWorkdayId: null,
+        workDate: workDate ?? null,
         summary: {
           assigned: 0,
           checkedIn: 0,
@@ -134,24 +156,14 @@ export const operationAttendanceRepository = {
       };
     }
 
-    const service = mapServiceRow({
-      id: operationRow.service_ref_id,
-      name: operationRow.service_name,
-      address: operationRow.service_address,
-      latitude: operationRow.service_latitude,
-      longitude: operationRow.service_longitude,
-      allowed_radius_meters: operationRow.service_allowed_radius_meters,
-      google_place_id: operationRow.service_google_place_id,
-      active: operationRow.service_active,
-      created_at: operationRow.service_created_at,
-      updated_at: operationRow.service_updated_at,
-    });
+    const { operationWorkdayId, workDate: resolvedWorkDate } = resolvedWorkday;
 
     const summaryResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("workDate", sql.Date, workDate)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("search", sql.NVarChar, searchLike)
       .query(`
         SELECT
           COUNT(*) AS assigned,
@@ -160,9 +172,9 @@ export const operationAttendanceRepository = {
           SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
           SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
           SUM(CASE WHEN ar.id IS NULL AND ew.expectation_status = 'EXPECTED' THEN 1 ELSE 0 END) AS without_check_in,
-          SUM(CASE WHEN oa.confirmation_status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
-          SUM(CASE WHEN oa.confirmation_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
-          SUM(CASE WHEN oa.confirmation_status = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
+          SUM(CASE WHEN COALESCE(oa.confirmation_status, 'PENDING') = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
+          SUM(CASE WHEN COALESCE(oa.confirmation_status, 'PENDING') = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
+          SUM(CASE WHEN COALESCE(oa.confirmation_status, 'PENDING') = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
         ${employeesBaseQuery}
       `);
 
@@ -183,13 +195,14 @@ export const operationAttendanceRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("workDate", sql.Date, workDate)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
       .input("offset", sql.Int, offset)
       .input("limit", sql.Int, limit)
+      .input("search", sql.NVarChar, searchLike)
       .query(`
         SELECT
           e.*,
-          oa.id AS assignment_id,
+          ew.operation_assignment_id AS assignment_id,
           oa.confirmation_status,
           oa.confirmed_at,
           oa.unavailable_at,
@@ -231,6 +244,8 @@ export const operationAttendanceRepository = {
     return {
       operation,
       service,
+      operationWorkdayId,
+      workDate: resolvedWorkDate,
       summary,
       employees,
       total: summary.assigned,

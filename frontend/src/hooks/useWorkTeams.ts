@@ -12,19 +12,16 @@ import {
   updateWorkTeam,
 } from "../api/work-teams.api";
 import type { CreateWorkTeamInput, UpdateWorkTeamInput, WorkTeamFilters } from "../types/work-team";
+import { invalidateOperationScopedQueries } from "./useOperations";
 import { isRecurringWorkdaySyncError } from "../utils/errors";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export async function invalidateOperationAssignmentQueries(
   queryClient: ReturnType<typeof useQueryClient>,
+  companyId: string | undefined,
+  operationId: string | undefined,
 ): Promise<void> {
-  await Promise.all([
-    queryClient.invalidateQueries({ queryKey: ["operation"] }),
-    queryClient.invalidateQueries({ queryKey: ["operation-employees"] }),
-    queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] }),
-    queryClient.invalidateQueries({ queryKey: ["operation-workdays"] }),
-    queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] }),
-  ]);
+  await invalidateOperationScopedQueries(queryClient, companyId, operationId);
 }
 
 export function useWorkTeams(filters: WorkTeamFilters, extraEnabled = true) {
@@ -127,6 +124,7 @@ export function usePreviewWorkTeamAssignment(operationId: string) {
 
 export function useConfirmWorkTeamAssignment(operationId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (previewToken: string) => confirmWorkTeamAssignment(operationId, previewToken),
@@ -134,7 +132,7 @@ export function useConfirmWorkTeamAssignment(operationId: string) {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;
       }
-      await invalidateOperationAssignmentQueries(queryClient);
+      await invalidateOperationAssignmentQueries(queryClient, companyId, operationId);
     },
   });
 }

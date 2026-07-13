@@ -128,11 +128,10 @@ const cancelExpectedEmployeeWorkdaysForAssignment = async (
     assignmentId,
   );
 
+  // Reject destructive cancellation if ANY workday of this assignment already
+  // has attendance, regardless of its current expectation status. This keeps
+  // historical attendance intact; recurring assignments must be ended instead.
   for (const workday of workdays) {
-    if (workday.expectationStatus !== "EXPECTED") {
-      continue;
-    }
-
     const hasAttendance = await employeeWorkdayRepository.hasAttendanceInTransaction(
       companyId,
       transaction,
@@ -144,6 +143,12 @@ const cancelExpectedEmployeeWorkdaysForAssignment = async (
         "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
         "No se puede cancelar la asignación porque ya existe asistencia registrada",
       );
+    }
+  }
+
+  for (const workday of workdays) {
+    if (workday.expectationStatus !== "EXPECTED") {
+      continue;
     }
 
     await employeeWorkdayRepository.cancelExpectationInTransaction(

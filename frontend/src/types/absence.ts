@@ -68,13 +68,13 @@ export interface AbsenceRequestListItem extends AbsenceRequest {
     name: string;
   };
   reviewerName?: string | null;
-  affectedInventoriesCount: number;
+  affectedOperationsCount: number;
 }
 
-export interface AffectedInventoryWarning {
-  inventoryId: string;
-  storeId: string;
-  storeName: string;
+export interface AffectedOperationWarning {
+  operationId: string;
+  serviceId: string;
+  serviceName: string;
   scheduledStart: string;
   scheduledEnd: string | null;
   status: string;
@@ -82,8 +82,17 @@ export interface AffectedInventoryWarning {
 
 export interface AbsenceRequestDetail extends AbsenceRequestListItem {
   events: AbsenceRequestEvent[];
-  affectedInventories: AffectedInventoryWarning[];
+  affectedOperations: AffectedOperationWarning[];
   balanceImpact?: AbsenceBalanceImpact | null;
+  workdayReconciliation?: AbsenceWorkdayReconciliationResult;
+}
+
+export interface AbsenceWorkdayReconciliationResult {
+  justified: number;
+  restored: number;
+  relinked: number;
+  unchanged: number;
+  attendanceConflicts: number;
 }
 
 export interface EmployeeAbsenceBalanceSummary {

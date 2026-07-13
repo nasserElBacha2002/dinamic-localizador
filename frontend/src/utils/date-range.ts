@@ -323,7 +323,7 @@ export function getCalendarViewDateFromRange(
   return { year: today.getFullYear(), month: today.getMonth() + 1 };
 }
 
-export function getDefaultInventoryDateRange(referenceDate?: string): DateRangeValue {
+export function getDefaultOperationDateRange(referenceDate?: string): DateRangeValue {
   return resolveDateRangePreset("today", referenceDate);
 }
 

@@ -2,7 +2,7 @@ import { Stack, Tabs, Text } from "@mantine/core";
 import { PageHeader } from "../../design-system";
 import { StatisticsEmployeeTable } from "../../components/statistics/StatisticsEmployeeTable";
 import { StatisticsFiltersBar } from "../../components/statistics/StatisticsFiltersBar";
-import { StatisticsInventoryTable } from "../../components/statistics/StatisticsInventoryTable";
+import { StatisticsOperationTable } from "../../components/statistics/StatisticsOperationTable";
 import { StatisticsLocationTable } from "../../components/statistics/StatisticsLocationTable";
 import { StatisticsGeneralTab } from "./components/StatisticsGeneralTab";
 import { useStatisticsPageData } from "./hooks/useStatisticsPageData";
@@ -21,9 +21,11 @@ export function StatisticsPage() {
       <StatisticsFiltersBar
         dateRange={data.dateRange}
         defaultDateRange={data.defaultDateRange}
-        inventoryId={data.inventoryId}
-        storeId={data.storeId}
+        operationId={data.operationId}
+        serviceId={data.serviceId}
         employeeId={data.employeeId}
+        operationKind={data.operationKind}
+        effectiveState={data.effectiveState}
         validationStatus={data.validationStatus}
         locationStatus={data.locationStatus}
         punctualityStatus={data.punctualityStatus}
@@ -31,17 +33,25 @@ export function StatisticsPage() {
           data.resetAllPages();
           data.setDateRange(value);
         }}
-        onInventoryChange={(value) => {
+        onOperationChange={(value) => {
           data.resetAllPages();
-          data.setInventoryId(value);
+          data.setOperationId(value);
         }}
-        onStoreChange={(value) => {
+        onServiceChange={(value) => {
           data.resetAllPages();
-          data.setStoreId(value);
+          data.setServiceId(value);
         }}
         onEmployeeChange={(value) => {
           data.resetAllPages();
           data.setEmployeeId(value);
+        }}
+        onOperationKindChange={(value) => {
+          data.resetAllPages();
+          data.setOperationKind(value);
+        }}
+        onEffectiveStateChange={(value) => {
+          data.resetAllPages();
+          data.setEffectiveState(value);
         }}
         onValidationStatusChange={(value) => {
           data.resetAllPages();
@@ -72,8 +82,8 @@ export function StatisticsPage() {
         <Tabs.List>
           <Tabs.Tab value="general">General</Tabs.Tab>
           <Tabs.Tab value="employee">Por empleado</Tabs.Tab>
-          <Tabs.Tab value="inventory">Por inventario</Tabs.Tab>
-          <Tabs.Tab value="location">Por tienda / ubicación</Tabs.Tab>
+          <Tabs.Tab value="operation">Por operación</Tabs.Tab>
+          <Tabs.Tab value="location">Por servicio / ubicación</Tabs.Tab>
         </Tabs.List>
       </Tabs>
 
@@ -93,28 +103,28 @@ export function StatisticsPage() {
           onPageChange={data.employeePagination.onPageChange}
           onPageSizeChange={data.employeePagination.onPageSizeChange}
           onSortChange={data.handleEmployeeSort as never}
-          exportRows={data.employeeExportQuery.data?.data ?? []}
+          loadExportRows={data.loadEmployeeExportRows}
           dateFrom={data.isoDateFrom}
           dateTo={data.isoDateTo}
           exportsDisabled={data.exportsDisabled}
         />
       ) : null}
 
-      {data.activeTab === "inventory" ? (
-        <StatisticsInventoryTable
-          rows={data.inventoryQuery.data?.data ?? []}
-          isLoading={data.inventoryQuery.isPending}
-          isError={data.inventoryQuery.isError}
-          error={data.inventoryQuery.error}
-          page={data.inventoryPagination.page}
-          pageSize={data.inventoryPagination.pageSize}
-          total={data.inventoryQuery.data?.meta.total ?? 0}
-          sortBy={data.inventorySortBy as never}
-          sortDirection={data.inventorySortDirection}
-          onPageChange={data.inventoryPagination.onPageChange}
-          onPageSizeChange={data.inventoryPagination.onPageSizeChange}
-          onSortChange={data.handleInventorySort as never}
-          exportRows={data.inventoryExportQuery.data?.data ?? []}
+      {data.activeTab === "operation" ? (
+        <StatisticsOperationTable
+          rows={data.operationQuery.data?.data ?? []}
+          isLoading={data.operationQuery.isPending}
+          isError={data.operationQuery.isError}
+          error={data.operationQuery.error}
+          page={data.operationPagination.page}
+          pageSize={data.operationPagination.pageSize}
+          total={data.operationQuery.data?.meta.total ?? 0}
+          sortBy={data.operationSortBy as never}
+          sortDirection={data.operationSortDirection}
+          onPageChange={data.operationPagination.onPageChange}
+          onPageSizeChange={data.operationPagination.onPageSizeChange}
+          onSortChange={data.handleOperationSort as never}
+          loadExportRows={data.loadOperationExportRows}
           dateFrom={data.isoDateFrom}
           dateTo={data.isoDateTo}
           exportsDisabled={data.exportsDisabled}
@@ -123,19 +133,19 @@ export function StatisticsPage() {
 
       {data.activeTab === "location" ? (
         <StatisticsLocationTable
-          rows={data.locationQuery.data?.data ?? []}
-          isLoading={data.locationQuery.isPending}
-          isError={data.locationQuery.isError}
-          error={data.locationQuery.error}
-          page={data.locationPagination.page}
-          pageSize={data.locationPagination.pageSize}
-          total={data.locationQuery.data?.meta.total ?? 0}
-          sortBy={data.locationSortBy as never}
-          sortDirection={data.locationSortDirection}
-          onPageChange={data.locationPagination.onPageChange}
-          onPageSizeChange={data.locationPagination.onPageSizeChange}
+          rows={data.serviceQuery.data?.data ?? []}
+          isLoading={data.serviceQuery.isPending}
+          isError={data.serviceQuery.isError}
+          error={data.serviceQuery.error}
+          page={data.servicePagination.page}
+          pageSize={data.servicePagination.pageSize}
+          total={data.serviceQuery.data?.meta.total ?? 0}
+          sortBy={data.serviceSortBy as never}
+          sortDirection={data.serviceSortDirection}
+          onPageChange={data.servicePagination.onPageChange}
+          onPageSizeChange={data.servicePagination.onPageSizeChange}
           onSortChange={data.handleLocationSort as never}
-          exportRows={data.locationExportQuery.data?.data ?? []}
+          loadExportRows={data.loadServiceExportRows}
           dateFrom={data.isoDateFrom}
           dateTo={data.isoDateTo}
           exportsDisabled={data.exportsDisabled}

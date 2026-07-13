@@ -1,7 +1,8 @@
 import { SimpleGrid } from "@mantine/core";
 import { MetricCard } from "../../design-system";
-import { assignedWorkersLabel, terminology } from "../../domain/terminology";
+import { terminology } from "../../domain/terminology";
 import type { AttendanceStatisticsSummary } from "../../types/statistics";
+import { formatDurationFromMinutes } from "../../utils/duration";
 import { formatPercent } from "../../utils/export";
 
 interface StatisticsKpiCardsProps {
@@ -10,38 +11,60 @@ interface StatisticsKpiCardsProps {
 }
 
 const KPI_ITEMS: Array<{
-  key: keyof AttendanceStatisticsSummary;
+  key: keyof AttendanceStatisticsSummary | "workedHours" | "overtimeHours";
   label: string;
-  format?: (value: number) => string;
+  format?: (value: number, summary?: AttendanceStatisticsSummary) => string;
+  resolve?: (summary?: AttendanceStatisticsSummary) => number;
 }> = [
-  { key: "totalAttendanceRecords", label: "Registros de asistencia" },
-  { key: "totalAssignedEmployees", label: assignedWorkersLabel },
-  { key: "attendancePercentage", label: "% asistencia", format: formatPercent },
-  { key: "presentCount", label: "Presente / a tiempo" },
-  { key: "lateCount", label: "Tarde" },
+  { key: "scheduledWorkdays", label: "Jornadas programadas" },
+  { key: "presentWorkdays", label: "Presentes" },
+  { key: "absentWorkdays", label: "Ausentes" },
+  { key: "justifiedWorkdays", label: "Justificadas" },
+  { key: "expectedOpenWorkdays", label: "Pendientes / esperadas" },
+  { key: "attendanceRate", label: "Presentismo", format: (value) => formatPercent(value) },
+  { key: "absenceRate", label: "Ausentismo", format: (value) => formatPercent(value) },
+  {
+    key: "punctualityRate",
+    label: "Puntualidad",
+    format: (value) => formatPercent(value),
+  },
+  { key: "onTimeWorkdays", label: "Llegadas puntuales" },
+  { key: "lateWorkdays", label: "Llegadas tarde" },
+  { key: "earlyDepartureWorkdays", label: "Salidas tempranas" },
+  {
+    key: "workedHours",
+    label: "Horas trabajadas",
+    resolve: (summary) => summary?.workedMinutes ?? 0,
+    format: (value) => formatDurationFromMinutes(value),
+  },
+  {
+    key: "overtimeHours",
+    label: "Horas extra",
+    resolve: (summary) => summary?.overtimeMinutes ?? 0,
+    format: (value) => formatDurationFromMinutes(value),
+  },
+  { key: "openAttendanceWorkdays", label: "Asistencias sin cierre" },
   { key: "outsideGeofenceCount", label: "Fuera de geocerca" },
   { key: "pendingReviewCount", label: "Pendiente de revisión" },
-  { key: "rejectedCount", label: "Rechazados" },
-  { key: "manuallyAcceptedCount", label: "Aceptados manualmente" },
-  { key: "noShowCount", label: "Sin asistencia" },
-  { key: "totalInventories", label: terminology.operation.plural },
+  { key: "totalOperations", label: terminology.operation.plural },
 ];
 
 export function StatisticsKpiCards({ summary, isLoading }: StatisticsKpiCardsProps) {
   return (
     <SimpleGrid cols={{ base: 1, sm: 2, md: 3, lg: 4 }} spacing="md">
-      {KPI_ITEMS.map((item) => (
-        <MetricCard
-          key={item.key}
-          title={item.label}
-          loading={isLoading}
-          value={
-            item.format
-              ? item.format(summary?.[item.key] ?? 0)
-              : (summary?.[item.key] ?? 0)
-          }
-        />
-      ))}
+      {KPI_ITEMS.map((item) => {
+        const rawValue = item.resolve ? item.resolve(summary) : (summary?.[item.key as keyof AttendanceStatisticsSummary] ?? 0);
+        const numericValue = typeof rawValue === "number" ? rawValue : 0;
+
+        return (
+          <MetricCard
+            key={item.key}
+            title={item.label}
+            loading={isLoading}
+            value={item.format ? item.format(numericValue, summary) : numericValue}
+          />
+        );
+      })}
     </SimpleGrid>
   );
 }

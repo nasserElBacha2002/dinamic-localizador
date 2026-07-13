@@ -1,6 +1,6 @@
 export type CompanyModuleKey =
   | "attendance"
-  | "inventory_operations"
+  | "operations"
   | "absences"
   | "reports"
   | "bot_simulator";

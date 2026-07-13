@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Outlet, Route, Routes } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useParams } from "react-router-dom";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
@@ -12,13 +12,16 @@ import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { EmployeesListPage } from "../pages/employees/EmployeesListPage";
+import { WorkTeamsListPage } from "../pages/work-teams/WorkTeamsListPage";
+import { WorkTeamCreatePage } from "../pages/work-teams/WorkTeamCreatePage";
+import { WorkTeamEditPage } from "../pages/work-teams/WorkTeamEditPage";
 import { EmployeeCreatePage } from "../pages/employees/EmployeeCreatePage";
 import { EmployeeEditPage } from "../pages/employees/EmployeeEditPage";
-import { StoresListPage } from "../pages/stores/StoresListPage";
-import { StoreCreatePage } from "../pages/stores/StoreCreatePage";
-import { StoreEditPage } from "../pages/stores/StoreEditPage";
-import { InventoriesListPage } from "../pages/inventories/InventoriesListPage";
-import { InventoryCreatePage } from "../pages/inventories/InventoryCreatePage";
+import { ServicesListPage } from "../pages/services/ServicesListPage";
+import { ServiceCreatePage } from "../pages/services/ServiceCreatePage";
+import { ServiceEditPage } from "../pages/services/ServiceEditPage";
+import { OperationsListPage } from "../pages/operations/OperationsListPage";
+import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
@@ -38,13 +41,13 @@ const BotSimulatorPage = lazyNamed(
   () => import("../pages/bot-simulator/BotSimulatorPage"),
   "BotSimulatorPage",
 );
-const InventoryImportPage = lazyNamed(
-  () => import("../pages/inventories/InventoryImportPage"),
-  "InventoryImportPage",
+const OperationImportPage = lazyNamed(
+  () => import("../pages/operations/OperationImportPage"),
+  "OperationImportPage",
 );
-const InventoryDetailPage = lazyNamed(
-  () => import("../pages/inventories/InventoryDetailPage"),
-  "InventoryDetailPage",
+const OperationDetailPage = lazyNamed(
+  () => import("../pages/operations/OperationDetailPage"),
+  "OperationDetailPage",
 );
 const AbsenceDetailPage = lazyNamed(
   () => import("../pages/absences/AbsenceDetailPage"),
@@ -69,6 +72,16 @@ function LazyPage({
   );
 }
 
+function LegacyOperationRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/operations/${id}` : "/operations"} replace />;
+}
+
+function LegacyServiceRedirect() {
+  const { id } = useParams();
+  return <Navigate to={id ? `/services/${id}` : "/services"} replace />;
+}
+
 function ProtectedLayout() {
   return (
     <ProtectedRoute>
@@ -82,7 +95,7 @@ function ProtectedLayout() {
 }
 
 const employeeAccess = {
-  anyModuleOf: ["attendance", "inventory_operations", "absences"] as const,
+  anyModuleOf: ["attendance", "operations", "absences"] as const,
   requiredAnyPermission: ["employees:read", "employees:manage"] as const,
 };
 
@@ -91,24 +104,32 @@ const employeeManage = {
   requiredAnyPermission: ["employees:manage"] as const,
 };
 
-const storeAccess = {
-  moduleKey: "inventory_operations" as const,
-  requiredAnyPermission: ["stores:read", "stores:manage"] as const,
+const workTeamAccess = {
+  ...employeeAccess,
 };
 
-const storeManage = {
-  ...storeAccess,
-  requiredAnyPermission: ["stores:manage"] as const,
+const workTeamManage = {
+  ...employeeManage,
 };
 
-const inventoryAccess = {
-  moduleKey: "inventory_operations" as const,
-  requiredAnyPermission: ["inventories:read", "inventories:manage"] as const,
+const serviceAccess = {
+  moduleKey: "operations" as const,
+  requiredAnyPermission: ["services:read", "services:manage"] as const,
 };
 
-const inventoryManage = {
-  ...inventoryAccess,
-  requiredAnyPermission: ["inventories:manage"] as const,
+const serviceManage = {
+  ...serviceAccess,
+  requiredAnyPermission: ["services:manage"] as const,
+};
+
+const operationAccess = {
+  moduleKey: "operations" as const,
+  requiredAnyPermission: ["operations:read", "operations:manage"] as const,
+};
+
+const operationManage = {
+  ...operationAccess,
+  requiredAnyPermission: ["operations:manage"] as const,
 };
 
 const attendanceAccess = {
@@ -127,6 +148,13 @@ export function AppRoutes() {
       <Route path="/login" element={<LoginPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomePage />} />
+        <Route path="/inventories" element={<Navigate to="/operations" replace />} />
+        <Route path="/inventories/new" element={<Navigate to="/operations/new" replace />} />
+        <Route path="/inventories/import" element={<Navigate to="/operations/import" replace />} />
+        <Route path="/inventories/:id" element={<LegacyOperationRedirect />} />
+        <Route path="/stores" element={<Navigate to="/services" replace />} />
+        <Route path="/stores/new" element={<Navigate to="/services/new" replace />} />
+        <Route path="/stores/:id" element={<LegacyServiceRedirect />} />
         <Route
           path="/employees"
           element={
@@ -152,58 +180,82 @@ export function AppRoutes() {
           }
         />
         <Route
-          path="/stores"
+          path="/work-teams"
           element={
-            <FeatureRouteGuard {...storeAccess}>
-              <StoresListPage />
+            <FeatureRouteGuard {...workTeamAccess}>
+              <WorkTeamsListPage />
             </FeatureRouteGuard>
           }
         />
         <Route
-          path="/stores/new"
+          path="/work-teams/new"
           element={
-            <FeatureRouteGuard {...storeManage}>
-              <StoreCreatePage />
+            <FeatureRouteGuard {...workTeamManage}>
+              <WorkTeamCreatePage />
             </FeatureRouteGuard>
           }
         />
         <Route
-          path="/stores/:id"
+          path="/work-teams/:id"
           element={
-            <FeatureRouteGuard {...storeAccess}>
-              <StoreEditPage />
+            <FeatureRouteGuard {...workTeamAccess}>
+              <WorkTeamEditPage />
             </FeatureRouteGuard>
           }
         />
         <Route
-          path="/inventories"
+          path="/services"
           element={
-            <FeatureRouteGuard {...inventoryAccess}>
-              <InventoriesListPage />
+            <FeatureRouteGuard {...serviceAccess}>
+              <ServicesListPage />
             </FeatureRouteGuard>
           }
         />
         <Route
-          path="/inventories/import"
+          path="/services/new"
           element={
-            <FeatureRouteGuard {...inventoryManage}>
-              <LazyPage component={InventoryImportPage} message="Cargando importación..." />
+            <FeatureRouteGuard {...serviceManage}>
+              <ServiceCreatePage />
             </FeatureRouteGuard>
           }
         />
         <Route
-          path="/inventories/new"
+          path="/services/:id"
           element={
-            <FeatureRouteGuard {...inventoryManage}>
-              <InventoryCreatePage />
+            <FeatureRouteGuard {...serviceAccess}>
+              <ServiceEditPage />
             </FeatureRouteGuard>
           }
         />
         <Route
-          path="/inventories/:id"
+          path="/operations"
           element={
-            <FeatureRouteGuard {...inventoryAccess}>
-              <LazyPage component={InventoryDetailPage} message="Cargando inventario..." />
+            <FeatureRouteGuard {...operationAccess}>
+              <OperationsListPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/operations/import"
+          element={
+            <FeatureRouteGuard {...operationManage}>
+              <LazyPage component={OperationImportPage} message="Cargando importación..." />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/operations/new"
+          element={
+            <FeatureRouteGuard {...operationManage}>
+              <OperationCreatePage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/operations/:id"
+          element={
+            <FeatureRouteGuard {...operationAccess}>
+              <LazyPage component={OperationDetailPage} message="Cargando operación..." />
             </FeatureRouteGuard>
           }
         />

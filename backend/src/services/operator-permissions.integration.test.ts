@@ -88,7 +88,7 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
       role: "ADMIN",
     });
 
-  it("denies OPERATOR access to full employees and stores APIs", async () => {
+  it("denies OPERATOR access to full employees and services APIs", async () => {
     const token = operatorToken();
     const employeesResponse = await apiRequest(
       baseUrl,
@@ -97,22 +97,22 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
     );
     assert.equal(employeesResponse.status, 403);
 
-    const storesResponse = await apiRequest(
+    const servicesResponse = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/stores`,
+      `/api/companies/${dinamicCompanyId}/services`,
       { token },
     );
-    assert.equal(storesResponse.status, 403);
+    assert.equal(servicesResponse.status, 403);
   });
 
-  it("allows OPERATOR access to inventories and attendance APIs", async () => {
+  it("allows OPERATOR access to operations and attendance APIs", async () => {
     const token = operatorToken();
-    const inventoriesResponse = await apiRequest(
+    const operationsResponse = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/inventories`,
+      `/api/companies/${dinamicCompanyId}/operations`,
       { token },
     );
-    assert.equal(inventoriesResponse.status, 200);
+    assert.equal(operationsResponse.status, 200);
 
     const attendanceResponse = await apiRequest(
       baseUrl,
@@ -137,19 +137,19 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
       assert.equal("fullName" in employees[0], true);
     }
 
-    const storesLookup = await apiRequest(
+    const servicesLookup = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/lookups/stores`,
+      `/api/companies/${dinamicCompanyId}/lookups/services`,
       { token },
     );
-    assert.equal(storesLookup.status, 200);
+    assert.equal(servicesLookup.status, 200);
 
-    const inventoriesLookup = await apiRequest(
+    const operationsLookup = await apiRequest(
       baseUrl,
-      `/api/companies/${dinamicCompanyId}/lookups/inventories`,
+      `/api/companies/${dinamicCompanyId}/lookups/operations`,
       { token },
     );
-    assert.equal(inventoriesLookup.status, 200);
+    assert.equal(operationsLookup.status, 200);
   });
 
   it("denies OPERATOR bot simulator and statistics APIs", async () => {

@@ -50,6 +50,31 @@ export const botSessionRepository = {
     return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
   },
 
+  /**
+   * Company-resolution only. Must not be used after WhatsApp company context is resolved.
+   * When multiple active sessions exist for the same phone, returns the most recent one.
+   */
+  async findLatestValidActiveByPhoneForCompanyResolutionOnly(
+    phoneNumber: string,
+    scope?: BotSessionScope,
+  ): Promise<BotSession | null> {
+    const resolvedScope = resolveBotSessionScope(scope);
+    const request = getPool().request();
+    request.input("phoneNumber", sql.NVarChar(30), phoneNumber);
+    const scopeSql = applyBotSessionScope(request, resolvedScope);
+    const result = await request.query(`
+      SELECT TOP 1 *
+      FROM bot_sessions
+      WHERE phone_number = @phoneNumber
+        AND state IN ${ACTIVE_STATE_SQL}
+        AND expires_at > SYSUTCDATETIME()
+        ${scopeSql}
+      ORDER BY created_at DESC
+    `);
+
+    return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
+  },
+
   async findStaleActiveByPhone(
     companyId: string,
     phoneNumber: string,
@@ -226,7 +251,9 @@ export const botSessionRepository = {
     input: {
       companyId: string;
       employeeId: string;
-      inventoryId: string | null;
+      operationId: string | null;
+      employeeWorkdayId?: string | null;
+      attendanceRecordId?: string | null;
       phoneNumber: string;
       state: BotSessionState;
       contextJson: string | null;
@@ -241,7 +268,9 @@ export const botSessionRepository = {
     const result = await request
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
-      .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId ?? null)
+      .input("attendanceRecordId", sql.UniqueIdentifier, input.attendanceRecordId ?? null)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("state", sql.NVarChar(40), input.state)
       .input("contextJson", sql.NVarChar(sql.MAX), input.contextJson)
@@ -250,12 +279,14 @@ export const botSessionRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, createFlags.simulationSessionId)
       .query(`
         INSERT INTO bot_sessions (
-          company_id, employee_id, inventory_id, phone_number, state, context_json, expires_at,
+          company_id, employee_id, operation_id, employee_workday_id, attendance_record_id,
+          phone_number, state, context_json, expires_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @employeeId, @inventoryId, @phoneNumber, @state, @contextJson, @expiresAt,
+          @companyId, @employeeId, @operationId, @employeeWorkdayId, @attendanceRecordId,
+          @phoneNumber, @state, @contextJson, @expiresAt,
           @isSimulation, @simulationSessionId
         )
       `);
@@ -267,7 +298,9 @@ export const botSessionRepository = {
     companyId: string,
     id: string,
     input: {
-      inventoryId?: string | null;
+      operationId?: string | null;
+      employeeWorkdayId?: string | null;
+      attendanceRecordId?: string | null;
       state?: BotSessionState;
       contextJson?: string | null;
       expiresAt?: Date;
@@ -282,9 +315,19 @@ export const botSessionRepository = {
     request.input("id", sql.UniqueIdentifier, id);
     const scopeSql = applyBotSessionScope(request, resolvedScope);
 
-    if (input.inventoryId !== undefined) {
-      request.input("inventoryId", sql.UniqueIdentifier, input.inventoryId);
-      fields.push("inventory_id = @inventoryId");
+    if (input.operationId !== undefined) {
+      request.input("operationId", sql.UniqueIdentifier, input.operationId);
+      fields.push("operation_id = @operationId");
+    }
+
+    if (input.employeeWorkdayId !== undefined) {
+      request.input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId);
+      fields.push("employee_workday_id = @employeeWorkdayId");
+    }
+
+    if (input.attendanceRecordId !== undefined) {
+      request.input("attendanceRecordId", sql.UniqueIdentifier, input.attendanceRecordId);
+      fields.push("attendance_record_id = @attendanceRecordId");
     }
 
     if (input.state !== undefined) {
@@ -310,9 +353,9 @@ export const botSessionRepository = {
 
     const activeStateGuard =
       input.state === "WAITING_LOCATION" ||
-      input.state === "WAITING_INVENTORY_SELECTION" ||
+      input.state === "WAITING_OPERATION_SELECTION" ||
       input.state === "WAITING_CHECKOUT_LOCATION" ||
-      input.state === "WAITING_CHECKOUT_INVENTORY_SELECTION" ||
+      input.state === "WAITING_CHECKOUT_OPERATION_SELECTION" ||
       input.state === "WAITING_ABSENCE_TYPE" ||
       input.state === "WAITING_ABSENCE_START_DATE" ||
       input.state === "WAITING_ABSENCE_END_DATE" ||

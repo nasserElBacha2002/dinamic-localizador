@@ -15,7 +15,7 @@ const punctualityStatusSchema = z.enum([
 ]);
 
 export const createAttendanceSchema = z.object({
-  inventoryId: z.string().uuid("UUID de inventario inválido"),
+  operationId: z.string().uuid("UUID de operación inválido"),
   employeeId: z.string().uuid("UUID de empleado inválido"),
   receivedLatitude: z.number().min(-90).max(90),
   receivedLongitude: z.number().min(-180).max(180),
@@ -33,9 +33,9 @@ export const attendanceIdParamSchema = z.object({
 });
 
 export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSchema).extend({
-  inventoryId: z.string().uuid().optional(),
+  operationId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),
-  storeId: z.string().uuid().optional(),
+  serviceId: z.string().uuid().optional(),
   validationStatus: validationStatusSchema.optional(),
   locationStatus: locationStatusSchema.optional(),
   punctualityStatus: punctualityStatusSchema.optional(),

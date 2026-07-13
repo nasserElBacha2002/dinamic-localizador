@@ -2,6 +2,7 @@ import { Alert, Button, Group, Modal, Stack, Text, Textarea } from "@mantine/cor
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
@@ -21,9 +22,10 @@ import {
   useNeedsInfoAbsenceRequest,
   useRejectAbsenceRequest,
 } from "../../hooks/useAbsences";
-import type { AffectedInventoryWarning } from "../../types/absence";
+import type { AffectedOperationWarning } from "../../types/absence";
 import { formatDateTime } from "../../utils/dates";
-import { getApiErrorMessage } from "../../utils/errors";
+import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
+import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
 import {
   absenceEventTypeLabels,
   absenceRequestedViaLabels,
@@ -31,10 +33,10 @@ import {
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
-import { inventoryStatusLabels } from "../../utils/labels";
+import { operationStatusLabels } from "../../utils/labels";
 
-const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
-  { key: "store", header: "Tienda", getValue: (row) => row.storeName },
+const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
+  { key: "service", header: "Servicio", getValue: (row) => row.serviceName },
   { key: "start", header: "Inicio", getValue: (row) => formatDateTime(row.scheduledStart) },
   {
     key: "end",
@@ -45,15 +47,15 @@ const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
     key: "status",
     header: "Estado",
     getValue: (row) =>
-      inventoryStatusLabels[row.status as keyof typeof inventoryStatusLabels] ?? row.status,
+      operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status,
   },
   {
     key: "action",
     header: "Acción",
     align: "right",
     render: (row) => (
-      <Button component={RouterLink} to={`/inventories/${row.inventoryId}`} size="compact-xs" variant="light">
-        Ver inventario
+      <Button component={RouterLink} to={`/operations/${row.operationId}`} size="compact-xs" variant="light">
+        Ver operación
       </Button>
     ),
   },
@@ -61,6 +63,7 @@ const affectedInventoryColumns: DataTableColumn<AffectedInventoryWarning>[] = [
 
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const { goBackToList } = useListBackNavigation("/absences");
   const queryClient = useQueryClient();
   const requestQuery = useAbsenceRequest(id);
   const approveMutation = useApproveAbsenceRequest(id ?? "");
@@ -117,9 +120,18 @@ export function AbsenceDetailPage() {
 
   const handleApprove = async () => {
     try {
-      await approveMutation.mutateAsync();
-      notify("Solicitud aprobada.");
+      const result = await approveMutation.mutateAsync();
+      notify(
+        buildAbsenceApprovalSuccessMessage({
+          justified: result.workdayReconciliation?.justified,
+          attendanceConflicts: result.workdayReconciliation?.attendanceConflicts,
+        }),
+      );
     } catch (error) {
+      if (isAbsenceWorkdaySyncError(error)) {
+        notify(getApiErrorMessage(error), "red");
+        return;
+      }
       notify(getApiErrorMessage(error), "red");
     }
   };
@@ -181,7 +193,7 @@ export function AbsenceDetailPage() {
                 </Button>
               </>
             ) : null}
-            <Button component={RouterLink} to="/absences" variant="default">
+            <Button variant="default" onClick={goBackToList}>
               Volver al listado
             </Button>
           </Group>
@@ -232,21 +244,21 @@ export function AbsenceDetailPage() {
         <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
       </SectionCard>
 
-      <SectionCard title="Inventarios afectados">
-        {request.affectedInventories.length === 0 ? (
+      <SectionCard title="Operaciones afectadas">
+        {request.affectedOperations.length === 0 ? (
           <Text c="dimmed">
-            No se detectaron inventarios asignados que se superpongan con esta ausencia.
+            No se detectaron operaciones asignadas que se superpongan con esta ausencia.
           </Text>
         ) : (
           <Stack gap="md">
             <Alert color="yellow">
-              Esta solicitud se superpone con {request.affectedInventories.length} inventario(s)
+              Esta solicitud se superpone con {request.affectedOperations.length} operación(es)
               asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
             </Alert>
             <DataTable
-              rows={request.affectedInventories}
-              columns={affectedInventoryColumns}
-              getRowKey={(row) => row.inventoryId}
+              rows={request.affectedOperations}
+              columns={affectedOperationColumns}
+              getRowKey={(row) => row.operationId}
             />
           </Stack>
         )}

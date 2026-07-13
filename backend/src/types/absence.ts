@@ -1,4 +1,5 @@
 import type { Employee } from "./domain";
+import type { AbsenceWorkdayReconciliationResult } from "./absence-workday-reconciliation";
 
 export type AbsenceRequestStatus =
   | "PENDING"
@@ -53,6 +54,14 @@ export interface AbsenceRequest {
   updatedAt: string;
 }
 
+/**
+ * Approved absence requests justify EmployeeWorkday expectations regardless of absence type.
+ * Type-specific flags (requiresApproval, deductsBalance, etc.) govern request workflow and balances only.
+ */
+export interface ApprovedAbsenceForWorkday extends AbsenceRequest {
+  absenceTypeName: string;
+}
+
 export interface AbsenceRequestEvent {
   id: string;
   absenceRequestId: string;
@@ -70,13 +79,14 @@ export interface AbsenceRequestWithRelations extends AbsenceRequest {
   employee: Pick<Employee, "id" | "name" | "phoneNumber" | "active">;
   absenceType: Pick<AbsenceType, "id" | "code" | "name">;
   reviewerName?: string | null;
-  affectedInventoriesCount: number;
+  affectedOperationsCount: number;
 }
 
 export interface AbsenceRequestDetail extends AbsenceRequestWithRelations {
   events: AbsenceRequestEvent[];
-  affectedInventories: AffectedInventoryWarning[];
+  affectedOperations: AffectedOperationWarning[];
   balanceImpact: AbsenceBalanceImpact | null;
+  workdayReconciliation?: AbsenceWorkdayReconciliationResult;
 }
 
 export interface EmployeeAbsenceBalance {
@@ -116,10 +126,10 @@ export interface AbsenceBalanceImpact {
   message?: string;
 }
 
-export interface AffectedInventoryWarning {
-  inventoryId: string;
-  storeId: string;
-  storeName: string;
+export interface AffectedOperationWarning {
+  operationId: string;
+  serviceId: string;
+  serviceName: string;
   scheduledStart: string;
   scheduledEnd: string | null;
   status: string;

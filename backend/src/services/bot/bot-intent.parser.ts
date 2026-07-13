@@ -1,9 +1,18 @@
-import { isAbsenceCancelIntent, isAbsenceIntent } from "../../utils/absence-intent";
+import { isAbsenceIntent } from "../../utils/absence-intent";
+import {
+  isConfirmAttendanceIntent,
+  isUnavailabilityIntent,
+  isUpcomingAssignmentsIntent,
+  isWorkdayQueryIntent,
+} from "../../utils/assignment-intent";
 import {
   isCheckInIntent,
   isCheckoutIntent,
+  isGlobalCancelCommand,
+  isGlobalHelpCommand,
+  isGlobalMenuCommand,
   isSimpleGreeting,
-  parseInventorySelection,
+  parseOperationSelection,
 } from "../../utils/intent";
 
 export type BotIntent =
@@ -11,8 +20,12 @@ export type BotIntent =
   | "checkout"
   | "menu"
   | "absence"
+  | "workday"
+  | "upcoming_assignments"
+  | "confirm_attendance"
+  | "report_unavailability"
   | "location"
-  | "inventory_selection"
+  | "operation_selection"
   | "cancel"
   | "unknown";
 
@@ -29,12 +42,24 @@ export const parseBotIntent = (input: {
     return "unknown";
   }
 
-  if (isAbsenceCancelIntent(body)) {
+  if (isGlobalCancelCommand(body)) {
     return "cancel";
   }
 
-  if (parseInventorySelection(body) !== null) {
-    return "inventory_selection";
+  if (isGlobalHelpCommand(body)) {
+    return "menu";
+  }
+
+  if (isConfirmAttendanceIntent(body)) {
+    return "confirm_attendance";
+  }
+
+  if (isUnavailabilityIntent(body)) {
+    return "report_unavailability";
+  }
+
+  if (parseOperationSelection(body) !== null) {
+    return "operation_selection";
   }
 
   if (isCheckoutIntent(body)) {
@@ -49,7 +74,15 @@ export const parseBotIntent = (input: {
     return "absence";
   }
 
-  if (isSimpleGreeting(body)) {
+  if (isWorkdayQueryIntent(body)) {
+    return "workday";
+  }
+
+  if (isUpcomingAssignmentsIntent(body)) {
+    return "upcoming_assignments";
+  }
+
+  if (isGlobalMenuCommand(body) || isSimpleGreeting(body)) {
     return "menu";
   }
 

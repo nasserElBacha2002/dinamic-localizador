@@ -2,13 +2,13 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type {
   EmployeeLookup,
-  InventoryLookup,
-  StoreLookup,
+  OperationLookup,
+  ServiceLookup,
 } from "../types/lookup";
 import type {
   EmployeeLookupQuery,
-  InventoryLookupQuery,
-  StoreLookupQuery,
+  OperationLookupQuery,
+  ServiceLookupQuery,
 } from "../schemas/lookup.schema";
 
 const toIsoString = (value: Date | string | null): string | null => {
@@ -61,7 +61,7 @@ export const lookupRepository = {
     }));
   },
 
-  async listStores(companyId: string, query: StoreLookupQuery): Promise<StoreLookup[]> {
+  async listServices(companyId: string, query: ServiceLookupQuery): Promise<ServiceLookup[]> {
     const pool = getPool();
     const request = pool
       .request()
@@ -101,10 +101,10 @@ export const lookupRepository = {
     }));
   },
 
-  async listInventories(
+  async listOperations(
     companyId: string,
-    query: InventoryLookupQuery,
-  ): Promise<InventoryLookup[]> {
+    query: OperationLookupQuery,
+  ): Promise<OperationLookup[]> {
     const pool = getPool();
     const request = pool
       .request()
@@ -128,24 +128,24 @@ export const lookupRepository = {
         i.id,
         i.scheduled_start,
         i.scheduled_end,
-        s.name AS store_name
+        s.name AS service_name
       FROM scheduled_operations i
-      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = i.company_id
+      INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
       WHERE ${filters.join(" AND ")}
       ORDER BY i.scheduled_start DESC
     `);
 
     return result.recordset.map((row) => {
-      const storeName = String(row.store_name);
+      const serviceName = String(row.service_name);
       const startDate = toIsoString(row.scheduled_start as Date | string) ?? "";
       const endDate = toIsoString(row.scheduled_end as Date | string | null);
 
       return {
         id: String(row.id),
-        name: storeName,
+        name: serviceName,
         startDate,
         endDate,
-        storeName,
+        serviceName,
       };
     });
   },

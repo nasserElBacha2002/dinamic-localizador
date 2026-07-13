@@ -15,7 +15,7 @@ import type { CompanyModule } from "../types/company-module";
 
 const allEnabledModules: CompanyModule[] = [
   "attendance",
-  "inventory_operations",
+  "operations",
   "absences",
   "reports",
   "bot_simulator",
@@ -85,13 +85,13 @@ describe("company modules frontend module", () => {
   it("shows only Operaciones and Asistencias for OPERATOR with all modules enabled", () => {
     const items = getAdminNavItems({
       modules: allEnabledModules,
-      permissions: ["company:read", "inventories:read", "attendance:read"],
+      permissions: ["company:read", "operations:read", "attendance:read"],
       isPlatformAdmin: false,
       modulesLoading: false,
     });
     const paths = items.map((item) => item.path);
     const labels = items.map((item) => item.label);
-    assert.deepEqual(paths, ["/", "/inventories", "/attendance"]);
+    assert.deepEqual(paths, ["/", "/operations", "/attendance"]);
     assert.deepEqual(labels, ["Inicio", terminology.operation.plural, terminology.attendance.plural]);
   });
 
@@ -101,8 +101,8 @@ describe("company modules frontend module", () => {
       permissions: [
         "company:read",
         "employees:read",
-        "stores:read",
-        "inventories:read",
+        "services:read",
+        "operations:read",
         "attendance:read",
         "absences:read",
         "reports:read",
@@ -115,13 +115,13 @@ describe("company modules frontend module", () => {
     });
     const labels = items.map((item) => item.label);
     assert.ok(labels.includes(terminology.worker.plural));
-    assert.ok(labels.includes(terminology.location.plural));
+    assert.ok(labels.includes(terminology.service.plural));
     assert.ok(labels.includes(terminology.operation.plural));
     assert.ok(labels.includes(terminology.attendance.plural));
   });
 
-  it("exposes generic module labels while keeping inventory_operations key", () => {
-    assert.equal(COMPANY_MODULE_LABELS.inventory_operations, terminology.operation.plural);
+  it("exposes generic module labels while keeping operations key", () => {
+    assert.equal(COMPANY_MODULE_LABELS.operations, terminology.operation.plural);
     assert.equal(COMPANY_MODULE_LABELS.attendance, terminology.attendance.plural);
   });
 
@@ -133,13 +133,13 @@ describe("company modules frontend module", () => {
       modulesLoading: false,
     });
     assert.equal(items.some((item) => item.path === "/employees"), false);
-    assert.equal(items.some((item) => item.path === "/inventories"), false);
+    assert.equal(items.some((item) => item.path === "/operations"), false);
   });
 
   it("validates at least one core module remains enabled", () => {
     const disabledCore = allEnabledModules.map((module) => ({
       ...module,
-      isEnabled: !["attendance", "inventory_operations", "absences"].includes(module.moduleKey),
+      isEnabled: !["attendance", "operations", "absences"].includes(module.moduleKey),
     }));
     assert.equal(
       validateCompanyModulesUpdate(disabledCore),
@@ -154,7 +154,7 @@ describe("company modules frontend module", () => {
     assert.equal(isModuleEnabled(modules, "attendance"), true);
     assert.equal(isModuleEnabled(modules, "reports"), false);
     assert.equal(
-      isAnyModuleEnabled(modules, ["attendance", "inventory_operations", "absences"]),
+      isAnyModuleEnabled(modules, ["attendance", "operations", "absences"]),
       true,
     );
   });
@@ -185,10 +185,10 @@ describe("company modules frontend module", () => {
       "utf8",
     );
     assert.match(attendancePage, /EmployeeLookupAutocomplete/);
-    assert.match(attendancePage, /StoreLookupAutocomplete/);
-    assert.match(attendancePage, /InventoryLookupAutocomplete/);
+    assert.match(attendancePage, /ServiceLookupAutocomplete/);
+    assert.match(attendancePage, /OperationLookupAutocomplete/);
     assert.doesNotMatch(attendancePage, /EmployeeSearchAutocomplete/);
-    assert.doesNotMatch(attendancePage, /StoreSearchAutocomplete/);
+    assert.doesNotMatch(attendancePage, /ServiceSearchAutocomplete/);
   });
 
   it("does not use forbidden employee APIs on HomePage", () => {

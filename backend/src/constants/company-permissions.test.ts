@@ -16,8 +16,8 @@ describe("company permissions", () => {
     const readPermissions: CompanyPermission[] = [
       "company:read",
       "employees:read",
-      "stores:read",
-      "inventories:read",
+      "services:read",
+      "operations:read",
       "attendance:read",
       "absences:read",
       "reports:read",
@@ -40,10 +40,10 @@ describe("company permissions", () => {
 
   it("denies OPERATOR bot simulator and full read modules", () => {
     assert.ok(!roleHasPermission("OPERATOR", "employees:read"));
-    assert.ok(!roleHasPermission("OPERATOR", "stores:read"));
+    assert.ok(!roleHasPermission("OPERATOR", "services:read"));
     assert.ok(!roleHasPermission("OPERATOR", "bot_simulator:use"));
     assert.ok(roleHasPermission("OPERATOR", "attendance:read"));
-    assert.ok(roleHasPermission("OPERATOR", "inventories:read"));
+    assert.ok(roleHasPermission("OPERATOR", "operations:read"));
   });
 
   it("grants SUPERVISOR bot simulator access", () => {

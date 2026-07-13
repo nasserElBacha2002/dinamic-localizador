@@ -54,11 +54,40 @@ export interface CompanySettings {
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;
+  defaultEarlyArrivalToleranceMinutes: number;
+  defaultLateArrivalToleranceMinutes: number;
+  defaultOperationStartTime: string | null;
+  defaultOperationEndTime: string | null;
+  geofenceReviewMarginMeters: number | null;
+  confirmationReminderEnabled: boolean;
+  confirmationReminderHoursBefore: number;
+  pendingOperationExpirationHours: number;
   createdAt: string;
   updatedAt: string;
 }
 
 export type CompanySettingsDto = Omit<CompanySettings, "id">;
+
+export interface CompanyAbsenceSetting {
+  id: string;
+  companyId: string;
+  absenceTypeCode: string;
+  defaultAnnualDays: number;
+  autoAssignOnEmployeeCreate: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CompanyLocationType {
+  id: string;
+  companyId: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export interface CompanyModule {
   id: string;
@@ -79,10 +108,10 @@ export type CompanyPermission =
   | "users:manage"
   | "employees:read"
   | "employees:manage"
-  | "stores:read"
-  | "stores:manage"
-  | "inventories:read"
-  | "inventories:manage"
+  | "services:read"
+  | "services:manage"
+  | "operations:read"
+  | "operations:manage"
   | "attendance:read"
   | "attendance:review"
   | "attendance:export"

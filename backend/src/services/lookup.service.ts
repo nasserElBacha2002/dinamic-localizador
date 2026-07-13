@@ -1,8 +1,8 @@
 import { lookupRepository } from "../repositories/lookup.repository";
 import type {
   EmployeeLookupQuery,
-  InventoryLookupQuery,
-  StoreLookupQuery,
+  OperationLookupQuery,
+  ServiceLookupQuery,
 } from "../schemas/lookup.schema";
 
 export const lookupService = {
@@ -10,11 +10,11 @@ export const lookupService = {
     return lookupRepository.listEmployees(companyId, query);
   },
 
-  async listStores(companyId: string, query: StoreLookupQuery) {
-    return lookupRepository.listStores(companyId, query);
+  async listServices(companyId: string, query: ServiceLookupQuery) {
+    return lookupRepository.listServices(companyId, query);
   },
 
-  async listInventories(companyId: string, query: InventoryLookupQuery) {
-    return lookupRepository.listInventories(companyId, query);
+  async listOperations(companyId: string, query: OperationLookupQuery) {
+    return lookupRepository.listOperations(companyId, query);
   },
 };

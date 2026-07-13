@@ -11,20 +11,25 @@ import {
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByEmployeeRow } from "../../types/statistics";
 import { formatDateTime } from "../../utils/dates";
+import { formatDurationFromMinutes } from "../../utils/duration";
 import { formatPercent } from "../../utils/export";
-import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
 type SortableField =
   | "employeeName"
   | "phoneNumber"
-  | "assignedInventoriesCount"
-  | "confirmedAttendances"
-  | "noShowCount"
-  | "lateCount"
-  | "outsideGeofenceCount"
-  | "pendingReviewCount"
-  | "attendancePercentage"
+  | "scheduledWorkdays"
+  | "presentWorkdays"
+  | "absentWorkdays"
+  | "justifiedWorkdays"
+  | "expectedOpenWorkdays"
+  | "attendanceRate"
+  | "onTimeWorkdays"
+  | "lateWorkdays"
+  | "punctualityRate"
+  | "workedMinutes"
+  | "overtimeMinutes"
+  | "earlyDepartureWorkdays"
   | "lastAttendanceDate";
 
 interface StatisticsEmployeeTableProps {
@@ -40,7 +45,7 @@ interface StatisticsEmployeeTableProps {
   onPageChange: (page: number) => void;
   onPageSizeChange: (pageSize: number) => void;
   onSortChange: (field: SortableField) => void;
-  exportRows: AttendanceByEmployeeRow[];
+  loadExportRows: () => Promise<Array<Array<string | number | null | undefined>>>;
   dateFrom?: string;
   dateTo?: string;
   exportsDisabled?: boolean;
@@ -49,30 +54,19 @@ interface StatisticsEmployeeTableProps {
 const EXPORT_HEADERS = [
   "Empleado",
   "Teléfono",
-  "Inventarios asignados",
-  "Confirmadas",
-  "Sin asistencia",
-  "Tarde",
-  "Fuera de geocerca",
-  "Pendiente",
-  "% asistencia",
+  "Jornadas programadas",
+  "Presentes",
+  "Ausentes",
+  "Justificadas",
+  "Pendientes",
+  "Presentismo",
+  "Puntualidad",
+  "Horas trabajadas",
+  "Horas extra",
+  "Llegadas tarde",
+  "Salidas tempranas",
   "Última asistencia",
 ];
-
-function toExportRows(rows: AttendanceByEmployeeRow[]) {
-  return rows.map((row) => [
-    row.employeeName,
-    row.phoneNumber,
-    row.assignedInventoriesCount,
-    row.confirmedAttendances,
-    row.noShowCount,
-    row.lateCount,
-    row.outsideGeofenceCount,
-    row.pendingReviewCount,
-    formatPercent(row.attendancePercentage),
-    row.lastAttendanceDate ? formatDateTime(row.lastAttendanceDate) : "—",
-  ]);
-}
 
 export function StatisticsEmployeeTable({
   rows,
@@ -87,71 +81,86 @@ export function StatisticsEmployeeTable({
   onPageChange,
   onPageSizeChange,
   onSortChange,
-  exportRows,
+  loadExportRows,
   dateFrom,
   dateTo,
   exportsDisabled = false,
 }: StatisticsEmployeeTableProps) {
-  const exportData = useMemo(() => toExportRows(exportRows), [exportRows]);
-
   const columns = useMemo<DataTableColumn<AttendanceByEmployeeRow>[]>(
     () => [
       {
         key: "employeeName",
-        header: terminology.worker.singular,
+        header: "Empleado",
         getValue: (row) => row.employeeName,
         sortable: true,
       },
-      { key: "phoneNumber", header: "Teléfono", getValue: (row) => row.phoneNumber },
       {
-        key: "assignedInventoriesCount",
-        header: terminology.operation.plural,
-        getValue: (row) => row.assignedInventoriesCount,
-        align: "right",
+        key: "phoneNumber",
+        header: "Teléfono",
+        getValue: (row) => row.phoneNumber,
+        sortable: true,
       },
       {
-        key: "confirmedAttendances",
-        header: "Confirmadas",
-        getValue: (row) => row.confirmedAttendances,
+        key: "scheduledWorkdays",
+        header: "Jornadas",
+        getValue: (row) => row.scheduledWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "noShowCount",
-        header: "Sin asistencia",
-        getValue: (row) => row.noShowCount,
+        key: "presentWorkdays",
+        header: "Presentes",
+        getValue: (row) => row.presentWorkdays,
         align: "right",
-      },
-      { key: "lateCount", header: "Tarde", getValue: (row) => row.lateCount, align: "right" },
-      {
-        key: "outsideGeofenceCount",
-        header: "Fuera geocerca",
-        getValue: (row) => row.outsideGeofenceCount,
-        align: "right",
+        sortable: true,
       },
       {
-        key: "pendingReviewCount",
-        header: "Pendiente",
-        getValue: (row) => row.pendingReviewCount,
+        key: "absentWorkdays",
+        header: "Ausentes",
+        getValue: (row) => row.absentWorkdays,
         align: "right",
+        sortable: true,
       },
       {
-        key: "attendancePercentage",
-        header: "% asistencia",
-        getValue: (row) => formatPercent(row.attendancePercentage),
+        key: "justifiedWorkdays",
+        header: "Justificadas",
+        getValue: (row) => row.justifiedWorkdays,
         align: "right",
+        sortable: true,
+      },
+      {
+        key: "attendanceRate",
+        header: "Presentismo",
+        getValue: (row) => formatPercent(row.attendanceRate),
+        align: "right",
+        sortable: true,
+      },
+      {
+        key: "punctualityRate",
+        header: "Puntualidad",
+        getValue: (row) => formatPercent(row.punctualityRate),
+        align: "right",
+        sortable: true,
+      },
+      {
+        key: "workedMinutes",
+        header: "Horas trabajadas",
+        getValue: (row) => formatDurationFromMinutes(row.workedMinutes),
+        align: "right",
+        sortable: true,
       },
       {
         key: "lastAttendanceDate",
         header: "Última asistencia",
-        getValue: (row) =>
-          row.lastAttendanceDate ? formatDateTime(row.lastAttendanceDate) : "—",
+        getValue: (row) => (row.lastAttendanceDate ? formatDateTime(row.lastAttendanceDate) : "—"),
+        sortable: true,
       },
     ],
     [],
   );
 
   if (isLoading) {
-    return <LoadingState message={`Cargando estadísticas por ${terminology.worker.singular.toLowerCase()}...`} />;
+    return <LoadingState message="Cargando estadísticas por empleado..." />;
   }
 
   if (isError) {
@@ -164,7 +173,7 @@ export function StatisticsEmployeeTable({
         <ExportActionButtons
           baseName="attendance-by-employee"
           headers={EXPORT_HEADERS}
-          rows={exportData}
+          loadRows={loadExportRows}
           dateFrom={dateFrom}
           dateTo={dateTo}
           sheetName="Por empleado"
@@ -180,7 +189,7 @@ export function StatisticsEmployeeTable({
         sortDirection={sortDirection}
         onSortChange={(key) => onSortChange(key as SortableField)}
         emptyTitle="Sin resultados"
-        emptyDescription={`No hay datos de ${terminology.worker.plural.toLowerCase()} para los filtros seleccionados.`}
+        emptyDescription="No hay datos de empleados para los filtros seleccionados."
       />
 
       <PaginationControls

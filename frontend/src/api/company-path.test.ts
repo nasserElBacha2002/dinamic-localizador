@@ -66,8 +66,16 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/operations/import/preview`,
     );
     assert.equal(
-      scopedApiPath("locations"),
-      `companies/${ACTIVE_COMPANY_ID}/locations`,
+      scopedApiPath("services"),
+      `companies/${ACTIVE_COMPANY_ID}/services`,
+    );
+    assert.equal(
+      scopedApiPath("work-teams"),
+      `companies/${ACTIVE_COMPANY_ID}/work-teams`,
+    );
+    assert.equal(
+      scopedApiPath("work-team-assignment-batches/batch-id"),
+      `companies/${ACTIVE_COMPANY_ID}/work-team-assignment-batches/batch-id`,
     );
     assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
     assert.equal(
@@ -134,9 +142,8 @@ describe("companyApiPath", () => {
 describe("isLegacyOperationalApiPath", () => {
   it("detects legacy flat operational paths", () => {
     assert.equal(isLegacyOperationalApiPath("employees"), true);
-    assert.equal(isLegacyOperationalApiPath("inventories?page=1"), true);
-    assert.equal(isLegacyOperationalApiPath("stores"), true);
-    assert.equal(isLegacyOperationalApiPath("locations"), true);
+    assert.equal(isLegacyOperationalApiPath("operations?page=1"), true);
+    assert.equal(isLegacyOperationalApiPath("services"), true);
     assert.equal(isLegacyOperationalApiPath("operations"), true);
     assert.equal(isLegacyOperationalApiPath("companies/uuid/employees"), false);
   });
@@ -155,7 +162,7 @@ describe("operational API audit", () => {
   it("does not contain direct legacy operational apiClient paths", () => {
     const apiDir = join(process.cwd(), "src/api");
     const legacyPattern =
-      /apiClient\.(get|post|put|patch|delete)\(\s*["'`]\/?(employees|inventories|stores|attendance|statistics|absence-types|absence-requests|bot-simulator|users)/;
+      /apiClient\.(get|post|put|patch|delete)\(\s*["'`]\/?(employees|operations|services|attendance|statistics|absence-types|absence-requests|bot-simulator|users)/;
 
     const offenders: string[] = [];
     for (const fileName of readdirSync(apiDir)) {

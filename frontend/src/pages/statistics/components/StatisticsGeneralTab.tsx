@@ -3,9 +3,13 @@ import { ErrorState } from "../../../design-system";
 import { ChartCard } from "../../../components/statistics/ChartCard";
 import { ExportActionButtons } from "../../../components/statistics/ExportActionButtons";
 import { StatisticsKpiCards } from "../../../components/statistics/StatisticsKpiCards";
-import { buildHorizontalBarOption, buildVerticalBarOption } from "../../../components/statistics/statistics-chart-options";
+import {
+  buildHorizontalBarOption,
+  buildVerticalBarOption,
+} from "../../../components/statistics/statistics-chart-options";
 import { formatPercent } from "../../../utils/export";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { operationKindLabels } from "../../../utils/operation-schedule-display";
 import type { StatisticsPageData } from "../hooks/useStatisticsPageData";
 
 type StatisticsGeneralTabProps = Pick<
@@ -24,14 +28,25 @@ type StatisticsGeneralTabProps = Pick<
   | "distributionQuery"
   | "distribution"
   | "distributionOption"
-  | "inventoryExportQuery"
-  | "topInventoriesByAttendance"
-  | "employeeExportQuery"
+  | "topOperationsByAttendanceQuery"
+  | "topOperationsByAttendance"
+  | "topEmployeesByAttendanceQuery"
   | "topEmployeesByAttendance"
+  | "topLateEmployeesQuery"
   | "topLateEmployees"
-  | "locationExportQuery"
-  | "topLocationsByAttendance"
+  | "topServicesByAttendanceQuery"
+  | "topServicesByAttendance"
+  | "workdayDetailHeaders"
+  | "loadWorkdayDetailExportRows"
 >;
+
+function formatOperationChartLabel(
+  row: StatisticsPageData["topOperationsByAttendance"][number],
+): string {
+  const kind =
+    operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind;
+  return `${row.serviceName} (${kind})`;
+}
 
 export function StatisticsGeneralTab({
   summaryHeaders,
@@ -48,17 +63,20 @@ export function StatisticsGeneralTab({
   distributionQuery,
   distribution,
   distributionOption,
-  inventoryExportQuery,
-  topInventoriesByAttendance,
-  employeeExportQuery,
+  topOperationsByAttendanceQuery,
+  topOperationsByAttendance,
+  topEmployeesByAttendanceQuery,
   topEmployeesByAttendance,
+  topLateEmployeesQuery,
   topLateEmployees,
-  locationExportQuery,
-  topLocationsByAttendance,
+  topServicesByAttendanceQuery,
+  topServicesByAttendance,
+  workdayDetailHeaders,
+  loadWorkdayDetailExportRows,
 }: StatisticsGeneralTabProps) {
   return (
     <Stack gap="lg">
-      <Group justify="flex-end">
+      <Group justify="flex-end" gap="sm">
         <ExportActionButtons
           baseName="attendance-summary"
           headers={summaryHeaders}
@@ -66,6 +84,15 @@ export function StatisticsGeneralTab({
           dateFrom={isoDateFrom}
           dateTo={isoDateTo}
           sheetName="Resumen"
+          disabled={exportsDisabled}
+        />
+        <ExportActionButtons
+          baseName="attendance-workday-details"
+          headers={workdayDetailHeaders}
+          loadRows={loadWorkdayDetailExportRows}
+          dateFrom={isoDateFrom}
+          dateTo={isoDateTo}
+          sheetName="Detalle jornadas"
           disabled={exportsDisabled}
         />
       </Group>
@@ -85,13 +112,13 @@ export function StatisticsGeneralTab({
             option={timelineOption}
             exportHeaders={[
               "Fecha",
-              "Presente",
+              "Presentes",
+              "Ausentes",
+              "Justificadas",
+              "Pendientes",
+              "Programadas",
+              "Puntuales",
               "Tarde",
-              "Fuera geocerca",
-              "Pendiente",
-              "Rechazado",
-              "Sin asistencia",
-              "Total",
             ]}
             exportRows={timelineExportRows}
             exportBaseName="attendance-timeline"
@@ -116,24 +143,22 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="% asistencia por inventario (top 10)"
-            isLoading={inventoryExportQuery.isPending}
-            isEmpty={topInventoriesByAttendance.length === 0}
+            title="Presentismo por operación (top 10)"
+            isLoading={topOperationsByAttendanceQuery.isPending}
+            isEmpty={topOperationsByAttendance.length === 0}
             option={buildHorizontalBarOption(
               "",
-              topInventoriesByAttendance.map(
-                (row) => `${row.storeName} (${row.scheduledStart.slice(0, 10)})`,
-              ),
-              topInventoriesByAttendance.map((row) => row.attendancePercentage),
+              topOperationsByAttendance.map((row) => formatOperationChartLabel(row)),
+              topOperationsByAttendance.map((row) => row.attendanceRate),
             )}
-            exportHeaders={["Inventario", "Tienda", "Fecha", "% asistencia"]}
-            exportRows={topInventoriesByAttendance.map((row) => [
-              row.inventoryId,
-              row.storeName,
-              row.scheduledStart.slice(0, 10),
-              formatPercent(row.attendancePercentage),
+            exportHeaders={["Operación", "Servicio", "Tipo", "Presentismo"]}
+            exportRows={topOperationsByAttendance.map((row) => [
+              row.operationId,
+              row.serviceName,
+              operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+              formatPercent(row.attendanceRate),
             ])}
-            exportBaseName="attendance-by-inventory-chart"
+            exportBaseName="attendance-by-operation-chart"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
@@ -141,18 +166,18 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Top empleados por % asistencia"
-            isLoading={employeeExportQuery.isPending}
+            title="Top empleados por presentismo"
+            isLoading={topEmployeesByAttendanceQuery.isPending}
             isEmpty={topEmployeesByAttendance.length === 0}
             option={buildHorizontalBarOption(
               "",
               topEmployeesByAttendance.map((row) => row.employeeName),
-              topEmployeesByAttendance.map((row) => row.attendancePercentage),
+              topEmployeesByAttendance.map((row) => row.attendanceRate),
             )}
-            exportHeaders={["Empleado", "% asistencia"]}
+            exportHeaders={["Empleado", "Presentismo"]}
             exportRows={topEmployeesByAttendance.map((row) => [
               row.employeeName,
-              formatPercent(row.attendancePercentage),
+              formatPercent(row.attendanceRate),
             ])}
             exportBaseName="attendance-top-employees"
             dateFrom={isoDateFrom}
@@ -162,16 +187,16 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Empleados con más registros tarde"
-            isLoading={employeeExportQuery.isPending}
+            title="Empleados con más llegadas tarde"
+            isLoading={topLateEmployeesQuery.isPending}
             isEmpty={topLateEmployees.length === 0}
             option={buildVerticalBarOption(
               "",
               topLateEmployees.map((row) => row.employeeName),
-              topLateEmployees.map((row) => row.lateCount),
+              topLateEmployees.map((row) => row.lateWorkdays),
             )}
-            exportHeaders={["Empleado", "Registros tarde"]}
-            exportRows={topLateEmployees.map((row) => [row.employeeName, row.lateCount])}
+            exportHeaders={["Empleado", "Llegadas tarde"]}
+            exportRows={topLateEmployees.map((row) => [row.employeeName, row.lateWorkdays])}
             exportBaseName="attendance-late-employees"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
@@ -180,21 +205,21 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Rendimiento por tienda / ubicación"
-            isLoading={locationExportQuery.isPending}
-            isEmpty={topLocationsByAttendance.length === 0}
+            title="Rendimiento por servicio"
+            isLoading={topServicesByAttendanceQuery.isPending}
+            isEmpty={topServicesByAttendance.length === 0}
             option={buildVerticalBarOption(
               "",
-              topLocationsByAttendance.map((row) => row.storeName),
-              topLocationsByAttendance.map((row) => row.averageAttendancePercentage),
+              topServicesByAttendance.map((row) => row.serviceName),
+              topServicesByAttendance.map((row) => row.attendanceRate),
               "%",
             )}
-            exportHeaders={["Tienda", "% asistencia promedio"]}
-            exportRows={topLocationsByAttendance.map((row) => [
-              row.storeName,
-              formatPercent(row.averageAttendancePercentage),
+            exportHeaders={["Servicio", "Presentismo"]}
+            exportRows={topServicesByAttendance.map((row) => [
+              row.serviceName,
+              formatPercent(row.attendanceRate),
             ])}
-            exportBaseName="attendance-by-location-chart"
+            exportBaseName="attendance-by-service-chart"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}

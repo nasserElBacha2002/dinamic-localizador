@@ -4,8 +4,8 @@ import {
   formatDataTableCellDisplay,
   resolveDataTableCellValue,
   type DataTableColumnLike,
-} from "../design-system/components/data-table-cell";
-import { DISPLAY_FALLBACK } from "../utils/display-safe";
+} from "./data-table-cell";
+import { DISPLAY_FALLBACK } from "../../utils/display-safe";
 
 describe("data-table-cell helpers", () => {
   it("formatDataTableCellDisplay returns fallback for empty values", () => {

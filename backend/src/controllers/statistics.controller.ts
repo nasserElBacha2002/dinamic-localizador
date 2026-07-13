@@ -31,15 +31,24 @@ export const statisticsController = {
     res.status(200).json(result);
   },
 
-  async byInventory(req: Request, res: Response) {
+  async byOperation(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const result = await statisticsService.getByInventory(companyId, req.validatedQuery as StatisticsTableQuery);
+    const result = await statisticsService.getByOperation(companyId, req.validatedQuery as StatisticsTableQuery);
     res.status(200).json(result);
   },
 
-  async byLocation(req: Request, res: Response) {
+  async byService(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const result = await statisticsService.getByLocation(companyId, req.validatedQuery as StatisticsTableQuery);
+    const result = await statisticsService.getByService(companyId, req.validatedQuery as StatisticsTableQuery);
+    res.status(200).json(result);
+  },
+
+  async workdayDetails(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await statisticsService.getWorkdayDetails(
+      companyId,
+      req.validatedQuery as StatisticsTableQuery,
+    );
     res.status(200).json(result);
   },
 };

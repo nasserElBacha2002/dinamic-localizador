@@ -1,0 +1,644 @@
+import { normalizeAddress } from "../service-reconciliation/address";
+import {
+  isLabelOnlyOfficialAddress,
+  isMalformedOfficialAddress,
+} from "./address-heuristics";
+import {
+  compareCurrentAddressToOfficial,
+  detectReportDrift,
+  getCurrentRowsForServiceNumber,
+  pickReportRowForService,
+  recomputeCoordinateDistance,
+  recomputeCoordinateStatus,
+} from "./current-db";
+import type { OfficialSourceRow } from "./csv";
+import {
+  buildDuplicateResolutionFromCurrentDb,
+  officialDuplicateNumbers,
+} from "./duplicate-resolution";
+import type {
+  CurrentDbState,
+  DuplicateReportRow,
+  EnvironmentSnapshot,
+  FixConfidence,
+  FixPlan,
+  FixPlanOptions,
+  FixType,
+  MissingInsertPlanRow,
+  ProposedFix,
+  ReconciliationReportRow,
+  SkippedFix,
+} from "./types";
+
+const CRITICAL_DISTANCE_METERS = 10_000;
+
+const parseNumber = (value: string): number | null => {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return null;
+  }
+
+  const parsed = Number.parseFloat(trimmed);
+  return Number.isFinite(parsed) ? parsed : null;
+};
+
+const hasCoordinates = (latitude: string, longitude: string): boolean =>
+  parseNumber(latitude) !== null && parseNumber(longitude) !== null;
+
+const classifyCoordinateFix = (
+  distance: number,
+  includeReviewCoordinates: boolean,
+): { fixType: FixType; applyByDefault: boolean; confidence: FixConfidence } => {
+  if (distance > CRITICAL_DISTANCE_METERS) {
+    return {
+      fixType: "CRITICAL_COORDINATE_FIX",
+      applyByDefault: true,
+      confidence: "high",
+    };
+  }
+
+  if (distance > 300) {
+    return {
+      fixType: "AUTO_FIX_COORDINATE",
+      applyByDefault: true,
+      confidence: "high",
+    };
+  }
+
+  return {
+    fixType: "REVIEW_COORDINATE_FIX",
+    applyByDefault: includeReviewCoordinates,
+    confidence: "medium",
+  };
+};
+
+const uniqueServiceNumbers = (rows: ReconciliationReportRow[]): string[] => {
+  const numbers = new Set<string>();
+  for (const row of rows) {
+    if (row.serviceNumber) {
+      numbers.add(row.serviceNumber);
+    }
+  }
+  return [...numbers];
+};
+
+const formatCoordinate = (value: number | null): string =>
+  value === null ? "" : String(value);
+
+const appendNote = (base: string, notes: string[]): string => {
+  if (notes.length === 0) {
+    return base;
+  }
+
+  return `${base}; ${notes.join(", ")}`;
+};
+
+const resolveKeeperForDuplicateGroup = (
+  serviceNumber: string,
+  duplicateResolution: ReturnType<typeof buildDuplicateResolutionFromCurrentDb>,
+): string | undefined =>
+  duplicateResolution.find(
+    (entry) => entry.serviceNumber === serviceNumber && entry.recommendation === "keep",
+  )?.dbId;
+
+export const buildFixPlan = (
+  summaryRows: ReconciliationReportRow[],
+  missingRows: ReconciliationReportRow[],
+  duplicateRows: DuplicateReportRow[],
+  addressMismatchRows: ReconciliationReportRow[],
+  coordinateMismatchRows: ReconciliationReportRow[],
+  officialRows: OfficialSourceRow[],
+  currentDb: CurrentDbState,
+  environmentSnapshot: EnvironmentSnapshot,
+  options: FixPlanOptions,
+): FixPlan => {
+  const proposed: ProposedFix[] = [];
+  const skipped: SkippedFix[] = [];
+  const allReportRows = [...summaryRows, ...addressMismatchRows, ...coordinateMismatchRows];
+  const officialDupes = officialDuplicateNumbers(duplicateRows, officialRows);
+  const duplicateResolution = buildDuplicateResolutionFromCurrentDb(
+    currentDb,
+    allReportRows,
+    officialDupes,
+  );
+
+  const coordinateServiceNumbers = uniqueServiceNumbers([...summaryRows, ...coordinateMismatchRows]);
+  const processedCoordinateDbIds = new Set<string>();
+
+  for (const serviceNumber of coordinateServiceNumbers) {
+    const currentRows = getCurrentRowsForServiceNumber(currentDb, serviceNumber);
+
+    if (currentRows.length === 0) {
+      skipped.push({
+        serviceNumber,
+        dbId: "",
+        skippedReason: "current_service_not_found",
+        details: "Service number is not present in the connected database",
+      });
+      continue;
+    }
+
+    if (currentRows.length > 1) {
+      const keeperId = resolveKeeperForDuplicateGroup(serviceNumber, duplicateResolution);
+      if (!keeperId) {
+        for (const row of currentRows) {
+          skipped.push({
+            serviceNumber,
+            dbId: row.id,
+            skippedReason: "current_service_duplicate_ambiguous",
+            details: "Multiple DB rows share this service number in the current environment",
+          });
+        }
+        continue;
+      }
+
+      const nonKeepers = currentRows.filter((row) => row.id.toUpperCase() !== keeperId.toUpperCase());
+      for (const row of nonKeepers) {
+        skipped.push({
+          serviceNumber,
+          dbId: row.id,
+          skippedReason: "current_service_duplicate_ambiguous",
+          details: "Duplicate row is not the recommended keeper in the current environment",
+        });
+      }
+    }
+
+    const targetRows =
+      currentRows.length === 1
+        ? currentRows
+        : currentRows.filter(
+            (row) =>
+              row.id.toUpperCase() ===
+              resolveKeeperForDuplicateGroup(serviceNumber, duplicateResolution)?.toUpperCase(),
+          );
+
+    for (const currentRow of targetRows) {
+      if (processedCoordinateDbIds.has(currentRow.id.toUpperCase())) {
+        continue;
+      }
+      processedCoordinateDbIds.add(currentRow.id.toUpperCase());
+
+      const report = pickReportRowForService(serviceNumber, allReportRows, currentRow);
+      if (!report) {
+        continue;
+      }
+
+      if (report.geocodingStatus !== "OK") {
+        skipped.push({
+          serviceNumber,
+          dbId: currentRow.id,
+          skippedReason: "geocoding_not_ok",
+          details: report.geocodingErrorMessage || report.geocodingStatus,
+        });
+        continue;
+      }
+
+      if (!hasCoordinates(report.geocodedLatitude, report.geocodedLongitude)) {
+        skipped.push({
+          serviceNumber,
+          dbId: currentRow.id,
+          skippedReason: "missing_geocoded_coordinates",
+          details: "Geocoded latitude/longitude are required",
+        });
+        continue;
+      }
+
+      const drift = detectReportDrift(currentRow, report);
+      const distance = recomputeCoordinateDistance(
+        {
+          ...currentRow,
+          latitude: drift.currentLatitude,
+          longitude: drift.currentLongitude,
+        },
+        report.geocodedLatitude,
+        report.geocodedLongitude,
+      );
+
+      if (distance === null) {
+        skipped.push({
+          serviceNumber,
+          dbId: currentRow.id,
+          skippedReason: "missing_distance",
+          details: "Current DB coordinates are required to recompute distance",
+        });
+        continue;
+      }
+
+      const coordinateStatus = recomputeCoordinateStatus(distance);
+      if (coordinateStatus === "ok") {
+        skipped.push({
+          serviceNumber,
+          dbId: currentRow.id,
+          skippedReason: "current_coordinates_already_ok",
+          details: `Recomputed distance to geocoded official address is ${distance.toFixed(2)} m`,
+        });
+        continue;
+      }
+
+      if (coordinateStatus === "review" && !options.includeReviewCoordinates) {
+        proposed.push({
+          serviceNumber,
+          dbId: currentRow.id,
+          fixType: "REVIEW_COORDINATE_FIX",
+          oldAddress: drift.currentAddress,
+          newAddress: drift.currentAddress,
+          oldLatitude: formatCoordinate(drift.currentLatitude),
+          oldLongitude: formatCoordinate(drift.currentLongitude),
+          newLatitude: report.geocodedLatitude,
+          newLongitude: report.geocodedLongitude,
+          distanceMeters: distance,
+          confidence: "medium",
+          applyByDefault: false,
+          reason: appendNote(
+            `Update coordinates from geocoded official address (${distance.toFixed(2)} m away)`,
+            drift.notes,
+          ),
+          sqlComment: `store_number=${serviceNumber} | REVIEW_COORDINATE_FIX | distance=${distance.toFixed(2)}m`,
+        });
+        continue;
+      }
+
+      if (coordinateStatus !== "mismatch" && coordinateStatus !== "review") {
+        continue;
+      }
+
+      const classification = classifyCoordinateFix(distance, options.includeReviewCoordinates);
+      proposed.push({
+        serviceNumber,
+        dbId: currentRow.id,
+        fixType: classification.fixType,
+        oldAddress: drift.currentAddress,
+        newAddress: drift.currentAddress,
+        oldLatitude: formatCoordinate(drift.currentLatitude),
+        oldLongitude: formatCoordinate(drift.currentLongitude),
+        newLatitude: report.geocodedLatitude,
+        newLongitude: report.geocodedLongitude,
+        distanceMeters: distance,
+        confidence: classification.confidence,
+        applyByDefault: classification.applyByDefault,
+        reason: appendNote(
+          `Update coordinates from geocoded official address (${distance.toFixed(2)} m away)`,
+          drift.notes,
+        ),
+        sqlComment: `store_number=${serviceNumber} | ${classification.fixType} | distance=${distance.toFixed(2)}m`,
+      });
+    }
+  }
+
+  const addressServiceNumbers = uniqueServiceNumbers([...summaryRows, ...addressMismatchRows]);
+  const processedAddressDbIds = new Set<string>();
+
+  for (const serviceNumber of addressServiceNumbers) {
+    const currentRows = getCurrentRowsForServiceNumber(currentDb, serviceNumber);
+    if (currentRows.length !== 1) {
+      if (currentRows.length > 1) {
+        skipped.push({
+          serviceNumber,
+          dbId: "",
+          skippedReason: "current_service_duplicate_ambiguous",
+          details: "Address update skipped for ambiguous duplicate group in current DB",
+        });
+      }
+      continue;
+    }
+
+    const currentRow = currentRows[0];
+    if (processedAddressDbIds.has(currentRow.id.toUpperCase())) {
+      continue;
+    }
+    processedAddressDbIds.add(currentRow.id.toUpperCase());
+
+    const report = pickReportRowForService(serviceNumber, allReportRows, currentRow);
+    if (!report) {
+      continue;
+    }
+
+    const drift = detectReportDrift(currentRow, report);
+    const addressComparison = compareCurrentAddressToOfficial(
+      drift.currentAddress,
+      report.carrefourOfficialAddress,
+    );
+
+    if (addressComparison.status === "exact_match" || addressComparison.status === "likely_match") {
+      skipped.push({
+        serviceNumber,
+        dbId: currentRow.id,
+        skippedReason: "current_address_already_ok",
+        details: `Current DB address already matches official source (${addressComparison.status})`,
+      });
+      continue;
+    }
+
+    if (addressComparison.addressDifferenceReason === "range_or_format_difference") {
+      skipped.push({
+        serviceNumber,
+        dbId: currentRow.id,
+        skippedReason: "range_or_format_difference",
+        details: "Address difference is only formatting/range",
+      });
+      continue;
+    }
+
+    if (
+      isLabelOnlyOfficialAddress(report.carrefourOfficialAddress) ||
+      isMalformedOfficialAddress(report.carrefourOfficialAddress)
+    ) {
+      skipped.push({
+        serviceNumber,
+        dbId: currentRow.id,
+        skippedReason: "official_address_not_safe_to_apply",
+        details: report.carrefourOfficialAddress,
+      });
+      continue;
+    }
+
+    if (officialDupes.has(serviceNumber)) {
+      skipped.push({
+        serviceNumber,
+        dbId: currentRow.id,
+        skippedReason: "official_duplicate_service_number",
+        details: "Official source has duplicate service numbers",
+      });
+      continue;
+    }
+
+    proposed.push({
+      serviceNumber,
+      dbId: currentRow.id,
+      fixType: "AUTO_FIX_ADDRESS",
+      oldAddress: drift.currentAddress,
+      newAddress: report.carrefourOfficialAddress,
+      oldLatitude: formatCoordinate(drift.currentLatitude),
+      oldLongitude: formatCoordinate(drift.currentLongitude),
+      newLatitude: formatCoordinate(drift.currentLatitude),
+      newLongitude: formatCoordinate(drift.currentLongitude),
+      distanceMeters: recomputeCoordinateDistance(
+        currentRow,
+        report.geocodedLatitude,
+        report.geocodedLongitude,
+      ),
+      confidence: "medium",
+      applyByDefault: false,
+      reason: appendNote("Align DB address with Carrefour official source", drift.notes),
+      sqlComment: `store_number=${serviceNumber} | AUTO_FIX_ADDRESS`,
+    });
+  }
+
+  const officialByNumber = new Map(officialRows.map((row) => [row.serviceNumber, row]));
+  const missingInserts: MissingInsertPlanRow[] = [];
+  const missingRequiresCoordinates: MissingInsertPlanRow[] = [];
+
+  for (const row of missingRows) {
+    if (getCurrentRowsForServiceNumber(currentDb, row.serviceNumber).length > 0) {
+      skipped.push({
+        serviceNumber: row.serviceNumber,
+        dbId: "",
+        skippedReason: "missing_service_already_exists_in_current_db",
+        details: "Service number already exists in the connected database",
+      });
+      continue;
+    }
+
+    const official = officialByNumber.get(row.serviceNumber);
+    const officialAddress = official?.officialAddress || row.carrefourOfficialAddress;
+    const geocodedFromSummary = pickReportRowForService(row.serviceNumber, summaryRows);
+
+    const latitude = geocodedFromSummary?.geocodedLatitude ?? "";
+    const longitude = geocodedFromSummary?.geocodedLongitude ?? "";
+    const canInsert = hasCoordinates(latitude, longitude) && !isLabelOnlyOfficialAddress(officialAddress);
+
+    const planRow: MissingInsertPlanRow = {
+      serviceNumber: row.serviceNumber,
+      officialAddress,
+      neighborhood: official?.neighborhood ?? "",
+      locality: official?.locality ?? "",
+      latitude,
+      longitude,
+      canInsert,
+      reason: canInsert
+        ? "Ready to insert when --insert-missing is passed"
+        : hasCoordinates(latitude, longitude)
+          ? "Official address is not a physical address"
+          : "Missing geocoded coordinates",
+    };
+
+    if (canInsert) {
+      missingInserts.push(planRow);
+      if (options.insertMissing) {
+        proposed.push({
+          serviceNumber: row.serviceNumber,
+          dbId: "",
+          fixType: "INSERT_MISSING",
+          oldAddress: "",
+          newAddress: officialAddress,
+          oldLatitude: "",
+          oldLongitude: "",
+          newLatitude: latitude,
+          newLongitude: longitude,
+          distanceMeters: null,
+          confidence: "medium",
+          applyByDefault: false,
+          reason: "Insert missing service from Carrefour official source",
+          sqlComment: `store_number=${row.serviceNumber} | INSERT_MISSING`,
+        });
+      }
+    } else {
+      missingRequiresCoordinates.push(planRow);
+    }
+  }
+
+  for (const currentRow of currentDb.nonNumericServices) {
+    const normalizedDbAddress = normalizeAddress(currentRow.address);
+    const missingMatch = missingRows.find(
+      (row) => normalizeAddress(row.carrefourOfficialAddress) === normalizedDbAddress,
+    );
+
+    if (!missingMatch) {
+      continue;
+    }
+
+    if (getCurrentRowsForServiceNumber(currentDb, missingMatch.serviceNumber).length > 0) {
+      continue;
+    }
+
+    proposed.push({
+      serviceNumber: missingMatch.serviceNumber,
+      dbId: currentRow.id,
+      fixType: "RENAME_NONNUMERIC",
+      oldAddress: currentRow.address,
+      newAddress: currentRow.address,
+      oldLatitude: formatCoordinate(currentRow.latitude),
+      oldLongitude: formatCoordinate(currentRow.longitude),
+      newLatitude: "",
+      newLongitude: "",
+      distanceMeters: null,
+      confidence: "medium",
+      applyByDefault: false,
+      reason: options.fixNonnumericNames
+        ? `Rename non-numeric service '${currentRow.name}' to official service number ${missingMatch.serviceNumber}`
+        : `Possible non-numeric match '${currentRow.name}' for missing service ${missingMatch.serviceNumber}`,
+      sqlComment: `store_number=${missingMatch.serviceNumber} | RENAME_NONNUMERIC | old_name=${currentRow.name}`,
+    });
+
+    if (!options.fixNonnumericNames) {
+      skipped.push({
+        serviceNumber: missingMatch.serviceNumber,
+        dbId: currentRow.id,
+        skippedReason: "possible_nonnumeric_match_requires_manual_or_flag",
+        details: `Current DB row '${currentRow.name}' matches missing official address`,
+      });
+    }
+  }
+
+  for (const entry of duplicateResolution) {
+    if (entry.recommendation !== "deactivate" || !entry.dbId) {
+      continue;
+    }
+
+    if (officialDupes.has(entry.serviceNumber)) {
+      continue;
+    }
+
+    const currentRow = currentDb.services.find((row) => row.id.toUpperCase() === entry.dbId.toUpperCase());
+    if (!currentRow?.active) {
+      continue;
+    }
+
+    const keeper = duplicateResolution.find(
+      (row) => row.serviceNumber === entry.serviceNumber && row.recommendation === "keep",
+    );
+    const keeperDistance = parseNumber(keeper?.coordinateDistanceMeters ?? "");
+    const entryDistance = parseNumber(entry.coordinateDistanceMeters ?? "");
+
+    const highConfidence =
+      keeper?.addressMatchStatus === "exact_match" ||
+      (keeperDistance !== null && keeperDistance <= 100) ||
+      (entryDistance !== null &&
+        keeperDistance !== null &&
+        entryDistance - keeperDistance > 1000);
+
+    if (!highConfidence) {
+      skipped.push({
+        serviceNumber: entry.serviceNumber,
+        dbId: entry.dbId,
+        skippedReason: "ambiguous_duplicate_group",
+        details: "Duplicate deactivation requires high confidence",
+      });
+      continue;
+    }
+
+    proposed.push({
+      serviceNumber: entry.serviceNumber,
+      dbId: entry.dbId,
+      fixType: "DEACTIVATE_DUPLICATE",
+      oldAddress: entry.address,
+      newAddress: entry.address,
+      oldLatitude: entry.latitude,
+      oldLongitude: entry.longitude,
+      newLatitude: entry.latitude,
+      newLongitude: entry.longitude,
+      distanceMeters: entryDistance,
+      confidence: "high",
+      applyByDefault: false,
+      reason: "Deactivate duplicate DB row with worse coordinate/address match",
+      sqlComment: `store_number=${entry.serviceNumber} | DEACTIVATE_DUPLICATE`,
+    });
+  }
+
+  const extraRows = summaryRows.filter((row) => row.status === "extra_in_database");
+  for (const row of extraRows) {
+    const currentRows = getCurrentRowsForServiceNumber(currentDb, row.serviceNumber);
+    const currentRow = currentRows[0];
+    if (!currentRow || !options.deactivateExtra) {
+      continue;
+    }
+
+    proposed.push({
+      serviceNumber: row.serviceNumber,
+      dbId: currentRow.id,
+      fixType: "DEACTIVATE_EXTRA",
+      oldAddress: currentRow.address,
+      newAddress: currentRow.address,
+      oldLatitude: formatCoordinate(currentRow.latitude),
+      oldLongitude: formatCoordinate(currentRow.longitude),
+      newLatitude: formatCoordinate(currentRow.latitude),
+      newLongitude: formatCoordinate(currentRow.longitude),
+      distanceMeters: null,
+      confidence: "low",
+      applyByDefault: false,
+      reason: "Deactivate extra service not present in Carrefour official source",
+      sqlComment: `store_number=${row.serviceNumber} | DEACTIVATE_EXTRA`,
+    });
+  }
+
+  const coordinateUpdates = proposed.filter((fix) =>
+    ["AUTO_FIX_COORDINATE", "CRITICAL_COORDINATE_FIX", "REVIEW_COORDINATE_FIX"].includes(fix.fixType),
+  );
+  const addressUpdates = proposed.filter((fix) => fix.fixType === "AUTO_FIX_ADDRESS");
+
+  return {
+    proposed,
+    skipped,
+    duplicateResolution,
+    missingInserts,
+    missingRequiresCoordinates,
+    environmentSnapshot,
+    summary: {
+      totalCoordinateUpdatesProposed: coordinateUpdates.length,
+      totalAddressUpdatesProposed: addressUpdates.length,
+      totalMissingInsertCandidates: missingInserts.length,
+      totalDuplicateGroups: currentDb.duplicateNumericGroups.size,
+      totalDuplicateDeactivationCandidates: proposed.filter(
+        (fix) => fix.fixType === "DEACTIVATE_DUPLICATE",
+      ).length,
+      totalSkipped: skipped.length,
+      totalApplyDefault: proposed.filter((fix) => fix.applyByDefault).length,
+      generatedAt: new Date().toISOString(),
+      nodeEnv: environmentSnapshot.nodeEnv,
+      dbName: environmentSnapshot.dbName,
+      dbHost: environmentSnapshot.dbHost,
+    },
+  };
+};
+
+export const selectFixesToApply = (
+  plan: FixPlan,
+  options: FixPlanOptions,
+): ProposedFix[] =>
+  plan.proposed.filter((fix) => {
+    if (fix.applyByDefault) {
+      return true;
+    }
+
+    if (fix.fixType === "AUTO_FIX_ADDRESS" && options.fixAddresses) {
+      return true;
+    }
+
+    if (fix.fixType === "INSERT_MISSING" && options.insertMissing) {
+      return true;
+    }
+
+    if (fix.fixType === "REVIEW_COORDINATE_FIX" && options.includeReviewCoordinates) {
+      return true;
+    }
+
+    if (fix.fixType === "DEACTIVATE_DUPLICATE" && options.deactivateDuplicates) {
+      return true;
+    }
+
+    if (fix.fixType === "RENAME_NONNUMERIC" && options.fixNonnumericNames) {
+      return true;
+    }
+
+    if (fix.fixType === "DEACTIVATE_EXTRA" && options.deactivateExtra) {
+      return true;
+    }
+
+    return false;
+  });
+
+export {
+  isCommercialDescriptionAddress,
+  isLabelOnlyOfficialAddress,
+  isMalformedOfficialAddress,
+} from "./address-heuristics";

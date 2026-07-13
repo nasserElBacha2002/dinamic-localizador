@@ -41,3 +41,28 @@ export const requireDinamicCompanyId = async (): Promise<string> => {
   }
   return company.id;
 };
+
+export const resolveCompanyTodayIso = async (companyId: string): Promise<string> => {
+  const { companySettingsRepository } = await import("../repositories/company-settings.repository");
+  const { getDateIsoInTimezone } = await import("../utils/absence-date");
+  const { resolveOperationTimezone } = await import("../utils/operation-timezone");
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  const timezone = resolveOperationTimezone(settings?.operationTimezone);
+  return getDateIsoInTimezone(new Date(), timezone);
+};
+
+/** Normalizes SQL DATE values returned by mssql/tedious for stable ISO comparisons. */
+export const normalizeSqlDateIso = (value: unknown): string => {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  return text.slice(0, 10);
+};

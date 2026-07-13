@@ -55,6 +55,11 @@ describeDatabaseIntegration("platform company creation integration", () => {
     const pool = getPool();
     for (const companyId of createdCompanyIds) {
       await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
+        DELETE FROM employee_absence_balances WHERE company_id = @companyId;
+        DELETE FROM employees WHERE company_id = @companyId;
+        DELETE FROM company_absence_settings WHERE company_id = @companyId;
+        DELETE FROM absence_types WHERE company_id = @companyId;
+        DELETE FROM company_location_types WHERE company_id = @companyId;
         DELETE FROM user_company_memberships WHERE company_id = @companyId;
         DELETE FROM company_modules WHERE company_id = @companyId;
         DELETE FROM company_settings WHERE company_id = @companyId;
@@ -277,6 +282,11 @@ describeDatabaseIntegration("platform company routes authorization", () => {
     if (company.id) {
       const pool = getPool();
       await pool.request().input("companyId", sql.UniqueIdentifier, company.id).query(`
+        DELETE FROM employee_absence_balances WHERE company_id = @companyId;
+        DELETE FROM employees WHERE company_id = @companyId;
+        DELETE FROM company_absence_settings WHERE company_id = @companyId;
+        DELETE FROM absence_types WHERE company_id = @companyId;
+        DELETE FROM company_location_types WHERE company_id = @companyId;
         DELETE FROM user_company_memberships WHERE company_id = @companyId;
         DELETE FROM company_modules WHERE company_id = @companyId;
         DELETE FROM company_settings WHERE company_id = @companyId;

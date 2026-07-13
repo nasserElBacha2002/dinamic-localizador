@@ -40,8 +40,8 @@ export const evaluateGeofenceDistance = (
 export const evaluateAttendanceGeofence = (input: {
   employeeLatitude: number;
   employeeLongitude: number;
-  storeLatitude: number;
-  storeLongitude: number;
+  serviceLatitude: number;
+  serviceLongitude: number;
   allowedRadiusMeters: number;
   reviewMarginMeters: number;
   defaultRadiusMeters?: number;
@@ -49,8 +49,8 @@ export const evaluateAttendanceGeofence = (input: {
   const distanceMeters = calculateDistanceMeters(
     input.employeeLatitude,
     input.employeeLongitude,
-    input.storeLatitude,
-    input.storeLongitude,
+    input.serviceLatitude,
+    input.serviceLongitude,
   );
 
   const fallbackRadius = input.defaultRadiusMeters ?? getDefaultRadiusMeters();

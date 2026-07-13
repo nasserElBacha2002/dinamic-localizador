@@ -14,14 +14,17 @@ import {
   StatusBadge,
   type DataTableColumn,
 } from "../../design-system";
-import {
-  useCompanyPermissions,
+import { useCompanyPermissions,
   useCompanyUsers,
   useCreateCompanyUser,
   useDeactivateCompanyUser,
   useUpdateCompanyUser,
 } from "../../hooks/useCompanyUsers";
-import { usePaginationState } from "../../hooks/usePaginationState";
+import { useTableUrlState } from "../../hooks/useTableUrlState";
+import {
+  COMPANY_USERS_TABLE_DEFAULTS,
+  COMPANY_USERS_TABLE_FIELDS,
+} from "./company-users-table-state";
 import type { CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
 import { formatDate } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -29,12 +32,10 @@ import { companyRoleLabels, membershipStatusLabels } from "../../utils/labels";
 import { CompanyUserDialog } from "./CompanyUserDialog";
 
 export function CompanyUsersPage() {
-  const pagination = usePaginationState(10);
-  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
-  const [searchInput, setSearchInput] = useState("");
-  const [search, setSearch] = useState("");
-  const [roleFilter, setRoleFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const table = useTableUrlState({
+    defaults: COMPANY_USERS_TABLE_DEFAULTS,
+    fields: COMPANY_USERS_TABLE_FIELDS,
+  });
   const [dialogOpen, setDialogOpen] = useState(false);
   const [dialogMode, setDialogMode] = useState<"create" | "edit">("create");
   const [selectedUser, setSelectedUser] = useState<CompanyUser | null>(null);
@@ -46,14 +47,16 @@ export function CompanyUsersPage() {
 
   const filters = useMemo(
     () => ({
-      page,
-      limit: pageSize,
-      search: search || undefined,
-      role: roleFilter === "all" ? undefined : (roleFilter as CompanyUser["companyRole"]),
+      page: table.page,
+      limit: table.pageSize,
+      search: table.state.search || undefined,
+      role: table.state.role === "all" ? undefined : (table.state.role as CompanyUser["companyRole"]),
       status:
-        statusFilter === "all" ? undefined : (statusFilter as CompanyUser["membershipStatus"]),
+        table.state.status === "all"
+          ? undefined
+          : (table.state.status as CompanyUser["membershipStatus"]),
     }),
-    [page, pageSize, roleFilter, search, statusFilter],
+    [table.page, table.pageSize, table.state.role, table.state.search, table.state.status],
   );
 
   const usersQuery = useCompanyUsers(filters, canManageUsers);
@@ -63,23 +66,16 @@ export function CompanyUsersPage() {
 
   const handleSearch = useCallback(
     (value: string) => {
-      resetPage();
-      const nextSearch = value.trim();
-      setSearchInput(nextSearch);
-      setSearch(nextSearch);
+      table.commitSearch(value);
     },
-    [resetPage],
+    [table],
   );
 
   const handleSearchChange = useCallback(
     (value: string) => {
-      setSearchInput(value);
-      if (!value) {
-        resetPage();
-        setSearch("");
-      }
+      table.setSearch(value);
     },
-    [resetPage],
+    [table],
   );
 
   const openCreateDialog = () => {
@@ -200,7 +196,7 @@ export function CompanyUsersPage() {
       <FilterBar>
         <FilterBar.Item>
           <SearchInput
-            value={searchInput}
+            value={table.searchInput}
             onChange={handleSearchChange}
             onSearch={handleSearch}
             placeholder="Nombre o email"
@@ -210,13 +206,12 @@ export function CompanyUsersPage() {
         <FilterBar.Item>
           <Select
             label="Rol"
-            value={roleFilter}
+            value={table.state.role}
             onChange={(value) => {
               if (!value) {
                 return;
               }
-              resetPage();
-              setRoleFilter(value);
+              table.setField("role", value);
             }}
             data={[
               { value: "all", label: "Todos" },
@@ -227,13 +222,12 @@ export function CompanyUsersPage() {
         <FilterBar.Item>
           <Select
             label="Estado"
-            value={statusFilter}
+            value={table.state.status}
             onChange={(value) => {
               if (!value) {
                 return;
               }
-              resetPage();
-              setStatusFilter(value);
+              table.setField("status", value);
             }}
             data={[
               { value: "all", label: "Todos" },
@@ -274,9 +268,9 @@ export function CompanyUsersPage() {
           usersQuery.data && usersQuery.data.data.length > 0 ? (
             <PaginationControls
               meta={mapApiPaginationMeta(usersQuery.data.meta)}
-              onPageChange={onPageChange}
-              pageSize={pageSize}
-              onPageSizeChange={onPageSizeChange}
+              onPageChange={table.onPageChange}
+              pageSize={table.pageSize}
+              onPageSizeChange={table.onPageSizeChange}
               showPageSizeSelector
             />
           ) : undefined

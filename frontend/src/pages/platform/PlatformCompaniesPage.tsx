@@ -15,6 +15,7 @@ import type { CreatePlatformCompanyInput, PlatformCompany } from "../../types/pl
 import { getApiErrorMessage } from "../../utils/errors";
 import { CreatePlatformCompanyDialog } from "./CreatePlatformCompanyDialog";
 
+// Platform admin list: no filters, search, or pagination — URL table state not applicable.
 export function PlatformCompaniesPage() {
   const { user } = useAuth();
   const { refreshCompanies } = useCompany();

@@ -5,14 +5,14 @@ import {
   formatTerminology,
   getTerminologyLabel,
   legacyTerminology,
-  locationAddressLabel,
+  serviceAddressLabel,
   operationScheduleLabel,
   terminology,
 } from "./terminology";
 
 describe("terminology", () => {
-  it("defines location, operation, and worker entries", () => {
-    assert.ok(terminology.location);
+  it("defines service, operation, and worker entries", () => {
+    assert.ok(terminology.service);
     assert.ok(terminology.operation);
     assert.ok(terminology.worker);
     assert.ok(terminology.attendance);
@@ -20,8 +20,8 @@ describe("terminology", () => {
   });
 
   it("uses recommended Spanish product labels", () => {
-    assert.equal(terminology.location.singular, "Ubicación");
-    assert.equal(terminology.location.plural, "Ubicaciones");
+    assert.equal(terminology.service.singular, "Servicio");
+    assert.equal(terminology.service.plural, "Servicios");
     assert.equal(terminology.operation.singular, "Operación");
     assert.equal(terminology.operation.plural, "Operaciones");
     assert.equal(terminology.worker.singular, "Colaborador");
@@ -31,18 +31,19 @@ describe("terminology", () => {
   });
 
   it("keeps legacy labels available", () => {
-    assert.equal(terminology.location.legacySingular, "Tienda");
-    assert.equal(terminology.location.legacyPlural, "Tiendas");
+    assert.equal(terminology.service.legacySingular, "Tienda");
+    assert.equal(terminology.service.legacyPlural, "Tiendas");
     assert.equal(terminology.operation.legacySingular, "Inventario");
     assert.equal(terminology.operation.legacyPlural, "Inventarios");
     assert.equal(terminology.worker.legacySingular, "Empleado");
     assert.equal(terminology.worker.legacyPlural, "Empleados");
-    assert.deepEqual(legacyTerminology.location, { singular: "Tienda", plural: "Tiendas" });
+    assert.deepEqual(legacyTerminology.operation, { singular: "Inventario", plural: "Inventarios" });
+    assert.deepEqual(legacyTerminology.service, { singular: "Tienda", plural: "Tiendas" });
   });
 
   it("keeps technical keys stable", () => {
-    assert.equal(terminology.location.technical, "store");
-    assert.equal(terminology.operation.technical, "inventory");
+    assert.equal(terminology.service.technical, "service");
+    assert.equal(terminology.operation.technical, "operation");
     assert.equal(terminology.worker.technical, "employee");
   });
 
@@ -50,7 +51,7 @@ describe("terminology", () => {
     assert.equal(getTerminologyLabel("operation", "plural"), "Operaciones");
     assert.equal(formatTerminology("worker", "Nuevo {term}", "singular"), "Nuevo Colaborador");
     assert.equal(assignedWorkersLabel, "Colaboradores asignados");
-    assert.equal(locationAddressLabel, "Dirección de la ubicación");
+    assert.equal(serviceAddressLabel, "Dirección del servicio");
     assert.equal(operationScheduleLabel, "Horario de la operación");
   });
 });

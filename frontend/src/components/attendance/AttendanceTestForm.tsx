@@ -20,7 +20,7 @@ import {
   validationStatusLabels,
 } from "../../utils/labels";
 import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
-import { InventorySearchAutocomplete } from "../inventories/InventorySearchAutocomplete";
+import { OperationSearchAutocomplete } from "../operations/OperationSearchAutocomplete";
 
 interface AttendanceTestFormProps {
   defaultValues: AttendanceTestFormValues;
@@ -69,12 +69,12 @@ export function AttendanceTestForm({
           <FormErrorAlert message={errorMessage} />
 
           <Controller
-            name="inventoryId"
+            name="operationId"
             control={control}
             render={({ field, fieldState }) => (
-              <InventorySearchAutocomplete
+              <OperationSearchAutocomplete
                 value={field.value || null}
-                onChange={(inventoryId) => field.onChange(inventoryId ?? "")}
+                onChange={(operationId) => field.onChange(operationId ?? "")}
                 error={Boolean(fieldState.error)}
                 helperText={fieldState.error?.message}
                 required

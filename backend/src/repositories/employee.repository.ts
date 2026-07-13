@@ -31,10 +31,10 @@ export const employeeRepository = {
       phoneNumber: string;
       employeeType: Employee["employeeType"];
     },
+    transaction?: sql.Transaction,
   ): Promise<Employee> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(150), input.name)
       .input("documentNumber", sql.NVarChar(50), input.documentNumber)
@@ -64,6 +64,29 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async listByIds(companyId: string, ids: string[]): Promise<Employee[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const idParams = ids.map((id, index) => {
+      const param = `id${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT e.*
+      FROM employees e
+      WHERE e.company_id = @companyId
+        AND e.id IN (${idParams.join(", ")})
+    `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
   async findByPhone(companyId: string, phoneNumber: string): Promise<Employee | null> {
     const pool = getPool();
     const result = await pool
@@ -80,6 +103,43 @@ export const employeeRepository = {
     }
 
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listActiveByPhone(phoneNumber: string): Promise<Array<Employee & { companyId: string }>> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("phoneNumber", sql.NVarChar(30), phoneNumber)
+      .query(`
+        SELECT e.*
+        FROM employees e
+        INNER JOIN companies c ON c.id = e.company_id
+        WHERE e.phone_number = @phoneNumber
+          AND e.active = 1
+          AND c.status = 'ACTIVE'
+        ORDER BY e.created_at ASC
+      `);
+
+    return result.recordset.map((row) => ({
+      ...mapEmployeeRow(row as Record<string, unknown>),
+      companyId: String((row as Record<string, unknown>).company_id),
+    }));
+  },
+
+  async listActiveByCompanyId(companyId: string): Promise<Employee[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT *
+        FROM employees
+        WHERE company_id = @companyId
+          AND active = 1
+        ORDER BY name ASC, created_at ASC
+      `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
   },
 
   async list(
@@ -194,7 +254,7 @@ export const employeeRepository = {
     return this.update(companyId, id, { active: false });
   },
 
-  async hasActiveOrScheduledInventories(companyId: string, employeeId: string): Promise<boolean> {
+  async hasActiveOrScheduledOperations(companyId: string, employeeId: string): Promise<boolean> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -203,7 +263,7 @@ export const employeeRepository = {
       .query(`
         SELECT TOP 1 1 AS found
         FROM operation_assignments ie
-        INNER JOIN scheduled_operations i ON i.id = ie.inventory_id
+        INNER JOIN scheduled_operations i ON i.id = ie.operation_id
         WHERE ie.employee_id = @employeeId
           AND ie.company_id = @companyId
           AND i.company_id = @companyId

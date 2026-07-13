@@ -14,9 +14,9 @@ import { evaluateAttendanceGeofence } from "./bot-geofence.validator";
 export function buildCheckInValidation(input: {
   employeeLatitude: number;
   employeeLongitude: number;
-  storeLatitude: number;
-  storeLongitude: number;
-  storeAllowedRadiusMeters: number;
+  serviceLatitude: number;
+  serviceLongitude: number;
+  serviceAllowedRadiusMeters: number;
   receivedAt: Date;
   scheduledStart: Date;
   earlyToleranceMinutes: number;
@@ -28,15 +28,15 @@ export function buildCheckInValidation(input: {
   effectiveRadiusMeters: number;
 } {
   const effectiveRadiusMeters =
-    input.storeAllowedRadiusMeters > 0
-      ? input.storeAllowedRadiusMeters
+    input.serviceAllowedRadiusMeters > 0
+      ? input.serviceAllowedRadiusMeters
       : input.runtimeSettings.defaultRadiusMeters;
 
   const geo = evaluateAttendanceGeofence({
     employeeLatitude: input.employeeLatitude,
     employeeLongitude: input.employeeLongitude,
-    storeLatitude: input.storeLatitude,
-    storeLongitude: input.storeLongitude,
+    serviceLatitude: input.serviceLatitude,
+    serviceLongitude: input.serviceLongitude,
     allowedRadiusMeters: effectiveRadiusMeters,
     reviewMarginMeters: input.runtimeSettings.geofenceReviewMarginMeters,
     defaultRadiusMeters: input.runtimeSettings.defaultRadiusMeters,
@@ -60,9 +60,9 @@ export function buildCheckInValidation(input: {
 export function buildCheckoutValidation(input: {
   employeeLatitude: number;
   employeeLongitude: number;
-  storeLatitude: number;
-  storeLongitude: number;
-  storeAllowedRadiusMeters: number;
+  serviceLatitude: number;
+  serviceLongitude: number;
+  serviceAllowedRadiusMeters: number;
   checkoutAt: Date;
   scheduledEnd: Date | null;
   runtimeSettings: BotRuntimeSettings;
@@ -72,15 +72,15 @@ export function buildCheckoutValidation(input: {
   effectiveRadiusMeters: number;
 } {
   const effectiveRadiusMeters =
-    input.storeAllowedRadiusMeters > 0
-      ? input.storeAllowedRadiusMeters
+    input.serviceAllowedRadiusMeters > 0
+      ? input.serviceAllowedRadiusMeters
       : input.runtimeSettings.defaultRadiusMeters;
 
   const geo = evaluateAttendanceGeofence({
     employeeLatitude: input.employeeLatitude,
     employeeLongitude: input.employeeLongitude,
-    storeLatitude: input.storeLatitude,
-    storeLongitude: input.storeLongitude,
+    serviceLatitude: input.serviceLatitude,
+    serviceLongitude: input.serviceLongitude,
     allowedRadiusMeters: effectiveRadiusMeters,
     reviewMarginMeters: input.runtimeSettings.geofenceReviewMarginMeters,
     defaultRadiusMeters: input.runtimeSettings.defaultRadiusMeters,

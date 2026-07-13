@@ -4,7 +4,7 @@ import { Controller, type Control, type FieldPath, type FieldValues } from "reac
 /**
  * Datetime-local input preserving string values (e.g. "2026-06-23T14:30").
  * Uses native HTML datetime-local via Mantine TextInput — @mantine/dates is deferred
- * until inventory/attendance form migrations (PR 11+) to avoid timezone contract changes.
+ * until operation/attendance form migrations (PR 11+) to avoid timezone contract changes.
  */
 export interface RHFDateTimeInputProps<T extends FieldValues> {
   control: Control<T>;

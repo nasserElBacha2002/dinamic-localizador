@@ -17,6 +17,7 @@ import { userRepository } from "../repositories/user.repository";
 import { hashPassword } from "../utils/password";
 
 const TEST_OWNER_EMAIL = "integration-modules-owner@test.local";
+const TEST_ADMIN_EMAIL = "integration-modules-admin@test.local";
 const TEST_READ_ONLY_EMAIL = "integration-modules-readonly@test.local";
 const TEST_OUTSIDER_EMAIL = "integration-modules-outsider@test.local";
 
@@ -26,6 +27,8 @@ describeDatabaseIntegration("company modules API integration", () => {
   let dinamicCompanyId = "";
   let ownerUserId = "";
   let ownerUserEmail = "";
+  let adminUserId = "";
+  let adminUserEmail = "";
   let readOnlyUserId = "";
   let readOnlyUserEmail = "";
   let outsiderUserId = "";
@@ -53,6 +56,20 @@ describeDatabaseIntegration("company modules API integration", () => {
     });
   };
 
+  const platformAdminToken = () =>
+    signTestToken({
+      userId: platformAdminId,
+      email: platformAdminEmail,
+      role: "ADMIN",
+    });
+
+  const ownerToken = () =>
+    signTestToken({
+      userId: ownerUserId,
+      email: ownerUserEmail,
+      role: "ADMIN",
+    });
+
   before(async () => {
     setupUnitTestEnv();
     await setupDatabaseIntegration();
@@ -76,7 +93,7 @@ describeDatabaseIntegration("company modules API integration", () => {
     const ensureUser = async (
       email: string,
       name: string,
-      role: "OWNER" | "READ_ONLY",
+      role: "OWNER" | "ADMIN" | "READ_ONLY",
       companyId: string,
       withMembership: boolean,
     ) => {
@@ -113,6 +130,16 @@ describeDatabaseIntegration("company modules API integration", () => {
     );
     ownerUserId = owner.id;
     ownerUserEmail = owner.email;
+
+    const admin = await ensureUser(
+      TEST_ADMIN_EMAIL,
+      "Modules Admin",
+      "ADMIN",
+      dinamicCompanyId,
+      true,
+    );
+    adminUserId = admin.id;
+    adminUserEmail = admin.email;
 
     const readOnly = await ensureUser(
       TEST_READ_ONLY_EMAIL,
@@ -153,13 +180,8 @@ describeDatabaseIntegration("company modules API integration", () => {
   });
 
   it("allows OWNER to list modules", async () => {
-    const token = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
-      role: "ADMIN",
-    });
     const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/modules`, {
-      token,
+      token: ownerToken(),
     });
     assert.equal(response.status, 200);
     const data = response.body.data as Array<{ moduleKey: string; isEnabled: boolean }>;
@@ -167,13 +189,29 @@ describeDatabaseIntegration("company modules API integration", () => {
     assert.equal("id" in (data[0] ?? {}), false);
   });
 
-  it("allows OWNER to update modules", async () => {
+  it("rejects OWNER PATCH with PLATFORM_ADMIN_REQUIRED", async () => {
+    const response = await patchModules(ownerToken(), dinamicCompanyId, [
+      { moduleKey: "reports", isEnabled: false },
+    ]);
+    assert.equal(response.status, 403);
+    assert.equal((response.body.error as { code?: string })?.code, "PLATFORM_ADMIN_REQUIRED");
+  });
+
+  it("rejects company ADMIN PATCH with PLATFORM_ADMIN_REQUIRED", async () => {
     const token = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
+      userId: adminUserId,
+      email: adminUserEmail,
       role: "ADMIN",
     });
     const response = await patchModules(token, dinamicCompanyId, [
+      { moduleKey: "reports", isEnabled: false },
+    ]);
+    assert.equal(response.status, 403);
+    assert.equal((response.body.error as { code?: string })?.code, "PLATFORM_ADMIN_REQUIRED");
+  });
+
+  it("allows platform admin to update modules", async () => {
+    const response = await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "reports", isEnabled: false },
     ]);
     assert.equal(response.status, 200);
@@ -192,6 +230,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       { moduleKey: "reports", isEnabled: false },
     ]);
     assert.equal(response.status, 403);
+    assert.equal((response.body.error as { code?: string })?.code, "PLATFORM_ADMIN_REQUIRED");
   });
 
   it("allows READ_ONLY GET", async () => {
@@ -220,28 +259,18 @@ describeDatabaseIntegration("company modules API integration", () => {
   });
 
   it("rejects invalid module key", async () => {
-    const token = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
-      role: "ADMIN",
-    });
     const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/modules`, {
       method: "PATCH",
-      token,
+      token: platformAdminToken(),
       body: { modules: [{ moduleKey: "billing", isEnabled: false }] },
     });
     assert.equal(response.status, 400);
   });
 
   it("rejects duplicate module keys in payload", async () => {
-    const token = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
-      role: "ADMIN",
-    });
     const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/modules`, {
       method: "PATCH",
-      token,
+      token: platformAdminToken(),
       body: {
         modules: [
           { moduleKey: "attendance", isEnabled: true },
@@ -253,14 +282,9 @@ describeDatabaseIntegration("company modules API integration", () => {
   });
 
   it("rejects disabling all core modules", async () => {
-    const token = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
-      role: "ADMIN",
-    });
-    const response = await patchModules(token, dinamicCompanyId, [
+    const response = await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "attendance", isEnabled: false },
-      { moduleKey: "inventory_operations", isEnabled: false },
+      { moduleKey: "operations", isEnabled: false },
       { moduleKey: "absences", isEnabled: false },
     ]);
     assert.equal(response.status, 400);
@@ -274,7 +298,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [{ moduleKey: "absences", isEnabled: false }]);
+    await patchModules(platformAdminToken(), dinamicCompanyId, [{ moduleKey: "absences", isEnabled: false }]);
 
     const requestsResponse = await apiRequest(
       baseUrl,
@@ -305,7 +329,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [
+    await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "absences", isEnabled: false },
       { moduleKey: "attendance", isEnabled: true },
     ]);
@@ -327,7 +351,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [{ moduleKey: "absences", isEnabled: false }]);
+    await patchModules(platformAdminToken(), dinamicCompanyId, [{ moduleKey: "absences", isEnabled: false }]);
 
     const response = await apiRequest(
       baseUrl,
@@ -346,7 +370,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [
+    await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "reports", isEnabled: false },
       { moduleKey: "bot_simulator", isEnabled: false },
       { moduleKey: "absences", isEnabled: false },
@@ -362,12 +386,7 @@ describeDatabaseIntegration("company modules API integration", () => {
   });
 
   it("returns MODULE_DISABLED for platform superadmin on disabled reports routes", async () => {
-    const ownerToken = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
-      role: "ADMIN",
-    });
-    await patchModules(ownerToken, dinamicCompanyId, [{ moduleKey: "reports", isEnabled: false }]);
+    await patchModules(platformAdminToken(), dinamicCompanyId, [{ moduleKey: "reports", isEnabled: false }]);
 
     const platformToken = signTestToken({
       userId: platformAdminId,
@@ -386,12 +405,7 @@ describeDatabaseIntegration("company modules API integration", () => {
   });
 
   it("returns MODULE_DISABLED for platform superadmin on disabled attendance routes", async () => {
-    const ownerToken = signTestToken({
-      userId: ownerUserId,
-      email: ownerUserEmail,
-      role: "ADMIN",
-    });
-    await patchModules(ownerToken, dinamicCompanyId, [{ moduleKey: "attendance", isEnabled: false }]);
+    await patchModules(platformAdminToken(), dinamicCompanyId, [{ moduleKey: "attendance", isEnabled: false }]);
 
     const platformToken = signTestToken({
       userId: platformAdminId,
@@ -414,7 +428,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [{ moduleKey: "reports", isEnabled: false }]);
+    await patchModules(platformAdminToken(), dinamicCompanyId, [{ moduleKey: "reports", isEnabled: false }]);
 
     const response = await apiRequest(
       baseUrl,
@@ -427,18 +441,18 @@ describeDatabaseIntegration("company modules API integration", () => {
     await restoreAllModules(dinamicCompanyId);
   });
 
-  it("returns MODULE_DISABLED for stores when inventory_operations is disabled", async () => {
+  it("returns MODULE_DISABLED for services when operations module is disabled", async () => {
     const token = signTestToken({
       userId: ownerUserId,
       email: ownerUserEmail,
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [
-      { moduleKey: "inventory_operations", isEnabled: false },
+    await patchModules(platformAdminToken(), dinamicCompanyId, [
+      { moduleKey: "operations", isEnabled: false },
     ]);
 
-    const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/stores`, {
+    const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/services`, {
       token,
     });
     assert.equal(response.status, 403);
@@ -454,7 +468,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [{ moduleKey: "attendance", isEnabled: false }]);
+    await patchModules(platformAdminToken(), dinamicCompanyId, [{ moduleKey: "attendance", isEnabled: false }]);
 
     const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/attendance`, {
       token,
@@ -472,9 +486,9 @@ describeDatabaseIntegration("company modules API integration", () => {
       role: "ADMIN",
     });
 
-    await patchModules(token, dinamicCompanyId, [
+    await patchModules(platformAdminToken(), dinamicCompanyId, [
       { moduleKey: "attendance", isEnabled: true },
-      { moduleKey: "inventory_operations", isEnabled: false },
+      { moduleKey: "operations", isEnabled: false },
       { moduleKey: "absences", isEnabled: false },
     ]);
 

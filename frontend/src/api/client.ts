@@ -7,7 +7,8 @@ import {
 import { getStoredToken } from "./token-storage";
 import { parseApiError } from "../utils/errors";
 
-const baseURL = import.meta.env.VITE_API_URL;
+const viteEnv = (import.meta as { env?: ImportMetaEnv }).env;
+const baseURL = viteEnv?.VITE_API_URL ?? globalThis.__VITE_API_URL__;
 
 if (!baseURL) {
   throw new Error("VITE_API_URL no está configurada");
@@ -30,7 +31,7 @@ apiClient.interceptors.request.use((config) => {
     config.headers.Authorization = `Bearer ${token}`;
   }
 
-  if (import.meta.env.DEV) {
+  if (viteEnv?.DEV) {
     const requestUrl = config.url ?? "";
     if (isLegacyOperationalApiPath(requestUrl)) {
       console.warn(
@@ -57,7 +58,7 @@ apiClient.interceptors.response.use(
         const hasActiveCompany = Boolean(getActiveCompanyId());
         const isLegacyRoute = isLegacyOperationalApiPath(requestUrl);
 
-        if (import.meta.env.DEV && hasActiveCompany && isLegacyRoute) {
+        if (viteEnv?.DEV && hasActiveCompany && isLegacyRoute) {
           console.warn(
             "Ignored COMPANY_SELECTION_REQUIRED for stale legacy request while company is selected:",
             requestUrl,

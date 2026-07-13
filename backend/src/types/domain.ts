@@ -1,8 +1,12 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
-import type { StoreFormat } from "../constants/store-formats";
 import type { EmployeeType } from "../constants/employee-types";
+import type { AssignmentOrigin } from "../constants/work-team-assignment";
+import type { OperationKind } from "../constants/operation-kind";
+import type { OperationScheduleSummary } from "./schedule";
 
-export type InventoryStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
+export type ServiceFormat = string;
+
+export type OperationStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
 export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
@@ -19,13 +23,13 @@ export interface Employee {
   updatedAt: string;
 }
 
-export interface Store {
+export interface Service {
   id: string;
   name: string;
   address: string | null;
   neighborhood: string | null;
   locality: string | null;
-  storeFormat: StoreFormat | null;
+  serviceFormat: ServiceFormat | null;
   latitude: number;
   longitude: number;
   allowedRadiusMeters: number;
@@ -35,42 +39,70 @@ export interface Store {
   updatedAt: string;
 }
 
-export interface Inventory {
+export interface Operation {
   id: string;
-  storeId: string;
-  scheduledStart: string;
+  serviceId: string;
+  operationKind: OperationKind;
+  scheduledStart: string | null;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
-  status: InventoryStatus;
+  status: OperationStatus;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
 
-export interface InventoryWithStore extends Inventory {
-  store: Pick<Store, "id" | "name" | "address" | "active">;
+export interface OperationScheduleView {
+  scheduleSource: "COMPANY" | "CUSTOM";
+  validFrom: string;
+  validUntil: string | null;
+  timezone: string;
+  version: number;
+  days: import("./schedule").WeeklyScheduleDay[];
+}
+
+export interface OperationWithService extends Operation {
+  service: Pick<Service, "id" | "name" | "address" | "active">;
   assignedEmployeesCount?: number;
   attendanceRecordsCount?: number;
+  scheduleSummary?: OperationScheduleSummary;
 }
 
-export interface InventoryDetail extends Inventory {
-  store: Store;
+export interface OperationDetail extends Operation {
+  service: Service;
   assignedEmployees: Employee[];
   attendanceRecordsCount: number;
+  schedule?: OperationScheduleView;
 }
 
-export interface InventoryEmployeeAssignment {
-  inventoryId: string;
+export interface OperationEmployeeAssignment {
+  id: string;
+  companyId: string;
+  operationId: string;
   employeeId: string;
+  validFrom: string;
+  validUntil: string | null;
   assignedAt: string;
+  createdAt: string;
+  updatedAt: string;
+  confirmationStatus?: "PENDING" | "CONFIRMED" | "UNAVAILABLE";
+  confirmedAt?: string | null;
+  unavailableAt?: string | null;
+  cancelledAt?: string | null;
+  lifecycleState?: "CURRENT" | "FUTURE" | "ENDED";
+  assignmentOrigin?: AssignmentOrigin;
+  sourceAssignmentBatchId?: string | null;
+  sourceWorkTeamId?: string | null;
+  sourceWorkTeamName?: string | null;
   employee?: Employee;
 }
 
 export interface AttendanceRecord {
   id: string;
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
+  employeeWorkdayId: string | null;
   receivedLatitude: number;
   receivedLongitude: number;
   distanceMeters: number;
@@ -99,6 +131,6 @@ export interface AttendanceRecord {
 
 export interface AttendanceRecordWithRelations extends AttendanceRecord {
   employee: Pick<Employee, "id" | "name" | "phoneNumber">;
-  inventory: Pick<Inventory, "id" | "status" | "scheduledStart" | "scheduledEnd">;
-  store: Pick<Store, "id" | "name" | "address"> & { allowedRadiusMeters?: number };
+  operation: Pick<Operation, "id" | "status" | "scheduledStart" | "scheduledEnd">;
+  service: Pick<Service, "id" | "name" | "address"> & { allowedRadiusMeters?: number };
 }

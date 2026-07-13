@@ -1,3 +1,5 @@
+import { formatDateOnly, isDateOnlyString } from "./date-only";
+
 const TIMEZONE = "America/Argentina/Buenos_Aires";
 /** Argentina (America/Argentina/Buenos_Aires) is UTC-3 without DST since 2009. */
 const ARGENTINA_UTC_OFFSET_HOURS = 3;
@@ -36,7 +38,31 @@ export function formatDate(iso: string | null | undefined): string {
     return "—";
   }
 
+  if (isDateOnlyString(iso)) {
+    try {
+      return formatDateOnly(iso);
+    } catch {
+      // Impossible calendar date: never render a different day than received.
+      return iso;
+    }
+  }
+
   return dateFormatter.format(new Date(iso));
+}
+
+const timeFormatter = new Intl.DateTimeFormat("es-AR", {
+  timeZone: TIMEZONE,
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+export function formatTime(iso: string | null | undefined): string {
+  if (!iso) {
+    return "—";
+  }
+
+  return timeFormatter.format(new Date(iso));
 }
 
 export function isoToDatetimeLocal(iso: string): string {

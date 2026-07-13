@@ -53,22 +53,22 @@ describeDatabaseIntegration("absence request stabilization (database)", () => {
     assert.equal(result.meta.limit, 10);
     assert.equal(typeof result.meta.total, "number");
     for (const item of result.data) {
-      assert.equal(typeof item.affectedInventoriesCount, "number");
-      assert.ok(item.affectedInventoriesCount >= 0);
+      assert.equal(typeof item.affectedOperationsCount, "number");
+      assert.ok(item.affectedOperationsCount >= 0);
     }
   });
 
-  it("findAffectedInventories tolerates inventories without scheduled_start", async () => {
+  it("findAffectedOperations tolerates operations without scheduled_start", async () => {
     const { absenceRequestRepository } = await import("../repositories/absence-request.repository");
     const companyId = await requireDinamicCompanyId();
-    const inventories = await absenceRequestRepository.findAffectedInventories(
+    const operations = await absenceRequestRepository.findAffectedOperations(
       companyId,
       "00000000-0000-0000-0000-000000000000",
       new Date("2026-01-01T03:00:00.000Z"),
       new Date("2026-01-02T02:59:59.999Z"),
     );
 
-    assert.ok(Array.isArray(inventories));
+    assert.ok(Array.isArray(operations));
   });
 
   it("forces admin create path to ignore client requestedVia", async () => {

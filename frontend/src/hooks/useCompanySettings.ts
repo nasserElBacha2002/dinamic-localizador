@@ -1,16 +1,40 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseQueryOptions,
+} from "@tanstack/react-query";
 import { getCompanySettings, updateCompanySettings } from "../api/company-settings.api";
-import type { UpdateCompanySettingsInput } from "../types/company-settings";
+import type { CompanySettings, UpdateCompanySettingsInput } from "../types/company-settings";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
-export function useCompanySettings(extraEnabled = true) {
+export const companySettingsQueryKey = (companyId?: string) =>
+  ["company-settings", companyId] as const;
+
+type CompanySettingsQueryOptions = Pick<
+  UseQueryOptions<CompanySettings>,
+  "staleTime" | "refetchOnMount" | "gcTime"
+>;
+
+export function useCompanySettings(
+  extraEnabled = true,
+  queryOptions?: CompanySettingsQueryOptions,
+) {
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
 
   return useQuery({
-    queryKey: ["company-settings", companyId],
+    queryKey: companySettingsQueryKey(companyId),
     queryFn: () => getCompanySettings(),
     enabled,
     retry: 1,
+    ...queryOptions,
+  });
+}
+
+export function useCompanySettingsForOperationCreate() {
+  return useCompanySettings(true, {
+    staleTime: 0,
+    refetchOnMount: "always",
   });
 }
 
@@ -20,8 +44,11 @@ export function useUpdateCompanySettings() {
 
   return useMutation({
     mutationFn: (input: UpdateCompanySettingsInput) => updateCompanySettings(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["company-settings", companyId] });
+    onSuccess: (settings) => {
+      if (companyId) {
+        queryClient.setQueryData(companySettingsQueryKey(companyId), settings);
+      }
+      void queryClient.invalidateQueries({ queryKey: companySettingsQueryKey(companyId) });
     },
   });
 }

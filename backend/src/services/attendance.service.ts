@@ -8,14 +8,16 @@ import { attendanceReviewRepository } from "../repositories/attendance-review.re
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import { inventoryEmployeeRepository } from "../repositories/inventory-employee.repository";
-import { inventoryRepository } from "../repositories/inventory.repository";
+import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import type { ReviewAttendanceInput } from "../schemas/attendance-review.schema";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
 import { auditService } from "./audit.service";
+import { workdayMaterializationService } from "./workday-materialization.service";
 import { buildCsv } from "../utils/csv";
 import { buildPaginationMeta } from "../utils/pagination";
+import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
 
 const formatLocalDateTime = (value: string | Date | null | undefined): string => {
   if (!value) {
@@ -36,9 +38,9 @@ const formatLocalDateTime = (value: string | Date | null | undefined): string =>
 
 export const attendanceService = {
   async create(companyId: string, input: CreateAttendanceInput) {
-    const inventory = await inventoryRepository.findById(companyId, input.inventoryId);
-    if (!inventory) {
-      throw new AppError(404, "INVENTORY_NOT_FOUND", "Inventario no encontrado");
+    const operation = await operationRepository.findById(companyId, input.operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
 
     const employee = await employeeRepository.findById(companyId, input.employeeId);
@@ -46,40 +48,62 @@ export const attendanceService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
-    const isAssigned = await inventoryEmployeeRepository.exists(
+    const operationWorkday = await workdayMaterializationService.ensureOperationWorkday(
       companyId,
-      input.inventoryId,
+      input.operationId,
+    );
+
+    const isAssigned = await operationEmployeeRepository.exists(
+      companyId,
+      input.operationId,
       input.employeeId,
+      operationWorkday.workDate,
     );
     if (!isAssigned) {
       throw new AppError(
         409,
-        "EMPLOYEE_NOT_ASSIGNED_TO_INVENTORY",
-        "El empleado no está asignado al inventario",
+        "EMPLOYEE_NOT_ASSIGNED_TO_OPERATION",
+        "El empleado no está asignado a la operación",
       );
     }
 
-    const hasActiveRecord = await attendanceRepository.hasActiveRecord(
+    const employeeWorkday = await workdayMaterializationService.ensureEmployeeWorkday(
       companyId,
-      input.inventoryId,
+      input.operationId,
       input.employeeId,
+    );
+
+    const hasActiveRecord = await attendanceRepository.hasActiveRecordByEmployeeWorkday(
+      companyId,
+      employeeWorkday.id,
     );
     if (hasActiveRecord) {
       throw new AppError(
         409,
         "ATTENDANCE_ALREADY_EXISTS",
-        "Ya existe un registro de asistencia válido o pendiente para este empleado e inventario",
+        "Ya existe un registro de asistencia válido o pendiente para este empleado y operación",
       );
     }
 
     try {
-      return await attendanceRepository.create(companyId, input);
+      return await attendanceRepository.create(companyId, {
+        ...input,
+        employeeWorkdayId: employeeWorkday.id,
+      });
     } catch (error) {
       if (error instanceof Error && error.message.includes("UQ_attendance_records_source_message_sid")) {
         throw new AppError(
           409,
           "SOURCE_MESSAGE_SID_ALREADY_EXISTS",
           "El sourceMessageSid ya fue utilizado",
+        );
+      }
+
+      if (isActiveAttendanceDuplicateKeyError(error)) {
+        throw new AppError(
+          409,
+          "ATTENDANCE_ALREADY_EXISTS",
+          "Ya existe un registro de asistencia válido o pendiente para este empleado y operación",
         );
       }
 
@@ -169,7 +193,7 @@ export const attendanceService = {
             id: session.id,
             state: session.state,
             expiresAt: session.expiresAt,
-            inventoryId: session.inventoryId,
+            operationId: session.operationId,
           }
         : null,
       coordinates: {
@@ -261,13 +285,13 @@ export const attendanceService = {
       String(row.employee_name ?? ""),
       row.employee_document_number ? String(row.employee_document_number) : "",
       String(row.employee_phone_number ?? ""),
-      String(row.store_name ?? ""),
-      row.store_address ? String(row.store_address) : "",
-      String(row.inventory_id ?? ""),
-      formatLocalDateTime(row.inventory_scheduled_start as string),
+      String(row.service_name ?? ""),
+      row.service_address ? String(row.service_address) : "",
+      String(row.operation_id ?? ""),
+      formatLocalDateTime(row.operation_scheduled_start as string),
       formatLocalDateTime(row.received_at as string),
       row.distance_meters !== undefined ? Number(row.distance_meters) : "",
-      row.store_allowed_radius_meters !== undefined ? Number(row.store_allowed_radius_meters) : "",
+      row.service_allowed_radius_meters !== undefined ? Number(row.service_allowed_radius_meters) : "",
       String(row.validation_status ?? ""),
       String(row.location_status ?? ""),
       String(row.punctuality_status ?? ""),
@@ -281,9 +305,9 @@ export const attendanceService = {
         "Empleado",
         "Documento",
         "Teléfono",
-        "Tienda",
+        "Servicio",
         "Dirección",
-        "Inventario",
+        "Operación",
         "Inicio programado",
         "Check-in",
         "Distancia",

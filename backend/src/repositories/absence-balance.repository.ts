@@ -161,6 +161,84 @@ export const absenceBalanceRepository = {
     );
   },
 
+  async createIfNotExists(
+    companyId: string,
+    input: {
+      employeeId: string;
+      absenceTypeId: string;
+      year: number;
+      totalDays: number;
+      notes?: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<EmployeeAbsenceBalance | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+
+    try {
+      const result = await request
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+        .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
+        .input("year", sql.Int, input.year)
+        .input("totalDays", sql.Decimal(5, 1), input.totalDays)
+        .input("notes", sql.NVarChar(500), input.notes ?? null)
+        .query(`
+          IF NOT EXISTS (
+            SELECT 1
+            FROM employee_absence_balances
+            WHERE company_id = @companyId
+              AND employee_id = @employeeId
+              AND absence_type_id = @absenceTypeId
+              AND year = @year
+          )
+          BEGIN
+            INSERT INTO employee_absence_balances (
+              company_id, employee_id, absence_type_id, year, total_days, notes
+            )
+            VALUES (@companyId, @employeeId, @absenceTypeId, @year, @totalDays, @notes);
+          END
+
+          SELECT TOP 1 *
+          FROM employee_absence_balances
+          WHERE company_id = @companyId
+            AND employee_id = @employeeId
+            AND absence_type_id = @absenceTypeId
+            AND year = @year
+        `);
+
+      if (!result.recordset[0]) {
+        return null;
+      }
+
+      return mapEmployeeAbsenceBalanceRow(result.recordset[0] as Record<string, unknown>);
+    } catch (error) {
+      if (!isUniqueConstraintError(error)) {
+        throw error;
+      }
+
+      const fallbackRequest = transaction ? new sql.Request(transaction) : getPool().request();
+      const fallback = await fallbackRequest
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+        .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
+        .input("year", sql.Int, input.year)
+        .query(`
+          SELECT TOP 1 *
+          FROM employee_absence_balances
+          WHERE company_id = @companyId
+            AND employee_id = @employeeId
+            AND absence_type_id = @absenceTypeId
+            AND year = @year
+        `);
+
+      if (!fallback.recordset[0]) {
+        return null;
+      }
+
+      return mapEmployeeAbsenceBalanceRow(fallback.recordset[0] as Record<string, unknown>);
+    }
+  },
+
   async upsert(
     companyId: string,
     input: {

@@ -1,49 +1,41 @@
 import type {
   AttendanceRecord,
   Employee,
-  Inventory,
-  InventoryEmployeeAssignment,
-  Store,
+  Operation,
+  OperationEmployeeAssignment,
+  OperationWithService,
+  Service,
 } from "./domain";
 
 /**
- * Conceptual alias for {@link Store}.
+ * Conceptual alias for {@link Service}.
  *
- * Physical table (Phase 2.7): `operational_locations`. Legacy view: `stores`.
- * API routes and JSON fields (`storeId`, `storeName`) remain unchanged.
- * Product-facing terminology may call this "Ubicación".
+ * Physical table: `operational_locations`. Product term: "Servicio".
  */
-export type OperationalLocation = Store;
+export type OperationalLocation = Service;
 
 /**
- * Conceptual alias for {@link Inventory}.
+ * Conceptual alias for {@link Operation}.
  *
- * Physical table (Phase 2.7): `scheduled_operations`. Legacy view: `inventories`.
- * API routes and JSON fields (`inventoryId`, …) remain unchanged.
- * Product-facing terminology may call this "Operación" (scheduled operation).
+ * Physical table: `scheduled_operations`. Product term: "Operación" / "Jornada".
  */
-export type ScheduledOperation = Inventory;
+export type ScheduledOperation = Operation;
 
 /**
  * Conceptual alias for {@link Employee}.
  *
- * Current technical name remains `Employee` / `employees` for DB and API compatibility.
- * Product-facing terminology may call this "Colaborador".
+ * Product-facing terminology: "Colaborador".
  */
 export type Worker = Employee;
 
 /**
- * Conceptual alias for {@link InventoryEmployeeAssignment}.
+ * Conceptual alias for {@link OperationEmployeeAssignment}.
  *
- * Physical table (Phase 2.7): `operation_assignments`. Legacy view: `inventory_employees`.
- * Product-facing terminology may call this an operation assignment.
+ * Physical table: `operation_assignments`.
  */
-export type OperationAssignment = InventoryEmployeeAssignment;
+export type OperationAssignment = OperationEmployeeAssignment;
 
 /**
  * Conceptual alias for {@link AttendanceRecord}.
- *
- * Current technical name remains `AttendanceRecord` / `attendance_records`.
- * Represents check-in/check-out evidence for a scheduled operation.
  */
 export type OperationAttendanceRecord = AttendanceRecord;

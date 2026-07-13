@@ -17,14 +17,17 @@ describe("bot session expiration helpers", () => {
   it("defines only the expected active states", () => {
     assert.deepEqual(ACTIVE_SESSION_STATES, [
       "WAITING_LOCATION",
-      "WAITING_INVENTORY_SELECTION",
+      "WAITING_OPERATION_SELECTION",
       "WAITING_CHECKOUT_LOCATION",
-      "WAITING_CHECKOUT_INVENTORY_SELECTION",
+      "WAITING_CHECKOUT_OPERATION_SELECTION",
       "WAITING_ABSENCE_TYPE",
       "WAITING_ABSENCE_START_DATE",
       "WAITING_ABSENCE_END_DATE",
       "WAITING_ABSENCE_REASON",
       "WAITING_ABSENCE_CONFIRMATION",
+      "WAITING_CONFIRM_ATTENDANCE_SELECTION",
+      "WAITING_UNAVAILABILITY_SELECTION",
+      "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
     ]);
   });
 
@@ -83,7 +86,7 @@ describe("TTL renewal rules", () => {
 
   it("does not change expiration when only reading an active session", () => {
     const expiresAt = "2026-06-16T12:15:00.000Z";
-    const active = session("WAITING_INVENTORY_SELECTION", expiresAt);
+    const active = session("WAITING_OPERATION_SELECTION", expiresAt);
     const now = new Date("2026-06-16T12:05:00.000Z");
     assert.equal(isSessionActive(active, now), true);
     assert.equal(active.expiresAt, expiresAt);

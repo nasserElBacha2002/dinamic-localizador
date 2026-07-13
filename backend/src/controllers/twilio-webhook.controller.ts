@@ -1,8 +1,8 @@
 import type { Request, Response } from "express";
 import { AppError } from "../errors/app-error";
 import { twilioWebhookSchema } from "../schemas/twilio-webhook.schema";
-import { companyContextService } from "../services/company-context.service";
 import { whatsappBotService } from "../services/whatsapp-bot.service";
+import { whatsappCompanyContextService } from "../services/whatsapp-company-context.service";
 
 export const twilioWebhookController = {
   async handleWhatsApp(req: Request, res: Response): Promise<void> {
@@ -14,8 +14,18 @@ export const twilioWebhookController = {
     }
 
     try {
-      const companyId = await companyContextService.resolveDefaultCompanyId();
-      const twiml = await whatsappBotService.handleWebhook(companyId, parsed.data);
+      const resolution = await whatsappCompanyContextService.resolve({
+        phoneFrom: parsed.data.From,
+        phoneTo: parsed.data.To ?? "",
+        messageSid: parsed.data.MessageSid,
+      });
+
+      if (resolution.kind === "blocked") {
+        res.status(200).type("text/xml").send(whatsappBotService.buildTwiml(resolution.message));
+        return;
+      }
+
+      const twiml = await whatsappBotService.handleWebhook(resolution.context, parsed.data);
       res.status(200).type("text/xml").send(twiml);
     } catch (error) {
       const message =

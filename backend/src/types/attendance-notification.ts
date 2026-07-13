@@ -5,7 +5,7 @@ import type {
 
 export interface AttendanceNotification {
   id: string;
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
   notificationType: AttendanceNotificationType;
   twilioMessageSid: string | null;
@@ -18,11 +18,16 @@ export interface AttendanceNotification {
 }
 
 export interface AttendanceReminderCandidate {
-  inventoryId: string;
+  operationId: string;
   employeeId: string;
   employeeName: string;
   employeePhoneNumber: string;
-  storeName: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
   scheduledStart: string;
   scheduledEnd: string | null;
+  scheduleVersion: number;
+  confirmationReminderHoursBefore: number;
+  operationTimezone?: string;
 }

@@ -23,7 +23,11 @@ export function StatusBadge({
   variant = "light",
 }: StatusBadgeProps) {
   return (
-    <Badge color={toneColorMap[tone]} variant={variant}>
+    <Badge
+      color={toneColorMap[tone]}
+      variant={variant}
+      style={{ textTransform: "none", whiteSpace: "nowrap" }}
+    >
       {label}
     </Badge>
   );

@@ -75,18 +75,52 @@ export const compareAbsenceDates = (left: string, right: string): number => {
   return left < right ? -1 : 1;
 };
 
-export const getTodayAbsenceDateIso = (timezone: string): string => {
+export const getTodayAbsenceDateIso = (timezone: string): string =>
+  getDateIsoInTimezone(new Date(), timezone);
+
+export const getDateIsoInTimezone = (at: Date, timezone: string): string => {
   const parts = new Intl.DateTimeFormat("en-CA", {
     timeZone: timezone,
     year: "numeric",
     month: "2-digit",
     day: "2-digit",
-  }).formatToParts(new Date());
+  }).formatToParts(at);
 
   const year = parts.find((part) => part.type === "year")?.value ?? "1970";
   const month = parts.find((part) => part.type === "month")?.value ?? "01";
   const day = parts.find((part) => part.type === "day")?.value ?? "01";
   return `${year}-${month}-${day}`;
+};
+
+/**
+ * UTC bounds for the calendar day of `at` in the given IANA timezone.
+ *
+ * Uses a half-open interval [dayStartUtc, nextDayStartUtc) for SQL range filters.
+ *
+ * Current implementation is sufficient for BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires.
+ * If companies use DST-changing timezones in the future, compute local day boundaries with a
+ * timezone-aware library.
+ */
+export const getOperationDayUtcBounds = (
+  at: Date,
+  timezone: string,
+): { dayStartUtc: Date; nextDayStartUtc: Date; dayEndUtc: Date } => {
+  const parsed = parseAbsenceDateInput(getDateIsoInTimezone(at, timezone));
+  if (!parsed) {
+    throw new Error("Invalid operation timezone date");
+  }
+
+  const offsetHours = getUtcOffsetHoursFromTimezone(timezone, at);
+  const utcStartHour = -offsetHours;
+  const dayStartUtc = new Date(
+    Date.UTC(parsed.year, parsed.month - 1, parsed.day, utcStartHour, 0, 0, 0),
+  );
+  const nextDayStartUtc = new Date(
+    Date.UTC(parsed.year, parsed.month - 1, parsed.day + 1, utcStartHour, 0, 0, 0),
+  );
+  const dayEndUtc = new Date(nextDayStartUtc.getTime() - 1);
+
+  return { dayStartUtc, nextDayStartUtc, dayEndUtc };
 };
 
 export const calculateTotalAbsenceDays = (input: {

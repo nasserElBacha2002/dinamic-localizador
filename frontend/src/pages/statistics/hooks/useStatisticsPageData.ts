@@ -1,48 +1,137 @@
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   useStatisticsByEmployee,
-  useStatisticsByInventory,
-  useStatisticsByLocation,
+  useStatisticsByOperation,
+  useStatisticsByService,
   useStatisticsStatusDistribution,
   useStatisticsSummary,
   useStatisticsTimeline,
 } from "../../../hooks/useStatistics";
-import { usePaginationState } from "../../../hooks/usePaginationState";
-import type { StatisticsFilters, StatisticsValidationStatus } from "../../../types/statistics";
+import { useTableUrlState } from "../../../hooks/useTableUrlState";
+import {
+  getAttendanceByEmployee,
+  getAttendanceByOperation,
+  getAttendanceByService,
+  getAttendanceWorkdayDetails,
+} from "../../../api/statistics.api";
+import type {
+  StatisticsEffectiveState,
+  StatisticsFilters,
+  StatisticsOperationKind,
+  StatisticsValidationStatus,
+} from "../../../types/statistics";
+import type { StatisticsTabKey } from "../statistics-table-state";
 import type { DateRangeValue } from "../../../types/date-range";
-import { getDefaultStatisticsDateRange, getDateRangeQueryValue, isInvalidCustomDateRange } from "../../../utils/date-range";
-import { dateInputToIsoEnd, dateInputToIsoStart } from "../../../utils/dates";
+import {
+  buildStatisticsTableDefaults,
+  STATISTICS_TABLE_FIELDS,
+} from "../statistics-table-state";
+import {
+  areDateRangeUrlFieldsEqual,
+  dateRangeToUrlFields,
+  urlFieldsToDateRange,
+} from "../../../utils/date-range-url";
+import {
+  getDefaultStatisticsDateRange,
+  getDateRangeQueryValue,
+  isInvalidCustomDateRange,
+} from "../../../utils/date-range";
+import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../../utils/dates";
 import { formatPercent } from "../../../utils/export";
+import { formatDurationFromMinutes } from "../../../utils/duration";
+import { terminology } from "../../../domain/terminology";
+import { operationKindLabels } from "../../../utils/operation-schedule-display";
+import {
+  checkoutStatusLabels,
+  employeeTypeLabels,
+  punctualityStatusLabels,
+} from "../../../utils/labels";
+import { employeeWorkdayEffectiveStateLabels } from "../../../utils/statistics-display-labels";
 import {
   buildStatusDistributionOption,
   buildTimelineChartOption,
 } from "../../../components/statistics/statistics-chart-options";
+import {
+  buildEmployeeTableExportFilters,
+  buildOperationTableExportFilters,
+  buildServiceTableExportFilters,
+  buildTopEmployeesByAttendanceFilters,
+  buildTopLateEmployeesFilters,
+  buildTopOperationsByAttendanceFilters,
+  buildTopServicesByAttendanceFilters,
+  buildWorkdayDetailExportFilters,
+} from "../statistics-page-queries";
 
-export type StatisticsTabKey = "general" | "employee" | "inventory" | "location";
+export type { StatisticsTabKey } from "../statistics-table-state";
 
 const SUMMARY_HEADERS = ["Métrica", "Valor"];
 
+const WORKDAY_DETAIL_HEADERS = [
+  "Fecha de jornada",
+  "Empleado",
+  "Tipo de empleado",
+  "Servicio",
+  "Tipo de operación",
+  "Hora esperada de ingreso",
+  "Hora esperada de salida",
+  "Estado de jornada",
+  "Hora de ingreso",
+  "Estado de llegada",
+  "Hora de salida",
+  "Estado de salida",
+  "Minutos trabajados",
+  "Minutos extra",
+  "Tipo de ausencia",
+];
+
 export function useStatisticsPageData() {
-  const [activeTab, setActiveTab] = useState<StatisticsTabKey>("general");
   const [defaultDateRange] = useState<DateRangeValue>(() => getDefaultStatisticsDateRange());
-  const [dateRange, setDateRange] = useState<DateRangeValue>(() => defaultDateRange);
-  const [inventoryId, setInventoryId] = useState("");
-  const [storeId, setStoreId] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [validationStatus, setValidationStatus] = useState<StatisticsValidationStatus>("");
-  const [locationStatus, setLocationStatus] = useState("");
-  const [punctualityStatus, setPunctualityStatus] = useState("");
+  const defaultDateFields = useMemo(
+    () => dateRangeToUrlFields(defaultDateRange),
+    [defaultDateRange],
+  );
+  const tableDefaults = useMemo(
+    () => buildStatisticsTableDefaults(defaultDateFields),
+    [defaultDateFields],
+  );
+  const shouldOmitFromUrl = useCallback(
+    (
+      key: keyof typeof tableDefaults,
+      value: (typeof tableDefaults)[keyof typeof tableDefaults],
+      defaults: typeof tableDefaults,
+      state: typeof tableDefaults,
+    ) => {
+      if (key === "datePreset" || key === "dateFrom" || key === "dateTo") {
+        return areDateRangeUrlFieldsEqual(
+          {
+            datePreset: String(state.datePreset),
+            dateFrom: String(state.dateFrom),
+            dateTo: String(state.dateTo),
+          },
+          defaultDateFields,
+        );
+      }
 
-  const employeePagination = usePaginationState(10);
-  const inventoryPagination = usePaginationState(10);
-  const locationPagination = usePaginationState(10);
+      return value === defaults[key] || value === "";
+    },
+    [defaultDateFields],
+  );
 
-  const [employeeSortBy, setEmployeeSortBy] = useState("attendancePercentage");
-  const [employeeSortDirection, setEmployeeSortDirection] = useState<"asc" | "desc">("desc");
-  const [inventorySortBy, setInventorySortBy] = useState("scheduledStart");
-  const [inventorySortDirection, setInventorySortDirection] = useState<"asc" | "desc">("desc");
-  const [locationSortBy, setLocationSortBy] = useState("averageAttendancePercentage");
-  const [locationSortDirection, setLocationSortDirection] = useState<"asc" | "desc">("desc");
+  const table = useTableUrlState({
+    defaults: tableDefaults,
+    fields: STATISTICS_TABLE_FIELDS,
+    shouldOmitFromUrl,
+  });
+
+  const dateRange = useMemo(
+    () =>
+      urlFieldsToDateRange({
+        datePreset: table.state.datePreset,
+        dateFrom: table.state.dateFrom,
+        dateTo: table.state.dateTo,
+      }),
+    [table.state.dateFrom, table.state.datePreset, table.state.dateTo],
+  );
 
   const dateQuery = getDateRangeQueryValue(dateRange);
   const isoDateFrom = dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined;
@@ -53,141 +142,115 @@ export function useStatisticsPageData() {
     () => ({
       dateFrom: isoDateFrom,
       dateTo: isoDateTo,
-      inventoryId: inventoryId || undefined,
-      storeId: storeId || undefined,
-      employeeId: employeeId || undefined,
-      validationStatus: validationStatus || undefined,
-      locationStatus: locationStatus || undefined,
-      punctualityStatus: punctualityStatus || undefined,
+      operationId: table.state.operationId || undefined,
+      serviceId: table.state.serviceId || undefined,
+      employeeId: table.state.employeeId || undefined,
+      operationKind: (table.state.operationKind as StatisticsOperationKind) || undefined,
+      effectiveState: (table.state.effectiveState as StatisticsEffectiveState) || undefined,
+      validationStatus: (table.state.validationStatus as StatisticsValidationStatus) || undefined,
+      locationStatus: table.state.locationStatus || undefined,
+      punctualityStatus: table.state.punctualityStatus || undefined,
     }),
     [
       isoDateFrom,
       isoDateTo,
-      inventoryId,
-      storeId,
-      employeeId,
-      validationStatus,
-      locationStatus,
-      punctualityStatus,
+      table.state.employeeId,
+      table.state.operationId,
+      table.state.operationKind,
+      table.state.effectiveState,
+      table.state.locationStatus,
+      table.state.punctualityStatus,
+      table.state.serviceId,
+      table.state.validationStatus,
     ],
+  );
+
+  const employeeFilters = useMemo(
+    () => ({
+      ...baseFilters,
+      page: table.state.empPage,
+      limit: table.state.empPageSize,
+      sortBy: table.state.empSortBy,
+      sortDirection: table.state.empSortOrder,
+    }),
+    [baseFilters, table.state.empPage, table.state.empPageSize, table.state.empSortBy, table.state.empSortOrder],
+  );
+
+  const operationFilters = useMemo(
+    () => ({
+      ...baseFilters,
+      page: table.state.opPage,
+      limit: table.state.opPageSize,
+      sortBy: table.state.opSortBy,
+      sortDirection: table.state.opSortOrder,
+    }),
+    [baseFilters, table.state.opPage, table.state.opPageSize, table.state.opSortBy, table.state.opSortOrder],
+  );
+
+  const serviceFilters = useMemo(
+    () => ({
+      ...baseFilters,
+      page: table.state.svcPage,
+      limit: table.state.svcPageSize,
+      sortBy: table.state.svcSortBy,
+      sortDirection: table.state.svcSortOrder,
+    }),
+    [baseFilters, table.state.svcPage, table.state.svcPageSize, table.state.svcSortBy, table.state.svcSortOrder],
+  );
+
+  const topEmployeeChartFilters = useMemo(
+    () => buildTopEmployeesByAttendanceFilters(baseFilters),
+    [baseFilters],
+  );
+  const topLateEmployeeChartFilters = useMemo(
+    () => buildTopLateEmployeesFilters(baseFilters),
+    [baseFilters],
+  );
+  const topOperationChartFilters = useMemo(
+    () => buildTopOperationsByAttendanceFilters(baseFilters),
+    [baseFilters],
+  );
+  const topServiceChartFilters = useMemo(
+    () => buildTopServicesByAttendanceFilters(baseFilters),
+    [baseFilters],
   );
 
   const summaryQuery = useStatisticsSummary(baseFilters);
   const timelineQuery = useStatisticsTimeline(baseFilters);
   const distributionQuery = useStatisticsStatusDistribution(baseFilters);
-
-  const employeeFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      page: employeePagination.page,
-      limit: employeePagination.pageSize,
-      sortBy: employeeSortBy,
-      sortDirection: employeeSortDirection,
-    }),
-    [baseFilters, employeePagination.page, employeePagination.pageSize, employeeSortBy, employeeSortDirection],
-  );
-
-  const employeeExportFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      export: true,
-      sortBy: employeeSortBy,
-      sortDirection: employeeSortDirection,
-    }),
-    [baseFilters, employeeSortBy, employeeSortDirection],
-  );
-
-  const inventoryFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      page: inventoryPagination.page,
-      limit: inventoryPagination.pageSize,
-      sortBy: inventorySortBy,
-      sortDirection: inventorySortDirection,
-    }),
-    [baseFilters, inventoryPagination.page, inventoryPagination.pageSize, inventorySortBy, inventorySortDirection],
-  );
-
-  const inventoryExportFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      export: true,
-      sortBy: inventorySortBy,
-      sortDirection: inventorySortDirection,
-    }),
-    [baseFilters, inventorySortBy, inventorySortDirection],
-  );
-
-  const locationFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      page: locationPagination.page,
-      limit: locationPagination.pageSize,
-      sortBy: locationSortBy,
-      sortDirection: locationSortDirection,
-    }),
-    [baseFilters, locationPagination.page, locationPagination.pageSize, locationSortBy, locationSortDirection],
-  );
-
-  const locationExportFilters = useMemo(
-    () => ({
-      ...baseFilters,
-      export: true,
-      sortBy: locationSortBy,
-      sortDirection: locationSortDirection,
-    }),
-    [baseFilters, locationSortBy, locationSortDirection],
-  );
-
   const employeeQuery = useStatisticsByEmployee(employeeFilters);
-  const employeeExportQuery = useStatisticsByEmployee(employeeExportFilters);
-  const inventoryQuery = useStatisticsByInventory(inventoryFilters);
-  const inventoryExportQuery = useStatisticsByInventory(inventoryExportFilters);
-  const locationQuery = useStatisticsByLocation(locationFilters);
-  const locationExportQuery = useStatisticsByLocation(locationExportFilters);
+  const operationQuery = useStatisticsByOperation(operationFilters);
+  const serviceQuery = useStatisticsByService(serviceFilters);
+  const topEmployeesByAttendanceQuery = useStatisticsByEmployee(topEmployeeChartFilters);
+  const topLateEmployeesQuery = useStatisticsByEmployee(topLateEmployeeChartFilters);
+  const topOperationsByAttendanceQuery = useStatisticsByOperation(topOperationChartFilters);
+  const topServicesByAttendanceQuery = useStatisticsByService(topServiceChartFilters);
 
-  const chartEmployeeData = employeeExportQuery.data?.data ?? [];
-  const chartInventoryData = inventoryExportQuery.data?.data ?? [];
-  const chartLocationData = locationExportQuery.data?.data ?? [];
-
-  const topEmployeesByAttendance = [...chartEmployeeData]
-    .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
-    .slice(0, 10);
-
-  const topLateEmployees = [...chartEmployeeData]
-    .sort((a, b) => b.lateCount - a.lateCount)
-    .filter((row) => row.lateCount > 0)
-    .slice(0, 10);
-
-  const topInventoriesByAttendance = [...chartInventoryData]
-    .sort((a, b) => b.attendancePercentage - a.attendancePercentage)
-    .slice(0, 10);
-
-  const topLocationsByAttendance = [...chartLocationData]
-    .sort((a, b) => b.averageAttendancePercentage - a.averageAttendancePercentage)
-    .slice(0, 10);
+  const topEmployeesByAttendance = topEmployeesByAttendanceQuery.data?.data ?? [];
+  const topLateEmployees = (topLateEmployeesQuery.data?.data ?? []).filter((row) => row.lateWorkdays > 0);
+  const topOperationsByAttendance = topOperationsByAttendanceQuery.data?.data ?? [];
+  const topServicesByAttendance = topServicesByAttendanceQuery.data?.data ?? [];
 
   const timeline = timelineQuery.data ?? [];
   const timelineOption = buildTimelineChartOption(
     timeline.map((point) => point.date),
     {
       present: timeline.map((point) => point.present),
-      late: timeline.map((point) => point.late),
-      outsideGeofence: timeline.map((point) => point.outsideGeofence),
-      pendingReview: timeline.map((point) => point.pendingReview),
-      rejected: timeline.map((point) => point.rejected),
+      absent: timeline.map((point) => point.absent),
+      justified: timeline.map((point) => point.justified),
+      expected: timeline.map((point) => point.expected),
     },
   );
 
   const timelineExportRows = timeline.map((point) => [
     point.date,
     point.present,
+    point.absent,
+    point.justified,
+    point.expected,
+    point.scheduled,
+    point.onTime,
     point.late,
-    point.outsideGeofence,
-    point.pendingReview,
-    point.rejected,
-    point.noShow,
-    point.total,
   ]);
 
   const distribution = distributionQuery.data ?? [];
@@ -196,74 +259,224 @@ export function useStatisticsPageData() {
   const summary = summaryQuery.data;
   const summaryExportRows = summary
     ? [
-        ["Registros de asistencia", summary.totalAttendanceRecords],
-        ["Empleados asignados", summary.totalAssignedEmployees],
-        ["% asistencia", formatPercent(summary.attendancePercentage)],
-        ["Presente / a tiempo", summary.presentCount],
-        ["Tarde", summary.lateCount],
-        ["Fuera de geocerca", summary.outsideGeofenceCount],
-        ["Pendiente de revisión", summary.pendingReviewCount],
-        ["Rechazados", summary.rejectedCount],
-        ["Aceptados manualmente", summary.manuallyAcceptedCount],
-        ["Sin asistencia", summary.noShowCount],
-        ["Inventarios", summary.totalInventories],
+        ["Jornadas programadas", summary.scheduledWorkdays],
+        ["Presentes", summary.presentWorkdays],
+        ["Ausentes", summary.absentWorkdays],
+        ["Justificadas", summary.justifiedWorkdays],
+        ["Pendientes / esperadas", summary.expectedOpenWorkdays],
+        ["Presentismo", formatPercent(summary.attendanceRate)],
+        ["Ausentismo", formatPercent(summary.absenceRate)],
+        ["Puntualidad", formatPercent(summary.punctualityRate)],
+        ["Horas trabajadas", formatDurationFromMinutes(summary.workedMinutes)],
+        ["Horas extra", formatDurationFromMinutes(summary.overtimeMinutes)],
+        ["Asistencias sin cierre", summary.openAttendanceWorkdays],
+        [terminology.operation.plural, summary.totalOperations],
       ]
     : [];
 
+  const mapWorkdayDetailExportRows = useCallback(
+    (rows: Awaited<ReturnType<typeof getAttendanceWorkdayDetails>>["data"]) =>
+      rows.map((row) => [
+        row.workDate,
+        row.employeeName,
+        row.employeeType ? (employeeTypeLabels[row.employeeType] ?? row.employeeType) : "",
+        row.serviceName,
+        operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+        row.expectedStartAt ? formatDateTime(row.expectedStartAt) : "",
+        row.expectedEndAt ? formatDateTime(row.expectedEndAt) : "",
+        employeeWorkdayEffectiveStateLabels[row.effectiveState] ?? row.effectiveState,
+        row.checkInAt ? formatDateTime(row.checkInAt) : "",
+        row.arrivalStatus ? (punctualityStatusLabels[row.arrivalStatus] ?? row.arrivalStatus) : "",
+        row.checkOutAt ? formatDateTime(row.checkOutAt) : "",
+        row.checkoutStatus ? (checkoutStatusLabels[row.checkoutStatus] ?? row.checkoutStatus) : "",
+        row.workedMinutes,
+        row.overtimeMinutes,
+        row.absenceTypeName ?? "",
+      ]),
+    [],
+  );
+
+  const loadWorkdayDetailExportRows = useCallback(async () => {
+    const response = await getAttendanceWorkdayDetails(buildWorkdayDetailExportFilters(baseFilters));
+    return mapWorkdayDetailExportRows(response.data);
+  }, [baseFilters, mapWorkdayDetailExportRows]);
+
+  const loadEmployeeExportRows = useCallback(async () => {
+    const response = await getAttendanceByEmployee(
+      buildEmployeeTableExportFilters(
+        baseFilters,
+        table.state.empSortBy,
+        table.state.empSortOrder,
+      ),
+    );
+    return response.data.map((row) => [
+      row.employeeName,
+      row.phoneNumber,
+      row.scheduledWorkdays,
+      row.presentWorkdays,
+      row.absentWorkdays,
+      row.justifiedWorkdays,
+      row.expectedOpenWorkdays,
+      formatPercent(row.attendanceRate),
+      formatPercent(row.punctualityRate),
+      formatDurationFromMinutes(row.workedMinutes),
+      formatDurationFromMinutes(row.overtimeMinutes),
+      row.lateWorkdays,
+      row.earlyDepartureWorkdays,
+      row.lastAttendanceDate ? formatDateTime(row.lastAttendanceDate) : "—",
+    ]);
+  }, [baseFilters, table.state.empSortBy, table.state.empSortOrder]);
+
+  const loadOperationExportRows = useCallback(async () => {
+    const response = await getAttendanceByOperation(
+      buildOperationTableExportFilters(
+        baseFilters,
+        table.state.opSortBy,
+        table.state.opSortOrder,
+      ),
+    );
+    return response.data.map((row) => [
+      row.operationId,
+      operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+      row.serviceName,
+      row.serviceAddress ?? "",
+      row.scheduledStart ? formatDateTime(row.scheduledStart) : "—",
+      row.scheduledWorkdays,
+      row.presentWorkdays,
+      row.absentWorkdays,
+      row.justifiedWorkdays,
+      row.expectedOpenWorkdays,
+      formatPercent(row.attendanceRate),
+      formatPercent(row.punctualityRate),
+      formatDurationFromMinutes(row.workedMinutes),
+      formatDurationFromMinutes(row.overtimeMinutes),
+      row.operationalStatus,
+    ]);
+  }, [baseFilters, table.state.opSortBy, table.state.opSortOrder]);
+
+  const loadServiceExportRows = useCallback(async () => {
+    const response = await getAttendanceByService(
+      buildServiceTableExportFilters(
+        baseFilters,
+        table.state.svcSortBy,
+        table.state.svcSortOrder,
+      ),
+    );
+    return response.data.map((row) => [
+      row.serviceName,
+      row.address ?? "",
+      row.totalOperations,
+      row.scheduledWorkdays,
+      row.presentWorkdays,
+      row.absentWorkdays,
+      row.justifiedWorkdays,
+      row.expectedOpenWorkdays,
+      formatPercent(row.attendanceRate),
+      formatPercent(row.punctualityRate),
+      formatDurationFromMinutes(row.workedMinutes),
+      formatDurationFromMinutes(row.overtimeMinutes),
+    ]);
+  }, [baseFilters, table.state.svcSortBy, table.state.svcSortOrder]);
+
   const resetAllPages = () => {
-    employeePagination.resetPage();
-    inventoryPagination.resetPage();
-    locationPagination.resetPage();
+    table.setState(
+      {
+        empPage: 1,
+        opPage: 1,
+        svcPage: 1,
+      },
+      { resetPage: false },
+    );
   };
 
   const handleEmployeeSort = (field: string) => {
-    employeePagination.resetPage();
-    if (employeeSortBy === field) {
-      setEmployeeSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    if (table.state.empSortBy === field) {
+      table.setState({
+        empSortBy: field,
+        empSortOrder: table.state.empSortOrder === "asc" ? "desc" : "asc",
+        empPage: 1,
+      });
       return;
     }
-    setEmployeeSortBy(field);
-    setEmployeeSortDirection("desc");
+
+    table.setState({ empSortBy: field, empSortOrder: "desc", empPage: 1 });
   };
 
-  const handleInventorySort = (field: string) => {
-    inventoryPagination.resetPage();
-    if (inventorySortBy === field) {
-      setInventorySortDirection((current) => (current === "asc" ? "desc" : "asc"));
+  const handleOperationSort = (field: string) => {
+    if (table.state.opSortBy === field) {
+      table.setState({
+        opSortBy: field,
+        opSortOrder: table.state.opSortOrder === "asc" ? "desc" : "asc",
+        opPage: 1,
+      });
       return;
     }
-    setInventorySortBy(field);
-    setInventorySortDirection("desc");
+
+    table.setState({ opSortBy: field, opSortOrder: "desc", opPage: 1 });
   };
 
   const handleLocationSort = (field: string) => {
-    locationPagination.resetPage();
-    if (locationSortBy === field) {
-      setLocationSortDirection((current) => (current === "asc" ? "desc" : "asc"));
+    if (table.state.svcSortBy === field) {
+      table.setState({
+        svcSortBy: field,
+        svcSortOrder: table.state.svcSortOrder === "asc" ? "desc" : "asc",
+        svcPage: 1,
+      });
       return;
     }
-    setLocationSortBy(field);
-    setLocationSortDirection("desc");
+
+    table.setState({ svcSortBy: field, svcSortOrder: "desc", svcPage: 1 });
+  };
+
+  const employeePagination = {
+    page: table.state.empPage,
+    pageSize: table.state.empPageSize,
+    onPageChange: (page: number) => table.setField("empPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ empPageSize: pageSize, empPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("empPage", 1, { resetPage: false }),
+  };
+
+  const operationPagination = {
+    page: table.state.opPage,
+    pageSize: table.state.opPageSize,
+    onPageChange: (page: number) => table.setField("opPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ opPageSize: pageSize, opPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("opPage", 1, { resetPage: false }),
+  };
+
+  const servicePagination = {
+    page: table.state.svcPage,
+    pageSize: table.state.svcPageSize,
+    onPageChange: (page: number) => table.setField("svcPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ svcPageSize: pageSize, svcPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("svcPage", 1, { resetPage: false }),
   };
 
   return {
-    activeTab,
-    setActiveTab,
+    activeTab: table.state.tab,
+    setActiveTab: (tab: StatisticsTabKey) => table.setField("tab", tab, { resetPage: false }),
     defaultDateRange,
     dateRange,
-    setDateRange,
-    inventoryId,
-    setInventoryId,
-    storeId,
-    setStoreId,
-    employeeId,
-    setEmployeeId,
-    validationStatus,
-    setValidationStatus,
-    locationStatus,
-    setLocationStatus,
-    punctualityStatus,
-    setPunctualityStatus,
+    setDateRange: (value: DateRangeValue) => table.setState(dateRangeToUrlFields(value)),
+    operationId: table.state.operationId,
+    setOperationId: (value: string) => table.setField("operationId", value),
+    serviceId: table.state.serviceId,
+    setServiceId: (value: string) => table.setField("serviceId", value),
+    employeeId: table.state.employeeId,
+    setEmployeeId: (value: string) => table.setField("employeeId", value),
+    operationKind: table.state.operationKind as StatisticsOperationKind,
+    setOperationKind: (value: string) => table.setField("operationKind", value),
+    effectiveState: table.state.effectiveState as StatisticsEffectiveState,
+    setEffectiveState: (value: string) => table.setField("effectiveState", value),
+    validationStatus: table.state.validationStatus as StatisticsValidationStatus,
+    setValidationStatus: (value: string) => table.setField("validationStatus", value),
+    locationStatus: table.state.locationStatus,
+    setLocationStatus: (value: string) => table.setField("locationStatus", value),
+    punctualityStatus: table.state.punctualityStatus,
+    setPunctualityStatus: (value: string) => table.setField("punctualityStatus", value),
     exportsDisabled,
     isoDateFrom,
     isoDateTo,
@@ -272,24 +485,26 @@ export function useStatisticsPageData() {
     timelineQuery,
     distributionQuery,
     employeeQuery,
-    employeeExportQuery,
-    inventoryQuery,
-    inventoryExportQuery,
-    locationQuery,
-    locationExportQuery,
+    operationQuery,
+    serviceQuery,
+    topEmployeesByAttendanceQuery,
+    topLateEmployeesQuery,
+    topOperationsByAttendanceQuery,
+    topServicesByAttendanceQuery,
     employeePagination,
-    inventoryPagination,
-    locationPagination,
-    employeeSortBy,
-    employeeSortDirection,
-    inventorySortBy,
-    inventorySortDirection,
-    locationSortBy,
-    locationSortDirection,
+    operationPagination,
+    servicePagination,
+    employeeSortBy: table.state.empSortBy,
+    employeeSortDirection: table.state.empSortOrder,
+    operationSortBy: table.state.opSortBy,
+    operationSortDirection: table.state.opSortOrder,
+    serviceSortBy: table.state.svcSortBy,
+    serviceSortDirection: table.state.svcSortOrder,
     handleEmployeeSort,
-    handleInventorySort,
+    handleOperationSort,
     handleLocationSort,
     summaryHeaders: SUMMARY_HEADERS,
+    workdayDetailHeaders: WORKDAY_DETAIL_HEADERS,
     summary,
     summaryExportRows,
     timeline,
@@ -299,8 +514,12 @@ export function useStatisticsPageData() {
     distributionOption,
     topEmployeesByAttendance,
     topLateEmployees,
-    topInventoriesByAttendance,
-    topLocationsByAttendance,
+    topOperationsByAttendance,
+    topServicesByAttendance,
+    loadWorkdayDetailExportRows,
+    loadEmployeeExportRows,
+    loadOperationExportRows,
+    loadServiceExportRows,
   };
 }
 

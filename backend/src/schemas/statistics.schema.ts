@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { OPERATION_KINDS } from "../constants/operation-kind";
 import { dateRangeSchema, paginationQuerySchema } from "./common.schema";
 
 const validationStatusFilterSchema = z.enum([
@@ -21,15 +22,25 @@ const punctualityStatusFilterSchema = z.enum([
   "OUTSIDE_TIME_WINDOW",
 ]);
 
+const effectiveStateFilterSchema = z.enum([
+  "EXPECTED",
+  "JUSTIFIED",
+  "PRESENT",
+  "ABSENT",
+  "CANCELLED",
+]);
+
 const exportFlagSchema = z
   .enum(["true", "false"])
   .optional()
   .transform((value) => value === "true");
 
 export const statisticsFiltersSchema = dateRangeSchema.extend({
-  inventoryId: z.string().uuid().optional(),
-  storeId: z.string().uuid().optional(),
+  operationId: z.string().uuid().optional(),
+  serviceId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),
+  operationKind: z.enum(OPERATION_KINDS).optional(),
+  effectiveState: effectiveStateFilterSchema.optional(),
   validationStatus: validationStatusFilterSchema.optional(),
   locationStatus: locationStatusFilterSchema.optional(),
   punctualityStatus: punctualityStatusFilterSchema.optional(),

@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useMemo } from "react";
+import { useLocation, useNavigate } from "react-router-dom";
 import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
 import {
   DataTable,
@@ -13,53 +13,66 @@ import {
   type DataTableColumn,
 } from "../../design-system";
 import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
-import { usePaginationState } from "../../hooks/usePaginationState";
+import { useTableUrlState } from "../../hooks/useTableUrlState";
 import type { AbsenceRequestListItem, AbsenceRequestStatus } from "../../types/absence";
-import type { DateRangeValue } from "../../types/date-range";
 import { terminology } from "../../domain/terminology";
-import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue } from "../../utils/date-range";
+import { getDateRangeQueryValue } from "../../utils/date-range";
+import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../utils/date-range-url";
 import { formatDateTime } from "../../utils/dates";
 import { getRelatedName, safeText } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
+import { navigateWithListContext } from "../../utils/list-navigation";
 import {
   absenceRequestedViaLabels,
   absenceStatusLabels,
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
+import {
+  ABSENCES_TABLE_DEFAULTS,
+  ABSENCES_TABLE_FIELDS,
+  shouldOmitAbsencesTableValue,
+} from "./absences-list-table-state";
+
+const ABSENCES_LIST_PATH = "/absences";
 
 export function AbsencesListPage() {
   const navigate = useNavigate();
-  const [searchParams] = useSearchParams();
-  const pagination = usePaginationState(10);
-  const { resetPage, page, pageSize, onPageChange, onPageSizeChange } = pagination;
-  const [status, setStatus] = useState<AbsenceRequestStatus | "">("PENDING");
-  const [absenceTypeId, setAbsenceTypeId] = useState("");
-  const [employeeId, setEmployeeId] = useState(searchParams.get("employeeId") ?? "");
-  const [dateRange, setDateRange] = useState<DateRangeValue>(() => {
-    const from = searchParams.get("dateFrom");
-    const to = searchParams.get("dateTo");
-    if (from || to) {
-      return { preset: "custom", from, to };
-    }
-    return EMPTY_DATE_RANGE_VALUE;
+  const location = useLocation();
+
+  const table = useTableUrlState({
+    defaults: ABSENCES_TABLE_DEFAULTS,
+    fields: ABSENCES_TABLE_FIELDS,
+    shouldOmitFromUrl: shouldOmitAbsencesTableValue,
   });
 
   const typesQuery = useAbsenceTypes();
+  const dateRange = useMemo(
+    () =>
+      urlFieldsToDateRange({
+        datePreset: table.state.datePreset,
+        dateFrom: table.state.dateFrom,
+        dateTo: table.state.dateTo,
+      }),
+    [table.state.dateFrom, table.state.datePreset, table.state.dateTo],
+  );
   const dateQuery = getDateRangeQueryValue(dateRange);
+  const apiStatus =
+    table.state.status === "all" ? undefined : (table.state.status as AbsenceRequestStatus);
+
   const { data, isPending, isError, error } = useAbsenceRequests({
-    page,
-    limit: pageSize,
-    status: status || undefined,
-    absenceTypeId: absenceTypeId || undefined,
-    employeeId: employeeId || undefined,
+    page: table.page,
+    limit: table.pageSize,
+    status: apiStatus,
+    absenceTypeId: table.state.absenceTypeId || undefined,
+    employeeId: table.state.employeeId || undefined,
     dateFrom: dateQuery.from,
     dateTo: dateQuery.to,
   });
 
   const statusOptions = useMemo(
     () => [
-      { value: "", label: "Todos" },
+      { value: "all", label: "Todos" },
       ...Object.entries(absenceStatusLabels).map(([value, label]) => ({ value, label })),
     ],
     [],
@@ -107,9 +120,9 @@ export function AbsencesListPage() {
       },
       { key: "createdAt", header: "Creada", getValue: (row) => formatDateTime(row.createdAt) },
       {
-        key: "affectedInventories",
+        key: "affectedOperations",
         header: `${terminology.operation.plural} afectadas`,
-        getValue: (row) => row.affectedInventoriesCount,
+        getValue: (row) => row.affectedOperationsCount,
       },
     ],
     [],
@@ -126,10 +139,9 @@ export function AbsencesListPage() {
         <FilterBar.Item>
           <FilterSelect
             label="Estado"
-            value={status}
+            value={table.state.status}
             onChange={(nextValue) => {
-              resetPage();
-              setStatus(nextValue as AbsenceRequestStatus | "");
+              table.setField("status", nextValue);
             }}
             data={statusOptions}
           />
@@ -137,20 +149,18 @@ export function AbsencesListPage() {
         <FilterBar.Item>
           <FilterSelect
             label="Tipo"
-            value={absenceTypeId}
+            value={table.state.absenceTypeId}
             onChange={(nextValue) => {
-              resetPage();
-              setAbsenceTypeId(nextValue);
+              table.setField("absenceTypeId", nextValue);
             }}
             data={typeOptions}
           />
         </FilterBar.Item>
         <FilterBar.Item>
           <EmployeeSearchAutocomplete
-            value={employeeId || null}
+            value={table.state.employeeId || null}
             onChange={(value) => {
-              resetPage();
-              setEmployeeId(value ?? "");
+              table.setField("employeeId", value ?? "");
             }}
             label={terminology.worker.singular}
           />
@@ -159,8 +169,7 @@ export function AbsencesListPage() {
           <FilterDateRangeInput
             value={dateRange}
             onChange={(nextDateRange) => {
-              resetPage();
-              setDateRange(nextDateRange);
+              table.setState(dateRangeToUrlFields(nextDateRange));
             }}
             mode="mixed"
             label="Fecha"
@@ -177,15 +186,17 @@ export function AbsencesListPage() {
         error={isError ? getApiErrorMessage(error) : undefined}
         emptyTitle="No hay solicitudes de ausencia para los filtros seleccionados."
         emptyDescription="Ajustá los filtros o esperá nuevas solicitudes."
-        onRowClick={(row) => navigate(`/absences/${row.id}`)}
+        onRowClick={(row) =>
+          navigateWithListContext(navigate, `/absences/${row.id}`, ABSENCES_LIST_PATH, location)
+        }
         aria-label="Listado de solicitudes de ausencia"
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls
               meta={mapApiPaginationMeta(data.meta)}
-              onPageChange={onPageChange}
-              pageSize={pageSize}
-              onPageSizeChange={onPageSizeChange}
+              onPageChange={table.onPageChange}
+              pageSize={table.pageSize}
+              onPageSizeChange={table.onPageSizeChange}
               showPageSizeSelector
             />
           ) : undefined

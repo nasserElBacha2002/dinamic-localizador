@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { env } from "../config/env";
 import type { BotRuntimeSettings } from "../types/bot-runtime-settings";
 
@@ -41,13 +42,20 @@ export function getRequireCheckoutLocation(): boolean {
   return getBotRuntimeSettings()?.requireCheckoutLocation ?? true;
 }
 
+export function getPendingOperationExpirationHours(): number {
+  return (
+    getBotRuntimeSettings()?.pendingOperationExpirationHours ??
+    DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours
+  );
+}
+
 export function getSessionTtlMinutes(): number {
   return getBotRuntimeSettings()?.sessionTtlMinutes ?? env.BOT_SESSION_TTL_MINUTES;
 }
 
-export function resolveEffectiveAllowedRadiusMeters(storeRadiusMeters: number): number {
-  if (storeRadiusMeters > 0) {
-    return storeRadiusMeters;
+export function resolveEffectiveAllowedRadiusMeters(serviceRadiusMeters: number): number {
+  if (serviceRadiusMeters > 0) {
+    return serviceRadiusMeters;
   }
 
   return getDefaultRadiusMeters();

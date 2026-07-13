@@ -12,6 +12,14 @@ const splitBatches = (script: string): string[] =>
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
 
+/** Migrations may contain legacy `USE <database>` statements; the pool already targets env.DB_NAME. */
+const stripLegacyDatabaseUse = (batch: string): string =>
+  batch
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_\[\]]+\s*;?\s*$/i.test(line.trim()))
+    .join("\n")
+    .trim();
+
 const listMigrationFiles = (): string[] =>
   readdirSync(migrationDir)
     .filter((file) => file.endsWith(".sql"))
@@ -77,7 +85,11 @@ export const runMigrations = async (): Promise<void> => {
       const batches = splitBatches(script);
 
       for (const batch of batches) {
-        await pool.request().query(batch);
+        const normalizedBatch = stripLegacyDatabaseUse(batch);
+        if (!normalizedBatch) {
+          continue;
+        }
+        await pool.request().query(normalizedBatch);
       }
 
       await registerMigration(pool, file);

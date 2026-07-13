@@ -4,7 +4,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { AttendanceRecord, AttendanceRecordWithRelations } from "../types/domain";
-import type { CheckoutEligibleInventory } from "../types/twilio.types";
+import type { CheckoutEligibleOperation } from "../types/twilio.types";
 import { mapAttendanceRow, mapAttendanceWithRelationsRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
@@ -29,10 +29,10 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
     });
   }
 
-  if (query.inventoryId) {
+  if (query.operationId) {
     filters.push({
-      clause: "ar.inventory_id = @inventoryId",
-      apply: (request) => request.input("inventoryId", sql.UniqueIdentifier, query.inventoryId),
+      clause: "ar.operation_id = @operationId",
+      apply: (request) => request.input("operationId", sql.UniqueIdentifier, query.operationId),
     });
   }
 
@@ -43,10 +43,10 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
     });
   }
 
-  if (query.storeId) {
+  if (query.serviceId) {
     filters.push({
-      clause: "i.store_id = @storeId",
-      apply: (request) => request.input("storeId", sql.UniqueIdentifier, query.storeId),
+      clause: "i.service_id = @serviceId",
+      apply: (request) => request.input("serviceId", sql.UniqueIdentifier, query.serviceId),
     });
   }
 
@@ -92,13 +92,17 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
 };
 
 export const attendanceRepository = {
-  async create(companyId: string, input: CreateAttendanceInput): Promise<AttendanceRecord> {
+  async create(
+    companyId: string,
+    input: CreateAttendanceInput & { employeeWorkdayId: string },
+  ): Promise<AttendanceRecord> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
       .input("receivedLatitude", sql.Decimal(10, 7), input.receivedLatitude)
       .input("receivedLongitude", sql.Decimal(10, 7), input.receivedLongitude)
       .input("distanceMeters", sql.Decimal(10, 2), input.distanceMeters)
@@ -110,13 +114,15 @@ export const attendanceRepository = {
       .input("receivedAt", sql.DateTime2, new Date(input.receivedAt))
       .query(`
         INSERT INTO attendance_records (
-          company_id, inventory_id, employee_id, received_latitude, received_longitude,
+          company_id, operation_id, employee_id, employee_workday_id,
+          received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
+          @companyId, @operationId, @employeeId, @employeeWorkdayId,
+          @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt
         )
@@ -136,17 +142,17 @@ export const attendanceRepository = {
         ar.*,
         e.name AS employee_name,
         e.phone_number AS employee_phone_number,
-        i.status AS inventory_status,
-        i.scheduled_start AS inventory_scheduled_start,
-        i.scheduled_end AS inventory_scheduled_end,
-        s.id AS store_id,
-        s.name AS store_name,
-        s.address AS store_address,
-        s.allowed_radius_meters AS store_allowed_radius_meters
+        i.status AS operation_status,
+        i.scheduled_start AS operation_scheduled_start,
+        i.scheduled_end AS operation_scheduled_end,
+        s.id AS service_id,
+        s.name AS service_name,
+        s.address AS service_address,
+        s.allowed_radius_meters AS service_allowed_radius_meters
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = @companyId
-      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = @companyId
-      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+      INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = @companyId
+      INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
       WHERE ar.id = @id AND ar.company_id = @companyId
     `);
 
@@ -170,7 +176,7 @@ export const attendanceRepository = {
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
       FROM attendance_records ar
-      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
+      INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -185,17 +191,17 @@ export const attendanceRepository = {
         ar.*,
         e.name AS employee_name,
         e.phone_number AS employee_phone_number,
-        i.status AS inventory_status,
-        i.scheduled_start AS inventory_scheduled_start,
-        i.scheduled_end AS inventory_scheduled_end,
-        s.id AS store_id,
-        s.name AS store_name,
-        s.address AS store_address,
-        s.allowed_radius_meters AS store_allowed_radius_meters
+        i.status AS operation_status,
+        i.scheduled_start AS operation_scheduled_start,
+        i.scheduled_end AS operation_scheduled_end,
+        s.id AS service_id,
+        s.name AS service_name,
+        s.address AS service_address,
+        s.allowed_radius_meters AS service_allowed_radius_meters
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
-      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
-      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = ar.company_id
+      INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
+      INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
       ${whereClause}
       ORDER BY ar.received_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
@@ -211,7 +217,7 @@ export const attendanceRepository = {
 
   async hasActiveRecord(
     companyId: string,
-    inventoryId: string,
+    operationId: string,
     employeeId: string,
     options?: { simulationSessionId?: string | null },
   ): Promise<boolean> {
@@ -219,7 +225,7 @@ export const attendanceRepository = {
     const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId);
 
     const simulationFilter = options?.simulationSessionId
@@ -233,7 +239,7 @@ export const attendanceRepository = {
     const result = await request.query(`
         SELECT TOP 1 1 AS found
         FROM attendance_records
-        WHERE inventory_id = @inventoryId
+        WHERE operation_id = @operationId
           AND employee_id = @employeeId
           AND company_id = @companyId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
@@ -246,20 +252,76 @@ export const attendanceRepository = {
   async hasActiveRecordInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    inventoryId: string,
+    operationId: string,
     employeeId: string,
     simulationSessionId: string | null,
   ): Promise<boolean> {
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("simulationSessionId", sql.UniqueIdentifier, simulationSessionId)
       .query(`
         SELECT TOP 1 1 AS found
         FROM attendance_records WITH (UPDLOCK, HOLDLOCK)
-        WHERE inventory_id = @inventoryId
+        WHERE operation_id = @operationId
           AND employee_id = @employeeId
+          AND company_id = @companyId
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND (
+            (@simulationSessionId IS NULL AND is_simulation = 0)
+            OR (is_simulation = 1 AND simulation_session_id = @simulationSessionId)
+          )
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
+  async hasActiveRecordByEmployeeWorkday(
+    companyId: string,
+    employeeWorkdayId: string,
+    options?: { simulationSessionId?: string | null },
+  ): Promise<boolean> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+
+    const simulationFilter = options?.simulationSessionId
+      ? "AND is_simulation = 1 AND simulation_session_id = @simulationSessionId"
+      : "AND is_simulation = 0";
+
+    if (options?.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, options.simulationSessionId);
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_records
+        WHERE employee_workday_id = @employeeWorkdayId
+          AND company_id = @companyId
+          AND validation_status IN ('VALID', 'PENDING_REVIEW')
+          ${simulationFilter}
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
+  async hasActiveRecordByEmployeeWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    employeeWorkdayId: string,
+    simulationSessionId: string | null,
+  ): Promise<boolean> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("simulationSessionId", sql.UniqueIdentifier, simulationSessionId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM attendance_records WITH (UPDLOCK, HOLDLOCK)
+        WHERE employee_workday_id = @employeeWorkdayId
           AND company_id = @companyId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')
           AND (
@@ -275,6 +337,7 @@ export const attendanceRepository = {
     companyId: string,
     transaction: sql.Transaction,
     input: CreateAttendanceInput & {
+      employeeWorkdayId: string;
       isSimulation?: boolean;
       simulationSessionId?: string | null;
     },
@@ -282,8 +345,9 @@ export const attendanceRepository = {
     const request = new sql.Request(transaction);
     const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, input.inventoryId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
       .input("receivedLatitude", sql.Decimal(10, 7), input.receivedLatitude)
       .input("receivedLongitude", sql.Decimal(10, 7), input.receivedLongitude)
       .input("distanceMeters", sql.Decimal(10, 2), input.distanceMeters)
@@ -297,14 +361,16 @@ export const attendanceRepository = {
       .input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId ?? null)
       .query(`
         INSERT INTO attendance_records (
-          company_id, inventory_id, employee_id, received_latitude, received_longitude,
+          company_id, operation_id, employee_id, employee_workday_id,
+          received_latitude, received_longitude,
           distance_meters, validation_status, location_status, punctuality_status,
           source_message_sid, validation_reason, received_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @inventoryId, @employeeId, @receivedLatitude, @receivedLongitude,
+          @companyId, @operationId, @employeeId, @employeeWorkdayId,
+          @receivedLatitude, @receivedLongitude,
           @distanceMeters, @validationStatus, @locationStatus, @punctualityStatus,
           @sourceMessageSid, @validationReason, @receivedAt,
           @isSimulation, @simulationSessionId
@@ -330,15 +396,15 @@ export const attendanceRepository = {
         e.name AS employee_name,
         e.document_number AS employee_document_number,
         e.phone_number AS employee_phone_number,
-        i.scheduled_start AS inventory_scheduled_start,
-        s.name AS store_name,
-        s.address AS store_address,
-        s.allowed_radius_meters AS store_allowed_radius_meters,
+        i.scheduled_start AS operation_scheduled_start,
+        s.name AS service_name,
+        s.address AS service_address,
+        s.allowed_radius_meters AS service_allowed_radius_meters,
         reviewer.name AS reviewer_name
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
-      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = ar.company_id
-      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = ar.company_id
+      INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
+      INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
       LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
       ${whereClause}
       ORDER BY ar.received_at DESC
@@ -377,49 +443,76 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findCheckoutEligibleInventories(
+  /**
+   * @deprecated Prefer employeeWorkdayAvailabilityRepository checkout candidates.
+   * Kept aligned with pending checkout expiration for any residual callers.
+   */
+  async findCheckoutEligibleOperations(
     companyId: string,
     employeeId: string,
-  ): Promise<CheckoutEligibleInventory[]> {
+    input: {
+      now: Date;
+      pendingOperationExpirationHours: number;
+    },
+  ): Promise<CheckoutEligibleOperation[]> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("now", sql.DateTime2, input.now)
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      )
       .query(`
       SELECT
         i.id,
-        i.store_id,
+        i.service_id,
         i.scheduled_start,
         i.scheduled_end,
         i.early_tolerance_minutes,
         i.late_tolerance_minutes,
         i.status,
         ar.id AS attendance_id,
-        s.name AS store_name,
-        s.latitude AS store_latitude,
-        s.longitude AS store_longitude,
+        s.name AS service_name,
+        s.address AS service_address,
+        s.locality AS service_locality,
+        s.latitude AS service_latitude,
+        s.longitude AS service_longitude,
         s.allowed_radius_meters
       FROM attendance_records ar
-      INNER JOIN scheduled_operations i ON i.id = ar.inventory_id AND i.company_id = @companyId
+      INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = @companyId
       INNER JOIN operation_assignments ie
-        ON ie.inventory_id = i.id AND ie.employee_id = ar.employee_id AND ie.company_id = @companyId
-      INNER JOIN operational_locations s ON s.id = i.store_id AND s.company_id = @companyId
+        ON ie.operation_id = i.id AND ie.employee_id = ar.employee_id AND ie.company_id = @companyId
+      INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
+      LEFT JOIN employee_workdays ew
+        ON ew.id = ar.employee_workday_id AND ew.company_id = ar.company_id
+      LEFT JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id AND ow.company_id = ew.company_id
       WHERE ar.employee_id = @employeeId
         AND ar.company_id = @companyId
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         AND ar.checkout_at IS NULL
         AND i.status <> 'CANCELLED'
         AND s.active = 1
+        AND @now <= DATEADD(
+          HOUR,
+          @pendingOperationExpirationHours,
+          COALESCE(ow.expected_end_at, i.scheduled_end, i.scheduled_start)
+        )
       ORDER BY i.scheduled_start ASC
     `);
 
     return result.recordset.map((row) => ({
       id: String(row.id),
-      storeId: String(row.store_id),
-      storeName: String(row.store_name),
-      storeLatitude: Number(row.store_latitude),
-      storeLongitude: Number(row.store_longitude),
+      serviceId: String(row.service_id),
+      serviceName: String(row.service_name),
+      serviceAddress: row.service_address ? String(row.service_address) : null,
+      serviceLocality: row.service_locality ? String(row.service_locality) : null,
+      serviceLatitude: Number(row.service_latitude),
+      serviceLongitude: Number(row.service_longitude),
       allowedRadiusMeters: Number(row.allowed_radius_meters),
       scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
       scheduledEnd: row.scheduled_end
@@ -432,9 +525,47 @@ export const attendanceRepository = {
     }));
   },
 
+  async findCheckInForEmployeeWorkday(
+    companyId: string,
+    employeeWorkdayId: string,
+    options?: { simulationSessionId?: string | null },
+  ): Promise<AttendanceRecord | null> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+
+    const simulationFilter = options?.simulationSessionId
+      ? "AND ar.is_simulation = 1 AND ar.simulation_session_id = @simulationSessionId"
+      : "AND ar.is_simulation = 0";
+
+    if (options?.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, options.simulationSessionId);
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1 ar.*
+        FROM attendance_records ar
+        WHERE ar.employee_workday_id = @employeeWorkdayId
+          AND ar.company_id = @companyId
+          AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND ar.checkout_at IS NULL
+          ${simulationFilter}
+        ORDER BY ar.received_at DESC
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /** @deprecated Prefer findCheckInForEmployeeWorkday for attendance identity. */
   async findCheckInForCheckout(
     companyId: string,
-    inventoryId: string,
+    operationId: string,
     employeeId: string,
     options?: { simulationSessionId?: string | null },
   ): Promise<AttendanceRecord | null> {
@@ -442,7 +573,7 @@ export const attendanceRepository = {
     const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("inventoryId", sql.UniqueIdentifier, inventoryId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
       .input("employeeId", sql.UniqueIdentifier, employeeId);
 
     const simulationFilter = options?.simulationSessionId
@@ -456,7 +587,7 @@ export const attendanceRepository = {
     const result = await request.query(`
         SELECT TOP 1 *
         FROM attendance_records
-        WHERE inventory_id = @inventoryId
+        WHERE operation_id = @operationId
           AND employee_id = @employeeId
           AND company_id = @companyId
           AND validation_status IN ('VALID', 'PENDING_REVIEW')

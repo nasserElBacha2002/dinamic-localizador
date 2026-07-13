@@ -7,8 +7,8 @@ type BotSimulationSessionRow = {
   id: string;
   company_id: string | null;
   employee_id: string;
-  inventory_id: string | null;
-  store_id: string | null;
+  operation_id: string | null;
+  service_id: string | null;
   phone_number: string;
   simulated_now: Date;
   mode: BotSimulationMode;
@@ -24,8 +24,8 @@ function mapSession(row: BotSimulationSessionRow): BotSimulationSession {
     id: row.id,
     companyId: row.company_id,
     employeeId: row.employee_id,
-    inventoryId: row.inventory_id,
-    storeId: row.store_id,
+    operationId: row.operation_id,
+    serviceId: row.service_id,
     phoneNumber: row.phone_number,
     simulatedNow: row.simulated_now.toISOString(),
     mode: row.mode,
@@ -42,8 +42,8 @@ export const botSimulationSessionRepository = {
   async create(input: {
     companyId?: string | null;
     employeeId: string;
-    inventoryId?: string | null;
-    storeId?: string | null;
+    operationId?: string | null;
+    serviceId?: string | null;
     phoneNumber: string;
     simulatedNow: string;
     mode: BotSimulationMode;
@@ -54,20 +54,20 @@ export const botSimulationSessionRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId ?? null)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
-      .input("inventoryId", sql.UniqueIdentifier, input.inventoryId ?? null)
-      .input("storeId", sql.UniqueIdentifier, input.storeId ?? null)
+      .input("operationId", sql.UniqueIdentifier, input.operationId ?? null)
+      .input("serviceId", sql.UniqueIdentifier, input.serviceId ?? null)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("simulatedNow", sql.DateTime2, new Date(input.simulatedNow))
       .input("mode", sql.NVarChar(20), input.mode)
       .input("createdBy", sql.UniqueIdentifier, input.createdBy ?? null)
       .query(`
         INSERT INTO bot_simulation_sessions (
-          company_id, employee_id, inventory_id, store_id,
+          company_id, employee_id, operation_id, service_id,
           phone_number, simulated_now, mode, created_by
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @employeeId, @inventoryId, @storeId,
+          @companyId, @employeeId, @operationId, @serviceId,
           @phoneNumber, @simulatedNow, @mode, @createdBy
         )
       `);

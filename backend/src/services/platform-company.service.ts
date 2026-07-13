@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { DEFAULT_COMPANY_MODULE_KEYS } from "../constants/company-modules";
+import { toCompanySettingsInput } from "../constants/company-settings";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { companyModuleRepository } from "../repositories/company-module.repository";
@@ -8,17 +9,10 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { userRepository } from "../repositories/user.repository";
 import type { CreatePlatformCompanyInput } from "../schemas/platform-company.schema";
+import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+import { companyLocationTypesService } from "./company-location-types.service";
 import { hashPassword, normalizeEmail } from "../utils/password";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
-
-const DEFAULT_SETTINGS = {
-  operationTimezone: "America/Argentina/Buenos_Aires",
-  defaultRadiusMeters: 150,
-  lateGraceMinutes: 15,
-  earlyLeaveToleranceMinutes: 15,
-  requireCheckoutLocation: true,
-  allowManualAttendanceCorrections: true,
-};
 
 export const platformCompanyService = {
   async listCompanies() {
@@ -59,16 +53,21 @@ export const platformCompanyService = {
         transaction,
       );
 
+      const defaultSettings = toCompanySettingsInput();
+
       const settingsInput = {
-        ...DEFAULT_SETTINGS,
+        ...defaultSettings,
         ...input.settings,
         operationTimezone:
           input.settings?.operationTimezone ??
           input.defaultTimezone ??
-          DEFAULT_SETTINGS.operationTimezone,
+          defaultSettings.operationTimezone,
       };
 
       await companySettingsRepository.create(company.id, settingsInput, transaction);
+
+      await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(company.id, transaction);
+      await companyLocationTypesService.ensureLocationTypesCatalogForCompany(company.id, transaction);
 
       const moduleKeys = [
         ...new Set(input.modules?.length ? input.modules : DEFAULT_COMPANY_MODULE_KEYS),

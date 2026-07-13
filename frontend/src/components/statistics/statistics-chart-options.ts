@@ -2,12 +2,13 @@ import type { EChartsOption } from "echarts";
 
 const CHART_COLORS = {
   present: "#2e7d32",
+  absent: "#d32f2f",
+  justified: "#7b1fa2",
+  expected: "#0288d1",
   late: "#ed6c02",
-  outsideGeofence: "#d32f2f",
-  pendingReview: "#0288d1",
-  rejected: "#6d4c41",
-  noShow: "#757575",
-  manuallyAccepted: "#7b1fa2",
+  outsideGeofence: "#6d4c41",
+  pendingReview: "#455a64",
+  rejected: "#5d4037",
   primary: "#1565c0",
 };
 
@@ -33,10 +34,9 @@ export function buildTimelineChartOption(
   dates: string[],
   series: {
     present: number[];
-    late: number[];
-    outsideGeofence: number[];
-    pendingReview: number[];
-    rejected: number[];
+    absent: number[];
+    justified: number[];
+    expected: number[];
   },
 ): EChartsOption {
   const enableDataZoom = dates.length > 14;
@@ -44,10 +44,9 @@ export function buildTimelineChartOption(
   return {
     color: [
       CHART_COLORS.present,
-      CHART_COLORS.late,
-      CHART_COLORS.outsideGeofence,
-      CHART_COLORS.pendingReview,
-      CHART_COLORS.rejected,
+      CHART_COLORS.absent,
+      CHART_COLORS.justified,
+      CHART_COLORS.expected,
     ],
     tooltip: { trigger: "axis" },
     legend: { top: 0 },
@@ -62,11 +61,10 @@ export function buildTimelineChartOption(
     xAxis: { type: "category", data: dates, boundaryGap: false },
     yAxis: { type: "value", minInterval: 1 },
     series: [
-      { name: "Presente", type: "line", smooth: true, data: series.present },
-      { name: "Tarde", type: "line", smooth: true, data: series.late },
-      { name: "Fuera de geocerca", type: "line", smooth: true, data: series.outsideGeofence },
-      { name: "Pendiente", type: "line", smooth: true, data: series.pendingReview },
-      { name: "Rechazado", type: "line", smooth: true, data: series.rejected },
+      { name: "Presentes", type: "line", smooth: true, data: series.present },
+      { name: "Ausentes", type: "line", smooth: true, data: series.absent },
+      { name: "Justificadas", type: "line", smooth: true, data: series.justified },
+      { name: "Pendientes", type: "line", smooth: true, data: series.expected },
     ],
   };
 }
@@ -77,12 +75,10 @@ export function buildStatusDistributionOption(
   return {
     color: [
       CHART_COLORS.present,
+      CHART_COLORS.absent,
+      CHART_COLORS.justified,
+      CHART_COLORS.expected,
       CHART_COLORS.late,
-      CHART_COLORS.outsideGeofence,
-      CHART_COLORS.pendingReview,
-      CHART_COLORS.rejected,
-      CHART_COLORS.manuallyAccepted,
-      CHART_COLORS.noShow,
     ],
     tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
     legend: { orient: "vertical", left: "left", top: "middle" },

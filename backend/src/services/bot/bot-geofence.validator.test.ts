@@ -52,8 +52,8 @@ describe("evaluateAttendanceGeofence", () => {
     const result = evaluateAttendanceGeofence({
       employeeLatitude: -34.6,
       employeeLongitude: -58.4,
-      storeLatitude: -34.6,
-      storeLongitude: -58.4,
+      serviceLatitude: -34.6,
+      serviceLongitude: -58.4,
       allowedRadiusMeters,
       reviewMarginMeters,
     });
@@ -67,8 +67,8 @@ describe("evaluateAttendanceGeofence", () => {
     const result = evaluateAttendanceGeofence({
       employeeLatitude: -34.6005,
       employeeLongitude: -58.4005,
-      storeLatitude: -34.6,
-      storeLongitude: -58.4,
+      serviceLatitude: -34.6,
+      serviceLongitude: -58.4,
       allowedRadiusMeters,
       reviewMarginMeters,
     });
@@ -82,8 +82,8 @@ describe("evaluateAttendanceGeofence", () => {
     const withDefault = evaluateAttendanceGeofence({
       employeeLatitude: -34.6,
       employeeLongitude: -58.4,
-      storeLatitude: -34.6,
-      storeLongitude: -58.4,
+      serviceLatitude: -34.6,
+      serviceLongitude: -58.4,
       allowedRadiusMeters: 0,
       reviewMarginMeters,
     });

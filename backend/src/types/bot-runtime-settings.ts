@@ -8,6 +8,7 @@ export interface BotRuntimeSettings {
   requireCheckoutLocation: boolean;
   /** Used by admin/manual correction flows; not applied to WhatsApp check-in/check-out validation yet. */
   allowManualAttendanceCorrections: boolean;
+  pendingOperationExpirationHours: number;
   sessionTtlMinutes: number;
 }
 

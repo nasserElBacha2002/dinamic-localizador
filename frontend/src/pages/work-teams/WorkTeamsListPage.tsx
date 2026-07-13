@@ -21,6 +21,16 @@ import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 import { navigateWithListContext } from "../../utils/list-navigation";
 
+const mapWorkTeamsListError = (message: string): string => {
+  if (
+    message.includes("usá rutas con /api/companies") ||
+    message.includes("empresa activa")
+  ) {
+    return "Seleccioná una empresa para continuar.";
+  }
+  return message;
+};
+
 const WORK_TEAMS_LIST_PATH = "/work-teams";
 
 const TABLE_DEFAULTS = {
@@ -53,7 +63,7 @@ export function WorkTeamsListPage() {
     active: table.state.active === "all" ? undefined : table.state.active === "true",
   };
 
-  const { data, isPending, isError, error } = useWorkTeams(filters);
+  const { data, isPending, isError, error, isCompanyLoading } = useWorkTeams(filters);
 
   const columns = useMemo<DataTableColumn<WorkTeam>[]>(
     () => [
@@ -144,8 +154,8 @@ export function WorkTeamsListPage() {
         rows={data?.data ?? []}
         columns={columns}
         getRowKey={(row) => row.id}
-        loading={isPending}
-        error={isError ? getApiErrorMessage(error) : undefined}
+        loading={isCompanyLoading || isPending}
+        error={isError ? mapWorkTeamsListError(getApiErrorMessage(error)) : undefined}
         emptyTitle="No hay grupos de trabajo"
         emptyDescription="Creá el primer grupo para comenzar."
         onRowClick={(row) =>

@@ -21,6 +21,7 @@ import {
   buildEmployeeWorkdayStatisticsFilters,
   buildStatisticsWhereFromFilters,
 } from "../utils/employee-workday-statistics-projection";
+import { toDateOnlyString } from "../utils/row-mappers";
 
 const toNumber = (value: unknown): number => Number(value ?? 0);
 
@@ -34,8 +35,8 @@ const toIsoDate = (value: unknown): string | null => {
 };
 
 const toDateKey = (value: unknown): string => {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+  if (value instanceof Date || typeof value === "string") {
+    return toDateOnlyString(value);
   }
 
   return String(value).slice(0, 10);

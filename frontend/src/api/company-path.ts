@@ -26,6 +26,8 @@ export const OPERATIONAL_API_PREFIXES = [
   "settings",
   "modules",
   "lookups",
+  "work-teams",
+  "work-team-assignment-batches",
   "dev",
 ] as const;
 

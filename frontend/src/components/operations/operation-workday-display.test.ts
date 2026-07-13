@@ -16,8 +16,10 @@ describe("operation-workday-display", () => {
   });
 
   it("formats workday date with weekday", () => {
-    assert.match(formatWorkdayDate("2026-08-10"), /2026/);
-    assert.match(formatWorkdayDate("2026-08-10"), /lun|mar|mié|jue|vie|sáb|dom/i);
+    assert.equal(formatWorkdayDate("2026-07-13"), formatWorkdayDate("2026-07-13"));
+    assert.match(formatWorkdayDate("2026-07-13"), /lun/i);
+    assert.match(formatWorkdayDate("2026-07-13"), /13\/07\/2026/);
+    assert.doesNotMatch(formatWorkdayDate("2026-07-13"), /12\/07\/2026/);
   });
 
   it("formats expected time range including overnight end", () => {

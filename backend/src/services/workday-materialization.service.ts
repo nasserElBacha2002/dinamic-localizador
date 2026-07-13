@@ -113,6 +113,51 @@ const ensureOperationWorkdayRow = async (
   }
 };
 
+const reactivateAssignmentCancelledWorkday = async (
+  companyId: string,
+  existing: EmployeeWorkday,
+  operationAssignmentId: string,
+  transaction?: sql.Transaction,
+): Promise<EmployeeWorkday | null> => {
+  if (
+    existing.expectationStatus !== "CANCELLED" ||
+    existing.cancellationReason !== "ASSIGNMENT"
+  ) {
+    return null;
+  }
+
+  const hasAttendance = transaction
+    ? await employeeWorkdayRepository.hasAttendanceInTransaction(
+        companyId,
+        transaction,
+        existing.id,
+      )
+    : await employeeWorkdayRepository.hasAttendance(companyId, existing.id);
+
+  if (hasAttendance) {
+    throw new AppError(
+      409,
+      "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+      "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
+    );
+  }
+
+  if (transaction) {
+    return employeeWorkdayRepository.reactivateAssignmentCancelledExpectationInTransaction(
+      companyId,
+      transaction,
+      existing.id,
+      operationAssignmentId,
+    );
+  }
+
+  return employeeWorkdayRepository.reactivateAssignmentCancelledExpectation(
+    companyId,
+    existing.id,
+    operationAssignmentId,
+  );
+};
+
 const ensureEmployeeWorkdayRow = async (
   companyId: string,
   operationWorkday: OperationWorkday,
@@ -137,6 +182,16 @@ const ensureEmployeeWorkdayRow = async (
 
   const existing = await findExisting();
   if (existing) {
+    const reactivated = await reactivateAssignmentCancelledWorkday(
+      companyId,
+      existing,
+      operationAssignmentId,
+      transaction,
+    );
+    if (reactivated) {
+      return reactivated;
+    }
+
     if (!existing.operationAssignmentId) {
       const assignment = await operationEmployeeRepository.findById(
         companyId,
@@ -205,6 +260,15 @@ const ensureEmployeeWorkdayRow = async (
     const raced = await findExisting();
     if (!raced) {
       throw error;
+    }
+    const reactivated = await reactivateAssignmentCancelledWorkday(
+      companyId,
+      raced,
+      operationAssignmentId,
+      transaction,
+    );
+    if (reactivated) {
+      return reactivated;
     }
     return raced;
   }

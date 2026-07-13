@@ -40,7 +40,7 @@ describe("operational attendance status labels", () => {
 describe("Operation operational employee table UI", () => {
   it("renders grouped summary wiring and simplified production table navigation", async () => {
     const sectionSource = await readFile(
-      join(process.cwd(), "src/components/operations/OperationWorkforceSection.tsx"),
+      join(process.cwd(), "src/components/operations/OperationTeamSection.tsx"),
       "utf8",
     );
     const tableSource = await readFile(
@@ -48,10 +48,12 @@ describe("Operation operational employee table UI", () => {
       "utf8",
     );
 
-    assert.match(sectionSource, /OperationalSummaryMetrics/);
     assert.match(sectionSource, /OperationEmployeeTable/);
+    assert.match(sectionSource, /OperationTeamManageDialog/);
+    assert.doesNotMatch(sectionSource, /OperationalSummaryMetrics/);
+    assert.match(sectionSource, /Equipo y asistencia/);
     assert.match(tableSource, /Confirmación/);
-    assert.match(tableSource, /Estado asistencia/);
+    assert.match(tableSource, /Asistencia/);
     assert.match(tableSource, /assignmentConfirmationStatusTableLabels/);
     assert.match(tableSource, /operationalAttendanceStatusTableLabels/);
     assert.match(tableSource, /isRowClickable/);
@@ -62,5 +64,6 @@ describe("Operation operational employee table UI", () => {
     assert.doesNotMatch(tableSource, /header: "Teléfono"/);
     assert.doesNotMatch(tableSource, /header: "Tiempo extra"/);
     assert.doesNotMatch(tableSource, /header: "Estado salida"/);
+    assert.doesNotMatch(tableSource, /header: "Hora esperada"/);
   });
 });

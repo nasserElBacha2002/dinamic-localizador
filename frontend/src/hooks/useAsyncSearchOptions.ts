@@ -42,6 +42,7 @@ export function useAsyncSearchOptions<T>({
     inputValue,
     setInputValue,
     options,
+    items: data ?? [],
     isLoading: isFetching,
     hasSearched: isFetched && canSearch,
     debouncedSearch: debouncedSearch.trim(),

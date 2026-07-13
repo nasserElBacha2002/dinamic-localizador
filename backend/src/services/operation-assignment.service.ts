@@ -223,7 +223,7 @@ export const operationAssignmentService = {
             companyId,
             result.existingAssignmentId,
           );
-          if (existing) {
+          if (existing && !existing.cancelledAt) {
             await transaction.commit();
             transactionClosed = true;
             return withLifecycleState(existing, operationWorkDate ?? validFrom);

@@ -4,7 +4,7 @@ setupDomEnvironment();
 
 import assert from "node:assert/strict";
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -80,12 +80,12 @@ function renderTable(rows: OperationAttendanceSummaryEmployee[], onReviewApprove
               <OperationEmployeeTable
                 operationId="operation-1"
                 rows={rows}
-                scheduledStart="2026-07-15T23:30:00.000Z"
                 canAssign={false}
                 canReviewAttendance={canReviewOperationalAttendance}
                 onReviewApprove={onReviewApprove}
                 onReviewReject={() => {}}
-                onUnassign={() => {}}
+                onCancelAssignment={() => {}}
+                onEndAssignment={() => {}}
                 emptyTitle="Sin filas"
                 emptyDescription="Sin datos"
               />
@@ -126,6 +126,8 @@ describe("OperationEmployeeTable", () => {
     assert.equal(headers.includes("Estado salida"), false);
     assert.equal(headers.includes("Tiempo extra"), false);
     assert.equal(headers.includes("Teléfono"), false);
+    assert.equal(headers.includes("Hora esperada"), false);
+    assert.equal(headers.includes("Tipo"), false);
   });
 
   it("navigates to attendance detail only when the row has attendance", () => {
@@ -143,15 +145,15 @@ describe("OperationEmployeeTable", () => {
     assert.ok(view.getByText("Attendance detail"));
   });
 
-  it("executes row action without triggering attendance navigation", () => {
-    let approved = false;
-    const rows = [buildRow("c", "UNAVAILABLE", "PENDING_REVIEW", "att-c")];
-    const view = renderTable(rows, () => {
-      approved = true;
-    });
+  it("uses contextual actions menu for attendance review", async () => {
+    const { readFile } = await import("node:fs/promises");
+    const { join } = await import("node:path");
+    const source = await readFile(
+      join(process.cwd(), "src/components/operations/OperationEmployeeTable.tsx"),
+      "utf8",
+    );
 
-    fireEvent.click(view.getByText("Aprobar"));
-    assert.equal(approved, true);
-    assert.equal(view.queryByText("Attendance detail"), null);
+    assert.match(source, /Aprobar asistencia/);
+    assert.match(source, /<Menu/);
   });
 });

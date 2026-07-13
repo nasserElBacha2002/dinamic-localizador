@@ -237,6 +237,7 @@ export function OperationAssignmentsSection({
         onClose={() => setWorkTeamModalOpen(false)}
         operationId={operationId}
         operationKind={operationKind}
+        operationWorkDate={operationWorkDate}
         onCompleted={onFeedback}
       />
     </SectionCard>

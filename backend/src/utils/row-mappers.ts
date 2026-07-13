@@ -14,9 +14,16 @@ import type { AttendanceReview, User } from "../types/auth";
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+const dateToCalendarIsoString = (date: Date): string => {
+  const year = date.getUTCFullYear();
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
 export const toDateOnlyString = (value: Date | string): string => {
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    return dateToCalendarIsoString(value);
   }
   const text = String(value);
   const isoPrefix = /^(\d{4}-\d{2}-\d{2})/.exec(text);
@@ -25,7 +32,7 @@ export const toDateOnlyString = (value: Date | string): string => {
   }
   const parsed = new Date(text);
   if (!Number.isNaN(parsed.getTime())) {
-    return parsed.toISOString().slice(0, 10);
+    return dateToCalendarIsoString(parsed);
   }
   return text.slice(0, 10);
 };

@@ -1,3 +1,5 @@
+import { formatDateOnly, isDateOnlyString } from "./date-only";
+
 const TIMEZONE = "America/Argentina/Buenos_Aires";
 /** Argentina (America/Argentina/Buenos_Aires) is UTC-3 without DST since 2009. */
 const ARGENTINA_UTC_OFFSET_HOURS = 3;
@@ -34,6 +36,10 @@ export function formatDateTime(iso: string | null | undefined): string {
 export function formatDate(iso: string | null | undefined): string {
   if (!iso) {
     return "—";
+  }
+
+  if (isDateOnlyString(iso)) {
+    return formatDateOnly(iso);
   }
 
   return dateFormatter.format(new Date(iso));

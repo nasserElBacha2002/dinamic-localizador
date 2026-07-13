@@ -17,9 +17,11 @@ import {
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { isOperationAssignable } from "../utils/operation-status";
 import { operationWorkDateService } from "./operation-work-date.service";
-import { workdayMaterializationService } from "./workday-materialization.service";
+import { operationAssignmentCore } from "./operation-assignment-core.service";
+import { auditService } from "./audit.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
+import { workdayMaterializationService } from "./workday-materialization.service";
 
 const withLifecycleState = (
   assignment: OperationEmployeeAssignment,
@@ -157,6 +159,7 @@ export const operationAssignmentService = {
     operationId: string,
     employeeId: string,
     input?: { validFrom?: string; validUntil?: string | null },
+    userId?: string | null,
   ) {
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
@@ -184,46 +187,18 @@ export const operationAssignmentService = {
         ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
         : null;
 
-    const validFrom = input?.validFrom ?? operationWorkDate;
-    const validUntil =
-      input?.validUntil !== undefined
-        ? input.validUntil
-        : operationKind === "ONE_TIME"
-          ? operationWorkDate
-          : null;
-
-    if (!validFrom) {
-      throw new AppError(400, "ASSIGNMENT_VALID_FROM_REQUIRED", "La fecha de inicio es obligatoria");
-    }
-
-    try {
-      assertValidAssignmentDateRange(validFrom, validUntil);
-    } catch {
-      throw new AppError(
-        400,
-        "ASSIGNMENT_INVALID_DATE_RANGE",
-        "La fecha de finalización no puede ser anterior a la fecha de inicio",
-      );
-    }
-
-    if (
-      operationKind === "ONE_TIME" &&
-      operationWorkDate &&
-      !isAssignmentActiveOnWorkDate({ validFrom, validUntil, workDate: operationWorkDate })
-    ) {
-      throw new AppError(
-        409,
-        "ASSIGNMENT_OUTSIDE_OPERATION_WORK_DATE",
-        "La asignación debe cubrir la fecha de la operación",
-      );
-    }
+    const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
+      operationKind,
+      operationWorkDate,
+      input,
+    );
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
-      const overlap = await operationEmployeeRepository.findOverlappingInTransaction(
+      const result = await operationAssignmentCore.assignEmployeeInTransaction(
         companyId,
         transaction,
         {
@@ -231,65 +206,34 @@ export const operationAssignmentService = {
           employeeId,
           validFrom,
           validUntil,
+          employeeActive: employee.active,
+          operationKind,
+          operationWorkDate,
         },
       );
-      if (overlap) {
-        if (operationWorkDate) {
-          const existingWorkday =
-            await employeeWorkdayRepository.findByOperationAndEmployeeInTransaction(
-              companyId,
-              transaction,
-              operationId,
-              employeeId,
-            );
-          if (!existingWorkday) {
-            await workdayMaterializationService.ensureEmployeeWorkdayForAssignmentInTransaction(
-              companyId,
-              transaction,
-              operationId,
-              employeeId,
-              overlap.id,
-              operationWorkDate,
-            );
+
+      if (result.outcome === "skipped") {
+        if (result.reason === "already_assigned" && result.existingAssignmentId) {
+          const existing = await operationEmployeeRepository.findById(
+            companyId,
+            result.existingAssignmentId,
+          );
+          if (existing) {
             await transaction.commit();
-            return withLifecycleState(overlap, operationWorkDate);
+            return withLifecycleState(existing, operationWorkDate ?? validFrom);
           }
         }
-        throw new AppError(
-          409,
-          "ASSIGNMENT_PERIOD_OVERLAP",
-          "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
-        );
-      }
-
-      const assignment = await operationEmployeeRepository.createInTransaction(
-        companyId,
-        transaction,
-        {
-          operationId,
-          employeeId,
-          validFrom,
-          validUntil,
-        },
-      );
-
-      if (
-        operationKind === "ONE_TIME" &&
-        operationWorkDate &&
-        isAssignmentActiveOnWorkDate({
-          validFrom: assignment.validFrom,
-          validUntil: assignment.validUntil,
-          workDate: operationWorkDate,
-        })
-      ) {
-        await workdayMaterializationService.ensureEmployeeWorkdayForAssignmentInTransaction(
-          companyId,
-          transaction,
-          operationId,
-          employeeId,
-          assignment.id,
-          operationWorkDate,
-        );
+        if (
+          result.reason === "already_assigned" ||
+          result.reason === "assignment_period_overlap"
+        ) {
+          throw new AppError(
+            409,
+            "ASSIGNMENT_PERIOD_OVERLAP",
+            "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
+          );
+        }
+        throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
       }
 
       await transaction.commit();
@@ -302,13 +246,27 @@ export const operationAssignmentService = {
             recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
               companyId,
               operationId,
-              assignment,
+              result.assignment,
             ),
           "recurring assignment create",
         );
       }
 
-      return withLifecycleState(assignment, operationWorkDate ?? validFrom);
+      await auditService.log(companyId, {
+        entityType: "operation_assignment",
+        entityId: result.assignment.id,
+        action: "create",
+        newData: {
+          operationId,
+          employeeId,
+          validFrom,
+          validUntil,
+          assignmentOrigin: "MANUAL",
+        },
+        userId: userId ?? null,
+      });
+
+      return withLifecycleState(result.assignment, operationWorkDate ?? validFrom);
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -331,7 +289,12 @@ export const operationAssignmentService = {
     return assignments.map((assignment) => withLifecycleState(assignment, referenceDate));
   },
 
-  async cancelAssignment(companyId: string, operationId: string, assignmentId: string) {
+  async cancelAssignment(
+    companyId: string,
+    operationId: string,
+    assignmentId: string,
+    userId?: string | null,
+  ) {
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
@@ -361,6 +324,14 @@ export const operationAssignmentService = {
       }
 
       await transaction.commit();
+
+      await auditService.log(companyId, {
+        entityType: "operation_assignment",
+        entityId: assignmentId,
+        action: "cancel",
+        previousData: { operationId, assignmentId },
+        userId: userId ?? null,
+      });
 
       if ((operation.operationKind ?? "ONE_TIME") === "RECURRING") {
         await recurringWorkdaySyncService.runOperationSync(
@@ -393,6 +364,7 @@ export const operationAssignmentService = {
     operationId: string,
     assignmentId: string,
     effectiveDate: string,
+    userId?: string | null,
   ) {
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
@@ -467,6 +439,14 @@ export const operationAssignmentService = {
       await reconcileEmployeeWorkdaysOutsideAssignment(companyId, transaction, updated);
 
       await transaction.commit();
+
+      await auditService.log(companyId, {
+        entityType: "operation_assignment",
+        entityId: assignmentId,
+        action: "end",
+        newData: { operationId, assignmentId, effectiveDate },
+        userId: userId ?? null,
+      });
 
       if ((operation.operationKind ?? "ONE_TIME") === "RECURRING") {
         await recurringWorkdaySyncService.runOperationSync(

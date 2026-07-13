@@ -47,6 +47,10 @@ export interface OperationEmployeeAssignment {
   updatedAt: string;
   cancelledAt?: string | null;
   lifecycleState?: AssignmentLifecycleState;
+  assignmentOrigin?: "MANUAL" | "WORK_TEAM" | "SYSTEM";
+  sourceAssignmentBatchId?: string | null;
+  sourceWorkTeamId?: string | null;
+  sourceWorkTeamName?: string | null;
   employee?: Employee;
 }
 

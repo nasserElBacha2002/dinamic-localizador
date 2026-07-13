@@ -110,8 +110,8 @@ export function OperationDetailPage() {
     );
   }
 
-  const canAssign = isOperationAssignable(operation.status);
   const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
+  const canAssign = canManage && isOperationAssignable(operation.status);
   const canEdit = isOperationEditable(operation.status);
   const serviceDisplayName = operation.service?.name ?? "—";
   const serviceDetailId = operation.serviceId || operation.service?.id;

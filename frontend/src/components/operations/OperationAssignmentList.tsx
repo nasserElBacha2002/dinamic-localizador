@@ -69,6 +69,11 @@ export function OperationAssignmentList({
                 {employee?.employeeType ? employeeTypeLabels[employee.employeeType] : "—"} · Vigencia:{" "}
                 {formatValidity(assignment)}
               </Text>
+              {assignment.assignmentOrigin === "WORK_TEAM" && assignment.sourceWorkTeamName ? (
+                <Text size="xs" c="dimmed">
+                  Origen: {assignment.sourceWorkTeamName}
+                </Text>
+              ) : null}
             </Stack>
 
             {action === "end" ? (

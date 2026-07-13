@@ -134,6 +134,14 @@ export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmploye
   confirmedAt: row.confirmed_at ? toIsoString(row.confirmed_at as Date | string) : null,
   unavailableAt: row.unavailable_at ? toIsoString(row.unavailable_at as Date | string) : null,
   cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at as Date | string) : null,
+  assignmentOrigin: row.assignment_origin
+    ? (String(row.assignment_origin) as OperationEmployeeAssignment["assignmentOrigin"])
+    : "MANUAL",
+  sourceAssignmentBatchId: row.source_assignment_batch_id
+    ? String(row.source_assignment_batch_id)
+    : null,
+  sourceWorkTeamId: row.source_work_team_id ? String(row.source_work_team_id) : null,
+  sourceWorkTeamName: row.source_work_team_name ? String(row.source_work_team_name) : null,
   employee: row.employee_name
     ? {
         id: String(row.employee_id),

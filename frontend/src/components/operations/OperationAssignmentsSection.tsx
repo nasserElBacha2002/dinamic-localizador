@@ -15,6 +15,7 @@ import { getTodayDateInput } from "../../utils/dates";
 import { getApiErrorMessage, parseApiError } from "../../utils/errors";
 import { EndAssignmentDialog } from "./EndAssignmentDialog";
 import { OperationAssignmentList } from "./OperationAssignmentList";
+import { WorkTeamAssignmentModal } from "./WorkTeamAssignmentModal";
 import {
   isCurrentOperationalAssignment,
   mapAssignmentErrorMessage,
@@ -46,6 +47,7 @@ export function OperationAssignmentsSection({
   const [validFrom, setValidFrom] = useState(getTodayDateInput());
   const [validUntil, setValidUntil] = useState("");
   const [endTarget, setEndTarget] = useState<OperationEmployeeAssignment | null>(null);
+  const [workTeamModalOpen, setWorkTeamModalOpen] = useState(false);
 
   const isRecurring = operationKind === "RECURRING";
 
@@ -165,6 +167,9 @@ export function OperationAssignmentsSection({
             </Stack>
           )}
           <Group justify="flex-end">
+            <Button variant="light" onClick={() => setWorkTeamModalOpen(true)}>
+              Asignar desde grupos
+            </Button>
             <Button
               onClick={() => void handleAssign()}
               disabled={!selectedEmployeeId || assignMutation.isPending}
@@ -225,6 +230,14 @@ export function OperationAssignmentsSection({
         loading={endMutation.isPending}
         onClose={() => setEndTarget(null)}
         onConfirm={handleEnd}
+      />
+
+      <WorkTeamAssignmentModal
+        opened={workTeamModalOpen}
+        onClose={() => setWorkTeamModalOpen(false)}
+        operationId={operationId}
+        operationKind={operationKind}
+        onCompleted={onFeedback}
       />
     </SectionCard>
   );

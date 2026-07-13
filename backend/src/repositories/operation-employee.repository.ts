@@ -36,9 +36,11 @@ const listSelectClause = `
     e.employee_type AS employee_type,
     e.active AS employee_active,
     e.created_at AS employee_created_at,
-    e.updated_at AS employee_updated_at
+    e.updated_at AS employee_updated_at,
+    wt.name AS source_work_team_name
   FROM operation_assignments oa
   INNER JOIN employees e ON e.id = oa.employee_id AND e.company_id = @companyId
+  LEFT JOIN work_teams wt ON wt.id = oa.source_work_team_id AND wt.company_id = @companyId
 `;
 
 export const operationEmployeeRepository = {
@@ -50,6 +52,9 @@ export const operationEmployeeRepository = {
       employeeId: string;
       validFrom: string;
       validUntil: string | null;
+      sourceAssignmentBatchId?: string | null;
+      sourceWorkTeamId?: string | null;
+      assignmentOrigin?: string;
     },
   ): Promise<OperationEmployeeAssignment> {
     const assignmentId = randomUUID();
@@ -60,13 +65,18 @@ export const operationEmployeeRepository = {
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("validFrom", sql.Date, input.validFrom)
       .input("validUntil", sql.Date, input.validUntil)
+      .input("sourceAssignmentBatchId", sql.UniqueIdentifier, input.sourceAssignmentBatchId ?? null)
+      .input("sourceWorkTeamId", sql.UniqueIdentifier, input.sourceWorkTeamId ?? null)
+      .input("assignmentOrigin", sql.NVarChar(20), input.assignmentOrigin ?? "MANUAL")
       .query(`
         INSERT INTO operation_assignments (
-          id, company_id, operation_id, employee_id, valid_from, valid_until
+          id, company_id, operation_id, employee_id, valid_from, valid_until,
+          source_assignment_batch_id, source_work_team_id, assignment_origin
         )
         OUTPUT INSERTED.*
         VALUES (
-          @assignmentId, @companyId, @operationId, @employeeId, @validFrom, @validUntil
+          @assignmentId, @companyId, @operationId, @employeeId, @validFrom, @validUntil,
+          @sourceAssignmentBatchId, @sourceWorkTeamId, @assignmentOrigin
         )
       `);
 

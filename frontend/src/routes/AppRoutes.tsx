@@ -12,6 +12,9 @@ import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { EmployeesListPage } from "../pages/employees/EmployeesListPage";
+import { WorkTeamsListPage } from "../pages/work-teams/WorkTeamsListPage";
+import { WorkTeamCreatePage } from "../pages/work-teams/WorkTeamCreatePage";
+import { WorkTeamEditPage } from "../pages/work-teams/WorkTeamEditPage";
 import { EmployeeCreatePage } from "../pages/employees/EmployeeCreatePage";
 import { EmployeeEditPage } from "../pages/employees/EmployeeEditPage";
 import { ServicesListPage } from "../pages/services/ServicesListPage";
@@ -101,6 +104,14 @@ const employeeManage = {
   requiredAnyPermission: ["employees:manage"] as const,
 };
 
+const workTeamAccess = {
+  ...employeeAccess,
+};
+
+const workTeamManage = {
+  ...employeeManage,
+};
+
 const serviceAccess = {
   moduleKey: "operations" as const,
   requiredAnyPermission: ["services:read", "services:manage"] as const,
@@ -165,6 +176,30 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard {...employeeAccess}>
               <EmployeeEditPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/work-teams"
+          element={
+            <FeatureRouteGuard {...workTeamAccess}>
+              <WorkTeamsListPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/work-teams/new"
+          element={
+            <FeatureRouteGuard {...workTeamManage}>
+              <WorkTeamCreatePage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/work-teams/:id"
+          element={
+            <FeatureRouteGuard {...workTeamAccess}>
+              <WorkTeamEditPage />
             </FeatureRouteGuard>
           }
         />

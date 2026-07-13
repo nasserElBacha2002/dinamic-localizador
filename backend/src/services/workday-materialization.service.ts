@@ -7,6 +7,7 @@ import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
 import { isAssignmentActiveOnWorkDate } from "../utils/assignment-period";
+import { isRecoverableCancelledExpectation } from "../utils/employee-workday-recovery";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 
@@ -119,13 +120,6 @@ const reactivateAssignmentCancelledWorkday = async (
   operationAssignmentId: string,
   transaction?: sql.Transaction,
 ): Promise<EmployeeWorkday | null> => {
-  if (
-    existing.expectationStatus !== "CANCELLED" ||
-    existing.cancellationReason !== "ASSIGNMENT"
-  ) {
-    return null;
-  }
-
   const hasAttendance = transaction
     ? await employeeWorkdayRepository.hasAttendanceInTransaction(
         companyId,
@@ -133,6 +127,17 @@ const reactivateAssignmentCancelledWorkday = async (
         existing.id,
       )
     : await employeeWorkdayRepository.hasAttendance(companyId, existing.id);
+
+  const recoverable = await isRecoverableCancelledExpectation(
+    companyId,
+    existing,
+    operationAssignmentId,
+    hasAttendance,
+  );
+
+  if (!recoverable) {
+    return null;
+  }
 
   if (hasAttendance) {
     throw new AppError(

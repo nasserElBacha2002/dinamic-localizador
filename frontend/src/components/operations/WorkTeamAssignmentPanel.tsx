@@ -9,7 +9,7 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { useCompany } from "../../hooks/useCompany";
 import {
@@ -55,22 +55,32 @@ export interface WorkTeamAssignmentPanelProps {
   onFinished?: () => void;
 }
 
-export function WorkTeamAssignmentPanel({
+export function WorkTeamAssignmentPanel(props: WorkTeamAssignmentPanelProps) {
+  const { activeCompany } = useCompany();
+  const companyId = activeCompany?.companyId ?? null;
+  const panelKey = props.enabled
+    ? `${companyId ?? "no-company"}:${props.operationId}:${props.operationWorkDate}`
+    : "disabled";
+
+  if (!props.enabled) {
+    return null;
+  }
+
+  return <WorkTeamAssignmentPanelContent key={panelKey} companyId={companyId} {...props} />;
+}
+
+function WorkTeamAssignmentPanelContent({
   operationId,
   operationKind,
   operationWorkDate,
-  enabled = true,
+  companyId,
   onCompleted,
   onFinished,
-}: WorkTeamAssignmentPanelProps) {
+}: WorkTeamAssignmentPanelProps & { companyId: string | null }) {
   const isRecurring = operationKind === "RECURRING";
-  const { activeCompany } = useCompany();
-  const companyId = activeCompany?.companyId ?? null;
-  const previousCompanyIdRef = useRef<string | null>(companyId);
-  const previousOperationIdRef = useRef<string | null>(operationId);
   const queryClient = useQueryClient();
 
-  const teamsQuery = useWorkTeams({ page: 1, limit: 100, active: true }, enabled);
+  const teamsQuery = useWorkTeams({ page: 1, limit: 100, active: true }, true);
   const previewMutation = usePreviewWorkTeamAssignment(operationId);
   const confirmMutation = useConfirmWorkTeamAssignment(operationId);
 
@@ -92,33 +102,6 @@ export function WorkTeamAssignmentPanel({
     setPreview(null);
     setErrorMessage(null);
   };
-
-  useEffect(() => {
-    if (!enabled) {
-      return;
-    }
-    resetState();
-  }, [enabled, operationWorkDate]);
-
-  useEffect(() => {
-    if (!enabled) {
-      previousCompanyIdRef.current = companyId;
-      previousOperationIdRef.current = operationId;
-      return;
-    }
-
-    const previousCompanyId = previousCompanyIdRef.current;
-    const previousOperationId = previousOperationIdRef.current;
-    if (
-      (previousCompanyId && companyId && previousCompanyId !== companyId) ||
-      (previousOperationId && previousOperationId !== operationId)
-    ) {
-      resetState();
-    }
-
-    previousCompanyIdRef.current = companyId;
-    previousOperationIdRef.current = operationId;
-  }, [companyId, operationId, enabled]);
 
   const teamsLoading = teamsQuery.isCompanyLoading || teamsQuery.isPending;
   const teamsLoaded = !teamsLoading && !teamsQuery.isError;

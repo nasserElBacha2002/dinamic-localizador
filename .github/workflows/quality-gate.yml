@@ -72,6 +72,57 @@ jobs:
       - name: npm audit (high+)
         run: npm audit --audit-level=high
 
+  backend-integration:
+    name: backend-integration
+    runs-on: ubuntu-latest
+    services:
+      sqlserver:
+        image: mcr.microsoft.com/mssql/server:2022-latest
+        env:
+          ACCEPT_EULA: Y
+          MSSQL_SA_PASSWORD: TestPassword123!
+        ports:
+          - 1433:1433
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      RUN_DB_INTEGRATION_TESTS: "true"
+      FRONTEND_URL: http://localhost:5173
+      TZ: America/Argentina/Buenos_Aires
+      DB_HOST: localhost
+      DB_PORT: 1433
+      DB_NAME: dinamic_attendance_ci
+      DB_USER: sa
+      DB_PASSWORD: TestPassword123!
+      DB_ENCRYPT: "false"
+      DB_TRUST_SERVER_CERTIFICATE: "true"
+      JWT_SECRET: ci-jwt-secret-min-16-chars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Create database
+        run: |
+          docker run --rm --network host mcr.microsoft.com/mssql-tools \
+            /opt/mssql-tools/bin/sqlcmd \
+            -S localhost -U sa -P "$DB_PASSWORD" \
+            -Q "IF DB_ID('$DB_NAME') IS NULL CREATE DATABASE [$DB_NAME]" -C
+
+      - name: Run migrations
+        run: npm run migrate
+
+      - name: Integration tests
+        run: npm run test:integration
+
   audit-artifacts:
     name: audit-artifacts
     runs-on: ubuntu-latest

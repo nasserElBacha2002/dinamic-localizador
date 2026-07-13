@@ -1,5 +1,5 @@
 import { Button, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { SectionCard } from "../../design-system";
 import { WorkTeamMemberMultiSelect } from "./WorkTeamMemberMultiSelect";
 import type { Employee } from "../../types/employee";
@@ -20,7 +20,14 @@ interface WorkTeamFormProps {
   onCancel: () => void;
 }
 
-export function WorkTeamForm({
+const buildFormKey = (values: WorkTeamFormValues): string =>
+  `${values.name}|${values.description}|${values.employeeIds.join(",")}`;
+
+export function WorkTeamForm(props: WorkTeamFormProps) {
+  return <WorkTeamFormFields key={buildFormKey(props.defaultValues)} {...props} />;
+}
+
+function WorkTeamFormFields({
   defaultValues,
   existingMembers = [],
   submitLabel,
@@ -32,12 +39,6 @@ export function WorkTeamForm({
   const [name, setName] = useState(defaultValues.name);
   const [description, setDescription] = useState(defaultValues.description);
   const [employeeIds, setEmployeeIds] = useState(defaultValues.employeeIds);
-
-  useEffect(() => {
-    setName(defaultValues.name);
-    setDescription(defaultValues.description);
-    setEmployeeIds(defaultValues.employeeIds);
-  }, [defaultValues]);
 
   return (
     <SectionCard title="Datos del grupo" description="Plantilla reutilizable de colaboradores.">
@@ -52,7 +53,6 @@ export function WorkTeamForm({
           label="Descripción"
           value={description}
           onChange={(event) => setDescription(event.currentTarget.value)}
-          minRows={2}
         />
         <WorkTeamMemberMultiSelect
           selectedEmployeeIds={employeeIds}
@@ -64,20 +64,14 @@ export function WorkTeamForm({
             {errorMessage}
           </Text>
         ) : null}
-        <Stack gap="xs">
+        <Stack gap="sm">
           <Button
-            onClick={() =>
-              onSubmit({
-                name: name.trim(),
-                description: description.trim(),
-                employeeIds,
-              })
-            }
             loading={loading}
+            onClick={() => void onSubmit({ name, description, employeeIds })}
           >
             {submitLabel}
           </Button>
-          <Button variant="default" onClick={onCancel} disabled={loading}>
+          <Button variant="default" onClick={onCancel}>
             Cancelar
           </Button>
         </Stack>

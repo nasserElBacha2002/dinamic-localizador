@@ -20,6 +20,8 @@ describe("operation attendance summary search query", () => {
     assert.match(query, /ow\.operation_id = @operationId/);
     assert.match(query, /ow\.company_id = @companyId/);
     assert.match(query, /ow\.id = @operationWorkdayId/);
+    assert.match(query, /oa\.cancelled_at IS NULL/);
+    assert.match(query, /ow\.work_date >= oa\.valid_from/);
     // Never interpolate the raw term: only the @search parameter is referenced.
     assert.doesNotMatch(query, /LIKE '%/);
   });

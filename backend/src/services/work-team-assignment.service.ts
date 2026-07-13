@@ -623,16 +623,18 @@ export const workTeamAssignmentService = {
       }
     } catch (error) {
       if (!transactionClosed) {
-        try {
-          await workTeamAssignmentBatchRepository.markFailedInTransaction(
-            transaction,
-            input.previewToken,
-          );
-          await transaction.commit();
-        } catch {
-          await safeRollback(transaction);
-        }
+        await safeRollback(transaction);
       }
+
+      try {
+        await workTeamAssignmentBatchRepository.markFailed(companyId, input.previewToken);
+      } catch (markFailedError) {
+        console.error(
+          "[work-team-assignment] failed to mark batch as FAILED after rollback",
+          markFailedError,
+        );
+      }
+
       throw error;
     }
 

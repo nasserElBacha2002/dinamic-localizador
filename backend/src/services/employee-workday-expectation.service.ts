@@ -2,8 +2,9 @@ import { AppError } from "../errors/app-error";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import type { EnsureEmployeeWorkdayOutcome } from "../types/materialization";
 import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
+import { isRecoverableCancelledExpectation } from "../utils/employee-workday-recovery";
 
-const reactivateAssignmentCancelledExpectation = async (
+const reactivateRecoverableCancelledExpectation = async (
   companyId: string,
   employeeWorkdayId: string,
   operationAssignmentId: string,
@@ -27,19 +28,15 @@ export const employeeWorkdayExpectationService = {
       input;
 
     if (existing) {
-      if (
-        existing.expectationStatus === "CANCELLED" &&
-        existing.cancellationReason === "ASSIGNMENT"
-      ) {
-        if (hasAttendance) {
-          throw new AppError(
-            409,
-            "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
-            "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
-          );
-        }
+      const recoverable = await isRecoverableCancelledExpectation(
+        companyId,
+        existing,
+        operationAssignmentId,
+        hasAttendance,
+      );
 
-        const reactivated = await reactivateAssignmentCancelledExpectation(
+      if (recoverable) {
+        const reactivated = await reactivateRecoverableCancelledExpectation(
           companyId,
           existing.id,
           operationAssignmentId,

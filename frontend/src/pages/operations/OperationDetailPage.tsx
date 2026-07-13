@@ -1,6 +1,6 @@
 import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
@@ -81,7 +81,8 @@ export function OperationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [teamWorkday, setTeamWorkday] = useState<OperationTeamWorkdaySelection | null>(null);
+  const [teamWorkdayOverride, setTeamWorkdayOverride] =
+    useState<OperationTeamWorkdaySelection | null>(null);
 
   const operation = operationQuery.data;
   const isRecurring = operation?.operationKind === "RECURRING";
@@ -96,22 +97,20 @@ export function OperationDetailPage() {
     { page: 1, limit: 90 },
   );
   const teamWorkdayOptions = teamWorkdaysQuery.data?.data ?? [];
-
-  useEffect(() => {
+  const teamWorkday = useMemo(() => {
     if (!isRecurring) {
-      setTeamWorkday(null);
-      return;
+      return null;
     }
 
     if (
-      teamWorkday &&
-      teamWorkdayOptions.some((workday) => workday.id === teamWorkday.workdayId)
+      teamWorkdayOverride &&
+      teamWorkdayOptions.some((workday) => workday.id === teamWorkdayOverride.workdayId)
     ) {
-      return;
+      return teamWorkdayOverride;
     }
 
-    setTeamWorkday(pickDefaultTeamWorkday(teamWorkdayOptions, operationalToday));
-  }, [isRecurring, operation?.id, teamWorkdayOptions, operationalToday, teamWorkday]);
+    return pickDefaultTeamWorkday(teamWorkdayOptions, operationalToday);
+  }, [isRecurring, teamWorkdayOverride, teamWorkdayOptions, operationalToday]);
 
   const showFeedback = (message: string, severity: "success" | "error" = "success") => {
     notifications.show({ color: severity === "error" ? "red" : "green", message });
@@ -265,7 +264,7 @@ export function OperationDetailPage() {
                 operationalToday={operationalToday}
                 workdayOptions={teamWorkdayOptions}
                 selectedWorkday={teamWorkday}
-                onWorkdayChange={setTeamWorkday}
+                onWorkdayChange={setTeamWorkdayOverride}
                 onFeedback={(message, severity) => showFeedback(message, severity)}
               />
               {operation.operationKind === "RECURRING" ? (

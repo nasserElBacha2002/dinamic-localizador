@@ -30,7 +30,26 @@ export interface OperationAttendanceSummaryCounts {
   unavailableEmployees: number;
 }
 
-export const buildEmployeesBaseQuery = (hasSearch: boolean): string => `
+const ACTIVE_ASSIGNMENT_JOIN = `
+  INNER JOIN operation_assignments oa
+    ON oa.id = ew.operation_assignment_id
+   AND oa.company_id = ew.company_id
+   AND oa.cancelled_at IS NULL
+   AND ow.work_date >= oa.valid_from
+   AND (oa.valid_until IS NULL OR ow.work_date <= oa.valid_until)
+`;
+
+const buildSearchPredicate = (hasSearch: boolean): string =>
+  hasSearch
+    ? `    AND (
+      e.name LIKE @search
+      OR e.phone_number LIKE @search
+      OR e.document_number LIKE @search
+    )`
+    : "";
+
+/** Global operational rows: active assignment required, no search filter. */
+export const buildOperationalEmployeesBaseQuery = (hasSearch: boolean): string => `
   FROM employee_workdays ew
   INNER JOIN operation_workdays ow
     ON ow.id = ew.operation_workday_id
@@ -38,9 +57,7 @@ export const buildEmployeesBaseQuery = (hasSearch: boolean): string => `
   INNER JOIN employees e
     ON e.id = ew.employee_id
    AND e.company_id = @companyId
-  LEFT JOIN operation_assignments oa
-    ON oa.id = ew.operation_assignment_id
-   AND oa.company_id = ew.company_id
+  ${ACTIVE_ASSIGNMENT_JOIN}
   LEFT JOIN attendance_records ar
     ON ar.employee_workday_id = ew.id
    AND ar.company_id = ew.company_id
@@ -49,16 +66,11 @@ export const buildEmployeesBaseQuery = (hasSearch: boolean): string => `
     AND ow.company_id = @companyId
     AND ow.id = @operationWorkdayId
     AND ew.expectation_status <> 'CANCELLED'
-${
-  hasSearch
-    ? `    AND (
-      e.name LIKE @search
-      OR e.phone_number LIKE @search
-      OR e.document_number LIKE @search
-    )`
-    : ""
-}
+${buildSearchPredicate(hasSearch)}
 `;
+
+/** @deprecated Use buildOperationalEmployeesBaseQuery */
+export const buildEmployeesBaseQuery = buildOperationalEmployeesBaseQuery;
 
 export const operationAttendanceRepository = {
   async getAttendanceSummary(
@@ -83,7 +95,8 @@ export const operationAttendanceRepository = {
     const normalizedSearch = search?.trim();
     const hasSearch = Boolean(normalizedSearch);
     const searchLike = hasSearch ? `%${normalizedSearch}%` : null;
-    const employeesBaseQuery = buildEmployeesBaseQuery(hasSearch);
+    const globalBaseQuery = buildOperationalEmployeesBaseQuery(false);
+    const filteredBaseQuery = buildOperationalEmployeesBaseQuery(hasSearch);
 
     const operationResult = await pool
       .request()
@@ -163,7 +176,6 @@ export const operationAttendanceRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
       .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
-      .input("search", sql.NVarChar, searchLike)
       .query(`
         SELECT
           COUNT(*) AS assigned,
@@ -172,10 +184,10 @@ export const operationAttendanceRepository = {
           SUM(CASE WHEN ar.validation_status = 'PENDING_REVIEW' THEN 1 ELSE 0 END) AS pending_review,
           SUM(CASE WHEN ar.validation_status = 'REJECTED' THEN 1 ELSE 0 END) AS rejected,
           SUM(CASE WHEN ar.id IS NULL AND ew.expectation_status = 'EXPECTED' THEN 1 ELSE 0 END) AS without_check_in,
-          SUM(CASE WHEN COALESCE(oa.confirmation_status, 'PENDING') = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
-          SUM(CASE WHEN COALESCE(oa.confirmation_status, 'PENDING') = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
-          SUM(CASE WHEN COALESCE(oa.confirmation_status, 'PENDING') = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
-        ${employeesBaseQuery}
+          SUM(CASE WHEN oa.confirmation_status = 'CONFIRMED' THEN 1 ELSE 0 END) AS confirmed_employees,
+          SUM(CASE WHEN oa.confirmation_status = 'PENDING' THEN 1 ELSE 0 END) AS pending_confirmation_employees,
+          SUM(CASE WHEN oa.confirmation_status = 'UNAVAILABLE' THEN 1 ELSE 0 END) AS unavailable_employees
+        ${globalBaseQuery}
       `);
 
     const summaryRow = summaryResult.recordset[0] as Record<string, unknown>;
@@ -190,6 +202,21 @@ export const operationAttendanceRepository = {
       pendingConfirmationEmployees: Number(summaryRow.pending_confirmation_employees ?? 0),
       unavailableEmployees: Number(summaryRow.unavailable_employees ?? 0),
     };
+
+    const filteredCountResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("search", sql.NVarChar, searchLike)
+      .query(`
+        SELECT COUNT(*) AS filtered_total
+        ${filteredBaseQuery}
+      `);
+
+    const filteredTotal = Number(
+      (filteredCountResult.recordset[0] as { filtered_total?: number }).filtered_total ?? 0,
+    );
 
     const employeesResult = await pool
       .request()
@@ -232,7 +259,7 @@ export const operationAttendanceRepository = {
           ar.extra_worked_minutes,
           ar.checkout_message_sid,
           ar.created_at AS attendance_created_at
-        ${employeesBaseQuery}
+        ${filteredBaseQuery}
         ORDER BY e.name ASC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
@@ -248,7 +275,7 @@ export const operationAttendanceRepository = {
       workDate: resolvedWorkDate,
       summary,
       employees,
-      total: summary.assigned,
+      total: filteredTotal,
     };
   },
 };

@@ -324,6 +324,23 @@ export const workTeamAssignmentBatchRepository = {
       `);
   },
 
+  async markFailed(companyId: string, batchId: string): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("batchId", sql.UniqueIdentifier, batchId)
+      .query(`
+        UPDATE work_team_assignment_batches
+        SET status = N'FAILED'
+        WHERE id = @batchId
+          AND company_id = @companyId
+          AND status = N'PREVIEWED'
+      `);
+
+    return (result.rowsAffected[0] ?? 0) > 0;
+  },
+
   async markExpiredInTransaction(transaction: sql.Transaction, batchId: string): Promise<void> {
     await new sql.Request(transaction)
       .input("batchId", sql.UniqueIdentifier, batchId)

@@ -90,6 +90,9 @@ describe("employeeWorkdayExpectationService", () => {
   it("reactivates ASSIGNMENT-cancelled expectation for a new assignment", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayExpectationService } = await import("./employee-workday-expectation.service");
+    const { operationEmployeeRepository } = await import(
+      "../repositories/operation-employee.repository"
+    );
     const existing = baseEmployeeWorkday({
       operationAssignmentId: "assign-old",
       expectationStatus: "CANCELLED",
@@ -101,6 +104,10 @@ describe("employeeWorkdayExpectationService", () => {
       cancellationReason: null,
     });
 
+    mock.method(operationEmployeeRepository, "findById", async () => ({
+      id: "assign-old",
+      cancelledAt: "2026-07-13T12:00:00.000Z",
+    }));
     mock.method(employeeWorkdayRepository, "reactivateAssignmentCancelledExpectation", async () => reactivated);
 
     const outcome = await employeeWorkdayExpectationService.ensureExpectedForRecurringAssignment({
@@ -126,6 +133,11 @@ describe("employeeWorkdayExpectationService", () => {
     });
 
     mock.method(employeeWorkdayRepository, "reactivateAssignmentCancelledExpectation", async () => null);
+    mock.method(
+      (await import("../repositories/operation-employee.repository")).operationEmployeeRepository,
+      "findById",
+      async () => ({ id: "assign-old", cancelledAt: "2026-07-13T12:00:00.000Z" }),
+    );
 
     await assert.rejects(
       () =>
@@ -142,32 +154,47 @@ describe("employeeWorkdayExpectationService", () => {
     );
   });
 
-  it("does not reactivate legacy CANCELLED row with null reason", async () => {
+  it("reactivates legacy CANCELLED rows with null cancellation_reason when linked assignment is cancelled", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayExpectationService } = await import("./employee-workday-expectation.service");
+    const { operationEmployeeRepository } = await import(
+      "../repositories/operation-employee.repository"
+    );
     const existing = baseEmployeeWorkday({
+      operationAssignmentId: "assign-old",
       expectationStatus: "CANCELLED",
       cancellationReason: null,
     });
+    const reactivated = baseEmployeeWorkday({
+      operationAssignmentId: "assign-new",
+      expectationStatus: "EXPECTED",
+      cancellationReason: null,
+    });
+
+    mock.method(operationEmployeeRepository, "findById", async () => ({
+      id: "assign-old",
+      cancelledAt: "2026-07-13T12:00:00.000Z",
+    }));
+    mock.method(employeeWorkdayRepository, "reactivateAssignmentCancelledExpectation", async () => reactivated);
 
     const outcome = await employeeWorkdayExpectationService.ensureExpectedForRecurringAssignment({
       companyId: COMPANY_ID,
       operationWorkday,
       employeeId: EMPLOYEE_ID,
-      operationAssignmentId: ASSIGNMENT_ID,
+      operationAssignmentId: "assign-new",
       existing,
       hasAttendance: false,
     });
 
-    assert.equal(outcome.kind, "UNCHANGED");
+    assert.equal(outcome.kind, "REACTIVATED");
   });
 
-  it("does not reactivate when attendance exists", async () => {
+  it("does not reactivate legacy CANCELLED rows with null reason when attendance exists", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayExpectationService } = await import("./employee-workday-expectation.service");
     const existing = baseEmployeeWorkday({
       expectationStatus: "CANCELLED",
-      cancellationReason: "SCHEDULE",
+      cancellationReason: null,
     });
 
     const outcome = await employeeWorkdayExpectationService.ensureExpectedForRecurringAssignment({

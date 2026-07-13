@@ -133,3 +133,6 @@ export function displayStateTone(state: AssignmentDisplayState) {
       return "danger" as const;
   }
 }
+
+// Deuda técnica: la asignación individual múltiple sigue usando N requests secuenciales.
+// Pendiente un endpoint batch (POST .../assignments/batch) reutilizando operationAssignmentCore.

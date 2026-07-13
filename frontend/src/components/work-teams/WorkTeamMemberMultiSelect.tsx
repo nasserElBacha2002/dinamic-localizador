@@ -20,26 +20,31 @@ export function WorkTeamMemberMultiSelect({
   onChange,
   existingMembers = [],
 }: WorkTeamMemberMultiSelectProps) {
-  const [employeeById, setEmployeeById] = useState<Map<string, Employee>>(() =>
-    buildEmployeeByIdMap(existingMembers),
-  );
-  const [loadingIds, setLoadingIds] = useState<Set<string>>(new Set());
+  const [fetchedEmployees, setFetchedEmployees] = useState<Map<string, Employee>>(new Map());
   const [unavailableIds, setUnavailableIds] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    setEmployeeById((current) => {
-      const next = new Map(current);
-      for (const member of existingMembers) {
-        next.set(member.id, member);
-      }
-      return next;
-    });
-  }, [existingMembers]);
+  const employeeById = useMemo(() => {
+    const next = buildEmployeeByIdMap(existingMembers);
+    for (const [employeeId, employee] of fetchedEmployees) {
+      next.set(employeeId, employee);
+    }
+    return next;
+  }, [existingMembers, fetchedEmployees]);
 
   const missingEmployeeIds = useMemo(
     () => getMissingSelectedEmployeeIds(selectedEmployeeIds, employeeById, unavailableIds),
     [selectedEmployeeIds, employeeById, unavailableIds],
   );
+
+  const loadingIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const employeeId of missingEmployeeIds) {
+      if (!employeeById.has(employeeId) && !unavailableIds.has(employeeId)) {
+        ids.add(employeeId);
+      }
+    }
+    return ids;
+  }, [missingEmployeeIds, employeeById, unavailableIds]);
 
   useEffect(() => {
     if (missingEmployeeIds.length === 0) {
@@ -47,7 +52,6 @@ export function WorkTeamMemberMultiSelect({
     }
 
     let cancelled = false;
-    setLoadingIds((current) => new Set([...current, ...missingEmployeeIds]));
 
     void Promise.all(
       missingEmployeeIds.map(async (employeeId) => {
@@ -56,18 +60,10 @@ export function WorkTeamMemberMultiSelect({
           if (cancelled) {
             return;
           }
-          setEmployeeById((current) => new Map(current).set(employeeId, employee));
+          setFetchedEmployees((current) => new Map(current).set(employeeId, employee));
         } catch {
           if (!cancelled) {
             setUnavailableIds((current) => new Set(current).add(employeeId));
-          }
-        } finally {
-          if (!cancelled) {
-            setLoadingIds((current) => {
-              const next = new Set(current);
-              next.delete(employeeId);
-              return next;
-            });
           }
         }
       }),
@@ -79,7 +75,7 @@ export function WorkTeamMemberMultiSelect({
   }, [missingEmployeeIds]);
 
   const handleEmployeeSelected = (employee: Employee) => {
-    setEmployeeById((current) => new Map(current).set(employee.id, employee));
+    setFetchedEmployees((current) => new Map(current).set(employee.id, employee));
     if (selectedEmployeeIds.includes(employee.id)) {
       return;
     }

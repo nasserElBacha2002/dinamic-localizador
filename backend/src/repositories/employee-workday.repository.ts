@@ -488,7 +488,7 @@ export const employeeWorkdayRepository = {
         WHERE company_id = @companyId
           AND id = @employeeWorkdayId
           AND expectation_status = 'CANCELLED'
-          AND cancellation_reason = 'ASSIGNMENT'
+          AND (cancellation_reason = 'ASSIGNMENT' OR cancellation_reason IS NULL)
           AND NOT EXISTS (
             SELECT 1
             FROM attendance_records ar
@@ -524,7 +524,7 @@ export const employeeWorkdayRepository = {
         WHERE company_id = @companyId
           AND id = @employeeWorkdayId
           AND expectation_status = 'CANCELLED'
-          AND cancellation_reason = 'ASSIGNMENT'
+          AND (cancellation_reason = 'ASSIGNMENT' OR cancellation_reason IS NULL)
           AND NOT EXISTS (
             SELECT 1
             FROM attendance_records ar

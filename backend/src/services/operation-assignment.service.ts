@@ -16,6 +16,8 @@ import {
 } from "../utils/assignment-period";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { isOperationAssignable } from "../utils/operation-status";
+import { safeRollback } from "../utils/safe-transaction";
+import { logAuditSafe } from "../utils/audit-post-commit";
 import { operationWorkDateService } from "./operation-work-date.service";
 import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { auditService } from "./audit.service";
@@ -197,6 +199,9 @@ export const operationAssignmentService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let transactionClosed = false;
+    let committedAssignment: OperationEmployeeAssignment | null = null;
+
     try {
       const result = await operationAssignmentCore.assignEmployeeInTransaction(
         companyId,
@@ -220,6 +225,7 @@ export const operationAssignmentService = {
           );
           if (existing) {
             await transaction.commit();
+            transactionClosed = true;
             return withLifecycleState(existing, operationWorkDate ?? validFrom);
           }
         }
@@ -237,8 +243,17 @@ export const operationAssignmentService = {
       }
 
       await transaction.commit();
+      transactionClosed = true;
+      committedAssignment = result.assignment;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
 
-      if (operationKind === "RECURRING") {
+    if (operationKind === "RECURRING" && committedAssignment) {
+      try {
         await recurringWorkdaySyncService.runOperationSync(
           companyId,
           operationId,
@@ -246,15 +261,19 @@ export const operationAssignmentService = {
             recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
               companyId,
               operationId,
-              result.assignment,
+              committedAssignment!,
             ),
           "recurring assignment create",
         );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after commit", error);
       }
+    }
 
-      await auditService.log(companyId, {
+    await logAuditSafe("operation_assignment.create", () =>
+      auditService.log(companyId, {
         entityType: "operation_assignment",
-        entityId: result.assignment.id,
+        entityId: committedAssignment!.id,
         action: "create",
         newData: {
           operationId,
@@ -264,13 +283,10 @@ export const operationAssignmentService = {
           assignmentOrigin: "MANUAL",
         },
         userId: userId ?? null,
-      });
+      }),
+    );
 
-      return withLifecycleState(result.assignment, operationWorkDate ?? validFrom);
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
-    }
+    return withLifecycleState(committedAssignment!, operationWorkDate ?? validFrom);
   },
 
   async listAssignmentPeriods(companyId: string, operationId: string) {
@@ -312,28 +328,42 @@ export const operationAssignmentService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let transactionClosed = false;
+    let cancelled: OperationEmployeeAssignment | null = null;
+
     try {
       await cancelExpectedEmployeeWorkdaysForAssignment(companyId, transaction, assignmentId);
-      const cancelled = await operationEmployeeRepository.cancelAssignmentInTransaction(
+      const cancelledAssignment = await operationEmployeeRepository.cancelAssignmentInTransaction(
         companyId,
         transaction,
         assignmentId,
       );
-      if (!cancelled) {
+      if (!cancelledAssignment) {
         throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
       }
 
       await transaction.commit();
+      transactionClosed = true;
+      cancelled = cancelledAssignment;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
 
-      await auditService.log(companyId, {
+    await logAuditSafe("operation_assignment.cancel", () =>
+      auditService.log(companyId, {
         entityType: "operation_assignment",
         entityId: assignmentId,
         action: "cancel",
         previousData: { operationId, assignmentId },
         userId: userId ?? null,
-      });
+      }),
+    );
 
-      if ((operation.operationKind ?? "ONE_TIME") === "RECURRING") {
+    if ((operation.operationKind ?? "ONE_TIME") === "RECURRING" && cancelled) {
+      try {
         await recurringWorkdaySyncService.runOperationSync(
           companyId,
           operationId,
@@ -341,22 +371,21 @@ export const operationAssignmentService = {
             recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
               companyId,
               operationId,
-              cancelled,
+              cancelled!,
             ),
           "recurring assignment cancel",
         );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after commit", error);
       }
-
-      const referenceDate = await resolveLifecycleReferenceDate(
-        companyId,
-        operationId,
-        operation.operationKind ?? "ONE_TIME",
-      );
-      return withLifecycleState(cancelled, referenceDate);
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
     }
+
+    const referenceDate = await resolveLifecycleReferenceDate(
+      companyId,
+      operationId,
+      operation.operationKind ?? "ONE_TIME",
+    );
+    return withLifecycleState(cancelled!, referenceDate);
   },
 
   async endAssignment(
@@ -374,6 +403,9 @@ export const operationAssignmentService = {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
+
+    let transactionClosed = false;
+    let updated: OperationEmployeeAssignment | null = null;
 
     try {
       const assignment = await operationEmployeeRepository.findByIdInTransaction(
@@ -422,13 +454,13 @@ export const operationAssignmentService = {
         );
       }
 
-      const updated = await operationEmployeeRepository.endAssignmentInTransaction(
+      const ended = await operationEmployeeRepository.endAssignmentInTransaction(
         companyId,
         transaction,
         assignmentId,
         effectiveDate,
       );
-      if (!updated) {
+      if (!ended) {
         throw new AppError(
           409,
           "ASSIGNMENT_INVALID_END_DATE",
@@ -436,19 +468,30 @@ export const operationAssignmentService = {
         );
       }
 
-      await reconcileEmployeeWorkdaysOutsideAssignment(companyId, transaction, updated);
+      await reconcileEmployeeWorkdaysOutsideAssignment(companyId, transaction, ended);
 
       await transaction.commit();
+      transactionClosed = true;
+      updated = ended;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
 
-      await auditService.log(companyId, {
+    await logAuditSafe("operation_assignment.end", () =>
+      auditService.log(companyId, {
         entityType: "operation_assignment",
         entityId: assignmentId,
         action: "end",
         newData: { operationId, assignmentId, effectiveDate },
         userId: userId ?? null,
-      });
+      }),
+    );
 
-      if ((operation.operationKind ?? "ONE_TIME") === "RECURRING") {
+    if ((operation.operationKind ?? "ONE_TIME") === "RECURRING" && updated) {
+      try {
         await recurringWorkdaySyncService.runOperationSync(
           companyId,
           operationId,
@@ -456,22 +499,21 @@ export const operationAssignmentService = {
             recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
               companyId,
               operationId,
-              updated,
+              updated!,
             ),
           "recurring assignment end",
         );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after commit", error);
       }
-
-      const referenceDate = await resolveLifecycleReferenceDate(
-        companyId,
-        operationId,
-        operation.operationKind ?? "ONE_TIME",
-      );
-      return withLifecycleState(updated, referenceDate);
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
     }
+
+    const referenceDate = await resolveLifecycleReferenceDate(
+      companyId,
+      operationId,
+      operation.operationKind ?? "ONE_TIME",
+    );
+    return withLifecycleState(updated!, referenceDate);
   },
 };
 

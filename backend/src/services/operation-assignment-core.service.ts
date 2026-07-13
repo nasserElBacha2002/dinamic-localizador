@@ -6,6 +6,7 @@ import { operationEmployeeRepository } from "../repositories/operation-employee.
 import type { OperationEmployeeAssignment } from "../types/domain";
 import {
   assertValidAssignmentDateRange,
+  assignmentPeriodsOverlap,
   isAssignmentActiveOnWorkDate,
 } from "../utils/assignment-period";
 import { workdayMaterializationService } from "./workday-materialization.service";
@@ -33,7 +34,11 @@ export const classifyAssignmentOverlap = (
   validFrom: string,
   validUntil: string | null,
 ): WorkTeamAssignmentSkipReason => {
-  if (periodsAreEquivalent(existing.validFrom, existing.validUntil, validFrom, validUntil)) {
+  const conflict = assignmentPeriodsOverlap({
+    existing,
+    requested: { validFrom, validUntil },
+  });
+  if (conflict === "already_assigned") {
     return "already_assigned";
   }
   return "assignment_period_overlap";

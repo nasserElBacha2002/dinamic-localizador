@@ -33,6 +33,7 @@ const mapBatchTeamRow = (row: Record<string, unknown>): WorkTeamAssignmentBatchT
   workTeamNameSnapshot: String(row.work_team_name_snapshot),
   workTeamUpdatedAtSnapshot: new Date(row.work_team_updated_at_snapshot as Date | string).toISOString(),
   membersSnapshotHash: String(row.members_snapshot_hash),
+  assignmentVersionSnapshot: Number(row.assignment_version_snapshot ?? 0),
 });
 
 const mapBatchItemRow = (row: Record<string, unknown>): WorkTeamAssignmentBatchItem => ({
@@ -106,14 +107,15 @@ export const workTeamAssignmentBatchRepository = {
       .input("workTeamNameSnapshot", sql.NVarChar(200), input.workTeamNameSnapshot)
       .input("workTeamUpdatedAtSnapshot", sql.DateTime2, new Date(input.workTeamUpdatedAtSnapshot))
       .input("membersSnapshotHash", sql.NVarChar(128), input.membersSnapshotHash)
+      .input("assignmentVersionSnapshot", sql.Int, input.assignmentVersionSnapshot)
       .query(`
         INSERT INTO work_team_assignment_batch_teams (
           batch_id, work_team_id, work_team_name_snapshot,
-          work_team_updated_at_snapshot, members_snapshot_hash
+          work_team_updated_at_snapshot, members_snapshot_hash, assignment_version_snapshot
         )
         VALUES (
           @batchId, @workTeamId, @workTeamNameSnapshot,
-          @workTeamUpdatedAtSnapshot, @membersSnapshotHash
+          @workTeamUpdatedAtSnapshot, @membersSnapshotHash, @assignmentVersionSnapshot
         )
       `);
   },
@@ -154,6 +156,24 @@ export const workTeamAssignmentBatchRepository = {
       return null;
     }
     return mapBatchRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listBatchTeamsInTransaction(
+    companyId: string,
+    batchId: string,
+    transaction: sql.Transaction,
+  ): Promise<WorkTeamAssignmentBatchTeam[]> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("batchId", sql.UniqueIdentifier, batchId)
+      .query(`
+        SELECT bt.*
+        FROM work_team_assignment_batch_teams bt
+        INNER JOIN work_team_assignment_batches b ON b.id = bt.batch_id AND b.company_id = @companyId
+        WHERE bt.batch_id = @batchId
+      `);
+
+    return result.recordset.map((row) => mapBatchTeamRow(row as Record<string, unknown>));
   },
 
   async listBatchTeams(companyId: string, batchId: string): Promise<WorkTeamAssignmentBatchTeam[]> {
@@ -231,6 +251,50 @@ export const workTeamAssignmentBatchRepository = {
     return mapBatchItemRow(queryResult.recordset[0] as Record<string, unknown>);
   },
 
+  async addBatchItemSourceInTransaction(
+    transaction: sql.Transaction,
+    input: {
+      batchItemId: string;
+      workTeamId: string;
+      isPrimary: boolean;
+    },
+  ): Promise<void> {
+    await new sql.Request(transaction)
+      .input("batchItemId", sql.UniqueIdentifier, input.batchItemId)
+      .input("workTeamId", sql.UniqueIdentifier, input.workTeamId)
+      .input("isPrimary", sql.Bit, input.isPrimary ? 1 : 0)
+      .query(`
+        INSERT INTO work_team_assignment_batch_item_sources (
+          batch_item_id, work_team_id, is_primary
+        )
+        VALUES (@batchItemId, @workTeamId, @isPrimary)
+      `);
+  },
+
+  async listBatchItemSources(
+    companyId: string,
+    batchId: string,
+  ): Promise<Array<{ batchItemId: string; workTeamId: string; isPrimary: boolean }>> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("batchId", sql.UniqueIdentifier, batchId)
+      .query(`
+        SELECT bis.batch_item_id, bis.work_team_id, bis.is_primary
+        FROM work_team_assignment_batch_item_sources bis
+        INNER JOIN work_team_assignment_batch_items bi ON bi.id = bis.batch_item_id
+        INNER JOIN work_team_assignment_batches b ON b.id = bi.batch_id AND b.company_id = @companyId
+        WHERE bi.batch_id = @batchId
+      `);
+
+    return result.recordset.map((row) => ({
+      batchItemId: String(row.batch_item_id),
+      workTeamId: String(row.work_team_id),
+      isPrimary: Boolean(row.is_primary),
+    }));
+  },
+
   async markCompletedInTransaction(
     transaction: sql.Transaction,
     batchId: string,
@@ -256,8 +320,46 @@ export const workTeamAssignmentBatchRepository = {
       .query(`
         UPDATE work_team_assignment_batches
         SET status = N'FAILED'
-        WHERE id = @batchId
+        WHERE id = @batchId AND status = N'PREVIEWED'
       `);
+  },
+
+  async markExpiredInTransaction(transaction: sql.Transaction, batchId: string): Promise<void> {
+    await new sql.Request(transaction)
+      .input("batchId", sql.UniqueIdentifier, batchId)
+      .query(`
+        UPDATE work_team_assignment_batches
+        SET status = N'EXPIRED'
+        WHERE id = @batchId AND status = N'PREVIEWED'
+      `);
+  },
+
+  async markStaleInTransaction(transaction: sql.Transaction, batchId: string): Promise<void> {
+    await new sql.Request(transaction)
+      .input("batchId", sql.UniqueIdentifier, batchId)
+      .query(`
+        UPDATE work_team_assignment_batches
+        SET status = N'STALE'
+        WHERE id = @batchId AND status = N'PREVIEWED'
+      `);
+  },
+
+  async expireStalePreviews(companyId: string, olderThan: Date): Promise<number> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("olderThan", sql.DateTime2, olderThan)
+      .query(`
+        UPDATE work_team_assignment_batches
+        SET status = N'EXPIRED'
+        WHERE company_id = @companyId
+          AND status = N'PREVIEWED'
+          AND preview_expires_at IS NOT NULL
+          AND preview_expires_at < SYSUTCDATETIME()
+      `);
+
+    return result.rowsAffected[0] ?? 0;
   },
 
   async listUsageByWorkTeam(
@@ -299,40 +401,93 @@ export const workTeamAssignmentBatchRepository = {
           u.name AS requested_by_name,
           b.valid_from,
           b.valid_until,
-          SUM(CASE WHEN bi.result = N'ADDED' THEN 1 ELSE 0 END) AS added_count,
-          SUM(CASE WHEN bi.result = N'SKIPPED' THEN 1 ELSE 0 END) AS skipped_count
+          (
+            SELECT COUNT(*)
+            FROM work_team_assignment_batch_items bi
+            INNER JOIN work_team_assignment_batch_item_sources bis
+              ON bis.batch_item_id = bi.id AND bis.work_team_id = @workTeamId
+            WHERE bi.batch_id = b.id AND bi.result = N'ADDED'
+          ) AS added_count,
+          (
+            SELECT COUNT(*)
+            FROM work_team_assignment_batch_items bi
+            LEFT JOIN work_team_assignment_batch_item_sources bis
+              ON bis.batch_item_id = bi.id AND bis.work_team_id = @workTeamId
+            WHERE bi.batch_id = b.id
+              AND bi.result = N'SKIPPED'
+              AND (bi.work_team_id = @workTeamId OR bis.work_team_id IS NOT NULL)
+          ) AS skipped_count
         FROM work_team_assignment_batch_teams bt
         INNER JOIN work_team_assignment_batches b
           ON b.id = bt.batch_id AND b.company_id = @companyId AND b.status = N'COMPLETED'
         INNER JOIN scheduled_operations o ON o.id = b.operation_id AND o.company_id = @companyId
         INNER JOIN operational_locations s ON s.id = o.service_id AND s.company_id = @companyId
         LEFT JOIN users u ON u.id = b.requested_by
-        LEFT JOIN work_team_assignment_batch_items bi
-          ON bi.batch_id = b.id AND bi.work_team_id = bt.work_team_id
         WHERE bt.work_team_id = @workTeamId
-        GROUP BY
-          b.id, b.operation_id, o.notes, s.name, o.operation_kind, o.status,
-          b.requested_at, b.requested_by, u.name, b.valid_from, b.valid_until
         ORDER BY b.requested_at DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
-    const items: WorkTeamUsageRecord[] = result.recordset.map((row) => ({
-      batchId: String(row.batch_id),
-      operationId: String(row.operation_id),
-      operationName: row.operation_name ? String(row.operation_name) : null,
-      serviceName: row.service_name ? String(row.service_name) : null,
-      operationKind: String(row.operation_kind),
-      operationStatus: String(row.operation_status),
-      requestedAt: new Date(row.requested_at as Date | string).toISOString(),
-      requestedBy: row.requested_by ? String(row.requested_by) : null,
-      requestedByName: row.requested_by_name ? String(row.requested_by_name) : null,
-      validFrom: row.valid_from ? toDateOnlyString(row.valid_from as Date | string) : null,
-      validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
-      addedCount: Number(row.added_count ?? 0),
-      skippedCount: Number(row.skipped_count ?? 0),
-      topSkipReasons: [],
-    }));
+    const batchIds = result.recordset.map((row) => String(row.batch_id));
+    const skipReasonsByBatch = new Map<string, Array<{ reason: string; count: number }>>();
+
+    if (batchIds.length > 0) {
+      const reasonsRequest = pool.request().input("workTeamId", sql.UniqueIdentifier, workTeamId);
+      const batchParams = batchIds.map((batchId, index) => {
+        const param = `batchId${index}`;
+        reasonsRequest.input(param, sql.UniqueIdentifier, batchId);
+        return `@${param}`;
+      });
+
+      const reasonsResult = await reasonsRequest.query(`
+        SELECT
+          bi.batch_id,
+          bi.reason,
+          COUNT(*) AS reason_count
+        FROM work_team_assignment_batch_items bi
+        LEFT JOIN work_team_assignment_batch_item_sources bis
+          ON bis.batch_item_id = bi.id AND bis.work_team_id = @workTeamId
+        WHERE bi.batch_id IN (${batchParams.join(", ")})
+          AND bi.result = N'SKIPPED'
+          AND bi.reason IS NOT NULL
+          AND (bi.work_team_id = @workTeamId OR bis.work_team_id IS NOT NULL)
+        GROUP BY bi.batch_id, bi.reason
+      `);
+
+      for (const row of reasonsResult.recordset) {
+        const batchId = String(row.batch_id);
+        const list = skipReasonsByBatch.get(batchId) ?? [];
+        list.push({
+          reason: String(row.reason),
+          count: Number(row.reason_count ?? 0),
+        });
+        skipReasonsByBatch.set(batchId, list);
+      }
+    }
+
+    const items: WorkTeamUsageRecord[] = result.recordset.map((row) => {
+      const batchId = String(row.batch_id);
+      const topSkipReasons = (skipReasonsByBatch.get(batchId) ?? []).sort(
+        (left, right) => right.count - left.count,
+      );
+
+      return {
+        batchId,
+        operationId: String(row.operation_id),
+        operationName: row.operation_name ? String(row.operation_name) : null,
+        serviceName: row.service_name ? String(row.service_name) : null,
+        operationKind: String(row.operation_kind),
+        operationStatus: String(row.operation_status),
+        requestedAt: new Date(row.requested_at as Date | string).toISOString(),
+        requestedBy: row.requested_by ? String(row.requested_by) : null,
+        requestedByName: row.requested_by_name ? String(row.requested_by_name) : null,
+        validFrom: row.valid_from ? toDateOnlyString(row.valid_from as Date | string) : null,
+        validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
+        addedCount: Number(row.added_count ?? 0),
+        skippedCount: Number(row.skipped_count ?? 0),
+        topSkipReasons,
+      };
+    });
 
     return { items, total: Number(countResult.recordset[0]?.total ?? 0) };
   },

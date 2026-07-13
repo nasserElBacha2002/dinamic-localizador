@@ -11,8 +11,12 @@ import type {
   WorkTeamAssignConfirmInput,
   WorkTeamAssignPreviewInput,
 } from "../schemas/work-team.schema";
-import type { Employee } from "../types/domain";
+import type { Employee, OperationEmployeeAssignment } from "../types/domain";
+import type { WorkTeam, WorkTeamMember } from "../types/work-team";
+import { assignmentPeriodsOverlap } from "../utils/assignment-period";
+import { logAuditSafe } from "../utils/audit-post-commit";
 import { isOperationAssignable } from "../utils/operation-status";
+import { safeRollback } from "../utils/safe-transaction";
 import { hashCombinedWorkTeamSnapshots, hashWorkTeamMembers } from "../utils/work-team-snapshot-hash";
 import { auditService } from "./audit.service";
 import { operationAssignmentCore } from "./operation-assignment-core.service";
@@ -20,21 +24,147 @@ import { operationWorkDateService } from "./operation-work-date.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 
-interface ResolvedTeamMember {
-  workTeamId: string;
-  workTeamName: string;
-  workTeamUpdatedAt: string;
-  membersSnapshotHash: string;
-  employeeId: string;
-  employee: Employee;
-}
-
 interface PreviewEmployeeEntry {
   employeeId: string;
   employee: Employee;
   workTeamIds: string[];
+  primaryWorkTeamId: string;
   reason?: WorkTeamAssignmentSkipReason;
 }
+
+interface TeamSnapshot {
+  workTeamId: string;
+  workTeamName: string;
+  updatedAt: string;
+  assignmentVersion: number;
+  membersSnapshotHash: string;
+  members: Employee[];
+}
+
+const choosePrimaryWorkTeamId = (workTeamIds: string[]): string =>
+  [...workTeamIds].sort((left, right) => left.localeCompare(right))[0]!;
+
+const buildMembersByTeam = (members: WorkTeamMember[]): Map<string, WorkTeamMember[]> => {
+  const byTeam = new Map<string, WorkTeamMember[]>();
+  for (const member of members) {
+    const list = byTeam.get(member.workTeamId) ?? [];
+    list.push(member);
+    byTeam.set(member.workTeamId, list);
+  }
+  return byTeam;
+};
+
+const buildTeamSnapshots = (
+  teams: WorkTeam[],
+  membersByTeam: Map<string, WorkTeamMember[]>,
+): TeamSnapshot[] =>
+  teams.map((team) => {
+    const teamMembers = membersByTeam.get(team.id) ?? [];
+    const employeeIds = teamMembers.map((member) => member.employeeId);
+    return {
+      workTeamId: team.id,
+      workTeamName: team.name,
+      updatedAt: team.updatedAt,
+      assignmentVersion: team.assignmentVersion ?? 0,
+      membersSnapshotHash: hashWorkTeamMembers(employeeIds),
+      members: teamMembers
+        .filter((member) => member.employee)
+        .map((member) => member.employee!),
+    };
+  });
+
+const classifyEmployeeAgainstAssignments = (
+  employee: Employee,
+  workTeamIds: string[],
+  existingAssignments: OperationEmployeeAssignment[],
+  validFrom: string,
+  validUntil: string | null,
+): PreviewEmployeeEntry => {
+  const entry: PreviewEmployeeEntry = {
+    employeeId: employee.id,
+    employee,
+    workTeamIds,
+    primaryWorkTeamId: choosePrimaryWorkTeamId(workTeamIds),
+  };
+
+  if (!employee.active) {
+    entry.reason = "employee_inactive";
+    return entry;
+  }
+
+  for (const assignment of existingAssignments) {
+    if (assignment.employeeId !== employee.id || assignment.cancelledAt) {
+      continue;
+    }
+
+    const conflict = assignmentPeriodsOverlap({
+      existing: assignment,
+      requested: { validFrom, validUntil },
+    });
+
+    if (conflict === "already_assigned") {
+      entry.reason = "already_assigned";
+      return entry;
+    }
+    if (conflict === "assignment_period_overlap") {
+      entry.reason = "assignment_period_overlap";
+      return entry;
+    }
+  }
+
+  return entry;
+};
+
+export const classifyPreviewEmployees = (
+  membersByTeam: Map<string, WorkTeamMember[]>,
+  workTeamIds: string[],
+  existingAssignments: OperationEmployeeAssignment[],
+  validFrom: string,
+  validUntil: string | null,
+): { assignableEmployees: PreviewEmployeeEntry[]; skippedEmployees: PreviewEmployeeEntry[] } => {
+  const membershipByEmployee = new Map<string, Set<string>>();
+
+  for (const workTeamId of workTeamIds) {
+    for (const member of membersByTeam.get(workTeamId) ?? []) {
+      if (!member.employee) {
+        continue;
+      }
+      const teams = membershipByEmployee.get(member.employeeId) ?? new Set<string>();
+      teams.add(workTeamId);
+      membershipByEmployee.set(member.employeeId, teams);
+    }
+  }
+
+  const assignableEmployees: PreviewEmployeeEntry[] = [];
+  const skippedEmployees: PreviewEmployeeEntry[] = [];
+
+  for (const [employeeId, teamSet] of membershipByEmployee) {
+    const workTeamIdList = [...teamSet];
+    const firstMember = workTeamIdList
+      .flatMap((teamId) => membersByTeam.get(teamId) ?? [])
+      .find((member) => member.employeeId === employeeId);
+
+    if (!firstMember?.employee) {
+      continue;
+    }
+
+    const entry = classifyEmployeeAgainstAssignments(
+      firstMember.employee,
+      workTeamIdList,
+      existingAssignments,
+      validFrom,
+      validUntil,
+    );
+
+    if (entry.reason) {
+      skippedEmployees.push(entry);
+    } else {
+      assignableEmployees.push(entry);
+    }
+  }
+
+  return { assignableEmployees, skippedEmployees };
+};
 
 const buildPreviewResponse = (
   operationId: string,
@@ -82,101 +212,137 @@ const buildPreviewResponse = (
   };
 };
 
-const loadTeamsForAssignment = async (companyId: string, workTeamIds: string[]) => {
-  const uniqueIds = [...new Set(workTeamIds)];
-  const teams = await workTeamRepository.listByIds(companyId, uniqueIds);
-  if (teams.length !== uniqueIds.length) {
-    throw new AppError(404, "WORK_TEAM_NOT_FOUND", "Grupo de trabajo no encontrado");
-  }
-
-  const inactive = teams.filter((team) => !team.isActive);
-  if (inactive.length > 0) {
-    throw new AppError(409, "WORK_TEAM_INACTIVE", "Uno o más grupos están inactivos");
-  }
-
-  return teams;
-};
-
-const resolveTeamMembers = async (
+export const buildAssignmentConfirmationResponse = async (
   companyId: string,
-  workTeamIds: string[],
-): Promise<ResolvedTeamMember[]> => {
-  const members = await workTeamRepository.listMembersForTeams(companyId, workTeamIds);
-  const teams = await workTeamRepository.listByIds(companyId, workTeamIds);
-  const teamById = new Map(teams.map((team) => [team.id, team]));
-
-  return members
-    .filter((member) => member.employee)
-    .map((member) => {
-      const team = teamById.get(member.workTeamId)!;
-      const employeeIds = members
-        .filter((item) => item.workTeamId === member.workTeamId)
-        .map((item) => item.employeeId);
-      return {
-        workTeamId: member.workTeamId,
-        workTeamName: team.name,
-        workTeamUpdatedAt: team.updatedAt,
-        membersSnapshotHash: hashWorkTeamMembers(employeeIds),
-        employeeId: member.employeeId,
-        employee: member.employee!,
-      };
-    });
-};
-
-const classifyPreviewEmployees = (
-  resolvedMembers: ResolvedTeamMember[],
-  existingAssignments: Array<{ employeeId: string; validFrom: string; validUntil: string | null }>,
-  validFrom: string,
-  validUntil: string | null,
+  batchId: string,
 ) => {
-  const byEmployee = new Map<string, PreviewEmployeeEntry>();
-  const assignableEmployees: PreviewEmployeeEntry[] = [];
-  const skippedEmployees: PreviewEmployeeEntry[] = [];
-
-  for (const member of resolvedMembers) {
-    const existing = byEmployee.get(member.employeeId);
-    if (existing) {
-      existing.workTeamIds.push(member.workTeamId);
-      if (!existing.reason) {
-        existing.reason = "duplicate_in_request";
-        skippedEmployees.push(existing);
-        const assignableIndex = assignableEmployees.findIndex(
-          (entry) => entry.employeeId === member.employeeId,
-        );
-        if (assignableIndex >= 0) {
-          assignableEmployees.splice(assignableIndex, 1);
-        }
-      }
-      continue;
-    }
-
-    const entry: PreviewEmployeeEntry = {
-      employeeId: member.employeeId,
-      employee: member.employee,
-      workTeamIds: [member.workTeamId],
-    };
-
-    if (!member.employee.active) {
-      entry.reason = "employee_inactive";
-      skippedEmployees.push(entry);
-    } else {
-      const overlap = existingAssignments.find((assignment) => assignment.employeeId === member.employeeId);
-      if (overlap) {
-        if (overlap.validFrom === validFrom && overlap.validUntil === validUntil) {
-          entry.reason = "already_assigned";
-        } else {
-          entry.reason = "assignment_period_overlap";
-        }
-        skippedEmployees.push(entry);
-      } else {
-        assignableEmployees.push(entry);
-      }
-    }
-
-    byEmployee.set(member.employeeId, entry);
+  const batch = await workTeamAssignmentBatchRepository.findById(companyId, batchId);
+  if (!batch) {
+    throw new AppError(404, "WORK_TEAM_BATCH_NOT_FOUND", "La previsualización no existe");
   }
 
-  return { assignableEmployees, skippedEmployees, byEmployee };
+  const items = await workTeamAssignmentBatchRepository.listBatchItems(companyId, batchId);
+  const sources = await workTeamAssignmentBatchRepository.listBatchItemSources(companyId, batchId);
+  const sourcesByItem = new Map<string, string[]>();
+  for (const source of sources) {
+    const list = sourcesByItem.get(source.batchItemId) ?? [];
+    list.push(source.workTeamId);
+    sourcesByItem.set(source.batchItemId, list);
+  }
+
+  const addedEmployees = items
+    .filter((item) => item.result === "ADDED")
+    .map((item) => ({
+      employeeId: item.employeeId,
+      assignmentId: item.operationAssignmentId!,
+      workTeamId: item.workTeamId,
+      workTeamIds: sourcesByItem.get(item.id) ?? (item.workTeamId ? [item.workTeamId] : []),
+    }));
+
+  const skippedEmployees = items
+    .filter((item) => item.result === "SKIPPED")
+    .map((item) => ({
+      employeeId: item.employeeId,
+      reason: item.reason!,
+      workTeamId: item.workTeamId,
+      workTeamIds: sourcesByItem.get(item.id) ?? (item.workTeamId ? [item.workTeamId] : []),
+    }));
+
+  return {
+    batchId: batch.id,
+    operationId: batch.operationId,
+    addedEmployees,
+    skippedEmployees,
+    summary: {
+      requested: items.length,
+      added: addedEmployees.length,
+      skipped: skippedEmployees.length,
+    },
+  };
+};
+
+const assertBatchOwnership = (
+  batch: { requestedBy: string | null },
+  userId: string | null,
+): void => {
+  if (batch.requestedBy && userId && batch.requestedBy !== userId) {
+    throw new AppError(404, "WORK_TEAM_BATCH_NOT_FOUND", "La previsualización no existe");
+  }
+};
+
+const validateBatchTeamsAreCurrent = async (
+  companyId: string,
+  batchTeams: Array<{
+    workTeamId: string;
+    membersSnapshotHash: string;
+    assignmentVersionSnapshot: number;
+  }>,
+  transaction: sql.Transaction,
+): Promise<void> => {
+  const currentTeams = await workTeamRepository.listByIdsInTransaction(
+    companyId,
+    batchTeams.map((team) => team.workTeamId),
+    transaction,
+  );
+  const currentTeamById = new Map(currentTeams.map((team) => [team.id, team]));
+
+  for (const snapshot of batchTeams) {
+    const current = currentTeamById.get(snapshot.workTeamId);
+    if (!current || !current.isActive) {
+      throw new AppError(409, "WORK_TEAM_INACTIVE", "Uno o más grupos están inactivos");
+    }
+
+    const currentMembers = await workTeamRepository.listMembersForTeamsInTransaction(
+      companyId,
+      [snapshot.workTeamId],
+      transaction,
+    );
+    const currentHash = hashWorkTeamMembers(currentMembers.map((member) => member.employeeId));
+    const version = current.assignmentVersion ?? 0;
+
+    if (
+      currentHash !== snapshot.membersSnapshotHash ||
+      version !== snapshot.assignmentVersionSnapshot
+    ) {
+      throw new AppError(
+        409,
+        "WORK_TEAM_PREVIEW_STALE",
+        "La composición del grupo cambió desde la previsualización",
+      );
+    }
+  }
+};
+
+const persistBatchItemWithSources = async (
+  transaction: sql.Transaction,
+  input: {
+    batchId: string;
+    workTeamIds: string[];
+    primaryWorkTeamId: string | null;
+    employeeId: string;
+    operationAssignmentId: string | null;
+    result: "ADDED" | "SKIPPED";
+    reason: WorkTeamAssignmentSkipReason | null;
+  },
+) => {
+  const item = await workTeamAssignmentBatchRepository.addBatchItemInTransaction(transaction, {
+    batchId: input.batchId,
+    workTeamId: input.primaryWorkTeamId,
+    employeeId: input.employeeId,
+    operationAssignmentId: input.operationAssignmentId,
+    result: input.result,
+    reason: input.reason,
+  });
+
+  for (const workTeamId of input.workTeamIds) {
+    await workTeamAssignmentBatchRepository.addBatchItemSourceInTransaction(transaction, {
+      batchItemId: item.id,
+      workTeamId,
+      isPrimary: workTeamId === input.primaryWorkTeamId,
+    });
+  }
+
+  return item;
 };
 
 export const workTeamAssignmentService = {
@@ -186,6 +352,7 @@ export const workTeamAssignmentService = {
     userId: string | null,
     input: WorkTeamAssignPreviewInput,
   ) {
+    await workTeamAssignmentBatchRepository.expireStalePreviews(companyId, new Date());
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
@@ -210,45 +377,52 @@ export const workTeamAssignmentService = {
       input,
     );
 
-    const teams = await loadTeamsForAssignment(companyId, input.workTeamIds);
-    const resolvedMembers = await resolveTeamMembers(companyId, input.workTeamIds);
-    const existingAssignments = await operationEmployeeRepository.listByOperation(companyId, operationId);
-    const { assignableEmployees, skippedEmployees } = classifyPreviewEmployees(
-      resolvedMembers,
-      existingAssignments.map((assignment) => ({
-        employeeId: assignment.employeeId,
-        validFrom: assignment.validFrom,
-        validUntil: assignment.validUntil,
-      })),
-      validFrom,
-      validUntil,
-    );
-
-    const teamSnapshots = teams.map((team) => {
-      const employeeIds = resolvedMembers
-        .filter((member) => member.workTeamId === team.id)
-        .map((member) => member.employeeId);
-      return {
-        workTeamId: team.id,
-        workTeamName: team.name,
-        updatedAt: team.updatedAt,
-        membersSnapshotHash: hashWorkTeamMembers(employeeIds),
-        members: resolvedMembers
-          .filter((member) => member.workTeamId === team.id)
-          .map((member) => member.employee),
-      };
-    });
-
-    const membersSnapshotHash = hashCombinedWorkTeamSnapshots(
-      teamSnapshots.map((snapshot) => snapshot.membersSnapshotHash),
-    );
-
+    const uniqueTeamIds = [...new Set(input.workTeamIds)];
     const previewExpiresAt = new Date(Date.now() + WORK_TEAM_PREVIEW_TTL_MINUTES * 60 * 1000);
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
     try {
+      const teams = await workTeamRepository.listByIdsInTransaction(
+        companyId,
+        uniqueTeamIds,
+        transaction,
+      );
+      if (teams.length !== uniqueTeamIds.length) {
+        throw new AppError(404, "WORK_TEAM_NOT_FOUND", "Grupo de trabajo no encontrado");
+      }
+
+      const inactive = teams.filter((team) => !team.isActive);
+      if (inactive.length > 0) {
+        throw new AppError(409, "WORK_TEAM_INACTIVE", "Uno o más grupos están inactivos");
+      }
+
+      const members = await workTeamRepository.listMembersForTeamsInTransaction(
+        companyId,
+        uniqueTeamIds,
+        transaction,
+      );
+      const membersByTeam = buildMembersByTeam(members);
+      const teamSnapshots = buildTeamSnapshots(teams, membersByTeam);
+      const existingAssignments = await operationEmployeeRepository.listByOperationInTransaction(
+        companyId,
+        operationId,
+        transaction,
+      );
+
+      const { assignableEmployees, skippedEmployees } = classifyPreviewEmployees(
+        membersByTeam,
+        uniqueTeamIds,
+        existingAssignments,
+        validFrom,
+        validUntil,
+      );
+
+      const membersSnapshotHash = hashCombinedWorkTeamSnapshots(
+        teamSnapshots.map((snapshot) => snapshot.membersSnapshotHash),
+      );
+
       const batch = await workTeamAssignmentBatchRepository.createPreviewInTransaction(transaction, {
         companyId,
         operationId,
@@ -266,6 +440,7 @@ export const workTeamAssignmentService = {
           workTeamNameSnapshot: snapshot.workTeamName,
           workTeamUpdatedAtSnapshot: snapshot.updatedAt,
           membersSnapshotHash: snapshot.membersSnapshotHash,
+          assignmentVersionSnapshot: snapshot.assignmentVersion,
         });
       }
 
@@ -286,7 +461,7 @@ export const workTeamAssignmentService = {
         validUntil,
       );
     } catch (error) {
-      await transaction.rollback();
+      await safeRollback(transaction);
       throw error;
     }
   },
@@ -297,6 +472,7 @@ export const workTeamAssignmentService = {
     userId: string | null,
     input: WorkTeamAssignConfirmInput,
   ) {
+    await workTeamAssignmentBatchRepository.expireStalePreviews(companyId, new Date());
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
@@ -319,6 +495,10 @@ export const workTeamAssignmentService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
 
+    let committedBatchId: string | null = null;
+    let shouldSyncRecurring = false;
+    let transactionClosed = false;
+
     try {
       const batch = await workTeamAssignmentBatchRepository.findByIdForUpdate(
         companyId,
@@ -329,176 +509,159 @@ export const workTeamAssignmentService = {
         throw new AppError(404, "WORK_TEAM_BATCH_NOT_FOUND", "La previsualización no existe");
       }
 
+      assertBatchOwnership(batch, userId);
+
       if (batch.status === "COMPLETED") {
         await transaction.commit();
-        return this.getBatchDetail(companyId, batch.id);
-      }
-
-      if (batch.status !== "PREVIEWED") {
+        transactionClosed = true;
+        committedBatchId = batch.id;
+      } else if (batch.status === "EXPIRED" || batch.status === "STALE") {
         throw new AppError(409, "WORK_TEAM_BATCH_INVALID", "La previsualización no está disponible");
-      }
-
-      if (batch.previewExpiresAt && new Date(batch.previewExpiresAt) < new Date()) {
+      } else if (batch.status !== "PREVIEWED") {
+        throw new AppError(409, "WORK_TEAM_BATCH_INVALID", "La previsualización no está disponible");
+      } else if (batch.previewExpiresAt && new Date(batch.previewExpiresAt) < new Date()) {
+        await workTeamAssignmentBatchRepository.markExpiredInTransaction(transaction, batch.id);
+        await transaction.commit();
+        transactionClosed = true;
         throw new AppError(409, "WORK_TEAM_PREVIEW_EXPIRED", "La previsualización expiró");
-      }
-
-      const batchTeams = await workTeamAssignmentBatchRepository.listBatchTeams(companyId, batch.id);
-      const currentTeams = await workTeamRepository.listByIds(
-        companyId,
-        batchTeams.map((team) => team.workTeamId),
-      );
-      const currentTeamById = new Map(currentTeams.map((team) => [team.id, team]));
-
-      for (const snapshot of batchTeams) {
-        const current = currentTeamById.get(snapshot.workTeamId);
-        if (!current || !current.isActive) {
-          throw new AppError(409, "WORK_TEAM_INACTIVE", "Uno o más grupos están inactivos");
-        }
-        const currentMembers = await workTeamRepository.listMembers(companyId, snapshot.workTeamId);
-        const currentHash = hashWorkTeamMembers(currentMembers.map((member) => member.employeeId));
-        if (
-          current.updatedAt !== snapshot.workTeamUpdatedAtSnapshot ||
-          currentHash !== snapshot.membersSnapshotHash
-        ) {
-          throw new AppError(
-            409,
-            "WORK_TEAM_PREVIEW_STALE",
-            "La composición del grupo cambió desde la previsualización",
-          );
-        }
-      }
-
-      const resolvedMembers = await resolveTeamMembers(
-        companyId,
-        batchTeams.map((team) => team.workTeamId),
-      );
-      const existingAssignments = await operationEmployeeRepository.listByOperation(companyId, operationId);
-      const { assignableEmployees, skippedEmployees } = classifyPreviewEmployees(
-        resolvedMembers,
-        existingAssignments.map((assignment) => ({
-          employeeId: assignment.employeeId,
-          validFrom: assignment.validFrom,
-          validUntil: assignment.validUntil,
-        })),
-        batch.validFrom!,
-        batch.validUntil,
-      );
-
-      const addedEmployees: Array<{
-        employeeId: string;
-        assignmentId: string;
-        workTeamId: string | null;
-      }> = [];
-      const skippedResults: Array<{
-        employeeId: string;
-        reason: WorkTeamAssignmentSkipReason;
-        workTeamId: string | null;
-      }> = [];
-
-      for (const skipped of skippedEmployees) {
-        await workTeamAssignmentBatchRepository.addBatchItemInTransaction(transaction, {
-          batchId: batch.id,
-          workTeamId: skipped.workTeamIds[0] ?? null,
-          employeeId: skipped.employeeId,
-          operationAssignmentId: null,
-          result: "SKIPPED",
-          reason: skipped.reason ?? "duplicate_in_request",
-        });
-        skippedResults.push({
-          employeeId: skipped.employeeId,
-          reason: skipped.reason ?? "duplicate_in_request",
-          workTeamId: skipped.workTeamIds[0] ?? null,
-        });
-      }
-
-      for (const entry of assignableEmployees) {
-        const primaryTeamId = entry.workTeamIds[0] ?? null;
-        const result = await operationAssignmentCore.assignEmployeeInTransaction(
+      } else {
+        const batchTeams = await workTeamAssignmentBatchRepository.listBatchTeamsInTransaction(
           companyId,
+          batch.id,
           transaction,
-          {
-            operationId,
-            employeeId: entry.employeeId,
-            validFrom: batch.validFrom!,
-            validUntil: batch.validUntil,
-            employeeActive: entry.employee.active,
-            operationKind,
-            operationWorkDate,
-            sourceAssignmentBatchId: batch.id,
-            sourceWorkTeamId: primaryTeamId,
-          },
         );
 
-        if (result.outcome === "added") {
-          await workTeamAssignmentBatchRepository.addBatchItemInTransaction(transaction, {
+        try {
+          await validateBatchTeamsAreCurrent(companyId, batchTeams, transaction);
+        } catch (error) {
+          if (error instanceof AppError && error.code === "WORK_TEAM_PREVIEW_STALE") {
+            await workTeamAssignmentBatchRepository.markStaleInTransaction(transaction, batch.id);
+            await transaction.commit();
+            transactionClosed = true;
+          }
+          throw error;
+        }
+
+        const workTeamIds = batchTeams.map((team) => team.workTeamId);
+        const members = await workTeamRepository.listMembersForTeamsInTransaction(
+          companyId,
+          workTeamIds,
+          transaction,
+        );
+        const membersByTeam = buildMembersByTeam(members);
+        const existingAssignments = await operationEmployeeRepository.listByOperationInTransaction(
+          companyId,
+          operationId,
+          transaction,
+        );
+
+        const { assignableEmployees, skippedEmployees } = classifyPreviewEmployees(
+          membersByTeam,
+          workTeamIds,
+          existingAssignments,
+          batch.validFrom!,
+          batch.validUntil,
+        );
+
+        for (const skipped of skippedEmployees) {
+          await persistBatchItemWithSources(transaction, {
             batchId: batch.id,
-            workTeamId: primaryTeamId,
-            employeeId: entry.employeeId,
-            operationAssignmentId: result.assignment.id,
-            result: "ADDED",
-            reason: null,
-          });
-          addedEmployees.push({
-            employeeId: entry.employeeId,
-            assignmentId: result.assignment.id,
-            workTeamId: primaryTeamId,
-          });
-        } else {
-          await workTeamAssignmentBatchRepository.addBatchItemInTransaction(transaction, {
-            batchId: batch.id,
-            workTeamId: primaryTeamId,
-            employeeId: entry.employeeId,
-            operationAssignmentId: result.existingAssignmentId ?? null,
+            workTeamIds: skipped.workTeamIds,
+            primaryWorkTeamId: skipped.primaryWorkTeamId,
+            employeeId: skipped.employeeId,
+            operationAssignmentId: null,
             result: "SKIPPED",
-            reason: result.reason,
-          });
-          skippedResults.push({
-            employeeId: entry.employeeId,
-            reason: result.reason,
-            workTeamId: primaryTeamId,
+            reason: skipped.reason ?? "duplicate_in_request",
           });
         }
+
+        for (const entry of assignableEmployees) {
+          const result = await operationAssignmentCore.assignEmployeeInTransaction(
+            companyId,
+            transaction,
+            {
+              operationId,
+              employeeId: entry.employeeId,
+              validFrom: batch.validFrom!,
+              validUntil: batch.validUntil,
+              employeeActive: entry.employee.active,
+              operationKind,
+              operationWorkDate,
+              sourceAssignmentBatchId: batch.id,
+              sourceWorkTeamId: entry.primaryWorkTeamId,
+            },
+          );
+
+          if (result.outcome === "added") {
+            await persistBatchItemWithSources(transaction, {
+              batchId: batch.id,
+              workTeamIds: entry.workTeamIds,
+              primaryWorkTeamId: entry.primaryWorkTeamId,
+              employeeId: entry.employeeId,
+              operationAssignmentId: result.assignment.id,
+              result: "ADDED",
+              reason: null,
+            });
+          } else {
+            await persistBatchItemWithSources(transaction, {
+              batchId: batch.id,
+              workTeamIds: entry.workTeamIds,
+              primaryWorkTeamId: entry.primaryWorkTeamId,
+              employeeId: entry.employeeId,
+              operationAssignmentId: result.existingAssignmentId ?? null,
+              result: "SKIPPED",
+              reason: result.reason,
+            });
+          }
+        }
+
+        await workTeamAssignmentBatchRepository.markCompletedInTransaction(transaction, batch.id);
+        await transaction.commit();
+        transactionClosed = true;
+        committedBatchId = batch.id;
+        shouldSyncRecurring = operationKind === "RECURRING";
       }
+    } catch (error) {
+      if (!transactionClosed) {
+        try {
+          await workTeamAssignmentBatchRepository.markFailedInTransaction(
+            transaction,
+            input.previewToken,
+          );
+          await transaction.commit();
+        } catch {
+          await safeRollback(transaction);
+        }
+      }
+      throw error;
+    }
 
-      await workTeamAssignmentBatchRepository.markCompletedInTransaction(transaction, batch.id);
-      await transaction.commit();
-
-      if (operationKind === "RECURRING") {
+    if (shouldSyncRecurring && committedBatchId) {
+      try {
         await recurringWorkdaySyncService.runOperationSync(
           companyId,
           operationId,
           () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operationId),
           "recurring work team batch assignment",
         );
+      } catch (error) {
+        console.error("[work-team-assignment] recurring sync failed after commit", error);
       }
-
-      await auditService.log(companyId, {
-        entityType: "work_team_assignment_batch",
-        entityId: batch.id,
-        action: "confirm",
-        newData: {
-          operationId,
-          added: addedEmployees.length,
-          skipped: skippedResults.length,
-        },
-        userId,
-      });
-
-      return {
-        batchId: batch.id,
-        operationId,
-        addedEmployees,
-        skippedEmployees: skippedResults,
-        summary: {
-          requested: assignableEmployees.length + skippedEmployees.length,
-          added: addedEmployees.length,
-          skipped: skippedResults.length,
-        },
-      };
-    } catch (error) {
-      await transaction.rollback();
-      throw error;
     }
+
+    if (committedBatchId) {
+      await logAuditSafe("work_team_assignment_batch.confirm", () =>
+        auditService.log(companyId, {
+          entityType: "work_team_assignment_batch",
+          entityId: committedBatchId!,
+          action: "confirm",
+          newData: { operationId },
+          userId,
+        }),
+      );
+    }
+
+    return buildAssignmentConfirmationResponse(companyId, committedBatchId!);
   },
 
   async getBatchDetail(companyId: string, batchId: string) {
@@ -510,6 +673,7 @@ export const workTeamAssignmentService = {
     const teams = await workTeamAssignmentBatchRepository.listBatchTeams(companyId, batchId);
     const items = await workTeamAssignmentBatchRepository.listBatchItems(companyId, batchId);
     const operation = await operationRepository.findById(companyId, batch.operationId);
+    const confirmation = await buildAssignmentConfirmationResponse(companyId, batchId);
 
     return {
       batch,
@@ -522,10 +686,7 @@ export const workTeamAssignmentService = {
         : null,
       teams,
       items,
-      summary: {
-        added: items.filter((item) => item.result === "ADDED").length,
-        skipped: items.filter((item) => item.result === "SKIPPED").length,
-      },
+      ...confirmation,
     };
   },
 };

@@ -81,7 +81,7 @@ workTeamRouter.delete(
 );
 workTeamRouter.get(
   "/:workTeamId/usage",
-  requirePermission("employees:read"),
+  requirePermission("operations:read"),
   validate(workTeamIdParamSchema, "params"),
   validate(listWorkTeamUsageQuerySchema, "query"),
   asyncHandler(workTeamController.listUsage),

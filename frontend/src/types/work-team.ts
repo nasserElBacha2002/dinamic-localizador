@@ -58,6 +58,7 @@ export interface WorkTeamUsageRecord {
   validUntil: string | null;
   addedCount: number;
   skippedCount: number;
+  topSkipReasons: Array<{ reason: WorkTeamAssignmentSkipReason; count: number }>;
 }
 
 export type WorkTeamAssignmentSkipReason =
@@ -104,11 +105,13 @@ export interface WorkTeamAssignConfirmResult {
     employeeId: string;
     assignmentId: string;
     workTeamId: string | null;
+    workTeamIds?: string[];
   }>;
   skippedEmployees: Array<{
     employeeId: string;
     reason: WorkTeamAssignmentSkipReason;
     workTeamId: string | null;
+    workTeamIds?: string[];
   }>;
   summary: {
     requested: number;

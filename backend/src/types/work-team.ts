@@ -20,6 +20,7 @@ export interface WorkTeam {
   memberCount?: number;
   activeMemberCount?: number;
   usageCount?: number;
+  assignmentVersion?: number;
 }
 
 export interface WorkTeamMember {
@@ -55,6 +56,14 @@ export interface WorkTeamAssignmentBatchTeam {
   workTeamNameSnapshot: string;
   workTeamUpdatedAtSnapshot: string;
   membersSnapshotHash: string;
+  assignmentVersionSnapshot: number;
+}
+
+export interface WorkTeamAssignmentBatchItemSource {
+  batchItemId: string;
+  workTeamId: string;
+  isPrimary: boolean;
+  createdAt: string;
 }
 
 export interface WorkTeamAssignmentBatchItem {
@@ -83,7 +92,7 @@ export interface WorkTeamUsageRecord {
   validUntil: string | null;
   addedCount: number;
   skippedCount: number;
-  topSkipReasons: string[];
+  topSkipReasons: Array<{ reason: string; count: number }>;
 }
 
 export interface AssignmentSourceInfo {

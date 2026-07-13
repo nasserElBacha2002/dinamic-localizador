@@ -37,10 +37,13 @@ const listSelectClause = `
     e.active AS employee_active,
     e.created_at AS employee_created_at,
     e.updated_at AS employee_updated_at,
-    wt.name AS source_work_team_name
+    COALESCE(bt.work_team_name_snapshot, wt.name) AS source_work_team_name
   FROM operation_assignments oa
   INNER JOIN employees e ON e.id = oa.employee_id AND e.company_id = @companyId
   LEFT JOIN work_teams wt ON wt.id = oa.source_work_team_id AND wt.company_id = @companyId
+  LEFT JOIN work_team_assignment_batch_teams bt
+    ON bt.batch_id = oa.source_assignment_batch_id
+   AND bt.work_team_id = oa.source_work_team_id
 `;
 
 export const operationEmployeeRepository = {
@@ -235,6 +238,26 @@ export const operationEmployeeRepository = {
         ${listSelectClause}
         WHERE oa.operation_id = @operationId
           AND oa.company_id = @companyId
+        ORDER BY oa.valid_from DESC, oa.assigned_at DESC
+      `);
+
+    return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
+  },
+
+  async listByOperationInTransaction(
+    companyId: string,
+    operationId: string,
+    transaction: sql.Transaction,
+  ): Promise<OperationEmployeeAssignment[]> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .query(`
+        SELECT oa.*
+        FROM operation_assignments oa WITH (UPDLOCK, HOLDLOCK)
+        WHERE oa.operation_id = @operationId
+          AND oa.company_id = @companyId
+          AND oa.cancelled_at IS NULL
         ORDER BY oa.valid_from DESC, oa.assigned_at DESC
       `);
 

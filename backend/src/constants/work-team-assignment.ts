@@ -1,4 +1,10 @@
-export const WORK_TEAM_ASSIGNMENT_BATCH_STATUSES = ["PREVIEWED", "COMPLETED", "FAILED"] as const;
+export const WORK_TEAM_ASSIGNMENT_BATCH_STATUSES = [
+  "PREVIEWED",
+  "COMPLETED",
+  "FAILED",
+  "EXPIRED",
+  "STALE",
+] as const;
 export type WorkTeamAssignmentBatchStatus = (typeof WORK_TEAM_ASSIGNMENT_BATCH_STATUSES)[number];
 
 export const WORK_TEAM_ASSIGNMENT_ITEM_RESULTS = ["ADDED", "SKIPPED"] as const;

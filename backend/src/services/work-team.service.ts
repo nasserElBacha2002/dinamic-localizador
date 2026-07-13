@@ -33,9 +33,11 @@ const validateEmployeesForMembership = async (
   requireActive: boolean,
 ): Promise<void> => {
   assertUniqueEmployeeIds(employeeIds);
+  const employees = await employeeRepository.listByIds(companyId, employeeIds);
+  const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
 
   for (const employeeId of employeeIds) {
-    const employee = await employeeRepository.findById(companyId, employeeId);
+    const employee = employeeById.get(employeeId);
     if (!employee) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
@@ -173,6 +175,19 @@ export const workTeamService = {
       throw new AppError(404, "WORK_TEAM_NOT_FOUND", "Grupo de trabajo no encontrado");
     }
 
+    if (input.name !== undefined || input.isActive !== undefined) {
+      const pool = getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        await workTeamRepository.bumpAssignmentVersionInTransaction(transaction, workTeamId);
+        await transaction.commit();
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    }
+
     await auditService.log(companyId, {
       entityType: "work_team",
       entityId: workTeamId,
@@ -202,6 +217,17 @@ export const workTeamService = {
       throw new AppError(404, "WORK_TEAM_NOT_FOUND", "Grupo de trabajo no encontrado");
     }
 
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      await workTeamRepository.bumpAssignmentVersionInTransaction(transaction, workTeamId);
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+
     await auditService.log(companyId, {
       entityType: "work_team",
       entityId: workTeamId,
@@ -219,6 +245,17 @@ export const workTeamService = {
     });
     if (!updated) {
       throw new AppError(404, "WORK_TEAM_NOT_FOUND", "Grupo de trabajo no encontrado");
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      await workTeamRepository.bumpAssignmentVersionInTransaction(transaction, workTeamId);
+      await transaction.commit();
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
     }
 
     await auditService.log(companyId, {
@@ -267,7 +304,7 @@ export const workTeamService = {
         });
       }
 
-      await workTeamRepository.update(companyId, workTeamId, { updatedBy: userId });
+      await workTeamRepository.bumpAssignmentVersionInTransaction(transaction, workTeamId);
       await transaction.commit();
     } catch (error) {
       await transaction.rollback();
@@ -305,7 +342,7 @@ export const workTeamService = {
         input.employeeIds,
         userId,
       );
-      await workTeamRepository.update(companyId, workTeamId, { updatedBy: userId });
+      await workTeamRepository.bumpAssignmentVersionInTransaction(transaction, workTeamId);
       await transaction.commit();
     } catch (error) {
       await transaction.rollback();
@@ -345,7 +382,7 @@ export const workTeamService = {
       if (!removed) {
         throw new AppError(404, "WORK_TEAM_MEMBER_NOT_FOUND", "El colaborador no pertenece al grupo");
       }
-      await workTeamRepository.update(companyId, workTeamId, { updatedBy: userId });
+      await workTeamRepository.bumpAssignmentVersionInTransaction(transaction, workTeamId);
       await transaction.commit();
     } catch (error) {
       await transaction.rollback();

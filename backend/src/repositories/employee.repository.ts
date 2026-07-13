@@ -64,6 +64,29 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async listByIds(companyId: string, ids: string[]): Promise<Employee[]> {
+    if (ids.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const idParams = ids.map((id, index) => {
+      const param = `id${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT e.*
+      FROM employees e
+      WHERE e.company_id = @companyId
+        AND e.id IN (${idParams.join(", ")})
+    `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
   async findByPhone(companyId: string, phoneNumber: string): Promise<Employee | null> {
     const pool = getPool();
     const result = await pool

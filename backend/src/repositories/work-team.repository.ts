@@ -21,6 +21,8 @@ const mapWorkTeamRow = (row: Record<string, unknown>): WorkTeam => ({
   activeMemberCount:
     row.active_member_count !== undefined ? Number(row.active_member_count) : undefined,
   usageCount: row.usage_count !== undefined ? Number(row.usage_count) : undefined,
+  assignmentVersion:
+    row.assignment_version !== undefined ? Number(row.assignment_version) : undefined,
 });
 
 const mapWorkTeamMemberRow = (row: Record<string, unknown>): WorkTeamMember => ({
@@ -362,6 +364,85 @@ export const workTeamRepository = {
     `);
 
     return result.recordset.map((row) => mapWorkTeamMemberRow(row as Record<string, unknown>));
+  },
+
+  async listByIdsInTransaction(
+    companyId: string,
+    workTeamIds: string[],
+    transaction: sql.Transaction,
+  ): Promise<WorkTeam[]> {
+    if (workTeamIds.length === 0) {
+      return [];
+    }
+
+    const request = new sql.Request(transaction).input("companyId", sql.UniqueIdentifier, companyId);
+    const idParams = workTeamIds.map((id, index) => {
+      const param = `id${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT *
+      FROM work_teams WITH (UPDLOCK, HOLDLOCK)
+      WHERE company_id = @companyId
+        AND id IN (${idParams.join(", ")})
+    `);
+
+    return result.recordset.map((row) => mapWorkTeamRow(row as Record<string, unknown>));
+  },
+
+  async listMembersForTeamsInTransaction(
+    companyId: string,
+    workTeamIds: string[],
+    transaction: sql.Transaction,
+  ): Promise<WorkTeamMember[]> {
+    if (workTeamIds.length === 0) {
+      return [];
+    }
+
+    const request = new sql.Request(transaction).input("companyId", sql.UniqueIdentifier, companyId);
+    const idParams = workTeamIds.map((id, index) => {
+      const param = `teamId${index}`;
+      request.input(param, sql.UniqueIdentifier, id);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT
+        wtm.work_team_id,
+        wtm.employee_id,
+        wtm.created_at,
+        wtm.created_by,
+        e.name AS employee_name,
+        e.document_number AS employee_document_number,
+        e.phone_number AS employee_phone_number,
+        e.employee_type AS employee_type,
+        e.active AS employee_active,
+        e.created_at AS employee_created_at,
+        e.updated_at AS employee_updated_at
+      FROM work_team_members wtm
+      INNER JOIN work_teams wt ON wt.id = wtm.work_team_id AND wt.company_id = @companyId
+      INNER JOIN employees e ON e.id = wtm.employee_id AND e.company_id = @companyId
+      WHERE wtm.work_team_id IN (${idParams.join(", ")})
+      ORDER BY wt.name ASC, e.name ASC
+    `);
+
+    return result.recordset.map((row) => mapWorkTeamMemberRow(row as Record<string, unknown>));
+  },
+
+  async bumpAssignmentVersionInTransaction(
+    transaction: sql.Transaction,
+    workTeamId: string,
+  ): Promise<void> {
+    await new sql.Request(transaction)
+      .input("workTeamId", sql.UniqueIdentifier, workTeamId)
+      .query(`
+        UPDATE work_teams
+        SET assignment_version = assignment_version + 1,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @workTeamId
+      `);
   },
 };
 

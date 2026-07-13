@@ -49,6 +49,7 @@ describeDatabaseIntegration("employee absence balance backfill integration", () 
         DELETE FROM user_company_memberships WHERE company_id = @companyId;
         DELETE FROM company_settings WHERE company_id = @companyId;
         DELETE FROM company_modules WHERE company_id = @companyId;
+        DELETE FROM company_location_types WHERE company_id = @companyId;
         DELETE FROM companies WHERE id = @companyId;
       `);
     }
@@ -95,7 +96,7 @@ describeDatabaseIntegration("employee absence balance backfill integration", () 
       name: "Legacy Employee",
       documentNumber: null,
       phoneNumber: uniquePhone(),
-      employeeType: "FIELD",
+      employeeType: "fijo",
     });
     createdEmployeeIds.push(employee.id);
 

@@ -2,6 +2,18 @@ import { AppError } from "../errors/app-error";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import type { EnsureEmployeeWorkdayOutcome } from "../types/materialization";
 import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
+import { isRecoverableCancelledExpectation } from "../utils/employee-workday-recovery";
+
+const reactivateRecoverableCancelledExpectation = async (
+  companyId: string,
+  employeeWorkdayId: string,
+  operationAssignmentId: string,
+): Promise<EmployeeWorkday | null> =>
+  employeeWorkdayRepository.reactivateAssignmentCancelledExpectation(
+    companyId,
+    employeeWorkdayId,
+    operationAssignmentId,
+  );
 
 export const employeeWorkdayExpectationService = {
   async ensureExpectedForRecurringAssignment(input: {
@@ -16,6 +28,30 @@ export const employeeWorkdayExpectationService = {
       input;
 
     if (existing) {
+      const recoverable = await isRecoverableCancelledExpectation(
+        companyId,
+        existing,
+        operationAssignmentId,
+        hasAttendance,
+      );
+
+      if (recoverable) {
+        const reactivated = await reactivateRecoverableCancelledExpectation(
+          companyId,
+          existing.id,
+          operationAssignmentId,
+        );
+        if (reactivated) {
+          return { kind: "REACTIVATED", employeeWorkday: reactivated };
+        }
+
+        throw new AppError(
+          409,
+          "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+          "No se pudo reactivar la jornada del empleado para la nueva asignación",
+        );
+      }
+
       if (existing.operationAssignmentId === operationAssignmentId) {
         if (existing.expectationStatus === "EXPECTED") {
           return { kind: "EXISTING", employeeWorkday: existing };
@@ -49,11 +85,15 @@ export const employeeWorkdayExpectationService = {
         return { kind: "REPAIRED", employeeWorkday: repaired };
       }
 
-      throw new AppError(
-        409,
-        "EMPLOYEE_WORKDAY_ASSIGNMENT_MISMATCH",
-        "La jornada del empleado ya está vinculada a otra asignación",
-      );
+      if (existing.expectationStatus === "EXPECTED") {
+        throw new AppError(
+          409,
+          "EMPLOYEE_WORKDAY_ASSIGNMENT_MISMATCH",
+          "La jornada del empleado ya está vinculada a otra asignación",
+        );
+      }
+
+      return { kind: "UNCHANGED", employeeWorkday: existing };
     }
 
     try {

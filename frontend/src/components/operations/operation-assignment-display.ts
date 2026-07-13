@@ -84,6 +84,22 @@ export function isCurrentOperationalAssignment(assignment: OperationEmployeeAssi
   return !assignment.cancelledAt && assignment.lifecycleState === "CURRENT";
 }
 
+export type AssignmentBatchStatus = "success" | "partial" | "error";
+
+/**
+ * Classifies a multi-collaborator assignment attempt so the dialog can decide
+ * whether to close (only on full success) and what feedback to show.
+ */
+export function resolveAssignmentBatchStatus(
+  addedCount: number,
+  skippedCount: number,
+): AssignmentBatchStatus {
+  if (skippedCount === 0) {
+    return "success";
+  }
+  return addedCount > 0 ? "partial" : "error";
+}
+
 const assignmentErrorMessages: Record<string, string> = {
   ASSIGNMENT_PERIOD_OVERLAP: "Ya existe otra asignación en el período indicado.",
   ASSIGNMENT_ATTENDANCE_CONFLICT:
@@ -117,3 +133,6 @@ export function displayStateTone(state: AssignmentDisplayState) {
       return "danger" as const;
   }
 }
+
+// Deuda técnica: la asignación individual múltiple sigue usando N requests secuenciales.
+// Pendiente un endpoint batch (POST .../assignments/batch) reutilizando operationAssignmentCore.

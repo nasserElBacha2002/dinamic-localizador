@@ -4,13 +4,34 @@ setupDomEnvironment();
 
 import assert from "node:assert/strict";
 import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render } from "@testing-library/react";
+import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
+import type { OperationEmployeeAssignment } from "../../types/operation";
 import { OperationEmployeeTable } from "./OperationEmployeeTable";
 import { canReviewOperationalAttendance } from "./operation-workforce-attendance";
+
+function buildAssignment(
+  overrides: Partial<OperationEmployeeAssignment> = {},
+): OperationEmployeeAssignment {
+  return {
+    id: "assignment-a",
+    companyId: "company-1",
+    operationId: "operation-1",
+    employeeId: "a",
+    validFrom: "2026-07-13",
+    validUntil: null,
+    assignedAt: "2026-07-13T00:00:00.000Z",
+    createdAt: "2026-07-13T00:00:00.000Z",
+    updatedAt: "2026-07-13T00:00:00.000Z",
+    cancelledAt: null,
+    lifecycleState: "CURRENT",
+    assignmentOrigin: "MANUAL",
+    ...overrides,
+  };
+}
 
 function buildRow(
   id: string,
@@ -69,7 +90,15 @@ function buildRow(
   };
 }
 
-function renderTable(rows: OperationAttendanceSummaryEmployee[], onReviewApprove = () => {}) {
+interface RenderOptions {
+  onReviewApprove?: (attendanceId: string) => void;
+  onCancelAssignment?: (assignment: OperationEmployeeAssignment) => void;
+  canAssign?: boolean;
+  assignmentById?: Map<string, OperationEmployeeAssignment>;
+  operationWorkDate?: string;
+}
+
+function renderTable(rows: OperationAttendanceSummaryEmployee[], options: RenderOptions = {}) {
   return render(
     <MemoryRouter initialEntries={["/operations/operation-1"]}>
       <Routes>
@@ -80,12 +109,14 @@ function renderTable(rows: OperationAttendanceSummaryEmployee[], onReviewApprove
               <OperationEmployeeTable
                 operationId="operation-1"
                 rows={rows}
-                scheduledStart="2026-07-15T23:30:00.000Z"
-                canAssign={false}
+                canAssign={options.canAssign ?? false}
                 canReviewAttendance={canReviewOperationalAttendance}
-                onReviewApprove={onReviewApprove}
+                assignmentById={options.assignmentById}
+                operationWorkDate={options.operationWorkDate}
+                onReviewApprove={options.onReviewApprove ?? (() => {})}
                 onReviewReject={() => {}}
-                onUnassign={() => {}}
+                onCancelAssignment={options.onCancelAssignment ?? (() => {})}
+                onEndAssignment={() => {}}
                 emptyTitle="Sin filas"
                 emptyDescription="Sin datos"
               />
@@ -126,6 +157,8 @@ describe("OperationEmployeeTable", () => {
     assert.equal(headers.includes("Estado salida"), false);
     assert.equal(headers.includes("Tiempo extra"), false);
     assert.equal(headers.includes("Teléfono"), false);
+    assert.equal(headers.includes("Hora esperada"), false);
+    assert.equal(headers.includes("Tipo"), false);
   });
 
   it("navigates to attendance detail only when the row has attendance", () => {
@@ -143,15 +176,59 @@ describe("OperationEmployeeTable", () => {
     assert.ok(view.getByText("Attendance detail"));
   });
 
-  it("executes row action without triggering attendance navigation", () => {
-    let approved = false;
-    const rows = [buildRow("c", "UNAVAILABLE", "PENDING_REVIEW", "att-c")];
-    const view = renderTable(rows, () => {
-      approved = true;
+  it("runs the approve callback from the actions menu without navigating", async () => {
+    let approvedId: string | null = null;
+    const rows = [buildRow("a", "CONFIRMED", "PENDING_REVIEW", "att-a")];
+
+    const view = renderTable(rows, {
+      onReviewApprove: (attendanceId) => {
+        approvedId = attendanceId;
+      },
     });
 
-    fireEvent.click(view.getByText("Aprobar"));
-    assert.equal(approved, true);
-    assert.equal(view.queryByText("Attendance detail"), null);
+    fireEvent.click(view.getByRole("button", { name: "Acciones" }));
+    const body = within(view.baseElement);
+    const approveItem = await body.findByText("Aprobar asistencia");
+    fireEvent.click(approveItem);
+
+    assert.equal(approvedId, "att-a");
+    assert.equal(body.queryByText("Attendance detail"), null);
+  });
+
+  it("offers removal for an assignment without attendance", async () => {
+    const rows = [buildRow("a", "PENDING", "NO_CHECK_IN", null)];
+    const assignmentById = new Map([["assignment-a", buildAssignment()]]);
+    let cancelledId: string | null = null;
+
+    const view = renderTable(rows, {
+      canAssign: true,
+      assignmentById,
+      operationWorkDate: "2026-07-13",
+      onCancelAssignment: (assignment) => {
+        cancelledId = assignment.id;
+      },
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Acciones" }));
+    const removeItem = await within(view.baseElement).findByText("Quitar asignación");
+    fireEvent.click(removeItem);
+
+    assert.equal(cancelledId, "assignment-a");
+  });
+
+  it("hides destructive removal when the row already has attendance", async () => {
+    const rows = [buildRow("a", "CONFIRMED", "VALID", "att-a")];
+    const assignmentById = new Map([["assignment-a", buildAssignment()]]);
+
+    const view = renderTable(rows, {
+      canAssign: true,
+      assignmentById,
+      operationWorkDate: "2026-07-13",
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Acciones" }));
+    const body = within(view.baseElement);
+    await body.findByText("Ver detalle");
+    assert.equal(body.queryByText("Quitar asignación"), null);
   });
 });

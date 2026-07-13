@@ -3,6 +3,7 @@ import { getPool } from "../database/connection";
 import type { EmployeeWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
 import type { EmployeeWorkday, EmployeeWorkdayScheduleContext } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
+import { toDateOnlyString } from "../utils/row-mappers";
 import type { JustifyDelta, RelinkDelta, RestoreDelta } from "../utils/resolve-workday-absence-deltas";
 
 const BATCH_CHUNK_SIZE = 40;
@@ -31,7 +32,7 @@ const mapEmployeeWorkdayWithScheduleRow = (
   row: Record<string, unknown>,
 ): EmployeeWorkdayWithSchedule => ({
   ...mapEmployeeWorkdayRow(row),
-  workDate: String(row.work_date).slice(0, 10),
+  workDate: toDateOnlyString(row.work_date as Date | string),
   expectedStartAt: toIsoString(row.expected_start_at as Date | string),
   expectedEndAt: row.expected_end_at
     ? toIsoString(row.expected_end_at as Date | string)
@@ -451,6 +452,79 @@ export const employeeWorkdayRepository = {
           AND id = @employeeWorkdayId
           AND expectation_status = 'CANCELLED'
           AND cancellation_reason = 'SCHEDULE'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = @employeeWorkdayId
+          )
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async reactivateAssignmentCancelledExpectation(
+    companyId: string,
+    employeeWorkdayId: string,
+    operationAssignmentId: string,
+  ): Promise<EmployeeWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("operationAssignmentId", sql.UniqueIdentifier, operationAssignmentId)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = 'EXPECTED',
+            cancellation_reason = NULL,
+            operation_assignment_id = @operationAssignmentId,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'CANCELLED'
+          AND (cancellation_reason = 'ASSIGNMENT' OR cancellation_reason IS NULL)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = @employeeWorkdayId
+          )
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async reactivateAssignmentCancelledExpectationInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    employeeWorkdayId: string,
+    operationAssignmentId: string,
+  ): Promise<EmployeeWorkday | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("operationAssignmentId", sql.UniqueIdentifier, operationAssignmentId)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = 'EXPECTED',
+            cancellation_reason = NULL,
+            operation_assignment_id = @operationAssignmentId,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @employeeWorkdayId
+          AND expectation_status = 'CANCELLED'
+          AND (cancellation_reason = 'ASSIGNMENT' OR cancellation_reason IS NULL)
           AND NOT EXISTS (
             SELECT 1
             FROM attendance_records ar

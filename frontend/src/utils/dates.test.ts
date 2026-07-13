@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { dateInputToIsoEnd, dateInputToIsoStart } from "./dates";
+import { dateInputToIsoEnd, dateInputToIsoStart, formatDate } from "./dates";
 
 describe("dateInputToIsoStart", () => {
   it("converts Argentina local start of day to UTC", () => {
@@ -45,5 +45,16 @@ describe("dateInputToIsoEnd", () => {
     assert.throws(() => dateInputToIsoEnd("2026-00-10"), /Fecha inválida/);
     assert.throws(() => dateInputToIsoEnd("2026-02-31"), /Fecha inválida/);
     assert.throws(() => dateInputToIsoEnd("2026-99-99"), /Fecha inválida/);
+  });
+});
+
+describe("formatDate", () => {
+  it("formats date-only strings without timezone shift", () => {
+    assert.equal(formatDate("2026-07-13"), "13/07/2026");
+    assert.doesNotMatch(formatDate("2026-07-13"), /12\/07\/2026/);
+  });
+
+  it("formats timestamps in Argentina timezone", () => {
+    assert.equal(formatDate("2026-07-13T03:00:00.000Z"), "13/07/2026");
   });
 });

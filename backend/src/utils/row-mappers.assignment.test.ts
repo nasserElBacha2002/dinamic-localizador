@@ -10,6 +10,20 @@ describe("toDateOnlyString", () => {
   it("keeps ISO date strings unchanged", () => {
     assert.equal(toDateOnlyString("2026-07-05"), "2026-07-05");
   });
+
+  it("does not shift calendar dates when mapping UTC midnight Date values", () => {
+    assert.equal(toDateOnlyString(new Date("2026-07-13T00:00:00.000Z")), "2026-07-13");
+  });
+
+  it("maps date-only strings parsed as UTC without shifting", () => {
+    assert.equal(toDateOnlyString("2026-07-13"), "2026-07-13");
+  });
+
+  it("preserves round-trip calendar dates from JSON serialization", () => {
+    const payload = JSON.stringify({ workDate: "2026-07-13" });
+    const parsed = JSON.parse(payload) as { workDate: string };
+    assert.equal(toDateOnlyString(parsed.workDate), "2026-07-13");
+  });
 });
 
 describe("mapAssignmentRow", () => {

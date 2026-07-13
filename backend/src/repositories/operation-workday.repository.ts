@@ -3,22 +3,16 @@ import { getPool } from "../database/connection";
 import type { OperationWorkdayCancellationReason } from "../constants/workday-cancellation-reason";
 import type { OperationWorkday } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
+import { toDateOnlyString } from "../utils/row-mappers";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
-
-const toDateOnly = (value: Date | string): string => {
-  if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
-  }
-  return String(value).slice(0, 10);
-};
 
 export const mapOperationWorkdayRow = (row: Record<string, unknown>): OperationWorkday => ({
   id: String(row.id),
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
-  workDate: toDateOnly(row.work_date as Date | string),
+  workDate: toDateOnlyString(row.work_date as Date | string),
   expectedStartAt: toIsoString(row.expected_start_at as Date | string),
   expectedEndAt: row.expected_end_at
     ? toIsoString(row.expected_end_at as Date | string)

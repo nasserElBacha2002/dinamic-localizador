@@ -316,7 +316,7 @@ describeDatabaseIntegration("company absence settings integration", () => {
     const employee = await employeeService.create(companyId, {
       name: "Balance Test Employee",
       phoneNumber: uniquePhone(),
-      employeeType: "FIELD",
+      employeeType: "fijo",
     });
     createdEmployeeIds.push(employee.id);
 
@@ -363,7 +363,7 @@ describeDatabaseIntegration("company absence settings integration", () => {
     const secondEmployee = await employeeService.create(companyId, {
       name: "Balance Test Employee 2",
       phoneNumber: uniquePhone(),
-      employeeType: "FIELD",
+      employeeType: "fijo",
     });
     createdEmployeeIds.push(secondEmployee.id);
 

@@ -13,6 +13,7 @@ export const operationAssignmentController = {
         validFrom: req.body.validFrom,
         validUntil: req.body.validUntil,
       },
+      req.auth?.userId ?? null,
     );
     res.status(201).json({ data: assignment });
   },
@@ -32,6 +33,7 @@ export const operationAssignmentController = {
       companyId,
       String(req.params.operationId),
       String(req.params.assignmentId),
+      req.auth?.userId ?? null,
     );
     res.status(200).json({ data: assignment });
   },
@@ -43,6 +45,7 @@ export const operationAssignmentController = {
       String(req.params.operationId),
       String(req.params.assignmentId),
       req.body.effectiveDate,
+      req.auth?.userId ?? null,
     );
     res.status(200).json({ data: assignment });
   },

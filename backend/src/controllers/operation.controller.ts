@@ -35,12 +35,21 @@ export const operationController = {
 
   async getAttendanceSummary(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const query = req.validatedQuery as { page: number; limit: number };
+    const query = req.validatedQuery as {
+      page: number;
+      limit: number;
+      search?: string;
+      workDate?: string;
+      workdayId?: string;
+    };
     const summary = await operationService.getAttendanceSummary(
       companyId,
       String(req.params.id),
       query.page,
       query.limit,
+      query.search,
+      query.workDate,
+      query.workdayId,
     );
     res.status(200).json({ data: summary });
   },

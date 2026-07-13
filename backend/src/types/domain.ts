@@ -1,5 +1,6 @@
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { EmployeeType } from "../constants/employee-types";
+import type { AssignmentOrigin } from "../constants/work-team-assignment";
 import type { OperationKind } from "../constants/operation-kind";
 import type { OperationScheduleSummary } from "./schedule";
 
@@ -90,6 +91,10 @@ export interface OperationEmployeeAssignment {
   unavailableAt?: string | null;
   cancelledAt?: string | null;
   lifecycleState?: "CURRENT" | "FUTURE" | "ENDED";
+  assignmentOrigin?: AssignmentOrigin;
+  sourceAssignmentBatchId?: string | null;
+  sourceWorkTeamId?: string | null;
+  sourceWorkTeamName?: string | null;
   employee?: Employee;
 }
 

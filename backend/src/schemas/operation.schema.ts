@@ -107,7 +107,12 @@ export const operationIdParamSchema = z.object({
   id: z.string().uuid("UUID inválido"),
 });
 
-export const operationAttendanceSummaryQuerySchema = paginationQuerySchema;
+export const operationAttendanceSummaryQuerySchema = paginationQuerySchema
+  .merge(searchFilterSchema)
+  .extend({
+    workDate: dateOnlySchema.optional(),
+    workdayId: z.string().uuid().optional(),
+  });
 
 export const listOperationsQuerySchema = paginationQuerySchema
   .merge(dateRangeSchema)

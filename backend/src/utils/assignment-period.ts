@@ -41,6 +41,51 @@ export const doAssignmentPeriodsOverlap = (input: {
   );
 };
 
+export type AssignmentPeriodConflict =
+  | "already_assigned"
+  | "assignment_period_overlap"
+  | "no_overlap";
+
+const periodsAreEquivalent = (
+  leftFrom: string,
+  leftUntil: string | null,
+  rightFrom: string,
+  rightUntil: string | null,
+): boolean => leftFrom === rightFrom && leftUntil === rightUntil;
+
+export const assignmentPeriodsOverlap = (input: {
+  existing: { validFrom: string; validUntil: string | null; cancelledAt?: string | null };
+  requested: { validFrom: string; validUntil: string | null };
+}): AssignmentPeriodConflict => {
+  if (input.existing.cancelledAt) {
+    return "no_overlap";
+  }
+
+  if (
+    !doAssignmentPeriodsOverlap({
+      validFrom: input.requested.validFrom,
+      validUntil: input.requested.validUntil,
+      otherValidFrom: input.existing.validFrom,
+      otherValidUntil: input.existing.validUntil,
+    })
+  ) {
+    return "no_overlap";
+  }
+
+  if (
+    periodsAreEquivalent(
+      input.existing.validFrom,
+      input.existing.validUntil,
+      input.requested.validFrom,
+      input.requested.validUntil,
+    )
+  ) {
+    return "already_assigned";
+  }
+
+  return "assignment_period_overlap";
+};
+
 export const resolveAssignmentLifecycleState = (
   assignment: { validFrom: string; validUntil: string | null; cancelledAt?: string | null },
   referenceDate: string,

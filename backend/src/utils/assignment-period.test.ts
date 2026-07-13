@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   assertValidAssignmentDateRange,
+  assignmentPeriodsOverlap,
   doAssignmentPeriodsOverlap,
   isAssignmentActiveOnWorkDate,
   resolveAssignmentLifecycleState,
@@ -80,6 +81,23 @@ describe("assignment-period", () => {
         otherValidUntil: null,
       }),
       false,
+    );
+  });
+
+  it("classifies overlap outcomes with assignmentPeriodsOverlap", () => {
+    assert.equal(
+      assignmentPeriodsOverlap({
+        existing: { validFrom: "2026-07-01", validUntil: "2026-07-10" },
+        requested: { validFrom: "2026-08-01", validUntil: "2026-08-31" },
+      }),
+      "no_overlap",
+    );
+    assert.equal(
+      assignmentPeriodsOverlap({
+        existing: { validFrom: "2026-08-01", validUntil: "2026-08-31" },
+        requested: { validFrom: "2026-08-01", validUntil: "2026-08-31" },
+      }),
+      "already_assigned",
     );
   });
 

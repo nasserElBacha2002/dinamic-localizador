@@ -3,8 +3,8 @@
   gap: var(--mantine-spacing-lg);
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
-    "data"
     "operational"
+    "data"
     "edit";
 }
 

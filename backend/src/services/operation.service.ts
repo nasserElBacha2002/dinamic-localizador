@@ -571,12 +571,23 @@ export const operationService = {
     return cancelled;
   },
 
-  async getAttendanceSummary(companyId: string, operationId: string, page = 1, limit = 10) {
+  async getAttendanceSummary(
+    companyId: string,
+    operationId: string,
+    page = 1,
+    limit = 10,
+    search?: string,
+    workDate?: string,
+    workdayId?: string,
+  ) {
     const summary = await operationAttendanceRepository.getAttendanceSummary(
       companyId,
       operationId,
       page,
       limit,
+      search,
+      workDate,
+      workdayId,
     );
     if (!summary) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
@@ -590,6 +601,8 @@ export const operationService = {
         ...syncedOperation,
         service: summary.service,
       },
+      operationWorkdayId: summary.operationWorkdayId,
+      workDate: summary.workDate,
       summary: summary.summary,
       employees: summary.employees,
       meta: buildPaginationMeta(page, limit, summary.total),

@@ -7,6 +7,7 @@ import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { EmployeeWorkday, OperationWorkday } from "../types/workday";
 import { isAssignmentActiveOnWorkDate } from "../utils/assignment-period";
+import { isRecoverableCancelledExpectation } from "../utils/employee-workday-recovery";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 
@@ -113,6 +114,55 @@ const ensureOperationWorkdayRow = async (
   }
 };
 
+const reactivateAssignmentCancelledWorkday = async (
+  companyId: string,
+  existing: EmployeeWorkday,
+  operationAssignmentId: string,
+  transaction?: sql.Transaction,
+): Promise<EmployeeWorkday | null> => {
+  const hasAttendance = transaction
+    ? await employeeWorkdayRepository.hasAttendanceInTransaction(
+        companyId,
+        transaction,
+        existing.id,
+      )
+    : await employeeWorkdayRepository.hasAttendance(companyId, existing.id);
+
+  const recoverable = await isRecoverableCancelledExpectation(
+    companyId,
+    existing,
+    operationAssignmentId,
+    hasAttendance,
+  );
+
+  if (!recoverable) {
+    return null;
+  }
+
+  if (hasAttendance) {
+    throw new AppError(
+      409,
+      "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+      "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
+    );
+  }
+
+  if (transaction) {
+    return employeeWorkdayRepository.reactivateAssignmentCancelledExpectationInTransaction(
+      companyId,
+      transaction,
+      existing.id,
+      operationAssignmentId,
+    );
+  }
+
+  return employeeWorkdayRepository.reactivateAssignmentCancelledExpectation(
+    companyId,
+    existing.id,
+    operationAssignmentId,
+  );
+};
+
 const ensureEmployeeWorkdayRow = async (
   companyId: string,
   operationWorkday: OperationWorkday,
@@ -137,6 +187,43 @@ const ensureEmployeeWorkdayRow = async (
 
   const existing = await findExisting();
   if (existing) {
+    const reactivated = await reactivateAssignmentCancelledWorkday(
+      companyId,
+      existing,
+      operationAssignmentId,
+      transaction,
+    );
+    if (reactivated) {
+      return reactivated;
+    }
+
+    if (
+      existing.expectationStatus === "CANCELLED" &&
+      existing.cancellationReason === "ASSIGNMENT"
+    ) {
+      const hasAttendance = transaction
+        ? await employeeWorkdayRepository.hasAttendanceInTransaction(
+            companyId,
+            transaction,
+            existing.id,
+          )
+        : await employeeWorkdayRepository.hasAttendance(companyId, existing.id);
+
+      if (hasAttendance) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+          "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
+        );
+      }
+
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+        "No se pudo reactivar la jornada del empleado para la nueva asignación",
+      );
+    }
+
     if (!existing.operationAssignmentId) {
       const assignment = await operationEmployeeRepository.findById(
         companyId,
@@ -179,6 +266,14 @@ const ensureEmployeeWorkdayRow = async (
       );
     }
 
+    if (existing.expectationStatus === "CANCELLED") {
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+        "No se pudo reactivar la jornada del empleado para la nueva asignación",
+      );
+    }
+
     return existing;
   }
 
@@ -206,6 +301,43 @@ const ensureEmployeeWorkdayRow = async (
     if (!raced) {
       throw error;
     }
+    const reactivated = await reactivateAssignmentCancelledWorkday(
+      companyId,
+      raced,
+      operationAssignmentId,
+      transaction,
+    );
+    if (reactivated) {
+      return reactivated;
+    }
+
+    if (
+      raced.expectationStatus === "CANCELLED" &&
+      raced.cancellationReason === "ASSIGNMENT"
+    ) {
+      const hasAttendance = transaction
+        ? await employeeWorkdayRepository.hasAttendanceInTransaction(
+            companyId,
+            transaction,
+            raced.id,
+          )
+        : await employeeWorkdayRepository.hasAttendance(companyId, raced.id);
+
+      if (hasAttendance) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+          "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
+        );
+      }
+
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+        "No se pudo reactivar la jornada del empleado para la nueva asignación",
+      );
+    }
+
     return raced;
   }
 };

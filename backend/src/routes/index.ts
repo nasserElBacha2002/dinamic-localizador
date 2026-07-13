@@ -5,6 +5,11 @@ import { authRouter } from "./auth.routes";
 import { employeeRouter } from "./employee.routes";
 import { healthRouter } from "./health.routes";
 import { operationAssignmentRouter } from "./operation-assignment.routes";
+import { workTeamRouter } from "./work-team.routes";
+import {
+  operationWorkTeamAssignmentRouter,
+  workTeamAssignmentBatchRouter,
+} from "./work-team-assignment.routes";
 import { operationRouter } from "./operation.routes";
 import { statisticsRouter } from "./statistics.routes";
 import { serviceRouter } from "./service.routes";
@@ -61,12 +66,31 @@ companyScopedOperationalRouter.use("/users", companyUserRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
 companyScopedOperationalRouter.use("/lookups", lookupRouter);
 mountEmployeeRoutes(companyScopedOperationalRouter);
+companyScopedOperationalRouter.use(
+  "/work-teams",
+  requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.OPERATIONS,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  ),
+  workTeamRouter,
+);
+companyScopedOperationalRouter.use(
+  "/work-team-assignment-batches",
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
+  workTeamAssignmentBatchRouter,
+);
 mountOperationsServiceRoutes(companyScopedOperationalRouter);
 mountOperationsOperationRoutes(companyScopedOperationalRouter);
 companyScopedOperationalRouter.use(
   "/operations/:operationId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
   operationAssignmentRouter,
+);
+companyScopedOperationalRouter.use(
+  "/operations/:operationId/work-teams",
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
+  operationWorkTeamAssignmentRouter,
 );
 companyScopedOperationalRouter.use(
   "/attendance",
@@ -106,12 +130,31 @@ operationalRouter.use(resolveCompanyContext);
 operationalRouter.use(asyncHandler(loadCompanyModuleStates));
 operationalRouter.use("/lookups", lookupRouter);
 mountEmployeeRoutes(operationalRouter);
+operationalRouter.use(
+  "/work-teams",
+  requireAnyCompanyModule(
+    COMPANY_MODULE_KEYS.ATTENDANCE,
+    COMPANY_MODULE_KEYS.OPERATIONS,
+    COMPANY_MODULE_KEYS.ABSENCES,
+  ),
+  workTeamRouter,
+);
+operationalRouter.use(
+  "/work-team-assignment-batches",
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
+  workTeamAssignmentBatchRouter,
+);
 mountOperationsServiceRoutes(operationalRouter);
 mountOperationsOperationRoutes(operationalRouter);
 operationalRouter.use(
   "/operations/:operationId/employees",
   requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
   operationAssignmentRouter,
+);
+operationalRouter.use(
+  "/operations/:operationId/work-teams",
+  requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS),
+  operationWorkTeamAssignmentRouter,
 );
 operationalRouter.use(
   "/attendance",

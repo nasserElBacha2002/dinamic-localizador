@@ -23,6 +23,7 @@ interface EmployeeSearchAutocompleteProps {
   required?: boolean;
   placeholder?: string;
   descriptionMode?: "phone" | "assignment";
+  onEmployeeSelected?: (employee: Employee) => void;
 }
 
 function formatEmployeeAssignmentDescription(employee: Employee): string {
@@ -59,6 +60,7 @@ export function EmployeeSearchAutocomplete({
   required = false,
   placeholder = "Nombre o teléfono",
   descriptionMode = "phone",
+  onEmployeeSelected,
 }: EmployeeSearchAutocompleteProps) {
   const navigate = useNavigate();
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
@@ -93,6 +95,7 @@ export function EmployeeSearchAutocomplete({
     inputValue,
     setInputValue,
     options,
+    items,
     isLoading,
     hasSearched,
   } = useAsyncSearchOptions({
@@ -111,11 +114,28 @@ export function EmployeeSearchAutocomplete({
     return mapEmployeeToOption(selectedEmployeeQuery.data, descriptionMode);
   }, [descriptionMode, selectedEmployeeQuery.data, value]);
 
+  const handleChange = (nextValue: string | null) => {
+    onChange(nextValue);
+    if (!nextValue || !onEmployeeSelected) {
+      return;
+    }
+
+    const fromSearch = items.find((employee) => employee.id === nextValue);
+    if (fromSearch) {
+      onEmployeeSelected(fromSearch);
+      return;
+    }
+
+    if (selectedEmployeeQuery.data?.id === nextValue) {
+      onEmployeeSelected(selectedEmployeeQuery.data);
+    }
+  };
+
   return (
     <SearchAutocomplete
       label={label}
       value={value}
-      onChange={onChange}
+      onChange={handleChange}
       options={options}
       inputValue={inputValue}
       onInputChange={setInputValue}

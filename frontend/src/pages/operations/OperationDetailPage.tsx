@@ -1,11 +1,11 @@
-import { Anchor, Box, Button, Divider, Group, SimpleGrid, Stack, Text } from "@mantine/core";
+import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
-import { WeeklySchedulePreview } from "../../components/schedules/WeeklySchedulePreview";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useCompanySettings } from "../../hooks/useCompanySettings";
 import {
   ConfirmDialog,
   ErrorState,
@@ -16,15 +16,15 @@ import {
   StatusBadge,
   type StatusBadgeTone,
 } from "../../design-system";
-import { OperationAssignmentsSection } from "../../components/operations/OperationAssignmentsSection";
+import { OperationTeamSection } from "../../components/operations/OperationTeamSection";
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import { OperationScheduledWorkdaysSection } from "../../components/operations/OperationScheduledWorkdaysSection";
-import { OperationWorkforceSection } from "../../components/operations/OperationWorkforceSection";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
   useCancelOperation,
   useOperation,
+  useOperationWorkdays,
   useUpdateOperation,
 } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
@@ -43,9 +43,15 @@ import {
 import {
   formatRecurringValidity,
   operationKindLabels,
-  scheduleSourceLabels,
 } from "../../utils/operation-schedule-display";
+import {
+  getOperationalTodayDate,
+  pickDefaultTeamWorkday,
+  type OperationTeamWorkdaySelection,
+} from "../../utils/operation-team-workday";
 import { operationStatusLabels } from "../../utils/labels";
+
+const DEFAULT_OPERATION_TIMEZONE = "America/Argentina/Buenos_Aires";
 
 function operationStatusTone(status: OperationStatus): StatusBadgeTone {
   switch (status) {
@@ -67,6 +73,7 @@ export function OperationDetailPage() {
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
   const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
+  const companySettingsQuery = useCompanySettings(Boolean(id));
   const permissionsQuery = useCompanyPermissions();
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
@@ -74,17 +81,40 @@ export function OperationDetailPage() {
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [teamWorkdayOverride, setTeamWorkdayOverride] =
+    useState<OperationTeamWorkdaySelection | null>(null);
+
+  const operation = operationQuery.data;
+  const isRecurring = operation?.operationKind === "RECURRING";
+  const operationalTimezone =
+    companySettingsQuery.data?.operationTimezone ?? DEFAULT_OPERATION_TIMEZONE;
+  const operationalToday = useMemo(
+    () => getOperationalTodayDate(operationalTimezone),
+    [operationalTimezone],
+  );
+  const teamWorkdaysQuery = useOperationWorkdays(
+    isRecurring ? operation?.id : undefined,
+    { page: 1, limit: 90 },
+  );
+  const teamWorkdayOptions = teamWorkdaysQuery.data?.data ?? [];
+  const teamWorkday = useMemo(() => {
+    if (!isRecurring) {
+      return null;
+    }
+
+    if (
+      teamWorkdayOverride &&
+      teamWorkdayOptions.some((workday) => workday.id === teamWorkdayOverride.workdayId)
+    ) {
+      return teamWorkdayOverride;
+    }
+
+    return pickDefaultTeamWorkday(teamWorkdayOptions, operationalToday);
+  }, [isRecurring, teamWorkdayOverride, teamWorkdayOptions, operationalToday]);
 
   const showFeedback = (message: string, severity: "success" | "error" = "success") => {
     notifications.show({ color: severity === "error" ? "red" : "green", message });
   };
-
-  const operation = operationQuery.data;
-
-  const assignedEmployeeIds = useMemo(
-    () => operation?.assignedEmployees.map((employee) => employee.id) ?? [],
-    [operation?.assignedEmployees],
-  );
 
   const operationWorkDate = useMemo(
     () => (operation ? resolveOperationReferenceDate(operation) : ""),
@@ -110,8 +140,8 @@ export function OperationDetailPage() {
     );
   }
 
-  const canAssign = isOperationAssignable(operation.status);
   const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
+  const canAssign = canManage && isOperationAssignable(operation.status);
   const canEdit = isOperationEditable(operation.status);
   const serviceDisplayName = operation.service?.name ?? "—";
   const serviceDetailId = operation.serviceId || operation.service?.id;
@@ -204,41 +234,37 @@ export function OperationDetailPage() {
                 tone={operationStatusTone(operation.status)}
               />
             }
+            description={operationKindLabels[operation.operationKind ?? "ONE_TIME"]}
+          />
+          <MetricCard
+            title={terminology.service.singular}
+            value={serviceDisplayName}
+            description={operation.service?.address ?? "Sin dirección"}
+          />
+          <MetricCard
+            title="Colaboradores asignados"
+            value={operation.assignedEmployees.length}
+            description="Dotación actual de la operación"
           />
           <MetricCard
             title="Asistencias registradas"
             value={operation.attendanceRecordsCount}
-            description="Registros vinculados a esta operación"
+            description={geofenceSummary}
           />
-          <MetricCard
-            title="Horario de operación"
-            value={
-              operation.operationKind === "RECURRING"
-                ? operationKindLabels.RECURRING
-                : formatDateTime(operation.scheduledStart)
-            }
-            description={
-              operation.operationKind === "RECURRING"
-                ? operation.schedule
-                  ? formatRecurringValidity(operation.schedule.validFrom, operation.schedule.validUntil)
-                  : "Trabajo habitual"
-                : operation.scheduledEnd
-                  ? `Fin: ${formatDateTime(operation.scheduledEnd)}`
-                  : "Sin horario de fin"
-            }
-          />
-          <MetricCard title="Geocerca" value={geofenceSummary} description="Radio y tolerancias horarias" />
         </SimpleGrid>
 
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
             <Stack gap="lg">
-              <OperationAssignmentsSection
+              <OperationTeamSection
                 operationId={operation.id}
                 operationKind={operation.operationKind ?? "ONE_TIME"}
                 canAssign={canAssign}
                 operationWorkDate={operationWorkDate}
-                activeEmployeeIds={assignedEmployeeIds}
+                operationalToday={operationalToday}
+                workdayOptions={teamWorkdayOptions}
+                selectedWorkday={teamWorkday}
+                onWorkdayChange={setTeamWorkdayOverride}
                 onFeedback={(message, severity) => showFeedback(message, severity)}
               />
               {operation.operationKind === "RECURRING" ? (
@@ -248,31 +274,16 @@ export function OperationDetailPage() {
                   onFeedback={(message, severity) => showFeedback(message, severity)}
                 />
               ) : null}
-              <OperationWorkforceSection
-                operationId={operation.id}
-                canAssign={canAssign}
-                scheduledStart={operation.scheduledStart}
-                onFeedback={(message, severity) => showFeedback(message, severity)}
-              />
             </Stack>
           </Box>
 
           <Box className={layoutClasses.dataSection}>
             <SectionCard
-              title="Datos de operación"
-              description="Información general, ubicación y parámetros de validación."
+              title="Configuración"
+              description="Parámetros de la operación y validación."
             >
               <OperationDetailFieldGrid
                 fields={[
-                  {
-                    label: "Estado",
-                    value: (
-                      <StatusBadge
-                        label={operationStatusLabels[operation.status]}
-                        tone={operationStatusTone(operation.status)}
-                      />
-                    ),
-                  },
                   { label: "Tipo", value: operationKindLabels[operation.operationKind ?? "ONE_TIME"] },
                   { label: terminology.service.singular, value: serviceFieldValue },
                   { label: "Dirección", value: operation.service?.address ?? "—" },
@@ -292,36 +303,17 @@ export function OperationDetailPage() {
                         { label: operationScheduleLabel, value: formatDateTime(operation.scheduledStart) },
                         { label: "Fin", value: formatDateTime(operation.scheduledEnd) },
                       ]),
+                  {
+                    label: "Geocerca",
+                    value: operation.service?.allowedRadiusMeters
+                      ? `${operation.service.allowedRadiusMeters} m`
+                      : "—",
+                  },
                   { label: "Tolerancia temprana", value: `${operation.earlyToleranceMinutes} min` },
                   { label: "Tolerancia tardía", value: `${operation.lateToleranceMinutes} min` },
-                  { label: "Asistencias registradas", value: operation.attendanceRecordsCount },
                   { label: "Notas", value: operation.notes ?? "—" },
                 ]}
               />
-
-              {operation.operationKind === "RECURRING" && operation.schedule ? (
-                <>
-                  <Divider my="sm" />
-                  <Stack gap="sm">
-                    <Stack gap={2}>
-                      <Text size="sm" fw={600}>
-                        Horario de trabajo
-                      </Text>
-                      <Text size="xs" c="dimmed">
-                        Configuración semanal de la operación habitual.
-                      </Text>
-                    </Stack>
-                    <Group gap="xs">
-                      <StatusBadge
-                        label={scheduleSourceLabels[operation.schedule.scheduleSource]}
-                        tone="info"
-                        variant="light"
-                      />
-                    </Group>
-                    <WeeklySchedulePreview days={operation.schedule.days} />
-                  </Stack>
-                </>
-              ) : null}
             </SectionCard>
           </Box>
 

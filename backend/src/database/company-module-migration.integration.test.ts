@@ -16,12 +16,19 @@ const MIGRATION_038_PATH = join(
   "database/migrations/038_finalize_company_module_key_migration.sql",
 );
 
+const stripLegacyDatabaseUse = (batch: string): string =>
+  batch
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_\[\]]+\s*;?\s*$/i.test(line.trim()))
+    .join("\n")
+    .trim();
+
 const runMigration038 = async (): Promise<void> => {
   const pool = getPool();
   const migrationSql = readFileSync(MIGRATION_038_PATH, "utf8");
   const batches = migrationSql
     .split(/^\s*GO\s*$/gim)
-    .map((batch) => batch.trim())
+    .map((batch) => stripLegacyDatabaseUse(batch.trim()))
     .filter(Boolean);
 
   for (const batch of batches) {
@@ -86,8 +93,8 @@ describeDatabaseIntegration("company module key migration (038)", () => {
         .query(`
           IF NOT EXISTS (SELECT 1 FROM companies WHERE id = @id)
           BEGIN
-            INSERT INTO companies (id, name, active)
-            VALUES (@id, @name, 1);
+            INSERT INTO companies (id, name, default_timezone, status)
+            VALUES (@id, @name, N'America/Argentina/Buenos_Aires', N'ACTIVE');
           END
         `);
     }
@@ -133,7 +140,7 @@ describeDatabaseIntegration("company module key migration (038)", () => {
 
     const byCompany = new Map<string, Array<Record<string, unknown>>>();
     for (const row of modules.recordset as Array<Record<string, unknown>>) {
-      const companyId = String(row.company_id);
+      const companyId = String(row.company_id).toLowerCase();
       const rows = byCompany.get(companyId) ?? [];
       rows.push(row);
       byCompany.set(companyId, rows);
@@ -141,17 +148,17 @@ describeDatabaseIntegration("company module key migration (038)", () => {
 
     assert.equal(await countLegacyModuleRows(), 0);
 
-    const legacyOnlyRows = byCompany.get(companyIds.legacyOnly) ?? [];
+    const legacyOnlyRows = byCompany.get(companyIds.legacyOnly.toLowerCase()) ?? [];
     assert.equal(legacyOnlyRows.length, 1);
     assert.equal(legacyOnlyRows[0]?.module_key, "operations");
     assert.equal(Boolean(legacyOnlyRows[0]?.is_enabled), true);
 
-    const canonicalOnlyRows = byCompany.get(companyIds.canonicalOnly) ?? [];
+    const canonicalOnlyRows = byCompany.get(companyIds.canonicalOnly.toLowerCase()) ?? [];
     assert.equal(canonicalOnlyRows.length, 1);
     assert.equal(canonicalOnlyRows[0]?.module_key, "operations");
     assert.equal(Boolean(canonicalOnlyRows[0]?.is_enabled), true);
 
-    const duplicateRows = byCompany.get(companyIds.duplicate) ?? [];
+    const duplicateRows = byCompany.get(companyIds.duplicate.toLowerCase()) ?? [];
     assert.equal(duplicateRows.length, 1);
     assert.equal(duplicateRows[0]?.module_key, "operations");
     assert.equal(Boolean(duplicateRows[0]?.is_enabled), true);

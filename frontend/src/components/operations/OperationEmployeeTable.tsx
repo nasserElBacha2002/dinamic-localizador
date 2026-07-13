@@ -1,4 +1,4 @@
-import { Button, Group, Stack, Text } from "@mantine/core";
+import { Button, Menu, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { DataTable, type DataTableColumn } from "../../design-system/components/DataTable";
@@ -7,7 +7,7 @@ import { mapApiPaginationMeta } from "../../design-system/components/pagination-
 import { StatusBadge } from "../../design-system/components/StatusBadge";
 import type { PaginationMeta } from "../../types/api";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
-import { formatTime } from "../../utils/dates";
+import type { OperationEmployeeAssignment } from "../../types/operation";
 import { getRelatedName, safeText } from "../../utils/display-safe";
 import {
   assignmentConfirmationStatusTableLabels,
@@ -23,19 +23,44 @@ import {
   formatOperationalCheckOutCell,
 } from "../../utils/operation-workforce-display";
 import { navigateWithListContext } from "../../utils/list-navigation";
+import {
+  assignmentActionLabel,
+  resolveAssignmentAction,
+} from "./operation-assignment-display";
+
+function buildEmployeeSecondaryLine(
+  row: OperationAttendanceSummaryEmployee,
+  assignment?: OperationEmployeeAssignment,
+): string {
+  const parts: string[] = [];
+  if (row.employee?.employeeType) {
+    parts.push(employeeTypeLabels[row.employee.employeeType]);
+  }
+  if (assignment?.assignmentOrigin === "WORK_TEAM" && assignment.sourceWorkTeamName) {
+    parts.push(assignment.sourceWorkTeamName);
+  }
+  const phone = safeText(row.employee?.phoneNumber ?? null);
+  if (phone !== "—") {
+    parts.push(phone);
+  }
+  return parts.join(" · ");
+}
 
 export interface OperationEmployeeTableProps {
   operationId: string;
   rows: OperationAttendanceSummaryEmployee[];
-  scheduledStart: string | null;
   loading?: boolean;
   error?: string;
   canAssign: boolean;
   canReviewAttendance: (row: OperationAttendanceSummaryEmployee) => boolean;
+  assignmentById?: Map<string, OperationEmployeeAssignment>;
+  operationWorkDate?: string;
   onReviewApprove: (attendanceId: string) => void;
   onReviewReject: (attendanceId: string) => void;
-  onUnassign: (assignmentId: string) => void;
-  unassignPending?: boolean;
+  onCancelAssignment: (assignment: OperationEmployeeAssignment) => void;
+  onEndAssignment: (assignment: OperationEmployeeAssignment) => void;
+  cancelPending?: boolean;
+  endPending?: boolean;
   pagination?: {
     meta: PaginationMeta;
     pageSize: number;
@@ -49,15 +74,18 @@ export interface OperationEmployeeTableProps {
 export function OperationEmployeeTable({
   operationId,
   rows,
-  scheduledStart,
   loading = false,
   error,
   canAssign,
   canReviewAttendance,
+  assignmentById,
+  operationWorkDate = "",
   onReviewApprove,
   onReviewReject,
-  onUnassign,
-  unassignPending = false,
+  onCancelAssignment,
+  onEndAssignment,
+  cancelPending = false,
+  endPending = false,
   pagination,
   emptyTitle,
   emptyDescription,
@@ -65,31 +93,29 @@ export function OperationEmployeeTable({
   const navigate = useNavigate();
   const location = useLocation();
   const operationDetailPath = `/operations/${operationId}`;
-  const expectedArrivalTime = scheduledStart ? formatTime(scheduledStart) : "—";
 
   const columns = useMemo<DataTableColumn<OperationAttendanceSummaryEmployee>[]>(
     () => [
       {
         key: "employee",
         header: "Colaborador",
-        width: 180,
-        render: (row) => (
-          <Stack gap={2}>
-            <Text size="sm" fw={500}>
-              {getRelatedName(row.employee)}
-            </Text>
-            <Text size="xs" c="dimmed">
-              {safeText(row.employee?.phoneNumber ?? null)}
-            </Text>
-          </Stack>
-        ),
-      },
-      {
-        key: "employeeType",
-        header: "Tipo",
-        width: 90,
-        getValue: (row) =>
-          row.employee?.employeeType ? employeeTypeLabels[row.employee.employeeType] : "—",
+        width: 200,
+        render: (row) => {
+          const assignment = assignmentById?.get(row.assignmentId);
+          const secondary = buildEmployeeSecondaryLine(row, assignment);
+          return (
+            <Stack gap={2}>
+              <Text size="sm" fw={500}>
+                {getRelatedName(row.employee)}
+              </Text>
+              {secondary ? (
+                <Text size="xs" c="dimmed">
+                  {secondary}
+                </Text>
+              ) : null}
+            </Stack>
+          );
+        },
       },
       {
         key: "confirmation",
@@ -103,27 +129,9 @@ export function OperationEmployeeTable({
         ),
       },
       {
-        key: "expected",
-        header: "Hora esperada",
-        width: 100,
-        getValue: () => expectedArrivalTime,
-      },
-      {
-        key: "checkIn",
-        header: "Check-in",
-        width: 110,
-        render: (row) => formatOperationalCheckInCell(row.attendance),
-      },
-      {
-        key: "checkOut",
-        header: "Check-out",
-        width: 120,
-        render: (row) => formatOperationalCheckOutCell(row.attendance),
-      },
-      {
         key: "attendanceStatus",
-        header: "Estado asistencia",
-        width: 130,
+        header: "Asistencia",
+        width: 120,
         render: (row) => (
           <StatusBadge
             label={operationalAttendanceStatusTableLabels[row.operationalStatus]}
@@ -131,8 +139,20 @@ export function OperationEmployeeTable({
           />
         ),
       },
+      {
+        key: "checkIn",
+        header: "Check-in",
+        width: 100,
+        render: (row) => formatOperationalCheckInCell(row.attendance),
+      },
+      {
+        key: "checkOut",
+        header: "Check-out",
+        width: 110,
+        render: (row) => formatOperationalCheckOutCell(row.attendance),
+      },
     ],
-    [expectedArrivalTime],
+    [assignmentById],
   );
 
   return (
@@ -157,40 +177,79 @@ export function OperationEmployeeTable({
         );
       }}
       isRowClickable={(row) => Boolean(row.attendance)}
-      rowActions={(row) => (
-        <Group gap="xs" justify="flex-end" wrap="nowrap">
-          {canReviewAttendance(row) ? (
-            <>
-              <Button
-                size="compact-sm"
-                onClick={() => onReviewApprove(row.attendance!.id)}
-              >
-                Aprobar
+      rowActions={(row) => {
+        const assignment = assignmentById?.get(row.assignmentId);
+        const hasAttendanceDetail = Boolean(row.attendance);
+        const resolvedAction =
+          canAssign && assignment
+            ? resolveAssignmentAction(assignment, operationWorkDate)
+            : null;
+        // Never offer destructive removal for a row with attendance: the backend
+        // rejects it (ASSIGNMENT_HAS_ATTENDANCE_RECORDS) to preserve history.
+        const assignmentAction =
+          hasAttendanceDetail &&
+          (resolvedAction === "cancel-current" || resolvedAction === "cancel-future")
+            ? null
+            : resolvedAction;
+        const canReview = canReviewAttendance(row);
+
+        if (!canReview && !assignmentAction && !hasAttendanceDetail) {
+          return null;
+        }
+
+        return (
+          <Menu position="bottom-end" withinPortal>
+            <Menu.Target>
+              <Button size="compact-xs" variant="subtle">
+                Acciones
               </Button>
-              <Button
-                size="compact-sm"
-                color="danger"
-                variant="default"
-                onClick={() => onReviewReject(row.attendance!.id)}
-              >
-                Rechazar
-              </Button>
-            </>
-          ) : null}
-          {canAssign && !row.attendance ? (
-            <Button
-              size="compact-sm"
-              color="danger"
-              variant="light"
-              disabled={unassignPending}
-              loading={unassignPending}
-              onClick={() => onUnassign(row.assignmentId)}
-            >
-              Quitar asignación
-            </Button>
-          ) : null}
-        </Group>
-      )}
+            </Menu.Target>
+            <Menu.Dropdown>
+              {hasAttendanceDetail ? (
+                <Menu.Item
+                  onClick={() =>
+                    navigateWithListContext(
+                      navigate,
+                      `/attendance/${row.attendance!.id}`,
+                      operationDetailPath,
+                      location,
+                    )
+                  }
+                >
+                  Ver detalle
+                </Menu.Item>
+              ) : null}
+              {canReview ? (
+                <>
+                  <Menu.Item onClick={() => onReviewApprove(row.attendance!.id)}>
+                    Aprobar asistencia
+                  </Menu.Item>
+                  <Menu.Item color="red" onClick={() => onReviewReject(row.attendance!.id)}>
+                    Rechazar asistencia
+                  </Menu.Item>
+                </>
+              ) : null}
+              {assignmentAction === "end" ? (
+                <Menu.Item
+                  disabled={endPending}
+                  onClick={() => onEndAssignment(assignment!)}
+                >
+                  {assignmentActionLabel(assignmentAction)}
+                </Menu.Item>
+              ) : null}
+              {assignmentAction === "cancel-current" || assignmentAction === "cancel-future" ? (
+                <Menu.Item
+                  color="red"
+                  disabled={cancelPending}
+                  onClick={() => onCancelAssignment(assignment!)}
+                >
+                  {assignmentActionLabel(assignmentAction)}
+                </Menu.Item>
+              ) : null}
+            </Menu.Dropdown>
+          </Menu>
+        );
+      }}
       pagination={
         pagination ? (
           <PaginationControls
@@ -202,7 +261,7 @@ export function OperationEmployeeTable({
           />
         ) : null
       }
-      aria-label="Vista operativa de colaboradores"
+      aria-label="Equipo asignado y asistencia"
     />
   );
 }

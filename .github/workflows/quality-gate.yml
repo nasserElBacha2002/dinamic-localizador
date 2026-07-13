@@ -92,7 +92,7 @@ jobs:
       TZ: America/Argentina/Buenos_Aires
       DB_HOST: localhost
       DB_PORT: 1433
-      DB_NAME: dinamic_attendance_ci
+      DB_NAME: dinamic_attendance
       DB_USER: sa
       DB_PASSWORD: TestPassword123!
       DB_ENCRYPT: "false"
@@ -109,6 +109,22 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Wait for SQL Server
+        run: |
+          for i in $(seq 1 30); do
+            if docker run --rm --network host mcr.microsoft.com/mssql-tools \
+              /opt/mssql-tools/bin/sqlcmd \
+              -S localhost -U sa -P "$DB_PASSWORD" \
+              -Q "SELECT 1" -C >/dev/null 2>&1; then
+              echo "SQL Server is ready"
+              exit 0
+            fi
+            echo "Waiting for SQL Server (${i}/30)..."
+            sleep 5
+          done
+          echo "SQL Server did not become ready in time"
+          exit 1
 
       - name: Create database
         run: |

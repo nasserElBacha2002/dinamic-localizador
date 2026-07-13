@@ -192,6 +192,33 @@ const ensureEmployeeWorkdayRow = async (
       return reactivated;
     }
 
+    if (
+      existing.expectationStatus === "CANCELLED" &&
+      existing.cancellationReason === "ASSIGNMENT"
+    ) {
+      const hasAttendance = transaction
+        ? await employeeWorkdayRepository.hasAttendanceInTransaction(
+            companyId,
+            transaction,
+            existing.id,
+          )
+        : await employeeWorkdayRepository.hasAttendance(companyId, existing.id);
+
+      if (hasAttendance) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+          "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
+        );
+      }
+
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+        "No se pudo reactivar la jornada del empleado para la nueva asignación",
+      );
+    }
+
     if (!existing.operationAssignmentId) {
       const assignment = await operationEmployeeRepository.findById(
         companyId,
@@ -234,6 +261,14 @@ const ensureEmployeeWorkdayRow = async (
       );
     }
 
+    if (existing.expectationStatus === "CANCELLED") {
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+        "No se pudo reactivar la jornada del empleado para la nueva asignación",
+      );
+    }
+
     return existing;
   }
 
@@ -270,6 +305,34 @@ const ensureEmployeeWorkdayRow = async (
     if (reactivated) {
       return reactivated;
     }
+
+    if (
+      raced.expectationStatus === "CANCELLED" &&
+      raced.cancellationReason === "ASSIGNMENT"
+    ) {
+      const hasAttendance = transaction
+        ? await employeeWorkdayRepository.hasAttendanceInTransaction(
+            companyId,
+            transaction,
+            raced.id,
+          )
+        : await employeeWorkdayRepository.hasAttendance(companyId, raced.id);
+
+      if (hasAttendance) {
+        throw new AppError(
+          409,
+          "ASSIGNMENT_HAS_ATTENDANCE_RECORDS",
+          "No se puede reasignar porque ya existe asistencia registrada para esta jornada",
+        );
+      }
+
+      throw new AppError(
+        409,
+        "EMPLOYEE_WORKDAY_REACTIVATION_FAILED",
+        "No se pudo reactivar la jornada del empleado para la nueva asignación",
+      );
+    }
+
     return raced;
   }
 };

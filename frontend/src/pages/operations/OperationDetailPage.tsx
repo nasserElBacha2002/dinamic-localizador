@@ -272,10 +272,6 @@ export function OperationDetailPage() {
                 <OperationScheduledWorkdaysSection
                   operationId={operation.id}
                   canManage={canManage}
-                  highlightedWorkdayId={teamWorkday?.workdayId}
-                  onSelectWorkdayForTeam={(workday) =>
-                    setTeamWorkday({ workdayId: workday.id, workDate: workday.workDate })
-                  }
                   onFeedback={(message, severity) => showFeedback(message, severity)}
                 />
               ) : null}

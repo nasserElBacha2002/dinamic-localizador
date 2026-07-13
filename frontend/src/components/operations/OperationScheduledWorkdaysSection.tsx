@@ -24,16 +24,12 @@ import { OperationWorkdayDetailModal } from "./OperationWorkdayDetailModal";
 interface OperationScheduledWorkdaysSectionProps {
   operationId: string;
   canManage: boolean;
-  highlightedWorkdayId?: string;
-  onSelectWorkdayForTeam?: (workday: OperationWorkdaySummary) => void;
   onFeedback: (message: string, severity: "success" | "error") => void;
 }
 
 export function OperationScheduledWorkdaysSection({
   operationId,
   canManage,
-  highlightedWorkdayId,
-  onSelectWorkdayForTeam,
   onFeedback,
 }: OperationScheduledWorkdaysSectionProps) {
   const pagination = usePaginationState(14);
@@ -108,14 +104,7 @@ export function OperationScheduledWorkdaysSection({
                 </Table.Thead>
                 <Table.Tbody>
                   {rows.map((workday) => (
-                    <Table.Tr
-                      key={workday.id}
-                      style={
-                        highlightedWorkdayId === workday.id
-                          ? { backgroundColor: "var(--mantine-color-blue-light)" }
-                          : undefined
-                      }
-                    >
+                    <Table.Tr key={workday.id}>
                       <Table.Td>{formatWorkdayDate(workday.workDate)}</Table.Td>
                       <Table.Td>{formatExpectedTimeRange(workday)}</Table.Td>
                       <Table.Td>
@@ -127,24 +116,13 @@ export function OperationScheduledWorkdaysSection({
                       </Table.Td>
                       <Table.Td>{workday.scheduledEmployeesCount}</Table.Td>
                       <Table.Td>
-                        <Group gap="xs" justify="flex-end">
-                          {onSelectWorkdayForTeam ? (
-                            <Button
-                              variant="subtle"
-                              size="compact-xs"
-                              onClick={() => onSelectWorkdayForTeam(workday)}
-                            >
-                              Ver en equipo
-                            </Button>
-                          ) : null}
-                          <Button
-                            variant="subtle"
-                            size="compact-xs"
-                            onClick={() => setSelectedWorkday(workday)}
-                          >
-                            Ver detalle
-                          </Button>
-                        </Group>
+                        <Button
+                          variant="subtle"
+                          size="compact-xs"
+                          onClick={() => setSelectedWorkday(workday)}
+                        >
+                          Ver detalle
+                        </Button>
                       </Table.Td>
                     </Table.Tr>
                   ))}

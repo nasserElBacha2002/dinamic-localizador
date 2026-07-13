@@ -4,6 +4,7 @@ import sql from "mssql";
 import { WEEKDAYS } from "../constants/weekday";
 import {
   describeDatabaseIntegration,
+  normalizeSqlDateIso,
   resolveCompanyTodayIso,
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
@@ -125,8 +126,12 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       { validFrom: today },
     );
 
+    await recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id);
+
     const afterAssign = await loadExpectationsForEmployee(companyId, operation.id, employeeId);
-    const todayExpectation = afterAssign.find((row) => String(row.work_date).slice(0, 10) === today);
+    const todayExpectation = afterAssign.find(
+      (row) => normalizeSqlDateIso(row.work_date) === today,
+    );
     assert.ok(todayExpectation);
     assert.equal(todayExpectation.expectation_status, "EXPECTED");
     assert.equal(todayExpectation.operation_assignment_id, assignmentA.id);
@@ -134,7 +139,9 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
     await operationAssignmentService.cancelAssignment(companyId, operation.id, assignmentA.id);
 
     const afterCancel = await loadExpectationsForEmployee(companyId, operation.id, employeeId);
-    const cancelledToday = afterCancel.find((row) => String(row.work_date).slice(0, 10) === today);
+    const cancelledToday = afterCancel.find(
+      (row) => normalizeSqlDateIso(row.work_date) === today,
+    );
     assert.ok(cancelledToday);
     assert.equal(cancelledToday.expectation_status, "CANCELLED");
     assert.equal(cancelledToday.cancellation_reason, "ASSIGNMENT");
@@ -151,7 +158,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
 
     const afterReassign = await loadExpectationsForEmployee(companyId, operation.id, employeeId);
     const reactivatedToday = afterReassign.find(
-      (row) => String(row.work_date).slice(0, 10) === today,
+      (row) => normalizeSqlDateIso(row.work_date) === today,
     );
     assert.ok(reactivatedToday);
     assert.equal(reactivatedToday.expectation_status, "EXPECTED");

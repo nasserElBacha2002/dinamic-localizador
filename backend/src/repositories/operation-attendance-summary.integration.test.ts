@@ -11,6 +11,7 @@ import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
 import { operationAssignmentService } from "../services/operation-assignment.service";
 import { operationService } from "../services/operation.service";
+import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
 import { WEEKDAYS } from "../constants/weekday";
 import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 
@@ -200,6 +201,8 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     await operationAssignmentService.assignEmployee(companyId, operation.id, employeeC, {
       validFrom: laterDate,
     });
+
+    await recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, operation.id);
 
     const summaryStart = await operationAttendanceRepository.getAttendanceSummary(
       companyId,

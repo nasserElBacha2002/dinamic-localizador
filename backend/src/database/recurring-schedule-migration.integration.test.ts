@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { after, before, it } from "node:test";
+import sql from "mssql";
 import { getPool } from "./connection";
 import {
   describeDatabaseIntegration,
@@ -58,7 +59,7 @@ describeDatabaseIntegration("recurring schedule migrations 042/043", () => {
           VALUES (
             NEWID(),
             (SELECT TOP 1 id FROM dbo.companies),
-            (SELECT TOP 1 id FROM dbo.services),
+            (SELECT TOP 1 id FROM dbo.operational_locations),
             N'ONE_TIME',
             NULL,
             NULL,
@@ -86,24 +87,88 @@ describeDatabaseIntegration("recurring schedule migrations 042/043", () => {
       return;
     }
 
-    await assert.rejects(
-      () =>
-        pool.request().query(`
-          INSERT INTO dbo.operation_schedules (
-            id, company_id, operation_id, schedule_source, timezone, valid_from, version
-          )
-          VALUES (
-            NEWID(),
-            (SELECT TOP 1 id FROM dbo.companies),
-            (SELECT TOP 1 id FROM dbo.scheduled_operations WHERE operation_kind = N'RECURRING'),
-            N'COMPANY',
-            N'America/Argentina/Buenos_Aires',
-            CAST(GETDATE() AS DATE),
-            1
-          )
-        `),
-      /CK_operation_schedules_timezone_source|CHECK constraint/,
-    );
+    const targetOperation = await pool.request().query(`
+      SELECT TOP 1
+        o.id AS operation_id,
+        o.company_id
+      FROM dbo.scheduled_operations o
+      WHERE o.operation_kind = N'RECURRING'
+        AND NOT EXISTS (
+          SELECT 1
+          FROM dbo.operation_schedules os
+          WHERE os.operation_id = o.id
+        )
+      ORDER BY o.created_at DESC
+    `);
+
+    let operationId = targetOperation.recordset[0]?.operation_id
+      ? String(targetOperation.recordset[0].operation_id)
+      : "";
+    let companyId = targetOperation.recordset[0]?.company_id
+      ? String(targetOperation.recordset[0].company_id)
+      : "";
+    let seededOperation = false;
+
+    if (!operationId) {
+      const seeded = await pool.request().query(`
+        DECLARE @companyId UNIQUEIDENTIFIER = (SELECT TOP 1 id FROM dbo.companies ORDER BY created_at ASC);
+        DECLARE @serviceId UNIQUEIDENTIFIER = (
+          SELECT TOP 1 id
+          FROM dbo.operational_locations
+          WHERE company_id = @companyId
+          ORDER BY created_at ASC
+        );
+        DECLARE @operationId UNIQUEIDENTIFIER = NEWID();
+
+        INSERT INTO dbo.scheduled_operations (
+          id, company_id, service_id, operation_kind, status
+        )
+        VALUES (@operationId, @companyId, @serviceId, N'RECURRING', N'SCHEDULED');
+
+        SELECT @operationId AS operation_id, @companyId AS company_id;
+      `);
+      operationId = String(seeded.recordset[0]?.operation_id ?? "");
+      companyId = String(seeded.recordset[0]?.company_id ?? "");
+      seededOperation = true;
+    }
+
+    assert.ok(operationId);
+    assert.ok(companyId);
+
+    try {
+      await assert.rejects(
+        () =>
+          pool
+            .request()
+            .input("companyId", sql.UniqueIdentifier, companyId)
+            .input("operationId", sql.UniqueIdentifier, operationId)
+            .query(`
+              INSERT INTO dbo.operation_schedules (
+                id, company_id, operation_id, schedule_source, timezone, valid_from, version
+              )
+              VALUES (
+                NEWID(),
+                @companyId,
+                @operationId,
+                N'COMPANY',
+                N'America/Argentina/Buenos_Aires',
+                CAST(GETDATE() AS DATE),
+                1
+              )
+            `),
+        /CK_operation_schedules_timezone_source|CHECK constraint/,
+      );
+    } finally {
+      if (seededOperation) {
+        await pool
+          .request()
+          .input("operationId", sql.UniqueIdentifier, operationId)
+          .query(`
+            DELETE FROM dbo.operation_schedules WHERE operation_id = @operationId;
+            DELETE FROM dbo.scheduled_operations WHERE id = @operationId;
+          `);
+      }
+    }
   });
 
   it("documents migration SQL includes company schedule backfill", () => {

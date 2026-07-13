@@ -50,3 +50,19 @@ export const resolveCompanyTodayIso = async (companyId: string): Promise<string>
   const timezone = resolveOperationTimezone(settings?.operationTimezone);
   return getDateIsoInTimezone(new Date(), timezone);
 };
+
+/** Normalizes SQL DATE values returned by mssql/tedious for stable ISO comparisons. */
+export const normalizeSqlDateIso = (value: unknown): string => {
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10);
+  }
+  const text = String(value).trim();
+  if (/^\d{4}-\d{2}-\d{2}/.test(text)) {
+    return text.slice(0, 10);
+  }
+  const parsed = new Date(text);
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10);
+  }
+  return text.slice(0, 10);
+};

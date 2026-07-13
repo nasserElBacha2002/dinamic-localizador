@@ -26,6 +26,7 @@
     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
     "diagnose:operation-reassignment": "tsx scripts/diagnose-operation-reassignment.ts",
     "repair:operation-reassignment": "tsx scripts/repair-operation-reassignment.ts",
+    "seed:integration-ci": "tsx src/scripts/seed-integration-ci.ts",
     "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts",
     "test:integration": "RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.integration.test.ts"
   },

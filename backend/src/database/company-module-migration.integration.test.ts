@@ -16,12 +16,19 @@ const MIGRATION_038_PATH = join(
   "database/migrations/038_finalize_company_module_key_migration.sql",
 );
 
+const stripLegacyDatabaseUse = (batch: string): string =>
+  batch
+    .split(/\r?\n/)
+    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_\[\]]+\s*;?\s*$/i.test(line.trim()))
+    .join("\n")
+    .trim();
+
 const runMigration038 = async (): Promise<void> => {
   const pool = getPool();
   const migrationSql = readFileSync(MIGRATION_038_PATH, "utf8");
   const batches = migrationSql
     .split(/^\s*GO\s*$/gim)
-    .map((batch) => batch.trim())
+    .map((batch) => stripLegacyDatabaseUse(batch.trim()))
     .filter(Boolean);
 
   for (const batch of batches) {
@@ -86,8 +93,8 @@ describeDatabaseIntegration("company module key migration (038)", () => {
         .query(`
           IF NOT EXISTS (SELECT 1 FROM companies WHERE id = @id)
           BEGIN
-            INSERT INTO companies (id, name, active)
-            VALUES (@id, @name, 1);
+            INSERT INTO companies (id, name, default_timezone, status)
+            VALUES (@id, @name, N'America/Argentina/Buenos_Aires', N'ACTIVE');
           END
         `);
     }

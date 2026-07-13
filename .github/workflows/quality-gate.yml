@@ -136,6 +136,13 @@ jobs:
       - name: Run migrations
         run: npm run migrate
 
+      - name: Seed CI integration fixtures
+        env:
+          ADMIN_NAME: CI Platform Admin
+          ADMIN_EMAIL: admin@dinamicsystems.com
+          ADMIN_PASSWORD: ci-test-password-123
+        run: npm run seed:integration-ci
+
       - name: Integration tests
         run: npm run test:integration
 

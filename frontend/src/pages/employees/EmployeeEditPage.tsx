@@ -50,6 +50,7 @@ export function EmployeeEditPage() {
         documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
         phoneNumber: values.phoneNumber,
         employeeType: values.employeeType,
+        categoryId: values.categoryId ?? null,
         active: values.active,
       });
       notifications.show({
@@ -74,8 +75,14 @@ export function EmployeeEditPage() {
           documentNumber: employee.documentNumber ?? "",
           phoneNumber: employee.phoneNumber,
           employeeType: employee.employeeType,
+          categoryId: employee.categoryId,
           active: employee.active,
         }}
+        retainedCategory={
+          employee.category
+            ? { id: employee.category.id, name: employee.category.name }
+            : null
+        }
         submitLabel="Guardar cambios"
         cancelTo="/employees"
         onCancel={goBackToList}

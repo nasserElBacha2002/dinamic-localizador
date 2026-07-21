@@ -19,10 +19,12 @@ export const employeeService = {
       throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
     }
 
+    const categoryId = input.categoryId === undefined ? null : input.categoryId;
+
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
-    // Catalog/settings are ensured before the transaction. Balance inserts share the
-    // employee creation transaction; reads during init use committed catalog data.
+    // Category assignability is enforced inside the INSERT (UPDLOCK/HOLDLOCK + EXISTS),
+    // in the same transaction as balance initialization — no pre-check race window.
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -35,6 +37,7 @@ export const employeeService = {
           documentNumber: input.documentNumber?.trim() ?? null,
           phoneNumber,
           employeeType: input.employeeType,
+          categoryId,
         },
         transaction,
       );
@@ -93,6 +96,7 @@ export const employeeService = {
       }
     }
 
+    // Category scope/active checks run inside UPDATE with UPDLOCK/HOLDLOCK.
     const updated = await employeeRepository.update(companyId, id, updatePayload);
     if (!updated) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");

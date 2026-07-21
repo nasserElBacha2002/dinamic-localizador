@@ -2,6 +2,7 @@ import type { CompanyAbsenceSetting } from "../../types/company-absence-settings
 import type { CompanyLocationType } from "../../types/company-location-type";
 import type { CompanyModule } from "../../types/company-module";
 import type { CompanySettings } from "../../types/company-settings";
+import type { EmployeeCategory } from "../../types/employee-category";
 import type { CompanyWorkSchedule } from "../../types/schedule";
 import { buildCompanySchedulePreviewLabel } from "../../utils/operation-schedule-display";
 
@@ -107,6 +108,22 @@ export function buildLocationTypesSummary(locationTypes: CompanyLocationType[]) 
     summaryItems: [
       { label: "Activos", value: `${active.length} activos` },
       { label: "Inactivos", value: `${inactive.length} inactivos` },
+    ],
+    chips,
+  };
+}
+
+export function buildEmployeeCategoriesSummary(categories: EmployeeCategory[]) {
+  const system = categories.filter((category) => category.isSystem);
+  const customActive = categories.filter((category) => !category.isSystem && category.isActive);
+  const customInactive = categories.filter((category) => !category.isSystem && !category.isActive);
+  const chips = [...system, ...customActive].slice(0, 3).map((category) => category.name);
+
+  return {
+    summaryItems: [
+      { label: "Base", value: `${system.length} categorías base` },
+      { label: "Personalizadas", value: `${customActive.length} activas` },
+      { label: "Inactivas", value: `${customInactive.length} inactivas` },
     ],
     chips,
   };

@@ -113,9 +113,11 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phone", sql.NVarChar(20), uniquePhone(21))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Recurring Reassign', @phone, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Recurring Reassign', @phone, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
 

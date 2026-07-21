@@ -72,9 +72,11 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(20), uniquePhone(1))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Cycle Integration', @phoneNumber, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Cycle Integration', @phoneNumber, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
 

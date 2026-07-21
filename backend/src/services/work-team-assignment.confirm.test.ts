@@ -12,6 +12,10 @@ const buildEmployee = (id: string) => ({
   name: `Employee ${id}`,
   phoneNumber: `+54911000000${id.slice(-1)}`,
   employeeType: "fijo",
+  categoryId: null,
+  category: null,
+  documentNumber: null,
+  lastWorkedAt: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 });

@@ -30,7 +30,7 @@
     "repair:operational-location-duplicates": "tsx scripts/repair-operational-location-duplicates.ts",
     "seed:integration-ci": "tsx src/scripts/seed-integration-ci.ts",
     "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts",
-    "test:integration": "RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.integration.test.ts"
+    "test:integration": "RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 src/**/*.integration.test.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

@@ -226,12 +226,25 @@ describeDatabaseIntegration("tenant isolation hardening", () => {
   it("resolves legacy route for single-membership user", async () => {
     const pool = getPool();
     const singleMembershipUser = await pool.request().query(`
-      SELECT TOP 1 u.id, m.company_id
+      SELECT TOP 1
+        u.id,
+        (
+          SELECT TOP 1 m2.company_id
+          FROM user_company_memberships m2
+          WHERE m2.user_id = u.id
+            AND m2.status = N'ACTIVE'
+          ORDER BY m2.created_at ASC
+        ) AS company_id
       FROM users u
-      INNER JOIN user_company_memberships m ON m.user_id = u.id AND m.status = 'ACTIVE'
-      WHERE u.is_platform_admin = 0 AND u.active = 1
-      GROUP BY u.id, m.company_id
-      HAVING COUNT(*) = 1
+      WHERE u.is_platform_admin = 0
+        AND u.active = 1
+        AND (
+          SELECT COUNT(*)
+          FROM user_company_memberships m
+          WHERE m.user_id = u.id
+            AND m.status = N'ACTIVE'
+        ) = 1
+      ORDER BY u.created_at ASC
     `);
 
     const row = singleMembershipUser.recordset[0];

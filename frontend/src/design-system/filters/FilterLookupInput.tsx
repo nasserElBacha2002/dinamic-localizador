@@ -69,18 +69,14 @@ export function FilterLookupInput({
   });
 
   const displayedOptions = useMemo(() => {
-    let items: FilterLookupOption[];
+    const items = [...options];
 
-    if (!createOption || !inputValue.trim() || loading || options.length > 0) {
-      items = options;
-    } else {
-      items = [
-        {
-          value: "__create__",
-          label: createOption.label,
-          description: createOption.description,
-        },
-      ];
+    if (createOption && inputValue.trim() && !loading) {
+      items.push({
+        value: "__create__",
+        label: createOption.label,
+        description: createOption.description,
+      });
     }
 
     return items.slice(0, maxOptions);

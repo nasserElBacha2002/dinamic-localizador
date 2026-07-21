@@ -3,6 +3,7 @@ import { COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import { attendanceRouter } from "./attendance.routes";
 import { authRouter } from "./auth.routes";
 import { employeeRouter } from "./employee.routes";
+import { employeeCategoryRouter } from "./employee-category.routes";
 import { healthRouter } from "./health.routes";
 import { operationAssignmentRouter } from "./operation-assignment.routes";
 import { workTeamRouter } from "./work-team.routes";
@@ -58,6 +59,7 @@ const mountEmployeeRoutes = (router: Router) => {
   );
   router.use("/employees", moduleGuard, employeeRouter);
   router.use("/workers", moduleGuard, employeeRouter);
+  router.use("/employee-categories", moduleGuard, employeeCategoryRouter);
 };
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });

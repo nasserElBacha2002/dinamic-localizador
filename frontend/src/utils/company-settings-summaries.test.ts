@@ -47,20 +47,22 @@ describe("validateOperationalSettingsForm", () => {
 });
 
 describe("company settings page UX structure", () => {
-  it("uses inline operational section with collection cards", () => {
+  it("uses operational summary card with dialog and collection cards", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+    const dialogFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
 
-    assert.match(pageFile, /CompanyOperationalSettingsSection/);
-    assert.match(sectionFile, /Guardar configuración/);
+    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
+    assert.match(pageFile, /buildOperationalSettingsSummary/);
+    assert.match(dialogFile, /Guardar configuración/);
     assert.match(pageFile, /SettingsSummaryCard/);
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);
+    assert.doesNotMatch(pageFile, /CompanyOperationalSettingsSection/);
     assert.doesNotMatch(pageFile, /Módulos habilitados/);
     assert.doesNotMatch(pageFile, /isPlatformAdmin/);
   });

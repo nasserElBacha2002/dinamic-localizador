@@ -1,7 +1,8 @@
 -- Harden operational_locations for list filters, facets, and format length consistency.
--- 1) Widen store_format to NVARCHAR(80) to match company_location_types.code
--- 2) Trim historical text fields and convert empty strings to NULL
--- 3) Add company-scoped indexes for list/facet query patterns
+-- 1) Drop legacy CK_stores_store_format that survived the stores → operational_locations rename
+-- 2) Widen store_format to NVARCHAR(80) to match company_location_types.code
+-- 3) Trim historical text fields and convert empty strings to NULL
+-- 4) Add company-scoped indexes for list/facet query patterns
 --
 -- Case comparisons rely on the database collation (typically case-insensitive);
 -- application code preserves original casing and does not force UPPER/LOWER.
@@ -11,9 +12,49 @@
 --   DROP INDEX IF EXISTS IX_operational_locations_company_locality_neighborhood ON dbo.operational_locations;
 --   DROP INDEX IF EXISTS IX_operational_locations_company_store_format ON dbo.operational_locations;
 --   ALTER TABLE dbo.operational_locations ALTER COLUMN store_format NVARCHAR(50) NULL;
---   (trimmed historical values are not restored)
+--   (trimmed historical values and dropped CHECKs are not restored)
 
 USE dinamic_attendance;
+GO
+
+-- ---------------------------------------------------------------------------
+-- Drop legacy store_format CHECK (survived table rename stores → operational_locations).
+-- Migration 029 only targeted dbo.stores; validation is application-level via
+-- company_location_types. Idempotent.
+-- ---------------------------------------------------------------------------
+IF EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_stores_store_format'
+      AND parent_object_id = OBJECT_ID(N'dbo.operational_locations')
+)
+BEGIN
+    ALTER TABLE dbo.operational_locations DROP CONSTRAINT CK_stores_store_format;
+END;
+GO
+
+IF EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_stores_formato'
+      AND parent_object_id = OBJECT_ID(N'dbo.operational_locations')
+)
+BEGIN
+    ALTER TABLE dbo.operational_locations DROP CONSTRAINT CK_stores_formato;
+END;
+GO
+
+-- Also handle environments where the physical table was never renamed.
+IF EXISTS (
+    SELECT 1
+    FROM sys.check_constraints
+    WHERE name = N'CK_stores_store_format'
+      AND parent_object_id = OBJECT_ID(N'dbo.stores')
+      AND OBJECTPROPERTY(OBJECT_ID(N'dbo.stores'), N'IsTable') = 1
+)
+BEGIN
+    ALTER TABLE dbo.stores DROP CONSTRAINT CK_stores_store_format;
+END;
 GO
 
 -- ---------------------------------------------------------------------------

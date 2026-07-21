@@ -1,13 +1,18 @@
 export type ServiceFormat = string;
 
-export type ServiceListSortField =
-  | "name"
-  | "neighborhood"
-  | "locality"
-  | "serviceFormat"
-  | "address"
-  | "active"
-  | "createdAt";
+export const SERVICE_LIST_SORT_FIELDS = [
+  "name",
+  "neighborhood",
+  "locality",
+  "serviceFormat",
+  "address",
+  "active",
+  "createdAt",
+] as const;
+
+export type ServiceListSortField = (typeof SERVICE_LIST_SORT_FIELDS)[number];
+
+export const SERVICE_FORMAT_MAX_LENGTH = 80;
 
 export interface Service {
   id: string;
@@ -32,6 +37,10 @@ export interface ServiceSummary {
   active: boolean;
 }
 
+/**
+ * Company-global geo facets (not contextual to other list filters).
+ * Includes active and inactive locations; null/empty values excluded.
+ */
 export interface ServiceGeoFacets {
   localities: string[];
   neighborhoodsByLocality: Record<string, string[]>;

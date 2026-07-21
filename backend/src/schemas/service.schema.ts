@@ -1,11 +1,12 @@
 import { z } from "zod";
 import { activeFilterSchema, paginationQuerySchema, searchFilterSchema, tableSortSchema } from "./common.schema";
+import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
 
 const serviceFormatSchema = z
   .string()
   .trim()
   .min(1, "El formato no puede estar vacío.")
-  .max(80, "El formato no puede superar 80 caracteres.");
+  .max(SERVICE_FORMAT_MAX_LENGTH, `El formato no puede superar ${SERVICE_FORMAT_MAX_LENGTH} caracteres.`);
 
 export const SERVICE_LIST_SORT_FIELDS = [
   "name",
@@ -57,7 +58,7 @@ export const listServicesQuerySchema = paginationQuerySchema
   .merge(searchFilterSchema)
   .merge(tableSortSchema)
   .extend({
-    serviceFormat: z.string().trim().min(1).max(80).optional(),
+    serviceFormat: z.string().trim().min(1).max(SERVICE_FORMAT_MAX_LENGTH).optional(),
     locality: z.string().trim().min(1).max(150).optional(),
     neighborhood: z.string().trim().min(1).max(150).optional(),
     sortBy: z.enum(SERVICE_LIST_SORT_FIELDS).optional(),

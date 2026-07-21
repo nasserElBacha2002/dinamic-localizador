@@ -2,7 +2,9 @@ export { FilterSelect, type FilterSelectProps, type FilterSelectOption } from ".
 export {
   CascadingFilterSelect,
   type CascadingFilterSelectProps,
+  type CascadingFilterChange,
 } from "./CascadingFilterSelect";
+export { resolveCascadeParentChange } from "./cascading-filter-change";
 export { FilterDateRangeInput, type FilterDateRangeInputProps } from "./FilterDateRangeInput";
 export {
   FilterLookupInput,

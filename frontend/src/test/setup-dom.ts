@@ -65,6 +65,14 @@ export function setupDomEnvironment(): void {
     });
   }
 
+  if (!("ShadowRoot" in globalThis) && "ShadowRoot" in window) {
+    Object.defineProperty(globalThis, "ShadowRoot", {
+      configurable: true,
+      writable: true,
+      value: window.ShadowRoot,
+    });
+  }
+
   if (!globalThis.requestAnimationFrame) {
     Object.defineProperty(globalThis, "requestAnimationFrame", {
       configurable: true,

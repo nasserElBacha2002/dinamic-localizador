@@ -65,11 +65,19 @@ export function useTableUrlState<T extends Record<string, unknown>>(
     [defaults, fields, searchParams],
   );
 
+  // Keep the latest committed table state synchronously so rapid setState/setField
+  // patches (e.g. Localidad + clear Barrio) compose into one URL without stale closures.
+  const stateRef = useRef(state);
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   const [searchInput, setSearchInput] = useState(() => {
     const initial = hasSearchKey(defaults) ? String(state.search ?? "") : "";
     return initial;
   });
-  const skipSearchDebounceRef = useRef(false);
+  /** Only debounce-write search when the user is typing in the search box. */
+  const searchDirtyFromTypingRef = useRef(false);
   const searchInputRef = useRef(
     hasSearchKey(defaults) ? String(state.search ?? "") : "",
   );
@@ -86,6 +94,7 @@ export function useTableUrlState<T extends Record<string, unknown>>(
 
     const urlSearch = String(state.search ?? "");
     if (searchInputRef.current !== urlSearch) {
+      searchDirtyFromTypingRef.current = false;
       updateSearchInput(urlSearch);
     }
   }, [defaults, state.search, updateSearchInput]);
@@ -94,6 +103,16 @@ export function useTableUrlState<T extends Record<string, unknown>>(
 
   const writeState = useCallback(
     (nextState: T) => {
+      stateRef.current = nextState;
+
+      if (hasSearchKey(defaults)) {
+        const nextSearch = String((nextState as { search?: string }).search ?? "");
+        if (searchInputRef.current !== nextSearch) {
+          searchDirtyFromTypingRef.current = false;
+          updateSearchInput(nextSearch);
+        }
+      }
+
       const params = serializeTableUrlState({
         state: nextState,
         defaults,
@@ -102,22 +121,23 @@ export function useTableUrlState<T extends Record<string, unknown>>(
       });
       setSearchParams(params, { replace: true });
     },
-    [defaults, fields, setSearchParams, shouldOmitFromUrl],
+    [defaults, fields, setSearchParams, shouldOmitFromUrl, updateSearchInput],
   );
 
   const setState = useCallback(
     (patch: Partial<T>, patchOptions?: { resetPage?: boolean }) => {
-      let next = mergeTableUrlPatch(state, patch, defaults, fields);
+      const current = stateRef.current;
+      let next = mergeTableUrlPatch(current, patch, defaults, fields);
 
       if (patchOptions?.resetPage === false) {
-        next = { ...state, ...patch };
+        next = { ...current, ...patch };
       } else if (patchOptions?.resetPage === true && "page" in defaults) {
         next = { ...next, page: 1 as T[keyof T] };
       }
 
       writeState(next);
     },
-    [defaults, fields, state, writeState],
+    [defaults, fields, writeState],
   );
 
   const setField = useCallback(
@@ -132,13 +152,12 @@ export function useTableUrlState<T extends Record<string, unknown>>(
       return;
     }
 
-    const nextSearch = debouncedSearchInput.trim();
-    const currentSearch = String(state.search ?? "").trim();
-
-    if (skipSearchDebounceRef.current) {
-      skipSearchDebounceRef.current = false;
+    if (!searchDirtyFromTypingRef.current) {
       return;
     }
+
+    const nextSearch = debouncedSearchInput.trim();
+    const currentSearch = String(state.search ?? "").trim();
 
     if (nextSearch === currentSearch) {
       return;
@@ -155,8 +174,8 @@ export function useTableUrlState<T extends Record<string, unknown>>(
 
       const nextValue = value ?? searchInputRef.current;
       const nextSearch = nextValue.trim();
+      searchDirtyFromTypingRef.current = false;
       updateSearchInput(nextValue);
-      skipSearchDebounceRef.current = true;
       setState({ search: nextSearch } as unknown as Partial<T>, { resetPage: true });
     },
     [defaults, setState, updateSearchInput],
@@ -168,9 +187,11 @@ export function useTableUrlState<T extends Record<string, unknown>>(
         return;
       }
 
+      searchDirtyFromTypingRef.current = true;
       updateSearchInput(value);
 
       if (!value.trim()) {
+        searchDirtyFromTypingRef.current = false;
         setState({ search: "" } as unknown as Partial<T>, { resetPage: true });
       }
     },
@@ -233,6 +254,7 @@ export function useTableUrlState<T extends Record<string, unknown>>(
   );
 
   const resetFilters = useCallback(() => {
+    searchDirtyFromTypingRef.current = false;
     writeState({ ...defaults });
     if (hasSearchKey(defaults)) {
       updateSearchInput(String(defaults.search ?? ""));
@@ -240,6 +262,7 @@ export function useTableUrlState<T extends Record<string, unknown>>(
   }, [defaults, updateSearchInput, writeState]);
 
   const clearState = useCallback(() => {
+    searchDirtyFromTypingRef.current = false;
     setSearchParams(new URLSearchParams(), { replace: true });
     if (hasSearchKey(defaults)) {
       updateSearchInput("");

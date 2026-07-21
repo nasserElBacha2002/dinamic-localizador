@@ -19,14 +19,17 @@ import { useServiceFacets, useServices } from "../../hooks/useServices";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { terminology } from "../../domain/terminology";
-import type { Service, ServiceListSortField } from "../../types/service";
+import type { Service } from "../../types/service";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
 import { navigateWithListContext } from "../../utils/list-navigation";
 import { hasPermission } from "../../utils/permissions";
+import { ServicesListFiltersErrorBanner } from "./ServicesListFiltersErrorBanner";
 import {
+  buildServicesListApiFilters,
   SERVICE_TABLE_DEFAULTS,
   SERVICE_TABLE_FIELDS,
+  SERVICE_TABLE_SORTABLE_COLUMN_KEYS,
   shouldOmitServiceTableValue,
 } from "./services-list-table-state";
 
@@ -46,26 +49,15 @@ export function ServicesListPage() {
       shouldOmitServiceTableValue(key, value, defaults),
   });
 
-  const { data: locationTypes = [] } = useCompanyLocationTypes(false);
+  const locationTypesQuery = useCompanyLocationTypes(false);
   const facetsQuery = useServiceFacets();
 
-  const { data, isPending, isError, error } = useServices({
-    page: table.page,
-    limit: table.pageSize,
-    search: table.state.search || undefined,
-    active: table.state.active === "all" ? undefined : table.state.active === "true",
-    serviceFormat: table.state.serviceFormat || undefined,
-    locality: table.state.locality || undefined,
-    neighborhood:
-      table.state.locality && table.state.neighborhood
-        ? table.state.neighborhood
-        : undefined,
-    sortBy: table.state.sortBy as ServiceListSortField,
-    sortDirection: table.state.sortOrder,
-  });
+  const listFilters = buildServicesListApiFilters(table.state);
+  const { data, isPending, isError, error } = useServices(listFilters);
 
-  const formatOptions = useMemo(
-    () => [
+  const formatOptions = useMemo(() => {
+    const locationTypes = locationTypesQuery.data ?? [];
+    return [
       { value: "", label: "Todos" },
       ...locationTypes
         .filter((type) => type.isActive)
@@ -74,9 +66,8 @@ export function ServicesListPage() {
       !locationTypes.some((type) => type.isActive && type.code === table.state.serviceFormat)
         ? [{ value: table.state.serviceFormat, label: table.state.serviceFormat }]
         : []),
-    ],
-    [locationTypes, table.state.serviceFormat],
-  );
+    ];
+  }, [locationTypesQuery.data, table.state.serviceFormat]);
 
   const localityOptions = useMemo(
     () => [
@@ -154,10 +145,18 @@ export function ServicesListPage() {
 
   const handleSortChange = useCallback(
     (field: string) => {
+      if (!(SERVICE_TABLE_SORTABLE_COLUMN_KEYS as readonly string[]).includes(field)) {
+        return;
+      }
       table.toggleSorting(field, "asc");
     },
     [table],
   );
+
+  const facetsLoading = facetsQuery.isPending || facetsQuery.isFetching;
+  const formatsLoading = locationTypesQuery.isPending || locationTypesQuery.isFetching;
+  const facetsFailed = facetsQuery.isError;
+  const formatsFailed = locationTypesQuery.isError;
 
   return (
     <>
@@ -171,6 +170,17 @@ export function ServicesListPage() {
             </Button>
           ) : undefined
         }
+      />
+
+      <ServicesListFiltersErrorBanner
+        facetsFailed={facetsFailed}
+        formatsFailed={formatsFailed}
+        onRetryFacets={() => {
+          void facetsQuery.refetch();
+        }}
+        onRetryFormats={() => {
+          void locationTypesQuery.refetch();
+        }}
       />
 
       <FilterBar>
@@ -190,14 +200,15 @@ export function ServicesListPage() {
             onChange={(value) => table.setField("serviceFormat", value)}
             data={formatOptions}
             clearable
+            disabled={formatsLoading || formatsFailed}
           />
         </FilterBar.Item>
         <FilterBar.Item minWidth={360}>
           <CascadingFilterSelect
             parentLabel="Localidad"
             parentValue={table.state.locality}
-            onParentChange={(locality, neighborhood) =>
-              table.setState({ locality, neighborhood })
+            onCascadeChange={({ parentValue, childValue }) =>
+              table.setState({ locality: parentValue, neighborhood: childValue })
             }
             parentData={localityOptions}
             parentPlaceholder="Todas"
@@ -206,6 +217,7 @@ export function ServicesListPage() {
             onChildChange={(value) => table.setField("neighborhood", value)}
             childData={neighborhoodOptions}
             childPlaceholder="Todos"
+            disabled={facetsLoading || facetsFailed}
           />
         </FilterBar.Item>
         <FilterBar.Item>

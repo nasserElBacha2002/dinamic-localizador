@@ -1,15 +1,8 @@
 import type { ServiceListSortField } from "../../types/service";
+import { SERVICE_LIST_SORT_FIELDS } from "../../types/service";
 import type { TableUrlFieldMap } from "../../utils/table-url-state";
 
-export const SERVICE_SORT_FIELDS = [
-  "name",
-  "neighborhood",
-  "locality",
-  "serviceFormat",
-  "address",
-  "active",
-  "createdAt",
-] as const satisfies readonly ServiceListSortField[];
+export const SERVICE_SORT_FIELDS = SERVICE_LIST_SORT_FIELDS;
 
 export const SERVICE_TABLE_DEFAULTS = {
   page: 1,
@@ -35,4 +28,29 @@ export function shouldOmitServiceTableValue(
   defaults: typeof SERVICE_TABLE_DEFAULTS,
 ): boolean {
   return value === defaults[key] || value === "";
+}
+
+/** Columns marked sortable in the services table must belong to the sort contract. */
+export const SERVICE_TABLE_SORTABLE_COLUMN_KEYS = [
+  "name",
+  "neighborhood",
+  "locality",
+  "serviceFormat",
+  "address",
+  "active",
+] as const satisfies readonly ServiceListSortField[];
+
+export function buildServicesListApiFilters(state: typeof SERVICE_TABLE_DEFAULTS) {
+  return {
+    page: state.page,
+    limit: state.pageSize,
+    search: state.search || undefined,
+    active: state.active === "all" ? undefined : state.active === "true",
+    serviceFormat: state.serviceFormat || undefined,
+    locality: state.locality || undefined,
+    neighborhood:
+      state.locality && state.neighborhood ? state.neighborhood : undefined,
+    sortBy: state.sortBy,
+    sortDirection: state.sortOrder,
+  };
 }

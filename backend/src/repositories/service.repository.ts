@@ -4,9 +4,19 @@ import type { Service } from "../types/domain";
 import { mapServiceRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import { resolveSqlSort } from "../utils/sql-sort";
-import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
+import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
+import {
+  type CreateServiceInput,
+  type ListServicesQuery,
+  type ServiceListSortField,
+  type UpdateServiceInput,
+} from "../schemas/service.schema";
 
-const SERVICE_LIST_SORT_COLUMNS: Record<string, string> = {
+/**
+ * Exhaustive SQL column map for service list sorting.
+ * Every `ServiceListSortField` must have a whitelist entry.
+ */
+export const SERVICE_LIST_SORT_COLUMNS = {
   name: "name",
   neighborhood: "neighborhood",
   locality: "locality",
@@ -14,8 +24,18 @@ const SERVICE_LIST_SORT_COLUMNS: Record<string, string> = {
   address: "address",
   active: "active",
   createdAt: "created_at",
-};
+} as const satisfies Record<ServiceListSortField, string>;
 
+/**
+ * Company-scoped geo facets for filter dropdowns.
+ *
+ * Contract:
+ * - Global for the company (not contextual to other active filters).
+ * - Includes active and inactive locations.
+ * - Excludes null/empty locality and neighborhood values.
+ * - Localities and neighborhoods are distinct and sorted ascending.
+ * - Comparisons rely on DB collation (typically case-insensitive).
+ */
 export interface ServiceGeoFacets {
   localities: string[];
   neighborhoodsByLocality: Record<string, string[]>;
@@ -31,7 +51,7 @@ export const serviceRepository = {
       .input("address", sql.NVarChar(300), input.address ?? null)
       .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
       .input("locality", sql.NVarChar(150), input.locality ?? null)
-      .input("serviceFormat", sql.NVarChar(50), input.serviceFormat ?? null)
+      .input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat ?? null)
       .input("latitude", sql.Decimal(10, 7), input.latitude)
       .input("longitude", sql.Decimal(10, 7), input.longitude)
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
@@ -141,20 +161,21 @@ export const serviceRepository = {
     if (query.serviceFormat) {
       filters.push({
         clause: "store_format = @serviceFormat",
-        apply: (request) => request.input("serviceFormat", sql.NVarChar(80), query.serviceFormat),
+        apply: (request) =>
+          request.input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), query.serviceFormat),
       });
     }
 
     if (query.locality) {
       filters.push({
-        clause: "LTRIM(RTRIM(locality)) = @locality",
+        clause: "locality = @locality",
         apply: (request) => request.input("locality", sql.NVarChar(150), query.locality),
       });
     }
 
     if (query.neighborhood) {
       filters.push({
-        clause: "LTRIM(RTRIM(neighborhood)) = @neighborhood",
+        clause: "neighborhood = @neighborhood",
         apply: (request) => request.input("neighborhood", sql.NVarChar(150), query.neighborhood),
       });
     }
@@ -194,45 +215,44 @@ export const serviceRepository = {
 
   async listGeoFacets(companyId: string): Promise<ServiceGeoFacets> {
     const pool = getPool();
-    const localitiesResult = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`
-        SELECT DISTINCT LTRIM(RTRIM(locality)) AS locality
-        FROM operational_locations
-        WHERE company_id = @companyId
-          AND locality IS NOT NULL
-          AND LTRIM(RTRIM(locality)) <> N''
-        ORDER BY locality ASC
-      `);
-
-    const neighborhoodsResult = await pool
+    // Single round-trip: locality/neighborhood pairs for the company (active + inactive).
+    const pairsResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
         SELECT DISTINCT
-          LTRIM(RTRIM(locality)) AS locality,
-          LTRIM(RTRIM(neighborhood)) AS neighborhood
+          locality,
+          neighborhood
         FROM operational_locations
         WHERE company_id = @companyId
           AND locality IS NOT NULL
-          AND LTRIM(RTRIM(locality)) <> N''
-          AND neighborhood IS NOT NULL
-          AND LTRIM(RTRIM(neighborhood)) <> N''
         ORDER BY locality ASC, neighborhood ASC
       `);
 
-    const localities = localitiesResult.recordset.map((row) => String(row.locality));
+    const localities: string[] = [];
+    const localitySeen = new Set<string>();
     const neighborhoodsByLocality: Record<string, string[]> = {};
-    for (const row of neighborhoodsResult.recordset as Array<{
+
+    for (const row of pairsResult.recordset as Array<{
       locality: string;
-      neighborhood: string;
+      neighborhood: string | null;
     }>) {
       const locality = String(row.locality);
+      if (!localitySeen.has(locality)) {
+        localitySeen.add(locality);
+        localities.push(locality);
+      }
+
+      if (row.neighborhood === null || row.neighborhood === undefined) {
+        continue;
+      }
+
       const neighborhood = String(row.neighborhood);
       const current = neighborhoodsByLocality[locality] ?? [];
-      current.push(neighborhood);
-      neighborhoodsByLocality[locality] = current;
+      if (!current.includes(neighborhood)) {
+        current.push(neighborhood);
+        neighborhoodsByLocality[locality] = current;
+      }
     }
 
     return { localities, neighborhoodsByLocality };
@@ -276,7 +296,7 @@ export const serviceRepository = {
     }
 
     if (input.serviceFormat !== undefined) {
-      request.input("serviceFormat", sql.NVarChar(50), input.serviceFormat);
+      request.input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat);
       fields.push("store_format = @serviceFormat");
     }
 

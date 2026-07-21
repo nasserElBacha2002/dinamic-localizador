@@ -103,12 +103,6 @@ const resolveActiveAssignmentsForWorkDate = (
   const activeByEmployee = new Map<string, OperationEmployeeAssignment>();
 
   for (const assignment of assignments) {
-    // Inactive collaborators must never be rematerialized (belt-and-suspenders with
-    // deactivation release + work-team removal).
-    if (assignment.employee && assignment.employee.active === false) {
-      continue;
-    }
-
     if (
       !isAssignmentActiveOnWorkDate({
         validFrom: assignment.validFrom,

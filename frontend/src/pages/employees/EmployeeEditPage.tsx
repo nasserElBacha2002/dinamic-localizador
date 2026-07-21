@@ -1,5 +1,5 @@
 import { notifications } from "@mantine/notifications";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useParams } from "react-router-dom";
 import { Stack } from "@mantine/core";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
@@ -32,6 +32,7 @@ export function EmployeeEditPage() {
   const [pendingValues, setPendingValues] = useState<EmployeeFormValues | null>(null);
   const [deactivationError, setDeactivationError] = useState<string | null>(null);
   const [impactLoading, setImpactLoading] = useState(false);
+  const confirmInFlight = useRef(false);
 
   if (!id) {
     return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
@@ -57,16 +58,13 @@ export function EmployeeEditPage() {
   const formBusy =
     updateMutation.isPending || deactivateMutation.isPending || impactLoading;
 
-  const persistProfile = async (values: EmployeeFormValues, active: boolean) => {
-    await updateMutation.mutateAsync({
-      name: values.name,
-      documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
-      phoneNumber: values.phoneNumber,
-      employeeType: values.employeeType,
-      categoryId: values.categoryId ?? null,
-      active,
-    });
-  };
+  const buildProfilePayload = (values: EmployeeFormValues) => ({
+    name: values.name,
+    documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
+    phoneNumber: values.phoneNumber,
+    employeeType: values.employeeType,
+    categoryId: values.categoryId ?? null,
+  });
 
   const finishSuccess = () => {
     notifications.show({
@@ -82,7 +80,10 @@ export function EmployeeEditPage() {
     const switchingToInactive = employee.active && !values.active;
     if (!switchingToInactive) {
       try {
-        await persistProfile(values, values.active);
+        await updateMutation.mutateAsync({
+          ...buildProfilePayload(values),
+          active: values.active,
+        });
         finishSuccess();
       } catch (error) {
         setErrorMessage(getApiErrorMessage(error));
@@ -94,7 +95,10 @@ export function EmployeeEditPage() {
     try {
       const impact = await getEmployeeDeactivationImpact(id);
       if (impact.canDeactivateDirectly) {
-        await persistProfile(values, false);
+        await deactivateMutation.mutateAsync({
+          confirmAffectedRelease: false,
+          profile: buildProfilePayload(values),
+        });
         finishSuccess();
         return;
       }
@@ -110,30 +114,24 @@ export function EmployeeEditPage() {
   };
 
   const handleConfirmDeactivation = async () => {
-    if (!pendingValues) {
+    if (!pendingValues || confirmInFlight.current) {
       return;
     }
 
+    confirmInFlight.current = true;
     setDeactivationError(null);
     try {
-      await deactivateMutation.mutateAsync({ removeActiveAndFutureAssignments: true });
-
-      const profileChanged =
-        pendingValues.name !== employee.name ||
-        (pendingValues.documentNumber?.trim() || null) !== (employee.documentNumber ?? null) ||
-        pendingValues.phoneNumber !== employee.phoneNumber ||
-        pendingValues.employeeType !== employee.employeeType ||
-        (pendingValues.categoryId ?? null) !== (employee.categoryId ?? null);
-
-      if (profileChanged) {
-        await persistProfile(pendingValues, false);
-      }
-
+      await deactivateMutation.mutateAsync({
+        confirmAffectedRelease: true,
+        profile: buildProfilePayload(pendingValues),
+      });
       setDeactivationImpact(null);
       setPendingValues(null);
       finishSuccess();
     } catch (error) {
       setDeactivationError(getApiErrorMessage(error));
+    } finally {
+      confirmInFlight.current = false;
     }
   };
 
@@ -184,7 +182,7 @@ export function EmployeeEditPage() {
         open={Boolean(deactivationImpact)}
         employeeName={employee.name}
         impact={deactivationImpact}
-        loading={deactivateMutation.isPending || updateMutation.isPending}
+        loading={deactivateMutation.isPending}
         errorMessage={deactivationError}
         onConfirm={() => void handleConfirmDeactivation()}
         onCancel={handleCancelDeactivation}

@@ -76,5 +76,5 @@ employeeRouter.delete(
   "/:id",
   requirePermission("employees:manage"),
   validate(employeeIdParamSchema, "params"),
-  asyncHandler(employeeController.deactivate),
+  asyncHandler(employeeController.deactivateLegacy),
 );

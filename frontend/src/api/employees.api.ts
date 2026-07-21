@@ -45,7 +45,7 @@ export async function updateEmployee(id: string, input: UpdateEmployeeInput): Pr
 
 export async function deactivateEmployee(
   id: string,
-  input: DeactivateEmployeeInput = {},
+  input: DeactivateEmployeeInput,
 ): Promise<Employee> {
   const { data } = await scopedApiClient.post<SingleResponse<Employee>>(
     `employees/${id}/deactivate`,

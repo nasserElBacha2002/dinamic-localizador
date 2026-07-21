@@ -45,9 +45,26 @@ export const employeeController = {
       req.body ?? {},
       req.auth?.userId ?? null,
     );
-    res.status(200).json({ data: result.employee, meta: {
-      removedAssignments: result.removedAssignments,
-      removedWorkTeams: result.removedWorkTeams,
-    } });
+    res.status(200).json({
+      data: result.employee,
+      meta: {
+        removedAssignmentIds: result.removedAssignmentIds,
+        endedAssignments: result.endedAssignments,
+        cancelledExpectationIds: result.cancelledExpectationIds,
+        removedWorkTeams: result.removedWorkTeams,
+      },
+    });
+  },
+
+  /** @deprecated Prefer POST /:id/deactivate. Soft-deactivates without profile updates. */
+  async deactivateLegacy(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await employeeDeactivationService.deactivate(
+      companyId,
+      String(req.params.id),
+      { confirmAffectedRelease: false },
+      req.auth?.userId ?? null,
+    );
+    res.status(200).json({ data: result.employee });
   },
 };

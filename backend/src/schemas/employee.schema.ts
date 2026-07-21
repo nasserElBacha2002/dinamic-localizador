@@ -50,8 +50,19 @@ export const employeeIdParamSchema = z.object({
 });
 
 export const deactivateEmployeeSchema = z.object({
-  removeActiveAndFutureAssignments: z.boolean().optional().default(false),
+  confirmAffectedRelease: z.boolean().optional().default(false),
+  profile: z
+    .object({
+      name: z.string().trim().min(1).max(150).optional(),
+      documentNumber: z.string().trim().max(50).nullable().optional(),
+      phoneNumber: z.string().trim().min(8).max(30).optional(),
+      employeeType: employeeTypeSchema.optional(),
+      categoryId: categoryIdSchema.optional(),
+    })
+    .optional(),
 });
+
+export type DeactivateEmployeeBody = z.infer<typeof deactivateEmployeeSchema>;
 
 export const listEmployeesQuerySchema = paginationQuerySchema
   .merge(activeFilterSchema)

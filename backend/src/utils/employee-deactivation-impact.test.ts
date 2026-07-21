@@ -1,43 +1,45 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  buildDeactivationImpactRow,
+  buildDeactivationReleasePlan,
   hasOperationalTemporalImpact,
   isAssignmentPeriodOpen,
-  type DeactivationImpactCandidate,
+  resolveOperationDisplayName,
+  summarizeDeactivationImpact,
+  type DeactivationAssignmentSnapshot,
 } from "./employee-deactivation-impact";
-import { __employeeDeactivationTestUtils } from "../services/employee-deactivation.service";
 
-const baseCandidate = (
-  overrides: Partial<DeactivationImpactCandidate> = {},
-): DeactivationImpactCandidate => ({
+const baseAssignment = (
+  overrides: Partial<DeactivationAssignmentSnapshot> = {},
+): DeactivationAssignmentSnapshot => ({
   assignmentId: "a1",
   operationId: "o1",
   operationKind: "ONE_TIME",
   operationStatus: "SCHEDULED",
-  workdayId: null,
-  employeeWorkdayId: null,
-  date: null,
-  expectedStartAt: null,
-  expectedEndAt: null,
-  scheduledStart: "2026-08-01T12:00:00.000Z",
-  scheduledEnd: "2026-08-01T18:00:00.000Z",
-  assignmentValidFrom: "2026-08-01",
-  assignmentValidUntil: "2026-08-01",
-  assignmentCancelledAt: null,
+  operationNotes: null,
   locationName: "Sucursal Palermo",
   workTeamName: null,
+  scheduledStart: "2026-08-01T12:00:00.000Z",
+  scheduledEnd: "2026-08-01T18:00:00.000Z",
+  validFrom: "2026-08-01",
+  validUntil: "2026-08-01",
+  cancelledAt: null,
+  workdays: [],
   ...overrides,
 });
 
-describe("employee deactivation impact rules", () => {
+describe("employee deactivation release plan", () => {
+  const companyTodayIso = "2026-07-21";
+  const referenceAt = new Date("2026-07-21T15:00:00.000Z");
+  const timezone = "America/Argentina/Buenos_Aires";
+
   it("allows direct deactivation when assignment period already ended", () => {
     assert.equal(
       isAssignmentPeriodOpen({
         validFrom: "2026-01-01",
         validUntil: "2026-01-02",
         cancelledAt: null,
-        companyTodayIso: "2026-07-21",
+        companyTodayIso,
       }),
       false,
     );
@@ -48,22 +50,8 @@ describe("employee deactivation impact rules", () => {
       hasOperationalTemporalImpact({
         operationStatus: "COMPLETED",
         operationKind: "ONE_TIME",
-        companyTodayIso: "2026-07-21",
-        referenceAt: new Date("2026-07-21T15:00:00.000Z"),
-        workDate: "2026-07-25",
-        expectedStartAt: null,
-        expectedEndAt: null,
-        scheduledStart: null,
-        scheduledEnd: null,
-      }),
-      false,
-    );
-    assert.equal(
-      hasOperationalTemporalImpact({
-        operationStatus: "CANCELLED",
-        operationKind: "ONE_TIME",
-        companyTodayIso: "2026-07-21",
-        referenceAt: new Date("2026-07-21T15:00:00.000Z"),
+        companyTodayIso,
+        referenceAt,
         workDate: "2026-07-25",
         expectedStartAt: null,
         expectedEndAt: null,
@@ -74,30 +62,133 @@ describe("employee deactivation impact rules", () => {
     );
   });
 
-  it("includes in-progress operations even if calendar date is stale", () => {
-    assert.equal(
-      hasOperationalTemporalImpact({
-        operationStatus: "IN_PROGRESS",
-        operationKind: "ONE_TIME",
-        companyTodayIso: "2026-07-21",
-        referenceAt: new Date("2026-07-21T15:00:00.000Z"),
-        workDate: "2026-07-01",
-        expectedStartAt: "2026-07-01T12:00:00.000Z",
-        expectedEndAt: "2026-07-01T18:00:00.000Z",
-        scheduledStart: null,
-        scheduledEnd: null,
-      }),
-      true,
-    );
+  it("cancels a completely future assignment", () => {
+    const plan = buildDeactivationReleasePlan({
+      assignments: [
+        baseAssignment({
+          validFrom: "2026-08-01",
+          validUntil: "2026-08-01",
+          workdays: [
+            {
+              employeeWorkdayId: "ew1",
+              operationWorkdayId: "ow1",
+              workDate: "2026-08-01",
+              expectationStatus: "EXPECTED",
+              hasAttendance: false,
+              expectedStartAt: "2026-08-01T12:00:00.000Z",
+              expectedEndAt: "2026-08-01T18:00:00.000Z",
+            },
+          ],
+        }),
+      ],
+      companyTodayIso,
+      referenceAt,
+      timezone,
+    });
+
+    assert.deepEqual(plan.assignmentsToCancel, ["a1"]);
+    assert.deepEqual(plan.assignmentsToEnd, []);
+    assert.deepEqual(plan.employeeWorkdayIdsToCancel, ["ew1"]);
+    assert.equal(plan.affectedAssignmentIds.length, 1);
   });
 
-  it("excludes past SCHEDULED one-time ops whose window already ended (stale status)", () => {
+  it("closes historical assignment without cancelling it, even without attendance", () => {
+    const plan = buildDeactivationReleasePlan({
+      assignments: [
+        baseAssignment({
+          operationKind: "RECURRING",
+          validFrom: "2026-07-01",
+          validUntil: null,
+          workdays: [
+            {
+              employeeWorkdayId: "ew-past",
+              operationWorkdayId: "ow-past",
+              workDate: "2026-07-10",
+              expectationStatus: "EXPECTED",
+              hasAttendance: false,
+              expectedStartAt: "2026-07-10T12:00:00.000Z",
+              expectedEndAt: "2026-07-10T18:00:00.000Z",
+            },
+            {
+              employeeWorkdayId: "ew-future",
+              operationWorkdayId: "ow-future",
+              workDate: "2026-07-25",
+              expectationStatus: "EXPECTED",
+              hasAttendance: false,
+              expectedStartAt: "2026-07-25T12:00:00.000Z",
+              expectedEndAt: "2026-07-25T18:00:00.000Z",
+            },
+          ],
+        }),
+      ],
+      companyTodayIso,
+      referenceAt,
+      timezone,
+    });
+
+    assert.deepEqual(plan.assignmentsToCancel, []);
+    assert.deepEqual(plan.assignmentsToEnd, [{ assignmentId: "a1", effectiveDate: "2026-07-20" }]);
+    assert.deepEqual(plan.employeeWorkdayIdsToCancel, ["ew-future"]);
+    assert.equal(plan.affectedWorkdayRows.length, 1);
+    assert.equal(plan.affectedAssignmentIds.length, 1);
+  });
+
+  it("keeps today inclusive when today already has attendance", () => {
+    const plan = buildDeactivationReleasePlan({
+      assignments: [
+        baseAssignment({
+          operationKind: "RECURRING",
+          operationStatus: "IN_PROGRESS",
+          validFrom: "2026-07-01",
+          validUntil: null,
+          workdays: [
+            {
+              employeeWorkdayId: "ew-today",
+              operationWorkdayId: "ow-today",
+              workDate: "2026-07-21",
+              expectationStatus: "EXPECTED",
+              hasAttendance: true,
+              expectedStartAt: "2026-07-21T12:00:00.000Z",
+              expectedEndAt: "2026-07-21T18:00:00.000Z",
+            },
+            {
+              employeeWorkdayId: "ew-future",
+              operationWorkdayId: "ow-future",
+              workDate: "2026-07-22",
+              expectationStatus: "EXPECTED",
+              hasAttendance: false,
+              expectedStartAt: "2026-07-22T12:00:00.000Z",
+              expectedEndAt: "2026-07-22T18:00:00.000Z",
+            },
+          ],
+        }),
+      ],
+      companyTodayIso,
+      referenceAt,
+      timezone,
+    });
+
+    assert.deepEqual(plan.employeeWorkdayIdsToCancel, ["ew-future"]);
+    assert.deepEqual(plan.assignmentsToEnd, [{ assignmentId: "a1", effectiveDate: "2026-07-21" }]);
+  });
+
+  it("does not touch cancelled operations", () => {
+    const plan = buildDeactivationReleasePlan({
+      assignments: [baseAssignment({ operationStatus: "CANCELLED" })],
+      companyTodayIso,
+      referenceAt,
+      timezone,
+    });
+    assert.equal(plan.affectedAssignmentIds.length, 0);
+  });
+
+  it("excludes stale past SCHEDULED one-time ops", () => {
     assert.equal(
       hasOperationalTemporalImpact({
         operationStatus: "SCHEDULED",
         operationKind: "ONE_TIME",
-        companyTodayIso: "2026-07-21",
-        referenceAt: new Date("2026-07-21T15:00:00.000Z"),
+        companyTodayIso,
+        referenceAt,
         workDate: null,
         expectedStartAt: null,
         expectedEndAt: null,
@@ -108,64 +199,65 @@ describe("employee deactivation impact rules", () => {
     );
   });
 
-  it("includes future SCHEDULED one-time ops", () => {
+  it("separates operation display name from location name", () => {
     assert.equal(
-      hasOperationalTemporalImpact({
-        operationStatus: "SCHEDULED",
-        operationKind: "ONE_TIME",
-        companyTodayIso: "2026-07-21",
-        referenceAt: new Date("2026-07-21T15:00:00.000Z"),
-        workDate: null,
-        expectedStartAt: null,
-        expectedEndAt: null,
-        scheduledStart: "2026-08-01T12:00:00.000Z",
-        scheduledEnd: "2026-08-01T18:00:00.000Z",
+      resolveOperationDisplayName({
+        notes: "Inventario Palermo",
+        locationName: "Sucursal Palermo",
+        date: "2026-07-25",
+        scheduledStart: null,
       }),
-      true,
+      "Inventario Palermo",
+    );
+    assert.equal(
+      resolveOperationDisplayName({
+        notes: null,
+        locationName: "Sucursal Palermo",
+        date: "2026-07-25",
+        scheduledStart: null,
+      }),
+      "Sucursal Palermo · 25/07/2026",
     );
   });
 
-  it("keeps future recurring workdays and drops past completed ones via filter", () => {
-    const companyTodayIso = "2026-07-21";
-    const referenceAt = new Date("2026-07-21T15:00:00.000Z");
-    const filtered = __employeeDeactivationTestUtils.filterImpactCandidates(
-      [
-        baseCandidate({
+  it("summarizes assignment and workday counts separately and requires team confirmation", () => {
+    const plan = buildDeactivationReleasePlan({
+      assignments: [
+        baseAssignment({
           operationKind: "RECURRING",
-          date: "2026-07-10",
-          expectedStartAt: "2026-07-10T12:00:00.000Z",
-          expectedEndAt: "2026-07-10T18:00:00.000Z",
-          assignmentValidFrom: "2026-07-01",
-          assignmentValidUntil: null,
-        }),
-        baseCandidate({
-          assignmentId: "a2",
-          operationKind: "RECURRING",
-          date: "2026-07-25",
-          expectedStartAt: "2026-07-25T12:00:00.000Z",
-          expectedEndAt: "2026-07-25T18:00:00.000Z",
-          assignmentValidFrom: "2026-07-01",
-          assignmentValidUntil: null,
+          validFrom: "2026-07-01",
+          validUntil: null,
+          workdays: [
+            {
+              employeeWorkdayId: "ew1",
+              operationWorkdayId: "ow1",
+              workDate: "2026-07-25",
+              expectationStatus: "EXPECTED",
+              hasAttendance: false,
+              expectedStartAt: "2026-07-25T12:00:00.000Z",
+              expectedEndAt: "2026-07-25T18:00:00.000Z",
+            },
+            {
+              employeeWorkdayId: "ew2",
+              operationWorkdayId: "ow2",
+              workDate: "2026-07-26",
+              expectationStatus: "EXPECTED",
+              hasAttendance: false,
+              expectedStartAt: "2026-07-26T12:00:00.000Z",
+              expectedEndAt: "2026-07-26T18:00:00.000Z",
+            },
+          ],
         }),
       ],
       companyTodayIso,
       referenceAt,
-    );
+      timezone,
+    });
 
-    assert.equal(filtered.length, 1);
-    assert.equal(filtered[0]?.date, "2026-07-25");
-  });
-
-  it("formats local clock times for impact rows", () => {
-    const row = buildDeactivationImpactRow(
-      baseCandidate({
-        expectedStartAt: "2026-08-01T12:00:00.000Z",
-        expectedEndAt: "2026-08-01T17:00:00.000Z",
-      }),
-      "America/Argentina/Buenos_Aires",
-    );
-    assert.equal(row.startTime, "09:00");
-    assert.equal(row.endTime, "14:00");
-    assert.equal(row.operationName, "Sucursal Palermo");
+    const summary = summarizeDeactivationImpact({ plan, workTeamCount: 1 });
+    assert.equal(summary.affectedAssignmentsCount, 1);
+    assert.equal(summary.affectedWorkdaysCount, 2);
+    assert.equal(summary.requiresConfirmation, true);
+    assert.equal(summary.canDeactivateDirectly, false);
   });
 });

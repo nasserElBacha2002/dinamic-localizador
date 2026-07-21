@@ -12,6 +12,7 @@ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { employeeCategoryRepository } from "../repositories/employee-category.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { employeeCategoryService } from "./employee-category.service";
+import { employeeDeactivationService } from "./employee-deactivation.service";
 import { employeeService } from "./employee.service";
 import { platformCompanyService } from "./platform-company.service";
 
@@ -400,7 +401,9 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
       }),
     );
 
-    await employeeService.update(companyId, createdEmployees[1]!.id, { active: false });
+    await employeeDeactivationService.deactivate(companyId, createdEmployees[1]!.id, {
+      confirmAffectedRelease: false,
+    });
 
     const byCategoryAsc = await employeeService.list(companyId, {
       page: 1,

@@ -4,6 +4,7 @@ import { terminology } from "../../domain/terminology";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
 import { operationStatusLabels } from "../../utils/labels";
 import { operationKindLabels } from "../../utils/operation-schedule-display";
+import { buildDeactivationSummaryMessage } from "./employee-deactivation-copy";
 
 interface EmployeeDeactivationDialogProps {
   open: boolean;
@@ -45,7 +46,6 @@ export function EmployeeDeactivationDialog({
   onConfirm,
   onCancel,
 }: EmployeeDeactivationDialogProps) {
-  const count = impact?.affectedAssignmentsCount ?? 0;
   const worker = terminology.worker.singular.toLowerCase();
 
   return (
@@ -55,6 +55,7 @@ export function EmployeeDeactivationDialog({
       title="Desactivar colaborador"
       size="xl"
       centered
+      withinPortal={false}
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}
     >
@@ -66,11 +67,11 @@ export function EmployeeDeactivationDialog({
           está asignado a operaciones activas o programadas. Al continuar, será desasignado de las
           siguientes actividades y quedará inactivo.
         </Text>
-        <Text size="sm" c="dimmed">
-          Se eliminarán {count} asignación{count === 1 ? "" : "es"} futura
-          {count === 1 ? "" : "s"}. Las operaciones ya finalizadas y el historial de asistencia no
-          serán modificados.
-        </Text>
+        {impact ? (
+          <Text size="sm" c="dimmed">
+            {buildDeactivationSummaryMessage(impact)}
+          </Text>
+        ) : null}
 
         {impact && impact.affectedAssignments.length > 0 ? (
           <Table.ScrollContainer minWidth={720}>

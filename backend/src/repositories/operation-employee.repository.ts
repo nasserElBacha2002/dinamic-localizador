@@ -396,6 +396,7 @@ export const operationEmployeeRepository = {
         WHERE oa.operation_id = @operationId
           AND oa.company_id = @companyId
           AND oa.cancelled_at IS NULL
+          AND e.active = 1
           AND oa.valid_from <= @rangeEnd
           AND (oa.valid_until IS NULL OR oa.valid_until >= @rangeStart)
         ORDER BY oa.employee_id ASC, oa.valid_from ASC

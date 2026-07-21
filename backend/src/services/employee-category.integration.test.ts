@@ -9,9 +9,11 @@ import {
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
 import { employeeCategoryRepository } from "../repositories/employee-category.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { employeeCategoryService } from "./employee-category.service";
+import { employeeDeactivationService } from "./employee-deactivation.service";
 import { employeeService } from "./employee.service";
 import { platformCompanyService } from "./platform-company.service";
 
@@ -19,22 +21,6 @@ const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).s
 
 const uniquePhone = (seed: number): string =>
   `+54911${String(Date.now()).slice(-5)}${String(seed).padStart(3, "0")}${Math.floor(Math.random() * 90 + 10)}`;
-
-const deleteCompanyCascade = async (companyId: string): Promise<void> => {
-  const pool = getPool();
-  await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
-    DELETE FROM employee_absence_balances WHERE company_id = @companyId;
-    DELETE FROM employees WHERE company_id = @companyId;
-    DELETE FROM employee_categories WHERE company_id = @companyId;
-    DELETE FROM company_absence_settings WHERE company_id = @companyId;
-    DELETE FROM absence_types WHERE company_id = @companyId;
-    DELETE FROM company_location_types WHERE company_id = @companyId;
-    DELETE FROM user_company_memberships WHERE company_id = @companyId;
-    DELETE FROM company_modules WHERE company_id = @companyId;
-    DELETE FROM company_settings WHERE company_id = @companyId;
-    DELETE FROM companies WHERE id = @companyId;
-  `);
-};
 
 describeDatabaseIntegration("employee categories multi-company and sorting", () => {
   const createdCompanyIds: string[] = [];
@@ -400,7 +386,9 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
       }),
     );
 
-    await employeeService.update(companyId, createdEmployees[1]!.id, { active: false });
+    await employeeDeactivationService.deactivate(companyId, createdEmployees[1]!.id, {
+      confirmAffectedRelease: false,
+    });
 
     const byCategoryAsc = await employeeService.list(companyId, {
       page: 1,

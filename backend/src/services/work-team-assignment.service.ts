@@ -5,6 +5,7 @@ import type { WorkTeamAssignmentSkipReason } from "../constants/work-team-assign
 import { AppError } from "../errors/app-error";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
+import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
 import { workTeamAssignmentBatchRepository } from "../repositories/work-team-assignment-batch.repository";
 import { workTeamRepository } from "../repositories/work-team.repository";
 import type {
@@ -576,6 +577,24 @@ export const workTeamAssignmentService = {
         }
 
         for (const entry of assignableEmployees) {
+          const lockedEmployee = await employeeDeactivationRepository.lockEmployeeForUpdate(
+            companyId,
+            entry.employeeId,
+            transaction,
+          );
+          if (!lockedEmployee?.active) {
+            await persistBatchItemWithSources(transaction, {
+              batchId: batch.id,
+              workTeamIds: entry.workTeamIds,
+              primaryWorkTeamId: entry.primaryWorkTeamId,
+              employeeId: entry.employeeId,
+              operationAssignmentId: null,
+              result: "SKIPPED",
+              reason: "employee_inactive",
+            });
+            continue;
+          }
+
           const result = await operationAssignmentCore.assignEmployeeInTransaction(
             companyId,
             transaction,
@@ -584,7 +603,7 @@ export const workTeamAssignmentService = {
               employeeId: entry.employeeId,
               validFrom: batch.validFrom!,
               validUntil: batch.validUntil,
-              employeeActive: entry.employee.active,
+              employeeActive: lockedEmployee.active,
               operationKind,
               operationWorkDate,
               sourceAssignmentBatchId: batch.id,

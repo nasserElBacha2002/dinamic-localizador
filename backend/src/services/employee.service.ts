@@ -23,8 +23,6 @@ export const employeeService = {
 
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
-    // Category assignability is enforced inside the INSERT (UPDLOCK/HOLDLOCK + EXISTS),
-    // in the same transaction as balance initialization — no pre-check race window.
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -75,6 +73,14 @@ export const employeeService = {
   async update(companyId: string, id: string, input: UpdateEmployeeInput) {
     await this.getById(companyId, id);
 
+    if (input.active === false) {
+      throw new AppError(
+        400,
+        "EMPLOYEE_DEACTIVATION_REQUIRES_DEDICATED_ENDPOINT",
+        "Para desactivar un colaborador usá el endpoint de desactivación asistida.",
+      );
+    }
+
     const updatePayload: UpdateEmployeeInput & { phoneNumber?: string } = { ...input };
     if (input.phoneNumber !== undefined) {
       const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
@@ -85,37 +91,7 @@ export const employeeService = {
       updatePayload.phoneNumber = normalizedPhone;
     }
 
-    if (input.active === false) {
-      const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
-      if (hasSchedules) {
-        throw new AppError(
-          409,
-          "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-          "No se puede desactivar un empleado con operaciones activas o programadas",
-        );
-      }
-    }
-
-    // Category scope/active checks run inside UPDATE with UPDLOCK/HOLDLOCK.
     const updated = await employeeRepository.update(companyId, id, updatePayload);
-    if (!updated) {
-      throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
-    }
-    return updated;
-  },
-
-  async deactivate(companyId: string, id: string) {
-    await this.getById(companyId, id);
-    const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
-    if (hasSchedules) {
-      throw new AppError(
-        409,
-        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-        "No se puede desactivar un empleado con operaciones activas o programadas",
-      );
-    }
-
-    const updated = await employeeRepository.deactivate(companyId, id);
     if (!updated) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }

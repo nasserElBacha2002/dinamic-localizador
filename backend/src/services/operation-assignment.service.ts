@@ -5,6 +5,7 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { getDateIsoInTimezone } from "../utils/absence-date";
 import { employeeRepository } from "../repositories/employee.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
@@ -208,6 +209,18 @@ export const operationAssignmentService = {
     let committedAssignment: OperationEmployeeAssignment | null = null;
 
     try {
+      const lockedEmployee = await employeeDeactivationRepository.lockEmployeeForUpdate(
+        companyId,
+        employeeId,
+        transaction,
+      );
+      if (!lockedEmployee) {
+        throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+      }
+      if (!lockedEmployee.active) {
+        throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
+      }
+
       const result = await operationAssignmentCore.assignEmployeeInTransaction(
         companyId,
         transaction,
@@ -216,7 +229,7 @@ export const operationAssignmentService = {
           employeeId,
           validFrom,
           validUntil,
-          employeeActive: employee.active,
+          employeeActive: lockedEmployee.active,
           operationKind,
           operationWorkDate,
         },

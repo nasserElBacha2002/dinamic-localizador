@@ -90,9 +90,20 @@ describe("workTeamAssignmentService.confirm rollback", () => {
       "../repositories/operation-employee.repository"
     );
     const { operationAssignmentCore } = await import("./operation-assignment-core.service");
+    const { employeeDeactivationRepository } = await import(
+      "../repositories/employee-deactivation.repository"
+    );
     const { workTeamAssignmentService } = await import("./work-team-assignment.service");
 
     mock.method(workTeamAssignmentBatchRepository, "expireStalePreviews", async () => undefined);
+    mock.method(
+      employeeDeactivationRepository,
+      "lockEmployeeForUpdate",
+      async (_companyId: string, employeeId: string) => ({
+        id: employeeId,
+        active: true,
+      }),
+    );
     mock.method(operationRepository, "findById", async () => ({
       id: "operation-1",
       companyId: "company-1",

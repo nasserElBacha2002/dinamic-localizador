@@ -1,4 +1,4 @@
-import { Button, Select } from "@mantine/core";
+import { Alert, Button, Select, Stack, Text } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -18,6 +18,8 @@ import { useListNavigationState } from "../../hooks/useListNavigationState";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { terminology } from "../../domain/terminology";
 import type { Employee } from "../../types/employee";
+import type { EmployeeListSortField } from "../../types/employee-list";
+import { EMPLOYEE_CATEGORY_FILTER_ALL, EMPLOYEE_CATEGORY_FILTER_NONE } from "../../types/employee-list";
 import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
 import { navigateWithListContext } from "../../utils/list-navigation";
@@ -49,18 +51,26 @@ export function EmployeesListPage() {
   const categoriesQuery = useEmployeeCategories({ includeInactive: false });
   const filters = buildEmployeesListApiFilters(table.state);
   const { data, isPending, isError, error } = useEmployees(filters);
+  const catalogFailed = categoriesQuery.isError;
 
   const categoryFilterOptions = useMemo(() => {
+    if (catalogFailed) {
+      return [
+        { value: EMPLOYEE_CATEGORY_FILTER_ALL, label: "Todas las categorías" },
+        { value: EMPLOYEE_CATEGORY_FILTER_NONE, label: "Sin categoría" },
+      ];
+    }
+
     const categories = categoriesQuery.data ?? [];
     return [
-      { value: "all", label: "Todas las categorías" },
-      { value: "none", label: "Sin categoría" },
+      { value: EMPLOYEE_CATEGORY_FILTER_ALL, label: "Todas las categorías" },
+      { value: EMPLOYEE_CATEGORY_FILTER_NONE, label: "Sin categoría" },
       ...categories.map((category) => ({
         value: category.id,
         label: category.isSystem ? `${category.name} (base)` : category.name,
       })),
     ];
-  }, [categoriesQuery.data]);
+  }, [catalogFailed, categoriesQuery.data]);
 
   const columns = useMemo<DataTableColumn<Employee>[]>(
     () => [
@@ -117,7 +127,7 @@ export function EmployeesListPage() {
 
   const handleCategoryFilterChange = useCallback(
     (value: string | null) => {
-      table.setField("categoryId", value ?? "all");
+      table.setField("categoryId", value ?? EMPLOYEE_CATEGORY_FILTER_ALL);
     },
     [table],
   );
@@ -127,7 +137,7 @@ export function EmployeesListPage() {
       if (!(EMPLOYEE_TABLE_SORTABLE_COLUMN_KEYS as readonly string[]).includes(field)) {
         return;
       }
-      table.toggleSorting(field, "asc");
+      table.toggleSorting(field as EmployeeListSortField, "asc");
     },
     [table],
   );
@@ -145,6 +155,17 @@ export function EmployeesListPage() {
           ) : undefined
         }
       />
+
+      {catalogFailed ? (
+        <Alert color="red" title="No se pudieron cargar las categorías" mb="md">
+          <Stack gap="xs">
+            <Text size="sm">{getApiErrorMessage(categoriesQuery.error)}</Text>
+            <Button size="xs" variant="light" onClick={() => void categoriesQuery.refetch()}>
+              Reintentar
+            </Button>
+          </Stack>
+        </Alert>
+      ) : null}
 
       <FilterBar>
         <FilterBar.Item>
@@ -175,7 +196,9 @@ export function EmployeesListPage() {
             onChange={handleCategoryFilterChange}
             data={categoryFilterOptions}
             searchable
-            nothingFoundMessage="Sin categorías"
+            disabled={catalogFailed}
+            nothingFoundMessage={catalogFailed ? "Catálogo no disponible" : "Sin categorías"}
+            error={catalogFailed ? "Error al cargar categorías" : undefined}
           />
         </FilterBar.Item>
       </FilterBar>

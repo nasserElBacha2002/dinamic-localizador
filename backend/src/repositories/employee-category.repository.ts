@@ -38,13 +38,15 @@ export const employeeCategoryRepository = {
       .query(`
         SELECT
           ec.*,
-          (
-            SELECT COUNT(*)
-            FROM employees e
-            WHERE e.company_id = @companyId
-              AND e.category_id = ec.id
-          ) AS assigned_employees_count
+          COALESCE(counts.assigned_employees_count, 0) AS assigned_employees_count
         FROM employee_categories ec
+        LEFT JOIN (
+          SELECT category_id, COUNT(*) AS assigned_employees_count
+          FROM employees
+          WHERE company_id = @companyId
+            AND category_id IS NOT NULL
+          GROUP BY category_id
+        ) counts ON counts.category_id = ec.id
         WHERE (
             ec.company_id IS NULL
             OR ec.company_id = @companyId
@@ -67,13 +69,15 @@ export const employeeCategoryRepository = {
       .query(`
         SELECT
           ec.*,
-          (
-            SELECT COUNT(*)
-            FROM employees e
-            WHERE e.company_id = @companyId
-              AND e.category_id = ec.id
-          ) AS assigned_employees_count
+          COALESCE(counts.assigned_employees_count, 0) AS assigned_employees_count
         FROM employee_categories ec
+        LEFT JOIN (
+          SELECT category_id, COUNT(*) AS assigned_employees_count
+          FROM employees
+          WHERE company_id = @companyId
+            AND category_id = @categoryId
+          GROUP BY category_id
+        ) counts ON counts.category_id = ec.id
         WHERE ec.id = @categoryId
           AND (ec.company_id IS NULL OR ec.company_id = @companyId)
       `);

@@ -10,6 +10,8 @@ export interface RHFTextInputProps<T extends FieldValues> {
   disabled?: boolean;
   required?: boolean;
   type?: "text" | "email" | "password" | "tel";
+  /** Defaults to Mantine order; use to keep sibling grid inputs aligned. */
+  inputWrapperOrder?: Array<"label" | "input" | "description" | "error">;
 }
 
 export function RHFTextInput<T extends FieldValues>({
@@ -21,6 +23,7 @@ export function RHFTextInput<T extends FieldValues>({
   disabled = false,
   required = false,
   type = "text",
+  inputWrapperOrder,
 }: RHFTextInputProps<T>) {
   return (
     <Controller
@@ -37,6 +40,7 @@ export function RHFTextInput<T extends FieldValues>({
           type={type}
           error={fieldState.error?.message}
           value={field.value ?? ""}
+          inputWrapperOrder={inputWrapperOrder}
         />
       )}
     />

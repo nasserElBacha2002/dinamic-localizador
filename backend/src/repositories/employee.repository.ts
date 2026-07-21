@@ -1,6 +1,7 @@
 // Phase 2.3 terminology note: Employee remains the technical DB/API model (employees table).
 // Conceptually this represents a Worker — see types/operational-domain.ts.
 import sql from "mssql";
+import { AppError } from "../errors/app-error";
 import { getPool } from "../database/connection";
 import type { Employee } from "../types/domain";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
@@ -15,6 +16,7 @@ import type {
 /**
  * Exhaustive SQL column map for employee list sorting.
  * Every `EmployeeListSortField` must have a whitelist entry.
+ * Category nulls sort last (both ASC and DESC).
  */
 export const EMPLOYEE_LIST_SORT_COLUMNS = {
   name: "e.name",
@@ -25,6 +27,13 @@ export const EMPLOYEE_LIST_SORT_COLUMNS = {
   active: "e.active",
 } as const satisfies Record<EmployeeListSortField, string>;
 
+/** Scoped category join: global (NULL company) or same-company customs only. */
+const buildEmployeeCategoryJoin = () => `
+  LEFT JOIN employee_categories ec
+    ON ec.id = e.category_id
+   AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
+`;
+
 const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
   LEFT JOIN (
     SELECT employee_id, MAX(received_at) AS last_worked_at
@@ -32,10 +41,6 @@ const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
     WHERE company_id = ${companyIdParam}
     GROUP BY employee_id
   ) lw ON lw.employee_id = e.id
-`;
-
-const buildEmployeeCategoryJoin = () => `
-  LEFT JOIN employee_categories ec ON ec.id = e.category_id
 `;
 
 const buildEmployeeSelect = () => `
@@ -61,6 +66,42 @@ const buildEmployeeSelectWithoutLastWorked = () => `
   ${buildEmployeeCategoryJoin()}
 `;
 
+const resolveEmployeeOrderBy = (
+  sortBy: EmployeeListSortField | undefined,
+  sortDirection: "asc" | "desc",
+): string => {
+  if (sortBy === "category") {
+    const direction = sortDirection === "asc" ? "ASC" : "DESC";
+    // Null categories always last; then name; stable tie-break by id.
+    return `CASE WHEN ec.name IS NULL THEN 1 ELSE 0 END ASC, ec.name ${direction}, e.id ASC`;
+  }
+
+  const orderBy = resolveSqlSort(
+    sortBy,
+    EMPLOYEE_LIST_SORT_COLUMNS,
+    "e.created_at",
+    sortBy ? sortDirection : "desc",
+  );
+  return `${orderBy}, e.id ASC`;
+};
+
+/** Assignable = in-scope and active. Same historical inactive allowed only when matching current. */
+const categoryAssignablePredicate = (employeeAlias = "employees") => `
+  (
+    @categoryId IS NULL
+    OR EXISTS (
+      SELECT 1
+      FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
+      WHERE ec.id = @categoryId
+        AND (ec.company_id IS NULL OR ec.company_id = @companyId)
+        AND (
+          ec.is_active = 1
+          OR ec.id = ${employeeAlias}.category_id
+        )
+    )
+  )
+`;
+
 export const employeeRepository = {
   async create(
     companyId: string,
@@ -83,13 +124,31 @@ export const employeeRepository = {
       .input("categoryId", sql.UniqueIdentifier, input.categoryId)
       .query(`
         INSERT INTO employees (company_id, name, document_number, phone_number, employee_type, category_id)
-        OUTPUT INSERTED.*
-        VALUES (@companyId, @name, @documentNumber, @phoneNumber, @employeeType, @categoryId)
+        OUTPUT INSERTED.id
+        SELECT @companyId, @name, @documentNumber, @phoneNumber, @employeeType, @categoryId
+        WHERE @categoryId IS NULL
+           OR EXISTS (
+             SELECT 1
+             FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
+             WHERE ec.id = @categoryId
+               AND ec.is_active = 1
+               AND (ec.company_id IS NULL OR ec.company_id = @companyId)
+           )
       `);
 
-    const inserted = result.recordset[0] as Record<string, unknown>;
-    const withCategory = await this.findById(companyId, String(inserted.id), transaction);
-    return withCategory ?? mapEmployeeRow(inserted);
+    if (!result.recordset[0]) {
+      throw new AppError(
+        400,
+        "EMPLOYEE_CATEGORY_INVALID",
+        "La categoría seleccionada no está disponible para esta empresa.",
+      );
+    }
+
+    const withCategory = await this.findById(companyId, String(result.recordset[0].id), transaction);
+    if (!withCategory) {
+      throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudo crear el colaborador.");
+    }
+    return withCategory;
   },
 
   async findById(
@@ -232,19 +291,13 @@ export const employeeRepository = {
 
     const whereClause = buildWhereClause(filters);
     const sortDirection = query.sortDirection ?? "asc";
-    const orderBy = resolveSqlSort(
-      query.sortBy,
-      EMPLOYEE_LIST_SORT_COLUMNS,
-      "e.created_at",
-      query.sortBy ? sortDirection : "desc",
-    );
+    const orderBy = resolveEmployeeOrderBy(query.sortBy, sortDirection);
 
     const countRequest = pool.request();
     applySqlFilters(countRequest, filters);
     const countResult = await countRequest.query(`
       SELECT COUNT(*) AS total
       FROM employees e
-      ${buildEmployeeCategoryJoin()}
       ${whereClause}
     `);
     const total = Number(countResult.recordset[0].total);
@@ -257,7 +310,7 @@ export const employeeRepository = {
     const dataResult = await dataRequest.query(`
       ${buildEmployeeSelect()}
       ${whereClause}
-      ORDER BY ${orderBy}, e.id ASC
+      ORDER BY ${orderBy}
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
@@ -271,13 +324,11 @@ export const employeeRepository = {
     companyId: string,
     id: string,
     input: UpdateEmployeeInput & { phoneNumber?: string },
+    transaction?: sql.Transaction,
   ): Promise<Employee | null> {
-    const pool = getPool();
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
     const fields: string[] = [];
-    const request = pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("id", sql.UniqueIdentifier, id);
+    request.input("companyId", sql.UniqueIdentifier, companyId).input("id", sql.UniqueIdentifier, id);
 
     if (input.name !== undefined) {
       request.input("name", sql.NVarChar(150), input.name);
@@ -299,7 +350,8 @@ export const employeeRepository = {
       fields.push("employee_type = @employeeType");
     }
 
-    if (input.categoryId !== undefined) {
+    const updatingCategory = input.categoryId !== undefined;
+    if (updatingCategory) {
       request.input("categoryId", sql.UniqueIdentifier, input.categoryId);
       fields.push("category_id = @categoryId");
     }
@@ -310,23 +362,39 @@ export const employeeRepository = {
     }
 
     if (fields.length === 0) {
-      return this.findById(companyId, id);
+      return this.findById(companyId, id, transaction);
     }
 
     fields.push("updated_at = SYSUTCDATETIME()");
+
+    const categoryGuard = updatingCategory
+      ? `AND ${categoryAssignablePredicate("employees")}`
+      : "";
 
     const result = await request.query(`
       UPDATE employees
       SET ${fields.join(", ")}
       OUTPUT INSERTED.id
       WHERE id = @id AND company_id = @companyId
+      ${categoryGuard}
     `);
 
     if (!result.recordset[0]) {
+      if (updatingCategory) {
+        const existing = await this.findById(companyId, id, transaction);
+        if (!existing) {
+          return null;
+        }
+        throw new AppError(
+          400,
+          "EMPLOYEE_CATEGORY_INVALID",
+          "La categoría seleccionada no está disponible para esta empresa.",
+        );
+      }
       return null;
     }
 
-    return this.findById(companyId, id);
+    return this.findById(companyId, id, transaction);
   },
 
   async deactivate(companyId: string, id: string): Promise<Employee | null> {

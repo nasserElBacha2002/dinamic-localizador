@@ -64,13 +64,13 @@ export function EmployeeForm({
   });
 
   return (
-    <Box maw={720}>
+    <Box w="100%">
       <form onSubmit={handleSubmit(onSubmit)} noValidate>
         <FormSection>
           <Stack gap="md">
             <FormErrorAlert message={errorMessage} />
 
-            <FormGrid>
+            <FormGrid align="start">
               <RHFTextInput control={control} name="name" label="Nombre" required />
               <RHFTextInput control={control} name="documentNumber" label="Documento" />
               <RHFPhoneInput
@@ -79,6 +79,7 @@ export function EmployeeForm({
                 label="Teléfono"
                 placeholder="+5491112345678"
                 description="Formato internacional E.164"
+                inputWrapperOrder={["label", "input", "description", "error"]}
                 required
               />
               <RHFSelect
@@ -97,7 +98,10 @@ export function EmployeeForm({
                 retainedCategory={retainedCategory}
               />
               <Input.Wrapper label="Estado activo" inputWrapperOrder={["label", "input", "error"]}>
-                <Box mih={36} style={{ display: "flex", alignItems: "center" }}>
+                <Box
+                  mih={36}
+                  style={{ display: "flex", alignItems: "center" }}
+                >
                   <RHFSwitch control={control} name="active" label="Activo" />
                 </Box>
               </Input.Wrapper>

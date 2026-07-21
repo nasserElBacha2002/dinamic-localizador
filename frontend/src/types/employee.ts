@@ -1,5 +1,13 @@
 import type { EmployeeType } from "../constants/employee-types";
+import type { EmployeeListSortField } from "./employee-list";
 import type { EmployeeCategorySummary } from "./employee-category";
+
+export type { EmployeeListSortField } from "./employee-list";
+export {
+  EMPLOYEE_LIST_SORT_FIELDS,
+  EMPLOYEE_CATEGORY_FILTER_ALL,
+  EMPLOYEE_CATEGORY_FILTER_NONE,
+} from "./employee-list";
 
 export interface Employee {
   id: string;
@@ -20,8 +28,9 @@ export interface EmployeeFilters {
   limit?: number;
   active?: boolean;
   search?: string;
+  /** UUID, or "none" for uncategorized. */
   categoryId?: string;
-  sortBy?: string;
+  sortBy?: EmployeeListSortField;
   sortDirection?: "asc" | "desc";
 }
 

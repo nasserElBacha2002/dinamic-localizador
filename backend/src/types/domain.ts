@@ -2,6 +2,7 @@ import type { CheckoutStatus } from "../constants/checkout-status";
 import type { EmployeeType } from "../constants/employee-types";
 import type { AssignmentOrigin } from "../constants/work-team-assignment";
 import type { OperationKind } from "../constants/operation-kind";
+import type { EmployeeCategorySummary } from "./employee-category";
 import type { OperationScheduleSummary } from "./schedule";
 
 export type ServiceFormat = string;
@@ -11,12 +12,8 @@ export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
 export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
 
-export interface EmployeeCategoryRef {
-  id: string;
-  name: string;
-  isSystem: boolean;
-  isActive: boolean;
-}
+/** Embedded category on employee responses (scoped join). */
+export type EmployeeCategoryRef = EmployeeCategorySummary;
 
 export interface Employee {
   id: string;

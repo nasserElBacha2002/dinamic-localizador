@@ -1,5 +1,13 @@
 -- Employee (collaborator) categories: shared system defaults + company-scoped customs.
--- Rollback (manual): drop FK/indexes/column on employees, then drop employee_categories.
+-- Rollback (manual):
+--   DROP TRIGGER TR_employees_category_company_scope;
+--   drop FK/indexes/column on employees;
+--   then drop employee_categories.
+--
+-- Invariants:
+--   - system categories: company_id NULL, is_system = 1 (exactly five seeded)
+--   - custom categories: company_id NOT NULL, is_system = 0
+--   - employees.category_id may only reference global or same-company categories (trigger)
 
 USE dinamic_attendance;
 GO
@@ -117,5 +125,39 @@ BEGIN
     CREATE INDEX IX_employees_company_category
         ON dbo.employees (company_id, category_id)
         INCLUDE (name, active, employee_type);
+END;
+GO
+
+IF OBJECT_ID(N'dbo.TR_employees_category_company_scope', N'TR') IS NULL
+BEGIN
+    EXEC(N'
+    CREATE TRIGGER dbo.TR_employees_category_company_scope
+    ON dbo.employees
+    AFTER INSERT, UPDATE
+    AS
+    BEGIN
+        SET NOCOUNT ON;
+
+        IF NOT EXISTS (SELECT 1 FROM inserted)
+        BEGIN
+            RETURN;
+        END;
+
+        IF EXISTS (
+            SELECT 1
+            FROM inserted i
+            WHERE i.category_id IS NOT NULL
+              AND NOT EXISTS (
+                  SELECT 1
+                  FROM dbo.employee_categories ec
+                  WHERE ec.id = i.category_id
+                    AND (ec.company_id IS NULL OR ec.company_id = i.company_id)
+              )
+        )
+        BEGIN
+            THROW 50051, ''EMPLOYEE_CATEGORY_CROSS_COMPANY: category_id must be global or belong to the employee company.'', 1;
+        END;
+    END;
+    ');
 END;
 GO

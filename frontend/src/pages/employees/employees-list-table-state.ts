@@ -1,12 +1,19 @@
 import type { TableUrlFieldMap } from "../../utils/table-url-state";
+import {
+  EMPLOYEE_CATEGORY_FILTER_ALL,
+  EMPLOYEE_CATEGORY_FILTER_NONE,
+  EMPLOYEE_LIST_SORT_FIELDS,
+  type EmployeeCategoryFilterId,
+  type EmployeeListSortField,
+} from "../../types/employee-list";
 
 export const EMPLOYEE_TABLE_DEFAULTS = {
   page: 1,
   pageSize: 10,
   search: "",
   active: "all" as "all" | "true" | "false",
-  categoryId: "all",
-  sortBy: "name",
+  categoryId: EMPLOYEE_CATEGORY_FILTER_ALL as EmployeeCategoryFilterId,
+  sortBy: "name" as EmployeeListSortField,
   sortOrder: "asc" as "asc" | "desc",
 };
 
@@ -15,19 +22,12 @@ export const EMPLOYEE_TABLE_FIELDS = {
   categoryId: { type: "string" },
   sortBy: {
     type: "enum",
-    values: ["name", "documentNumber", "phoneNumber", "category", "employeeType", "active"],
+    values: EMPLOYEE_LIST_SORT_FIELDS,
   },
   sortOrder: { type: "enum", values: ["asc", "desc"] },
 } satisfies TableUrlFieldMap<typeof EMPLOYEE_TABLE_DEFAULTS>;
 
-export const EMPLOYEE_TABLE_SORTABLE_COLUMN_KEYS = [
-  "name",
-  "documentNumber",
-  "phoneNumber",
-  "category",
-  "employeeType",
-  "active",
-] as const;
+export const EMPLOYEE_TABLE_SORTABLE_COLUMN_KEYS = EMPLOYEE_LIST_SORT_FIELDS;
 
 export function buildEmployeesListApiFilters(state: typeof EMPLOYEE_TABLE_DEFAULTS) {
   return {
@@ -36,12 +36,12 @@ export function buildEmployeesListApiFilters(state: typeof EMPLOYEE_TABLE_DEFAUL
     search: state.search || undefined,
     active: state.active === "all" ? undefined : state.active === "true",
     categoryId:
-      state.categoryId === "all" || !state.categoryId
+      state.categoryId === EMPLOYEE_CATEGORY_FILTER_ALL || !state.categoryId
         ? undefined
-        : state.categoryId === "none"
-          ? "none"
+        : state.categoryId === EMPLOYEE_CATEGORY_FILTER_NONE
+          ? EMPLOYEE_CATEGORY_FILTER_NONE
           : state.categoryId,
-    sortBy: state.sortBy || undefined,
+    sortBy: state.sortBy,
     sortDirection: state.sortOrder,
   };
 }

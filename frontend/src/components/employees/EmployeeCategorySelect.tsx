@@ -1,9 +1,11 @@
-import { Box, Button, Group, Stack, Text, TextInput } from "@mantine/core";
+import { Alert, Box, Button, Group, Stack, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { Controller, type Control, type FieldPath, type FieldValues } from "react-hook-form";
 import { FilterLookupInput } from "../../design-system";
 import { useCreateEmployeeCategory, useEmployeeCategories } from "../../hooks/useEmployeeCategories";
 import { getApiErrorMessage } from "../../utils/errors";
+import { normalizeCategoryName } from "../../utils/normalize-category-name";
+import { shouldOfferEmployeeCategoryCreate } from "./employee-category-select-logic";
 
 const NONE_VALUE = "__none__";
 
@@ -32,8 +34,16 @@ export function EmployeeCategorySelect<T extends FieldValues>({
   const [pendingCreateName, setPendingCreateName] = useState<string | null>(null);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const catalogFailed = categoriesQuery.isError;
+  const catalogLoading = categoriesQuery.isPending;
+  const canUseCatalog = !catalogFailed && !catalogLoading;
+
   const categories = useMemo(() => {
-    const items = [...(categoriesQuery.data ?? [])];
+    if (!categoriesQuery.data) {
+      return [];
+    }
+
+    const items = [...categoriesQuery.data];
     if (
       retainedCategory &&
       !items.some((category) => category.id === retainedCategory.id)
@@ -42,7 +52,7 @@ export function EmployeeCategorySelect<T extends FieldValues>({
         id: retainedCategory.id,
         companyId: null,
         name: retainedCategory.name,
-        normalizedName: retainedCategory.name.toLocaleLowerCase("es-AR"),
+        normalizedName: normalizeCategoryName(retainedCategory.name),
         isSystem: false,
         isActive: false,
         createdAt: "",
@@ -58,10 +68,12 @@ export function EmployeeCategorySelect<T extends FieldValues>({
   }, [categoriesQuery.data, retainedCategory]);
 
   const filteredOptions = useMemo(() => {
-    const query = inputValue.trim().toLocaleLowerCase("es-AR");
-    const matched = categories.filter((category) =>
-      category.name.toLocaleLowerCase("es-AR").includes(query),
-    );
+    const query = normalizeCategoryName(inputValue);
+    const matched = query
+      ? categories.filter((category) =>
+          normalizeCategoryName(category.name).includes(query),
+        )
+      : categories;
 
     const categoryOptions = matched.map((category) => ({
       value: category.id,
@@ -99,15 +111,37 @@ export function EmployeeCategorySelect<T extends FieldValues>({
                 : null);
 
         const trimmedInput = inputValue.trim();
-        const exactMatch = categories.some(
-          (category) =>
-            category.name.toLocaleLowerCase("es-AR") === trimmedInput.toLocaleLowerCase("es-AR"),
-        );
-        const showCreate =
-          canCreate && Boolean(trimmedInput) && !exactMatch && filteredOptions.length === 0;
+        const showCreate = shouldOfferEmployeeCategoryCreate({
+          input: trimmedInput,
+          categoryNames: categories.map((category) => category.name),
+          canCreate,
+          catalogReady: canUseCatalog,
+          createPending: createMutation.isPending,
+        });
 
         return (
           <Stack gap="xs">
+            {catalogFailed ? (
+              <Alert
+                color="red"
+                title="No se pudieron cargar las categorías"
+                withCloseButton={false}
+              >
+                <Stack gap="xs">
+                  <Text size="sm">{getApiErrorMessage(categoriesQuery.error)}</Text>
+                  <Button
+                    size="xs"
+                    variant="light"
+                    onClick={() => {
+                      void categoriesQuery.refetch();
+                    }}
+                  >
+                    Reintentar
+                  </Button>
+                </Stack>
+              </Alert>
+            ) : null}
+
             <FilterLookupInput
               label={label}
               value={selectedValue}
@@ -121,17 +155,21 @@ export function EmployeeCategorySelect<T extends FieldValues>({
                 }
                 field.onChange(value);
               }}
-              options={filteredOptions}
+              options={catalogFailed ? [] : filteredOptions}
               inputValue={inputValue}
               onInputChange={setInputValue}
               selectedOption={selectedOption}
               placeholder="Buscar o seleccionar categoría..."
-              loading={categoriesQuery.isPending}
-              disabled={disabled || createMutation.isPending}
-              error={Boolean(fieldState.error) || Boolean(createError)}
+              loading={catalogLoading}
+              disabled={disabled || createMutation.isPending || catalogFailed}
+              error={Boolean(fieldState.error) || Boolean(createError) || catalogFailed}
               description={fieldState.error?.message}
               emptyMessage={
-                showCreate ? `No se encontró “${trimmedInput}”` : "Sin resultados"
+                catalogFailed
+                  ? "Catálogo no disponible"
+                  : showCreate
+                    ? `No hay coincidencia exacta para “${trimmedInput}”`
+                    : "Sin resultados"
               }
               createOption={
                 showCreate
@@ -144,9 +182,10 @@ export function EmployeeCategorySelect<T extends FieldValues>({
                     }
                   : undefined
               }
+              maxOptions={20}
             />
 
-            {pendingCreateName ? (
+            {pendingCreateName && canUseCatalog ? (
               <Box
                 p="sm"
                 style={{

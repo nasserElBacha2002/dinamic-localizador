@@ -60,7 +60,6 @@ const mountEmployeeRoutes = (router: Router) => {
   router.use("/employees", moduleGuard, employeeRouter);
   router.use("/workers", moduleGuard, employeeRouter);
   router.use("/employee-categories", moduleGuard, employeeCategoryRouter);
-  router.use("/collaborator-categories", moduleGuard, employeeCategoryRouter);
 };
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });

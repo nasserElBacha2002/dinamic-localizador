@@ -8,6 +8,7 @@ import type {
 import { getPool } from "../database/connection";
 import { employeeRepository } from "../repositories/employee.repository";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+import { employeeCategoryService } from "./employee-category.service";
 import { normalizePhoneNumber } from "../utils/phone";
 import { buildPaginationMeta } from "../utils/pagination";
 
@@ -18,6 +19,9 @@ export const employeeService = {
     if (exists) {
       throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
     }
+
+    const categoryId = input.categoryId === undefined ? null : input.categoryId;
+    await employeeCategoryService.assertAssignableCategory(companyId, categoryId);
 
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
@@ -35,6 +39,7 @@ export const employeeService = {
           documentNumber: input.documentNumber?.trim() ?? null,
           phoneNumber,
           employeeType: input.employeeType,
+          categoryId,
         },
         transaction,
       );
@@ -70,7 +75,7 @@ export const employeeService = {
   },
 
   async update(companyId: string, id: string, input: UpdateEmployeeInput) {
-    await this.getById(companyId, id);
+    const current = await this.getById(companyId, id);
 
     const updatePayload: UpdateEmployeeInput & { phoneNumber?: string } = { ...input };
     if (input.phoneNumber !== undefined) {
@@ -80,6 +85,14 @@ export const employeeService = {
         throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
       }
       updatePayload.phoneNumber = normalizedPhone;
+    }
+
+    if (input.categoryId !== undefined && input.categoryId !== null) {
+      // Clearing is allowed. Keeping the same category (including inactive historical) is allowed.
+      // Assigning a different category requires an active, in-scope category.
+      if (input.categoryId !== current.categoryId) {
+        await employeeCategoryService.assertAssignableCategory(companyId, input.categoryId);
+      }
     }
 
     if (input.active === false) {

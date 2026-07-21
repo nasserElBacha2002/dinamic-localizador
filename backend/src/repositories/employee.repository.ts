@@ -4,8 +4,26 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Employee } from "../types/domain";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { resolveSqlSort } from "../utils/sql-sort";
 import { mapEmployeeRow } from "../utils/row-mappers";
-import type { ListEmployeesQuery, UpdateEmployeeInput } from "../schemas/employee.schema";
+import type {
+  EmployeeListSortField,
+  ListEmployeesQuery,
+  UpdateEmployeeInput,
+} from "../schemas/employee.schema";
+
+/**
+ * Exhaustive SQL column map for employee list sorting.
+ * Every `EmployeeListSortField` must have a whitelist entry.
+ */
+export const EMPLOYEE_LIST_SORT_COLUMNS = {
+  name: "e.name",
+  documentNumber: "e.document_number",
+  phoneNumber: "e.phone_number",
+  category: "ec.name",
+  employeeType: "e.employee_type",
+  active: "e.active",
+} as const satisfies Record<EmployeeListSortField, string>;
 
 const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
   LEFT JOIN (
@@ -16,10 +34,31 @@ const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
   ) lw ON lw.employee_id = e.id
 `;
 
+const buildEmployeeCategoryJoin = () => `
+  LEFT JOIN employee_categories ec ON ec.id = e.category_id
+`;
+
 const buildEmployeeSelect = () => `
-  SELECT e.*, lw.last_worked_at
+  SELECT
+    e.*,
+    lw.last_worked_at,
+    ec.name AS category_name,
+    ec.is_system AS category_is_system,
+    ec.is_active AS category_is_active
   FROM employees e
+  ${buildEmployeeCategoryJoin()}
   ${buildEmployeeLastWorkedJoin()}
+`;
+
+const buildEmployeeSelectWithoutLastWorked = () => `
+  SELECT
+    e.*,
+    CAST(NULL AS DATETIME2) AS last_worked_at,
+    ec.name AS category_name,
+    ec.is_system AS category_is_system,
+    ec.is_active AS category_is_active
+  FROM employees e
+  ${buildEmployeeCategoryJoin()}
 `;
 
 export const employeeRepository = {
@@ -30,6 +69,7 @@ export const employeeRepository = {
       documentNumber: string | null;
       phoneNumber: string;
       employeeType: Employee["employeeType"];
+      categoryId: string | null;
     },
     transaction?: sql.Transaction,
   ): Promise<Employee> {
@@ -40,19 +80,25 @@ export const employeeRepository = {
       .input("documentNumber", sql.NVarChar(50), input.documentNumber)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("employeeType", sql.NVarChar(20), input.employeeType)
+      .input("categoryId", sql.UniqueIdentifier, input.categoryId)
       .query(`
-        INSERT INTO employees (company_id, name, document_number, phone_number, employee_type)
+        INSERT INTO employees (company_id, name, document_number, phone_number, employee_type, category_id)
         OUTPUT INSERTED.*
-        VALUES (@companyId, @name, @documentNumber, @phoneNumber, @employeeType)
+        VALUES (@companyId, @name, @documentNumber, @phoneNumber, @employeeType, @categoryId)
       `);
 
-    return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
+    const inserted = result.recordset[0] as Record<string, unknown>;
+    const withCategory = await this.findById(companyId, String(inserted.id), transaction);
+    return withCategory ?? mapEmployeeRow(inserted);
   },
 
-  async findById(companyId: string, id: string): Promise<Employee | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async findById(
+    companyId: string,
+    id: string,
+    transaction?: sql.Transaction,
+  ): Promise<Employee | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .query(`${buildEmployeeSelect()} WHERE e.id = @id AND e.company_id = @companyId`);
@@ -78,8 +124,7 @@ export const employeeRepository = {
     });
 
     const result = await request.query(`
-      SELECT e.*
-      FROM employees e
+      ${buildEmployeeSelectWithoutLastWorked()}
       WHERE e.company_id = @companyId
         AND e.id IN (${idParams.join(", ")})
     `);
@@ -94,8 +139,8 @@ export const employeeRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(30), phoneNumber)
       .query(`
-        SELECT * FROM employees
-        WHERE phone_number = @phoneNumber AND company_id = @companyId
+        ${buildEmployeeSelectWithoutLastWorked()}
+        WHERE e.phone_number = @phoneNumber AND e.company_id = @companyId
       `);
 
     if (!result.recordset[0]) {
@@ -111,9 +156,15 @@ export const employeeRepository = {
       .request()
       .input("phoneNumber", sql.NVarChar(30), phoneNumber)
       .query(`
-        SELECT e.*
+        SELECT
+          e.*,
+          CAST(NULL AS DATETIME2) AS last_worked_at,
+          ec.name AS category_name,
+          ec.is_system AS category_is_system,
+          ec.is_active AS category_is_active
         FROM employees e
         INNER JOIN companies c ON c.id = e.company_id
+        ${buildEmployeeCategoryJoin()}
         WHERE e.phone_number = @phoneNumber
           AND e.active = 1
           AND c.status = 'ACTIVE'
@@ -132,11 +183,10 @@ export const employeeRepository = {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
-        SELECT *
-        FROM employees
-        WHERE company_id = @companyId
-          AND active = 1
-        ORDER BY name ASC, created_at ASC
+        ${buildEmployeeSelectWithoutLastWorked()}
+        WHERE e.company_id = @companyId
+          AND e.active = 1
+        ORDER BY e.name ASC, e.created_at ASC
       `);
 
     return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
@@ -168,11 +218,35 @@ export const employeeRepository = {
       });
     }
 
+    if (query.categoryId === "none") {
+      filters.push({
+        clause: "e.category_id IS NULL",
+        apply: () => undefined,
+      });
+    } else if (query.categoryId) {
+      filters.push({
+        clause: "e.category_id = @categoryId",
+        apply: (request) => request.input("categoryId", sql.UniqueIdentifier, query.categoryId),
+      });
+    }
+
     const whereClause = buildWhereClause(filters);
+    const sortDirection = query.sortDirection ?? "asc";
+    const orderBy = resolveSqlSort(
+      query.sortBy,
+      EMPLOYEE_LIST_SORT_COLUMNS,
+      "e.created_at",
+      query.sortBy ? sortDirection : "desc",
+    );
 
     const countRequest = pool.request();
     applySqlFilters(countRequest, filters);
-    const countResult = await countRequest.query(`SELECT COUNT(*) AS total FROM employees e ${whereClause}`);
+    const countResult = await countRequest.query(`
+      SELECT COUNT(*) AS total
+      FROM employees e
+      ${buildEmployeeCategoryJoin()}
+      ${whereClause}
+    `);
     const total = Number(countResult.recordset[0].total);
 
     const dataRequest = pool.request();
@@ -183,7 +257,7 @@ export const employeeRepository = {
     const dataResult = await dataRequest.query(`
       ${buildEmployeeSelect()}
       ${whereClause}
-      ORDER BY e.created_at DESC
+      ORDER BY ${orderBy}, e.id ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
@@ -225,6 +299,11 @@ export const employeeRepository = {
       fields.push("employee_type = @employeeType");
     }
 
+    if (input.categoryId !== undefined) {
+      request.input("categoryId", sql.UniqueIdentifier, input.categoryId);
+      fields.push("category_id = @categoryId");
+    }
+
     if (input.active !== undefined) {
       request.input("active", sql.Bit, input.active);
       fields.push("active = @active");
@@ -239,7 +318,7 @@ export const employeeRepository = {
     const result = await request.query(`
       UPDATE employees
       SET ${fields.join(", ")}
-      OUTPUT INSERTED.*
+      OUTPUT INSERTED.id
       WHERE id = @id AND company_id = @companyId
     `);
 
@@ -247,7 +326,7 @@ export const employeeRepository = {
       return null;
     }
 
-    return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
+    return this.findById(companyId, id);
   },
 
   async deactivate(companyId: string, id: string): Promise<Employee | null> {

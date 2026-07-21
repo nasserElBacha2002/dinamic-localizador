@@ -1,5 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Stack } from "@mantine/core";
+import { Box, Input, Stack } from "@mantine/core";
 import { useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
@@ -14,8 +14,11 @@ import {
   RHFSwitch,
   RHFTextInput,
 } from "../../design-system";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
 import { employeeTypeLabels } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
+import { EmployeeCategorySelect } from "./EmployeeCategorySelect";
 
 interface EmployeeFormProps {
   defaultValues: EmployeeFormInputValues;
@@ -24,6 +27,7 @@ interface EmployeeFormProps {
   onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
+  retainedCategory?: { id: string; name: string } | null;
   onSubmit: (values: EmployeeFormValues) => Promise<void>;
 }
 
@@ -34,8 +38,15 @@ export function EmployeeForm({
   onCancel,
   loading = false,
   errorMessage,
+  retainedCategory = null,
   onSubmit,
 }: EmployeeFormProps) {
+  const permissionsQuery = useCompanyPermissions();
+  const canCreateCategories = hasPermission(
+    permissionsQuery.data?.permissions,
+    "company:settings:update",
+  );
+
   const employeeTypeOptions = useMemo(
     () =>
       EMPLOYEE_TYPES.map((employeeType) => ({
@@ -53,37 +64,49 @@ export function EmployeeForm({
   });
 
   return (
-    <form onSubmit={handleSubmit(onSubmit)} noValidate>
-      <FormSection>
-        <Stack gap="md">
-          <FormErrorAlert message={errorMessage} />
+    <Box maw={720}>
+      <form onSubmit={handleSubmit(onSubmit)} noValidate>
+        <FormSection>
+          <Stack gap="md">
+            <FormErrorAlert message={errorMessage} />
 
-          <FormGrid>
-            <RHFTextInput control={control} name="name" label="Nombre" required />
-            <RHFTextInput control={control} name="documentNumber" label="Documento" />
-            <RHFPhoneInput
-              control={control}
-              name="phoneNumber"
-              label="Teléfono"
-              placeholder="+5491112345678"
-              description="Formato internacional E.164"
-              required
-            />
-            <RHFSelect
-              control={control}
-              name="employeeType"
-              label={workerTypeLabel}
-              placeholder="Seleccionar tipo"
-              data={employeeTypeOptions}
-              required
-            />
-          </FormGrid>
+            <FormGrid>
+              <RHFTextInput control={control} name="name" label="Nombre" required />
+              <RHFTextInput control={control} name="documentNumber" label="Documento" />
+              <RHFPhoneInput
+                control={control}
+                name="phoneNumber"
+                label="Teléfono"
+                placeholder="+5491112345678"
+                description="Formato internacional E.164"
+                required
+              />
+              <RHFSelect
+                control={control}
+                name="employeeType"
+                label={workerTypeLabel}
+                placeholder="Seleccionar tipo"
+                data={employeeTypeOptions}
+                required
+              />
+              <EmployeeCategorySelect
+                control={control}
+                name="categoryId"
+                canCreate={canCreateCategories}
+                disabled={loading}
+                retainedCategory={retainedCategory}
+              />
+              <Input.Wrapper label="Estado activo" inputWrapperOrder={["label", "input", "error"]}>
+                <Box mih={36} style={{ display: "flex", alignItems: "center" }}>
+                  <RHFSwitch control={control} name="active" label="Activo" />
+                </Box>
+              </Input.Wrapper>
+            </FormGrid>
 
-          <RHFSwitch control={control} name="active" label="Activo" />
-
-          <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
-        </Stack>
-      </FormSection>
-    </form>
+            <FormActions submitLabel={submitLabel} cancelTo={cancelTo} onCancel={onCancel} loading={loading} />
+          </Stack>
+        </FormSection>
+      </form>
+    </Box>
   );
 }

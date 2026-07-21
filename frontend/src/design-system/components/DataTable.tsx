@@ -143,24 +143,37 @@ export function DataTable<T>({
           >
             <Table.Thead>
               <Table.Tr>
-                {columns.map((column) => (
-                  <Table.Th
-                    key={column.key}
-                    style={{
-                      width: column.width,
-                      textAlign: column.align ?? "left",
-                    }}
-                  >
-                    <SortableHeader
-                      label={column.header}
-                      columnKey={column.key}
-                      sortable={column.sortable}
-                      sortBy={sortBy}
-                      sortDirection={sortDirection}
-                      onSortChange={onSortChange}
-                    />
-                  </Table.Th>
-                ))}
+                {columns.map((column) => {
+                  const isSortable = Boolean(column.sortable && onSortChange);
+                  const isActive = sortBy === column.key;
+                  const ariaSort = !isSortable
+                    ? undefined
+                    : !isActive
+                      ? "none"
+                      : sortDirection === "asc"
+                        ? "ascending"
+                        : "descending";
+
+                  return (
+                    <Table.Th
+                      key={column.key}
+                      aria-sort={ariaSort}
+                      style={{
+                        width: column.width,
+                        textAlign: column.align ?? "left",
+                      }}
+                    >
+                      <SortableHeader
+                        label={column.header}
+                        columnKey={column.key}
+                        sortable={column.sortable}
+                        sortBy={sortBy}
+                        sortDirection={sortDirection}
+                        onSortChange={onSortChange}
+                      />
+                    </Table.Th>
+                  );
+                })}
                 {rowActions ? (
                   <Table.Th style={{ textAlign: "right" }}>{rowActionsHeader}</Table.Th>
                 ) : null}

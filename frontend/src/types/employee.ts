@@ -1,4 +1,5 @@
 import type { EmployeeType } from "../constants/employee-types";
+import type { EmployeeCategorySummary } from "./employee-category";
 
 export interface Employee {
   id: string;
@@ -6,6 +7,8 @@ export interface Employee {
   documentNumber: string | null;
   phoneNumber: string;
   employeeType: EmployeeType;
+  categoryId: string | null;
+  category: EmployeeCategorySummary | null;
   active: boolean;
   lastWorkedAt: string | null;
   createdAt: string;
@@ -17,6 +20,9 @@ export interface EmployeeFilters {
   limit?: number;
   active?: boolean;
   search?: string;
+  categoryId?: string;
+  sortBy?: string;
+  sortDirection?: "asc" | "desc";
 }
 
 export interface CreateEmployeeInput {
@@ -24,6 +30,7 @@ export interface CreateEmployeeInput {
   documentNumber?: string | null;
   phoneNumber: string;
   employeeType: EmployeeType;
+  categoryId?: string | null;
 }
 
 export interface UpdateEmployeeInput {
@@ -31,5 +38,6 @@ export interface UpdateEmployeeInput {
   documentNumber?: string | null;
   phoneNumber?: string;
   employeeType?: EmployeeType;
+  categoryId?: string | null;
   active?: boolean;
 }

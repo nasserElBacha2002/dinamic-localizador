@@ -11,12 +11,21 @@ export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
 export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
 export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
 
+export interface EmployeeCategoryRef {
+  id: string;
+  name: string;
+  isSystem: boolean;
+  isActive: boolean;
+}
+
 export interface Employee {
   id: string;
   name: string;
   documentNumber: string | null;
   phoneNumber: string;
   employeeType: EmployeeType;
+  categoryId: string | null;
+  category: EmployeeCategoryRef | null;
   active: boolean;
   lastWorkedAt: string | null;
   createdAt: string;

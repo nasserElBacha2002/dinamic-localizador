@@ -6,17 +6,24 @@ import { useCompanyAbsenceSettings } from "../../hooks/useCompanyAbsenceSettings
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
+import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { companyRoleLabels } from "../../utils/labels";
 import { getApiErrorMessage } from "../../utils/errors";
-import { buildAbsenceSummary, buildLocationTypesSummary, buildWorkScheduleSummary } from "./company-settings-summaries";
+import {
+  buildAbsenceSummary,
+  buildEmployeeCategoriesSummary,
+  buildLocationTypesSummary,
+  buildWorkScheduleSummary,
+} from "./company-settings-summaries";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsSection } from "./components/CompanyOperationalSettingsSection";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
+import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 
-type DialogKey = "absences" | "locationTypes" | "workSchedule";
+type DialogKey = "absences" | "locationTypes" | "workSchedule" | "employeeCategories";
 
 export function CompanySettingsPage() {
   const permissionsQuery = useCompanyPermissions();
@@ -27,6 +34,7 @@ export function CompanySettingsPage() {
   const settingsQuery = useCompanySettings(canRead);
   const absenceSettingsQuery = useCompanyAbsenceSettings(canRead);
   const locationTypesQuery = useCompanyLocationTypes(false);
+  const employeeCategoriesQuery = useEmployeeCategories({ includeInactive: true }, canRead);
   const workScheduleQuery = useCompanyWorkSchedule(canRead);
 
   const [openDialog, setOpenDialog] = useState<DialogKey | null>(null);
@@ -140,6 +148,31 @@ export function CompanySettingsPage() {
           canEdit={canUpdate && !locationTypesQuery.isError}
           onAction={() => setOpenDialog("locationTypes")}
         />
+
+        <SettingsSummaryCard
+          title="Categorías de colaboradores"
+          description="Categorías laborales base y personalizadas para clasificar colaboradores."
+          summaryItems={
+            employeeCategoriesQuery.data
+              ? buildEmployeeCategoriesSummary(employeeCategoriesQuery.data).summaryItems
+              : []
+          }
+          chips={
+            employeeCategoriesQuery.data
+              ? buildEmployeeCategoriesSummary(employeeCategoriesQuery.data).chips
+              : []
+          }
+          loading={employeeCategoriesQuery.isLoading}
+          error={
+            employeeCategoriesQuery.isError
+              ? getApiErrorMessage(employeeCategoriesQuery.error)
+              : null
+          }
+          onRetry={() => void employeeCategoriesQuery.refetch()}
+          actionLabel="Gestionar categorías"
+          canEdit={canUpdate && !employeeCategoriesQuery.isError}
+          onAction={() => setOpenDialog("employeeCategories")}
+        />
       </SimpleGrid>
 
       {openDialog === "absences" && absenceSettingsQuery.data ? (
@@ -157,6 +190,15 @@ export function CompanySettingsPage() {
           opened
           onClose={() => setOpenDialog(null)}
           locationTypes={locationTypesQuery.data}
+          canUpdate={canUpdate}
+        />
+      ) : null}
+
+      {openDialog === "employeeCategories" && employeeCategoriesQuery.data ? (
+        <EmployeeCategoriesDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          categories={employeeCategoriesQuery.data}
           canUpdate={canUpdate}
         />
       ) : null}

@@ -97,6 +97,7 @@ describeDatabaseIntegration("employee absence balance backfill integration", () 
       documentNumber: null,
       phoneNumber: uniquePhone(),
       employeeType: "fijo",
+      categoryId: null,
     });
     createdEmployeeIds.push(employee.id);
 

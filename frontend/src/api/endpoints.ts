@@ -1,5 +1,6 @@
 export const API_ENDPOINTS = {
   services: "services",
+  serviceFacets: "services/facets",
   operations: "operations",
   employees: "employees",
   lookups: {

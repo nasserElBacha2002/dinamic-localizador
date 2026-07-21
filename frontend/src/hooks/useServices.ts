@@ -3,6 +3,7 @@ import {
   createService,
   deactivateService,
   getServiceById,
+  getServiceFacets,
   getServices,
   updateService,
 } from "../api/services.api";
@@ -17,6 +18,17 @@ export function useServices(filters: ServiceFilters) {
     queryFn: () => getServices(filters),
     enabled,
     retry: 1,
+  });
+}
+
+export function useServiceFacets() {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
+  return useQuery({
+    queryKey: ["service-facets", companyId],
+    queryFn: () => getServiceFacets(),
+    enabled,
+    staleTime: 60_000,
   });
 }
 
@@ -37,6 +49,7 @@ export function useCreateService() {
     mutationFn: createService,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
+      queryClient.invalidateQueries({ queryKey: ["service-facets"] });
     },
   });
 }
@@ -49,6 +62,7 @@ export function useUpdateService(serviceId: string) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
       queryClient.invalidateQueries({ queryKey: ["service"] });
+      queryClient.invalidateQueries({ queryKey: ["service-facets"] });
     },
   });
 }
@@ -60,6 +74,7 @@ export function useDeactivateService() {
     mutationFn: deactivateService,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["services"] });
+      queryClient.invalidateQueries({ queryKey: ["service-facets"] });
     },
   });
 }

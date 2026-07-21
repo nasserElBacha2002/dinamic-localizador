@@ -3,7 +3,7 @@ import { z } from "zod";
 const serviceFormatSchema = z
   .string()
   .trim()
-  .min(1, "Seleccioná un tipo de ubicación/servicio.")
+  .min(1, "Seleccioná un formato.")
   .max(80)
   .optional()
   .or(z.literal(""));

@@ -119,7 +119,7 @@ export function CompanySettingsPage() {
         />
 
         <SettingsSummaryCard
-          title="Tipos de ubicación / servicio"
+          title="Formato"
           description="Clasificación de servicios, depósitos y otros puntos operativos."
           summaryItems={
             locationTypesQuery.data
@@ -136,7 +136,7 @@ export function CompanySettingsPage() {
             locationTypesQuery.isError ? getApiErrorMessage(locationTypesQuery.error) : null
           }
           onRetry={() => void locationTypesQuery.refetch()}
-          actionLabel="Gestionar tipos"
+          actionLabel="Gestionar formatos"
           canEdit={canUpdate && !locationTypesQuery.isError}
           onAction={() => setOpenDialog("locationTypes")}
         />

@@ -1,11 +1,25 @@
-// Phase 2.3/2.7: Service remains the technical API model; physical table is operational_locations.
-// Conceptually this represents an OperationalLocation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Service } from "../types/domain";
 import { mapServiceRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { resolveSqlSort } from "../utils/sql-sort";
 import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
+
+const SERVICE_LIST_SORT_COLUMNS: Record<string, string> = {
+  name: "name",
+  neighborhood: "neighborhood",
+  locality: "locality",
+  serviceFormat: "store_format",
+  address: "address",
+  active: "active",
+  createdAt: "created_at",
+};
+
+export interface ServiceGeoFacets {
+  localities: string[];
+  neighborhoodsByLocality: Record<string, string[]>;
+}
 
 export const serviceRepository = {
   async create(companyId: string, input: CreateServiceInput): Promise<Service> {
@@ -124,7 +138,35 @@ export const serviceRepository = {
       });
     }
 
+    if (query.serviceFormat) {
+      filters.push({
+        clause: "store_format = @serviceFormat",
+        apply: (request) => request.input("serviceFormat", sql.NVarChar(80), query.serviceFormat),
+      });
+    }
+
+    if (query.locality) {
+      filters.push({
+        clause: "LTRIM(RTRIM(locality)) = @locality",
+        apply: (request) => request.input("locality", sql.NVarChar(150), query.locality),
+      });
+    }
+
+    if (query.neighborhood) {
+      filters.push({
+        clause: "LTRIM(RTRIM(neighborhood)) = @neighborhood",
+        apply: (request) => request.input("neighborhood", sql.NVarChar(150), query.neighborhood),
+      });
+    }
+
     const whereClause = buildWhereClause(filters);
+    const sortDirection: "asc" | "desc" = query.sortBy ? query.sortDirection : "desc";
+    const orderBy = resolveSqlSort(
+      query.sortBy,
+      SERVICE_LIST_SORT_COLUMNS,
+      "created_at",
+      sortDirection,
+    );
 
     const countRequest = pool.request();
     applySqlFilters(countRequest, filters);
@@ -140,7 +182,7 @@ export const serviceRepository = {
       SELECT *
       FROM operational_locations
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY ${orderBy}, id ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
@@ -148,6 +190,52 @@ export const serviceRepository = {
       items: dataResult.recordset.map((row) => mapServiceRow(row as Record<string, unknown>)),
       total,
     };
+  },
+
+  async listGeoFacets(companyId: string): Promise<ServiceGeoFacets> {
+    const pool = getPool();
+    const localitiesResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT DISTINCT LTRIM(RTRIM(locality)) AS locality
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND locality IS NOT NULL
+          AND LTRIM(RTRIM(locality)) <> N''
+        ORDER BY locality ASC
+      `);
+
+    const neighborhoodsResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT DISTINCT
+          LTRIM(RTRIM(locality)) AS locality,
+          LTRIM(RTRIM(neighborhood)) AS neighborhood
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND locality IS NOT NULL
+          AND LTRIM(RTRIM(locality)) <> N''
+          AND neighborhood IS NOT NULL
+          AND LTRIM(RTRIM(neighborhood)) <> N''
+        ORDER BY locality ASC, neighborhood ASC
+      `);
+
+    const localities = localitiesResult.recordset.map((row) => String(row.locality));
+    const neighborhoodsByLocality: Record<string, string[]> = {};
+    for (const row of neighborhoodsResult.recordset as Array<{
+      locality: string;
+      neighborhood: string;
+    }>) {
+      const locality = String(row.locality);
+      const neighborhood = String(row.neighborhood);
+      const current = neighborhoodsByLocality[locality] ?? [];
+      current.push(neighborhood);
+      neighborhoodsByLocality[locality] = current;
+    }
+
+    return { localities, neighborhoodsByLocality };
   },
 
   async listAllActive(companyId: string): Promise<Service[]> {

@@ -69,6 +69,8 @@ export {
   FilterSelect,
   type FilterSelectProps,
   type FilterSelectOption,
+  CascadingFilterSelect,
+  type CascadingFilterSelectProps,
   FilterDateRangeInput,
   type FilterDateRangeInputProps,
   FilterLookupInput,

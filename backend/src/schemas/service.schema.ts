@@ -1,11 +1,23 @@
 import { z } from "zod";
-import { activeFilterSchema, paginationQuerySchema, searchFilterSchema } from "./common.schema";
+import { activeFilterSchema, paginationQuerySchema, searchFilterSchema, tableSortSchema } from "./common.schema";
 
 const serviceFormatSchema = z
   .string()
   .trim()
-  .min(1, "El tipo de ubicación/servicio no puede estar vacío.")
-  .max(80, "El tipo de ubicación/servicio no puede superar 80 caracteres.");
+  .min(1, "El formato no puede estar vacío.")
+  .max(80, "El formato no puede superar 80 caracteres.");
+
+export const SERVICE_LIST_SORT_FIELDS = [
+  "name",
+  "neighborhood",
+  "locality",
+  "serviceFormat",
+  "address",
+  "active",
+  "createdAt",
+] as const;
+
+export type ServiceListSortField = (typeof SERVICE_LIST_SORT_FIELDS)[number];
 
 export const createServiceSchema = z.object({
   name: z.string().trim().min(1, "El nombre es obligatorio").max(150),
@@ -42,7 +54,14 @@ export const serviceIdParamSchema = z.object({
 
 export const listServicesQuerySchema = paginationQuerySchema
   .merge(activeFilterSchema)
-  .merge(searchFilterSchema);
+  .merge(searchFilterSchema)
+  .merge(tableSortSchema)
+  .extend({
+    serviceFormat: z.string().trim().min(1).max(80).optional(),
+    locality: z.string().trim().min(1).max(150).optional(),
+    neighborhood: z.string().trim().min(1).max(150).optional(),
+    sortBy: z.enum(SERVICE_LIST_SORT_FIELDS).optional(),
+  });
 
 export type CreateServiceInput = z.infer<typeof createServiceSchema>;
 export type UpdateServiceInput = z.infer<typeof updateServiceSchema>;

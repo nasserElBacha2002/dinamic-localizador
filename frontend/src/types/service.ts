@@ -1,5 +1,14 @@
 export type ServiceFormat = string;
 
+export type ServiceListSortField =
+  | "name"
+  | "neighborhood"
+  | "locality"
+  | "serviceFormat"
+  | "address"
+  | "active"
+  | "createdAt";
+
 export interface Service {
   id: string;
   name: string;
@@ -23,11 +32,21 @@ export interface ServiceSummary {
   active: boolean;
 }
 
+export interface ServiceGeoFacets {
+  localities: string[];
+  neighborhoodsByLocality: Record<string, string[]>;
+}
+
 export interface ServiceFilters {
   page?: number;
   limit?: number;
   active?: boolean;
   search?: string;
+  serviceFormat?: string;
+  locality?: string;
+  neighborhood?: string;
+  sortBy?: ServiceListSortField;
+  sortDirection?: "asc" | "desc";
 }
 
 export interface CreateServiceInput {

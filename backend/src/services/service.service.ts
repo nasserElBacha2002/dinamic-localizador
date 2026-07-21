@@ -45,6 +45,10 @@ export const serviceService = {
     };
   },
 
+  async listFacets(companyId: string) {
+    return serviceRepository.listGeoFacets(companyId);
+  },
+
   async getById(companyId: string, id: string) {
     const service = await serviceRepository.findById(companyId, id);
     if (!service) {

@@ -1,5 +1,11 @@
 import type { PaginatedResponse, SingleResponse } from "../types/api";
-import type { CreateServiceInput, Service, ServiceFilters, UpdateServiceInput } from "../types/service";
+import type {
+  CreateServiceInput,
+  Service,
+  ServiceFilters,
+  ServiceGeoFacets,
+  UpdateServiceInput,
+} from "../types/service";
 import { buildParams } from "./client";
 import { API_ENDPOINTS, servicePath } from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
@@ -9,6 +15,13 @@ export async function getServices(filters: ServiceFilters = {}): Promise<Paginat
     params: buildParams(filters as Record<string, string | number | boolean | undefined>),
   });
   return data;
+}
+
+export async function getServiceFacets(): Promise<ServiceGeoFacets> {
+  const { data } = await scopedApiClient.get<SingleResponse<ServiceGeoFacets>>(
+    API_ENDPOINTS.serviceFacets,
+  );
+  return data.data;
 }
 
 export async function getServiceById(id: string): Promise<Service> {

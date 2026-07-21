@@ -19,7 +19,7 @@ export function CompanyLocationTypesDialog({
     <Modal
       opened={opened}
       onClose={onClose}
-      title="Tipos de ubicación / servicio"
+      title="Formato"
       size="lg"
       centered
     >

@@ -88,22 +88,16 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   it("seeds admin memberships for Dinamic Systems", async () => {
-    const adminResult = await getPool().request().query(`
-      SELECT TOP 1 u.id AS user_id
-      FROM users u
-      WHERE u.role = 'ADMIN' AND u.active = 1
-    `);
-
-    const adminUserId = adminResult.recordset[0]?.user_id
-      ? String(adminResult.recordset[0].user_id)
-      : null;
-    assert.ok(adminUserId, "requires active admin user");
+    // Prefer the CI/migration-seeded platform admin. Later suites create other ADMIN
+    // users (company owners) without Dinamic membership; TOP 1 by role is non-deterministic.
+    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    assert.ok(admin?.active, "requires seeded admin@dinamicsystems.com");
 
     const membership = await userCompanyMembershipRepository.findActiveMembership(
-      adminUserId,
+      admin.id,
       dinamicCompanyId,
     );
-    assert.ok(membership);
+    assert.ok(membership, "admin@dinamicsystems.com must have Dinamic Systems membership");
     assert.equal(membership.companyId, dinamicCompanyId);
   });
 

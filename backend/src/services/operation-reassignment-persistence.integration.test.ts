@@ -92,9 +92,11 @@ describeDatabaseIntegration("operation reassignment persistence integration", ()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phone", sql.NVarChar(20), uniquePhone(1))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Reassign Persistence', @phone, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Reassign Persistence', @phone, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
 

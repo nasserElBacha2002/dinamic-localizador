@@ -64,12 +64,14 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
       .input("phone2", sql.NVarChar(20), uniquePhone(2))
       .input("phone3", sql.NVarChar(20), uniquePhone(3))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES
           (@companyId, N'Confirmed Reset', @phone1, 'fijo', 1),
           (@companyId, N'Unavailable Reset', @phone2, 'fijo', 1),
-          (@companyId, N'Pending Reset', @phone3, 'fijo', 1)
+          (@companyId, N'Pending Reset', @phone3, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
 
     const [confirmedId, unavailableId, pendingId] = employees.recordset.map((row) =>
@@ -167,9 +169,11 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(20), uniquePhone(9))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Rollback Integration', @phoneNumber, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Rollback Integration', @phoneNumber, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
 

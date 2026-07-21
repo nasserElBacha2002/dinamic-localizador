@@ -158,9 +158,15 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
       return;
     }
 
+    // Single read path (listForUser → listActive) to avoid races with parallel suites
+    // that insert ACTIVE companies between consecutive list calls.
     const companies = await companyService.listForUser(platformAdmin.id, true);
-    const activeCompanies = await companyRepository.listActive();
-    assert.equal(companies.length, activeCompanies.length);
+    assert.ok(companies.length >= 1);
     assert.ok(companies.every((company) => company.role === "OWNER"));
+    assert.ok(companies.every((company) => company.status === "ACTIVE"));
+    assert.ok(
+      companies.some((company) => company.companyId === otherCompanyId),
+      "platform admin list must include the company created by this suite",
+    );
   });
 });

@@ -75,12 +75,14 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       .input("phone2", sql.NVarChar(20), uniquePhone(2))
       .input("phone3", sql.NVarChar(20), uniquePhone(3))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES
           (@companyId, N'Emp Pending', @phone1, 'fijo', 1),
           (@companyId, N'Emp Confirmed', @phone2, 'fijo', 1),
-          (@companyId, N'Emp Unavailable', @phone3, 'fijo', 1)
+          (@companyId, N'Emp Unavailable', @phone3, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
 
     const [pendingId, confirmedId, unavailableId] = employees.recordset.map((row) =>
@@ -180,12 +182,14 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       .input("phoneB", sql.NVarChar(20), uniquePhone(11))
       .input("phoneC", sql.NVarChar(20), uniquePhone(12))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES
           (@companyId, N'Emp A', @phoneA, 'fijo', 1),
           (@companyId, N'Emp B', @phoneB, 'fijo', 1),
-          (@companyId, N'Emp C', @phoneC, 'fijo', 1)
+          (@companyId, N'Emp C', @phoneC, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
 
     const [employeeA, employeeB, employeeC] = employees.recordset.map((row) =>

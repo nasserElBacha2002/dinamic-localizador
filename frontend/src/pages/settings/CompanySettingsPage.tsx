@@ -14,16 +14,22 @@ import {
   buildAbsenceSummary,
   buildEmployeeCategoriesSummary,
   buildLocationTypesSummary,
+  buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
-import { CompanyOperationalSettingsSection } from "./components/CompanyOperationalSettingsSection";
+import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
 import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 
-type DialogKey = "absences" | "locationTypes" | "workSchedule" | "employeeCategories";
+type DialogKey =
+  | "operational"
+  | "absences"
+  | "locationTypes"
+  | "workSchedule"
+  | "employeeCategories";
 
 export function CompanySettingsPage() {
   const permissionsQuery = useCompanyPermissions();
@@ -60,6 +66,7 @@ export function CompanySettingsPage() {
   }
 
   const settings = settingsQuery.data;
+  const operationalSummary = buildOperationalSettingsSummary(settings);
 
   return (
     <Stack gap="md">
@@ -80,14 +87,16 @@ export function CompanySettingsPage() {
         <Alert color="blue">No tenés permisos para editar esta configuración.</Alert>
       ) : null}
 
-      <CompanyOperationalSettingsSection
-        key={`operational-${settings.companyId}-${settings.updatedAt}`}
-        settings={settings}
-        canUpdate={canUpdate}
-        onSaved={handleSaved}
-      />
-
       <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+        <SettingsSummaryCard
+          title="Configuración operativa"
+          description="Defaults usados por operaciones, importaciones y validaciones del bot."
+          summaryItems={operationalSummary.summaryItems}
+          actionLabel="Gestionar configuración operativa"
+          canEdit={canUpdate}
+          onAction={() => setOpenDialog("operational")}
+        />
+
         <SettingsSummaryCard
           title="Horario laboral semanal"
           description="Horario predeterminado para operaciones habituales con horario de la empresa."
@@ -174,6 +183,17 @@ export function CompanySettingsPage() {
           onAction={() => setOpenDialog("employeeCategories")}
         />
       </SimpleGrid>
+
+      {openDialog === "operational" ? (
+        <CompanyOperationalSettingsDialog
+          key={`operational-${settings.companyId}-${settings.updatedAt}`}
+          opened
+          onClose={() => setOpenDialog(null)}
+          settings={settings}
+          canUpdate={canUpdate}
+          onSaved={handleSaved}
+        />
+      ) : null}
 
       {openDialog === "absences" && absenceSettingsQuery.data ? (
         <CompanyAbsenceSettingsDialog

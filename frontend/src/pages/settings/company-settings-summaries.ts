@@ -1,3 +1,7 @@
+import {
+  getCanonicalOperationTimezone,
+  getOperationTimezoneOptions,
+} from "../../constants/operation-timezones";
 import type { CompanyAbsenceSetting } from "../../types/company-absence-settings";
 import type { CompanyLocationType } from "../../types/company-location-type";
 import type { CompanyModule } from "../../types/company-module";
@@ -13,6 +17,30 @@ export function formatOperationSchedule(
   const start = startTime?.trim() || "—";
   const end = endTime?.trim() || "—";
   return `${start} → ${end}`;
+}
+
+export function formatOperationScheduleSummary(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): string {
+  const start = startTime?.trim() || "—";
+  const end = endTime?.trim() || "—";
+  return `${start} a ${end}`;
+}
+
+export function formatHours(value: number | string | null | undefined, suffix = "h"): string {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+  return `${value} ${suffix}`;
+}
+
+export function formatTimezoneSummary(timezone: string): string {
+  const canonical = getCanonicalOperationTimezone(timezone);
+  return (
+    getOperationTimezoneOptions(timezone).find((option) => option.value === canonical)?.label ??
+    timezone
+  );
 }
 
 export function formatActiveInactive(value: boolean): string {
@@ -35,6 +63,33 @@ export function formatMeters(value: number | string | null | undefined): string 
 
 export function buildGeneralSettingsSummary(settings: CompanySettings) {
   return [{ label: "Zona horaria", value: settings.operationTimezone }];
+}
+
+export function buildOperationalSettingsSummary(settings: CompanySettings) {
+  return {
+    summaryItems: [
+      { label: "Zona horaria", value: formatTimezoneSummary(settings.operationTimezone) },
+      {
+        label: "Horario predeterminado",
+        value: formatOperationScheduleSummary(
+          settings.defaultOperationStartTime,
+          settings.defaultOperationEndTime,
+        ),
+      },
+      { label: "Radio permitido", value: formatMeters(settings.defaultRadiusMeters) },
+      {
+        label: "Tolerancia de llegada",
+        value: `${settings.defaultEarlyArrivalToleranceMinutes} min antes / ${settings.defaultLateArrivalToleranceMinutes} min después`,
+      },
+      { label: "Puntualidad WhatsApp", value: formatMinutes(settings.lateGraceMinutes) },
+      {
+        label: "Recordatorio",
+        value: settings.confirmationReminderEnabled
+          ? `${settings.confirmationReminderHoursBefore} h antes`
+          : "Desactivado",
+      },
+    ],
+  };
 }
 
 export function buildOperationOperationSummary(settings: CompanySettings) {

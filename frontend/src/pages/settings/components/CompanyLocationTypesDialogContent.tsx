@@ -66,13 +66,13 @@ export function CompanyLocationTypesDialogContent({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Los tipos de ubicación se usan para clasificar servicios, depósitos u otros puntos operativos.
+        Los formatos se usan para clasificar servicios, depósitos u otros puntos operativos.
       </Text>
 
       {canUpdate ? (
         <Group align="flex-end">
           <TextInput
-            label="Nuevo tipo"
+            label="Nuevo formato"
             placeholder="Ej. Express"
             value={newName}
             onChange={(event) => setNewName(event.currentTarget.value)}
@@ -87,7 +87,7 @@ export function CompanyLocationTypesDialogContent({
 
       {sortedTypes.length === 0 ? (
         <Text size="sm" c="dimmed">
-          No hay tipos configurados.
+          No hay formatos configurados.
         </Text>
       ) : (
         <Table striped highlightOnHover>

@@ -134,7 +134,7 @@ describe("Company settings page layout", () => {
     assert.match(pageFile, /CompanyOperationalSettingsSection/);
     assert.match(pageFile, /SettingsSummaryCard/);
     assert.match(pageFile, /Gestionar ausencias/);
-    assert.match(pageFile, /Gestionar tipos/);
+    assert.match(pageFile, /Gestionar formatos/);
     assert.doesNotMatch(pageFile, /Datos generales/);
     assert.doesNotMatch(pageFile, /Inventarios \/ operaciones/);
     assert.doesNotMatch(pageFile, /Asistencia \/ WhatsApp/);

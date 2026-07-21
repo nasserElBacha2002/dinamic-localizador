@@ -25,6 +25,11 @@ serviceRouter.get(
   asyncHandler(serviceController.list),
 );
 serviceRouter.get(
+  "/facets",
+  requirePermission("services:read"),
+  asyncHandler(serviceController.listFacets),
+);
+serviceRouter.get(
   "/:id",
   requirePermission("services:read"),
   validate(serviceIdParamSchema, "params"),

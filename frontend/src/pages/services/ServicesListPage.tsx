@@ -1,9 +1,11 @@
-import { Button, Select } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Button } from "@mantine/core";
 import {
+  CascadingFilterSelect,
   DataTable,
   FilterBar,
+  FilterSelect,
   mapApiPaginationMeta,
   PageHeader,
   PaginationControls,
@@ -13,7 +15,8 @@ import {
 } from "../../design-system";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { useListNavigationState } from "../../hooks/useListNavigationState";
-import { useServices } from "../../hooks/useServices";
+import { useServiceFacets, useServices } from "../../hooks/useServices";
+import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { terminology } from "../../domain/terminology";
 import type { Service } from "../../types/service";
@@ -21,19 +24,16 @@ import { getApiErrorMessage } from "../../utils/errors";
 import { activeStatusLabel } from "../../utils/labels";
 import { navigateWithListContext } from "../../utils/list-navigation";
 import { hasPermission } from "../../utils/permissions";
+import { ServicesListFiltersErrorBanner } from "./ServicesListFiltersErrorBanner";
+import {
+  buildServicesListApiFilters,
+  SERVICE_TABLE_DEFAULTS,
+  SERVICE_TABLE_FIELDS,
+  SERVICE_TABLE_SORTABLE_COLUMN_KEYS,
+  shouldOmitServiceTableValue,
+} from "./services-list-table-state";
 
 const SERVICES_LIST_PATH = "/services";
-
-const SERVICE_TABLE_DEFAULTS = {
-  page: 1,
-  pageSize: 10,
-  search: "",
-  active: "all" as "all" | "true" | "false",
-};
-
-const SERVICE_TABLE_FIELDS = {
-  active: { type: "enum", values: ["all", "true", "false"] },
-} as const;
 
 export function ServicesListPage() {
   const navigate = useNavigate();
@@ -45,22 +45,82 @@ export function ServicesListPage() {
   const table = useTableUrlState({
     defaults: SERVICE_TABLE_DEFAULTS,
     fields: SERVICE_TABLE_FIELDS,
+    shouldOmitFromUrl: (key, value, defaults) =>
+      shouldOmitServiceTableValue(key, value, defaults),
   });
 
-  const { data, isPending, isError, error } = useServices({
-    page: table.page,
-    limit: table.pageSize,
-    search: table.state.search || undefined,
-    active: table.state.active === "all" ? undefined : table.state.active === "true",
-  });
+  const locationTypesQuery = useCompanyLocationTypes(false);
+  const facetsQuery = useServiceFacets();
+
+  const listFilters = buildServicesListApiFilters(table.state);
+  const { data, isPending, isError, error } = useServices(listFilters);
+
+  const formatOptions = useMemo(() => {
+    const locationTypes = locationTypesQuery.data ?? [];
+    return [
+      { value: "", label: "Todos" },
+      ...locationTypes
+        .filter((type) => type.isActive)
+        .map((type) => ({ value: type.code, label: type.name })),
+      ...(table.state.serviceFormat &&
+      !locationTypes.some((type) => type.isActive && type.code === table.state.serviceFormat)
+        ? [{ value: table.state.serviceFormat, label: table.state.serviceFormat }]
+        : []),
+    ];
+  }, [locationTypesQuery.data, table.state.serviceFormat]);
+
+  const localityOptions = useMemo(
+    () => [
+      { value: "", label: "Todas" },
+      ...(facetsQuery.data?.localities ?? []).map((locality) => ({
+        value: locality,
+        label: locality,
+      })),
+    ],
+    [facetsQuery.data?.localities],
+  );
+
+  const neighborhoodOptions = useMemo(() => {
+    const neighborhoods =
+      table.state.locality && facetsQuery.data
+        ? (facetsQuery.data.neighborhoodsByLocality[table.state.locality] ?? [])
+        : [];
+    return [
+      { value: "", label: "Todos" },
+      ...neighborhoods.map((neighborhood) => ({
+        value: neighborhood,
+        label: neighborhood,
+      })),
+    ];
+  }, [facetsQuery.data, table.state.locality]);
 
   const columns = useMemo<DataTableColumn<Service>[]>(
     () => [
-      { key: "name", header: "Nombre", getValue: (row) => row.name },
-      { key: "neighborhood", header: "Barrio", getValue: (row) => row.neighborhood ?? "—" },
-      { key: "locality", header: "Localidad", getValue: (row) => row.locality ?? "—" },
-      { key: "serviceFormat", header: "Formato", getValue: (row) => row.serviceFormat ?? "—" },
-      { key: "address", header: "Dirección", getValue: (row) => row.address ?? "—" },
+      { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
+      {
+        key: "neighborhood",
+        header: "Barrio",
+        sortable: true,
+        getValue: (row) => row.neighborhood ?? "—",
+      },
+      {
+        key: "locality",
+        header: "Localidad",
+        sortable: true,
+        getValue: (row) => row.locality ?? "—",
+      },
+      {
+        key: "serviceFormat",
+        header: "Formato",
+        sortable: true,
+        getValue: (row) => row.serviceFormat ?? "—",
+      },
+      {
+        key: "address",
+        header: "Dirección",
+        sortable: true,
+        getValue: (row) => row.address ?? "—",
+      },
       { key: "latitude", header: "Latitud", getValue: (row) => row.latitude },
       { key: "longitude", header: "Longitud", getValue: (row) => row.longitude },
       {
@@ -71,6 +131,7 @@ export function ServicesListPage() {
       {
         key: "active",
         header: "Estado",
+        sortable: true,
         render: (row) => (
           <StatusBadge
             label={activeStatusLabel(row.active)}
@@ -82,16 +143,20 @@ export function ServicesListPage() {
     [],
   );
 
-  const handleActiveFilterChange = useCallback(
-    (value: string | null) => {
-      if (!value) {
+  const handleSortChange = useCallback(
+    (field: string) => {
+      if (!(SERVICE_TABLE_SORTABLE_COLUMN_KEYS as readonly string[]).includes(field)) {
         return;
       }
-
-      table.setField("active", value as "all" | "true" | "false");
+      table.toggleSorting(field, "asc");
     },
     [table],
   );
+
+  const facetsLoading = facetsQuery.isPending || facetsQuery.isFetching;
+  const formatsLoading = locationTypesQuery.isPending || locationTypesQuery.isFetching;
+  const facetsFailed = facetsQuery.isError;
+  const formatsFailed = locationTypesQuery.isError;
 
   return (
     <>
@@ -107,6 +172,17 @@ export function ServicesListPage() {
         }
       />
 
+      <ServicesListFiltersErrorBanner
+        facetsFailed={facetsFailed}
+        formatsFailed={formatsFailed}
+        onRetryFacets={() => {
+          void facetsQuery.refetch();
+        }}
+        onRetryFormats={() => {
+          void locationTypesQuery.refetch();
+        }}
+      />
+
       <FilterBar>
         <FilterBar.Item>
           <SearchInput
@@ -118,10 +194,42 @@ export function ServicesListPage() {
           />
         </FilterBar.Item>
         <FilterBar.Item>
-          <Select
+          <FilterSelect
+            label="Formato"
+            value={table.state.serviceFormat}
+            onChange={(value) => table.setField("serviceFormat", value)}
+            data={formatOptions}
+            clearable
+            disabled={formatsLoading || formatsFailed}
+          />
+        </FilterBar.Item>
+        <FilterBar.Item minWidth={360}>
+          <CascadingFilterSelect
+            parentLabel="Localidad"
+            parentValue={table.state.locality}
+            onCascadeChange={({ parentValue, childValue }) =>
+              table.setState({ locality: parentValue, neighborhood: childValue })
+            }
+            parentData={localityOptions}
+            parentPlaceholder="Todas"
+            childLabel="Barrio"
+            childValue={table.state.neighborhood}
+            onChildChange={(value) => table.setField("neighborhood", value)}
+            childData={neighborhoodOptions}
+            childPlaceholder="Todos"
+            disabled={facetsLoading || facetsFailed}
+          />
+        </FilterBar.Item>
+        <FilterBar.Item>
+          <FilterSelect
             label="Estado"
             value={table.state.active}
-            onChange={handleActiveFilterChange}
+            onChange={(value) => {
+              if (!value) {
+                return;
+              }
+              table.setField("active", value as "all" | "true" | "false");
+            }}
             data={[
               { value: "all", label: "Todas" },
               { value: "true", label: "Activas" },
@@ -143,6 +251,9 @@ export function ServicesListPage() {
           navigateWithListContext(navigate, `/services/${row.id}`, SERVICES_LIST_PATH, location)
         }
         aria-label={`Listado de ${terminology.service.plural.toLowerCase()}`}
+        sortBy={table.state.sortBy}
+        sortDirection={table.state.sortOrder}
+        onSortChange={handleSortChange}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls

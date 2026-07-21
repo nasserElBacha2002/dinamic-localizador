@@ -1,10 +1,11 @@
 import { z } from "zod";
+import { SERVICE_FORMAT_MAX_LENGTH } from "../types/service";
 
 const serviceFormatSchema = z
   .string()
   .trim()
-  .min(1, "Seleccioná un tipo de ubicación/servicio.")
-  .max(80)
+  .min(1, "Seleccioná un formato.")
+  .max(SERVICE_FORMAT_MAX_LENGTH)
   .optional()
   .or(z.literal(""));
 

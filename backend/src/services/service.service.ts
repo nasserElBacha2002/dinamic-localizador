@@ -1,6 +1,7 @@
 import { AppError } from "../errors/app-error";
 import { serviceRepository } from "../repositories/service.repository";
 import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
+import { normalizeOptionalText } from "../utils/normalize-optional-text";
 import { buildPaginationMeta } from "../utils/pagination";
 import { isOperationalLocationNameDuplicateKeyError } from "../utils/service-name-duplicate-errors";
 import { companyLocationTypesService } from "./company-location-types.service";
@@ -15,9 +16,36 @@ const throwIfDuplicateName = (error: unknown): never => {
   throw error;
 };
 
+function normalizeServiceTextFields<
+  T extends {
+    address?: string | null;
+    neighborhood?: string | null;
+    locality?: string | null;
+    serviceFormat?: string | null;
+  },
+>(input: T): T {
+  const next = { ...input };
+
+  if ("address" in input) {
+    next.address = normalizeOptionalText(input.address) as T["address"];
+  }
+  if ("neighborhood" in input) {
+    next.neighborhood = normalizeOptionalText(input.neighborhood) as T["neighborhood"];
+  }
+  if ("locality" in input) {
+    next.locality = normalizeOptionalText(input.locality) as T["locality"];
+  }
+  if ("serviceFormat" in input) {
+    next.serviceFormat = normalizeOptionalText(input.serviceFormat) as T["serviceFormat"];
+  }
+
+  return next;
+}
+
 export const serviceService = {
   async create(companyId: string, input: CreateServiceInput) {
-    await companyLocationTypesService.assertActiveServiceFormat(companyId, input.serviceFormat);
+    const normalized = normalizeServiceTextFields(input);
+    await companyLocationTypesService.assertActiveServiceFormat(companyId, normalized.serviceFormat);
 
     const name = input.name.trim();
     const existing = await serviceRepository.findByCompanyAndName(companyId, name);
@@ -27,10 +55,8 @@ export const serviceService = {
 
     try {
       return await serviceRepository.create(companyId, {
-        ...input,
+        ...normalized,
         name,
-        address: input.address?.trim() ?? null,
-        serviceFormat: input.serviceFormat?.trim() ?? null,
       });
     } catch (error) {
       throwIfDuplicateName(error);
@@ -45,6 +71,14 @@ export const serviceService = {
     };
   },
 
+  /**
+   * Company-global geo facets (not filtered by other list query params).
+   * Includes active and inactive locations; see repository contract.
+   */
+  async listFacets(companyId: string) {
+    return serviceRepository.listGeoFacets(companyId);
+  },
+
   async getById(companyId: string, id: string) {
     const service = await serviceRepository.findById(companyId, id);
     if (!service) {
@@ -56,11 +90,13 @@ export const serviceService = {
   async update(companyId: string, id: string, input: UpdateServiceInput) {
     await this.getById(companyId, id);
 
-    if (input.serviceFormat !== undefined) {
-      await companyLocationTypesService.assertActiveServiceFormat(companyId, input.serviceFormat);
+    const normalized = normalizeServiceTextFields(input);
+
+    if (normalized.serviceFormat !== undefined) {
+      await companyLocationTypesService.assertActiveServiceFormat(companyId, normalized.serviceFormat);
     }
 
-    if (input.active === false) {
+    if (normalized.active === false) {
       const hasSchedules = await serviceRepository.hasActiveOrScheduledOperations(companyId, id);
       if (hasSchedules) {
         throw new AppError(
@@ -72,10 +108,8 @@ export const serviceService = {
     }
 
     const updatePayload: UpdateServiceInput = {
-      ...input,
+      ...normalized,
       name: input.name !== undefined ? input.name.trim() : undefined,
-      serviceFormat:
-        input.serviceFormat !== undefined ? input.serviceFormat?.trim() ?? null : undefined,
     };
 
     if (updatePayload.name !== undefined) {

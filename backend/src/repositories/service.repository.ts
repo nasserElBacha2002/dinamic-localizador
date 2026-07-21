@@ -1,11 +1,45 @@
-// Phase 2.3/2.7: Service remains the technical API model; physical table is operational_locations.
-// Conceptually this represents an OperationalLocation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { Service } from "../types/domain";
 import { mapServiceRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
-import type { CreateServiceInput, ListServicesQuery, UpdateServiceInput } from "../schemas/service.schema";
+import { resolveSqlSort } from "../utils/sql-sort";
+import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
+import {
+  type CreateServiceInput,
+  type ListServicesQuery,
+  type ServiceListSortField,
+  type UpdateServiceInput,
+} from "../schemas/service.schema";
+
+/**
+ * Exhaustive SQL column map for service list sorting.
+ * Every `ServiceListSortField` must have a whitelist entry.
+ */
+export const SERVICE_LIST_SORT_COLUMNS = {
+  name: "name",
+  neighborhood: "neighborhood",
+  locality: "locality",
+  serviceFormat: "store_format",
+  address: "address",
+  active: "active",
+  createdAt: "created_at",
+} as const satisfies Record<ServiceListSortField, string>;
+
+/**
+ * Company-scoped geo facets for filter dropdowns.
+ *
+ * Contract:
+ * - Global for the company (not contextual to other active filters).
+ * - Includes active and inactive locations.
+ * - Excludes null/empty locality and neighborhood values.
+ * - Localities and neighborhoods are distinct and sorted ascending.
+ * - Comparisons rely on DB collation (typically case-insensitive).
+ */
+export interface ServiceGeoFacets {
+  localities: string[];
+  neighborhoodsByLocality: Record<string, string[]>;
+}
 
 export const serviceRepository = {
   async create(companyId: string, input: CreateServiceInput): Promise<Service> {
@@ -17,7 +51,7 @@ export const serviceRepository = {
       .input("address", sql.NVarChar(300), input.address ?? null)
       .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
       .input("locality", sql.NVarChar(150), input.locality ?? null)
-      .input("serviceFormat", sql.NVarChar(50), input.serviceFormat ?? null)
+      .input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat ?? null)
       .input("latitude", sql.Decimal(10, 7), input.latitude)
       .input("longitude", sql.Decimal(10, 7), input.longitude)
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
@@ -124,7 +158,36 @@ export const serviceRepository = {
       });
     }
 
+    if (query.serviceFormat) {
+      filters.push({
+        clause: "store_format = @serviceFormat",
+        apply: (request) =>
+          request.input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), query.serviceFormat),
+      });
+    }
+
+    if (query.locality) {
+      filters.push({
+        clause: "locality = @locality",
+        apply: (request) => request.input("locality", sql.NVarChar(150), query.locality),
+      });
+    }
+
+    if (query.neighborhood) {
+      filters.push({
+        clause: "neighborhood = @neighborhood",
+        apply: (request) => request.input("neighborhood", sql.NVarChar(150), query.neighborhood),
+      });
+    }
+
     const whereClause = buildWhereClause(filters);
+    const sortDirection: "asc" | "desc" = query.sortBy ? query.sortDirection : "desc";
+    const orderBy = resolveSqlSort(
+      query.sortBy,
+      SERVICE_LIST_SORT_COLUMNS,
+      "created_at",
+      sortDirection,
+    );
 
     const countRequest = pool.request();
     applySqlFilters(countRequest, filters);
@@ -140,7 +203,7 @@ export const serviceRepository = {
       SELECT *
       FROM operational_locations
       ${whereClause}
-      ORDER BY created_at DESC
+      ORDER BY ${orderBy}, id ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
@@ -148,6 +211,51 @@ export const serviceRepository = {
       items: dataResult.recordset.map((row) => mapServiceRow(row as Record<string, unknown>)),
       total,
     };
+  },
+
+  async listGeoFacets(companyId: string): Promise<ServiceGeoFacets> {
+    const pool = getPool();
+    // Single round-trip: locality/neighborhood pairs for the company (active + inactive).
+    const pairsResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT DISTINCT
+          locality,
+          neighborhood
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND locality IS NOT NULL
+        ORDER BY locality ASC, neighborhood ASC
+      `);
+
+    const localities: string[] = [];
+    const localitySeen = new Set<string>();
+    const neighborhoodsByLocality: Record<string, string[]> = {};
+
+    for (const row of pairsResult.recordset as Array<{
+      locality: string;
+      neighborhood: string | null;
+    }>) {
+      const locality = String(row.locality);
+      if (!localitySeen.has(locality)) {
+        localitySeen.add(locality);
+        localities.push(locality);
+      }
+
+      if (row.neighborhood === null || row.neighborhood === undefined) {
+        continue;
+      }
+
+      const neighborhood = String(row.neighborhood);
+      const current = neighborhoodsByLocality[locality] ?? [];
+      if (!current.includes(neighborhood)) {
+        current.push(neighborhood);
+        neighborhoodsByLocality[locality] = current;
+      }
+    }
+
+    return { localities, neighborhoodsByLocality };
   },
 
   async listAllActive(companyId: string): Promise<Service[]> {
@@ -188,7 +296,7 @@ export const serviceRepository = {
     }
 
     if (input.serviceFormat !== undefined) {
-      request.input("serviceFormat", sql.NVarChar(50), input.serviceFormat);
+      request.input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat);
       fields.push("store_format = @serviceFormat");
     }
 

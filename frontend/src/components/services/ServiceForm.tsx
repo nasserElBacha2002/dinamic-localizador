@@ -107,7 +107,7 @@ export function ServiceForm({
               <RHFSelect
                 control={control}
                 name="serviceFormat"
-                label="Tipo de ubicación / servicio"
+                label="Formato"
                 data={serviceFormatOptions}
                 clearable
               />

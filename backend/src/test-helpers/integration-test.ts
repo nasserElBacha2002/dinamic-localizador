@@ -33,6 +33,13 @@ export const teardownDatabaseIntegration = async () => {
   await closeDatabase();
 };
 
+/**
+ * Prefer `createIntegrationFixtureTracker` from `./integration-cleanup` for suites that
+ * insert employees/operations into a shared company (e.g. Dinamic Systems). Track every
+ * created ID and call `fixtures.cleanup()` in `after()` before teardown.
+ */
+export { createIntegrationFixtureTracker } from "./integration-cleanup";
+
 export const requireDinamicCompanyId = async (): Promise<string> => {
   const { companyRepository } = await import("../repositories/company.repository");
   const company = await companyRepository.findByName("Dinamic Systems");

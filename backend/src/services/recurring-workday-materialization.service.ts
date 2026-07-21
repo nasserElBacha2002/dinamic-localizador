@@ -490,6 +490,50 @@ export const recurringWorkdayMaterializationService = {
     return counters;
   },
 
+  /**
+   * Restores workdays/expectations cancelled by operation cancel (reason OPERATION),
+   * then rematerializes the horizon so assignments realign. Does not recreate history
+   * or restart cancelled jobs.
+   */
+  async reconcileWorkdaysForReactivatedOperation(
+    companyId: string,
+    operationId: string,
+  ): Promise<MaterializationResult> {
+    const cancelledWorkdays = await operationWorkdayRepository.listOperationCancelledByOperation(
+      companyId,
+      operationId,
+    );
+
+    const counters = emptyMaterializationResult(operationId, "", "");
+
+    for (const workday of cancelledWorkdays) {
+      const reactivated = await operationWorkdayRepository.reactivateOperationCancelledWorkday(
+        companyId,
+        workday.id,
+      );
+      if (!reactivated) {
+        continue;
+      }
+
+      counters.operationWorkdaysCreated += 1;
+      const reactivatedEmployees =
+        await employeeWorkdayRepository.reactivateOperationCancelledForWorkday(
+          companyId,
+          workday.id,
+        );
+      counters.employeeWorkdaysCreated += reactivatedEmployees;
+    }
+
+    const materializeResult = await this.materializeOperationHorizon(companyId, operationId);
+    return {
+      ...materializeResult,
+      operationWorkdaysCreated:
+        materializeResult.operationWorkdaysCreated + counters.operationWorkdaysCreated,
+      employeeWorkdaysCreated:
+        materializeResult.employeeWorkdaysCreated + counters.employeeWorkdaysCreated,
+    };
+  },
+
   async reconcileCompanyScheduleOperations(companyId: string): Promise<CompanyMaterializationSummary> {
     const operations = await operationScheduleRepository.listRecurringCompanySourceOperationIds(companyId);
     const summary: CompanyMaterializationSummary = {

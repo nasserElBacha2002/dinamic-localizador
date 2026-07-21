@@ -529,6 +529,34 @@ export const operationRepository = {
     return this.update(companyId, id, { status: "CANCELLED" });
   },
 
+  /**
+   * Conditionally restores CANCELLED → SCHEDULED.
+   * Returns null when the row is missing for the company or is no longer CANCELLED
+   * (concurrency / idempotency race).
+   */
+  async reactivateFromCancelled(companyId: string, id: string): Promise<Operation | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        UPDATE scheduled_operations
+        SET status = N'SCHEDULED',
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status = N'CANCELLED'
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async findCompatibleForEmployee(
     companyId: string,
     employeeId: string,

@@ -73,6 +73,12 @@ operationRouter.post(
   validate(operationIdParamSchema, "params"),
   asyncHandler(operationWorkdayController.materialize),
 );
+operationRouter.post(
+  "/:id/reactivate",
+  requirePermission("operations:manage"),
+  validate(operationIdParamSchema, "params"),
+  asyncHandler(operationController.reactivate),
+);
 operationRouter.get(
   "/:id",
   requirePermission("operations:read"),

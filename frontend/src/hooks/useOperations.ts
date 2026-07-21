@@ -12,6 +12,7 @@ import {
   getOperationWorkdayDetail,
   getOperationWorkdays,
   materializeOperationWorkdays,
+  reactivateOperation,
   updateOperation,
 } from "../api/operations.api";
 import type {
@@ -131,6 +132,22 @@ export function useCancelOperation() {
       queryClient.invalidateQueries({
         queryKey: operationWorkdayKeys.list(companyId, operationId),
       });
+    },
+  });
+}
+
+export function useReactivateOperation() {
+  const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
+
+  return useMutation({
+    mutationFn: reactivateOperation,
+    onSettled: (_data, error, operationId) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
+      queryClient.invalidateQueries({ queryKey: operationKeys.list(companyId) });
+      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
     },
   });
 }

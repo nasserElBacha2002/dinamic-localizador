@@ -29,6 +29,7 @@
     "diagnose:operational-location-duplicates": "tsx scripts/diagnose-operational-location-duplicates.ts",
     "repair:operational-location-duplicates": "tsx scripts/repair-operational-location-duplicates.ts",
     "seed:integration-ci": "tsx src/scripts/seed-integration-ci.ts",
+    "cleanup:integration-junk": "tsx src/scripts/cleanup-integration-junk.ts",
     "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts",
     "test:integration": "RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 src/**/*.integration.test.ts"
   },

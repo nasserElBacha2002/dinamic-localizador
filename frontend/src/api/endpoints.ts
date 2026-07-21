@@ -40,5 +40,8 @@ export const operationWorkdayPath = (operationId: string, workdayId: string): st
 export const operationMaterializeWorkdaysPath = (operationId: string): string =>
   `${operationPath(operationId)}/materialize-workdays`;
 
+export const operationReactivatePath = (operationId: string): string =>
+  `${operationPath(operationId)}/reactivate`;
+
 export const servicePath = (serviceId: string): string =>
   `${API_ENDPOINTS.services}/${serviceId}`;

@@ -25,6 +25,7 @@ import {
   useCancelOperation,
   useOperation,
   useOperationWorkdays,
+  useReactivateOperation,
   useUpdateOperation,
 } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
@@ -33,7 +34,7 @@ import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
-import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
+import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
 import {
   buildOperationEditDefaultValues,
   formatOperationDetailScheduleTitle,
@@ -77,9 +78,11 @@ export function OperationDetailPage() {
   const permissionsQuery = useCompanyPermissions();
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
+  const reactivateMutation = useReactivateOperation();
 
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [confirmReactivateOpen, setConfirmReactivateOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [teamWorkdayOverride, setTeamWorkdayOverride] =
     useState<OperationTeamWorkdaySelection | null>(null);
@@ -142,7 +145,8 @@ export function OperationDetailPage() {
 
   const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
   const canAssign = canManage && isOperationAssignable(operation.status);
-  const canEdit = isOperationEditable(operation.status);
+  const canEdit = canManage && isOperationEditable(operation.status);
+  const canReactivate = canManage && isOperationReactivatable(operation.status);
   const serviceDisplayName = operation.service?.name ?? "—";
   const serviceDetailId = operation.serviceId || operation.service?.id;
   const serviceFieldValue =
@@ -185,6 +189,19 @@ export function OperationDetailPage() {
     }
   };
 
+  const handleReactivate = async () => {
+    if (!id) {
+      return;
+    }
+    try {
+      await reactivateMutation.mutateAsync(id);
+      setConfirmReactivateOpen(false);
+      showFeedback("La operación fue reactivada correctamente.");
+    } catch (error) {
+      showFeedback(getApiErrorMessage(error), "error");
+    }
+  };
+
   return (
     <>
       <PageHeader
@@ -215,6 +232,16 @@ export function OperationDetailPage() {
             {canEdit ? (
               <Button variant="default" color="danger" onClick={() => setConfirmCancelOpen(true)}>
                 {`Cancelar ${terminology.operation.singular.toLowerCase()}`}
+              </Button>
+            ) : null}
+            {canReactivate ? (
+              <Button
+                variant="default"
+                onClick={() => setConfirmReactivateOpen(true)}
+                loading={reactivateMutation.isPending}
+                disabled={reactivateMutation.isPending}
+              >
+                Reactivar operación
               </Button>
             ) : null}
             <Button variant="default" onClick={goBackToList}>
@@ -350,6 +377,16 @@ export function OperationDetailPage() {
         loading={cancelMutation.isPending}
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={() => void handleCancel()}
+      />
+
+      <ConfirmDialog
+        open={confirmReactivateOpen}
+        title="Reactivar operación"
+        description="¿Querés reactivar esta operación? Volverá a estar disponible para su gestión, pero no se reiniciarán automáticamente trabajos o procesamientos cancelados."
+        confirmLabel="Reactivar operación"
+        loading={reactivateMutation.isPending}
+        onCancel={() => setConfirmReactivateOpen(false)}
+        onConfirm={() => void handleReactivate()}
       />
     </>
   );

@@ -9,6 +9,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
 import { operationAssignmentService } from "../services/operation-assignment.service";
@@ -67,11 +68,14 @@ async function loadExpectationsForEmployee(
 }
 
 describeDatabaseIntegration("recurring reassignment persistence integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -107,6 +111,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       },
       { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
     );
+    fixtures.trackOperation(companyId, operation.id);
 
     const employeeInsert = await pool
       .request()
@@ -120,6 +125,7 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
         SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     const assignmentA = await operationAssignmentService.assignEmployee(
       companyId,

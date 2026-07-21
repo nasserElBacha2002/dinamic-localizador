@@ -6,18 +6,22 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
 
 describeDatabaseIntegration("operation schedule confirmation reset integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
     mock.restoreAll();
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -56,6 +60,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employees = await pool
       .request()
@@ -77,6 +82,9 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
     const [confirmedId, unavailableId, pendingId] = employees.recordset.map((row) =>
       String((row as { id: string }).id),
     );
+    fixtures.trackEmployee(companyId, confirmedId);
+    fixtures.trackEmployee(companyId, unavailableId);
+    fixtures.trackEmployee(companyId, pendingId);
 
     await pool
       .request()
@@ -163,6 +171,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employeeInsert = await pool
       .request()
@@ -176,6 +185,7 @@ describeDatabaseIntegration("operation schedule confirmation reset integration",
         SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     await pool
       .request()

@@ -6,6 +6,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { operationAssignmentService } from "./operation-assignment.service";
@@ -44,11 +45,14 @@ async function loadActiveExpectation(
 }
 
 describeDatabaseIntegration("operation reassignment persistence integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -86,6 +90,7 @@ describeDatabaseIntegration("operation reassignment persistence integration", ()
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employeeInsert = await pool
       .request()
@@ -99,6 +104,7 @@ describeDatabaseIntegration("operation reassignment persistence integration", ()
         SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     return { companyId, operationId, employeeId };
   };

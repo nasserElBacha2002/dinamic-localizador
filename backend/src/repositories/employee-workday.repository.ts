@@ -467,6 +467,40 @@ export const employeeWorkdayRepository = {
     return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Restores expectations cancelled by operation cancel (reason OPERATION).
+   * Does not recreate rows; skips any with attendance.
+   */
+  async reactivateOperationCancelledForWorkday(
+    companyId: string,
+    operationWorkdayId: string,
+  ): Promise<number> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        UPDATE employee_workdays
+        SET expectation_status = N'EXPECTED',
+            cancellation_reason = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.id
+        WHERE company_id = @companyId
+          AND operation_workday_id = @operationWorkdayId
+          AND expectation_status = N'CANCELLED'
+          AND cancellation_reason = N'OPERATION'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.company_id = @companyId
+              AND ar.employee_workday_id = employee_workdays.id
+          )
+      `);
+
+    return result.recordset.length;
+  },
+
   async reactivateAssignmentCancelledExpectation(
     companyId: string,
     employeeWorkdayId: string,

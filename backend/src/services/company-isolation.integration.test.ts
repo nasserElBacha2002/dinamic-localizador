@@ -20,6 +20,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   let dinamicCompanyId = "";
   let otherCompanyId = "";
   let employeeInDinamicId = "";
+  let createdIsolationCompanyId = "";
 
   before(async () => {
     await setupDatabaseIntegration();
@@ -42,6 +43,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
         VALUES (N'Isolation Test Co', N'America/Argentina/Buenos_Aires', N'ACTIVE')
       `);
       otherCompanyId = String(created.recordset[0].id);
+      createdIsolationCompanyId = otherCompanyId;
 
       await pool.request().input("companyId", sql.UniqueIdentifier, otherCompanyId).query(`
         INSERT INTO company_settings (
@@ -61,6 +63,10 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   after(async () => {
+    if (createdIsolationCompanyId) {
+      const { deleteCompanyCascade } = await import("../test-helpers/integration-cleanup");
+      await deleteCompanyCascade(createdIsolationCompanyId);
+    }
     await teardownDatabaseIntegration();
   });
 

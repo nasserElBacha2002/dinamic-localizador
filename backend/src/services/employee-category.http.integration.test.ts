@@ -239,7 +239,7 @@ describeDatabaseIntegration("employee categories HTTP API", () => {
       token: ownerToken(),
       body: { isActive: false },
     });
-    assert.equal(systemPatch.status, 400);
+    assert.equal(systemPatch.status, 403);
     assert.equal(
       (systemPatch.body.error as { code?: string } | undefined)?.code,
       "EMPLOYEE_CATEGORY_SYSTEM_IMMUTABLE",

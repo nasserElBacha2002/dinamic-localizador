@@ -123,8 +123,9 @@ export const employeeRepository = {
       .input("employeeType", sql.NVarChar(20), input.employeeType)
       .input("categoryId", sql.UniqueIdentifier, input.categoryId)
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, document_number, phone_number, employee_type, category_id)
-        OUTPUT INSERTED.id
+        OUTPUT INSERTED.id INTO @inserted (id)
         SELECT @companyId, @name, @documentNumber, @phoneNumber, @employeeType, @categoryId
         WHERE @categoryId IS NULL
            OR EXISTS (
@@ -133,7 +134,8 @@ export const employeeRepository = {
              WHERE ec.id = @categoryId
                AND ec.is_active = 1
                AND (ec.company_id IS NULL OR ec.company_id = @companyId)
-           )
+           );
+        SELECT id FROM @inserted;
       `);
 
     if (!result.recordset[0]) {
@@ -372,11 +374,13 @@ export const employeeRepository = {
       : "";
 
     const result = await request.query(`
+      DECLARE @updated TABLE (id UNIQUEIDENTIFIER);
       UPDATE employees
       SET ${fields.join(", ")}
-      OUTPUT INSERTED.id
+      OUTPUT INSERTED.id INTO @updated (id)
       WHERE id = @id AND company_id = @companyId
-      ${categoryGuard}
+      ${categoryGuard};
+      SELECT id FROM @updated;
     `);
 
     if (!result.recordset[0]) {

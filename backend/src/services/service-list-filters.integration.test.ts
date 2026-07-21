@@ -26,6 +26,7 @@ const deleteCompanyCascade = async (companyId: string): Promise<void> => {
     DELETE FROM operational_locations WHERE company_id = @companyId;
     DELETE FROM employee_absence_balances WHERE company_id = @companyId;
     DELETE FROM employees WHERE company_id = @companyId;
+    DELETE FROM employee_categories WHERE company_id = @companyId;
     DELETE FROM company_absence_settings WHERE company_id = @companyId;
     DELETE FROM absence_types WHERE company_id = @companyId;
     DELETE FROM company_location_types WHERE company_id = @companyId;

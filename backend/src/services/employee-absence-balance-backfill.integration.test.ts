@@ -44,6 +44,7 @@ describeDatabaseIntegration("employee absence balance backfill integration", () 
       await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
         DELETE FROM employee_absence_balances WHERE company_id = @companyId;
         DELETE FROM employees WHERE company_id = @companyId;
+        DELETE FROM employee_categories WHERE company_id = @companyId;
         DELETE FROM company_absence_settings WHERE company_id = @companyId;
         DELETE FROM absence_types WHERE company_id = @companyId;
         DELETE FROM user_company_memberships WHERE company_id = @companyId;

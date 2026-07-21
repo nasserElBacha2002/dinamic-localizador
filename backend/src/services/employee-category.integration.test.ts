@@ -18,7 +18,7 @@ import { platformCompanyService } from "./platform-company.service";
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const uniquePhone = (seed: number): string =>
-  `+54911${String(Date.now() + seed).slice(-8)}`;
+  `+54911${String(Date.now()).slice(-5)}${String(seed).padStart(3, "0")}${Math.floor(Math.random() * 90 + 10)}`;
 
 const deleteCompanyCascade = async (companyId: string): Promise<void> => {
   const pool = getPool();
@@ -267,7 +267,7 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
     );
   });
 
-  it("rejects assignment atomically when category is inactive at write time", async () => {
+  it("rejects assignment when category is inactive at write time (conditional INSERT)", async () => {
     const suffix = uniqueSuffix();
     const ownerEmail = `cat-atomic-${suffix}@integration.test`;
     createdUserEmails.push(ownerEmail);
@@ -287,27 +287,47 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
       name: `Atomic ${suffix}`,
     });
 
+    await employeeCategoryService.update(company.data.company.id, "OWNER", category.id, {
+      isActive: false,
+    });
+
+    await assert.rejects(
+      () =>
+        employeeRepository.create(company.data.company.id, {
+          name: "Race Assignee",
+          documentNumber: null,
+          phoneNumber: uniquePhone(50),
+          employeeType: "fijo",
+          categoryId: category.id,
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "EMPLOYEE_CATEGORY_INVALID",
+    );
+
+    // Concurrent deactivate vs assign: hold inactive update, then let assign observe it.
+    const category2 = await employeeCategoryService.create(company.data.company.id, "OWNER", {
+      name: `Atomic2 ${suffix}`,
+    });
     const pool = getPool();
     const deactivateTx = new sql.Transaction(pool);
     await deactivateTx.begin();
     await new sql.Request(deactivateTx)
-      .input("categoryId", sql.UniqueIdentifier, category.id)
+      .input("categoryId", sql.UniqueIdentifier, category2.id)
       .query(`
-        UPDATE employee_categories
+        UPDATE employee_categories WITH (UPDLOCK, HOLDLOCK)
         SET is_active = 0, updated_at = SYSUTCDATETIME()
         WHERE id = @categoryId
       `);
 
     const assignPromise = employeeRepository.create(company.data.company.id, {
-      name: "Race Assignee",
+      name: "Race Assignee 2",
       documentNumber: null,
-      phoneNumber: uniquePhone(50),
+      phoneNumber: uniquePhone(51),
       employeeType: "fijo",
-      categoryId: category.id,
+      categoryId: category2.id,
     });
 
-    // Give the assign attempt a chance to block on UPDLOCK / then fail after commit.
-    await new Promise((resolve) => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 100));
     await deactivateTx.commit();
 
     await assert.rejects(
@@ -354,7 +374,7 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
         name: "Mike Beta",
         documentNumber: "200",
         phoneNumber: uniquePhone(61),
-        employeeType: "temporal",
+        employeeType: "eventual",
         categoryId: catBeta.id,
       }),
       await employeeService.create(companyId, {
@@ -375,7 +395,7 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
         name: "Carla Null",
         documentNumber: null,
         phoneNumber: uniquePhone(64),
-        employeeType: "temporal",
+        employeeType: "eventual",
         categoryId: null,
       }),
     );
@@ -388,18 +408,33 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
       sortBy: "category",
       sortDirection: "asc",
     });
+    // Null categories last; same-category / null groups are ordered by e.id (NEWID), not name.
     assert.deepEqual(
-      byCategoryAsc.data.map((row) => ({
-        name: row.name,
-        category: row.category?.name ?? null,
-      })),
-      [
-        { name: "Anna Alpha", category: "Alpha Cat" },
-        { name: "Bruno Alpha", category: "Alpha Cat" },
-        { name: "Mike Beta", category: "Beta Cat" },
-        { name: "Carla Null", category: null },
-        { name: "Zulu Null", category: null },
-      ],
+      byCategoryAsc.data.map((row) => row.category?.name ?? null),
+      ["Alpha Cat", "Alpha Cat", "Beta Cat", null, null],
+    );
+    assert.deepEqual(
+      new Set(
+        byCategoryAsc.data
+          .filter((row) => row.category?.name === "Alpha Cat")
+          .map((row) => row.name),
+      ),
+      new Set(["Anna Alpha", "Bruno Alpha"]),
+    );
+    assert.deepEqual(
+      new Set(byCategoryAsc.data.filter((row) => row.category == null).map((row) => row.name)),
+      new Set(["Carla Null", "Zulu Null"]),
+    );
+    const byCategoryAscAgain = await employeeService.list(companyId, {
+      page: 1,
+      limit: 50,
+      sortBy: "category",
+      sortDirection: "asc",
+    });
+    assert.deepEqual(
+      byCategoryAscAgain.data.map((row) => row.id),
+      byCategoryAsc.data.map((row) => row.id),
+      "category sort must be stable across pages/queries",
     );
 
     const byCategoryDesc = await employeeService.list(companyId, {
@@ -442,10 +477,12 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
       sortDirection: "asc",
     });
     const phones = byPhoneAsc.data.map((row) => row.phoneNumber);
-    assert.deepEqual(
-      [...phones].sort((a, b) => a.localeCompare(b)),
-      phones,
-    );
+    for (let index = 1; index < phones.length; index += 1) {
+      assert.ok(
+        phones[index - 1]! <= phones[index]!,
+        `phone sort not ascending at ${index}: ${phones[index - 1]} > ${phones[index]}`,
+      );
+    }
 
     const byTypeAsc = await employeeService.list(companyId, {
       page: 1,
@@ -453,12 +490,12 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
       sortBy: "employeeType",
       sortDirection: "asc",
     });
-    assert.ok(byTypeAsc.data.every((row, index, arr) => {
-      if (index === 0) {
-        return true;
-      }
-      return arr[index - 1]!.employeeType.localeCompare(row.employeeType) <= 0;
-    }));
+    for (let index = 1; index < byTypeAsc.data.length; index += 1) {
+      assert.ok(
+        byTypeAsc.data[index - 1]!.employeeType <= byTypeAsc.data[index]!.employeeType,
+        "employeeType sort must be ascending",
+      );
+    }
 
     const byActiveDesc = await employeeService.list(companyId, {
       page: 1,

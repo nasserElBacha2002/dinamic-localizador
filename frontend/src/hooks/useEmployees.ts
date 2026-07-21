@@ -3,10 +3,12 @@ import {
   createEmployee,
   deactivateEmployee,
   getEmployeeById,
+  getEmployeeDeactivationImpact,
   getEmployees,
   updateEmployee,
 } from "../api/employees.api";
 import type { EmployeeFilters, UpdateEmployeeInput } from "../types/employee";
+import type { DeactivateEmployeeInput } from "../types/employee-deactivation";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useEmployees(filters: EmployeeFilters, extraEnabled = true) {
@@ -53,13 +55,28 @@ export function useUpdateEmployee(employeeId: string) {
   });
 }
 
-export function useDeactivateEmployee() {
+export function useDeactivateEmployee(employeeId: string) {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deactivateEmployee,
+    mutationFn: (input: DeactivateEmployeeInput = {}) => deactivateEmployee(employeeId, input),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["employees"] });
+      queryClient.invalidateQueries({ queryKey: ["employee"] });
+      queryClient.invalidateQueries({ queryKey: ["operations"] });
+      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
     },
+  });
+}
+
+export function useEmployeeDeactivationImpact(employeeId: string | undefined, enabled: boolean) {
+  const { companyId, enabled: companyEnabled } = useOperationalQueryEnabled(
+    Boolean(employeeId) && enabled,
+  );
+
+  return useQuery({
+    queryKey: ["employee-deactivation-impact", companyId, employeeId],
+    queryFn: () => getEmployeeDeactivationImpact(employeeId!),
+    enabled: companyEnabled && Boolean(employeeId) && enabled,
   });
 }

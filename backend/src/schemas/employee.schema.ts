@@ -49,6 +49,10 @@ export const employeeIdParamSchema = z.object({
   id: z.string().uuid("UUID inválido"),
 });
 
+export const deactivateEmployeeSchema = z.object({
+  removeActiveAndFutureAssignments: z.boolean().optional().default(false),
+});
+
 export const listEmployeesQuerySchema = paginationQuerySchema
   .merge(activeFilterSchema)
   .merge(searchFilterSchema)

@@ -5,10 +5,17 @@ import { Stack } from "@mantine/core";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
+import { EmployeeDeactivationDialog } from "../../components/employees/EmployeeDeactivationDialog";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
-import { useEmployee, useUpdateEmployee } from "../../hooks/useEmployees";
+import {
+  useDeactivateEmployee,
+  useEmployee,
+  useUpdateEmployee,
+} from "../../hooks/useEmployees";
+import { getEmployeeDeactivationImpact } from "../../api/employees.api";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
+import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 
@@ -17,7 +24,14 @@ export function EmployeeEditPage() {
   const { id } = useParams<{ id: string }>();
   const employeeQuery = useEmployee(id);
   const updateMutation = useUpdateEmployee(id ?? "");
+  const deactivateMutation = useDeactivateEmployee(id ?? "");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [deactivationImpact, setDeactivationImpact] = useState<EmployeeDeactivationImpact | null>(
+    null,
+  );
+  const [pendingValues, setPendingValues] = useState<EmployeeFormValues | null>(null);
+  const [deactivationError, setDeactivationError] = useState<string | null>(null);
+  const [impactLoading, setImpactLoading] = useState(false);
 
   if (!id) {
     return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
@@ -40,27 +54,96 @@ export function EmployeeEditPage() {
 
   const employee = employeeQuery.data;
   const currentYear = new Date().getFullYear();
+  const formBusy =
+    updateMutation.isPending || deactivateMutation.isPending || impactLoading;
+
+  const persistProfile = async (values: EmployeeFormValues, active: boolean) => {
+    await updateMutation.mutateAsync({
+      name: values.name,
+      documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
+      phoneNumber: values.phoneNumber,
+      employeeType: values.employeeType,
+      categoryId: values.categoryId ?? null,
+      active,
+    });
+  };
+
+  const finishSuccess = () => {
+    notifications.show({
+      color: "green",
+      message: `${terminology.worker.singular} actualizado correctamente.`,
+    });
+    goBackToList();
+  };
 
   const handleSubmit = async (values: EmployeeFormValues) => {
     setErrorMessage(null);
 
+    const switchingToInactive = employee.active && !values.active;
+    if (!switchingToInactive) {
+      try {
+        await persistProfile(values, values.active);
+        finishSuccess();
+      } catch (error) {
+        setErrorMessage(getApiErrorMessage(error));
+      }
+      return;
+    }
+
+    setImpactLoading(true);
     try {
-      await updateMutation.mutateAsync({
-        name: values.name,
-        documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
-        phoneNumber: values.phoneNumber,
-        employeeType: values.employeeType,
-        categoryId: values.categoryId ?? null,
-        active: values.active,
-      });
-      notifications.show({
-        color: "green",
-        message: `${terminology.worker.singular} actualizado correctamente.`,
-      });
-      goBackToList();
+      const impact = await getEmployeeDeactivationImpact(id);
+      if (impact.canDeactivateDirectly) {
+        await persistProfile(values, false);
+        finishSuccess();
+        return;
+      }
+
+      setPendingValues(values);
+      setDeactivationImpact(impact);
+      setDeactivationError(null);
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
+    } finally {
+      setImpactLoading(false);
     }
+  };
+
+  const handleConfirmDeactivation = async () => {
+    if (!pendingValues) {
+      return;
+    }
+
+    setDeactivationError(null);
+    try {
+      await deactivateMutation.mutateAsync({ removeActiveAndFutureAssignments: true });
+
+      const profileChanged =
+        pendingValues.name !== employee.name ||
+        (pendingValues.documentNumber?.trim() || null) !== (employee.documentNumber ?? null) ||
+        pendingValues.phoneNumber !== employee.phoneNumber ||
+        pendingValues.employeeType !== employee.employeeType ||
+        (pendingValues.categoryId ?? null) !== (employee.categoryId ?? null);
+
+      if (profileChanged) {
+        await persistProfile(pendingValues, false);
+      }
+
+      setDeactivationImpact(null);
+      setPendingValues(null);
+      finishSuccess();
+    } catch (error) {
+      setDeactivationError(getApiErrorMessage(error));
+    }
+  };
+
+  const handleCancelDeactivation = () => {
+    if (deactivateMutation.isPending) {
+      return;
+    }
+    setDeactivationImpact(null);
+    setPendingValues(null);
+    setDeactivationError(null);
   };
 
   return (
@@ -86,7 +169,7 @@ export function EmployeeEditPage() {
         submitLabel="Guardar cambios"
         cancelTo="/employees"
         onCancel={goBackToList}
-        loading={updateMutation.isPending}
+        loading={formBusy}
         errorMessage={errorMessage}
         onSubmit={handleSubmit}
       />
@@ -96,6 +179,16 @@ export function EmployeeEditPage() {
       <SectionCard title={`Ausencias · Historial ${currentYear}`}>
         <EmployeeAbsenceHistoryTable employeeId={employee.id} year={currentYear} />
       </SectionCard>
+
+      <EmployeeDeactivationDialog
+        open={Boolean(deactivationImpact)}
+        employeeName={employee.name}
+        impact={deactivationImpact}
+        loading={deactivateMutation.isPending || updateMutation.isPending}
+        errorMessage={deactivationError}
+        onConfirm={() => void handleConfirmDeactivation()}
+        onCancel={handleCancelDeactivation}
+      />
     </Stack>
   );
 }

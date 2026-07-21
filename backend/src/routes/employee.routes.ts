@@ -12,6 +12,7 @@ import {
 } from "../schemas/absence-balance.schema";
 import {
   createEmployeeSchema,
+  deactivateEmployeeSchema,
   employeeIdParamSchema,
   listEmployeesQuerySchema,
   updateEmployeeSchema,
@@ -44,6 +45,19 @@ employeeRouter.put(
   validate(employeeAbsenceBalanceParamsSchema, "params"),
   validate(upsertEmployeeAbsenceBalanceSchema),
   asyncHandler(absenceBalanceController.upsert),
+);
+employeeRouter.get(
+  "/:id/deactivation-impact",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  asyncHandler(employeeController.getDeactivationImpact),
+);
+employeeRouter.post(
+  "/:id/deactivate",
+  requirePermission("employees:manage"),
+  validate(employeeIdParamSchema, "params"),
+  validate(deactivateEmployeeSchema),
+  asyncHandler(employeeController.deactivate),
 );
 employeeRouter.get(
   "/:id",

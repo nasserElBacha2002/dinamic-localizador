@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { employeeService } from "../services/employee.service";
+import { employeeDeactivationService } from "../services/employee-deactivation.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const employeeController = {
@@ -21,6 +22,15 @@ export const employeeController = {
     res.status(200).json({ data: employee });
   },
 
+  async getDeactivationImpact(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const impact = await employeeDeactivationService.getDeactivationImpact(
+      companyId,
+      String(req.params.id),
+    );
+    res.status(200).json({ data: impact });
+  },
+
   async update(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const employee = await employeeService.update(companyId, String(req.params.id), req.body);
@@ -29,7 +39,15 @@ export const employeeController = {
 
   async deactivate(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const employee = await employeeService.deactivate(companyId, String(req.params.id));
-    res.status(200).json({ data: employee });
+    const result = await employeeDeactivationService.deactivate(
+      companyId,
+      String(req.params.id),
+      req.body ?? {},
+      req.auth?.userId ?? null,
+    );
+    res.status(200).json({ data: result.employee, meta: {
+      removedAssignments: result.removedAssignments,
+      removedWorkTeams: result.removedWorkTeams,
+    } });
   },
 };

@@ -86,12 +86,16 @@ export const employeeService = {
     }
 
     if (input.active === false) {
-      const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
-      if (hasSchedules) {
+      // Assisted deactivation (impact preview + optional unassign) lives in
+      // employeeDeactivationService. Plain updates without confirmation still
+      // refuse when operational assignments remain.
+      const { employeeDeactivationService } = await import("./employee-deactivation.service");
+      const impact = await employeeDeactivationService.getDeactivationImpact(companyId, id);
+      if (!impact.canDeactivateDirectly) {
         throw new AppError(
           409,
           "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-          "No se puede desactivar un empleado con operaciones activas o programadas",
+          "No se puede desactivar un empleado con operaciones activas o programadas. Confirmá la desasignación para continuar.",
         );
       }
     }
@@ -104,21 +108,14 @@ export const employeeService = {
     return updated;
   },
 
-  async deactivate(companyId: string, id: string) {
-    await this.getById(companyId, id);
-    const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
-    if (hasSchedules) {
-      throw new AppError(
-        409,
-        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-        "No se puede desactivar un empleado con operaciones activas o programadas",
-      );
-    }
-
-    const updated = await employeeRepository.deactivate(companyId, id);
-    if (!updated) {
-      throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
-    }
-    return updated;
+  async deactivate(companyId: string, id: string, userId?: string | null) {
+    const { employeeDeactivationService } = await import("./employee-deactivation.service");
+    const result = await employeeDeactivationService.deactivate(
+      companyId,
+      id,
+      { removeActiveAndFutureAssignments: false },
+      userId,
+    );
+    return result.employee;
   },
 };

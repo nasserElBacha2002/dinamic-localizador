@@ -267,6 +267,41 @@ export const serviceRepository = {
     return result.recordset.map((row) => mapServiceRow(row as Record<string, unknown>));
   },
 
+  /** Returns existing names keyed by lower-case trimmed name for import duplicate checks. */
+  async findExistingNames(
+    companyId: string,
+    names: string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+    const existing = new Map<string, string>();
+    if (unique.length === 0) {
+      return existing;
+    }
+
+    const pool = getPool();
+    const chunkSize = 100;
+    for (let offset = 0; offset < unique.length; offset += chunkSize) {
+      const chunk = unique.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const params = chunk.map((name, index) => {
+        const key = `name${index}`;
+        request.input(key, sql.NVarChar(150), name);
+        return `@${key}`;
+      });
+      const result = await request.query(`
+        SELECT name
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND name IN (${params.join(", ")})
+      `);
+      for (const row of result.recordset as Array<{ name: string }>) {
+        existing.set(String(row.name).trim().toLowerCase(), String(row.name));
+      }
+    }
+
+    return existing;
+  },
+
   async update(companyId: string, id: string, input: UpdateServiceInput): Promise<Service | null> {
     const pool = getPool();
     const fields: string[] = [];

@@ -211,6 +211,38 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /** Returns the set of phone numbers that already exist for the company (exact match). */
+  async findExistingPhones(companyId: string, phones: string[]): Promise<Set<string>> {
+    const unique = [...new Set(phones.map((phone) => phone.trim()).filter(Boolean))];
+    const existing = new Set<string>();
+    if (unique.length === 0) {
+      return existing;
+    }
+
+    const pool = getPool();
+    const chunkSize = 100;
+    for (let offset = 0; offset < unique.length; offset += chunkSize) {
+      const chunk = unique.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const params = chunk.map((phone, index) => {
+        const key = `phone${index}`;
+        request.input(key, sql.NVarChar(30), phone);
+        return `@${key}`;
+      });
+      const result = await request.query(`
+        SELECT phone_number
+        FROM employees
+        WHERE company_id = @companyId
+          AND phone_number IN (${params.join(", ")})
+      `);
+      for (const row of result.recordset as Array<{ phone_number: string }>) {
+        existing.add(String(row.phone_number));
+      }
+    }
+
+    return existing;
+  },
+
   async listActiveByPhone(phoneNumber: string): Promise<Array<Employee & { companyId: string }>> {
     const pool = getPool();
     const result = await pool

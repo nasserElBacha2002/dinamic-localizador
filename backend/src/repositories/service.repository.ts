@@ -71,6 +71,50 @@ export const serviceRepository = {
     return mapServiceRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /** Multi-row insert for imports. Atomic for the whole batch. */
+  async createMany(companyId: string, inputs: CreateServiceInput[]): Promise<Service[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const pool = getPool();
+    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const valueSql: string[] = [];
+
+    for (let index = 0; index < inputs.length; index += 1) {
+      const input = inputs[index]!;
+      request.input(`name${index}`, sql.NVarChar(150), input.name);
+      request.input(`address${index}`, sql.NVarChar(300), input.address ?? null);
+      request.input(`neighborhood${index}`, sql.NVarChar(150), input.neighborhood ?? null);
+      request.input(`locality${index}`, sql.NVarChar(150), input.locality ?? null);
+      request.input(
+        `serviceFormat${index}`,
+        sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH),
+        input.serviceFormat ?? null,
+      );
+      request.input(`latitude${index}`, sql.Decimal(10, 7), input.latitude);
+      request.input(`longitude${index}`, sql.Decimal(10, 7), input.longitude);
+      request.input(`allowedRadiusMeters${index}`, sql.Int, input.allowedRadiusMeters);
+      request.input(`googlePlaceId${index}`, sql.NVarChar(255), input.googlePlaceId ?? null);
+      valueSql.push(`(
+        @companyId, @name${index}, @address${index}, @neighborhood${index}, @locality${index},
+        @serviceFormat${index}, @latitude${index}, @longitude${index},
+        @allowedRadiusMeters${index}, @googlePlaceId${index}
+      )`);
+    }
+
+    const result = await request.query(`
+      INSERT INTO operational_locations (
+        company_id, name, address, neighborhood, locality, store_format,
+        latitude, longitude, allowed_radius_meters, google_place_id
+      )
+      OUTPUT INSERTED.*
+      VALUES ${valueSql.join(",\n")}
+    `);
+
+    return result.recordset.map((row) => mapServiceRow(row as Record<string, unknown>));
+  },
+
   async findById(companyId: string, id: string): Promise<Service | null> {
     const pool = getPool();
     const result = await pool
@@ -265,6 +309,41 @@ export const serviceRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query("SELECT * FROM operational_locations WHERE active = 1 AND company_id = @companyId");
     return result.recordset.map((row) => mapServiceRow(row as Record<string, unknown>));
+  },
+
+  /** Returns existing names keyed by lower-case trimmed name for import duplicate checks. */
+  async findExistingNames(
+    companyId: string,
+    names: string[],
+  ): Promise<Map<string, string>> {
+    const unique = [...new Set(names.map((name) => name.trim()).filter(Boolean))];
+    const existing = new Map<string, string>();
+    if (unique.length === 0) {
+      return existing;
+    }
+
+    const pool = getPool();
+    const chunkSize = 100;
+    for (let offset = 0; offset < unique.length; offset += chunkSize) {
+      const chunk = unique.slice(offset, offset + chunkSize);
+      const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+      const params = chunk.map((name, index) => {
+        const key = `name${index}`;
+        request.input(key, sql.NVarChar(150), name);
+        return `@${key}`;
+      });
+      const result = await request.query(`
+        SELECT name
+        FROM operational_locations
+        WHERE company_id = @companyId
+          AND name IN (${params.join(", ")})
+      `);
+      for (const row of result.recordset as Array<{ name: string }>) {
+        existing.set(String(row.name).trim().toLowerCase(), String(row.name));
+      }
+    }
+
+    return existing;
   },
 
   async update(companyId: string, id: string, input: UpdateServiceInput): Promise<Service | null> {

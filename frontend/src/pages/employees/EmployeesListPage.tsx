@@ -1,4 +1,4 @@
-import { Alert, Button, Select, Stack, Text } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -149,9 +149,14 @@ export function EmployeesListPage() {
         description={`Administrá el personal habilitado para ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canManageEmployees ? (
-            <Button component={Link} to="/employees/new" state={listNav}>
-              {`Nuevo ${terminology.worker.singular.toLowerCase()}`}
-            </Button>
+            <Group gap="xs">
+              <Button component={Link} to="/imports?entity=employees" state={listNav} variant="default">
+                {`Importar ${terminology.worker.plural.toLowerCase()}`}
+              </Button>
+              <Button component={Link} to="/employees/new" state={listNav}>
+                {`Nuevo ${terminology.worker.singular.toLowerCase()}`}
+              </Button>
+            </Group>
           ) : undefined
         }
       />

@@ -104,15 +104,20 @@ describe("Operation create tolerance prefill", () => {
   });
 });
 
-describe("OperationImportPage defaults banner", () => {
-  it("mentions operation configuration explicitly", async () => {
+describe("Importaciones operaciones ayuda", () => {
+  it("mentions operation configuration defaults in strategy help", async () => {
     const { readFileSync } = await import("node:fs");
     const { join } = await import("node:path");
+    const strategyFile = readFileSync(
+      join(process.cwd(), "src/imports/entity-strategies.ts"),
+      "utf8",
+    );
     const pageFile = readFileSync(
-      join(process.cwd(), "src/pages/operations/OperationImportPage.tsx"),
+      join(process.cwd(), "src/pages/imports/ImportPage.tsx"),
       "utf8",
     );
 
-    assert.ok(pageFile.includes("configuración de operaciones"));
+    assert.ok(strategyFile.includes("configuración de operaciones"));
+    assert.ok(pageFile.includes("strategy.help"));
   });
 });

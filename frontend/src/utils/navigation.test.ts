@@ -37,7 +37,7 @@ describe("navigation grouping", () => {
     assert.ok(sections[1]?.items.some((item) => item.path === "/attendance"));
   });
 
-  it("shows Importación only for operations:manage", () => {
+  it("shows Importación for any import-related manage permission", () => {
     const readOnly = getAdminNavItems({
       modules: allEnabledModules,
       permissions: ["operations:read"],
@@ -45,7 +45,7 @@ describe("navigation grouping", () => {
       modulesLoading: false,
     });
     assert.equal(
-      readOnly.some((item) => item.path === "/operations/import"),
+      readOnly.some((item) => item.path === "/imports"),
       false,
     );
 
@@ -55,8 +55,16 @@ describe("navigation grouping", () => {
       isPlatformAdmin: false,
       modulesLoading: false,
     });
-    const importItem = manage.find((item) => item.path === "/operations/import");
+    const importItem = manage.find((item) => item.path === "/imports");
     assert.ok(importItem);
     assert.equal(importItem?.section, "tools");
+
+    const employeesManage = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["employees:manage"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.ok(employeesManage.some((item) => item.path === "/imports"));
   });
 });

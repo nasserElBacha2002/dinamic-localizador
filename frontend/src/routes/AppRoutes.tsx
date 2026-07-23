@@ -41,9 +41,9 @@ const BotSimulatorPage = lazyNamed(
   () => import("../pages/bot-simulator/BotSimulatorPage"),
   "BotSimulatorPage",
 );
-const OperationImportPage = lazyNamed(
-  () => import("../pages/operations/OperationImportPage"),
-  "OperationImportPage",
+const ImportPage = lazyNamed(
+  () => import("../pages/imports/ImportPage"),
+  "ImportPage",
 );
 const OperationDetailPage = lazyNamed(
   () => import("../pages/operations/OperationDetailPage"),
@@ -150,7 +150,8 @@ export function AppRoutes() {
         <Route path="/" element={<HomePage />} />
         <Route path="/inventories" element={<Navigate to="/operations" replace />} />
         <Route path="/inventories/new" element={<Navigate to="/operations/new" replace />} />
-        <Route path="/inventories/import" element={<Navigate to="/operations/import" replace />} />
+        <Route path="/inventories/import" element={<Navigate to="/imports?entity=operations" replace />} />
+        <Route path="/operations/import" element={<Navigate to="/imports?entity=operations" replace />} />
         <Route path="/inventories/:id" element={<LegacyOperationRedirect />} />
         <Route path="/stores" element={<Navigate to="/services" replace />} />
         <Route path="/stores/new" element={<Navigate to="/services/new" replace />} />
@@ -236,10 +237,13 @@ export function AppRoutes() {
           }
         />
         <Route
-          path="/operations/import"
+          path="/imports"
           element={
-            <FeatureRouteGuard {...operationManage}>
-              <LazyPage component={OperationImportPage} message="Cargando importación..." />
+            <FeatureRouteGuard
+              anyModuleOf={["operations", "attendance", "absences"]}
+              requiredAnyPermission={["operations:manage", "services:manage", "employees:manage"]}
+            >
+              <LazyPage component={ImportPage} message="Cargando importación..." />
             </FeatureRouteGuard>
           }
         />

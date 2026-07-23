@@ -152,9 +152,13 @@ export function getAdminNavItems({
     }
 
     if (
-      canShowNavItem(modules, permissions, ["operations"], ["operations:manage"])
+      canShowNavItem(modules, permissions, ["operations", "attendance", "absences"], [
+        "operations:manage",
+        "services:manage",
+        "employees:manage",
+      ])
     ) {
-      items.push({ label: "Importación", path: "/operations/import", section: "tools" });
+      items.push({ label: "Importación", path: "/imports", section: "tools" });
     }
   }
 

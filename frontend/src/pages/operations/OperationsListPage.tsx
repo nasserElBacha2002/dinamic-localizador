@@ -180,7 +180,7 @@ export function OperationsListPage() {
         action={
           canManageOperations ? (
             <Group gap="xs">
-              <Button component={Link} to="/operations/import" state={listNav} variant="default">
+              <Button component={Link} to="/imports?entity=operations" state={listNav} variant="default">
                 {`Importar ${terminology.operation.plural.toLowerCase()}`}
               </Button>
               <Button component={Link} to="/operations/new" state={listNav}>

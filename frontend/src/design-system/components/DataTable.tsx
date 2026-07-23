@@ -1,43 +1,34 @@
-import { Group, Paper, ScrollArea, Table, Text, UnstyledButton } from "@mantine/core";
+import {
+  Group,
+  Paper,
+  ScrollArea,
+  Table,
+  Text,
+  UnstyledButton,
+} from "@mantine/core";
 import type { KeyboardEvent, ReactNode } from "react";
+import { useIsBelow } from "../hooks/useIsBelow";
+import { DataTableCards } from "./data-table-cards";
+import { resolveDataTableCellValue } from "./data-table-cell";
+import type {
+  DataTableProps,
+  SortDirection,
+} from "./data-table-types";
 import { EmptyState } from "./EmptyState";
 import { ErrorState } from "./ErrorState";
 import { LoadingState } from "./LoadingState";
-import { resolveDataTableCellValue } from "./data-table-cell";
 
-export type SortDirection = "asc" | "desc";
-
-export interface DataTableColumn<T> {
-  key: string;
-  header: ReactNode;
-  width?: number | string;
-  align?: "left" | "center" | "right";
-  sortable?: boolean;
-  render?: (row: T) => ReactNode;
-  getValue?: (row: T) => ReactNode;
-}
-
-export interface DataTableProps<T> {
-  rows: T[];
-  columns: DataTableColumn<T>[];
-  getRowKey: (row: T) => string | number;
-  loading?: boolean;
-  error?: ReactNode;
-  emptyTitle?: ReactNode;
-  emptyDescription?: ReactNode;
-  onRowClick?: (row: T) => void;
-  isRowClickable?: (row: T) => boolean;
-  rowActions?: (row: T) => ReactNode;
-  rowActionsHeader?: ReactNode;
-  pagination?: ReactNode;
-  sortBy?: string;
-  sortDirection?: SortDirection;
-  onSortChange?: (columnKey: string) => void;
-  "aria-label"?: string;
-}
+export type {
+  DataTableColumn,
+  DataTableMobileCardConfig,
+  DataTableMobileField,
+  DataTableMobileView,
+  DataTableProps,
+  SortDirection,
+} from "./data-table-types";
 
 function handleRowKeyDown<T>(
-  event: KeyboardEvent<HTMLTableRowElement>,
+  event: KeyboardEvent<HTMLElement>,
   row: T,
   onRowClick?: (row: T) => void,
 ) {
@@ -93,25 +84,36 @@ function SortableHeader({
   );
 }
 
-export function DataTable<T>({
-  rows,
-  columns,
-  getRowKey,
-  loading = false,
-  error,
-  emptyTitle = "Sin resultados",
-  emptyDescription = "No hay datos para mostrar.",
-  onRowClick,
-  isRowClickable,
-  rowActions,
-  rowActionsHeader = "Acciones",
-  pagination,
-  sortBy,
-  sortDirection,
-  onSortChange,
-  "aria-label": ariaLabel,
-}: DataTableProps<T>) {
+export function DataTable<T>(props: DataTableProps<T>) {
+  const {
+    rows,
+    columns,
+    getRowKey,
+    loading = false,
+    error,
+    emptyTitle = "Sin resultados",
+    emptyDescription = "No hay datos para mostrar.",
+    onRowClick,
+    isRowClickable,
+    rowActions,
+    rowActionsHeader = "Acciones",
+    pagination,
+    sortBy,
+    sortDirection,
+    onSortChange,
+    "aria-label": ariaLabel,
+    scrollMinWidth,
+  } = props;
+
+  const mobileView = props.mobileView ?? "scroll";
+  const mobileCard = "mobileCard" in props ? props.mobileCard : undefined;
+
+  const isMobile = useIsBelow("sm");
   const safeRows = Array.isArray(rows) ? rows : [];
+  const useMobileCards =
+    isMobile &&
+    (mobileView === "cards" || mobileView === "summary") &&
+    Boolean(mobileCard);
 
   if (loading) {
     return (
@@ -129,10 +131,28 @@ export function DataTable<T>({
     return <EmptyState title={emptyTitle} description={emptyDescription} />;
   }
 
+  if (useMobileCards && mobileCard) {
+    return (
+      <>
+        <DataTableCards
+          rows={safeRows}
+          getRowKey={getRowKey}
+          onRowClick={onRowClick}
+          isRowClickable={isRowClickable}
+          rowActions={rowActions}
+          mobileCard={mobileCard}
+          summary={mobileView === "summary"}
+          aria-label={ariaLabel}
+        />
+        {pagination}
+      </>
+    );
+  }
+
   return (
     <>
       <Paper withBorder radius="md">
-        <ScrollArea type="auto">
+        <ScrollArea type="auto" offsetScrollbars>
           <Table
             striped
             highlightOnHover
@@ -140,6 +160,7 @@ export function DataTable<T>({
             horizontalSpacing="md"
             fz="sm"
             aria-label={ariaLabel}
+            style={scrollMinWidth !== undefined ? { minWidth: scrollMinWidth } : undefined}
           >
             <Table.Thead>
               <Table.Tr>
@@ -182,7 +203,8 @@ export function DataTable<T>({
             <Table.Tbody>
               {safeRows.map((row) => {
                 const rowKey = getRowKey(row);
-                const clickable = Boolean(onRowClick) && (isRowClickable ? isRowClickable(row) : true);
+                const clickable =
+                  Boolean(onRowClick) && (isRowClickable ? isRowClickable(row) : true);
 
                 return (
                   <Table.Tr
@@ -191,7 +213,9 @@ export function DataTable<T>({
                     role={clickable ? "button" : undefined}
                     onClick={clickable ? () => onRowClick?.(row) : undefined}
                     onKeyDown={
-                      clickable ? (event) => handleRowKeyDown(event, row, onRowClick) : undefined
+                      clickable
+                        ? (event) => handleRowKeyDown(event, row, onRowClick)
+                        : undefined
                     }
                     style={clickable ? { cursor: "pointer" } : undefined}
                     data-clickable={clickable ? "true" : undefined}

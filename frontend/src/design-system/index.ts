@@ -1,5 +1,7 @@
 export { designTokens } from "./theme/tokens";
 export { mantineTheme } from "./theme/theme";
+export { BREAKPOINTS, maxWidthBelow, type BreakpointName } from "./theme/breakpoints";
+export { useIsBelow } from "./hooks/useIsBelow";
 export { AppLayout } from "./layout/AppLayout";
 export { AppSidebar } from "./layout/AppSidebar";
 export { AppTopbar } from "./layout/AppTopbar";
@@ -16,6 +18,9 @@ export {
   ConfirmDialog,
   DataTable,
   FilterBar,
+  FilterBarItem,
+  ResponsiveModal,
+  ActionMenu,
   PaginationControls,
   SearchInput,
   mapApiPaginationMeta,
@@ -29,10 +34,17 @@ export {
   type ErrorStateProps,
   type ConfirmDialogProps,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
+  type DataTableMobileField,
+  type DataTableMobileView,
   type DataTableProps,
   type SortDirection,
   type FilterBarProps,
   type FilterBarItemProps,
+  type ResponsiveModalProps,
+  type ResponsiveModalBodyMode,
+  type ActionMenuItem,
+  type ActionMenuProps,
   type PaginationControlsProps,
   type PaginationMeta,
   type SearchInputProps,

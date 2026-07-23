@@ -3,7 +3,6 @@ import {
   Checkbox,
   Divider,
   Group,
-  Modal,
   NumberInput,
   Select,
   Stack,
@@ -18,7 +17,7 @@ import {
   getCanonicalOperationTimezone,
   getOperationTimezoneOptions,
 } from "../../constants/operation-timezones";
-import { FormGrid } from "../../design-system";
+import { FormGrid, ResponsiveModal } from "../../design-system";
 import type { CompanyModuleKey } from "../../types/company-module";
 import type { CreatePlatformCompanyInput } from "../../types/platform-company";
 import type { CompanySettingsFormValues } from "../../types/company-settings";
@@ -157,15 +156,25 @@ export function CreatePlatformCompanyDialog({
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
       onClose={loading ? () => undefined : handleClose}
       title="Crear empresa"
       size="xl"
-      centered
+      bodyMode="scroll"
       onExitTransitionEnd={() => {
         if (!open) resetForm();
       }}
+      footer={
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={handleClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSubmit} disabled={loading || !isValid} loading={loading}>
+            Crear empresa
+          </Button>
+        </Group>
+      }
     >
       <Stack gap="md">
         <Stack gap="sm">
@@ -405,15 +414,7 @@ export function CreatePlatformCompanyDialog({
             {errorMessage}
           </Text>
         ) : null}
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={handleClose} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button onClick={handleSubmit} disabled={loading || !isValid} loading={loading}>
-            Crear empresa
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

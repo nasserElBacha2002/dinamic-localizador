@@ -1,8 +1,9 @@
-import { Button, Group } from "@mantine/core";
+import { Button } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
 import {
+  ActionMenu,
   DataTable,
   FilterBar,
   FilterDateRangeInput,
@@ -12,6 +13,7 @@ import {
   PaginationControls,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useOperations } from "../../hooks/useOperations";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -21,7 +23,11 @@ import type { OperationKind, OperationListSortField, OperationStatus, OperationW
 import type { DateRangeValue } from "../../types/date-range";
 import { terminology } from "../../domain/terminology";
 import { getDefaultOperationDateRange, getDateRangeQueryValue } from "../../utils/date-range";
-import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../utils/date-range-url";
+import {
+  areDateRangeUrlFieldsEqual,
+  dateRangeToUrlFields,
+  urlFieldsToDateRange,
+} from "../../utils/date-range-url";
 import {
   dateInputToIsoEnd,
   dateInputToIsoStart,
@@ -97,6 +103,40 @@ export function OperationsListPage() {
     sortDirection: table.state.sortOrder,
   });
 
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (table.state.status) {
+      count += 1;
+    }
+    if (table.state.operationKind) {
+      count += 1;
+    }
+    if (table.state.serviceId) {
+      count += 1;
+    }
+    if (
+      !areDateRangeUrlFieldsEqual(
+        {
+          datePreset: table.state.datePreset,
+          dateFrom: table.state.dateFrom,
+          dateTo: table.state.dateTo,
+        },
+        defaultDateFields,
+      )
+    ) {
+      count += 1;
+    }
+    return count;
+  }, [
+    defaultDateFields,
+    table.state.dateFrom,
+    table.state.datePreset,
+    table.state.dateTo,
+    table.state.operationKind,
+    table.state.serviceId,
+    table.state.status,
+  ]);
+
   const handleSortChange = (field: string) => {
     table.toggleSorting(field, "asc");
   };
@@ -104,6 +144,15 @@ export function OperationsListPage() {
   const handleDateRangeChange = (nextDateRange: DateRangeValue) => {
     table.setState(dateRangeToUrlFields(nextDateRange));
   };
+
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setState({
+      status: tableDefaults.status,
+      operationKind: tableDefaults.operationKind,
+      serviceId: tableDefaults.serviceId,
+      ...defaultDateFields,
+    });
+  }, [defaultDateFields, table, tableDefaults.operationKind, tableDefaults.serviceId, tableDefaults.status]);
 
   const statusOptions = useMemo(
     () => [
@@ -172,6 +221,51 @@ export function OperationsListPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<OperationWithService>>(
+    () => ({
+      title: (row) => getOperationServiceName(row),
+      subtitle: (row) => getOperationServiceAddress(row),
+      status: (row) => (
+        <StatusBadge label={operationStatusLabels[row.status]} tone="info" variant="light" />
+      ),
+      fields: [
+        {
+          key: "scheduledStart",
+          label: "Programación",
+          render: (row) =>
+            formatOperationScheduleListLabel(
+              row.operationKind ?? "ONE_TIME",
+              row.scheduledStart,
+              row.scheduledEnd,
+              row.scheduleSummary,
+            ),
+          visibility: "always",
+        },
+        {
+          key: "operationKind",
+          label: "Tipo",
+          render: (row) =>
+            operationKindLabels[(row.operationKind ?? "ONE_TIME") as keyof typeof operationKindLabels] ??
+            row.operationKind,
+          visibility: "always",
+        },
+        {
+          key: "earlyToleranceMinutes",
+          label: "Tol. temprana",
+          render: (row) => `${row.earlyToleranceMinutes} min`,
+          visibility: "expanded",
+        },
+        {
+          key: "lateToleranceMinutes",
+          label: "Tol. tardía",
+          render: (row) => `${row.lateToleranceMinutes} min`,
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   return (
     <>
       <PageHeader
@@ -179,19 +273,35 @@ export function OperationsListPage() {
         description={`Planificá ${terminology.operation.plural.toLowerCase()} y asigná ${terminology.worker.plural.toLowerCase()}.`}
         action={
           canManageOperations ? (
-            <Group gap="xs">
-              <Button component={Link} to="/imports?entity=operations" state={listNav} variant="default">
-                {`Importar ${terminology.operation.plural.toLowerCase()}`}
-              </Button>
-              <Button component={Link} to="/operations/new" state={listNav}>
-                {`Nueva ${terminology.operation.singular.toLowerCase()}`}
-              </Button>
-            </Group>
+            <ActionMenu
+              primary={
+                <Button component={Link} to="/operations/new" state={listNav}>
+                  {`Nueva ${terminology.operation.singular.toLowerCase()}`}
+                </Button>
+              }
+              menuLabel="Más acciones de operaciones"
+              items={[
+                {
+                  key: "import",
+                  label: `Importar ${terminology.operation.plural.toLowerCase()}`,
+                  onClick: () =>
+                    navigateWithListContext(
+                      navigate,
+                      "/imports?entity=operations",
+                      OPERATIONS_LIST_PATH,
+                      location,
+                    ),
+                },
+              ]}
+            />
           ) : undefined
         }
       />
 
-      <FilterBar>
+      <FilterBar
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <FilterSelect
             label="Tipo de operación"
@@ -223,7 +333,7 @@ export function OperationsListPage() {
           />
         </FilterBar.Item>
 
-        <FilterBar.Item minWidth={280}>
+        <FilterBar.Item>
           <FilterDateRangeInput
             value={dateRange}
             onChange={handleDateRangeChange}
@@ -250,6 +360,8 @@ export function OperationsListPage() {
         sortBy={table.state.sortBy}
         sortDirection={table.state.sortOrder}
         onSortChange={handleSortChange}
+        mobileView="cards"
+        mobileCard={mobileCard}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls

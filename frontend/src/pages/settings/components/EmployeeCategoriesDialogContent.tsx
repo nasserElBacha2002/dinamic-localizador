@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
+import { Alert, Button, Group, ScrollArea, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { FormErrorAlert } from "../../../design-system";
 import {
@@ -157,28 +157,30 @@ export function EmployeeCategoriesDialogContent({
         <Text fw={600} size="sm">
           Categorías base
         </Text>
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Nombre</Table.Th>
-              <Table.Th>Colaboradores</Table.Th>
-              <Table.Th>Estado</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {systemCategories.map((category) => (
-              <Table.Tr key={category.id}>
-                <Table.Td>{category.name}</Table.Td>
-                <Table.Td>{category.assignedEmployeesCount ?? 0}</Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">
-                    Solo lectura
-                  </Text>
-                </Table.Td>
+        <ScrollArea type="scroll" offsetScrollbars>
+          <Table striped highlightOnHover miw={420}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Nombre</Table.Th>
+                <Table.Th>Colaboradores</Table.Th>
+                <Table.Th>Estado</Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {systemCategories.map((category) => (
+                <Table.Tr key={category.id}>
+                  <Table.Td>{category.name}</Table.Td>
+                  <Table.Td>{category.assignedEmployeesCount ?? 0}</Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">
+                      Solo lectura
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
       </Stack>
 
       <Stack gap="xs">
@@ -190,80 +192,82 @@ export function EmployeeCategoriesDialogContent({
             Todavía no hay categorías personalizadas.
           </Text>
         ) : (
-          <Table striped highlightOnHover>
-            <Table.Thead>
-              <Table.Tr>
-                <Table.Th>Nombre</Table.Th>
-                <Table.Th>Colaboradores</Table.Th>
-                <Table.Th>Activo</Table.Th>
-                <Table.Th>Acciones</Table.Th>
-              </Table.Tr>
-            </Table.Thead>
-            <Table.Tbody>
-              {customCategories.map((category) => (
-                <Table.Tr key={category.id}>
-                  <Table.Td>
-                    {editingId === category.id ? (
-                      <TextInput
-                        value={editingName}
-                        onChange={(event) => setEditingName(event.currentTarget.value)}
+          <ScrollArea type="scroll" offsetScrollbars>
+            <Table striped highlightOnHover miw={520}>
+              <Table.Thead>
+                <Table.Tr>
+                  <Table.Th>Nombre</Table.Th>
+                  <Table.Th>Colaboradores</Table.Th>
+                  <Table.Th>Activo</Table.Th>
+                  <Table.Th>Acciones</Table.Th>
+                </Table.Tr>
+              </Table.Thead>
+              <Table.Tbody>
+                {customCategories.map((category) => (
+                  <Table.Tr key={category.id}>
+                    <Table.Td>
+                      {editingId === category.id ? (
+                        <TextInput
+                          value={editingName}
+                          onChange={(event) => setEditingName(event.currentTarget.value)}
+                          disabled={disabled}
+                        />
+                      ) : (
+                        category.name
+                      )}
+                    </Table.Td>
+                    <Table.Td>{category.assignedEmployeesCount ?? 0}</Table.Td>
+                    <Table.Td>
+                      <Switch
+                        checked={category.isActive}
                         disabled={disabled}
+                        onChange={(event) =>
+                          handleToggleActive(category, event.currentTarget.checked)
+                        }
+                        aria-label={`Activar ${category.name}`}
                       />
-                    ) : (
-                      category.name
-                    )}
-                  </Table.Td>
-                  <Table.Td>{category.assignedEmployeesCount ?? 0}</Table.Td>
-                  <Table.Td>
-                    <Switch
-                      checked={category.isActive}
-                      disabled={disabled}
-                      onChange={(event) =>
-                        handleToggleActive(category, event.currentTarget.checked)
-                      }
-                      aria-label={`Activar ${category.name}`}
-                    />
-                  </Table.Td>
-                  <Table.Td>
-                    {editingId === category.id ? (
-                      <Group gap="xs">
+                    </Table.Td>
+                    <Table.Td>
+                      {editingId === category.id ? (
+                        <Group gap="xs">
+                          <Button
+                            size="xs"
+                            disabled={disabled || !editingName.trim()}
+                            onClick={() => void handleSaveEdit(category.id)}
+                          >
+                            Guardar
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="default"
+                            disabled={disabled}
+                            onClick={() => {
+                              setEditingId(null);
+                              setEditingName("");
+                            }}
+                          >
+                            Cancelar
+                          </Button>
+                        </Group>
+                      ) : (
                         <Button
                           size="xs"
-                          disabled={disabled || !editingName.trim()}
-                          onClick={() => void handleSaveEdit(category.id)}
-                        >
-                          Guardar
-                        </Button>
-                        <Button
-                          size="xs"
-                          variant="default"
+                          variant="light"
                           disabled={disabled}
                           onClick={() => {
-                            setEditingId(null);
-                            setEditingName("");
+                            setEditingId(category.id);
+                            setEditingName(category.name);
                           }}
                         >
-                          Cancelar
+                          Editar
                         </Button>
-                      </Group>
-                    ) : (
-                      <Button
-                        size="xs"
-                        variant="light"
-                        disabled={disabled}
-                        onClick={() => {
-                          setEditingId(category.id);
-                          setEditingName(category.name);
-                        }}
-                      >
-                        Editar
-                      </Button>
-                    )}
-                  </Table.Td>
-                </Table.Tr>
-              ))}
-            </Table.Tbody>
-          </Table>
+                      )}
+                    </Table.Td>
+                  </Table.Tr>
+                ))}
+              </Table.Tbody>
+            </Table>
+          </ScrollArea>
         )}
       </Stack>
     </Stack>

@@ -1,7 +1,8 @@
 import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Button, Group } from "@mantine/core";
+import { Button } from "@mantine/core";
 import {
+  ActionMenu,
   CascadingFilterSelect,
   DataTable,
   FilterBar,
@@ -12,6 +13,7 @@ import {
   SearchInput,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { useListNavigationState } from "../../hooks/useListNavigationState";
@@ -94,6 +96,28 @@ export function ServicesListPage() {
     ];
   }, [facetsQuery.data, table.state.locality]);
 
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (table.state.serviceFormat !== SERVICE_TABLE_DEFAULTS.serviceFormat) {
+      count += 1;
+    }
+    if (table.state.locality !== SERVICE_TABLE_DEFAULTS.locality) {
+      count += 1;
+    }
+    if (table.state.neighborhood !== SERVICE_TABLE_DEFAULTS.neighborhood) {
+      count += 1;
+    }
+    if (table.state.active !== SERVICE_TABLE_DEFAULTS.active) {
+      count += 1;
+    }
+    return count;
+  }, [
+    table.state.active,
+    table.state.locality,
+    table.state.neighborhood,
+    table.state.serviceFormat,
+  ]);
+
   const columns = useMemo<DataTableColumn<Service>[]>(
     () => [
       { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
@@ -143,6 +167,46 @@ export function ServicesListPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<Service>>(
+    () => ({
+      title: (row) => row.name,
+      subtitle: (row) => row.address ?? undefined,
+      status: (row) => (
+        <StatusBadge
+          label={activeStatusLabel(row.active)}
+          tone={row.active ? "success" : "neutral"}
+        />
+      ),
+      fields: [
+        {
+          key: "locality",
+          label: "Localidad",
+          render: (row) => row.locality ?? "—",
+          visibility: "always",
+        },
+        {
+          key: "neighborhood",
+          label: "Barrio",
+          render: (row) => row.neighborhood ?? "—",
+          visibility: "always",
+        },
+        {
+          key: "serviceFormat",
+          label: "Formato",
+          render: (row) => row.serviceFormat ?? "—",
+          visibility: "always",
+        },
+        {
+          key: "allowedRadiusMeters",
+          label: "Radio",
+          render: (row) => `${row.allowedRadiusMeters} m`,
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   const handleSortChange = useCallback(
     (field: string) => {
       if (!(SERVICE_TABLE_SORTABLE_COLUMN_KEYS as readonly string[]).includes(field)) {
@@ -152,6 +216,15 @@ export function ServicesListPage() {
     },
     [table],
   );
+
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setState({
+      serviceFormat: SERVICE_TABLE_DEFAULTS.serviceFormat,
+      locality: SERVICE_TABLE_DEFAULTS.locality,
+      neighborhood: SERVICE_TABLE_DEFAULTS.neighborhood,
+      active: SERVICE_TABLE_DEFAULTS.active,
+    });
+  }, [table]);
 
   const facetsLoading = facetsQuery.isPending || facetsQuery.isFetching;
   const formatsLoading = locationTypesQuery.isPending || locationTypesQuery.isFetching;
@@ -165,14 +238,27 @@ export function ServicesListPage() {
         description="Configurá ubicaciones y radios permitidos."
         action={
           canManageServices ? (
-            <Group gap="xs">
-              <Button component={Link} to="/imports?entity=services" state={listNav} variant="default">
-                {`Importar ${terminology.service.plural.toLowerCase()}`}
-              </Button>
-              <Button component={Link} to="/services/new" state={listNav}>
-                {`Nueva ${terminology.service.singular.toLowerCase()}`}
-              </Button>
-            </Group>
+            <ActionMenu
+              primary={
+                <Button component={Link} to="/services/new" state={listNav}>
+                  {`Nueva ${terminology.service.singular.toLowerCase()}`}
+                </Button>
+              }
+              menuLabel="Más acciones de servicios"
+              items={[
+                {
+                  key: "import",
+                  label: `Importar ${terminology.service.plural.toLowerCase()}`,
+                  onClick: () =>
+                    navigateWithListContext(
+                      navigate,
+                      "/imports?entity=services",
+                      SERVICES_LIST_PATH,
+                      location,
+                    ),
+                },
+              ]}
+            />
           ) : undefined
         }
       />
@@ -188,8 +274,8 @@ export function ServicesListPage() {
         }}
       />
 
-      <FilterBar>
-        <FilterBar.Item>
+      <FilterBar
+        search={
           <SearchInput
             value={table.searchInput}
             onChange={table.setSearch}
@@ -197,7 +283,10 @@ export function ServicesListPage() {
             placeholder="Nombre, dirección, barrio o localidad"
             label="Buscar"
           />
-        </FilterBar.Item>
+        }
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <FilterSelect
             label="Formato"
@@ -208,7 +297,7 @@ export function ServicesListPage() {
             disabled={formatsLoading || formatsFailed}
           />
         </FilterBar.Item>
-        <FilterBar.Item minWidth={360}>
+        <FilterBar.Item>
           <CascadingFilterSelect
             parentLabel="Localidad"
             parentValue={table.state.locality}
@@ -259,6 +348,8 @@ export function ServicesListPage() {
         sortBy={table.state.sortBy}
         sortDirection={table.state.sortOrder}
         onSortChange={handleSortChange}
+        mobileView="cards"
+        mobileCard={mobileCard}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls

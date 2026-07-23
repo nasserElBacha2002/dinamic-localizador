@@ -1,6 +1,6 @@
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import type { ReactNode } from "react";
-import { FormErrorAlert } from "../../../design-system";
+import { FormErrorAlert, ResponsiveModal } from "../../../design-system";
 
 export interface SettingsDialogProps {
   opened: boolean;
@@ -30,14 +30,24 @@ export function SettingsDialog({
   size = "md",
 }: SettingsDialogProps) {
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title={title}
       size={size}
-      centered
+      bodyMode="scroll"
       closeOnClickOutside={!saving}
       closeOnEscape={!saving}
+      footer={
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={onClose} disabled={saving}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void onSave()} loading={saving} disabled={saveDisabled || saving}>
+            {saveLabel}
+          </Button>
+        </Group>
+      }
     >
       <Stack gap="md">
         {subtitle ? (
@@ -49,16 +59,7 @@ export function SettingsDialog({
         {children}
 
         <FormErrorAlert message={submitError} />
-
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onClose} disabled={saving}>
-            Cancelar
-          </Button>
-          <Button onClick={() => void onSave()} loading={saving} disabled={saveDisabled || saving}>
-            {saveLabel}
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

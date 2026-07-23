@@ -41,6 +41,16 @@ export function setupDomEnvironment(): void {
     writable: true,
     value: window.Node,
   });
+  Object.defineProperty(globalThis, "Document", {
+    configurable: true,
+    writable: true,
+    value: window.Document,
+  });
+  Object.defineProperty(globalThis, "DocumentFragment", {
+    configurable: true,
+    writable: true,
+    value: window.DocumentFragment,
+  });
   Object.defineProperty(globalThis, "getComputedStyle", {
     configurable: true,
     writable: true,
@@ -73,11 +83,41 @@ export function setupDomEnvironment(): void {
     });
   }
 
+  if (!globalThis.MutationObserver && "MutationObserver" in window) {
+    Object.defineProperty(globalThis, "MutationObserver", {
+      configurable: true,
+      writable: true,
+      value: window.MutationObserver,
+    });
+  }
+
+  if (!globalThis.MutationObserver) {
+    Object.defineProperty(globalThis, "MutationObserver", {
+      configurable: true,
+      writable: true,
+      value: class MutationObserver {
+        observe(): void {}
+        disconnect(): void {}
+        takeRecords(): MutationRecord[] {
+          return [];
+        }
+      },
+    });
+  }
+
   if (!globalThis.requestAnimationFrame) {
     Object.defineProperty(globalThis, "requestAnimationFrame", {
       configurable: true,
       writable: true,
-      value: (callback: FrameRequestCallback) => setTimeout(() => callback(Date.now()), 0),
+      value: (callback: FrameRequestCallback) => {
+        const handle = setTimeout(() => callback(Date.now()), 0);
+        // Floating UI autoUpdate can leave RAF loops after unmount; unref so Node's
+        // test runner is not kept alive by happy-dom timer polyfills.
+        if (typeof handle === "object" && handle && "unref" in handle) {
+          (handle as NodeJS.Timeout).unref();
+        }
+        return handle as unknown as number;
+      },
     });
   }
 

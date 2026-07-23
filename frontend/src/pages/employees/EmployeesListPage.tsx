@@ -1,7 +1,8 @@
-import { Alert, Button, Group, Select, Stack, Text } from "@mantine/core";
+import { Button, Select, Stack, Text, Alert } from "@mantine/core";
 import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
+  ActionMenu,
   DataTable,
   FilterBar,
   mapApiPaginationMeta,
@@ -10,6 +11,7 @@ import {
   SearchInput,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
 import { useEmployees } from "../../hooks/useEmployees";
@@ -72,6 +74,17 @@ export function EmployeesListPage() {
     ];
   }, [catalogFailed, categoriesQuery.data]);
 
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (table.state.active !== EMPLOYEE_TABLE_DEFAULTS.active) {
+      count += 1;
+    }
+    if (table.state.categoryId !== EMPLOYEE_TABLE_DEFAULTS.categoryId) {
+      count += 1;
+    }
+    return count;
+  }, [table.state.active, table.state.categoryId]);
+
   const columns = useMemo<DataTableColumn<Employee>[]>(
     () => [
       { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
@@ -114,6 +127,45 @@ export function EmployeesListPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<Employee>>(
+    () => ({
+      title: (row) => row.name,
+      status: (row) => (
+        <StatusBadge
+          label={activeStatusLabel(row.active)}
+          tone={row.active ? "success" : "neutral"}
+        />
+      ),
+      fields: [
+        {
+          key: "phoneNumber",
+          label: "Teléfono",
+          render: (row) => row.phoneNumber,
+          visibility: "always",
+        },
+        {
+          key: "category",
+          label: "Categoría",
+          render: (row) => row.category?.name ?? "—",
+          visibility: "always",
+        },
+        {
+          key: "employeeType",
+          label: "Tipo",
+          render: (row) => employeeTypeLabels[row.employeeType],
+          visibility: "always",
+        },
+        {
+          key: "documentNumber",
+          label: "Documento",
+          render: (row) => row.documentNumber ?? "—",
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   const handleActiveFilterChange = useCallback(
     (value: string | null) => {
       if (!value) {
@@ -132,6 +184,11 @@ export function EmployeesListPage() {
     [table],
   );
 
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setField("active", EMPLOYEE_TABLE_DEFAULTS.active);
+    table.setField("categoryId", EMPLOYEE_TABLE_DEFAULTS.categoryId);
+  }, [table]);
+
   const handleSortChange = useCallback(
     (field: string) => {
       if (!(EMPLOYEE_TABLE_SORTABLE_COLUMN_KEYS as readonly string[]).includes(field)) {
@@ -149,14 +206,27 @@ export function EmployeesListPage() {
         description={`Administrá el personal habilitado para ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canManageEmployees ? (
-            <Group gap="xs">
-              <Button component={Link} to="/imports?entity=employees" state={listNav} variant="default">
-                {`Importar ${terminology.worker.plural.toLowerCase()}`}
-              </Button>
-              <Button component={Link} to="/employees/new" state={listNav}>
-                {`Nuevo ${terminology.worker.singular.toLowerCase()}`}
-              </Button>
-            </Group>
+            <ActionMenu
+              primary={
+                <Button component={Link} to="/employees/new" state={listNav}>
+                  {`Nuevo ${terminology.worker.singular.toLowerCase()}`}
+                </Button>
+              }
+              items={[
+                {
+                  key: "import",
+                  label: `Importar ${terminology.worker.plural.toLowerCase()}`,
+                  onClick: () =>
+                    navigateWithListContext(
+                      navigate,
+                      "/imports?entity=employees",
+                      EMPLOYEES_LIST_PATH,
+                      location,
+                    ),
+                },
+              ]}
+              menuLabel="Más acciones de colaboradores"
+            />
           ) : undefined
         }
       />
@@ -172,8 +242,8 @@ export function EmployeesListPage() {
         </Alert>
       ) : null}
 
-      <FilterBar>
-        <FilterBar.Item>
+      <FilterBar
+        search={
           <SearchInput
             value={table.searchInput}
             onChange={table.setSearch}
@@ -181,7 +251,10 @@ export function EmployeesListPage() {
             placeholder="Nombre, documento o teléfono"
             label="Buscar"
           />
-        </FilterBar.Item>
+        }
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <Select
             label="Estado"
@@ -223,6 +296,8 @@ export function EmployeesListPage() {
         sortBy={table.state.sortBy}
         sortDirection={table.state.sortOrder}
         onSortChange={handleSortChange}
+        mobileView="cards"
+        mobileCard={mobileCard}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls

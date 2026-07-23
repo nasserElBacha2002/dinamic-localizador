@@ -1,4 +1,5 @@
-import { Alert, Button, Group, Modal, NumberInput, Stack } from "@mantine/core";
+import { Alert, Button, Group, NumberInput, Stack } from "@mantine/core";
+import { ResponsiveModal } from "../../../design-system";
 import type { BotSimulatorSessionState } from "../hooks/useBotSimulatorSession";
 import { validateCoordinate } from "../utils";
 
@@ -34,12 +35,37 @@ export function BotLocationDialog({
   isBusy,
   handleSendLocation,
 }: BotLocationDialogProps) {
+  const canSend = Boolean(customLatitude && customLongitude) && !isBusy;
+
   return (
-    <Modal
+    <ResponsiveModal
       opened={locationDialogOpen}
       onClose={() => setLocationDialogOpen(false)}
       title="Enviar ubicación simulada"
-      centered
+      bodyMode="normal"
+      footer={
+        <Group justify="flex-end" gap="sm">
+          <Button variant="default" onClick={() => setLocationDialogOpen(false)}>
+            Cancelar
+          </Button>
+          <Button
+            disabled={!canSend}
+            loading={isBusy}
+            onClick={() => {
+              const latError = validateCoordinate(customLatitude, "latitude");
+              const lngError = validateCoordinate(customLongitude, "longitude");
+              setCustomLatitudeError(latError);
+              setCustomLongitudeError(lngError);
+              if (latError || lngError) {
+                return;
+              }
+              void handleSendLocation(Number(customLatitude), Number(customLongitude));
+            }}
+          >
+            Enviar ubicación
+          </Button>
+        </Group>
+      }
     >
       <Stack gap="md">
         {locationPresets ? (
@@ -71,29 +97,7 @@ export function BotLocationDialog({
           allowDecimal
           decimalScale={8}
         />
-
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={() => setLocationDialogOpen(false)}>
-            Cancelar
-          </Button>
-          <Button
-            disabled={!customLatitude || !customLongitude || isBusy}
-            onClick={() => {
-              const latitudeError = validateCoordinate(customLatitude, "latitude");
-              const longitudeError = validateCoordinate(customLongitude, "longitude");
-              setCustomLatitudeError(latitudeError);
-              setCustomLongitudeError(longitudeError);
-              if (latitudeError || longitudeError) {
-                return;
-              }
-
-              void handleSendLocation(Number(customLatitude), Number(customLongitude));
-            }}
-          >
-            Enviar ubicación
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -1,4 +1,5 @@
-import { Button, Group, Modal, Stack } from "@mantine/core";
+import { Button, Group } from "@mantine/core";
+import { ResponsiveModal } from "../../../design-system";
 import { CompanyLocationTypesDialogContent } from "./CompanyLocationTypesDialogContent";
 import type { CompanyLocationType } from "../../../types/company-location-type";
 
@@ -16,25 +17,21 @@ export function CompanyLocationTypesDialog({
   canUpdate,
 }: CompanyLocationTypesDialogProps) {
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Formato"
       size="lg"
-      centered
-    >
-      <Stack gap="md">
-        <CompanyLocationTypesDialogContent
-          locationTypes={locationTypes}
-          canUpdate={canUpdate}
-        />
-
+      bodyMode="scroll"
+      footer={
         <Group justify="flex-end">
           <Button variant="default" onClick={onClose}>
             Cerrar
           </Button>
         </Group>
-      </Stack>
-    </Modal>
+      }
+    >
+      <CompanyLocationTypesDialogContent locationTypes={locationTypes} canUpdate={canUpdate} />
+    </ResponsiveModal>
   );
 }

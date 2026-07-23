@@ -49,11 +49,16 @@ export function LocationMapCanvas({
   const showGoogleMapsUi = mapsLoadState === "loading" || mapsLoadState === "ready";
 
   if (!showGoogleMapsUi) {
-    return null;
+    return (
+      <Alert color="yellow" title="Mapa no disponible">
+        No se pudo cargar el mapa. Completá dirección y coordenadas manualmente en la sección de
+        geolocalización.
+      </Alert>
+    );
   }
 
   return (
-    <Paper withBorder radius="md" p={0} style={{ display: "flex", flexDirection: "column", flex: 1 }}>
+    <Paper withBorder radius="md" p={0} style={{ display: "flex", flexDirection: "column", flex: 1, minWidth: 0, maxWidth: "100%" }}>
       <Box
         ref={mapContainerRef}
         className={classes.mapCanvas}

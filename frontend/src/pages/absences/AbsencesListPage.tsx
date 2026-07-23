@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
 import {
@@ -11,6 +11,7 @@ import {
   PaginationControls,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
@@ -70,6 +71,22 @@ export function AbsencesListPage() {
     dateTo: dateQuery.to,
   });
 
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (table.state.status !== ABSENCES_TABLE_DEFAULTS.status) count += 1;
+    if (table.state.absenceTypeId !== ABSENCES_TABLE_DEFAULTS.absenceTypeId) count += 1;
+    if (table.state.employeeId !== ABSENCES_TABLE_DEFAULTS.employeeId) count += 1;
+    return count;
+  }, [table.state]);
+
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setState({
+      status: ABSENCES_TABLE_DEFAULTS.status,
+      absenceTypeId: ABSENCES_TABLE_DEFAULTS.absenceTypeId,
+      employeeId: ABSENCES_TABLE_DEFAULTS.employeeId,
+    });
+  }, [table]);
+
   const statusOptions = useMemo(
     () => [
       { value: "all", label: "Todos" },
@@ -128,6 +145,57 @@ export function AbsencesListPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<AbsenceRequestListItem>>(
+    () => ({
+      title: (row) => getRelatedName(row.employee),
+      status: (row) => (
+        <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+      ),
+      fields: [
+        {
+          key: "type",
+          label: "Tipo",
+          getValue: (row) =>
+            absenceTypeLabels[row.absenceType?.code as keyof typeof absenceTypeLabels] ??
+            safeText(row.absenceType?.name ?? null),
+          visibility: "always",
+        },
+        {
+          key: "period",
+          label: "Período",
+          getValue: (row) =>
+            `${formatAbsenceDate(row.startDate)} – ${formatAbsenceDate(row.endDate)}`,
+          visibility: "always",
+        },
+        {
+          key: "totalDays",
+          label: "Días",
+          getValue: (row) => String(row.totalDays),
+          visibility: "always",
+        },
+        {
+          key: "requestedVia",
+          label: "Origen",
+          getValue: (row) => absenceRequestedViaLabels[row.requestedVia],
+          visibility: "expanded",
+        },
+        {
+          key: "createdAt",
+          label: "Creada",
+          getValue: (row) => formatDateTime(row.createdAt),
+          visibility: "expanded",
+        },
+        {
+          key: "affectedOperations",
+          label: `${terminology.operation.plural} afectadas`,
+          getValue: (row) => String(row.affectedOperationsCount),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   return (
     <>
       <PageHeader
@@ -135,7 +203,21 @@ export function AbsencesListPage() {
         description="Revisá y gestioná las solicitudes enviadas por WhatsApp o administración."
       />
 
-      <FilterBar>
+      <FilterBar
+        search={
+          <FilterDateRangeInput
+            value={dateRange}
+            onChange={(nextDateRange) => {
+              table.setState(dateRangeToUrlFields(nextDateRange));
+            }}
+            mode="mixed"
+            label="Fecha"
+            allowCustomRange
+          />
+        }
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <FilterSelect
             label="Estado"
@@ -165,17 +247,6 @@ export function AbsencesListPage() {
             label={terminology.worker.singular}
           />
         </FilterBar.Item>
-        <FilterBar.Item minWidth={280}>
-          <FilterDateRangeInput
-            value={dateRange}
-            onChange={(nextDateRange) => {
-              table.setState(dateRangeToUrlFields(nextDateRange));
-            }}
-            mode="mixed"
-            label="Fecha"
-            allowCustomRange
-          />
-        </FilterBar.Item>
       </FilterBar>
 
       <DataTable
@@ -189,6 +260,8 @@ export function AbsencesListPage() {
         onRowClick={(row) =>
           navigateWithListContext(navigate, `/absences/${row.id}`, ABSENCES_LIST_PATH, location)
         }
+        mobileView="cards"
+        mobileCard={mobileCard}
         aria-label="Listado de solicitudes de ausencia"
         pagination={
           data && data.data.length > 0 ? (

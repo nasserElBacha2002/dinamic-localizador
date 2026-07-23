@@ -1,7 +1,5 @@
-import { Group, Modal, Stack, Text } from "@mantine/core";
-import { ErrorState } from "../../design-system/components/ErrorState";
-import { LoadingState } from "../../design-system/components/LoadingState";
-import { StatusBadge } from "../../design-system/components/StatusBadge";
+import { Group, Stack, Text } from "@mantine/core";
+import { ErrorState, LoadingState, ResponsiveModal, StatusBadge } from "../../design-system";
 import { useOperationWorkdayDetail } from "../../hooks/useOperations";
 import type { OperationWorkdaySummary } from "../../types/operation-workday";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -28,12 +26,12 @@ export function OperationWorkdayDetailModal({
   const detailQuery = useOperationWorkdayDetail(operationId, workday?.id, opened && Boolean(workday));
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={opened}
       onClose={onClose}
       title="Detalle de jornada"
       size="lg"
-      centered
+      bodyMode="scroll"
     >
       {workday ? (
         <Stack gap="md">
@@ -99,7 +97,7 @@ export function OperationWorkdayDetailModal({
                     key={employee.employeeId}
                     justify="space-between"
                     align="flex-start"
-                    wrap="nowrap"
+                    wrap="wrap"
                     py="xs"
                     style={{ borderBottom: "1px solid var(--mantine-color-gray-2)" }}
                   >
@@ -114,6 +112,6 @@ export function OperationWorkdayDetailModal({
           ) : null}
         </Stack>
       ) : null}
-    </Modal>
+    </ResponsiveModal>
   );
 }

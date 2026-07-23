@@ -1,11 +1,16 @@
-import { Button, Group, Stack, Table, Text, Tooltip } from "@mantine/core";
-import { useState } from "react";
-import { ErrorState } from "../../design-system/components/ErrorState";
-import { LoadingState } from "../../design-system/components/LoadingState";
-import { PaginationControls } from "../../design-system/components/PaginationControls";
-import { mapApiPaginationMeta } from "../../design-system/components/pagination-meta";
-import { SectionCard } from "../../design-system/components/SectionCard";
-import { StatusBadge } from "../../design-system/components/StatusBadge";
+import { Button, Text, Tooltip } from "@mantine/core";
+import { useMemo, useState } from "react";
+import {
+  DataTable,
+  ErrorState,
+  LoadingState,
+  PaginationControls,
+  SectionCard,
+  StatusBadge,
+  mapApiPaginationMeta,
+  type DataTableColumn,
+  type DataTableMobileCardConfig,
+} from "../../design-system";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import {
   useMaterializeOperationWorkdays,
@@ -52,6 +57,66 @@ export function OperationScheduledWorkdaysSection({
   const rows = workdaysQuery.data?.data ?? [];
   const meta = workdaysQuery.data?.meta;
 
+  const columns = useMemo<DataTableColumn<OperationWorkdaySummary>[]>(
+    () => [
+      {
+        key: "workDate",
+        header: "Fecha",
+        getValue: (row) => formatWorkdayDate(row.workDate),
+      },
+      {
+        key: "schedule",
+        header: "Horario esperado",
+        getValue: (row) => formatExpectedTimeRange(row),
+      },
+      {
+        key: "status",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge
+            label={workdayStatusLabels[row.status]}
+            tone={row.status === "ACTIVE" ? "info" : "neutral"}
+            variant="light"
+          />
+        ),
+      },
+      {
+        key: "employees",
+        header: "Colaboradores",
+        getValue: (row) => row.scheduledEmployeesCount,
+      },
+    ],
+    [],
+  );
+
+  const mobileCard = useMemo<DataTableMobileCardConfig<OperationWorkdaySummary>>(
+    () => ({
+      title: (row) => formatWorkdayDate(row.workDate),
+      status: (row) => (
+        <StatusBadge
+          label={workdayStatusLabels[row.status]}
+          tone={row.status === "ACTIVE" ? "info" : "neutral"}
+          variant="light"
+        />
+      ),
+      fields: [
+        {
+          key: "schedule",
+          label: "Horario",
+          getValue: (row) => formatExpectedTimeRange(row),
+          visibility: "always",
+        },
+        {
+          key: "employees",
+          label: "Colaboradores",
+          getValue: (row) => String(row.scheduledEmployeesCount),
+          visibility: "always",
+        },
+      ],
+    }),
+    [],
+  );
+
   return (
     <>
       <SectionCard
@@ -59,18 +124,16 @@ export function OperationScheduledWorkdaysSection({
         description="Próximas jornadas según horario y asignaciones vigentes."
         action={
           canManage ? (
-            <Group gap="xs">
-              <Tooltip label="Genera y actualiza las próximas jornadas según el horario y las asignaciones vigentes.">
-                <Button
-                  variant="default"
-                  size="compact-sm"
-                  loading={materializeMutation.isPending}
-                  onClick={() => void handleMaterialize()}
-                >
-                  Actualizar jornadas
-                </Button>
-              </Tooltip>
-            </Group>
+            <Tooltip label="Genera y actualiza las próximas jornadas según el horario y las asignaciones vigentes.">
+              <Button
+                variant="default"
+                size="compact-sm"
+                loading={materializeMutation.isPending}
+                onClick={() => void handleMaterialize()}
+              >
+                Actualizar jornadas
+              </Button>
+            </Tooltip>
           ) : undefined
         }
       >
@@ -86,49 +149,26 @@ export function OperationScheduledWorkdaysSection({
         ) : null}
 
         {!workdaysQuery.isLoading && !workdaysQuery.isError ? (
-          rows.length === 0 ? (
-            <Text size="sm" c="dimmed">
-              Todavía no hay jornadas materializadas para esta operación.
-            </Text>
-          ) : (
-            <Stack gap="md">
-              <Table striped highlightOnHover withTableBorder>
-                <Table.Thead>
-                  <Table.Tr>
-                    <Table.Th>Fecha</Table.Th>
-                    <Table.Th>Horario esperado</Table.Th>
-                    <Table.Th>Estado</Table.Th>
-                    <Table.Th>Colaboradores</Table.Th>
-                    <Table.Th />
-                  </Table.Tr>
-                </Table.Thead>
-                <Table.Tbody>
-                  {rows.map((workday) => (
-                    <Table.Tr key={workday.id}>
-                      <Table.Td>{formatWorkdayDate(workday.workDate)}</Table.Td>
-                      <Table.Td>{formatExpectedTimeRange(workday)}</Table.Td>
-                      <Table.Td>
-                        <StatusBadge
-                          label={workdayStatusLabels[workday.status]}
-                          tone={workday.status === "ACTIVE" ? "info" : "neutral"}
-                          variant="light"
-                        />
-                      </Table.Td>
-                      <Table.Td>{workday.scheduledEmployeesCount}</Table.Td>
-                      <Table.Td>
-                        <Button
-                          variant="subtle"
-                          size="compact-xs"
-                          onClick={() => setSelectedWorkday(workday)}
-                        >
-                          Ver detalle
-                        </Button>
-                      </Table.Td>
-                    </Table.Tr>
-                  ))}
-                </Table.Tbody>
-              </Table>
-              {meta ? (
+          <DataTable
+            rows={rows}
+            columns={columns}
+            getRowKey={(row) => row.id}
+            emptyTitle="Todavía no hay jornadas materializadas para esta operación."
+            emptyDescription="Actualizá las jornadas para generar las próximas fechas programadas."
+            mobileView="summary"
+            mobileCard={mobileCard}
+            onRowClick={(row) => setSelectedWorkday(row)}
+            rowActions={(row) => (
+              <Button
+                variant="light"
+                size="compact-xs"
+                onClick={() => setSelectedWorkday(row)}
+              >
+                Ver detalle
+              </Button>
+            )}
+            pagination={
+              meta ? (
                 <PaginationControls
                   meta={mapApiPaginationMeta(meta)}
                   pageSize={pagination.pageSize}
@@ -136,9 +176,10 @@ export function OperationScheduledWorkdaysSection({
                   onPageSizeChange={pagination.onPageSizeChange}
                   showPageSizeSelector
                 />
-              ) : null}
-            </Stack>
-          )
+              ) : null
+            }
+            aria-label="Jornadas programadas"
+          />
         ) : null}
       </SectionCard>
 

@@ -1,4 +1,4 @@
-import { Alert, Button, Group, Modal, Stack, Text, Textarea } from "@mantine/core";
+import { Alert, Button, Group, Stack, Text, Textarea } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
@@ -7,14 +7,18 @@ import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import {
+  ActionMenu,
   DataTable,
   DetailFieldGrid,
   ErrorState,
   LoadingState,
   PageHeader,
+  ResponsiveModal,
   SectionCard,
   StatusBadge,
+  type ActionMenuItem,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
   useAbsenceRequest,
@@ -60,6 +64,33 @@ const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
     ),
   },
 ];
+
+const affectedOperationMobileCard: DataTableMobileCardConfig<AffectedOperationWarning> = {
+  title: (row) => row.serviceName,
+  status: (row) => (
+    <StatusBadge
+      label={
+        operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status
+      }
+      tone="neutral"
+      variant="light"
+    />
+  ),
+  fields: [
+    {
+      key: "start",
+      label: "Inicio",
+      getValue: (row) => formatDateTime(row.scheduledStart),
+      visibility: "always",
+    },
+    {
+      key: "end",
+      label: "Fin",
+      getValue: (row) => (row.scheduledEnd ? formatDateTime(row.scheduledEnd) : "—"),
+      visibility: "always",
+    },
+  ],
+};
 
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -168,37 +199,61 @@ export function AbsenceDetailPage() {
     }
   };
 
+  const reviewMenuItems: ActionMenuItem[] = canReview
+    ? [
+        {
+          key: "needs-info",
+          label: "Requiere información",
+          onClick: openNeedsInfoModal,
+        },
+        {
+          key: "reject",
+          label: "Rechazar",
+          destructive: true,
+          onClick: openRejectModal,
+        },
+      ]
+    : [];
+
   return (
     <Stack gap="md">
       <PageHeader
         title="Detalle de solicitud de ausencia"
         description={`${request.employee.name} · ${formatAbsenceDate(request.startDate)} - ${formatAbsenceDate(request.endDate)}`}
         action={
-          <Group gap="xs" align="center">
-            {canReview ? (
-              <>
-                {insufficientBalance ? (
-                  <Alert color="blue" py={4}>
-                    Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
-                  </Alert>
-                ) : null}
-                <Button onClick={() => void handleApprove()} disabled={approveMutation.isPending || insufficientBalance}>
+          <ActionMenu
+            primary={
+              canReview ? (
+                <Button
+                  onClick={() => void handleApprove()}
+                  disabled={approveMutation.isPending || insufficientBalance}
+                  loading={approveMutation.isPending}
+                >
                   Aprobar
                 </Button>
-                <Button color="yellow" variant="default" onClick={openNeedsInfoModal}>
-                  Requiere información
+              ) : (
+                <Button variant="default" onClick={goBackToList}>
+                  Volver al listado
                 </Button>
-                <Button color="red" variant="default" onClick={openRejectModal}>
-                  Rechazar
-                </Button>
-              </>
-            ) : null}
-            <Button variant="default" onClick={goBackToList}>
-              Volver al listado
-            </Button>
-          </Group>
+              )
+            }
+            items={
+              canReview
+                ? [
+                    ...reviewMenuItems,
+                    { key: "back", label: "Volver al listado", onClick: goBackToList },
+                  ]
+                : []
+            }
+            menuLabel="Más acciones de la solicitud"
+          />
         }
       />
+      {canReview && insufficientBalance ? (
+        <Alert color="blue">
+          Para aprobar esta solicitud, primero cargá o ajustá el saldo del empleado.
+        </Alert>
+      ) : null}
 
       <SectionCard title="Datos generales">
         <DetailFieldGrid
@@ -259,6 +314,9 @@ export function AbsenceDetailPage() {
               rows={request.affectedOperations}
               columns={affectedOperationColumns}
               getRowKey={(row) => row.operationId}
+              mobileView="cards"
+              mobileCard={affectedOperationMobileCard}
+              aria-label="Operaciones afectadas por la ausencia"
             />
           </Stack>
         )}
@@ -278,50 +336,69 @@ export function AbsenceDetailPage() {
         </Stack>
       </SectionCard>
 
-      <Modal opened={rejectOpen} onClose={closeRejectModal} title="Rechazar solicitud" centered>
-        <Stack gap="md">
-          <Textarea
-            label="Motivo del rechazo"
-            value={comment}
-            onChange={(event) => setComment(event.currentTarget.value)}
-            minRows={3}
-            autoFocus
-          />
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={closeRejectModal}>
+      <ResponsiveModal
+        opened={rejectOpen}
+        onClose={rejectMutation.isPending ? () => undefined : closeRejectModal}
+        title="Rechazar solicitud"
+        bodyMode="normal"
+        closeOnClickOutside={!rejectMutation.isPending}
+        closeOnEscape={!rejectMutation.isPending}
+        footer={
+          <Group justify="flex-end" gap="sm" wrap="wrap">
+            <Button variant="default" onClick={closeRejectModal} disabled={rejectMutation.isPending}>
               Cancelar
             </Button>
-            <Button color="red" onClick={() => void handleReject()} loading={rejectMutation.isPending}>
+            <Button
+              color="red"
+              onClick={() => void handleReject()}
+              loading={rejectMutation.isPending}
+            >
               Rechazar
             </Button>
           </Group>
-        </Stack>
-      </Modal>
-
-      <Modal
-        opened={needsInfoOpen}
-        onClose={closeNeedsInfoModal}
-        title="Solicitar más información"
-        centered
+        }
       >
-        <Stack gap="md">
-          <Textarea
-            label="Comentario para el empleado"
-            value={comment}
-            onChange={(event) => setComment(event.currentTarget.value)}
-            minRows={3}
-            autoFocus
-          />
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={closeNeedsInfoModal}>
+        <Textarea
+          label="Motivo del rechazo"
+          value={comment}
+          onChange={(event) => setComment(event.currentTarget.value)}
+          minRows={3}
+          autoFocus
+          disabled={rejectMutation.isPending}
+        />
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        opened={needsInfoOpen}
+        onClose={needsInfoMutation.isPending ? () => undefined : closeNeedsInfoModal}
+        title="Solicitar más información"
+        bodyMode="normal"
+        closeOnClickOutside={!needsInfoMutation.isPending}
+        closeOnEscape={!needsInfoMutation.isPending}
+        footer={
+          <Group justify="flex-end" gap="sm" wrap="wrap">
+            <Button
+              variant="default"
+              onClick={closeNeedsInfoModal}
+              disabled={needsInfoMutation.isPending}
+            >
               Cancelar
             </Button>
             <Button onClick={() => void handleNeedsInfo()} loading={needsInfoMutation.isPending}>
               Guardar
             </Button>
           </Group>
-        </Stack>
-      </Modal>
+        }
+      >
+        <Textarea
+          label="Comentario para el empleado"
+          value={comment}
+          onChange={(event) => setComment(event.currentTarget.value)}
+          minRows={3}
+          autoFocus
+          disabled={needsInfoMutation.isPending}
+        />
+      </ResponsiveModal>
     </Stack>
   );
 }

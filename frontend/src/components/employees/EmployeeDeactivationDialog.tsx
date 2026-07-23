@@ -1,5 +1,12 @@
-import { Button, Group, Modal, Stack, Table, Text } from "@mantine/core";
-import { FormErrorAlert } from "../../design-system";
+import { Button, Group, Stack, Text } from "@mantine/core";
+import {
+  DataTable,
+  FormErrorAlert,
+  ResponsiveModal,
+  StatusBadge,
+  type DataTableColumn,
+  type DataTableMobileCardConfig,
+} from "../../design-system";
 import { terminology } from "../../domain/terminology";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
 import { operationStatusLabels } from "../../utils/labels";
@@ -15,6 +22,8 @@ interface EmployeeDeactivationDialogProps {
   onConfirm: () => void;
   onCancel: () => void;
 }
+
+type ImpactAssignment = EmployeeDeactivationImpact["affectedAssignments"][number];
 
 const formatDate = (value: string | null): string => {
   if (!value) {
@@ -47,17 +56,103 @@ export function EmployeeDeactivationDialog({
   onCancel,
 }: EmployeeDeactivationDialogProps) {
   const worker = terminology.worker.singular.toLowerCase();
+  const assignments = impact?.affectedAssignments ?? [];
+
+  const columns: DataTableColumn<ImpactAssignment>[] = [
+    { key: "operationName", header: "Operación", getValue: (row) => row.operationName },
+    { key: "date", header: "Fecha", getValue: (row) => formatDate(row.date) },
+    {
+      key: "status",
+      header: "Estado",
+      render: (row) => (
+        <StatusBadge
+          label={
+            operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status
+          }
+          tone="info"
+          variant="light"
+        />
+      ),
+    },
+    {
+      key: "operationType",
+      header: "Tipo",
+      getValue: (row) => operationKindLabels[row.operationType] ?? row.operationType,
+    },
+    { key: "locationName", header: "Ubicación", getValue: (row) => row.locationName },
+    {
+      key: "schedule",
+      header: "Horario",
+      getValue: (row) => formatSchedule(row.startTime, row.endTime),
+    },
+    { key: "workTeamName", header: "Grupo", getValue: (row) => row.workTeamName ?? "—" },
+  ];
+
+  const mobileCard: DataTableMobileCardConfig<ImpactAssignment> = {
+    title: (row) => row.operationName,
+    status: (row) => (
+      <StatusBadge
+        label={
+          operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status
+        }
+        tone="info"
+        variant="light"
+      />
+    ),
+    fields: [
+      {
+        key: "date",
+        label: "Fecha",
+        render: (row) => formatDate(row.date),
+        visibility: "always",
+      },
+      {
+        key: "locationName",
+        label: "Ubicación",
+        render: (row) => row.locationName,
+        visibility: "always",
+      },
+      {
+        key: "schedule",
+        label: "Horario",
+        render: (row) => formatSchedule(row.startTime, row.endTime),
+        visibility: "always",
+      },
+      {
+        key: "operationType",
+        label: "Tipo",
+        render: (row) => operationKindLabels[row.operationType] ?? row.operationType,
+        visibility: "expanded",
+      },
+      {
+        key: "workTeamName",
+        label: "Grupo",
+        render: (row) => row.workTeamName ?? "—",
+        visibility: "expanded",
+      },
+    ],
+  };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
       onClose={loading ? () => undefined : onCancel}
       title="Desactivar colaborador"
       size="xl"
-      centered
+      bodyMode="scroll"
       withinPortal={false}
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}
+      footer={
+        <Group justify="flex-end" gap="sm" wrap="wrap">
+          <Button variant="default" onClick={onCancel} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button color="danger" onClick={onConfirm} loading={loading} disabled={loading}>
+            Desactivar y desasignar
+          </Button>
+        </Group>
+      }
     >
       <Stack gap="md">
         <Text size="sm">
@@ -73,40 +168,17 @@ export function EmployeeDeactivationDialog({
           </Text>
         ) : null}
 
-        {impact && impact.affectedAssignments.length > 0 ? (
-          <Table.ScrollContainer minWidth={720}>
-            <Table striped highlightOnHover withTableBorder>
-              <Table.Thead>
-                <Table.Tr>
-                  <Table.Th>Operación</Table.Th>
-                  <Table.Th>Fecha</Table.Th>
-                  <Table.Th>Estado</Table.Th>
-                  <Table.Th>Tipo</Table.Th>
-                  <Table.Th>Ubicación</Table.Th>
-                  <Table.Th>Horario</Table.Th>
-                  <Table.Th>Grupo</Table.Th>
-                </Table.Tr>
-              </Table.Thead>
-              <Table.Tbody>
-                {impact.affectedAssignments.map((row) => (
-                  <Table.Tr key={`${row.assignmentId}-${row.workdayId ?? row.date ?? "na"}`}>
-                    <Table.Td>{row.operationName}</Table.Td>
-                    <Table.Td>{formatDate(row.date)}</Table.Td>
-                    <Table.Td>
-                      {operationStatusLabels[row.status as keyof typeof operationStatusLabels] ??
-                        row.status}
-                    </Table.Td>
-                    <Table.Td>
-                      {operationKindLabels[row.operationType] ?? row.operationType}
-                    </Table.Td>
-                    <Table.Td>{row.locationName}</Table.Td>
-                    <Table.Td>{formatSchedule(row.startTime, row.endTime)}</Table.Td>
-                    <Table.Td>{row.workTeamName ?? "—"}</Table.Td>
-                  </Table.Tr>
-                ))}
-              </Table.Tbody>
-            </Table>
-          </Table.ScrollContainer>
+        {assignments.length > 0 ? (
+          <DataTable
+            rows={assignments}
+            columns={columns}
+            getRowKey={(row) => `${row.assignmentId}-${row.workdayId ?? row.date ?? "na"}`}
+            mobileView="summary"
+            mobileCard={mobileCard}
+            aria-label="Asignaciones afectadas por la desactivación"
+            emptyTitle="Sin asignaciones afectadas"
+            emptyDescription="No hay operaciones futuras para desasignar."
+          />
         ) : null}
 
         {impact && impact.activeWorkTeamMemberships.length > 0 ? (
@@ -117,16 +189,7 @@ export function EmployeeDeactivationDialog({
         ) : null}
 
         <FormErrorAlert message={errorMessage} />
-
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button color="danger" onClick={onConfirm} loading={loading} disabled={loading}>
-            Desactivar y desasignar
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -1,0 +1,10 @@
+.item {
+  min-width: 0;
+  width: 100%;
+}
+
+@media (min-width: $mantine-breakpoint-sm) {
+  .item[data-has-desktop-min="true"] {
+    min-width: var(--filter-item-desktop-min);
+  }
+}

@@ -1,4 +1,4 @@
-import { Group } from "@mantine/core";
+import { SimpleGrid } from "@mantine/core";
 import { resolveCascadeParentChange } from "./cascading-filter-change";
 import type { CascadingFilterChange } from "./cascading-filter-types";
 import { FilterSelect, type FilterSelectOption } from "./FilterSelect";
@@ -45,7 +45,7 @@ export function CascadingFilterSelect({
   const childDisabled = disabled || !parentValue;
 
   return (
-    <Group align="flex-end" gap="sm" wrap="nowrap" grow>
+    <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
       <FilterSelect
         label={parentLabel}
         value={parentValue}
@@ -70,6 +70,6 @@ export function CascadingFilterSelect({
         clearable={clearable}
         disabled={childDisabled}
       />
-    </Group>
+    </SimpleGrid>
   );
 }

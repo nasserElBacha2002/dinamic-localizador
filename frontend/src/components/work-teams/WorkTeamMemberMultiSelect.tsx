@@ -1,4 +1,4 @@
-import { Badge, Group, Stack, Text } from "@mantine/core";
+import { Badge, Button, Group, Paper, Stack, Text } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
 import { getEmployeeById } from "../../api/employees.api";
 import type { Employee } from "../../types/employee";
@@ -98,7 +98,7 @@ export function WorkTeamMemberMultiSelect({
         descriptionMode="assignment"
         placeholder="Buscar colaborador activo"
       />
-      <Stack gap="xs">
+      <Stack gap="xs" role="list" aria-label="Integrantes seleccionados">
         {selectedEmployeeIds.length === 0 ? (
           <Text size="sm" c="dimmed">
             No hay colaboradores seleccionados.
@@ -113,31 +113,34 @@ export function WorkTeamMemberMultiSelect({
             );
 
             return (
-              <Group key={employeeId} justify="space-between" wrap="nowrap">
-                <Stack gap={0}>
-                  <Text size="sm" fw={500}>
-                    {display.name}
-                  </Text>
-                  {display.secondary ? (
-                    <Text size="xs" c="dimmed">
-                      {display.secondary}
+              <Paper key={employeeId} withBorder radius="md" p="sm" role="listitem">
+                <Group justify="space-between" wrap="nowrap" gap="sm" align="flex-start">
+                  <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
+                    <Text size="sm" fw={500} lineClamp={2}>
+                      {display.name}
                     </Text>
-                  ) : null}
-                </Stack>
-                <Group gap="xs">
-                  {display.isInactive ? <Badge color="gray">Inactivo</Badge> : null}
-                  {!display.isLoading ? (
-                    <Badge
-                      variant="light"
-                      color="red"
-                      style={{ cursor: "pointer" }}
-                      onClick={() => handleRemove(employeeId)}
-                    >
-                      Quitar
-                    </Badge>
-                  ) : null}
+                    {display.secondary ? (
+                      <Text size="xs" c="dimmed" lineClamp={2}>
+                        {display.secondary}
+                      </Text>
+                    ) : null}
+                  </Stack>
+                  <Group gap="xs" wrap="nowrap">
+                    {display.isInactive ? <Badge color="gray">Inactivo</Badge> : null}
+                    {!display.isLoading ? (
+                      <Button
+                        variant="light"
+                        color="red"
+                        size="compact-sm"
+                        aria-label={`Quitar a ${display.name}`}
+                        onClick={() => handleRemove(employeeId)}
+                      >
+                        Quitar
+                      </Button>
+                    ) : null}
+                  </Group>
                 </Group>
-              </Group>
+              </Paper>
             );
           })
         )}

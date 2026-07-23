@@ -1,5 +1,5 @@
-import { Button, Group, Modal, Stack, Table, Text } from "@mantine/core";
-import { FormErrorAlert } from "../../design-system";
+import { Button, Group, Stack, Table, Text } from "@mantine/core";
+import { FormErrorAlert, ResponsiveModal } from "../../design-system";
 import { terminology } from "../../domain/terminology";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
 import { operationStatusLabels } from "../../utils/labels";
@@ -49,15 +49,24 @@ export function EmployeeDeactivationDialog({
   const worker = terminology.worker.singular.toLowerCase();
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
       onClose={loading ? () => undefined : onCancel}
       title="Desactivar colaborador"
       size="xl"
-      centered
       withinPortal={false}
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}
+      footer={
+        <Group justify="flex-end" gap="sm" wrap="wrap">
+          <Button variant="default" onClick={onCancel} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button color="danger" onClick={onConfirm} loading={loading} disabled={loading}>
+            Desactivar y desasignar
+          </Button>
+        </Group>
+      }
     >
       <Stack gap="md">
         <Text size="sm">
@@ -74,7 +83,7 @@ export function EmployeeDeactivationDialog({
         ) : null}
 
         {impact && impact.affectedAssignments.length > 0 ? (
-          <Table.ScrollContainer minWidth={720}>
+          <Table.ScrollContainer minWidth="100%">
             <Table striped highlightOnHover withTableBorder>
               <Table.Thead>
                 <Table.Tr>
@@ -117,16 +126,7 @@ export function EmployeeDeactivationDialog({
         ) : null}
 
         <FormErrorAlert message={errorMessage} />
-
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onCancel} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button color="danger" onClick={onConfirm} loading={loading} disabled={loading}>
-            Desactivar y desasignar
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

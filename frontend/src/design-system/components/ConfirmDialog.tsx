@@ -1,5 +1,6 @@
-import { Button, Group, Modal, Text } from "@mantine/core";
+import { Button, Group, Text } from "@mantine/core";
 import type { ReactNode } from "react";
+import { ResponsiveModal } from "./ResponsiveModal";
 
 export interface ConfirmDialogProps {
   open: boolean;
@@ -25,31 +26,33 @@ export function ConfirmDialog({
   onCancel,
 }: ConfirmDialogProps) {
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
       onClose={loading ? () => undefined : onCancel}
       title={title}
-      centered
+      size="md"
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}
+      footer={
+        <Group justify="flex-end" gap="sm" wrap="wrap">
+          <Button variant="default" onClick={onCancel} disabled={loading}>
+            {cancelLabel}
+          </Button>
+          <Button
+            color={destructive ? "danger" : "brand"}
+            onClick={onConfirm}
+            loading={loading}
+          >
+            {confirmLabel}
+          </Button>
+        </Group>
+      }
     >
       {description ? (
-        <Text size="sm" c="dimmed" mb="lg">
+        <Text size="sm" c="dimmed">
           {description}
         </Text>
       ) : null}
-      <Group justify="flex-end" gap="sm">
-        <Button variant="default" onClick={onCancel} disabled={loading}>
-          {cancelLabel}
-        </Button>
-        <Button
-          color={destructive ? "danger" : "brand"}
-          onClick={onConfirm}
-          loading={loading}
-        >
-          {confirmLabel}
-        </Button>
-      </Group>
-    </Modal>
+    </ResponsiveModal>
   );
 }

@@ -81,6 +81,14 @@ describe("scopedApiPath", () => {
       scopedApiPath("work-team-assignment-batches/batch-id"),
       `companies/${ACTIVE_COMPANY_ID}/work-team-assignment-batches/batch-id`,
     );
+    assert.equal(
+      scopedApiPath("imports/employees/preview"),
+      `companies/${ACTIVE_COMPANY_ID}/imports/employees/preview`,
+    );
+    assert.equal(
+      scopedApiPath("imports/services/execute"),
+      `companies/${ACTIVE_COMPANY_ID}/imports/services/execute`,
+    );
     assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
     assert.equal(
       scopedApiPath("settings"),

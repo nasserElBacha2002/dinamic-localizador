@@ -83,6 +83,28 @@ export function setupDomEnvironment(): void {
     });
   }
 
+  if (!globalThis.MutationObserver && "MutationObserver" in window) {
+    Object.defineProperty(globalThis, "MutationObserver", {
+      configurable: true,
+      writable: true,
+      value: window.MutationObserver,
+    });
+  }
+
+  if (!globalThis.MutationObserver) {
+    Object.defineProperty(globalThis, "MutationObserver", {
+      configurable: true,
+      writable: true,
+      value: class MutationObserver {
+        observe(): void {}
+        disconnect(): void {}
+        takeRecords(): MutationRecord[] {
+          return [];
+        }
+      },
+    });
+  }
+
   if (!globalThis.requestAnimationFrame) {
     Object.defineProperty(globalThis, "requestAnimationFrame", {
       configurable: true,

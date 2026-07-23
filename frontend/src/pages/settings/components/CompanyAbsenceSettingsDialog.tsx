@@ -1,4 +1,4 @@
-import { NumberInput, Stack, Switch, Table, Text } from "@mantine/core";
+import { NumberInput, ScrollArea, Stack, Switch, Table, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import type { CompanyAbsenceSetting } from "../../../types/company-absence-settings";
 import { SettingsDialog } from "./SettingsDialog";
@@ -102,77 +102,79 @@ export function CompanyAbsenceSettingsDialog({
           Estos valores se usan al crear nuevos empleados. No modifican saldos existentes.
         </Text>
 
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Tipo</Table.Th>
-              <Table.Th>Días anuales</Table.Th>
-              <Table.Th>Auto-asignar</Table.Th>
-              <Table.Th>Estado</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {draft.map((row, index) => (
-              <Table.Tr key={row.absenceTypeCode}>
-                <Table.Td>
-                  <Text size="sm">{row.absenceTypeName}</Text>
-                  <Text size="xs" c="dimmed">
-                    {row.absenceTypeCode}
-                  </Text>
-                </Table.Td>
-                <Table.Td>
-                  <NumberInput
-                    value={row.defaultAnnualDays}
-                    onChange={(value) =>
-                      setDraft((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? {
-                                ...item,
-                                defaultAnnualDays:
-                                  typeof value === "number" ? value : item.defaultAnnualDays,
-                              }
-                            : item,
-                        ),
-                      )
-                    }
-                    min={0}
-                    max={365}
-                    decimalScale={1}
-                    step={0.5}
-                    disabled={disabled || !row.isActive}
-                    aria-label={`Días anuales ${row.absenceTypeName}`}
-                  />
-                </Table.Td>
-                <Table.Td>
-                  <Switch
-                    checked={row.autoAssignOnEmployeeCreate}
-                    onChange={(event) => {
-                      const checked = event.currentTarget.checked;
-                      setDraft((current) =>
-                        current.map((item, itemIndex) =>
-                          itemIndex === index
-                            ? {
-                                ...item,
-                                autoAssignOnEmployeeCreate: checked,
-                              }
-                            : item,
-                        ),
-                      );
-                    }}
-                    disabled={disabled || !row.isActive}
-                    aria-label={`Asignar automáticamente al crear empleado ${row.absenceTypeName}`}
-                  />
-                </Table.Td>
-                <Table.Td>
-                  <Text size="sm" c={row.isActive ? "green" : "dimmed"}>
-                    {row.isActive ? "Activo" : "Inactivo"}
-                  </Text>
-                </Table.Td>
+        <ScrollArea type="scroll" offsetScrollbars>
+          <Table striped highlightOnHover miw={520}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Tipo</Table.Th>
+                <Table.Th>Días anuales</Table.Th>
+                <Table.Th>Auto-asignar</Table.Th>
+                <Table.Th>Estado</Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {draft.map((row, index) => (
+                <Table.Tr key={row.absenceTypeCode}>
+                  <Table.Td>
+                    <Text size="sm">{row.absenceTypeName}</Text>
+                    <Text size="xs" c="dimmed">
+                      {row.absenceTypeCode}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>
+                    <NumberInput
+                      value={row.defaultAnnualDays}
+                      onChange={(value) =>
+                        setDraft((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  defaultAnnualDays:
+                                    typeof value === "number" ? value : item.defaultAnnualDays,
+                                }
+                              : item,
+                          ),
+                        )
+                      }
+                      min={0}
+                      max={365}
+                      decimalScale={1}
+                      step={0.5}
+                      disabled={disabled || !row.isActive}
+                      aria-label={`Días anuales ${row.absenceTypeName}`}
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Switch
+                      checked={row.autoAssignOnEmployeeCreate}
+                      onChange={(event) => {
+                        const checked = event.currentTarget.checked;
+                        setDraft((current) =>
+                          current.map((item, itemIndex) =>
+                            itemIndex === index
+                              ? {
+                                  ...item,
+                                  autoAssignOnEmployeeCreate: checked,
+                                }
+                              : item,
+                          ),
+                        );
+                      }}
+                      disabled={disabled || !row.isActive}
+                      aria-label={`Asignar automáticamente al crear empleado ${row.absenceTypeName}`}
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c={row.isActive ? "green" : "dimmed"}>
+                      {row.isActive ? "Activo" : "Inactivo"}
+                    </Text>
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
       </Stack>
     </SettingsDialog>
   );

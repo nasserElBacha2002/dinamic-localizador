@@ -21,7 +21,7 @@
   grid-area: edit;
 }
 
-@media (min-width: 62em) {
+@media (min-width: $mantine-breakpoint-md) {
   .operationDetailLayout {
     grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
     grid-template-areas:

@@ -12,6 +12,7 @@ import {
   SectionCard,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useImportExecute, useImportPreview } from "../../hooks/useImport";
@@ -74,6 +75,44 @@ function buildColumns(
   );
 
   return columns;
+}
+
+function buildMobileCard(
+  preview: ImportPreviewResult,
+): DataTableMobileCardConfig<ImportPreviewRow> {
+  const primaryColumns = preview.displayColumns.slice(0, 3);
+  const secondaryColumns = preview.displayColumns.slice(3);
+
+  return {
+    title: (row) => `Fila ${row.rowNumber}`,
+    status: (row) => (
+      <StatusBadge
+        label={row.status === "valid" ? "Válida" : row.status === "warning" ? "Advertencia" : "Inválida"}
+        tone={row.status === "valid" ? "success" : row.status === "warning" ? "warning" : "danger"}
+      />
+    ),
+    fields: [
+      ...primaryColumns.map((column) => ({
+        key: column.key,
+        label: column.header,
+        getValue: (row: ImportPreviewRow) => row.values[column.key] || "—",
+        visibility: "always" as const,
+      })),
+      {
+        key: "errors",
+        label: "Errores",
+        getValue: (row: ImportPreviewRow) =>
+          row.errors.length > 0 ? row.errors.map((error) => error.message).join(" · ") : "Sin errores",
+        visibility: "always" as const,
+      },
+      ...secondaryColumns.map((column) => ({
+        key: `extra-${column.key}`,
+        label: column.header,
+        getValue: (row: ImportPreviewRow) => row.values[column.key] || "—",
+        visibility: "expanded" as const,
+      })),
+    ],
+  };
 }
 
 export function ImportPage() {
@@ -215,6 +254,11 @@ export function ImportPage() {
     [activePreview],
   );
 
+  const previewMobileCard = useMemo(
+    () => (activePreview ? buildMobileCard(activePreview) : null),
+    [activePreview],
+  );
+
   const resultTone =
     activeExecuteResult == null
       ? null
@@ -245,6 +289,10 @@ export function ImportPage() {
             value: item.entityType,
             label: item.label,
           }))}
+          styles={{
+            root: { flexWrap: "wrap" },
+            label: { whiteSpace: "normal", lineHeight: 1.2 },
+          }}
         />
       </SectionCard>
 
@@ -384,6 +432,7 @@ export function ImportPage() {
                   </Group>
 
                   <SegmentedControl
+                    fullWidth
                     value={rowFilter}
                     onChange={(value) => setRowFilter(value as RowFilter)}
                     data={[
@@ -393,12 +442,16 @@ export function ImportPage() {
                     ]}
                   />
 
-                  <DataTable
-                    rows={filteredRows}
-                    columns={previewColumns}
-                    getRowKey={(row) => String(row.rowNumber)}
-                    aria-label="Vista previa de importación"
-                  />
+                  {previewMobileCard ? (
+                    <DataTable
+                      rows={filteredRows}
+                      columns={previewColumns}
+                      getRowKey={(row) => String(row.rowNumber)}
+                      aria-label="Vista previa de importación"
+                      mobileView="summary"
+                      mobileCard={previewMobileCard}
+                    />
+                  ) : null}
                 </Stack>
               </SectionCard>
 

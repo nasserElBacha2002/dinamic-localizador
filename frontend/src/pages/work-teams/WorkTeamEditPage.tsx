@@ -188,19 +188,19 @@ export function WorkTeamEditPage() {
                 key: "requestedAt",
                 label: "Fecha",
                 render: (row) => formatDateTime(row.requestedAt),
-                priority: "primary",
+                visibility: "always",
               },
               {
                 key: "addedCount",
                 label: "Agregados",
                 render: (row) => String(row.addedCount),
-                priority: "primary",
+                visibility: "always",
               },
               {
                 key: "skippedCount",
                 label: "Omitidos",
                 render: (row) => String(row.skippedCount),
-                priority: "secondary",
+                visibility: "expanded",
               },
             ],
             actions: (row) => (

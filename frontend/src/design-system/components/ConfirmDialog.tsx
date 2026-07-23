@@ -31,6 +31,7 @@ export function ConfirmDialog({
       onClose={loading ? () => undefined : onCancel}
       title={title}
       size="md"
+      bodyMode="normal"
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}
       footer={

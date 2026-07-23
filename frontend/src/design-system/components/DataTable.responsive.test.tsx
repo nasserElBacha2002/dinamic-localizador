@@ -30,7 +30,7 @@ const mobileCard = {
       key: "detail",
       label: "Detalle",
       render: (row: SampleRow) => row.detail,
-      priority: "primary" as const,
+      visibility: "always" as const,
     },
   ],
   actions: (row: SampleRow) => (
@@ -179,7 +179,7 @@ describe("DataTable responsive", () => {
     assert.deepEqual(actionClicks, ["x"]);
     assert.deepEqual(rowClicks, []);
 
-    fireEvent.click(view.getByText("Card A"));
+    fireEvent.click(view.getByRole("button", { name: "Ver detalle" }));
     assert.deepEqual(rowClicks, ["a"]);
   });
 

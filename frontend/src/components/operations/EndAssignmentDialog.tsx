@@ -1,5 +1,6 @@
-import { Button, Group, Modal, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
+import { ResponsiveModal } from "../../design-system";
 import { validateEndAssignmentEffectiveDate } from "./end-assignment-form";
 
 interface EndAssignmentDialogProps {
@@ -44,12 +45,25 @@ export function EndAssignmentDialog({
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
-      onClose={handleClose}
+      onClose={loading ? () => undefined : handleClose}
       title="Finalizar asignación"
-      centered
+      size="md"
+      bodyMode="normal"
+      closeOnClickOutside={!loading}
+      closeOnEscape={!loading}
       transitionProps={{ duration: 0 }}
+      footer={
+        <Group justify="flex-end" gap="sm" wrap="wrap">
+          <Button variant="default" onClick={handleClose} disabled={loading}>
+            Cancelar
+          </Button>
+          <Button onClick={() => void handleConfirm()} loading={loading} disabled={loading}>
+            Finalizar asignación
+          </Button>
+        </Group>
+      }
     >
       <Stack gap="md">
         <Text size="sm">
@@ -80,15 +94,7 @@ export function EndAssignmentDialog({
             </Text>
           ) : null}
         </Stack>
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={handleClose} disabled={loading}>
-            Cancelar
-          </Button>
-          <Button onClick={() => void handleConfirm()} loading={loading} disabled={loading}>
-            Finalizar asignación
-          </Button>
-        </Group>
       </Stack>
-    </Modal>
+    </ResponsiveModal>
   );
 }

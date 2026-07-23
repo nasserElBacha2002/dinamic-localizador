@@ -1,5 +1,6 @@
-import { Button, Group, Modal, Stack, Textarea } from "@mantine/core";
+import { Button, Group, Textarea } from "@mantine/core";
 import { useState } from "react";
+import { ResponsiveModal } from "../../design-system";
 import type { ReviewAttendanceInput } from "../../types/attendance";
 
 interface ReviewAttendanceDialogProps {
@@ -38,30 +39,34 @@ export function ReviewAttendanceDialog({
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
-      onClose={handleClose}
+      onClose={loading ? () => undefined : handleClose}
       title={decision === "APPROVE" ? "Aprobar asistencia" : "Rechazar asistencia"}
-      centered
-    >
-      <Stack gap="md">
-        <Textarea
-          label="Motivo"
-          required
-          minRows={3}
-          value={reason}
-          onChange={(event) => setReason(event.currentTarget.value)}
-          error={errorMessage ?? undefined}
-        />
-        <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={handleClose}>
+      size="md"
+      bodyMode="normal"
+      closeOnClickOutside={!loading}
+      closeOnEscape={!loading}
+      footer={
+        <Group justify="flex-end" gap="sm" wrap="wrap">
+          <Button variant="default" onClick={handleClose} disabled={loading}>
             Cancelar
           </Button>
           <Button onClick={() => void handleConfirm()} loading={loading}>
             Confirmar
           </Button>
         </Group>
-      </Stack>
-    </Modal>
+      }
+    >
+      <Textarea
+        label="Motivo"
+        required
+        minRows={3}
+        value={reason}
+        onChange={(event) => setReason(event.currentTarget.value)}
+        error={errorMessage ?? undefined}
+        disabled={loading}
+      />
+    </ResponsiveModal>
   );
 }

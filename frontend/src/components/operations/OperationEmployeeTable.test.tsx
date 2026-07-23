@@ -188,9 +188,9 @@ describe("OperationEmployeeTable", () => {
       },
     });
 
-    fireEvent.click(view.getByRole("button", { name: "Acciones" }));
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee a/i }));
     const body = within(view.baseElement);
-    const approveItem = await body.findByText("Aprobar asistencia");
+    const approveItem = await body.findByRole("menuitem", { name: "Aprobar asistencia" });
     fireEvent.click(approveItem);
 
     assert.equal(approvedId, "att-a");
@@ -211,8 +211,10 @@ describe("OperationEmployeeTable", () => {
       },
     });
 
-    fireEvent.click(view.getByRole("button", { name: "Acciones" }));
-    const removeItem = await within(view.baseElement).findByText("Quitar asignación");
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee a/i }));
+    const removeItem = await within(view.baseElement).findByRole("menuitem", {
+      name: "Quitar asignación",
+    });
     fireEvent.click(removeItem);
 
     assert.equal(cancelledId, "assignment-a");
@@ -228,9 +230,8 @@ describe("OperationEmployeeTable", () => {
       operationWorkDate: "2026-07-13",
     });
 
-    fireEvent.click(view.getByRole("button", { name: "Acciones" }));
-    const body = within(view.baseElement);
-    await body.findByText("Ver detalle");
-    assert.equal(body.queryByText("Quitar asignación"), null);
+    assert.ok(view.getByRole("button", { name: "Ver detalle" }));
+    assert.equal(view.queryByRole("button", { name: /Más acciones de Employee a/i }), null);
+    assert.equal(view.queryByText("Quitar asignación"), null);
   });
 });

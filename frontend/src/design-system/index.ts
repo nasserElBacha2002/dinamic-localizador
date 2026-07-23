@@ -42,6 +42,7 @@ export {
   type FilterBarProps,
   type FilterBarItemProps,
   type ResponsiveModalProps,
+  type ResponsiveModalBodyMode,
   type ActionMenuItem,
   type ActionMenuProps,
   type PaginationControlsProps,

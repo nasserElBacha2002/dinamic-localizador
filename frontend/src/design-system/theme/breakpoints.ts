@@ -1,14 +1,10 @@
 /**
  * Single source of truth for Mantine breakpoints.
- * Must stay aligned with `frontend/postcss.config.cjs` (`mantine-breakpoint-*`).
+ * Shared with PostCSS via `breakpoints.json` (see `postcss.config.cjs`).
  */
-export const BREAKPOINTS = {
-  xs: "36em",
-  sm: "48em",
-  md: "62em",
-  lg: "75em",
-  xl: "88em",
-} as const;
+import breakpointsJson from "./breakpoints.json" with { type: "json" };
+
+export const BREAKPOINTS = breakpointsJson;
 
 export type BreakpointName = keyof typeof BREAKPOINTS;
 

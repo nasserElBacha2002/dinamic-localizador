@@ -1,10 +1,12 @@
-import { Alert, Button, Group, Modal, NumberInput, SimpleGrid, Stack, Text, Textarea } from "@mantine/core";
+import { Alert, Button, Group, NumberInput, SimpleGrid, Stack, Text, Textarea } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import {
   DataTable,
   LoadingState,
+  ResponsiveModal,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
   useEmployeeAbsenceBalances,
@@ -87,6 +89,39 @@ export function EmployeeAbsenceBalanceCard({
     [showEdit],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<EmployeeAbsenceBalanceSummary>>(
+    () => ({
+      title: (row) => safeText(row.absenceType?.name ?? null),
+      fields: [
+        {
+          key: "available",
+          label: "Disponibles",
+          getValue: (row) => String(row.availableDays),
+          visibility: "always",
+        },
+        {
+          key: "assigned",
+          label: "Asignados",
+          getValue: (row) => String(row.assignedDays),
+          visibility: "always",
+        },
+        {
+          key: "approved",
+          label: "Aprobados",
+          getValue: (row) => String(row.approvedDays),
+          visibility: "expanded",
+        },
+        {
+          key: "pending",
+          label: "Pendientes",
+          getValue: (row) => String(row.pendingDays),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   const handleSave = async () => {
     if (!editTarget) {
       return;
@@ -167,16 +202,35 @@ export function EmployeeAbsenceBalanceCard({
           columns={columns}
           getRowKey={(row) => row.absenceType.id}
           emptyTitle={`No hay tipos de ausencia activos para mostrar en ${year}.`}
+          mobileView="summary"
+          mobileCard={mobileCard}
+          aria-label="Saldo de ausencias del empleado"
         />
       ) : (
         <Text c="dimmed">No hay tipos de ausencia activos para mostrar en {year}.</Text>
       )}
 
-      <Modal
+      <ResponsiveModal
         opened={Boolean(editTarget)}
-        onClose={() => setEditTarget(null)}
+        onClose={upsertMutation.isPending ? () => undefined : () => setEditTarget(null)}
         title={`Editar saldo · ${editTarget?.absenceType.name} · ${year}`}
-        centered
+        bodyMode="normal"
+        closeOnClickOutside={!upsertMutation.isPending}
+        closeOnEscape={!upsertMutation.isPending}
+        footer={
+          <Group justify="flex-end" gap="sm" wrap="wrap">
+            <Button
+              variant="default"
+              onClick={() => setEditTarget(null)}
+              disabled={upsertMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={() => void handleSave()} loading={upsertMutation.isPending}>
+              Guardar
+            </Button>
+          </Group>
+        }
       >
         <Stack gap="md">
           <NumberInput
@@ -186,24 +240,18 @@ export function EmployeeAbsenceBalanceCard({
             min={0}
             step={0.5}
             decimalScale={1}
+            disabled={upsertMutation.isPending}
           />
           <Textarea
             label="Notas"
             value={notes}
             onChange={(event) => setNotes(event.currentTarget.value)}
             minRows={2}
+            disabled={upsertMutation.isPending}
           />
           {error ? <Alert color="red">{error}</Alert> : null}
-          <Group justify="flex-end" gap="sm">
-            <Button variant="default" onClick={() => setEditTarget(null)}>
-              Cancelar
-            </Button>
-            <Button onClick={() => void handleSave()} loading={upsertMutation.isPending}>
-              Guardar
-            </Button>
-          </Group>
         </Stack>
-      </Modal>
+      </ResponsiveModal>
     </Stack>
   );
 }

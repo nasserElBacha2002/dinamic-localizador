@@ -1,250 +1,156 @@
+/**
+ * Responsive page tests: mock APIs before importing pages/helpers that pull hooks.
+ * Node's mock.module must run before the module graph loads the real API modules.
+ */
 import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import assert from "node:assert/strict";
-import { Button, MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, it } from "node:test";
-import React, { useMemo, useState } from "react";
-import { MemoryRouter } from "react-router-dom";
-import {
-  ActionMenu,
-  DataTable,
-  FilterBar,
-  ResponsiveModal,
-  SearchInput,
-  StatusBadge,
-  type DataTableColumn,
-  type DataTableMobileCardConfig,
-} from "../../design-system";
+import { mockApiModule } from "../../test/mock-api-module";
+import { setRuntimeCompanyId } from "../../api/company-path";
+import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import { mockViewport } from "../../test/mock-match-media";
-import type { Employee } from "../../types/employee";
-import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
 
-/**
- * Smoke composition mirroring EmployeesListPage responsive contract:
- * same DataTable/FilterBar/ActionMenu/ResponsiveModal wiring, shared state, no dual trees.
- */
-const sample: Employee = {
-  id: "emp-1",
-  name: "Ada Lovelace",
-  documentNumber: "30111222",
-  phoneNumber: "+5491112345678",
-  employeeType: "INTERNAL",
-  active: true,
-  categoryId: "cat-1",
-  category: { id: "cat-1", name: "Operaciones", isSystem: false, isActive: true },
-  lastWorkedAt: null,
-  createdAt: "2026-01-01T00:00:00.000Z",
-  updatedAt: "2026-01-01T00:00:00.000Z",
-};
+setRuntimeCompanyId("co-1");
+installLayoutPolyfills();
 
-function EmployeesPilotHarness({
-  onOpenDialog,
-}: {
-  onOpenDialog?: () => void;
-}) {
-  const [active, setActive] = useState("all");
-  const [categoryId, setCategoryId] = useState("all");
-  const [search, setSearch] = useState("");
-  const [dialogOpen, setDialogOpen] = useState(false);
-
-  const activeFilterCount =
-    (active !== "all" ? 1 : 0) + (categoryId !== "all" ? 1 : 0);
-
-  const columns = useMemo<DataTableColumn<Employee>[]>(
-    () => [
-      { key: "name", header: "Nombre", getValue: (row) => row.name },
-      { key: "phoneNumber", header: "Teléfono", getValue: (row) => row.phoneNumber },
+mockApiModule("api/employees.api", {
+  getEmployees: async () => ({
+    data: [
       {
-        key: "active",
-        header: "Estado",
-        render: (row) => (
-          <StatusBadge
-            label={activeStatusLabel(row.active)}
-            tone={row.active ? "success" : "neutral"}
-          />
-        ),
+        id: "emp-1",
+        name: "Ada Lovelace",
+        documentNumber: "30111222",
+        phoneNumber: "+5491112345678",
+        employeeType: "INTERNAL",
+        active: true,
+        categoryId: "cat-1",
+        category: { id: "cat-1", name: "Operaciones", isSystem: false, isActive: true },
+        lastWorkedAt: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ],
-    [],
-  );
+    meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+  }),
+  getEmployeeById: async () => {
+    throw new Error("not used");
+  },
+  getEmployeeDeactivationImpact: async () => {
+    throw new Error("not used");
+  },
+  createEmployee: async () => {
+    throw new Error("not used");
+  },
+  updateEmployee: async () => {
+    throw new Error("not used");
+  },
+  deactivateEmployee: async () => {
+    throw new Error("not used");
+  },
+});
 
-  const mobileCard = useMemo<DataTableMobileCardConfig<Employee>>(
-    () => ({
-      title: (row) => row.name,
-      status: (row) => (
-        <StatusBadge
-          label={activeStatusLabel(row.active)}
-          tone={row.active ? "success" : "neutral"}
-        />
-      ),
-      fields: [
-        {
-          key: "phoneNumber",
-          label: "Teléfono",
-          render: (row) => row.phoneNumber,
-          priority: "primary",
-        },
-        {
-          key: "category",
-          label: "Categoría",
-          render: (row) => row.category?.name ?? "—",
-          priority: "primary",
-        },
-        {
-          key: "employeeType",
-          label: "Tipo",
-          render: (row) => employeeTypeLabels[row.employeeType],
-          priority: "primary",
-        },
-      ],
-    }),
-    [],
-  );
+mockApiModule("api/employee-categories.api", {
+  getEmployeeCategories: async () => [
+    { id: "cat-1", name: "Operaciones", isSystem: false, isActive: true },
+  ],
+  createEmployeeCategory: async () => {
+    throw new Error("not used");
+  },
+  updateEmployeeCategory: async () => {
+    throw new Error("not used");
+  },
+});
 
-  return (
-    <>
-      <ActionMenu
-        primary={<Button>Nuevo colaborador</Button>}
-        menuLabel="Más acciones de colaboradores"
-        items={[
-          {
-            key: "import",
-            label: "Importar colaboradores",
-            onClick: () => undefined,
-          },
-          {
-            key: "deactivate",
-            label: "Desactivar",
-            destructive: true,
-            onClick: () => {
-              setDialogOpen(true);
-              onOpenDialog?.();
-            },
-          },
-        ]}
-      />
+mockApiModule("api/company-users.api", {
+  getCompanyMembership: async () => ({
+    companyId: "co-1",
+    companyName: "Empresa Test",
+    role: "ADMIN",
+    isPlatformAdmin: false,
+    permissions: ["employees:manage", "employees:read"],
+  }),
+  getCompanyUsers: async () => ({ data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } }),
+  getCompanyUserById: async () => {
+    throw new Error("not used");
+  },
+  createCompanyUser: async () => {
+    throw new Error("not used");
+  },
+  updateCompanyUser: async () => {
+    throw new Error("not used");
+  },
+  deactivateCompanyUser: async () => {
+    throw new Error("not used");
+  },
+  getActiveCompanyMembershipPath: () => null,
+});
 
-      <FilterBar
-        search={
-          <SearchInput
-            value={search}
-            onChange={setSearch}
-            onSearch={() => undefined}
-            placeholder="Nombre, documento o teléfono"
-            label="Buscar"
-          />
-        }
-        activeFilterCount={activeFilterCount}
-        onClearFilters={() => {
-          setActive("all");
-          setCategoryId("all");
-        }}
-      >
-        <FilterBar.Item>
-          <label>
-            Estado
-            <select
-              aria-label="Estado"
-              value={active}
-              onChange={(event) => setActive(event.target.value)}
-            >
-              <option value="all">Todos</option>
-              <option value="true">Activos</option>
-            </select>
-          </label>
-        </FilterBar.Item>
-        <FilterBar.Item>
-          <label>
-            Categoría
-            <select
-              aria-label="Categoría"
-              value={categoryId}
-              onChange={(event) => setCategoryId(event.target.value)}
-            >
-              <option value="all">Todas</option>
-              <option value="cat-1">Operaciones</option>
-            </select>
-          </label>
-        </FilterBar.Item>
-      </FilterBar>
+import assert from "node:assert/strict";
+import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
+import { afterEach, before, describe, it } from "node:test";
+import React from "react";
+import { Route, Routes } from "react-router-dom";
 
-      <DataTable
-        rows={[sample]}
-        columns={columns}
-        getRowKey={(row) => row.id}
-        mobileView="cards"
-        mobileCard={mobileCard}
-        aria-label="Listado de colaboradores"
-      />
+let renderPage: typeof import("../../test/render-page").renderPage;
+let EmployeesListPage: React.ComponentType;
 
-      <ResponsiveModal
-        opened={dialogOpen}
-        onClose={() => setDialogOpen(false)}
-        title="Desactivar colaborador"
-        withinPortal={false}
-        footer={<Button onClick={() => setDialogOpen(false)}>Cerrar</Button>}
-      >
-        Confirmar desactivación de {sample.name}
-      </ResponsiveModal>
-    </>
-  );
-}
+before(async () => {
+  ({ renderPage } = await import("../../test/render-page"));
+  ({ EmployeesListPage } = await import("./EmployeesListPage"));
+});
 
 afterEach(() => {
   cleanup();
   mockViewport("desktop");
 });
 
-describe("Colaboradores responsive pilot contract", () => {
-  it("shows a desktop table (not an interactive card list)", () => {
+describe("EmployeesListPage responsive (real page)", () => {
+  it("shows desktop table and not mobile cards", async () => {
     mockViewport("desktop");
-    const view = render(
-      <MantineProvider>
-        <MemoryRouter>
-          <EmployeesPilotHarness />
-        </MemoryRouter>
-      </MantineProvider>,
+    const view = renderPage(
+      <Routes>
+        <Route path="/employees" element={<EmployeesListPage />} />
+      </Routes>,
+      { route: "/employees" },
     );
 
-    assert.ok(view.getByRole("table", { name: "Listado de colaboradores" }));
-    assert.equal(view.queryByRole("list", { name: "Listado de colaboradores" }), null);
-    assert.ok(view.getByText("Ada Lovelace"));
+    await waitFor(() => {
+      assert.ok(view.getByText("Ada Lovelace"));
+    });
+    assert.ok(view.getByRole("table"));
+    assert.equal(view.queryByRole("list", { name: /colaboradores/i }), null);
   });
 
-  it("shows mobile cards, filter drawer, actions, and responsive dialog without a desktop table", async () => {
+  it("shows mobile cards, search, filter drawer, and actions without desktop table", async () => {
     mockViewport("mobile");
-    let dialogOpened = 0;
-
-    const view = render(
-      <MantineProvider>
-        <MemoryRouter>
-          <EmployeesPilotHarness
-            onOpenDialog={() => {
-              dialogOpened += 1;
-            }}
-          />
-        </MemoryRouter>
-      </MantineProvider>,
+    const view = renderPage(
+      <Routes>
+        <Route path="/employees" element={<EmployeesListPage />} />
+        <Route path="/employees/new" element={<div>Nuevo</div>} />
+      </Routes>,
+      { route: "/employees" },
     );
 
+    await waitFor(() => {
+      assert.ok(view.getByText("Ada Lovelace"));
+    });
     assert.equal(view.queryByRole("table"), null);
-    assert.ok(view.getByRole("list", { name: "Listado de colaboradores" }));
-    assert.ok(view.getByLabelText("Buscar"));
+    assert.ok(view.getByRole("list"));
+    assert.ok(view.getByLabelText(/Buscar/i));
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));
     await waitFor(() => {
-      assert.ok(view.getByRole("dialog", { name: "Filtros" }));
+      assert.ok(within(document.body).getByRole("combobox", { name: "Estado" }));
     });
-    fireEvent.click(view.getByRole("button", { name: "Ver resultados" }));
+    fireEvent.click(within(document.body).getByRole("button", { name: "Listo" }));
 
-    fireEvent.click(view.getByRole("button", { name: "Más acciones de colaboradores" }));
-    fireEvent.click(view.getByRole("menuitem", { name: "Desactivar" }));
-    assert.equal(dialogOpened, 1);
     await waitFor(() => {
-      assert.ok(within(document.body).getByText(/Confirmar desactivación/));
+      assert.ok(view.getByRole("button", { name: /Más acciones de colaboradores/i }));
+    });
+    fireEvent.click(view.getByRole("button", { name: /Más acciones de colaboradores/i }));
+    await waitFor(() => {
+      assert.ok(within(document.body).getByRole("menuitem", { name: /Importar/i }));
     });
   });
 });

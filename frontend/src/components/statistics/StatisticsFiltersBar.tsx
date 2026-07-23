@@ -36,6 +36,7 @@ interface StatisticsFiltersBarProps {
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
   onPunctualityStatusChange: (value: string) => void;
+  onClearSecondaryFilters: () => void;
 }
 
 const EFFECTIVE_STATE_LABELS: Record<Exclude<StatisticsEffectiveState, "">, string> = {
@@ -66,6 +67,7 @@ export function StatisticsFiltersBar({
   onValidationStatusChange,
   onLocationStatusChange,
   onPunctualityStatusChange,
+  onClearSecondaryFilters,
 }: StatisticsFiltersBarProps) {
   const validationOptions = useMemo(
     () => [
@@ -111,9 +113,31 @@ export function StatisticsFiltersBar({
     [],
   );
 
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (operationId) count += 1;
+    if (serviceId) count += 1;
+    if (employeeId) count += 1;
+    if (operationKind) count += 1;
+    if (effectiveState) count += 1;
+    if (validationStatus) count += 1;
+    if (locationStatus) count += 1;
+    if (punctualityStatus) count += 1;
+    return count;
+  }, [
+    employeeId,
+    effectiveState,
+    locationStatus,
+    operationId,
+    operationKind,
+    punctualityStatus,
+    serviceId,
+    validationStatus,
+  ]);
+
   return (
-    <FilterBar>
-      <FilterBar.Item minWidth={280}>
+    <FilterBar
+      search={
         <FilterDateRangeInput
           value={dateRange}
           onChange={onDateRangeChange}
@@ -122,7 +146,10 @@ export function StatisticsFiltersBar({
           defaultValue={defaultDateRange}
           allowCustomRange
         />
-      </FilterBar.Item>
+      }
+      activeFilterCount={activeSecondaryFilterCount}
+      onClearFilters={onClearSecondaryFilters}
+    >
       <FilterBar.Item>
         <OperationSearchAutocomplete
           value={operationId || null}

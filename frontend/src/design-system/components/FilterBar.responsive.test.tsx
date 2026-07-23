@@ -113,7 +113,7 @@ describe("FilterBar responsive", () => {
     fireEvent.change(within(document.body).getByLabelText("Estado"), {
       target: { value: "true" },
     });
-    fireEvent.click(within(document.body).getByRole("button", { name: "Ver resultados" }));
+    fireEvent.click(within(document.body).getByRole("button", { name: "Listo" }));
 
     await waitFor(() => {
       const filtersTrigger = view.getAllByRole("button", { name: /^Filtros/ })[0];

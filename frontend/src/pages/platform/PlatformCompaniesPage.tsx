@@ -6,7 +6,9 @@ import {
   ErrorState,
   LoadingState,
   PageHeader,
+  StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompany } from "../../hooks/useCompany";
@@ -45,9 +47,39 @@ export function PlatformCompaniesPage() {
   const columns = useMemo<DataTableColumn<PlatformCompany>[]>(
     () => [
       { key: "name", header: "Nombre", getValue: (row) => row.name },
-      { key: "status", header: "Estado", getValue: (row) => row.status },
+      {
+        key: "status",
+        header: "Estado",
+        render: (row) => (
+          <StatusBadge
+            label={row.status}
+            tone={row.status === "ACTIVE" ? "success" : "neutral"}
+          />
+        ),
+      },
       { key: "defaultTimezone", header: "Zona horaria", getValue: (row) => row.defaultTimezone },
     ],
+    [],
+  );
+
+  const mobileCard = useMemo<DataTableMobileCardConfig<PlatformCompany>>(
+    () => ({
+      title: (row) => row.name,
+      status: (row) => (
+        <StatusBadge
+          label={row.status}
+          tone={row.status === "ACTIVE" ? "success" : "neutral"}
+        />
+      ),
+      fields: [
+        {
+          key: "defaultTimezone",
+          label: "Zona horaria",
+          getValue: (row) => row.defaultTimezone,
+          visibility: "always",
+        },
+      ],
+    }),
     [],
   );
 
@@ -85,6 +117,8 @@ export function PlatformCompaniesPage() {
           emptyTitle="No hay empresas activas"
           emptyDescription="Creá la primera empresa de la plataforma."
           aria-label="Empresas de plataforma"
+          mobileView="cards"
+          mobileCard={mobileCard}
         />
       ) : null}
 
@@ -95,7 +129,6 @@ export function PlatformCompaniesPage() {
         onClose={() => setDialogOpen(false)}
         onSubmit={handleCreate}
       />
-
     </>
   );
 }

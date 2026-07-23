@@ -239,7 +239,7 @@ export function OperationsListPage() {
               row.scheduledEnd,
               row.scheduleSummary,
             ),
-          priority: "primary",
+          visibility: "always",
         },
         {
           key: "operationKind",
@@ -247,19 +247,19 @@ export function OperationsListPage() {
           render: (row) =>
             operationKindLabels[(row.operationKind ?? "ONE_TIME") as keyof typeof operationKindLabels] ??
             row.operationKind,
-          priority: "primary",
+          visibility: "always",
         },
         {
           key: "earlyToleranceMinutes",
           label: "Tol. temprana",
           render: (row) => `${row.earlyToleranceMinutes} min`,
-          priority: "secondary",
+          visibility: "expanded",
         },
         {
           key: "lateToleranceMinutes",
           label: "Tol. tardía",
           render: (row) => `${row.lateToleranceMinutes} min`,
-          priority: "secondary",
+          visibility: "expanded",
         },
       ],
     }),

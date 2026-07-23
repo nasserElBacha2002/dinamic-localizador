@@ -16,6 +16,7 @@ import { afterEach, describe, it } from "node:test";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { MantineProvider } from "@mantine/core";
 import React from "react";
+import { mockViewport } from "../../test/mock-match-media";
 import { EmployeeDeactivationDialog } from "./EmployeeDeactivationDialog";
 import { buildDeactivationSummaryMessage } from "./employee-deactivation-copy";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
@@ -71,6 +72,7 @@ describe("employee deactivation UI", () => {
   });
 
   it("renders modal details and confirms once", () => {
+    mockViewport("desktop");
     let confirms = 0;
     const impact = impactFixture();
 
@@ -91,9 +93,29 @@ describe("employee deactivation UI", () => {
     assert.ok(queries.getByText("Sucursal Palermo"));
     assert.ok(queries.getByText("Equipo Norte"));
     assert.ok(queries.getByText(/Se quitarán 2 jornadas futuras correspondientes a 1 asignación/));
+    assert.ok(queries.getByRole("table"));
 
     fireEvent.click(queries.getByRole("button", { name: "Desactivar y desasignar" }));
     assert.equal(confirms, 1);
+  });
+
+  it("renders affected assignments as summary cards on mobile", () => {
+    mockViewport("mobile");
+    const { queries } = renderDialog(
+      <EmployeeDeactivationDialog
+        open
+        employeeName="Ada Lovelace"
+        impact={impactFixture()}
+        onConfirm={() => undefined}
+        onCancel={() => undefined}
+      />,
+    );
+
+    assert.equal(queries.queryByRole("table"), null);
+    assert.ok(queries.getByText("Inventario Palermo"));
+    fireEvent.click(queries.getByRole("button", { name: /Inventario Palermo/i }));
+    assert.ok(queries.getByText("Horario"));
+    assert.ok(queries.getByText("09:00 – 14:00"));
   });
 
   it("disables actions while loading", () => {

@@ -4,9 +4,10 @@ import { useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { ReviewAttendanceDialog } from "../../components/attendance/ReviewAttendanceDialog";
-import { DetailFieldGrid } from "../../design-system";
 import {
+  ActionMenu,
   DataTable,
+  DetailFieldGrid,
   ErrorState,
   LoadingState,
   PageHeader,
@@ -14,7 +15,9 @@ import {
   SectionCard,
   StatusBadge,
   mapApiPaginationMeta,
+  type ActionMenuItem,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
   useAttendanceRecord,
@@ -63,6 +66,33 @@ export function AttendanceDetailPage() {
     [],
   );
 
+  const reviewMobileCard = useMemo<DataTableMobileCardConfig<AttendanceReview>>(
+    () => ({
+      title: (row) => (row.decision === "APPROVE" ? "Aprobada" : "Rechazada"),
+      fields: [
+        {
+          key: "reviewer",
+          label: "Revisor",
+          getValue: (row) => row.reviewer?.name ?? row.reviewedBy,
+          visibility: "always",
+        },
+        {
+          key: "createdAt",
+          label: "Fecha",
+          getValue: (row) => formatDateTime(row.createdAt),
+          visibility: "always",
+        },
+        {
+          key: "reason",
+          label: "Motivo",
+          getValue: (row) => row.reason,
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   if (!id) {
     return <ErrorState message="Registro no encontrado." />;
   }
@@ -72,7 +102,9 @@ export function AttendanceDetailPage() {
   }
 
   if (attendanceQuery.isError || !attendanceQuery.data) {
-    return <ErrorState message={getApiErrorMessage(attendanceQuery.error, "Registro no encontrado.")} />;
+    return (
+      <ErrorState message={getApiErrorMessage(attendanceQuery.error, "Registro no encontrado.")} />
+    );
   }
 
   const record = attendanceQuery.data;
@@ -83,15 +115,30 @@ export function AttendanceDetailPage() {
   const reviews = reviewsQuery.data?.data ?? [];
   const reviewsMeta = reviewsQuery.data?.meta;
 
+  const reviewMenuItems: ActionMenuItem[] = canReview
+    ? [
+        {
+          key: "reject",
+          label: "Rechazar asistencia",
+          destructive: true,
+          onClick: () => {
+            setReviewDecision("REJECT");
+            setReviewDialogOpen(true);
+          },
+        },
+        { key: "back", label: "Volver", onClick: goBackToList },
+      ]
+    : [];
+
   return (
     <Stack gap="md">
       <PageHeader
         title="Detalle de asistencia"
         description={`${record.employee.name} · Llegada ${formatDateTime(record.receivedAt)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
         action={
-          <Group gap="xs">
-            {canReview ? (
-              <>
+          <ActionMenu
+            primary={
+              canReview ? (
                 <Button
                   onClick={() => {
                     setReviewDecision("APPROVE");
@@ -100,22 +147,15 @@ export function AttendanceDetailPage() {
                 >
                   Aprobar asistencia
                 </Button>
-                <Button
-                  color="red"
-                  variant="default"
-                  onClick={() => {
-                    setReviewDecision("REJECT");
-                    setReviewDialogOpen(true);
-                  }}
-                >
-                  Rechazar asistencia
+              ) : (
+                <Button variant="default" onClick={goBackToList}>
+                  Volver
                 </Button>
-              </>
-            ) : null}
-            <Button variant="default" onClick={goBackToList}>
-              Volver
-            </Button>
-          </Group>
+              )
+            }
+            items={reviewMenuItems}
+            menuLabel="Más acciones de la asistencia"
+          />
         }
       />
 
@@ -154,15 +194,21 @@ export function AttendanceDetailPage() {
             },
             {
               label: "Radio permitido",
-              value: record.service.allowedRadiusMeters != null ? `${record.service.allowedRadiusMeters} m` : "—",
+              value:
+                record.service.allowedRadiusMeters != null
+                  ? `${record.service.allowedRadiusMeters} m`
+                  : "—",
             },
             {
               label: "Estado llegada",
               value: (
-                <Group gap="xs">
+                <Group gap="xs" wrap="wrap">
                   <StatusBadge label={validationStatusLabels[record.validationStatus]} tone="neutral" />
                   <StatusBadge label={locationStatusLabels[record.locationStatus]} tone="neutral" />
-                  <StatusBadge label={punctualityStatusLabels[record.punctualityStatus]} tone="neutral" />
+                  <StatusBadge
+                    label={punctualityStatusLabels[record.punctualityStatus]}
+                    tone="neutral"
+                  />
                   {record.isSimulation ? <StatusBadge label="Simulación" tone="info" /> : null}
                 </Group>
               ),
@@ -199,6 +245,9 @@ export function AttendanceDetailPage() {
           }
           emptyTitle="Sin revisiones"
           emptyDescription="Todavía no hay revisiones registradas para esta asistencia."
+          mobileView="summary"
+          mobileCard={reviewMobileCard}
+          aria-label="Historial de revisión de asistencia"
         />
         {reviewsMeta ? (
           <PaginationControls
@@ -224,23 +273,31 @@ export function AttendanceDetailPage() {
               <Text size="sm">MessageSid: {record.technical.sourceMessageSid ?? "—"}</Text>
               <Text size="sm">Teléfono: {record.technical.phoneNumber ?? "—"}</Text>
               <Text size="sm">
-                Mensaje: {record.technical.message?.body ?? "—"} ({record.technical.message?.messageType ?? "—"})
+                Mensaje: {record.technical.message?.body ?? "—"} (
+                {record.technical.message?.messageType ?? "—"})
               </Text>
               <Text size="sm">
                 Fecha del mensaje:{" "}
-                {record.technical.message?.createdAt ? formatDateTime(record.technical.message.createdAt) : "—"}
+                {record.technical.message?.createdAt
+                  ? formatDateTime(record.technical.message.createdAt)
+                  : "—"}
               </Text>
               <Text size="sm">
                 Estado de procesamiento: {record.technical.message?.processingStatus ?? "—"}
               </Text>
               <Text size="sm">
                 Sesión: {record.technical.session?.state ?? "—"} · expira{" "}
-                {record.technical.session?.expiresAt ? formatDateTime(record.technical.session.expiresAt) : "—"}
+                {record.technical.session?.expiresAt
+                  ? formatDateTime(record.technical.session.expiresAt)
+                  : "—"}
               </Text>
               <Text size="sm">
-                Coordenadas: {record.technical.coordinates.latitude}, {record.technical.coordinates.longitude}
+                Coordenadas: {record.technical.coordinates.latitude},{" "}
+                {record.technical.coordinates.longitude}
               </Text>
-              <Text size="sm">Distancia calculada: {record.technical.distanceMeters.toFixed(1)} m</Text>
+              <Text size="sm">
+                Distancia calculada: {record.technical.distanceMeters.toFixed(1)} m
+              </Text>
               <Text size="sm">Razón de validación: {record.technical.validationReason ?? "—"}</Text>
             </Stack>
           </Accordion.Panel>

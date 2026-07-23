@@ -65,6 +65,17 @@ export function StatisticsPage() {
           data.resetAllPages();
           data.setPunctualityStatus(value);
         }}
+        onClearSecondaryFilters={() => {
+          data.resetAllPages();
+          data.setOperationId("");
+          data.setServiceId("");
+          data.setEmployeeId("");
+          data.setOperationKind("");
+          data.setEffectiveState("");
+          data.setValidationStatus("");
+          data.setLocationStatus("");
+          data.setPunctualityStatus("");
+        }}
       />
 
       {data.exportsDisabled ? (
@@ -79,7 +90,7 @@ export function StatisticsPage() {
         mt="md"
         mb="lg"
       >
-        <Tabs.List>
+        <Tabs.List style={{ flexWrap: "nowrap", overflowX: "auto" }}>
           <Tabs.Tab value="general">General</Tabs.Tab>
           <Tabs.Tab value="employee">Por empleado</Tabs.Tab>
           <Tabs.Tab value="operation">Por operación</Tabs.Tab>

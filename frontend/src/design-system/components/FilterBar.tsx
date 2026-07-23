@@ -19,6 +19,10 @@ export interface FilterBarProps {
   onClearFilters?: () => void;
   filtersTitle?: string;
   clearLabel?: string;
+  /**
+   * Label for the drawer dismiss control.
+   * Filters apply immediately; this only closes the drawer (default: "Listo").
+   */
   applyLabel?: string;
 }
 
@@ -30,7 +34,7 @@ export function FilterBar({
   onClearFilters,
   filtersTitle = "Filtros",
   clearLabel = "Limpiar filtros",
-  applyLabel = "Ver resultados",
+  applyLabel = "Listo",
 }: FilterBarProps) {
   const isMobile = useIsBelow("sm");
   const [opened, { open, close }] = useDisclosure(false);

@@ -1,10 +1,11 @@
-import { Button, Group, Text } from "@mantine/core";
-import { useMemo } from "react";
+import { Button, Text } from "@mantine/core";
+import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { EmployeeLookupAutocomplete } from "../../components/lookups/EmployeeLookupAutocomplete";
 import { OperationLookupAutocomplete } from "../../components/lookups/OperationLookupAutocomplete";
 import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
 import {
+  ActionMenu,
   DataTable,
   FilterBar,
   FilterDateRangeInput,
@@ -14,12 +15,18 @@ import {
   PaginationControls,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
-import type { AttendanceRecordWithRelations, LocationStatus, PunctualityStatus, ValidationStatus } from "../../types/attendance";
+import type {
+  AttendanceRecordWithRelations,
+  LocationStatus,
+  PunctualityStatus,
+  ValidationStatus,
+} from "../../types/attendance";
 import { terminology } from "../../domain/terminology";
 import { isModuleEnabled } from "../../utils/company-modules";
 import { getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
@@ -87,6 +94,30 @@ export function AttendanceListPage() {
   };
 
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
+
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (table.state.operationId !== ATTENDANCE_TABLE_DEFAULTS.operationId) count += 1;
+    if (table.state.employeeId !== ATTENDANCE_TABLE_DEFAULTS.employeeId) count += 1;
+    if (table.state.serviceId !== ATTENDANCE_TABLE_DEFAULTS.serviceId) count += 1;
+    if (table.state.validationStatus !== ATTENDANCE_TABLE_DEFAULTS.validationStatus) count += 1;
+    if (table.state.locationStatus !== ATTENDANCE_TABLE_DEFAULTS.locationStatus) count += 1;
+    if (table.state.punctualityStatus !== ATTENDANCE_TABLE_DEFAULTS.punctualityStatus) count += 1;
+    if (table.state.recordType !== ATTENDANCE_TABLE_DEFAULTS.recordType) count += 1;
+    return count;
+  }, [table.state]);
+
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setState({
+      operationId: ATTENDANCE_TABLE_DEFAULTS.operationId,
+      employeeId: ATTENDANCE_TABLE_DEFAULTS.employeeId,
+      serviceId: ATTENDANCE_TABLE_DEFAULTS.serviceId,
+      validationStatus: ATTENDANCE_TABLE_DEFAULTS.validationStatus,
+      locationStatus: ATTENDANCE_TABLE_DEFAULTS.locationStatus,
+      punctualityStatus: ATTENDANCE_TABLE_DEFAULTS.punctualityStatus,
+      recordType: ATTENDANCE_TABLE_DEFAULTS.recordType,
+    });
+  }, [table]);
 
   const handleExport = async () => {
     if (exportsDisabled) {
@@ -165,6 +196,66 @@ export function AttendanceListPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceRecordWithRelations>>(
+    () => ({
+      title: (row) => getRelatedName(row.employee),
+      status: (row) => (
+        <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
+      ),
+      fields: [
+        {
+          key: "service",
+          label: terminology.service.singular,
+          getValue: (row) => getRelatedName(row.service),
+          visibility: "always",
+        },
+        {
+          key: "receivedAt",
+          label: "Llegada",
+          getValue: (row) => formatDateTime(row.receivedAt),
+          visibility: "always",
+        },
+        {
+          key: "checkoutAt",
+          label: "Salida",
+          getValue: (row) => formatDateTime(row.checkoutAt),
+          visibility: "always",
+        },
+        {
+          key: "operation",
+          label: terminology.operation.singular,
+          getValue: (row) => formatDateTime(row.operation?.scheduledStart),
+          visibility: "expanded",
+        },
+        {
+          key: "distance",
+          label: "Distancia",
+          getValue: (row) => formatDistanceMeters(row.distanceMeters),
+          visibility: "expanded",
+        },
+        {
+          key: "locationStatus",
+          label: "Ubicación",
+          getValue: (row) => locationStatusLabels[row.locationStatus],
+          visibility: "expanded",
+        },
+        {
+          key: "punctualityStatus",
+          label: "Puntualidad",
+          getValue: (row) => punctualityStatusLabels[row.punctualityStatus],
+          visibility: "expanded",
+        },
+        {
+          key: "recordType",
+          label: "Tipo",
+          getValue: (row) => (row.isSimulation ? "Simulación" : "Real"),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   return (
     <>
       <PageHeader
@@ -172,12 +263,12 @@ export function AttendanceListPage() {
         description={`Revisá los registros de llegada a ${terminology.operation.plural.toLowerCase()}.`}
         action={
           canExport || canUseBotSimulator ? (
-            <Group gap="xs" align="center">
-              {canExport ? (
-                <>
+            <ActionMenu
+              primary={
+                canExport ? (
                   <Button
                     variant="default"
-                    onClick={handleExport}
+                    onClick={() => void handleExport()}
                     disabled={exportMutation.isPending || exportsDisabled}
                     title={
                       exportsDisabled
@@ -187,24 +278,49 @@ export function AttendanceListPage() {
                   >
                     Exportar CSV
                   </Button>
-                  {exportsDisabled ? (
-                    <Text size="xs" c="red">
-                      Completá un rango de fechas válido antes de exportar.
-                    </Text>
-                  ) : null}
-                </>
-              ) : null}
-              {canUseBotSimulator ? (
-                <Button component={Link} to="/bot-simulator" variant="default">
-                  Probar flujo del bot
-                </Button>
-              ) : null}
-            </Group>
+                ) : canUseBotSimulator ? (
+                  <Button component={Link} to="/bot-simulator" variant="default">
+                    Probar flujo del bot
+                  </Button>
+                ) : undefined
+              }
+              items={
+                canExport && canUseBotSimulator
+                  ? [
+                      {
+                        key: "bot",
+                        label: "Probar flujo del bot",
+                        onClick: () => navigate("/bot-simulator"),
+                      },
+                    ]
+                  : []
+              }
+              menuLabel="Más acciones de asistencias"
+            />
           ) : undefined
         }
       />
+      {canExport && exportsDisabled ? (
+        <Text size="xs" c="red" mb="sm">
+          Completá un rango de fechas válido antes de exportar.
+        </Text>
+      ) : null}
 
-      <FilterBar>
+      <FilterBar
+        search={
+          <FilterDateRangeInput
+            value={dateRange}
+            onChange={(nextDateRange) => {
+              table.setState(dateRangeToUrlFields(nextDateRange));
+            }}
+            mode="past"
+            label="Fecha"
+            allowCustomRange
+          />
+        }
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <OperationLookupAutocomplete
             value={table.state.operationId || null}
@@ -290,18 +406,6 @@ export function AttendanceListPage() {
             ]}
           />
         </FilterBar.Item>
-
-        <FilterBar.Item minWidth={280}>
-          <FilterDateRangeInput
-            value={dateRange}
-            onChange={(nextDateRange) => {
-              table.setState(dateRangeToUrlFields(nextDateRange));
-            }}
-            mode="past"
-            label="Fecha"
-            allowCustomRange
-          />
-        </FilterBar.Item>
       </FilterBar>
 
       <DataTable
@@ -315,6 +419,8 @@ export function AttendanceListPage() {
         onRowClick={(row) =>
           navigateWithListContext(navigate, `/attendance/${row.id}`, ATTENDANCE_LIST_PATH, location)
         }
+        mobileView="summary"
+        mobileCard={mobileCard}
         aria-label="Listado de asistencias"
         pagination={
           data && data.data.length > 0 ? (

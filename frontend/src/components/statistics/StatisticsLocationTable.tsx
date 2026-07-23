@@ -7,6 +7,7 @@ import {
   PaginationControls,
   mapApiPaginationMeta,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByServiceRow } from "../../types/statistics";
@@ -148,6 +149,46 @@ export function StatisticsLocationTable({
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceByServiceRow>>(
+    () => ({
+      title: (row) => row.serviceName,
+      subtitle: (row) => row.address ?? "—",
+      fields: [
+        {
+          key: "totalOperations",
+          label: terminology.operation.plural,
+          getValue: (row) => String(row.totalOperations),
+          visibility: "always",
+        },
+        {
+          key: "presentWorkdays",
+          label: "Presentes",
+          getValue: (row) => String(row.presentWorkdays),
+          visibility: "always",
+        },
+        {
+          key: "attendanceRate",
+          label: "Presentismo",
+          getValue: (row) => formatPercent(row.attendanceRate),
+          visibility: "always",
+        },
+        {
+          key: "punctualityRate",
+          label: "Puntualidad",
+          getValue: (row) => formatPercent(row.punctualityRate),
+          visibility: "expanded",
+        },
+        {
+          key: "workedMinutes",
+          label: "Horas trabajadas",
+          getValue: (row) => formatDurationFromMinutes(row.workedMinutes),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   if (isLoading) {
     return <LoadingState message={`Cargando estadísticas por ${terminology.service.singular.toLowerCase()}...`} />;
   }
@@ -179,6 +220,8 @@ export function StatisticsLocationTable({
         onSortChange={(key) => onSortChange(key as SortableField)}
         emptyTitle="Sin resultados"
         emptyDescription={`No hay datos de ${terminology.service.plural.toLowerCase()} para los filtros seleccionados.`}
+        mobileView="summary"
+        mobileCard={mobileCard}
       />
 
       <PaginationControls

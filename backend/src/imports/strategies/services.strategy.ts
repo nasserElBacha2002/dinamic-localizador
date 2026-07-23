@@ -1,29 +1,32 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { AppError } from "../../errors/app-error";
 import { serviceRepository } from "../../repositories/service.repository";
-import { createServiceSchema } from "../../schemas/service.schema";
+import { createServiceSchema, type CreateServiceInput } from "../../schemas/service.schema";
 import { auditService } from "../../services/audit.service";
 import { companyLocationTypesService } from "../../services/company-location-types.service";
-import { serviceService } from "../../services/service.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
-import { isOperationalLocationNameDuplicateKeyError } from "../../utils/service-name-duplicate-errors";
 import {
   markInFileDuplicates,
   parseAndMapColumns,
   rowError,
   summarizePreviewRows,
 } from "../column-import-helpers";
-import { DEFAULT_IMPORT_BATCH_SIZE, DEFAULT_IMPORT_MAX_ROWS } from "../constants";
+import { classifyServiceUniqueViolation } from "../constraint-classifiers";
+import { DEFAULT_IMPORT_MAX_ROWS, IMPORT_PERSIST_CHUNK_SIZE } from "../constants";
+import {
+  runCreateOnlyImport,
+  type CreateOnlyPersistBatchResult,
+} from "../create-only-executor";
 import { buildCsvTemplate } from "../parse-import-file";
-import type { ImportStrategy } from "../strategy";
-import type {
-  ImportColumnDefinition,
-  ImportExecuteResult,
-  ImportExecuteRow,
-  ImportPreviewResult,
-  ImportPreviewRow,
-  ImportTemplate,
-} from "../types";
+import {
+  hashImportFile,
+  IMPORT_STRATEGY_VERSION,
+  preparedToPreviewResult,
+  type PreparedImport,
+  type PreparedImportRow,
+} from "../prepared-import";
+import type { ImportPersistContext, ImportStrategy } from "../strategy";
+import type { ImportColumnDefinition, ImportTemplate } from "../types";
 
 export const SERVICE_IMPORT_COLUMNS: ImportColumnDefinition[] = [
   { key: "name", header: "Nombre", required: true, aliases: ["servicio", "sucursal", "punto"] },
@@ -97,46 +100,38 @@ const parseNumber = (raw: string, field: string): { value: number | null; error:
   return { value, error: null };
 };
 
-type ServiceDraft = {
-  rowNumber: number;
-  values: Record<string, string>;
-  uniqueKey: string | null;
-  input: {
-    name: string;
-    address: string | null;
-    neighborhood: string | null;
-    locality: string | null;
-    serviceFormat: string | null;
-    latitude: number;
-    longitude: number;
-    allowedRadiusMeters: number;
-    googlePlaceId: string | null;
-  } | null;
-  errors: ReturnType<typeof rowError>[];
-};
-
-const buildServiceDrafts = async (
+const buildServicePrepared = async (
   companyId: string,
   buffer: Buffer,
   fileName: string,
-): Promise<{
-  fileType: "csv" | "xlsx";
-  fileErrors: string[];
-  drafts: ServiceDraft[];
-}> => {
-  const mapped = parseAndMapColumns(buffer, fileName, SERVICE_IMPORT_COLUMNS, {
-    maxRows: DEFAULT_IMPORT_MAX_ROWS,
-  });
+  maxRows: number,
+): Promise<PreparedImport> => {
+  const mapped = parseAndMapColumns(buffer, fileName, SERVICE_IMPORT_COLUMNS, { maxRows });
 
   if (mapped.fileErrors.length > 0 && mapped.dataRows.length === 0) {
-    return { fileType: mapped.fileType, fileErrors: mapped.fileErrors, drafts: [] };
+    return {
+      entityType: "services",
+      strategyVersion: IMPORT_STRATEGY_VERSION,
+      fileName,
+      fileHash: hashImportFile(buffer),
+      fileType: mapped.fileType,
+      format: null,
+      requireAllRowsValid: false,
+      displayColumns: SERVICE_IMPORT_COLUMNS.map((column) => ({
+        key: column.key,
+        header: column.header,
+      })),
+      fileErrors: mapped.fileErrors,
+      rows: [],
+      summary: summarizePreviewRows([], false),
+    };
   }
 
   const locationTypes = await companyLocationTypesService.listLocationTypes(companyId, false);
   const names = mapped.dataRows.map((row) => row.values.name?.trim() ?? "").filter(Boolean);
   const existingNames = await serviceRepository.findExistingNames(companyId, names);
 
-  const drafts: ServiceDraft[] = mapped.dataRows.map((row) => {
+  const rows: PreparedImportRow[] = mapped.dataRows.map((row) => {
     const values = row.values;
     const errors = [];
     const name = values.name?.trim() ?? "";
@@ -189,7 +184,7 @@ const buildServiceDrafts = async (
       );
     }
 
-    let input: ServiceDraft["input"] = null;
+    let payload: CreateServiceInput | null = null;
     if (errors.length === 0 && lat.value !== null && lng.value !== null) {
       const candidate = {
         name,
@@ -215,7 +210,7 @@ const buildServiceDrafts = async (
           );
         }
       } else {
-        input = {
+        payload = {
           name: parsed.data.name,
           address: parsed.data.address ?? null,
           neighborhood: parsed.data.neighborhood ?? null,
@@ -232,40 +227,54 @@ const buildServiceDrafts = async (
     return {
       rowNumber: row.rowNumber,
       values,
-      uniqueKey,
-      input,
       errors,
+      payload,
     };
   });
 
   const duplicateErrors = markInFileDuplicates(
-    drafts,
+    rows.map((row) => ({
+      rowNumber: row.rowNumber,
+      values: row.values,
+      uniqueKey: row.values.name?.trim() ? row.values.name.trim().toLowerCase() : null,
+      errors: row.errors,
+    })),
     "name",
     "SERVICE_DUPLICATE_IN_FILE",
     "Nombre duplicado dentro del archivo",
   );
-  for (const draft of drafts) {
-    const extras = duplicateErrors.get(draft.rowNumber);
+  for (const row of rows) {
+    const extras = duplicateErrors.get(row.rowNumber);
     if (extras) {
-      draft.errors.push(...extras);
-      draft.input = null;
+      row.errors.push(...extras);
+      row.payload = null;
     }
   }
 
+  const previewRows = rows.map((row) => ({
+    rowNumber: row.rowNumber,
+    status: (row.errors.length === 0 ? "valid" : "invalid") as "valid" | "invalid",
+    values: row.values,
+    errors: row.errors,
+  }));
+
   return {
+    entityType: "services",
+    strategyVersion: IMPORT_STRATEGY_VERSION,
+    fileName,
+    fileHash: hashImportFile(buffer),
     fileType: mapped.fileType,
+    format: null,
+    requireAllRowsValid: false,
+    displayColumns: SERVICE_IMPORT_COLUMNS.map((column) => ({
+      key: column.key,
+      header: column.header,
+    })),
     fileErrors: mapped.fileErrors,
-    drafts,
+    rows,
+    summary: summarizePreviewRows(previewRows, false),
   };
 };
-
-const toPreviewRows = (drafts: ServiceDraft[]): ImportPreviewRow[] =>
-  drafts.map((draft) => ({
-    rowNumber: draft.rowNumber,
-    status: draft.errors.length === 0 ? "valid" : "invalid",
-    values: draft.values,
-    errors: draft.errors,
-  }));
 
 export const servicesImportStrategy: ImportStrategy = {
   entityType: "services",
@@ -273,6 +282,7 @@ export const servicesImportStrategy: ImportStrategy = {
   moduleKeys: [COMPANY_MODULE_KEYS.OPERATIONS],
   requireAllRowsValid: false,
   maxRows: DEFAULT_IMPORT_MAX_ROWS,
+  strategyVersion: IMPORT_STRATEGY_VERSION,
 
   buildTemplate(): ImportTemplate {
     return {
@@ -297,127 +307,131 @@ export const servicesImportStrategy: ImportStrategy = {
     };
   },
 
-  async preview(companyId, buffer, fileName): Promise<ImportPreviewResult> {
-    const { fileType, fileErrors, drafts } = await buildServiceDrafts(companyId, buffer, fileName);
-    const rows = toPreviewRows(drafts);
-    return {
-      entityType: "services",
-      fileType,
-      format: null,
-      summary: summarizePreviewRows(rows, false),
-      rows,
-      fileErrors,
-      displayColumns: SERVICE_IMPORT_COLUMNS.map((column) => ({
-        key: column.key,
-        header: column.header,
-      })),
-    };
+  prepare(companyId, buffer, fileName) {
+    return buildServicePrepared(companyId, buffer, fileName, this.maxRows);
   },
 
-  async execute(companyId, buffer, fileName, userId): Promise<ImportExecuteResult> {
-    const started = Date.now();
-    const { fileErrors, drafts } = await buildServiceDrafts(companyId, buffer, fileName);
-    if (fileErrors.length > 0 && drafts.length === 0) {
-      return {
-        entityType: "services",
-        summary: {
-          totalRows: 0,
-          processedRows: 0,
-          created: 0,
-          updated: 0,
-          rejected: 0,
-          durationMs: Date.now() - started,
-        },
-        rows: [],
-        fileErrors,
-      };
-    }
+  async preview(companyId, buffer, fileName) {
+    const prepared = await this.prepare(companyId, buffer, fileName);
+    return preparedToPreviewResult(prepared);
+  },
 
-    const resultRows: ImportExecuteRow[] = [];
-    let created = 0;
-    let rejected = 0;
-
-    const validDrafts = drafts.filter((draft) => draft.errors.length === 0 && draft.input);
-    const invalidDrafts = drafts.filter((draft) => draft.errors.length > 0 || !draft.input);
-
-    for (const draft of invalidDrafts) {
-      rejected += 1;
-      resultRows.push({
-        rowNumber: draft.rowNumber,
-        status: "rejected",
-        values: draft.values,
-        errors: draft.errors,
-      });
-    }
-
-    for (let offset = 0; offset < validDrafts.length; offset += DEFAULT_IMPORT_BATCH_SIZE) {
-      const batch = validDrafts.slice(offset, offset + DEFAULT_IMPORT_BATCH_SIZE);
-      for (const draft of batch) {
-        try {
-          await serviceService.create(companyId, draft.input!);
-          created += 1;
-          resultRows.push({
-            rowNumber: draft.rowNumber,
-            status: "created",
-            values: draft.values,
-            errors: [],
-          });
-        } catch (error) {
-          rejected += 1;
-          const message =
-            error instanceof AppError
-              ? error.message
-              : isOperationalLocationNameDuplicateKeyError(error)
-                ? "Ya existe un servicio con este nombre en la compañía."
-                : "No se pudo crear el servicio.";
-          const code =
-            error instanceof AppError
-              ? error.code
-              : isOperationalLocationNameDuplicateKeyError(error)
-                ? "SERVICE_NAME_ALREADY_EXISTS"
-                : "SERVICE_CREATE_FAILED";
-          resultRows.push({
-            rowNumber: draft.rowNumber,
-            status: "rejected",
-            values: draft.values,
-            errors: [rowError(code, message, "name", draft.values.name)],
-          });
-        }
-      }
-    }
-
-    resultRows.sort((a, b) => a.rowNumber - b.rowNumber);
-
-    await logAuditSafe("import.services.execute", () =>
-      auditService.log(companyId, {
-        entityType: "import",
-        entityId: companyId,
-        action: "import.execute",
-        newData: {
-          entityType: "services",
-          fileName,
-          totalRows: drafts.length,
-          created,
-          updated: 0,
-          rejected,
-        },
-        reason: "generic_import",
-        userId: userId ?? null,
-      }),
-    );
-
-    return {
+  async persist(companyId, prepared, context: ImportPersistContext = {}) {
+    return runCreateOnlyImport(companyId, prepared, context, {
       entityType: "services",
-      summary: {
-        totalRows: drafts.length,
-        processedRows: created + rejected,
-        created,
-        updated: 0,
-        rejected,
-        durationMs: Date.now() - started,
+      defaultCreateErrorCode: "SERVICE_CREATE_FAILED",
+      defaultCreateErrorMessage: "No se pudo crear el servicio.",
+      defaultErrorField: "name",
+      chunkSize: IMPORT_PERSIST_CHUNK_SIZE,
+      classifyError: (error, row) => {
+        if (error instanceof AppError) {
+          return rowError(error.code, error.message, "name", row.values.name);
+        }
+        const classified = classifyServiceUniqueViolation(error);
+        if (classified) {
+          return rowError(classified.code, classified.message, classified.field, row.values.name);
+        }
+        return rowError(
+          "SERVICE_CREATE_FAILED",
+          "No se pudo crear el servicio.",
+          "name",
+          row.values.name,
+        );
       },
-      rows: resultRows,
-      fileErrors,
-    };
+      revalidateRows: async (cid, rows) => {
+        const names = rows
+          .map((row) => (row.payload as CreateServiceInput | null)?.name ?? "")
+          .filter(Boolean);
+        const existing = await serviceRepository.findExistingNames(cid, names);
+        const map = new Map<number, ReturnType<typeof rowError>[]>();
+        for (const row of rows) {
+          const name = (row.payload as CreateServiceInput | null)?.name ?? "";
+          if (name && existing.has(name.toLowerCase())) {
+            map.set(row.rowNumber, [
+              rowError(
+                "SERVICE_NAME_ALREADY_EXISTS",
+                "Ya existe un servicio con este nombre en la compañía.",
+                "name",
+                name,
+              ),
+            ]);
+          }
+        }
+        return map;
+      },
+      persistBatch: async (cid, items): Promise<CreateOnlyPersistBatchResult> => {
+        const payloads = items.map((item) => item.payload as CreateServiceInput);
+        try {
+          await serviceRepository.createMany(cid, payloads);
+          return {
+            created: items.map((item) => ({ rowNumber: item.row.rowNumber })),
+            rejected: [],
+          };
+        } catch (error) {
+          const classified = classifyServiceUniqueViolation(error);
+          if (classified || error instanceof AppError) {
+            // Fall back to per-row so partial success is preserved.
+            const created: Array<{ rowNumber: number }> = [];
+            const rejected: CreateOnlyPersistBatchResult["rejected"] = [];
+            for (const item of items) {
+              try {
+                await serviceRepository.createMany(cid, [item.payload as CreateServiceInput]);
+                created.push({ rowNumber: item.row.rowNumber });
+              } catch (rowErrorValue) {
+                const rowClassified =
+                  rowErrorValue instanceof AppError
+                    ? rowError(
+                        rowErrorValue.code,
+                        rowErrorValue.message,
+                        "name",
+                        item.row.values.name,
+                      )
+                    : (() => {
+                        const hit = classifyServiceUniqueViolation(rowErrorValue);
+                        return hit
+                          ? rowError(hit.code, hit.message, hit.field, item.row.values.name)
+                          : rowError(
+                              "SERVICE_CREATE_FAILED",
+                              "No se pudo crear el servicio.",
+                              "name",
+                              item.row.values.name,
+                            );
+                      })();
+                rejected.push({ rowNumber: item.row.rowNumber, error: rowClassified });
+              }
+            }
+            return { created, rejected };
+          }
+          throw error;
+        }
+      },
+      audit: async ({ companyId: cid, userId, importJobId, prepared: plan, created, rejected, durationMs }) => {
+        await logAuditSafe("import.services.execute", () =>
+          auditService.log(cid, {
+            entityType: "import_job",
+            entityId: importJobId ?? cid,
+            action: "import.execute",
+            newData: {
+              entityType: "services",
+              importJobId: importJobId ?? null,
+              fileName: plan.fileName,
+              strategyVersion: plan.strategyVersion,
+              totalRows: plan.rows.length,
+              created,
+              updated: 0,
+              rejected,
+              durationMs,
+            },
+            reason: "generic_import",
+            userId: userId ?? null,
+          }),
+        );
+      },
+    });
+  },
+
+  async execute(companyId, buffer, fileName, userId) {
+    const prepared = await this.prepare(companyId, buffer, fileName);
+    return this.persist(companyId, prepared, { userId, revalidateConcurrency: true });
   },
 };

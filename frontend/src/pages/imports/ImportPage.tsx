@@ -31,6 +31,7 @@ import {
   downloadImportRejectedRows,
   isAcceptedImportFile,
   readFileAsBase64,
+  resolveImportNotification,
   triggerBlobDownload,
   UNSUPPORTED_IMPORT_FILE_MESSAGE,
 } from "../../utils/import-file";
@@ -84,13 +85,12 @@ export function ImportPage() {
   );
 
   const requestedEntity = searchParams.get("entity");
-  const initialEntity: ImportEntityType =
+  const entityType: ImportEntityType =
     isImportEntityType(requestedEntity) &&
     availableStrategies.some((strategy) => strategy.entityType === requestedEntity)
       ? requestedEntity
       : (availableStrategies[0]?.entityType ?? "operations");
 
-  const [entityType, setEntityType] = useState<ImportEntityType>(initialEntity);
   const strategy = getImportEntityStrategy(entityType);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -99,25 +99,29 @@ export function ImportPage() {
 
   const [preview, setPreview] = useState<ImportPreviewResult | null>(null);
   const [executeResult, setExecuteResult] = useState<ImportExecuteResult | null>(null);
-  const [pendingFile, setPendingFile] = useState<{ name: string; contentBase64: string } | null>(
-    null,
-  );
+  const [pendingFileName, setPendingFileName] = useState<string | null>(null);
   const [clientError, setClientError] = useState<string | null>(null);
   const [rowFilter, setRowFilter] = useState<RowFilter>("all");
   const [templateLoading, setTemplateLoading] = useState(false);
 
-  const handleEntityChange = (next: string) => {
-    if (!isImportEntityType(next)) {
-      return;
-    }
-    setEntityType(next);
-    setSearchParams({ entity: next });
+  const resetImportState = () => {
     setPreview(null);
     setExecuteResult(null);
-    setPendingFile(null);
+    setPendingFileName(null);
     setClientError(null);
     setRowFilter("all");
   };
+
+  const handleEntityChange = (next: string) => {
+    if (!isImportEntityType(next) || next === entityType) {
+      return;
+    }
+    setSearchParams({ entity: next });
+    resetImportState();
+  };
+
+  const activePreview = preview?.entityType === entityType ? preview : null;
+  const activeExecuteResult = executeResult?.entityType === entityType ? executeResult : null;
 
   const handleFileSelect = async (file: File | null) => {
     setClientError(null);
@@ -125,19 +129,19 @@ export function ImportPage() {
     setExecuteResult(null);
 
     if (!file) {
-      setPendingFile(null);
+      setPendingFileName(null);
       return;
     }
 
     if (!isAcceptedImportFile(file)) {
-      setPendingFile(null);
+      setPendingFileName(null);
       setClientError(UNSUPPORTED_IMPORT_FILE_MESSAGE);
       return;
     }
 
     try {
       const fileContentBase64 = await readFileAsBase64(file);
-      setPendingFile({ name: file.name, contentBase64: fileContentBase64 });
+      setPendingFileName(file.name);
       const result = await previewMutation.mutateAsync({
         fileName: file.name,
         fileContentBase64,
@@ -164,19 +168,24 @@ export function ImportPage() {
   };
 
   const handleConfirm = async () => {
-    if (!preview?.summary.canConfirm || !pendingFile) {
+    if (
+      !activePreview?.summary.canConfirm ||
+      !activePreview.importJobId ||
+      !activePreview.confirmationToken
+    ) {
       return;
     }
 
     try {
       const result = await executeMutation.mutateAsync({
-        fileName: pendingFile.name,
-        fileContentBase64: pendingFile.contentBase64,
+        importJobId: activePreview.importJobId,
+        confirmationToken: activePreview.confirmationToken,
       });
       setExecuteResult(result);
+      const notification = resolveImportNotification(result);
       notifications.show({
-        color: "green",
-        title: "Importación completada",
+        color: notification.color,
+        title: notification.title,
         message: `${strategy.successMessage} Creadas: ${result.summary.created}. Rechazadas: ${result.summary.rejected}.`,
       });
     } catch (error) {
@@ -189,22 +198,31 @@ export function ImportPage() {
   };
 
   const filteredRows = useMemo(() => {
-    if (!preview) {
+    if (!activePreview) {
       return [];
     }
     if (rowFilter === "valid") {
-      return preview.rows.filter((row) => row.status === "valid");
+      return activePreview.rows.filter((row) => row.status === "valid");
     }
     if (rowFilter === "invalid") {
-      return preview.rows.filter((row) => row.status === "invalid" || row.status === "warning");
+      return activePreview.rows.filter((row) => row.status === "invalid" || row.status === "warning");
     }
-    return preview.rows;
-  }, [preview, rowFilter]);
+    return activePreview.rows;
+  }, [activePreview, rowFilter]);
 
   const previewColumns = useMemo(
-    () => (preview ? buildColumns(preview) : []),
-    [preview],
+    () => (activePreview ? buildColumns(activePreview) : []),
+    [activePreview],
   );
+
+  const resultTone =
+    activeExecuteResult == null
+      ? null
+      : activeExecuteResult.summary.rejected === 0 && activeExecuteResult.summary.created > 0
+        ? "success"
+        : activeExecuteResult.summary.created > 0
+          ? "warning"
+          : "danger";
 
   if (permissionsQuery.isLoading) {
     return <LoadingState />;
@@ -249,11 +267,15 @@ export function ImportPage() {
             <Button
               variant="default"
               onClick={() => {
-                if (pendingFile && preview) {
-                  downloadImportRejectedRows(pendingFile.name, preview);
+                if (pendingFileName && activePreview) {
+                  downloadImportRejectedRows(
+                    pendingFileName,
+                    activePreview,
+                    activePreview.displayColumns,
+                  );
                 }
               }}
-              disabled={!preview || preview.summary.invalidRows === 0}
+              disabled={!activePreview || activePreview.summary.invalidRows === 0}
             >
               Descargar errores
             </Button>
@@ -269,9 +291,9 @@ export function ImportPage() {
               }}
             />
           </Group>
-          {pendingFile ? (
+          {pendingFileName && activePreview ? (
             <Text size="sm">
-              Archivo seleccionado: <strong>{pendingFile.name}</strong>
+              Archivo seleccionado: <strong>{pendingFileName}</strong>
             </Text>
           ) : null}
           {clientError ? <Alert color="red">{clientError}</Alert> : null}
@@ -280,29 +302,43 @@ export function ImportPage() {
 
       {previewMutation.isPending ? <LoadingState message="Validando archivo..." /> : null}
 
-      {executeResult ? (
+      {activeExecuteResult ? (
         <SectionCard title="Resultado" description="Resumen de la ejecución.">
           <Stack gap="sm">
             <Group gap="xs" wrap="wrap">
-              <Badge>Total: {executeResult.summary.totalRows}</Badge>
+              {activeExecuteResult.status ? (
+                <Badge
+                  color={
+                    resultTone === "success" ? "green" : resultTone === "warning" ? "yellow" : "red"
+                  }
+                  variant="light"
+                >
+                  Estado: {activeExecuteResult.status}
+                </Badge>
+              ) : null}
+              <Badge>Total: {activeExecuteResult.summary.totalRows}</Badge>
               <Badge color="green" variant="light">
-                Creadas: {executeResult.summary.created}
+                Creadas: {activeExecuteResult.summary.created}
               </Badge>
               <Badge color="blue" variant="light">
-                Actualizadas: {executeResult.summary.updated}
+                Actualizadas: {activeExecuteResult.summary.updated}
               </Badge>
-              <Badge color={executeResult.summary.rejected > 0 ? "red" : "gray"} variant="light">
-                Rechazadas: {executeResult.summary.rejected}
+              <Badge color={activeExecuteResult.summary.rejected > 0 ? "red" : "gray"} variant="light">
+                Rechazadas: {activeExecuteResult.summary.rejected}
               </Badge>
             </Group>
             <Button
               variant="default"
               onClick={() => {
-                if (pendingFile) {
-                  downloadImportRejectedRows(pendingFile.name, executeResult);
+                if (pendingFileName) {
+                  downloadImportRejectedRows(
+                    pendingFileName,
+                    activeExecuteResult,
+                    activePreview?.displayColumns,
+                  );
                 }
               }}
-              disabled={executeResult.summary.rejected === 0}
+              disabled={activeExecuteResult.summary.rejected === 0}
             >
               Descargar filas rechazadas
             </Button>
@@ -310,12 +346,12 @@ export function ImportPage() {
         </SectionCard>
       ) : null}
 
-      {preview ? (
+      {activePreview ? (
         <>
-          {preview.fileErrors.length > 0 ? (
+          {activePreview.fileErrors.length > 0 ? (
             <Alert color="red" title="Errores de archivo">
               <Stack gap={4}>
-                {preview.fileErrors.map((error) => (
+                {activePreview.fileErrors.map((error) => (
                   <Text key={error} size="sm">
                     {error}
                   </Text>
@@ -324,21 +360,26 @@ export function ImportPage() {
             </Alert>
           ) : null}
 
-          {preview.rows.length > 0 ? (
+          {activePreview.rows.length > 0 ? (
             <>
               <SectionCard title="Vista previa" description="Paso 2 · Revisá filas válidas e inválidas.">
                 <Stack gap="md">
                   <Group gap="xs" wrap="wrap">
-                    {preview.format ? <Badge variant="light">Formato: {preview.format}</Badge> : null}
-                    {preview.fileType ? (
-                      <Badge variant="light">Archivo: {preview.fileType.toUpperCase()}</Badge>
+                    {activePreview.format ? (
+                      <Badge variant="light">Formato: {activePreview.format}</Badge>
                     ) : null}
-                    <Badge>Total: {preview.summary.totalRows}</Badge>
+                    {activePreview.fileType ? (
+                      <Badge variant="light">Archivo: {activePreview.fileType.toUpperCase()}</Badge>
+                    ) : null}
+                    <Badge>Total: {activePreview.summary.totalRows}</Badge>
                     <Badge color="green" variant="light">
-                      Válidas: {preview.summary.validRows}
+                      Válidas: {activePreview.summary.validRows}
                     </Badge>
-                    <Badge color={preview.summary.invalidRows > 0 ? "red" : "gray"} variant="light">
-                      Inválidas: {preview.summary.invalidRows}
+                    <Badge
+                      color={activePreview.summary.invalidRows > 0 ? "red" : "gray"}
+                      variant="light"
+                    >
+                      Inválidas: {activePreview.summary.invalidRows}
                     </Badge>
                   </Group>
 
@@ -365,12 +406,16 @@ export function ImportPage() {
                 <Stack gap="sm">
                   <Button
                     onClick={() => void handleConfirm()}
-                    disabled={!preview.summary.canConfirm || executeMutation.isPending || Boolean(executeResult)}
+                    disabled={
+                      !activePreview.summary.canConfirm ||
+                      executeMutation.isPending ||
+                      Boolean(activeExecuteResult)
+                    }
                     loading={executeMutation.isPending}
                   >
                     Confirmar importación
                   </Button>
-                  {!preview.summary.canConfirm ? (
+                  {!activePreview.summary.canConfirm ? (
                     <Text size="sm" c="dimmed">
                       {strategy.entityType === "operations"
                         ? "Corregí todas las filas inválidas antes de confirmar."
@@ -380,7 +425,7 @@ export function ImportPage() {
                 </Stack>
               </SectionCard>
             </>
-          ) : preview.fileErrors.length === 0 ? (
+          ) : activePreview.fileErrors.length === 0 ? (
             <ErrorState message="No se encontraron filas para importar." />
           ) : null}
         </>

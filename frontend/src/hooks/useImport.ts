@@ -1,6 +1,10 @@
 import { useMutation } from "@tanstack/react-query";
 import { executeImport, previewImport } from "../api/imports.api";
-import type { ImportEntityType, ImportFilePayload } from "../types/import";
+import type {
+  ImportEntityType,
+  ImportExecutePayload,
+  ImportFilePayload,
+} from "../types/import";
 
 export function useImportPreview(entityType: ImportEntityType) {
   return useMutation({
@@ -10,6 +14,6 @@ export function useImportPreview(entityType: ImportEntityType) {
 
 export function useImportExecute(entityType: ImportEntityType) {
   return useMutation({
-    mutationFn: (payload: ImportFilePayload) => executeImport(entityType, payload),
+    mutationFn: (payload: ImportExecutePayload) => executeImport(entityType, payload),
   });
 }

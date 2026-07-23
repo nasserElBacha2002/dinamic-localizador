@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { validate } from "../middleware/validate";
 import {
   importEntityTypeParamSchema,
+  importExecuteBodySchema,
   importFileBodySchema,
 } from "../schemas/import.schema";
 import type { NextFunction, Request, Response } from "express";
@@ -61,6 +62,6 @@ importRouter.post(
   "/:entityType/execute",
   validate(importEntityTypeParamSchema, "params"),
   requireImportStrategyAccess,
-  validate(importFileBodySchema),
+  validate(importExecuteBodySchema),
   asyncHandler(importController.execute),
 );

@@ -3,30 +3,34 @@ import { EMPLOYEE_TYPES } from "../../constants/employee-types";
 import { AppError } from "../../errors/app-error";
 import { employeeCategoryRepository } from "../../repositories/employee-category.repository";
 import { employeeRepository } from "../../repositories/employee.repository";
-import { createEmployeeSchema } from "../../schemas/employee.schema";
+import { createEmployeeSchema, type CreateEmployeeInput } from "../../schemas/employee.schema";
 import { auditService } from "../../services/audit.service";
 import { employeeService } from "../../services/employee.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { normalizeCategoryName } from "../../utils/normalize-category-name";
 import { normalizePhoneNumber } from "../../utils/phone";
-import { isDuplicateKeyError } from "../../utils/sql-server-errors";
 import {
   markInFileDuplicates,
   parseAndMapColumns,
   rowError,
   summarizePreviewRows,
 } from "../column-import-helpers";
-import { DEFAULT_IMPORT_BATCH_SIZE, DEFAULT_IMPORT_MAX_ROWS } from "../constants";
+import { classifyEmployeeUniqueViolation } from "../constraint-classifiers";
+import { DEFAULT_IMPORT_MAX_ROWS, IMPORT_PERSIST_CHUNK_SIZE } from "../constants";
+import {
+  runCreateOnlyImport,
+  type CreateOnlyPersistBatchResult,
+} from "../create-only-executor";
 import { buildCsvTemplate } from "../parse-import-file";
-import type { ImportStrategy } from "../strategy";
-import type {
-  ImportColumnDefinition,
-  ImportExecuteResult,
-  ImportExecuteRow,
-  ImportPreviewResult,
-  ImportPreviewRow,
-  ImportTemplate,
-} from "../types";
+import {
+  hashImportFile,
+  IMPORT_STRATEGY_VERSION,
+  preparedToPreviewResult,
+  type PreparedImport,
+  type PreparedImportRow,
+} from "../prepared-import";
+import type { ImportPersistContext, ImportStrategy } from "../strategy";
+import type { ImportColumnDefinition, ImportTemplate } from "../types";
 
 export const EMPLOYEE_IMPORT_COLUMNS: ImportColumnDefinition[] = [
   { key: "name", header: "Nombre", required: true, aliases: ["colaborador", "empleado"] },
@@ -74,35 +78,31 @@ const parseEmployeeType = (
   };
 };
 
-type EmployeeDraft = {
-  rowNumber: number;
-  values: Record<string, string>;
-  uniqueKey: string | null;
-  input: {
-    name: string;
-    documentNumber: string | null;
-    phoneNumber: string;
-    employeeType: (typeof EMPLOYEE_TYPES)[number];
-    categoryId: string | null;
-  } | null;
-  errors: ReturnType<typeof rowError>[];
-};
-
-const buildEmployeeDrafts = async (
+const buildEmployeePrepared = async (
   companyId: string,
   buffer: Buffer,
   fileName: string,
-): Promise<{
-  fileType: "csv" | "xlsx";
-  fileErrors: string[];
-  drafts: EmployeeDraft[];
-}> => {
-  const mapped = parseAndMapColumns(buffer, fileName, EMPLOYEE_IMPORT_COLUMNS, {
-    maxRows: DEFAULT_IMPORT_MAX_ROWS,
-  });
+  maxRows: number,
+): Promise<PreparedImport> => {
+  const mapped = parseAndMapColumns(buffer, fileName, EMPLOYEE_IMPORT_COLUMNS, { maxRows });
 
   if (mapped.fileErrors.length > 0 && mapped.dataRows.length === 0) {
-    return { fileType: mapped.fileType, fileErrors: mapped.fileErrors, drafts: [] };
+    return {
+      entityType: "employees",
+      strategyVersion: IMPORT_STRATEGY_VERSION,
+      fileName,
+      fileHash: hashImportFile(buffer),
+      fileType: mapped.fileType,
+      format: null,
+      requireAllRowsValid: false,
+      displayColumns: EMPLOYEE_IMPORT_COLUMNS.map((column) => ({
+        key: column.key,
+        header: column.header,
+      })),
+      fileErrors: mapped.fileErrors,
+      rows: [],
+      summary: summarizePreviewRows([], false),
+    };
   }
 
   const categories = await employeeCategoryRepository.listForCompany(companyId, {
@@ -115,7 +115,7 @@ const buildEmployeeDrafts = async (
   );
 
   const normalizedPhones: string[] = [];
-  const drafts: EmployeeDraft[] = mapped.dataRows.map((row) => {
+  const rows: PreparedImportRow[] = mapped.dataRows.map((row) => {
     const values = row.values;
     const errors = [];
     const name = values.name?.trim() ?? "";
@@ -166,7 +166,7 @@ const buildEmployeeDrafts = async (
       normalizedPhones.push(phoneNumber);
     }
 
-    let input: EmployeeDraft["input"] = null;
+    let payload: CreateEmployeeInput | null = null;
     if (errors.length === 0 && phoneNumber && type.value) {
       const candidate = {
         name,
@@ -188,7 +188,7 @@ const buildEmployeeDrafts = async (
           );
         }
       } else {
-        input = {
+        payload = {
           name: parsed.data.name,
           documentNumber: parsed.data.documentNumber ?? null,
           phoneNumber: parsed.data.phoneNumber,
@@ -201,55 +201,70 @@ const buildEmployeeDrafts = async (
     return {
       rowNumber: row.rowNumber,
       values,
-      uniqueKey: phoneNumber,
-      input,
       errors,
+      payload,
     };
   });
 
   const existingPhones = await employeeRepository.findExistingPhones(companyId, normalizedPhones);
-  for (const draft of drafts) {
-    if (draft.uniqueKey && existingPhones.has(draft.uniqueKey)) {
-      draft.errors.push(
+  for (const row of rows) {
+    const phone = (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? null;
+    if (phone && existingPhones.has(phone)) {
+      row.errors.push(
         rowError(
           "EMPLOYEE_PHONE_ALREADY_EXISTS",
           "El teléfono ya está registrado",
           "phoneNumber",
-          draft.values.phoneNumber,
+          row.values.phoneNumber,
         ),
       );
-      draft.input = null;
+      row.payload = null;
     }
   }
 
   const duplicateErrors = markInFileDuplicates(
-    drafts,
+    rows.map((row) => ({
+      rowNumber: row.rowNumber,
+      values: row.values,
+      uniqueKey: (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? null,
+      errors: row.errors,
+    })),
     "phoneNumber",
     "EMPLOYEE_DUPLICATE_IN_FILE",
     "Teléfono duplicado dentro del archivo",
   );
-  for (const draft of drafts) {
-    const extras = duplicateErrors.get(draft.rowNumber);
+  for (const row of rows) {
+    const extras = duplicateErrors.get(row.rowNumber);
     if (extras) {
-      draft.errors.push(...extras);
-      draft.input = null;
+      row.errors.push(...extras);
+      row.payload = null;
     }
   }
 
+  const previewRows = rows.map((row) => ({
+    rowNumber: row.rowNumber,
+    status: (row.errors.length === 0 ? "valid" : "invalid") as "valid" | "invalid",
+    values: row.values,
+    errors: row.errors,
+  }));
+
   return {
+    entityType: "employees",
+    strategyVersion: IMPORT_STRATEGY_VERSION,
+    fileName,
+    fileHash: hashImportFile(buffer),
     fileType: mapped.fileType,
+    format: null,
+    requireAllRowsValid: false,
+    displayColumns: EMPLOYEE_IMPORT_COLUMNS.map((column) => ({
+      key: column.key,
+      header: column.header,
+    })),
     fileErrors: mapped.fileErrors,
-    drafts,
+    rows,
+    summary: summarizePreviewRows(previewRows, false),
   };
 };
-
-const toPreviewRows = (drafts: EmployeeDraft[]): ImportPreviewRow[] =>
-  drafts.map((draft) => ({
-    rowNumber: draft.rowNumber,
-    status: draft.errors.length === 0 ? "valid" : "invalid",
-    values: draft.values,
-    errors: draft.errors,
-  }));
 
 export const employeesImportStrategy: ImportStrategy = {
   entityType: "employees",
@@ -261,6 +276,7 @@ export const employeesImportStrategy: ImportStrategy = {
   ],
   requireAllRowsValid: false,
   maxRows: DEFAULT_IMPORT_MAX_ROWS,
+  strategyVersion: IMPORT_STRATEGY_VERSION,
 
   buildTemplate(): ImportTemplate {
     return {
@@ -273,127 +289,157 @@ export const employeesImportStrategy: ImportStrategy = {
     };
   },
 
-  async preview(companyId, buffer, fileName): Promise<ImportPreviewResult> {
-    const { fileType, fileErrors, drafts } = await buildEmployeeDrafts(companyId, buffer, fileName);
-    const rows = toPreviewRows(drafts);
-    return {
-      entityType: "employees",
-      fileType,
-      format: null,
-      summary: summarizePreviewRows(rows, false),
-      rows,
-      fileErrors,
-      displayColumns: EMPLOYEE_IMPORT_COLUMNS.map((column) => ({
-        key: column.key,
-        header: column.header,
-      })),
-    };
+  prepare(companyId, buffer, fileName) {
+    return buildEmployeePrepared(companyId, buffer, fileName, this.maxRows);
   },
 
-  async execute(companyId, buffer, fileName, userId): Promise<ImportExecuteResult> {
-    const started = Date.now();
-    const { fileErrors, drafts } = await buildEmployeeDrafts(companyId, buffer, fileName);
-    if (fileErrors.length > 0 && drafts.length === 0) {
-      return {
-        entityType: "employees",
-        summary: {
-          totalRows: 0,
-          processedRows: 0,
-          created: 0,
-          updated: 0,
-          rejected: 0,
-          durationMs: Date.now() - started,
-        },
-        rows: [],
-        fileErrors,
-      };
-    }
+  async preview(companyId, buffer, fileName) {
+    const prepared = await this.prepare(companyId, buffer, fileName);
+    return preparedToPreviewResult(prepared);
+  },
 
-    const resultRows: ImportExecuteRow[] = [];
-    let created = 0;
-    let rejected = 0;
-
-    const validDrafts = drafts.filter((draft) => draft.errors.length === 0 && draft.input);
-    const invalidDrafts = drafts.filter((draft) => draft.errors.length > 0 || !draft.input);
-
-    for (const draft of invalidDrafts) {
-      rejected += 1;
-      resultRows.push({
-        rowNumber: draft.rowNumber,
-        status: "rejected",
-        values: draft.values,
-        errors: draft.errors,
-      });
-    }
-
-    for (let offset = 0; offset < validDrafts.length; offset += DEFAULT_IMPORT_BATCH_SIZE) {
-      const batch = validDrafts.slice(offset, offset + DEFAULT_IMPORT_BATCH_SIZE);
-      for (const draft of batch) {
-        try {
-          await employeeService.create(companyId, draft.input!);
-          created += 1;
-          resultRows.push({
-            rowNumber: draft.rowNumber,
-            status: "created",
-            values: draft.values,
-            errors: [],
-          });
-        } catch (error) {
-          rejected += 1;
-          const message =
-            error instanceof AppError
-              ? error.message
-              : isDuplicateKeyError(error)
-                ? "El teléfono ya está registrado"
-                : "No se pudo crear el colaborador.";
-          const code =
-            error instanceof AppError
-              ? error.code
-              : isDuplicateKeyError(error)
-                ? "EMPLOYEE_PHONE_ALREADY_EXISTS"
-                : "EMPLOYEE_CREATE_FAILED";
-          resultRows.push({
-            rowNumber: draft.rowNumber,
-            status: "rejected",
-            values: draft.values,
-            errors: [rowError(code, message, "phoneNumber", draft.values.phoneNumber)],
-          });
-        }
-      }
-    }
-
-    resultRows.sort((a, b) => a.rowNumber - b.rowNumber);
-
-    await logAuditSafe("import.employees.execute", () =>
-      auditService.log(companyId, {
-        entityType: "import",
-        entityId: companyId,
-        action: "import.execute",
-        newData: {
-          entityType: "employees",
-          fileName,
-          totalRows: drafts.length,
-          created,
-          updated: 0,
-          rejected,
-        },
-        reason: "generic_import",
-        userId: userId ?? null,
-      }),
-    );
-
-    return {
+  async persist(companyId, prepared, context: ImportPersistContext = {}) {
+    return runCreateOnlyImport(companyId, prepared, context, {
       entityType: "employees",
-      summary: {
-        totalRows: drafts.length,
-        processedRows: created + rejected,
-        created,
-        updated: 0,
-        rejected,
-        durationMs: Date.now() - started,
+      defaultCreateErrorCode: "EMPLOYEE_CREATE_FAILED",
+      defaultCreateErrorMessage: "No se pudo crear el colaborador.",
+      defaultErrorField: "phoneNumber",
+      chunkSize: IMPORT_PERSIST_CHUNK_SIZE,
+      classifyError: (error, row) => {
+        if (error instanceof AppError) {
+          const field =
+            error.code === "EMPLOYEE_PHONE_ALREADY_EXISTS"
+              ? "phoneNumber"
+              : error.code.includes("CATEGORY")
+                ? "category"
+                : "phoneNumber";
+          return rowError(error.code, error.message, field, row.values[field] ?? null);
+        }
+        const classified = classifyEmployeeUniqueViolation(error);
+        if (classified) {
+          return rowError(
+            classified.code,
+            classified.message,
+            classified.field === "unknown" ? null : classified.field,
+            classified.field === "phoneNumber" ? row.values.phoneNumber : null,
+          );
+        }
+        return rowError(
+          "EMPLOYEE_CREATE_FAILED",
+          "No se pudo crear el colaborador.",
+          null,
+          null,
+        );
       },
-      rows: resultRows,
-      fileErrors,
-    };
+      revalidateRows: async (cid, candidateRows) => {
+        const phones = candidateRows
+          .map((row) => (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? "")
+          .filter(Boolean);
+        const existing = await employeeRepository.findExistingPhones(cid, phones);
+        const map = new Map<number, ReturnType<typeof rowError>[]>();
+        for (const row of candidateRows) {
+          const phone = (row.payload as CreateEmployeeInput | null)?.phoneNumber ?? "";
+          if (phone && existing.has(phone)) {
+            map.set(row.rowNumber, [
+              rowError(
+                "EMPLOYEE_PHONE_ALREADY_EXISTS",
+                "El teléfono ya está registrado",
+                "phoneNumber",
+                row.values.phoneNumber,
+              ),
+            ]);
+          }
+        }
+        return map;
+      },
+      persistBatch: async (cid, items): Promise<CreateOnlyPersistBatchResult> => {
+        const payloads = items.map((item) => item.payload as CreateEmployeeInput);
+        try {
+          await employeeService.createManyForImport(cid, payloads);
+          return {
+            created: items.map((item) => ({ rowNumber: item.row.rowNumber })),
+            rejected: [],
+          };
+        } catch (error) {
+          const classified = classifyEmployeeUniqueViolation(error);
+          if (classified || error instanceof AppError) {
+            const created: Array<{ rowNumber: number }> = [];
+            const rejected: CreateOnlyPersistBatchResult["rejected"] = [];
+            for (const item of items) {
+              try {
+                await employeeService.create(cid, item.payload as CreateEmployeeInput, {
+                  creationMode: "import",
+                });
+                created.push({ rowNumber: item.row.rowNumber });
+              } catch (rowErrorValue) {
+                if (rowErrorValue instanceof AppError) {
+                  rejected.push({
+                    rowNumber: item.row.rowNumber,
+                    error: rowError(
+                      rowErrorValue.code,
+                      rowErrorValue.message,
+                      rowErrorValue.code === "EMPLOYEE_PHONE_ALREADY_EXISTS"
+                        ? "phoneNumber"
+                        : null,
+                      rowErrorValue.code === "EMPLOYEE_PHONE_ALREADY_EXISTS"
+                        ? item.row.values.phoneNumber
+                        : null,
+                    ),
+                  });
+                  continue;
+                }
+                const hit = classifyEmployeeUniqueViolation(rowErrorValue);
+                rejected.push({
+                  rowNumber: item.row.rowNumber,
+                  error: hit
+                    ? rowError(
+                        hit.code,
+                        hit.message,
+                        hit.field === "unknown" ? null : hit.field,
+                        hit.field === "phoneNumber" ? item.row.values.phoneNumber : null,
+                      )
+                    : rowError(
+                        "EMPLOYEE_CREATE_FAILED",
+                        "No se pudo crear el colaborador.",
+                        null,
+                        null,
+                      ),
+                });
+              }
+            }
+            return { created, rejected };
+          }
+          throw error;
+        }
+      },
+      audit: async ({ companyId: cid, userId, importJobId, prepared: plan, created, rejected, durationMs }) => {
+        await logAuditSafe("import.employees.execute", () =>
+          auditService.log(cid, {
+            entityType: "import_job",
+            entityId: importJobId ?? cid,
+            action: "import.execute",
+            newData: {
+              entityType: "employees",
+              importJobId: importJobId ?? null,
+              fileName: plan.fileName,
+              strategyVersion: plan.strategyVersion,
+              creationMode: "import",
+              totalRows: plan.rows.length,
+              created,
+              updated: 0,
+              rejected,
+              durationMs,
+            },
+            reason: "generic_import",
+            userId: userId ?? null,
+          }),
+        );
+      },
+    });
+  },
+
+  async execute(companyId, buffer, fileName, userId) {
+    const prepared = await this.prepare(companyId, buffer, fileName);
+    return this.persist(companyId, prepared, { userId, revalidateConcurrency: true });
   },
 };

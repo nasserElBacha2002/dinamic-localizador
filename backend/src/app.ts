@@ -33,7 +33,12 @@ app.use(
 );
 app.use(morgan("dev"));
 app.use(express.urlencoded({ extended: false }));
-app.use(express.json());
+// Sized for Base64 import payloads (~5MB file → ~6.7MB encoded) plus JSON envelope.
+app.use(
+  express.json({
+    limit: `${Math.ceil((5 * 1024 * 1024 * 4) / 3) + 256 * 1024}b`,
+  }),
+);
 
 app.use("/api", apiRouter);
 app.use(notFoundHandler);

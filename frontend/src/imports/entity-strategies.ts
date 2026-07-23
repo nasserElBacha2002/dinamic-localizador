@@ -55,7 +55,7 @@ export const IMPORT_ENTITY_STRATEGIES: ImportEntityUiStrategy[] = [
       "Opcionales: Documento, Categoría (por nombre, sin crear categorías nuevas).",
       "Tipo: Fijo o Eventual. Teléfono en E.164 (ej. +5491112345678).",
       "Si el teléfono ya existe en la compañía, la fila se rechaza.",
-      "No se envían WhatsApp ni invitaciones durante la importación.",
+      "Modo importación: no envía WhatsApp, invitaciones ni crea credenciales.",
     ].join(" "),
     permission: "employees:manage",
     successMessage: `${terminology.worker.plural} importados correctamente.`,

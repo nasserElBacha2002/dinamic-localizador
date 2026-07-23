@@ -1,6 +1,6 @@
 import type { Request, Response } from "express";
 import { importOrchestrator } from "../imports/orchestrator";
-import type { ImportFileBody } from "../schemas/import.schema";
+import type { ImportExecuteBody, ImportFileBody } from "../schemas/import.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const importController = {
@@ -19,14 +19,15 @@ export const importController = {
     const companyId = requireRequestCompanyId(req);
     const entityType = String(req.params.entityType);
     const body = req.body as ImportFileBody;
-    const result = await importOrchestrator.preview(companyId, entityType, body);
+    const userId = req.auth?.userId ?? null;
+    const result = await importOrchestrator.preview(companyId, entityType, body, userId);
     res.status(200).json({ data: result });
   },
 
   async execute(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const entityType = String(req.params.entityType);
-    const body = req.body as ImportFileBody;
+    const body = req.body as ImportExecuteBody;
     const userId = req.auth?.userId ?? null;
     const result = await importOrchestrator.execute(companyId, entityType, body, userId);
     res.status(201).json({ data: result });

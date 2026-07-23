@@ -5,7 +5,11 @@ import {
   parseSpreadsheetBuffer,
   type SpreadsheetFileType,
 } from "../utils/spreadsheet-parse";
-import { DEFAULT_IMPORT_MAX_FILE_BYTES, DEFAULT_IMPORT_MAX_ROWS } from "./constants";
+import {
+  DEFAULT_IMPORT_MAX_BASE64_CHARS,
+  DEFAULT_IMPORT_MAX_FILE_BYTES,
+  DEFAULT_IMPORT_MAX_ROWS,
+} from "./constants";
 
 export interface ParsedImportFile {
   fileType: SpreadsheetFileType;
@@ -13,12 +17,50 @@ export interface ParsedImportFile {
   rows: string[][];
 }
 
+const normalizeBase64 = (value: string): string => value.replace(/\s+/g, "");
+
+/**
+ * Strict Base64 decode: syntax/padding validation, size bound, and round-trip check.
+ * Does not rely on Buffer.from throwing for invalid input.
+ */
 export const decodeImportBase64 = (fileContentBase64: string): Buffer => {
-  try {
-    return Buffer.from(fileContentBase64, "base64");
-  } catch {
+  const normalized = normalizeBase64(fileContentBase64);
+  if (!normalized) {
     throw new AppError(400, "IMPORT_INVALID_FILE", "No se pudo leer el contenido del archivo.");
   }
+
+  if (normalized.length > DEFAULT_IMPORT_MAX_BASE64_CHARS) {
+    throw new AppError(
+      400,
+      "IMPORT_FILE_TOO_LARGE",
+      `El archivo supera el tamaño máximo permitido (${Math.floor(DEFAULT_IMPORT_MAX_FILE_BYTES / (1024 * 1024))} MB).`,
+    );
+  }
+
+  if (normalized.length % 4 !== 0 || !/^[A-Za-z0-9+/]+={0,2}$/.test(normalized)) {
+    throw new AppError(400, "IMPORT_INVALID_FILE", "El contenido Base64 del archivo es inválido.");
+  }
+
+  const paddingMatch = normalized.match(/=+$/);
+  if (paddingMatch && paddingMatch[0].length > 2) {
+    throw new AppError(400, "IMPORT_INVALID_FILE", "El contenido Base64 del archivo es inválido.");
+  }
+
+  const buffer = Buffer.from(normalized, "base64");
+  const reencoded = buffer.toString("base64");
+  if (reencoded !== normalized) {
+    throw new AppError(400, "IMPORT_INVALID_FILE", "El contenido Base64 del archivo es inválido.");
+  }
+
+  if (buffer.length > DEFAULT_IMPORT_MAX_FILE_BYTES) {
+    throw new AppError(
+      400,
+      "IMPORT_FILE_TOO_LARGE",
+      `El archivo supera el tamaño máximo permitido (${Math.floor(DEFAULT_IMPORT_MAX_FILE_BYTES / (1024 * 1024))} MB).`,
+    );
+  }
+
+  return buffer;
 };
 
 export const parseImportFile = (

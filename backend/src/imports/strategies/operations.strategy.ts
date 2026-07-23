@@ -5,13 +5,28 @@ import { auditService } from "../../services/audit.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import { DEFAULT_IMPORT_MAX_ROWS } from "../constants";
 import { buildCsvTemplate } from "../parse-import-file";
-import type { ImportStrategy } from "../strategy";
+import {
+  hashImportFile,
+  IMPORT_STRATEGY_VERSION,
+  preparedToPreviewResult,
+  type PreparedImport,
+  type PreparedImportRow,
+} from "../prepared-import";
+import type { ImportPersistContext, ImportStrategy } from "../strategy";
 import type {
   ImportExecuteResult,
-  ImportPreviewResult,
   ImportRowError,
   ImportTemplate,
 } from "../types";
+
+type OperationConfirmPayload = {
+  serviceId: string;
+  scheduledStart: string;
+  scheduledEnd: string;
+  earlyToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  notes: string | null;
+};
 
 const toRowErrors = (messages: string[]): ImportRowError[] =>
   messages.map((message) => ({
@@ -22,16 +37,14 @@ const toRowErrors = (messages: string[]): ImportRowError[] =>
     severity: "error" as const,
   }));
 
-const adaptOperationPreview = async (
+const buildOperationsPrepared = async (
   companyId: string,
   buffer: Buffer,
   fileName: string,
-): Promise<ImportPreviewResult> => {
+): Promise<PreparedImport> => {
   const result = await operationImportService.previewFile(companyId, buffer, fileName);
-  const rows = result.rows.map((row) => ({
-    rowNumber: row.rowNumber,
-    status: row.status === "valid" ? ("valid" as const) : ("invalid" as const),
-    values: {
+  const rows: PreparedImportRow[] = result.rows.map((row) => {
+    const values = {
       punto: row.punto || row.legacyLocation,
       serviceName: row.serviceName ?? "",
       rawFecha: row.rawFecha,
@@ -41,14 +54,58 @@ const adaptOperationPreview = async (
       scheduledStartDisplay: row.scheduledStartDisplay,
       scheduledEndDisplay: row.scheduledEndDisplay,
       notas: row.notas,
-    },
-    errors: toRowErrors(row.errors),
+    };
+    const errors = toRowErrors(row.errors);
+    const payload: OperationConfirmPayload | null =
+      row.status === "valid" &&
+      row.serviceId &&
+      row.scheduledStart &&
+      row.scheduledEnd &&
+      row.earlyToleranceMinutes !== null &&
+      row.lateToleranceMinutes !== null
+        ? {
+            serviceId: row.serviceId,
+            scheduledStart: row.scheduledStart,
+            scheduledEnd: row.scheduledEnd,
+            earlyToleranceMinutes: row.earlyToleranceMinutes,
+            lateToleranceMinutes: row.lateToleranceMinutes,
+            notes: row.notas.trim() ? row.notas.trim() : null,
+          }
+        : null;
+
+    return {
+      rowNumber: row.rowNumber,
+      values,
+      errors,
+      payload,
+    };
+  });
+
+  const previewRows = rows.map((row) => ({
+    rowNumber: row.rowNumber,
+    status: (row.errors.length === 0 ? "valid" : "invalid") as "valid" | "invalid",
+    values: row.values,
+    errors: row.errors,
   }));
 
   return {
     entityType: "operations",
+    strategyVersion: IMPORT_STRATEGY_VERSION,
+    fileName,
+    fileHash: hashImportFile(buffer),
     fileType: result.fileType,
     format: result.format,
+    requireAllRowsValid: true,
+    displayColumns: [
+      { key: "punto", header: result.format === "client" ? "PUNTO" : "Servicio" },
+      { key: "serviceName", header: "Servicio resuelto" },
+      { key: "rawFecha", header: result.format === "client" ? "Fecha original" : "Inicio original" },
+      { key: "scheduledStartDisplay", header: "Inicio" },
+      { key: "scheduledEndDisplay", header: "Fin" },
+      { key: "notas", header: "Notas" },
+    ],
+    fileErrors: result.fileErrors,
+    rows,
     summary: {
       totalRows: result.summary.totalRows,
       validRows: result.summary.validRows,
@@ -58,16 +115,6 @@ const adaptOperationPreview = async (
       createdEstimate: result.summary.validRows,
       updatedEstimate: 0,
     },
-    rows,
-    fileErrors: result.fileErrors,
-    displayColumns: [
-      { key: "punto", header: result.format === "client" ? "PUNTO" : "Servicio" },
-      { key: "serviceName", header: "Servicio resuelto" },
-      { key: "rawFecha", header: result.format === "client" ? "Fecha original" : "Inicio original" },
-      { key: "scheduledStartDisplay", header: "Inicio" },
-      { key: "scheduledEndDisplay", header: "Fin" },
-      { key: "notas", header: "Notas" },
-    ],
   };
 };
 
@@ -77,6 +124,7 @@ export const operationsImportStrategy: ImportStrategy = {
   moduleKeys: [COMPANY_MODULE_KEYS.OPERATIONS],
   requireAllRowsValid: true,
   maxRows: DEFAULT_IMPORT_MAX_ROWS,
+  strategyVersion: IMPORT_STRATEGY_VERSION,
 
   buildTemplate(): ImportTemplate {
     return {
@@ -88,89 +136,86 @@ export const operationsImportStrategy: ImportStrategy = {
     };
   },
 
-  preview(companyId, buffer, fileName) {
-    return adaptOperationPreview(companyId, buffer, fileName);
+  prepare(companyId, buffer, fileName) {
+    return buildOperationsPrepared(companyId, buffer, fileName);
   },
 
-  async execute(companyId, buffer, fileName, userId) {
-    const started = Date.now();
-    const preview = await operationImportService.previewFile(companyId, buffer, fileName);
+  async preview(companyId, buffer, fileName) {
+    const prepared = await this.prepare(companyId, buffer, fileName);
+    return preparedToPreviewResult(prepared);
+  },
 
-    if (preview.fileErrors.length > 0 || !preview.summary.canConfirm) {
+  async persist(companyId, prepared, context: ImportPersistContext = {}) {
+    const started = Date.now();
+
+    if (prepared.fileErrors.length > 0 || !prepared.summary.canConfirm) {
       return {
         entityType: "operations",
         summary: {
-          totalRows: preview.summary.totalRows,
+          totalRows: prepared.summary.totalRows,
           processedRows: 0,
           created: 0,
           updated: 0,
-          rejected: preview.summary.invalidRows || preview.summary.totalRows,
+          rejected: prepared.summary.invalidRows || prepared.summary.totalRows,
           durationMs: Date.now() - started,
         },
-        rows: preview.rows.map((row) => ({
+        rows: prepared.rows.map((row) => ({
           rowNumber: row.rowNumber,
           status: "rejected" as const,
-          values: {
-            punto: row.punto || row.legacyLocation,
-            serviceName: row.serviceName ?? "",
-            rawFecha: row.rawFecha,
-          },
-          errors: toRowErrors(
-            row.errors.length > 0 ? row.errors : preview.fileErrors,
-          ),
+          values: row.values,
+          errors:
+            row.errors.length > 0
+              ? row.errors
+              : toRowErrors(prepared.fileErrors),
         })),
-        fileErrors: preview.fileErrors,
+        fileErrors: prepared.fileErrors,
       };
     }
 
-    const confirmRows = preview.rows
-      .filter((row) => row.status === "valid")
-      .map((row) => ({
-        serviceId: row.serviceId!,
-        scheduledStart: row.scheduledStart!,
-        scheduledEnd: row.scheduledEnd!,
-        earlyToleranceMinutes: row.earlyToleranceMinutes!,
-        lateToleranceMinutes: row.lateToleranceMinutes!,
-        notes: row.notas.trim() ? row.notas.trim() : null,
-      }));
+    const confirmRows = prepared.rows
+      .filter((row) => row.payload)
+      .map((row) => row.payload as OperationConfirmPayload);
 
     const created = await operationImportService.confirm(companyId, confirmRows);
 
     await logAuditSafe("import.operations.execute", () =>
       auditService.log(companyId, {
-        entityType: "import",
-        entityId: companyId,
+        entityType: "import_job",
+        entityId: context.importJobId ?? companyId,
         action: "import.execute",
         newData: {
           entityType: "operations",
-          fileName,
-          totalRows: preview.summary.totalRows,
+          importJobId: context.importJobId ?? null,
+          fileName: prepared.fileName,
+          strategyVersion: prepared.strategyVersion,
+          totalRows: prepared.summary.totalRows,
           created: created.count,
           updated: 0,
           rejected: 0,
+          durationMs: Date.now() - started,
         },
         reason: "generic_import",
-        userId: userId ?? null,
+        userId: context.userId ?? null,
       }),
     );
 
     const result: ImportExecuteResult = {
       entityType: "operations",
       summary: {
-        totalRows: preview.summary.totalRows,
+        totalRows: prepared.summary.totalRows,
         processedRows: created.count,
         created: created.count,
         updated: 0,
         rejected: 0,
         durationMs: Date.now() - started,
       },
-      rows: preview.rows.map((row) => ({
+      rows: prepared.rows.map((row) => ({
         rowNumber: row.rowNumber,
         status: "created" as const,
         values: {
-          punto: row.punto || row.legacyLocation,
-          serviceName: row.serviceName ?? "",
-          rawFecha: row.rawFecha,
+          punto: row.values.punto ?? "",
+          serviceName: row.values.serviceName ?? "",
+          rawFecha: row.values.rawFecha ?? "",
         },
         errors: [],
       })),
@@ -178,5 +223,10 @@ export const operationsImportStrategy: ImportStrategy = {
     };
 
     return result;
+  },
+
+  async execute(companyId, buffer, fileName, userId) {
+    const prepared = await this.prepare(companyId, buffer, fileName);
+    return this.persist(companyId, prepared, { userId });
   },
 };

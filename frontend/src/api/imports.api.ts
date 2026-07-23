@@ -1,5 +1,6 @@
 import type {
   ImportEntityType,
+  ImportExecutePayload,
   ImportExecuteResult,
   ImportFilePayload,
   ImportPreviewResult,
@@ -27,7 +28,7 @@ export async function previewImport(
 
 export async function executeImport(
   entityType: ImportEntityType,
-  payload: ImportFilePayload,
+  payload: ImportExecutePayload,
 ): Promise<ImportExecuteResult> {
   const { data } = await scopedApiClient.post<{ data: ImportExecuteResult }>(
     `imports/${entityType}/execute`,

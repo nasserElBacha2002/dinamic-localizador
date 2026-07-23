@@ -2,6 +2,13 @@ export type ImportEntityType = "operations" | "services" | "employees";
 
 export type ImportRowStatus = "valid" | "invalid" | "warning";
 export type ImportExecuteRowStatus = "created" | "updated" | "rejected";
+export type ImportJobStatus =
+  | "VALIDATING"
+  | "READY"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "PARTIAL"
+  | "FAILED";
 
 export interface ImportRowError {
   field: string | null;
@@ -36,6 +43,11 @@ export interface ImportPreviewResult {
   rows: ImportPreviewRow[];
   fileErrors: string[];
   displayColumns: Array<{ key: string; header: string }>;
+  importJobId: string;
+  confirmationToken: string;
+  fileHash: string;
+  strategyVersion: string;
+  expiresAt: string;
 }
 
 export interface ImportExecuteRow {
@@ -59,9 +71,19 @@ export interface ImportExecuteResult {
   summary: ImportExecuteSummary;
   rows: ImportExecuteRow[];
   fileErrors: string[];
+  importJobId?: string;
+  status?: ImportJobStatus | string;
 }
 
 export interface ImportFilePayload {
   fileName: string;
   fileContentBase64: string;
+  idempotencyKey?: string | null;
+}
+
+export interface ImportExecutePayload {
+  importJobId: string;
+  confirmationToken: string;
+  idempotencyKey?: string | null;
+  forceNew?: boolean;
 }

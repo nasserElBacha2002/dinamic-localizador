@@ -153,6 +153,57 @@ export const employeeRepository = {
     return withCategory;
   },
 
+  /**
+   * Multi-row insert for imports. Caller must pre-validate category IDs.
+   * Atomic within the provided transaction.
+   */
+  async createMany(
+    companyId: string,
+    inputs: Array<{
+      name: string;
+      documentNumber: string | null;
+      phoneNumber: string;
+      employeeType: Employee["employeeType"];
+      categoryId: string | null;
+    }>,
+    transaction?: sql.Transaction,
+  ): Promise<Employee[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+    const valueSql: string[] = [];
+
+    for (let index = 0; index < inputs.length; index += 1) {
+      const input = inputs[index]!;
+      request.input(`name${index}`, sql.NVarChar(150), input.name);
+      request.input(`documentNumber${index}`, sql.NVarChar(50), input.documentNumber);
+      request.input(`phoneNumber${index}`, sql.NVarChar(30), input.phoneNumber);
+      request.input(`employeeType${index}`, sql.NVarChar(20), input.employeeType);
+      request.input(`categoryId${index}`, sql.UniqueIdentifier, input.categoryId);
+      valueSql.push(
+        `(@companyId, @name${index}, @documentNumber${index}, @phoneNumber${index}, @employeeType${index}, @categoryId${index})`,
+      );
+    }
+
+    const result = await request.query(`
+      DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+      INSERT INTO employees (company_id, name, document_number, phone_number, employee_type, category_id)
+      OUTPUT INSERTED.id INTO @inserted (id)
+      VALUES ${valueSql.join(",\n")};
+      SELECT id FROM @inserted;
+    `);
+
+    const ids = (result.recordset as Array<{ id: string }>).map((row) => String(row.id));
+    if (ids.length !== inputs.length) {
+      throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudieron crear los colaboradores.");
+    }
+
+    return this.listByIds(companyId, ids, transaction);
+  },
+
   async findById(
     companyId: string,
     id: string,
@@ -171,13 +222,17 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async listByIds(companyId: string, ids: string[]): Promise<Employee[]> {
+  async listByIds(
+    companyId: string,
+    ids: string[],
+    transaction?: sql.Transaction,
+  ): Promise<Employee[]> {
     if (ids.length === 0) {
       return [];
     }
 
-    const pool = getPool();
-    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
     const idParams = ids.map((id, index) => {
       const param = `id${index}`;
       request.input(param, sql.UniqueIdentifier, id);

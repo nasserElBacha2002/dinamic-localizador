@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { Button } from "@mantine/core";
+import { Button, Group } from "@mantine/core";
 import {
   CascadingFilterSelect,
   DataTable,
@@ -165,9 +165,14 @@ export function ServicesListPage() {
         description="Configurá ubicaciones y radios permitidos."
         action={
           canManageServices ? (
-            <Button component={Link} to="/services/new" state={listNav}>
-              {`Nueva ${terminology.service.singular.toLowerCase()}`}
-            </Button>
+            <Group gap="xs">
+              <Button component={Link} to="/imports?entity=services" state={listNav} variant="default">
+                {`Importar ${terminology.service.plural.toLowerCase()}`}
+              </Button>
+              <Button component={Link} to="/services/new" state={listNav}>
+                {`Nueva ${terminology.service.singular.toLowerCase()}`}
+              </Button>
+            </Group>
           ) : undefined
         }
       />

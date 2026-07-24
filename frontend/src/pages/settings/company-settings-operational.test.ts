@@ -12,6 +12,7 @@ import {
   toOperationalSettingsFormValues,
   toOperationalSettingsUpdateInput,
 } from "../../utils/company-settings-validation";
+import { buildOperationalSettingsSummary } from "./company-settings-summaries";
 
 function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySettings {
   return {
@@ -36,61 +37,70 @@ function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySe
   };
 }
 
-describe("CompanyOperationalSettingsSection", () => {
-  it("renders inline editable fields without dialogs", () => {
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+describe("OperationalSettingsForm", () => {
+  it("renders editable fields without page-level save actions", () => {
+    const formFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
       "utf8",
     );
 
-    assert.match(sectionFile, /Configuración operativa/);
-    assert.match(sectionFile, /Zona horaria operativa/);
-    assert.match(sectionFile, /Radio permitido por defecto \(m\)/);
-    assert.match(sectionFile, /Horario de inicio por defecto/);
-    assert.match(sectionFile, /Horario de fin por defecto/);
-    assert.match(sectionFile, /Tolerancia de llegada temprana para operaciones \(min\)/);
-    assert.match(sectionFile, /Tolerancia de llegada tardía para operaciones \(min\)/);
-    assert.match(sectionFile, /Tolerancia de puntualidad WhatsApp \(min\)/);
-    assert.match(sectionFile, /Tolerancia de salida anticipada WhatsApp \(min\)/);
-    assert.doesNotMatch(sectionFile, /Modal/);
-    assert.doesNotMatch(sectionFile, /SettingsDialog/);
+    assert.match(formFile, /Zona horaria operativa/);
+    assert.match(formFile, /Radio permitido por defecto \(m\)/);
+    assert.match(formFile, /Horario de inicio por defecto/);
+    assert.match(formFile, /Horario de fin por defecto/);
+    assert.match(formFile, /Tolerancia de llegada temprana para operaciones \(min\)/);
+    assert.match(formFile, /Tolerancia de llegada tardía para operaciones \(min\)/);
+    assert.match(formFile, /Tolerancia de puntualidad WhatsApp \(min\)/);
+    assert.match(formFile, /Tolerancia de salida anticipada WhatsApp \(min\)/);
+    assert.doesNotMatch(formFile, /Modal/);
+    assert.doesNotMatch(formFile, /SettingsDialog/);
+    assert.doesNotMatch(formFile, /Guardar configuración/);
   });
 
   it("uses aligned SettingsFormField wrappers with helper text on every field", () => {
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+    const formFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
       "utf8",
     );
-    const activeSection = sectionFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
+    const activeSection = formFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
 
     assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 10);
     assert.match(activeSection, /description="Zona horaria usada por operaciones y reportes\."/);
-    assert.match(activeSection, /description="Ventana configurable por empresa antes del inicio de la operación\."/);
-    assert.match(sectionFile, /description="Validación del mensaje “Llegué”\."/);
-    assert.match(sectionFile, /description="Validación del mensaje “Terminé”\."/);
     assert.match(
-      sectionFile,
+      activeSection,
+      /description="Ventana configurable por empresa antes del inicio de la operación\."/,
+    );
+    assert.match(formFile, /description="Validación del mensaje “Llegué”\."/);
+    assert.match(formFile, /description="Validación del mensaje “Terminé”\."/);
+    assert.match(
+      formFile,
       /description="Cantidad de horas después del fin de una operación durante las que un empleado todavía puede registrar su salida\."/,
     );
-    assert.match(sectionFile, /Vencimiento de salida pendiente \(horas\)/);
-    assert.match(sectionFile, /getOperationTimezoneOptions/);
-    assert.match(sectionFile, /OperationTimeInput/);
-    assert.match(sectionFile, /searchable/);
-    assert.match(sectionFile, /hideControls/);
+    assert.match(formFile, /Vencimiento de salida pendiente \(horas\)/);
+    assert.match(formFile, /getOperationTimezoneOptions/);
+    assert.match(formFile, /OperationTimeInput/);
+    assert.match(formFile, /searchable/);
+    assert.match(formFile, /hideControls/);
   });
+});
 
-  it("uses dirty-aware save and discard actions", () => {
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+describe("CompanyOperationalSettingsDialog", () => {
+  it("uses SettingsDialog with dirty-aware save and unsaved-close protection", () => {
+    const dialogFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
 
-    assert.match(sectionFile, /Guardar configuración/);
-    assert.match(sectionFile, /Descartar cambios/);
-    assert.match(sectionFile, /disabled=\{!hasChanges/);
-    assert.match(sectionFile, /handleReset/);
+    assert.match(dialogFile, /SettingsDialog/);
+    assert.match(dialogFile, /OperationalSettingsForm/);
+    assert.match(dialogFile, /Guardar configuración/);
+    assert.match(dialogFile, /saveDisabled=\{!canUpdate \|\| !hasChanges \|\| !isValid\}/);
+    assert.match(dialogFile, /window\.confirm/);
+    assert.match(dialogFile, /cambios sin guardar/);
   });
+});
 
+describe("Operational settings mapping", () => {
   it("builds PATCH payload with only operational fields", () => {
     const formValues = toOperationalSettingsFormValues(createMockSettings());
     const payload = toOperationalSettingsUpdateInput({
@@ -122,19 +132,47 @@ describe("CompanyOperationalSettingsSection", () => {
     const changed = { ...baseline, defaultLateArrivalToleranceMinutes: "30" };
     assert.equal(operationalSettingsEqual(baseline, changed), false);
   });
+
+  it("builds operational summary for the settings card", () => {
+    const summary = buildOperationalSettingsSummary(
+      createMockSettings({
+        defaultOperationStartTime: "21:07",
+        defaultOperationEndTime: "02:00",
+      }),
+    );
+
+    assert.ok(summary.summaryItems.some((item) => item.label === "Zona horaria"));
+    assert.ok(
+      summary.summaryItems.some(
+        (item) => item.label === "Horario predeterminado" && item.value === "21:07 a 02:00",
+      ),
+    );
+    assert.ok(summary.summaryItems.some((item) => item.value === "180 m"));
+    assert.ok(
+      summary.summaryItems.some(
+        (item) =>
+          item.label === "Tolerancia de llegada" &&
+          item.value === "60 min antes / 15 min después",
+      ),
+    );
+    assert.ok(summary.summaryItems.some((item) => item.value === "24 h antes"));
+  });
 });
 
 describe("Company settings page layout", () => {
-  it("uses one operational section and collection cards only", () => {
+  it("uses operational summary card and collection cards only", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
 
-    assert.match(pageFile, /CompanyOperationalSettingsSection/);
+    assert.match(pageFile, /buildOperationalSettingsSummary/);
+    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
     assert.match(pageFile, /SettingsSummaryCard/);
+    assert.match(pageFile, /Gestionar configuración operativa/);
     assert.match(pageFile, /Gestionar ausencias/);
-    assert.match(pageFile, /Gestionar tipos/);
+    assert.match(pageFile, /Gestionar formatos/);
+    assert.doesNotMatch(pageFile, /CompanyOperationalSettingsSection/);
     assert.doesNotMatch(pageFile, /Datos generales/);
     assert.doesNotMatch(pageFile, /Inventarios \/ operaciones/);
     assert.doesNotMatch(pageFile, /Asistencia \/ WhatsApp/);
@@ -147,15 +185,17 @@ describe("Company settings page layout", () => {
     assert.doesNotMatch(pageFile, /isPlatformAdmin/);
   });
 
-  it("opens absence, location and work schedule dialogs from summary cards", () => {
+  it("opens operational and other dialogs from summary cards", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
 
+    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);
     assert.match(pageFile, /CompanyLocationTypesDialog/);
     assert.match(pageFile, /CompanyWeeklyScheduleDialog/);
+    assert.match(pageFile, /setOpenDialog\("operational"\)/);
     assert.match(pageFile, /setOpenDialog\("absences"\)/);
     assert.match(pageFile, /setOpenDialog\("locationTypes"\)/);
     assert.match(pageFile, /setOpenDialog\("workSchedule"\)/);

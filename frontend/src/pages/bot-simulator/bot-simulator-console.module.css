@@ -4,18 +4,22 @@
   align-items: start;
 }
 
-@media (min-width: 75em) {
-  .console {
-    grid-template-columns: minmax(260px, 25%) minmax(0, 1fr) minmax(280px, 28%);
-  }
-}
-
-@media (min-width: 48em) and (max-width: 74.99em) {
+@media (min-width: $mantine-breakpoint-sm) {
   .console {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
   }
 
   .technical {
     grid-column: 1 / -1;
+  }
+}
+
+@media (min-width: $mantine-breakpoint-lg) {
+  .console {
+    grid-template-columns: minmax(260px, 25%) minmax(0, 1fr) minmax(280px, 28%);
+  }
+
+  .technical {
+    grid-column: auto;
   }
 }

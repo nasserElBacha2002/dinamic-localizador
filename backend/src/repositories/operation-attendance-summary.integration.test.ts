@@ -7,6 +7,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
 import { operationAssignmentService } from "../services/operation-assignment.service";
@@ -26,11 +27,14 @@ const allDaysSchedule = WEEKDAYS.map((dayOfWeek) => ({
 }));
 
 describeDatabaseIntegration("operation attendance confirmation summary integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -67,6 +71,7 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employees = await pool
       .request()
@@ -75,17 +80,22 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       .input("phone2", sql.NVarChar(20), uniquePhone(2))
       .input("phone3", sql.NVarChar(20), uniquePhone(3))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES
           (@companyId, N'Emp Pending', @phone1, 'fijo', 1),
           (@companyId, N'Emp Confirmed', @phone2, 'fijo', 1),
-          (@companyId, N'Emp Unavailable', @phone3, 'fijo', 1)
+          (@companyId, N'Emp Unavailable', @phone3, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
 
     const [pendingId, confirmedId, unavailableId] = employees.recordset.map((row) =>
       String((row as { id: string }).id),
     );
+    fixtures.trackEmployee(companyId, pendingId);
+    fixtures.trackEmployee(companyId, confirmedId);
+    fixtures.trackEmployee(companyId, unavailableId);
 
     const assignmentPending = await operationAssignmentService.assignEmployee(
       companyId,
@@ -172,6 +182,7 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       },
       { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
     );
+    fixtures.trackOperation(companyId, operation.id);
 
     const employees = await pool
       .request()
@@ -180,17 +191,22 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
       .input("phoneB", sql.NVarChar(20), uniquePhone(11))
       .input("phoneC", sql.NVarChar(20), uniquePhone(12))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES
           (@companyId, N'Emp A', @phoneA, 'fijo', 1),
           (@companyId, N'Emp B', @phoneB, 'fijo', 1),
-          (@companyId, N'Emp C', @phoneC, 'fijo', 1)
+          (@companyId, N'Emp C', @phoneC, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
 
     const [employeeA, employeeB, employeeC] = employees.recordset.map((row) =>
       String((row as { id: string }).id),
     );
+    fixtures.trackEmployee(companyId, employeeA);
+    fixtures.trackEmployee(companyId, employeeB);
+    fixtures.trackEmployee(companyId, employeeC);
 
     await operationAssignmentService.assignEmployee(companyId, operation.id, employeeA, {
       validFrom: today,

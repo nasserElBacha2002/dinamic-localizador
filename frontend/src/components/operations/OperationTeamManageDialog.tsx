@@ -1,5 +1,6 @@
-import { Modal, Tabs } from "@mantine/core";
+import { ScrollArea, Tabs } from "@mantine/core";
 import { useState } from "react";
+import { ResponsiveModal } from "../../design-system";
 import type { OperationKind } from "../../types/operation";
 import {
   OperationIndividualAssignmentPanel,
@@ -42,12 +43,20 @@ export function OperationTeamManageDialog({
   };
 
   return (
-    <Modal opened={opened} onClose={handleClose} title="Administrar equipo" size="lg" centered>
+    <ResponsiveModal
+      opened={opened}
+      onClose={handleClose}
+      title="Administrar equipo"
+      size="lg"
+      bodyMode="scroll"
+    >
       <Tabs value={activeTab} onChange={setActiveTab}>
-        <Tabs.List mb="md">
-          <Tabs.Tab value="individual">Agregar individualmente</Tabs.Tab>
-          <Tabs.Tab value="groups">Agregar desde grupos</Tabs.Tab>
-        </Tabs.List>
+        <ScrollArea type="scroll" offsetScrollbars scrollbarSize={6}>
+          <Tabs.List mb="md" style={{ flexWrap: "nowrap", minWidth: "max-content" }}>
+            <Tabs.Tab value="individual">Agregar individualmente</Tabs.Tab>
+            <Tabs.Tab value="groups">Agregar desde grupos</Tabs.Tab>
+          </Tabs.List>
+        </ScrollArea>
 
         <Tabs.Panel value="individual">
           <OperationIndividualAssignmentPanel
@@ -77,6 +86,6 @@ export function OperationTeamManageDialog({
           />
         </Tabs.Panel>
       </Tabs>
-    </Modal>
+    </ResponsiveModal>
   );
 }

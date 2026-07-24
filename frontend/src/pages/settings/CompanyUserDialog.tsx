@@ -1,5 +1,6 @@
-import { Button, Group, Modal, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
+import { Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
+import { ResponsiveModal } from "../../design-system";
 import type { CompanyRole, CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
 import { companyRoleLabels } from "../../utils/labels";
 
@@ -219,11 +220,11 @@ export function CompanyUserDialog({
         : "closed";
 
   return (
-    <Modal
+    <ResponsiveModal
       opened={open}
       onClose={loading ? () => undefined : onClose}
       title={mode === "create" ? "Agregar usuario" : "Editar usuario"}
-      centered
+      bodyMode="scroll"
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}
     >
@@ -238,6 +239,6 @@ export function CompanyUserDialog({
           onSubmit={onSubmit}
         />
       ) : null}
-    </Modal>
+    </ResponsiveModal>
   );
 }

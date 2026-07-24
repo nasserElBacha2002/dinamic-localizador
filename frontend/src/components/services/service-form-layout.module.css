@@ -7,26 +7,38 @@
     "map"
     "geo"
     "actions";
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .infoSection {
   grid-area: info;
+  min-width: 0;
 }
 
 .mapSection {
   grid-area: map;
   min-width: 0;
+  max-width: 100%;
 }
 
 .geoSection {
   grid-area: geo;
+  min-width: 0;
 }
 
 .actionsSection {
   grid-area: actions;
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  padding-block: var(--mantine-spacing-sm);
+  background: color-mix(in srgb, var(--mantine-color-body) 92%, transparent);
+  backdrop-filter: blur(4px);
 }
 
-@media (min-width: 62em) {
+@media (min-width: $mantine-breakpoint-md) {
   .serviceFormLayout {
     grid-template-columns: minmax(0, 2fr) minmax(0, 3fr);
     grid-template-areas:
@@ -39,5 +51,12 @@
   .mapSection {
     position: sticky;
     top: var(--mantine-spacing-md);
+  }
+
+  .actionsSection {
+    position: static;
+    padding-block: 0;
+    background: transparent;
+    backdrop-filter: none;
   }
 }

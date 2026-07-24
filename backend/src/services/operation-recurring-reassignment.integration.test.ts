@@ -9,6 +9,7 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
 import { operationAssignmentService } from "../services/operation-assignment.service";
@@ -67,11 +68,14 @@ async function loadExpectationsForEmployee(
 }
 
 describeDatabaseIntegration("recurring reassignment persistence integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -107,17 +111,21 @@ describeDatabaseIntegration("recurring reassignment persistence integration", ()
       },
       { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
     );
+    fixtures.trackOperation(companyId, operation.id);
 
     const employeeInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phone", sql.NVarChar(20), uniquePhone(21))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Recurring Reassign', @phone, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Recurring Reassign', @phone, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     const assignmentA = await operationAssignmentService.assignEmployee(
       companyId,

@@ -6,18 +6,22 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
 
 describeDatabaseIntegration("attendance confirmation schedule cycle integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
     mock.restoreAll();
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -66,17 +70,21 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employeeInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(20), uniquePhone(1))
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Cycle Integration', @phoneNumber, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Cycle Integration', @phoneNumber, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     await pool
       .request()

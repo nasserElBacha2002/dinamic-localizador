@@ -15,6 +15,7 @@ const GLOBAL_API_PREFIXES = ["auth", "health", "webhooks", "database"] as const;
 
 export const OPERATIONAL_API_PREFIXES = [
   "employees",
+  "employee-categories",
   "operations",
   "services",
   "attendance",
@@ -28,6 +29,7 @@ export const OPERATIONAL_API_PREFIXES = [
   "lookups",
   "work-teams",
   "work-team-assignment-batches",
+  "imports",
   "dev",
 ] as const;
 

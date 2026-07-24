@@ -8,6 +8,7 @@ import {
   StatusBadge,
   mapApiPaginationMeta,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByOperationRow } from "../../types/statistics";
@@ -178,6 +179,57 @@ export function StatisticsOperationTable({
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceByOperationRow>>(
+    () => ({
+      title: (row) => formatOperationLabel(row),
+      subtitle: (row) => row.serviceName,
+      status: (row) => (
+        <StatusBadge
+          label={
+            operationStatusLabels[row.operationalStatus as keyof typeof operationStatusLabels] ??
+            row.operationalStatus
+          }
+          tone="neutral"
+        />
+      ),
+      fields: [
+        {
+          key: "operationKind",
+          label: "Tipo",
+          getValue: (row) =>
+            operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ??
+            row.operationKind,
+          visibility: "always",
+        },
+        {
+          key: "presentWorkdays",
+          label: "Presentes",
+          getValue: (row) => String(row.presentWorkdays),
+          visibility: "always",
+        },
+        {
+          key: "attendanceRate",
+          label: "Presentismo",
+          getValue: (row) => formatPercent(row.attendanceRate),
+          visibility: "always",
+        },
+        {
+          key: "punctualityRate",
+          label: "Puntualidad",
+          getValue: (row) => formatPercent(row.punctualityRate),
+          visibility: "expanded",
+        },
+        {
+          key: "scheduledWorkdays",
+          label: "Jornadas esperadas",
+          getValue: (row) => String(row.scheduledWorkdays),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   if (isLoading) {
     return <LoadingState message={`Cargando estadísticas por ${terminology.operation.singular.toLowerCase()}...`} />;
   }
@@ -209,6 +261,8 @@ export function StatisticsOperationTable({
         onSortChange={(key) => onSortChange(key as SortableField)}
         emptyTitle="Sin resultados"
         emptyDescription={`No hay datos de ${terminology.operation.plural.toLowerCase()} para los filtros seleccionados.`}
+        mobileView="summary"
+        mobileCard={mobileCard}
       />
 
       <PaginationControls

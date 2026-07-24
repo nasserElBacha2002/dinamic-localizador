@@ -1,8 +1,9 @@
-import { Button, Group, Select } from "@mantine/core";
+import { Button, Select } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
-import { ConfirmDialog } from "../../design-system";
 import {
+  ActionMenu,
+  ConfirmDialog,
   DataTable,
   ErrorState,
   FilterBar,
@@ -12,23 +13,26 @@ import {
   PaginationControls,
   SearchInput,
   StatusBadge,
+  type ActionMenuItem,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
-import { useCompanyPermissions,
+import {
+  useCompanyPermissions,
   useCompanyUsers,
   useCreateCompanyUser,
   useDeactivateCompanyUser,
   useUpdateCompanyUser,
 } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
-import {
-  COMPANY_USERS_TABLE_DEFAULTS,
-  COMPANY_USERS_TABLE_FIELDS,
-} from "./company-users-table-state";
 import type { CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
 import { formatDate } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { companyRoleLabels, membershipStatusLabels } from "../../utils/labels";
+import {
+  COMPANY_USERS_TABLE_DEFAULTS,
+  COMPANY_USERS_TABLE_FIELDS,
+} from "./company-users-table-state";
 import { CompanyUserDialog } from "./CompanyUserDialog";
 
 export function CompanyUsersPage() {
@@ -63,6 +67,20 @@ export function CompanyUsersPage() {
   const createMutation = useCreateCompanyUser();
   const updateMutation = useUpdateCompanyUser();
   const deactivateMutation = useDeactivateCompanyUser();
+
+  const activeSecondaryFilterCount = useMemo(() => {
+    let count = 0;
+    if (table.state.role !== COMPANY_USERS_TABLE_DEFAULTS.role) count += 1;
+    if (table.state.status !== COMPANY_USERS_TABLE_DEFAULTS.status) count += 1;
+    return count;
+  }, [table.state.role, table.state.status]);
+
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setState({
+      role: COMPANY_USERS_TABLE_DEFAULTS.role,
+      status: COMPANY_USERS_TABLE_DEFAULTS.status,
+    });
+  }, [table]);
 
   const handleSearch = useCallback(
     (value: string) => {
@@ -175,6 +193,40 @@ export function CompanyUsersPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<CompanyUser>>(
+    () => ({
+      title: (row) => row.name,
+      subtitle: (row) => row.email,
+      status: (row) => (
+        <StatusBadge
+          label={membershipStatusLabels[row.membershipStatus]}
+          tone={row.membershipStatus === "ACTIVE" ? "success" : "neutral"}
+        />
+      ),
+      fields: [
+        {
+          key: "role",
+          label: "Rol",
+          getValue: (row) => companyRoleLabels[row.companyRole],
+          visibility: "always",
+        },
+        {
+          key: "isDefault",
+          label: "Predeterminada",
+          getValue: (row) => (row.isDefault ? "Sí" : "No"),
+          visibility: "always",
+        },
+        {
+          key: "updatedAt",
+          label: "Actualizado",
+          getValue: (row) => formatDate(row.updatedAt),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   if (permissionsQuery.isPending) {
     return <LoadingState message="Verificando permisos..." />;
   }
@@ -188,13 +240,11 @@ export function CompanyUsersPage() {
       <PageHeader
         title="Usuarios de empresa"
         description="Gestioná los usuarios que tienen acceso al panel para esta empresa."
-        action={
-          <Button onClick={openCreateDialog}>Agregar usuario</Button>
-        }
+        action={<Button onClick={openCreateDialog}>Agregar usuario</Button>}
       />
 
-      <FilterBar>
-        <FilterBar.Item>
+      <FilterBar
+        search={
           <SearchInput
             value={table.searchInput}
             onChange={handleSearchChange}
@@ -202,7 +252,10 @@ export function CompanyUsersPage() {
             placeholder="Nombre o email"
             label="Buscar"
           />
-        </FilterBar.Item>
+        }
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <Select
             label="Rol"
@@ -247,23 +300,36 @@ export function CompanyUsersPage() {
         emptyTitle="No hay usuarios"
         emptyDescription="Agregá el primer usuario con acceso al panel de esta empresa."
         aria-label="Usuarios de empresa"
-        rowActions={(user) => (
-          <Group gap="xs" justify="flex-end">
-            <Button size="compact-sm" variant="light" onClick={() => openEditDialog(user)}>
-              Editar
-            </Button>
-            {user.membershipStatus === "ACTIVE" ? (
-              <Button
-                size="compact-sm"
-                variant="light"
-                color="red"
-                onClick={() => setDeactivateTarget(user)}
-              >
-                Desactivar
-              </Button>
-            ) : null}
-          </Group>
-        )}
+        mobileView="cards"
+        mobileCard={mobileCard}
+        rowActions={(user) => {
+          const items: ActionMenuItem[] = [
+            {
+              key: "edit",
+              label: "Editar",
+              onClick: () => openEditDialog(user),
+            },
+          ];
+          if (user.membershipStatus === "ACTIVE") {
+            items.push({
+              key: "deactivate",
+              label: "Desactivar",
+              destructive: true,
+              onClick: () => setDeactivateTarget(user),
+            });
+          }
+          return (
+            <ActionMenu
+              primary={
+                <Button size="compact-sm" variant="light" onClick={() => openEditDialog(user)}>
+                  Editar
+                </Button>
+              }
+              items={items.filter((item) => item.key !== "edit")}
+              menuLabel={`Más acciones de ${user.name}`}
+            />
+          );
+        }}
         pagination={
           usersQuery.data && usersQuery.data.data.length > 0 ? (
             <PaginationControls
@@ -301,7 +367,6 @@ export function CompanyUsersPage() {
         onConfirm={handleDeactivate}
         onCancel={() => setDeactivateTarget(null)}
       />
-
     </>
   );
 }

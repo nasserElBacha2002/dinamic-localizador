@@ -31,6 +31,7 @@ import {
   operationAssignmentPath,
   operationMaterializeWorkdaysPath,
   operationPath,
+  operationReactivatePath,
   operationWorkdayPath,
   operationWorkdaysPath,
 } from "./endpoints";
@@ -68,6 +69,13 @@ export async function updateOperation(id: string, input: UpdateOperationInput): 
 
 export async function cancelOperation(id: string): Promise<Operation> {
   const { data } = await scopedApiClient.delete<SingleResponse<Operation>>(operationPath(id));
+  return data.data;
+}
+
+export async function reactivateOperation(id: string): Promise<Operation> {
+  const { data } = await scopedApiClient.post<SingleResponse<Operation>>(
+    operationReactivatePath(id),
+  );
   return data.data;
 }
 

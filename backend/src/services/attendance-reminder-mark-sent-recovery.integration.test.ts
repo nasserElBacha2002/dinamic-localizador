@@ -6,18 +6,22 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { ATTENDANCE_REMINDER_STALE_PENDING_MINUTES } from "../constants/attendance-notification";
 
 const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 10)}`;
 
 describeDatabaseIntegration("attendance reminder markSent recovery integration", () => {
+  const fixtures = createIntegrationFixtureTracker();
+
   before(async () => {
     await setupDatabaseIntegration();
   });
 
   after(async () => {
     mock.restoreAll();
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -53,17 +57,21 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employeeInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(20), uniquePhone())
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Recovery Repo', @phoneNumber, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Recovery Repo', @phoneNumber, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     const { attendanceNotificationRepository } = await import(
       "../repositories/attendance-notification.repository"
@@ -139,17 +147,21 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED')
       `);
     const operationId = String(operationInsert.recordset[0].id);
+    fixtures.trackOperation(companyId, operationId);
 
     const employeeInsert = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("phoneNumber", sql.NVarChar(20), uniquePhone())
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Recovery Integration', @phoneNumber, 'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, N'Recovery Integration', @phoneNumber, 'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     const employeeId = String(employeeInsert.recordset[0].id);
+    fixtures.trackEmployee(companyId, employeeId);
 
     await pool
       .request()

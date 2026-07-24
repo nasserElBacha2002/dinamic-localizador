@@ -6,8 +6,19 @@ export { EmptyState, type EmptyStateProps } from "./EmptyState";
 export { LoadingState, type LoadingStateProps } from "./LoadingState";
 export { ErrorState, type ErrorStateProps } from "./ErrorState";
 export { ConfirmDialog, type ConfirmDialogProps } from "./ConfirmDialog";
-export { DataTable, type DataTableColumn, type DataTableProps, type SortDirection } from "./DataTable";
+export {
+  DataTable,
+  type DataTableColumn,
+  type DataTableMobileCardConfig,
+  type DataTableMobileField,
+  type DataTableMobileView,
+  type DataTableProps,
+  type SortDirection,
+} from "./DataTable";
 export { FilterBar, type FilterBarProps, type FilterBarItemProps } from "./FilterBar";
+export { FilterBarItem } from "./FilterBarItem";
+export { ResponsiveModal, type ResponsiveModalProps, type ResponsiveModalBodyMode } from "./ResponsiveModal";
+export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from "./ActionMenu";
 export {
   PaginationControls,
   type PaginationControlsProps,

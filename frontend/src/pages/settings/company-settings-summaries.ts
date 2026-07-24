@@ -1,7 +1,12 @@
+import {
+  getCanonicalOperationTimezone,
+  getOperationTimezoneOptions,
+} from "../../constants/operation-timezones";
 import type { CompanyAbsenceSetting } from "../../types/company-absence-settings";
 import type { CompanyLocationType } from "../../types/company-location-type";
 import type { CompanyModule } from "../../types/company-module";
 import type { CompanySettings } from "../../types/company-settings";
+import type { EmployeeCategory } from "../../types/employee-category";
 import type { CompanyWorkSchedule } from "../../types/schedule";
 import { buildCompanySchedulePreviewLabel } from "../../utils/operation-schedule-display";
 
@@ -12,6 +17,30 @@ export function formatOperationSchedule(
   const start = startTime?.trim() || "—";
   const end = endTime?.trim() || "—";
   return `${start} → ${end}`;
+}
+
+export function formatOperationScheduleSummary(
+  startTime: string | null | undefined,
+  endTime: string | null | undefined,
+): string {
+  const start = startTime?.trim() || "—";
+  const end = endTime?.trim() || "—";
+  return `${start} a ${end}`;
+}
+
+export function formatHours(value: number | string | null | undefined, suffix = "h"): string {
+  if (value === null || value === undefined || value === "") {
+    return "—";
+  }
+  return `${value} ${suffix}`;
+}
+
+export function formatTimezoneSummary(timezone: string): string {
+  const canonical = getCanonicalOperationTimezone(timezone);
+  return (
+    getOperationTimezoneOptions(timezone).find((option) => option.value === canonical)?.label ??
+    timezone
+  );
 }
 
 export function formatActiveInactive(value: boolean): string {
@@ -34,6 +63,33 @@ export function formatMeters(value: number | string | null | undefined): string 
 
 export function buildGeneralSettingsSummary(settings: CompanySettings) {
   return [{ label: "Zona horaria", value: settings.operationTimezone }];
+}
+
+export function buildOperationalSettingsSummary(settings: CompanySettings) {
+  return {
+    summaryItems: [
+      { label: "Zona horaria", value: formatTimezoneSummary(settings.operationTimezone) },
+      {
+        label: "Horario predeterminado",
+        value: formatOperationScheduleSummary(
+          settings.defaultOperationStartTime,
+          settings.defaultOperationEndTime,
+        ),
+      },
+      { label: "Radio permitido", value: formatMeters(settings.defaultRadiusMeters) },
+      {
+        label: "Tolerancia de llegada",
+        value: `${settings.defaultEarlyArrivalToleranceMinutes} min antes / ${settings.defaultLateArrivalToleranceMinutes} min después`,
+      },
+      { label: "Puntualidad WhatsApp", value: formatMinutes(settings.lateGraceMinutes) },
+      {
+        label: "Recordatorio",
+        value: settings.confirmationReminderEnabled
+          ? `${settings.confirmationReminderHoursBefore} h antes`
+          : "Desactivado",
+      },
+    ],
+  };
 }
 
 export function buildOperationOperationSummary(settings: CompanySettings) {
@@ -107,6 +163,22 @@ export function buildLocationTypesSummary(locationTypes: CompanyLocationType[]) 
     summaryItems: [
       { label: "Activos", value: `${active.length} activos` },
       { label: "Inactivos", value: `${inactive.length} inactivos` },
+    ],
+    chips,
+  };
+}
+
+export function buildEmployeeCategoriesSummary(categories: EmployeeCategory[]) {
+  const system = categories.filter((category) => category.isSystem);
+  const customActive = categories.filter((category) => !category.isSystem && category.isActive);
+  const customInactive = categories.filter((category) => !category.isSystem && !category.isActive);
+  const chips = [...system, ...customActive].slice(0, 3).map((category) => category.name);
+
+  return {
+    summaryItems: [
+      { label: "Base", value: `${system.length} categorías base` },
+      { label: "Personalizadas", value: `${customActive.length} activas` },
+      { label: "Inactivas", value: `${customInactive.length} inactivas` },
     ],
     chips,
   };

@@ -5,17 +5,17 @@ import { describe, it } from "node:test";
 
 describe("Company settings operation vs WhatsApp labels", () => {
   it("keeps operation and WhatsApp tolerances in separate labeled fields", () => {
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+    const formFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
       "utf8",
     );
 
-    assert.match(sectionFile, /Tolerancia de llegada tardía para operaciones \(min\)/);
-    assert.match(sectionFile, /Tolerancia de puntualidad WhatsApp \(min\)/);
-    assert.match(sectionFile, /Tolerancia de salida anticipada WhatsApp \(min\)/);
-    assert.match(sectionFile, /Radio permitido por defecto \(m\)/);
+    assert.match(formFile, /Tolerancia de llegada tardía para operaciones \(min\)/);
+    assert.match(formFile, /Tolerancia de puntualidad WhatsApp \(min\)/);
+    assert.match(formFile, /Tolerancia de salida anticipada WhatsApp \(min\)/);
+    assert.match(formFile, /Radio permitido por defecto \(m\)/);
     assert.doesNotMatch(
-      sectionFile,
+      formFile,
       /Tolerancia de puntualidad WhatsApp[\s\S]*Radio permitido por defecto/,
     );
   });

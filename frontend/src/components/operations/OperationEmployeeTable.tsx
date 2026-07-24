@@ -1,10 +1,15 @@
-import { Button, Menu, Stack, Text } from "@mantine/core";
+import { Button, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
-import { DataTable, type DataTableColumn } from "../../design-system/components/DataTable";
-import { PaginationControls } from "../../design-system/components/PaginationControls";
-import { mapApiPaginationMeta } from "../../design-system/components/pagination-meta";
-import { StatusBadge } from "../../design-system/components/StatusBadge";
+import {
+  ActionMenu,
+  DataTable,
+  PaginationControls,
+  StatusBadge,
+  mapApiPaginationMeta,
+  type DataTableColumn,
+  type DataTableMobileCardConfig,
+} from "../../design-system";
 import type { PaginationMeta } from "../../types/api";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
 import type { OperationEmployeeAssignment } from "../../types/operation";
@@ -155,6 +160,46 @@ export function OperationEmployeeTable({
     [assignmentById],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<OperationAttendanceSummaryEmployee>>(
+    () => ({
+      title: (row) => getRelatedName(row.employee),
+      status: (row) => (
+        <StatusBadge
+          label={operationalAttendanceStatusTableLabels[row.operationalStatus]}
+          tone={operationalStatusTone(row.operationalStatus)}
+        />
+      ),
+      fields: [
+        {
+          key: "confirmation",
+          label: "Confirmación",
+          render: (row) => assignmentConfirmationStatusTableLabels[row.confirmationStatus],
+          visibility: "always",
+        },
+        {
+          key: "checkIn",
+          label: "Check-in",
+          render: (row) => formatOperationalCheckInCell(row.attendance),
+          visibility: "always",
+        },
+        {
+          key: "checkOut",
+          label: "Check-out",
+          render: (row) => formatOperationalCheckOutCell(row.attendance),
+          visibility: "always",
+        },
+        {
+          key: "team",
+          label: "Equipo / tipo",
+          render: (row) =>
+            buildEmployeeSecondaryLine(row, assignmentById?.get(row.assignmentId)) || "—",
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [assignmentById],
+  );
+
   return (
     <DataTable
       rows={rows}
@@ -177,6 +222,8 @@ export function OperationEmployeeTable({
         );
       }}
       isRowClickable={(row) => Boolean(row.attendance)}
+      mobileView="summary"
+      mobileCard={mobileCard}
       rowActions={(row) => {
         const assignment = assignmentById?.get(row.assignmentId);
         const hasAttendanceDetail = Boolean(row.attendance);
@@ -197,16 +244,62 @@ export function OperationEmployeeTable({
           return null;
         }
 
+        const items = [];
+        if (hasAttendanceDetail) {
+          items.push({
+            key: "detail",
+            label: "Ver detalle",
+            onClick: () =>
+              navigateWithListContext(
+                navigate,
+                `/attendance/${row.attendance!.id}`,
+                operationDetailPath,
+                location,
+              ),
+          });
+        }
+        if (canReview) {
+          items.push(
+            {
+              key: "approve",
+              label: "Aprobar asistencia",
+              onClick: () => onReviewApprove(row.attendance!.id),
+            },
+            {
+              key: "reject",
+              label: "Rechazar asistencia",
+              destructive: true,
+              onClick: () => onReviewReject(row.attendance!.id),
+            },
+          );
+        }
+        if (assignmentAction === "end") {
+          items.push({
+            key: "end",
+            label: assignmentActionLabel(assignmentAction),
+            disabled: endPending,
+            loading: endPending,
+            onClick: () => onEndAssignment(assignment!),
+          });
+        }
+        if (assignmentAction === "cancel-current" || assignmentAction === "cancel-future") {
+          items.push({
+            key: "cancel-assignment",
+            label: assignmentActionLabel(assignmentAction),
+            destructive: true,
+            disabled: cancelPending,
+            loading: cancelPending,
+            onClick: () => onCancelAssignment(assignment!),
+          });
+        }
+
         return (
-          <Menu position="bottom-end" withinPortal>
-            <Menu.Target>
-              <Button size="compact-xs" variant="subtle">
-                Acciones
-              </Button>
-            </Menu.Target>
-            <Menu.Dropdown>
-              {hasAttendanceDetail ? (
-                <Menu.Item
+          <ActionMenu
+            primary={
+              hasAttendanceDetail ? (
+                <Button
+                  size="compact-xs"
+                  variant="light"
                   onClick={() =>
                     navigateWithListContext(
                       navigate,
@@ -217,37 +310,12 @@ export function OperationEmployeeTable({
                   }
                 >
                   Ver detalle
-                </Menu.Item>
-              ) : null}
-              {canReview ? (
-                <>
-                  <Menu.Item onClick={() => onReviewApprove(row.attendance!.id)}>
-                    Aprobar asistencia
-                  </Menu.Item>
-                  <Menu.Item color="red" onClick={() => onReviewReject(row.attendance!.id)}>
-                    Rechazar asistencia
-                  </Menu.Item>
-                </>
-              ) : null}
-              {assignmentAction === "end" ? (
-                <Menu.Item
-                  disabled={endPending}
-                  onClick={() => onEndAssignment(assignment!)}
-                >
-                  {assignmentActionLabel(assignmentAction)}
-                </Menu.Item>
-              ) : null}
-              {assignmentAction === "cancel-current" || assignmentAction === "cancel-future" ? (
-                <Menu.Item
-                  color="red"
-                  disabled={cancelPending}
-                  onClick={() => onCancelAssignment(assignment!)}
-                >
-                  {assignmentActionLabel(assignmentAction)}
-                </Menu.Item>
-              ) : null}
-            </Menu.Dropdown>
-          </Menu>
+                </Button>
+              ) : undefined
+            }
+            items={items.filter((item) => item.key !== "detail")}
+            menuLabel={`Más acciones de ${getRelatedName(row.employee)}`}
+          />
         );
       }}
       pagination={

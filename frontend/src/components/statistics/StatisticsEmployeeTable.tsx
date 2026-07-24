@@ -7,6 +7,7 @@ import {
   PaginationControls,
   mapApiPaginationMeta,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { ExportActionButtons } from "./ExportActionButtons";
 import type { AttendanceByEmployeeRow } from "../../types/statistics";
@@ -159,6 +160,52 @@ export function StatisticsEmployeeTable({
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceByEmployeeRow>>(
+    () => ({
+      title: (row) => row.employeeName,
+      subtitle: (row) => row.phoneNumber,
+      fields: [
+        {
+          key: "scheduledWorkdays",
+          label: "Jornadas",
+          getValue: (row) => String(row.scheduledWorkdays),
+          visibility: "always",
+        },
+        {
+          key: "presentWorkdays",
+          label: "Presentes",
+          getValue: (row) => String(row.presentWorkdays),
+          visibility: "always",
+        },
+        {
+          key: "attendanceRate",
+          label: "Presentismo",
+          getValue: (row) => formatPercent(row.attendanceRate),
+          visibility: "always",
+        },
+        {
+          key: "punctualityRate",
+          label: "Puntualidad",
+          getValue: (row) => formatPercent(row.punctualityRate),
+          visibility: "expanded",
+        },
+        {
+          key: "workedMinutes",
+          label: "Horas trabajadas",
+          getValue: (row) => formatDurationFromMinutes(row.workedMinutes),
+          visibility: "expanded",
+        },
+        {
+          key: "lastAttendanceDate",
+          label: "Última asistencia",
+          getValue: (row) => (row.lastAttendanceDate ? formatDateTime(row.lastAttendanceDate) : "—"),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   if (isLoading) {
     return <LoadingState message="Cargando estadísticas por empleado..." />;
   }
@@ -190,6 +237,8 @@ export function StatisticsEmployeeTable({
         onSortChange={(key) => onSortChange(key as SortableField)}
         emptyTitle="Sin resultados"
         emptyDescription="No hay datos de empleados para los filtros seleccionados."
+        mobileView="summary"
+        mobileCard={mobileCard}
       />
 
       <PaginationControls

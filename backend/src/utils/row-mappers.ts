@@ -44,17 +44,32 @@ const parseEmployeeType = (value: unknown): EmployeeType => {
     : "fijo";
 };
 
-export const mapEmployeeRow = (row: Record<string, unknown>): Employee => ({
-  id: String(row.id),
-  name: String(row.name),
-  documentNumber: row.document_number ? String(row.document_number) : null,
-  phoneNumber: String(row.phone_number),
-  employeeType: parseEmployeeType(row.employee_type),
-  active: Boolean(row.active),
-  lastWorkedAt: row.last_worked_at ? toIsoString(row.last_worked_at as Date | string) : null,
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+export const mapEmployeeRow = (row: Record<string, unknown>): Employee => {
+  const categoryId = row.category_id ? String(row.category_id) : null;
+  const categoryName = row.category_name ? String(row.category_name) : null;
+
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    documentNumber: row.document_number ? String(row.document_number) : null,
+    phoneNumber: String(row.phone_number),
+    employeeType: parseEmployeeType(row.employee_type),
+    categoryId,
+    category:
+      categoryId && categoryName
+        ? {
+            id: categoryId,
+            name: categoryName,
+            isSystem: Boolean(row.category_is_system),
+            isActive: Boolean(row.category_is_active),
+          }
+        : null,
+    active: Boolean(row.active),
+    lastWorkedAt: row.last_worked_at ? toIsoString(row.last_worked_at as Date | string) : null,
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};
 
 const parseServiceFormat = (value: unknown): string | null => {
   if (!value) {
@@ -158,6 +173,8 @@ export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmploye
           : null,
         phoneNumber: String(row.employee_phone_number),
         employeeType: parseEmployeeType(row.employee_type),
+        categoryId: row.employee_category_id ? String(row.employee_category_id) : null,
+        category: null,
         active: Boolean(row.employee_active),
         lastWorkedAt: null,
         createdAt: toIsoString(row.employee_created_at as Date | string),

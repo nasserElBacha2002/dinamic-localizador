@@ -39,23 +39,28 @@ describe("company settings frontend module", () => {
     assert.match(navFile, /Configuración de empresa/);
   });
 
-  it("uses inline operational section for core company settings", () => {
+  it("uses operational settings dialog for core company settings", () => {
     const pageFile = readFileSync(
       join(process.cwd(), "src/pages/settings/CompanySettingsPage.tsx"),
       "utf8",
     );
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+    const dialogFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
+      "utf8",
+    );
+    const formFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
       "utf8",
     );
 
     assert.match(pageFile, /company:settings:update/);
-    assert.match(pageFile, /CompanyOperationalSettingsSection/);
-    assert.match(sectionFile, /updateMutation\.mutateAsync/);
-    assert.match(sectionFile, /toOperationalSettingsUpdateInput/);
-    assert.match(sectionFile, /defaultEarlyArrivalToleranceMinutes/);
-    assert.match(sectionFile, /lateGraceMinutes/);
-    assert.match(sectionFile, /Guardar configuración/);
+    assert.match(pageFile, /CompanyOperationalSettingsDialog/);
+    assert.match(pageFile, /buildOperationalSettingsSummary/);
+    assert.match(dialogFile, /updateMutation\.mutateAsync/);
+    assert.match(dialogFile, /toOperationalSettingsUpdateInput/);
+    assert.match(dialogFile, /Guardar configuración/);
+    assert.match(formFile, /defaultEarlyArrivalToleranceMinutes/);
+    assert.match(formFile, /lateGraceMinutes/);
   });
 
   it("validates invalid radius and minutes", () => {
@@ -90,12 +95,12 @@ describe("company settings frontend module", () => {
     assert.match(validationFile, /defaultOperationEndTime/);
   });
 
-  it("calls updateCompanySettings from operational section", () => {
-    const sectionFile = readFileSync(
-      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsSection.tsx"),
+  it("calls updateCompanySettings from operational dialog", () => {
+    const dialogFile = readFileSync(
+      join(process.cwd(), "src/pages/settings/components/CompanyOperationalSettingsDialog.tsx"),
       "utf8",
     );
-    assert.match(sectionFile, /useUpdateCompanySettings/);
-    assert.match(sectionFile, /updateMutation\.mutateAsync/);
+    assert.match(dialogFile, /useUpdateCompanySettings/);
+    assert.match(dialogFile, /updateMutation\.mutateAsync/);
   });
 });

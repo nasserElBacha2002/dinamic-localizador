@@ -12,7 +12,7 @@
   grid-template-columns: 1fr;
 }
 
-@media (min-width: 960px) {
+@media (min-width: $mantine-breakpoint-md) {
   .layout {
     grid-template-columns: minmax(320px, 1.05fr) minmax(360px, 0.95fr);
   }
@@ -27,7 +27,7 @@
     #1275f2;
 }
 
-@media (min-width: 960px) {
+@media (min-width: $mantine-breakpoint-md) {
   .brandPanel {
     display: flex;
     align-items: center;
@@ -82,7 +82,7 @@
   margin-bottom: 1rem;
 }
 
-@media (min-width: 960px) {
+@media (min-width: $mantine-breakpoint-md) {
   .mobileBrand {
     display: none;
   }

@@ -387,6 +387,70 @@ export const operationWorkdayRepository = {
     return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Restores workdays cancelled as a direct consequence of operation cancel
+   * (cancellation_reason = OPERATION). Skips workdays that already have attendance.
+   */
+  async reactivateOperationCancelledWorkday(
+    companyId: string,
+    operationWorkdayId: string,
+  ): Promise<OperationWorkday | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        UPDATE operation_workdays
+        SET status = N'ACTIVE',
+            cancellation_reason = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND status = N'CANCELLED'
+          AND cancellation_reason = N'OPERATION'
+          AND NOT EXISTS (
+            SELECT 1
+            FROM employee_workdays ew
+            INNER JOIN attendance_records ar
+              ON ar.employee_workday_id = ew.id
+             AND ar.company_id = ew.company_id
+            WHERE ew.company_id = @companyId
+              AND ew.operation_workday_id = @operationWorkdayId
+          )
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listOperationCancelledByOperation(
+    companyId: string,
+    operationId: string,
+  ): Promise<OperationWorkday[]> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .query(`
+        SELECT ow.*
+        FROM operation_workdays ow
+        WHERE ow.company_id = @companyId
+          AND ow.operation_id = @operationId
+          AND ow.status = N'CANCELLED'
+          AND ow.cancellation_reason = N'OPERATION'
+      `);
+
+    return result.recordset.map((row) =>
+      mapOperationWorkdayRow(row as Record<string, unknown>),
+    );
+  },
+
   async cancelWorkday(
     companyId: string,
     operationWorkdayId: string,

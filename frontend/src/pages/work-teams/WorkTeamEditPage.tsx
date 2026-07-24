@@ -177,6 +177,44 @@ export function WorkTeamEditPage() {
           error={usageQuery.isError ? getApiErrorMessage(usageQuery.error) : undefined}
           emptyTitle="Sin historial de uso"
           emptyDescription="Este grupo aún no fue utilizado en asignaciones."
+          mobileView="cards"
+          mobileCard={{
+            title: (row) => row.serviceName ?? "Operación",
+            subtitle: (row) =>
+              operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ??
+              row.operationKind,
+            fields: [
+              {
+                key: "requestedAt",
+                label: "Fecha",
+                render: (row) => formatDateTime(row.requestedAt),
+                visibility: "always",
+              },
+              {
+                key: "addedCount",
+                label: "Agregados",
+                render: (row) => String(row.addedCount),
+                visibility: "always",
+              },
+              {
+                key: "skippedCount",
+                label: "Omitidos",
+                render: (row) => String(row.skippedCount),
+                visibility: "expanded",
+              },
+            ],
+            actions: (row) => (
+              <Button
+                component={Link}
+                to={`/operations/${row.operationId}`}
+                variant="light"
+                size="compact-sm"
+              >
+                Ver operación
+              </Button>
+            ),
+          }}
+          aria-label="Historial de uso del grupo"
         />
       </SectionCard>
 

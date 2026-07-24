@@ -29,7 +29,21 @@ export const operationController = {
 
   async cancel(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const operation = await operationService.cancel(companyId, String(req.params.id));
+    const operation = await operationService.cancel(
+      companyId,
+      String(req.params.id),
+      req.auth?.userId ?? null,
+    );
+    res.status(200).json({ data: operation });
+  },
+
+  async reactivate(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const operation = await operationService.reactivate(
+      companyId,
+      String(req.params.id),
+      req.auth?.userId ?? null,
+    );
     res.status(200).json({ data: operation });
   },
 

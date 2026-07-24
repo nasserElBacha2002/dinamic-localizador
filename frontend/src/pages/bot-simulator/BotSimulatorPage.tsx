@@ -1,5 +1,5 @@
-import { Alert, Button, Group, Stack } from "@mantine/core";
-import { PageHeader } from "../../design-system";
+import { Alert, Button, Stack } from "@mantine/core";
+import { ActionMenu, PageHeader } from "../../design-system";
 import classes from "./bot-simulator-console.module.css";
 import { BotConversationPanel } from "./components/BotConversationPanel";
 import { BotLocationDialog } from "./components/BotLocationDialog";
@@ -17,17 +17,31 @@ export function BotSimulatorPage() {
         description="Probá flujos de WhatsApp sin enviar mensajes reales."
         action={
           session.sessionState ? (
-            <Group gap="sm">
-              <Button variant="default" onClick={session.handleNewSimulation} disabled={session.isBusy}>
-                Nueva simulación
-              </Button>
-              <Button variant="default" onClick={session.handleExportJson}>
-                Exportar JSON
-              </Button>
-              <Button variant="default" onClick={() => void session.handleRestart()} disabled={session.isBusy}>
-                Reiniciar conversación
-              </Button>
-            </Group>
+            <ActionMenu
+              primary={
+                <Button
+                  variant="default"
+                  onClick={session.handleNewSimulation}
+                  disabled={session.isBusy}
+                >
+                  Nueva simulación
+                </Button>
+              }
+              items={[
+                {
+                  key: "export",
+                  label: "Exportar JSON",
+                  onClick: session.handleExportJson,
+                },
+                {
+                  key: "restart",
+                  label: "Reiniciar conversación",
+                  onClick: () => void session.handleRestart(),
+                  disabled: session.isBusy,
+                },
+              ]}
+              menuLabel="Más acciones del simulador"
+            />
           ) : null
         }
       />

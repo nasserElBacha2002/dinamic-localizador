@@ -3,6 +3,7 @@ import { COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import { attendanceRouter } from "./attendance.routes";
 import { authRouter } from "./auth.routes";
 import { employeeRouter } from "./employee.routes";
+import { employeeCategoryRouter } from "./employee-category.routes";
 import { healthRouter } from "./health.routes";
 import { operationAssignmentRouter } from "./operation-assignment.routes";
 import { workTeamRouter } from "./work-team.routes";
@@ -20,6 +21,7 @@ import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
 import { companyUserRouter } from "./company-user.routes";
+import { importRouter } from "./import.routes";
 import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
 import { authenticate } from "../middleware/authenticate";
@@ -58,6 +60,7 @@ const mountEmployeeRoutes = (router: Router) => {
   );
   router.use("/employees", moduleGuard, employeeRouter);
   router.use("/workers", moduleGuard, employeeRouter);
+  router.use("/employee-categories", moduleGuard, employeeCategoryRouter);
 };
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });
@@ -65,6 +68,7 @@ companyScopedOperationalRouter.use(resolveCompanyContext);
 companyScopedOperationalRouter.use("/users", companyUserRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
 companyScopedOperationalRouter.use("/lookups", lookupRouter);
+companyScopedOperationalRouter.use("/imports", importRouter);
 mountEmployeeRoutes(companyScopedOperationalRouter);
 companyScopedOperationalRouter.use(
   "/work-teams",
@@ -129,6 +133,7 @@ const operationalRouter = Router();
 operationalRouter.use(resolveCompanyContext);
 operationalRouter.use(asyncHandler(loadCompanyModuleStates));
 operationalRouter.use("/lookups", lookupRouter);
+operationalRouter.use("/imports", importRouter);
 mountEmployeeRoutes(operationalRouter);
 operationalRouter.use(
   "/work-teams",

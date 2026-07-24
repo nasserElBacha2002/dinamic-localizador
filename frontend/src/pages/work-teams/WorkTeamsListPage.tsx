@@ -10,6 +10,7 @@ import {
   SearchInput,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useWorkTeams } from "../../hooks/useWorkTeams";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -65,6 +66,11 @@ export function WorkTeamsListPage() {
 
   const { data, isPending, isError, error, isCompanyLoading } = useWorkTeams(filters);
 
+  const activeSecondaryFilterCount = useMemo(
+    () => (table.state.active !== TABLE_DEFAULTS.active ? 1 : 0),
+    [table.state.active],
+  );
+
   const columns = useMemo<DataTableColumn<WorkTeam>[]>(
     () => [
       { key: "name", header: "Nombre", getValue: (row) => row.name },
@@ -102,6 +108,40 @@ export function WorkTeamsListPage() {
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<WorkTeam>>(
+    () => ({
+      title: (row) => row.name,
+      subtitle: (row) => row.description?.trim() || undefined,
+      status: (row) => (
+        <StatusBadge
+          label={row.isActive ? "Activo" : "Inactivo"}
+          tone={row.isActive ? "success" : "neutral"}
+        />
+      ),
+      fields: [
+        {
+          key: "memberCount",
+          label: "Integrantes",
+          render: (row) => String(row.memberCount ?? 0),
+          visibility: "always",
+        },
+        {
+          key: "activeMemberCount",
+          label: "Activos",
+          render: (row) => String(row.activeMemberCount ?? 0),
+          visibility: "always",
+        },
+        {
+          key: "updatedAt",
+          label: "Actualizado",
+          render: (row) => formatDateTime(row.updatedAt),
+          visibility: "expanded",
+        },
+      ],
+    }),
+    [],
+  );
+
   const handleActiveFilterChange = useCallback(
     (value: string | null) => {
       if (!value) {
@@ -111,6 +151,10 @@ export function WorkTeamsListPage() {
     },
     [table],
   );
+
+  const handleClearSecondaryFilters = useCallback(() => {
+    table.setField("active", TABLE_DEFAULTS.active);
+  }, [table]);
 
   return (
     <>
@@ -126,8 +170,8 @@ export function WorkTeamsListPage() {
         }
       />
 
-      <FilterBar>
-        <FilterBar.Item>
+      <FilterBar
+        search={
           <SearchInput
             value={table.searchInput}
             onChange={table.setSearch}
@@ -135,7 +179,10 @@ export function WorkTeamsListPage() {
             placeholder="Buscar por nombre"
             label="Buscar"
           />
-        </FilterBar.Item>
+        }
+        activeFilterCount={activeSecondaryFilterCount}
+        onClearFilters={handleClearSecondaryFilters}
+      >
         <FilterBar.Item>
           <Select
             label="Estado"
@@ -162,6 +209,8 @@ export function WorkTeamsListPage() {
           navigateWithListContext(navigate, `/work-teams/${row.id}`, WORK_TEAMS_LIST_PATH, location)
         }
         aria-label="Listado de grupos de trabajo"
+        mobileView="cards"
+        mobileCard={mobileCard}
         pagination={
           data && data.data.length > 0 ? (
             <PaginationControls

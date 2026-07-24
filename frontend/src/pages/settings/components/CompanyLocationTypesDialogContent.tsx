@@ -1,4 +1,4 @@
-import { Button, Group, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
+import { Button, Group, ScrollArea, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { FormErrorAlert } from "../../../design-system";
 import {
@@ -66,13 +66,13 @@ export function CompanyLocationTypesDialogContent({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Los tipos de ubicación se usan para clasificar servicios, depósitos u otros puntos operativos.
+        Los formatos se usan para clasificar servicios, depósitos u otros puntos operativos.
       </Text>
 
       {canUpdate ? (
         <Group align="flex-end">
           <TextInput
-            label="Nuevo tipo"
+            label="Nuevo formato"
             placeholder="Ej. Express"
             value={newName}
             onChange={(event) => setNewName(event.currentTarget.value)}
@@ -87,42 +87,44 @@ export function CompanyLocationTypesDialogContent({
 
       {sortedTypes.length === 0 ? (
         <Text size="sm" c="dimmed">
-          No hay tipos configurados.
+          No hay formatos configurados.
         </Text>
       ) : (
-        <Table striped highlightOnHover>
-          <Table.Thead>
-            <Table.Tr>
-              <Table.Th>Nombre</Table.Th>
-              <Table.Th>Código</Table.Th>
-              <Table.Th>Orden</Table.Th>
-              <Table.Th>Activo</Table.Th>
-            </Table.Tr>
-          </Table.Thead>
-          <Table.Tbody>
-            {sortedTypes.map((type) => (
-              <Table.Tr key={type.id}>
-                <Table.Td>{type.name}</Table.Td>
-                <Table.Td>
-                  <Text size="sm" c="dimmed">
-                    {type.code}
-                  </Text>
-                </Table.Td>
-                <Table.Td>{type.sortOrder}</Table.Td>
-                <Table.Td>
-                  <Switch
-                    checked={type.isActive}
-                    onChange={(event) =>
-                      void handleToggleActive(type.id, event.currentTarget.checked)
-                    }
-                    disabled={!canUpdate || disableMutation.isPending || updateMutation.isPending}
-                    aria-label={`Activo ${type.name}`}
-                  />
-                </Table.Td>
+        <ScrollArea type="scroll" offsetScrollbars>
+          <Table striped highlightOnHover miw={480}>
+            <Table.Thead>
+              <Table.Tr>
+                <Table.Th>Nombre</Table.Th>
+                <Table.Th>Código</Table.Th>
+                <Table.Th>Orden</Table.Th>
+                <Table.Th>Activo</Table.Th>
               </Table.Tr>
-            ))}
-          </Table.Tbody>
-        </Table>
+            </Table.Thead>
+            <Table.Tbody>
+              {sortedTypes.map((type) => (
+                <Table.Tr key={type.id}>
+                  <Table.Td>{type.name}</Table.Td>
+                  <Table.Td>
+                    <Text size="sm" c="dimmed">
+                      {type.code}
+                    </Text>
+                  </Table.Td>
+                  <Table.Td>{type.sortOrder}</Table.Td>
+                  <Table.Td>
+                    <Switch
+                      checked={type.isActive}
+                      onChange={(event) =>
+                        void handleToggleActive(type.id, event.currentTarget.checked)
+                      }
+                      disabled={!canUpdate || disableMutation.isPending || updateMutation.isPending}
+                      aria-label={`Activo ${type.name}`}
+                    />
+                  </Table.Td>
+                </Table.Tr>
+              ))}
+            </Table.Tbody>
+          </Table>
+        </ScrollArea>
       )}
 
       <FormErrorAlert message={submitError} />

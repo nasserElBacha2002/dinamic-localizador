@@ -24,6 +24,7 @@ export function EmployeeCreatePage() {
         documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
         phoneNumber: values.phoneNumber,
         employeeType: values.employeeType,
+        categoryId: values.categoryId ?? null,
       });
       goBackToList();
     } catch (error) {
@@ -38,7 +39,14 @@ export function EmployeeCreatePage() {
         description={`Registrá un ${terminology.worker.singular.toLowerCase()} habilitado para ${terminology.operation.plural.toLowerCase()}.`}
       />
       <EmployeeForm
-        defaultValues={{ name: defaultName, documentNumber: "", phoneNumber: "", employeeType: "", active: true }}
+        defaultValues={{
+          name: defaultName,
+          documentNumber: "",
+          phoneNumber: "",
+          employeeType: "",
+          categoryId: null,
+          active: true,
+        }}
         submitLabel={`Crear ${terminology.worker.singular.toLowerCase()}`}
         cancelTo="/employees"
         onCancel={goBackToList}

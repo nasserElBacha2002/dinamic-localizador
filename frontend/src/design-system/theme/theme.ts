@@ -1,4 +1,5 @@
 import { createTheme, type MantineColorsTuple } from "@mantine/core";
+import { BREAKPOINTS } from "./breakpoints";
 import { designTokens } from "./tokens";
 
 const brand: MantineColorsTuple = [
@@ -93,6 +94,7 @@ const gray: MantineColorsTuple = [
 ];
 
 export const mantineTheme = createTheme({
+  breakpoints: { ...BREAKPOINTS },
   primaryColor: "brand",
   colors: {
     brand,

@@ -12,6 +12,10 @@ const buildEmployee = (id: string) => ({
   name: `Employee ${id}`,
   phoneNumber: `+54911000000${id.slice(-1)}`,
   employeeType: "fijo",
+  categoryId: null,
+  category: null,
+  documentNumber: null,
+  lastWorkedAt: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
 });
@@ -86,9 +90,20 @@ describe("workTeamAssignmentService.confirm rollback", () => {
       "../repositories/operation-employee.repository"
     );
     const { operationAssignmentCore } = await import("./operation-assignment-core.service");
+    const { employeeDeactivationRepository } = await import(
+      "../repositories/employee-deactivation.repository"
+    );
     const { workTeamAssignmentService } = await import("./work-team-assignment.service");
 
     mock.method(workTeamAssignmentBatchRepository, "expireStalePreviews", async () => undefined);
+    mock.method(
+      employeeDeactivationRepository,
+      "lockEmployeeForUpdate",
+      async (_companyId: string, employeeId: string) => ({
+        id: employeeId,
+        active: true,
+      }),
+    );
     mock.method(operationRepository, "findById", async () => ({
       id: "operation-1",
       companyId: "company-1",

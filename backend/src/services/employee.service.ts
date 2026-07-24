@@ -7,22 +7,52 @@ import type {
 } from "../schemas/employee.schema";
 import { getPool } from "../database/connection";
 import { employeeRepository } from "../repositories/employee.repository";
+import type { Employee } from "../types/domain";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { normalizePhoneNumber } from "../utils/phone";
 import { buildPaginationMeta } from "../utils/pagination";
+import { classifyEmployeeUniqueViolation } from "../imports/constraint-classifiers";
+
+/**
+ * Explicit creation policy:
+ * - interactive: manual UI/API create (current behavior + reserved post-commit effects)
+ * - import: bulk import path — same persistence invariants, no post-commit side effects
+ */
+export type EmployeeCreationMode = "interactive" | "import";
+
+export type CreateEmployeeOptions = {
+  creationMode?: EmployeeCreationMode;
+};
+
+const runPostCommitEffects = async (
+  _companyId: string,
+  _employee: Employee,
+  creationMode: EmployeeCreationMode,
+): Promise<void> => {
+  // Interactive create currently has no WhatsApp / invitation / credential side effects.
+  // Import mode explicitly skips any future interactive-only post-commit hooks.
+  if (creationMode === "import") {
+    return;
+  }
+};
 
 export const employeeService = {
-  async create(companyId: string, input: CreateEmployeeInput) {
+  async create(
+    companyId: string,
+    input: CreateEmployeeInput,
+    options?: CreateEmployeeOptions,
+  ) {
+    const creationMode = options?.creationMode ?? "interactive";
     const phoneNumber = normalizePhoneNumber(input.phoneNumber);
     const exists = await employeeRepository.findByPhone(companyId, phoneNumber);
     if (exists) {
       throw new AppError(409, "EMPLOYEE_PHONE_ALREADY_EXISTS", "El teléfono ya está registrado");
     }
 
+    const categoryId = input.categoryId === undefined ? null : input.categoryId;
+
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
-    // Catalog/settings are ensured before the transaction. Balance inserts share the
-    // employee creation transaction; reads during init use committed catalog data.
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -35,6 +65,7 @@ export const employeeService = {
           documentNumber: input.documentNumber?.trim() ?? null,
           phoneNumber,
           employeeType: input.employeeType,
+          categoryId,
         },
         transaction,
       );
@@ -46,7 +77,57 @@ export const employeeService = {
       );
 
       await transaction.commit();
+      await runPostCommitEffects(companyId, employee, creationMode);
       return employee;
+    } catch (error) {
+      await transaction.rollback();
+      const classified = classifyEmployeeUniqueViolation(error);
+      if (classified) {
+        throw new AppError(409, classified.code, classified.message);
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Real multi-row create for imports. Atomic per chunk transaction.
+   * Does not run interactive post-commit side effects.
+   */
+  async createManyForImport(
+    companyId: string,
+    inputs: CreateEmployeeInput[],
+  ): Promise<Employee[]> {
+    if (inputs.length === 0) {
+      return [];
+    }
+
+    await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      const created = await employeeRepository.createMany(
+        companyId,
+        inputs.map((input) => ({
+          name: input.name.trim(),
+          documentNumber: input.documentNumber?.trim() ?? null,
+          phoneNumber: normalizePhoneNumber(input.phoneNumber),
+          employeeType: input.employeeType,
+          categoryId: input.categoryId === undefined ? null : input.categoryId,
+        })),
+        transaction,
+      );
+
+      await companyAbsenceSettingsService.initializeEmployeeAbsenceBalancesMany(
+        companyId,
+        created.map((employee) => employee.id),
+        transaction,
+      );
+
+      await transaction.commit();
+      return created;
     } catch (error) {
       await transaction.rollback();
       throw error;
@@ -72,6 +153,14 @@ export const employeeService = {
   async update(companyId: string, id: string, input: UpdateEmployeeInput) {
     await this.getById(companyId, id);
 
+    if (input.active === false) {
+      throw new AppError(
+        400,
+        "EMPLOYEE_DEACTIVATION_REQUIRES_DEDICATED_ENDPOINT",
+        "Para desactivar un colaborador usá el endpoint de desactivación asistida.",
+      );
+    }
+
     const updatePayload: UpdateEmployeeInput & { phoneNumber?: string } = { ...input };
     if (input.phoneNumber !== undefined) {
       const normalizedPhone = normalizePhoneNumber(input.phoneNumber);
@@ -82,36 +171,7 @@ export const employeeService = {
       updatePayload.phoneNumber = normalizedPhone;
     }
 
-    if (input.active === false) {
-      const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
-      if (hasSchedules) {
-        throw new AppError(
-          409,
-          "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-          "No se puede desactivar un empleado con operaciones activas o programadas",
-        );
-      }
-    }
-
     const updated = await employeeRepository.update(companyId, id, updatePayload);
-    if (!updated) {
-      throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
-    }
-    return updated;
-  },
-
-  async deactivate(companyId: string, id: string) {
-    await this.getById(companyId, id);
-    const hasSchedules = await employeeRepository.hasActiveOrScheduledOperations(companyId, id);
-    if (hasSchedules) {
-      throw new AppError(
-        409,
-        "EMPLOYEE_HAS_ACTIVE_OR_SCHEDULED_OPERATIONS",
-        "No se puede desactivar un empleado con operaciones activas o programadas",
-      );
-    }
-
-    const updated = await employeeRepository.deactivate(companyId, id);
     if (!updated) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }

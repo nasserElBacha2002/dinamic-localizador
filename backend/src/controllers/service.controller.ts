@@ -15,6 +15,12 @@ export const serviceController = {
     res.status(200).json(result);
   },
 
+  async listFacets(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const facets = await serviceService.listFacets(companyId);
+    res.status(200).json({ data: facets });
+  },
+
   async getById(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const service = await serviceService.getById(companyId, String(req.params.id));

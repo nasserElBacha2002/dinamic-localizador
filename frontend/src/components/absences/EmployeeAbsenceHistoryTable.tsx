@@ -1,5 +1,4 @@
-import { Button } from "@mantine/core";
-import { Stack, Text } from "@mantine/core";
+import { Button, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { Link as RouterLink } from "react-router-dom";
 import {
@@ -7,6 +6,7 @@ import {
   LoadingState,
   StatusBadge,
   type DataTableColumn,
+  type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAbsenceRequests } from "../../hooks/useAbsences";
 import type { AbsenceRequestListItem } from "../../types/absence";
@@ -49,6 +49,31 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
     [],
   );
 
+  const mobileCard = useMemo<DataTableMobileCardConfig<AbsenceRequestListItem>>(
+    () => ({
+      title: (row) => safeText(row.absenceType?.name ?? null),
+      status: (row) => (
+        <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
+      ),
+      fields: [
+        {
+          key: "period",
+          label: "Período",
+          getValue: (row) =>
+            `${formatAbsenceDate(row.startDate)} - ${formatAbsenceDate(row.endDate)}`,
+          visibility: "always",
+        },
+        {
+          key: "totalDays",
+          label: "Días",
+          getValue: (row) => String(row.totalDays),
+          visibility: "always",
+        },
+      ],
+    }),
+    [],
+  );
+
   if (historyQuery.isLoading) {
     return <LoadingState />;
   }
@@ -69,12 +94,22 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
         columns={columns}
         getRowKey={(row) => row.id}
         aria-label="Historial de ausencias del empleado"
+        mobileView="cards"
+        mobileCard={mobileCard}
         rowActions={(row) => (
-          <RouterLink to={`/absences/${row.id}`}>Ver</RouterLink>
+          <Button component={RouterLink} to={`/absences/${row.id}`} size="compact-xs" variant="light">
+            Ver
+          </Button>
         )}
         rowActionsHeader="Detalle"
       />
-      <Button component={RouterLink} to={listHref} size="compact-sm" variant="light" style={{ alignSelf: "flex-start" }}>
+      <Button
+        component={RouterLink}
+        to={listHref}
+        size="compact-sm"
+        variant="light"
+        style={{ alignSelf: "flex-start" }}
+      >
         Ver todas las solicitudes
       </Button>
     </Stack>

@@ -51,6 +51,10 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/employees`,
     );
     assert.equal(
+      scopedApiPath("employee-categories"),
+      `companies/${ACTIVE_COMPANY_ID}/employee-categories`,
+    );
+    assert.equal(
       scopedApiPath("/employees"),
       `companies/${ACTIVE_COMPANY_ID}/employees`,
     );
@@ -76,6 +80,14 @@ describe("scopedApiPath", () => {
     assert.equal(
       scopedApiPath("work-team-assignment-batches/batch-id"),
       `companies/${ACTIVE_COMPANY_ID}/work-team-assignment-batches/batch-id`,
+    );
+    assert.equal(
+      scopedApiPath("imports/employees/preview"),
+      `companies/${ACTIVE_COMPANY_ID}/imports/employees/preview`,
+    );
+    assert.equal(
+      scopedApiPath("imports/services/execute"),
+      `companies/${ACTIVE_COMPANY_ID}/imports/services/execute`,
     );
     assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
     assert.equal(

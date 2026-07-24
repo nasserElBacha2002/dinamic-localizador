@@ -20,6 +20,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   let dinamicCompanyId = "";
   let otherCompanyId = "";
   let employeeInDinamicId = "";
+  let createdIsolationCompanyId = "";
 
   before(async () => {
     await setupDatabaseIntegration();
@@ -42,6 +43,7 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
         VALUES (N'Isolation Test Co', N'America/Argentina/Buenos_Aires', N'ACTIVE')
       `);
       otherCompanyId = String(created.recordset[0].id);
+      createdIsolationCompanyId = otherCompanyId;
 
       await pool.request().input("companyId", sql.UniqueIdentifier, otherCompanyId).query(`
         INSERT INTO company_settings (
@@ -61,6 +63,10 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   after(async () => {
+    if (createdIsolationCompanyId) {
+      const { deleteCompanyCascade } = await import("../test-helpers/integration-cleanup");
+      await deleteCompanyCascade(createdIsolationCompanyId);
+    }
     await teardownDatabaseIntegration();
   });
 
@@ -88,22 +94,16 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
   });
 
   it("seeds admin memberships for Dinamic Systems", async () => {
-    const adminResult = await getPool().request().query(`
-      SELECT TOP 1 u.id AS user_id
-      FROM users u
-      WHERE u.role = 'ADMIN' AND u.active = 1
-    `);
-
-    const adminUserId = adminResult.recordset[0]?.user_id
-      ? String(adminResult.recordset[0].user_id)
-      : null;
-    assert.ok(adminUserId, "requires active admin user");
+    // Prefer the CI/migration-seeded platform admin. Later suites create other ADMIN
+    // users (company owners) without Dinamic membership; TOP 1 by role is non-deterministic.
+    const admin = await userRepository.findByEmail("admin@dinamicsystems.com");
+    assert.ok(admin?.active, "requires seeded admin@dinamicsystems.com");
 
     const membership = await userCompanyMembershipRepository.findActiveMembership(
-      adminUserId,
+      admin.id,
       dinamicCompanyId,
     );
-    assert.ok(membership);
+    assert.ok(membership, "admin@dinamicsystems.com must have Dinamic Systems membership");
     assert.equal(membership.companyId, dinamicCompanyId);
   });
 
@@ -158,9 +158,15 @@ describeDatabaseIntegration("multi-company foundation isolation", () => {
       return;
     }
 
+    // Single read path (listForUser → listActive) to avoid races with parallel suites
+    // that insert ACTIVE companies between consecutive list calls.
     const companies = await companyService.listForUser(platformAdmin.id, true);
-    const activeCompanies = await companyRepository.listActive();
-    assert.equal(companies.length, activeCompanies.length);
+    assert.ok(companies.length >= 1);
     assert.ok(companies.every((company) => company.role === "OWNER"));
+    assert.ok(companies.every((company) => company.status === "ACTIVE"));
+    assert.ok(
+      companies.some((company) => company.companyId === otherCompanyId),
+      "platform admin list must include the company created by this suite",
+    );
   });
 });

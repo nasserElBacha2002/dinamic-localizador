@@ -105,6 +105,18 @@ export const companyAbsenceSettingsService = {
     employeeId: string,
     transaction?: sql.Transaction,
   ): Promise<void> {
+    await this.initializeEmployeeAbsenceBalancesMany(companyId, [employeeId], transaction);
+  },
+
+  async initializeEmployeeAbsenceBalancesMany(
+    companyId: string,
+    employeeIds: string[],
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    if (employeeIds.length === 0) {
+      return;
+    }
+
     if (!transaction) {
       await this.ensureAbsenceCatalogForCompany(companyId);
     }
@@ -116,27 +128,37 @@ export const companyAbsenceSettingsService = {
       DEFAULT_COMPANY_OPERATIONAL_SETTINGS.operationTimezone;
     const year = getCurrentYearInTimezone(timezone);
 
-    for (const setting of settings) {
-      if (!setting.autoAssignOnEmployeeCreate) {
-        continue;
-      }
+    const autoSettings = settings.filter((setting) => setting.autoAssignOnEmployeeCreate);
+    if (autoSettings.length === 0) {
+      return;
+    }
 
-      const absenceType = await absenceTypeRepository.findByCode(companyId, setting.absenceTypeCode);
-      if (!absenceType || !absenceType.isActive) {
-        continue;
-      }
+    const absenceTypes = await Promise.all(
+      autoSettings.map((setting) =>
+        absenceTypeRepository.findByCode(companyId, setting.absenceTypeCode),
+      ),
+    );
 
-      await absenceBalanceRepository.createIfNotExists(
-        companyId,
-        {
-          employeeId,
-          absenceTypeId: absenceType.id,
-          year,
-          totalDays: setting.defaultAnnualDays,
-          notes: null,
-        },
-        transaction,
-      );
+    for (const employeeId of employeeIds) {
+      for (let index = 0; index < autoSettings.length; index += 1) {
+        const setting = autoSettings[index]!;
+        const absenceType = absenceTypes[index];
+        if (!absenceType || !absenceType.isActive) {
+          continue;
+        }
+
+        await absenceBalanceRepository.createIfNotExists(
+          companyId,
+          {
+            employeeId,
+            absenceTypeId: absenceType.id,
+            year,
+            totalDays: setting.defaultAnnualDays,
+            notes: null,
+          },
+          transaction,
+        );
+      }
     }
   },
 };

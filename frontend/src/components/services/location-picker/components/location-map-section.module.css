@@ -1,5 +1,27 @@
+.mapPanel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--mantine-spacing-md);
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 240px;
+}
+
+.mapCanvas {
+  width: 100%;
+  max-width: 100%;
+  flex: 1;
+  min-height: 220px;
+  height: min(42vh, 320px);
+  border-radius: var(--mantine-radius-md);
+  overflow: hidden;
+  touch-action: manipulation;
+}
+
 .searchHost {
   width: 100%;
+  min-width: 0;
   min-height: 2.25rem;
 }
 
@@ -8,23 +30,18 @@
   color-scheme: light;
 }
 
-.mapPanel {
-  display: flex;
-  flex-direction: column;
-  gap: var(--mantine-spacing-md);
-  height: 100%;
-  min-height: 320px;
+@media (min-width: $mantine-breakpoint-sm) {
+  .mapPanel {
+    min-height: 320px;
+  }
+
+  .mapCanvas {
+    min-height: 320px;
+    height: auto;
+  }
 }
 
-.mapCanvas {
-  width: 100%;
-  flex: 1;
-  min-height: 320px;
-  border-radius: var(--mantine-radius-md);
-  overflow: hidden;
-}
-
-@media (min-width: 62em) {
+@media (min-width: $mantine-breakpoint-md) {
   .mapPanel {
     min-height: 520px;
   }

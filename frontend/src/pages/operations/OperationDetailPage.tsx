@@ -1,4 +1,4 @@
-import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { Anchor, Box, Button, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router-dom";
@@ -7,6 +7,7 @@ import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
 import {
+  ActionMenu,
   ConfirmDialog,
   ErrorState,
   LoadingState,
@@ -14,6 +15,7 @@ import {
   PageHeader,
   SectionCard,
   StatusBadge,
+  type ActionMenuItem,
   type StatusBadgeTone,
 } from "../../design-system";
 import { OperationTeamSection } from "../../components/operations/OperationTeamSection";
@@ -25,6 +27,7 @@ import {
   useCancelOperation,
   useOperation,
   useOperationWorkdays,
+  useReactivateOperation,
   useUpdateOperation,
 } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
@@ -33,7 +36,7 @@ import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
-import { isOperationAssignable, isOperationEditable } from "../../utils/operation-status";
+import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
 import {
   buildOperationEditDefaultValues,
   formatOperationDetailScheduleTitle,
@@ -77,9 +80,11 @@ export function OperationDetailPage() {
   const permissionsQuery = useCompanyPermissions();
   const updateMutation = useUpdateOperation(id ?? "");
   const cancelMutation = useCancelOperation();
+  const reactivateMutation = useReactivateOperation();
 
   const [editing, setEditing] = useState(false);
   const [confirmCancelOpen, setConfirmCancelOpen] = useState(false);
+  const [confirmReactivateOpen, setConfirmReactivateOpen] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [teamWorkdayOverride, setTeamWorkdayOverride] =
     useState<OperationTeamWorkdaySelection | null>(null);
@@ -142,7 +147,8 @@ export function OperationDetailPage() {
 
   const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
   const canAssign = canManage && isOperationAssignable(operation.status);
-  const canEdit = isOperationEditable(operation.status);
+  const canEdit = canManage && isOperationEditable(operation.status);
+  const canReactivate = canManage && isOperationReactivatable(operation.status);
   const serviceDisplayName = operation.service?.name ?? "—";
   const serviceDetailId = operation.serviceId || operation.service?.id;
   const serviceFieldValue =
@@ -185,42 +191,80 @@ export function OperationDetailPage() {
     }
   };
 
+  const handleReactivate = async () => {
+    if (!id) {
+      return;
+    }
+    try {
+      await reactivateMutation.mutateAsync(id);
+      setConfirmReactivateOpen(false);
+      showFeedback("La operación fue reactivada correctamente.");
+    } catch (error) {
+      showFeedback(getApiErrorMessage(error), "error");
+    }
+  };
+
+  const headerMenuItems: ActionMenuItem[] = [];
+  if (canEdit) {
+    headerMenuItems.push({
+      key: "toggle-edit",
+      label: editing
+        ? "Cancelar edición"
+        : `Editar ${terminology.operation.singular.toLowerCase()}`,
+      onClick: () => {
+        setEditing((current) => !current);
+        setErrorMessage(null);
+      },
+    });
+    headerMenuItems.push({
+      key: "cancel-operation",
+      label: `Cancelar ${terminology.operation.singular.toLowerCase()}`,
+      destructive: true,
+      onClick: () => setConfirmCancelOpen(true),
+    });
+  }
+  if (canReactivate) {
+    headerMenuItems.push({
+      key: "reactivate",
+      label: "Reactivar operación",
+      loading: reactivateMutation.isPending,
+      disabled: reactivateMutation.isPending,
+      onClick: () => setConfirmReactivateOpen(true),
+    });
+  }
+  if (editing && canEdit) {
+    headerMenuItems.push({
+      key: "back",
+      label: "Volver al listado",
+      onClick: goBackToList,
+    });
+  }
+
   return (
     <>
       <PageHeader
         title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
         description={formatOperationDetailScheduleTitle(operation)}
         action={
-          <Group gap="sm" wrap="wrap">
-            {editing && canEdit ? (
-              <Button
-                type="submit"
-                form={OPERATION_DETAIL_FORM_ID}
-                loading={updateMutation.isPending}
-              >
-                Guardar cambios
-              </Button>
-            ) : null}
-            {canEdit ? (
-              <Button
-                variant="default"
-                onClick={() => {
-                  setEditing((current) => !current);
-                  setErrorMessage(null);
-                }}
-              >
-                {editing ? "Cancelar edición" : `Editar ${terminology.operation.singular.toLowerCase()}`}
-              </Button>
-            ) : null}
-            {canEdit ? (
-              <Button variant="default" color="danger" onClick={() => setConfirmCancelOpen(true)}>
-                {`Cancelar ${terminology.operation.singular.toLowerCase()}`}
-              </Button>
-            ) : null}
-            <Button variant="default" onClick={goBackToList}>
-              Volver al listado
-            </Button>
-          </Group>
+          <ActionMenu
+            primary={
+              editing && canEdit ? (
+                <Button
+                  type="submit"
+                  form={OPERATION_DETAIL_FORM_ID}
+                  loading={updateMutation.isPending}
+                >
+                  Guardar cambios
+                </Button>
+              ) : (
+                <Button variant="default" onClick={goBackToList}>
+                  Volver al listado
+                </Button>
+              )
+            }
+            items={headerMenuItems}
+            menuLabel="Más acciones de la operación"
+          />
         }
       />
 
@@ -350,6 +394,16 @@ export function OperationDetailPage() {
         loading={cancelMutation.isPending}
         onCancel={() => setConfirmCancelOpen(false)}
         onConfirm={() => void handleCancel()}
+      />
+
+      <ConfirmDialog
+        open={confirmReactivateOpen}
+        title="Reactivar operación"
+        description="¿Querés reactivar esta operación? Volverá a estar disponible para su gestión, pero no se reiniciarán automáticamente trabajos o procesamientos cancelados."
+        confirmLabel="Reactivar operación"
+        loading={reactivateMutation.isPending}
+        onCancel={() => setConfirmReactivateOpen(false)}
+        onConfirm={() => void handleReactivate()}
       />
     </>
   );

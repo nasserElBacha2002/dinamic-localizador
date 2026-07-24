@@ -21,7 +21,11 @@ export function PageHeader({ title, description, action, breadcrumb }: PageHeade
             </Text>
           ) : null}
         </Stack>
-        {action ? <Group gap="sm">{action}</Group> : null}
+        {action ? (
+          <Group gap="sm" wrap="wrap" style={{ flexShrink: 0 }}>
+            {action}
+          </Group>
+        ) : null}
       </Group>
     </Stack>
   );

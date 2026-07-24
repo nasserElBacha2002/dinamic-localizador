@@ -22,7 +22,7 @@ import { recurringScheduleService } from "./recurring-schedule.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
-import { canTransitionOperationStatus, isOperationEditable } from "../utils/operation-status";
+import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../utils/operation-status";
 import {
   isOperationStartInPast,
   resolveLifecycleOperationStatus,
@@ -531,7 +531,7 @@ export const operationService = {
     }
   },
 
-  async cancel(companyId: string, id: string) {
+  async cancel(companyId: string, id: string, userId?: string | null) {
     const current = await this.getById(companyId, id);
     if (!canTransitionOperationStatus(current.status, "CANCELLED")) {
       throw new AppError(
@@ -550,6 +550,7 @@ export const operationService = {
       entityType: "operation",
       entityId: id,
       action: "cancel",
+      userId: userId ?? null,
       previousData: current as unknown as Record<string, unknown>,
       newData: cancelled as unknown as Record<string, unknown>,
       reason: "Cancelación vía API",
@@ -569,6 +570,72 @@ export const operationService = {
     }
 
     return cancelled;
+  },
+
+  async reactivate(companyId: string, id: string, userId?: string | null) {
+    const current = await operationRepository.findById(companyId, id);
+    if (!current) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+
+    if (!isOperationReactivatable(current.status)) {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_CANCELLED",
+        "La operación ya no se encuentra cancelada y no puede reactivarse.",
+      );
+    }
+
+    if (!canTransitionOperationStatus(current.status, OPERATION_REACTIVATION_STATUS)) {
+      throw new AppError(
+        409,
+        "INVALID_OPERATION_STATUS_TRANSITION",
+        "No se puede reactivar una operación en este estado",
+      );
+    }
+
+    const reactivated = await operationRepository.reactivateFromCancelled(companyId, id);
+    if (!reactivated) {
+      // Concurrent reactivation or status changed between read and update.
+      const raced = await operationRepository.findById(companyId, id);
+      if (!raced) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+      }
+      throw new AppError(
+        409,
+        "OPERATION_NOT_CANCELLED",
+        "La operación ya no se encuentra cancelada y no puede reactivarse.",
+      );
+    }
+
+    await auditService.log(companyId, {
+      entityType: "operation",
+      entityId: id,
+      action: "reactivate",
+      userId: userId ?? null,
+      previousData: {
+        ...(current as unknown as Record<string, unknown>),
+        previousStatus: current.status,
+        restoredStatus: OPERATION_REACTIVATION_STATUS,
+      },
+      newData: reactivated as unknown as Record<string, unknown>,
+      reason: "Reactivación vía API",
+    });
+
+    if ((reactivated.operationKind ?? "ONE_TIME") === "RECURRING") {
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        id,
+        () =>
+          recurringWorkdayMaterializationService.reconcileWorkdaysForReactivatedOperation(
+            companyId,
+            id,
+          ),
+        "recurring operation reactivate",
+      );
+    }
+
+    return syncLifecycleStatus(companyId, reactivated);
   },
 
   async getAttendanceSummary(

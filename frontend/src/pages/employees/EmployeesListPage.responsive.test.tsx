@@ -120,6 +120,10 @@ describe("EmployeesListPage responsive (real page)", () => {
     });
     assert.ok(view.getByRole("table"));
     assert.equal(view.queryByRole("list", { name: /colaboradores/i }), null);
+    const avatar = view.container.querySelector("[data-entity-avatar='collaborator']");
+    assert.equal(avatar?.textContent, "AL");
+    assert.ok(view.getAllByText("Operaciones").length >= 1);
+    assert.ok(view.getByText("Activo"));
   });
 
   it("shows mobile cards, search, filter drawer, and actions without desktop table", async () => {
@@ -137,6 +141,7 @@ describe("EmployeesListPage responsive (real page)", () => {
     });
     assert.equal(view.queryByRole("table"), null);
     assert.ok(view.getByRole("list"));
+    assert.equal(view.container.querySelector("[data-entity-avatar='collaborator']")?.textContent, "AL");
     assert.ok(view.getByLabelText(/Buscar/i));
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));

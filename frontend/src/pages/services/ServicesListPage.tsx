@@ -8,6 +8,7 @@ import {
   FilterBar,
   FilterSelect,
   mapApiPaginationMeta,
+  EntityIdentity,
   PageHeader,
   PaginationControls,
   SearchInput,
@@ -98,7 +99,13 @@ export function ServicesListPage() {
 
   const columns = useMemo<DataTableColumn<Service>[]>(
     () => [
-      { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
+      {
+        key: "name",
+        header: "Nombre",
+        sortable: true,
+        getValue: (row) => row.name,
+        render: (row) => <EntityIdentity name={row.name} entityType="service" />,
+      },
       {
         key: "neighborhood",
         header: "Barrio",
@@ -147,7 +154,7 @@ export function ServicesListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<Service>>(
     () => ({
-      title: (row) => row.name,
+      title: (row) => <EntityIdentity name={row.name} entityType="service" />,
       subtitle: (row) => row.address ?? undefined,
       status: (row) => (
         <StatusBadge

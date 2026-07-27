@@ -129,6 +129,7 @@ describe("ServicesListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Palermo")));
     assert.ok(view.getByRole("table"));
+    assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
   });
 
   it("shows mobile cards and filter drawer without rigid 360px min-width", async () => {
@@ -142,6 +143,7 @@ describe("ServicesListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Palermo")));
     assert.equal(view.queryByRole("table"), null);
+    assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
     assert.equal(view.container.innerHTML.includes("min-width: 360"), false);
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));

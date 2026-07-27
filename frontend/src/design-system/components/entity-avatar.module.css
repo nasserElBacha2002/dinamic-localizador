@@ -1,0 +1,48 @@
+.avatar {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  line-height: 1;
+  user-select: none;
+  letter-spacing: 0.01em;
+}
+
+.shapeSquare {
+  border-radius: var(--mantine-radius-sm);
+}
+
+.shapeRounded {
+  border-radius: var(--mantine-radius-md);
+}
+
+.shapeCircle {
+  border-radius: 9999px;
+}
+
+.identity {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.identityText {
+  min-width: 0;
+}
+
+.identityTitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+.identitySubtitle {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
+  color: var(--mantine-color-dimmed);
+}

@@ -4,7 +4,7 @@ import { useState } from "react";
 import { useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { SERVICE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
-import { ErrorState, LoadingState, PageHeader } from "../../design-system";
+import { EntityAvatar, ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useService, useUpdateService } from "../../hooks/useServices";
 import type { ServiceFormValues } from "../../schemas/service.schema";
 import { toNullableServiceFormat, toNullableServiceText } from "../../schemas/service.schema";
@@ -68,8 +68,13 @@ export function ServiceEditPage() {
   return (
     <>
       <PageHeader
-        title={`Editar ${terminology.service.singular.toLowerCase()}`}
-        description="Actualizá la información y el perímetro de validación de la ubicación."
+        title={
+          <Group gap="md" wrap="nowrap" align="center">
+            <EntityAvatar name={service.name} entityType="service" size="lg" />
+            <span>{service.name}</span>
+          </Group>
+        }
+        description={`Editar ${terminology.service.singular.toLowerCase()}. Actualizá la información y el perímetro de validación de la ubicación.`}
         action={
           <Group gap="sm" visibleFrom="lg">
             <Button variant="default" onClick={goBackToList}>

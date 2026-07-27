@@ -5,6 +5,7 @@ import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLooku
 import {
   ActionMenu,
   DataTable,
+  EntityIdentity,
   FilterBar,
   FilterDateRangeInput,
   FilterSelect,
@@ -34,7 +35,8 @@ import {
 import { getApiErrorMessage } from "../../utils/errors";
 import { navigateWithListContext } from "../../utils/list-navigation";
 import { formatOperationScheduleListLabel, operationKindLabels } from "../../utils/operation-schedule-display";
-import { getOperationServiceAddress, getOperationServiceName } from "./operations-list-columns";
+import { getOperationServiceAddress } from "./operations-list-columns";
+import { getOperationDisplayName } from "../../utils/operation-display";
 import { operationStatusLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 import {
@@ -133,7 +135,11 @@ export function OperationsListPage() {
         key: "serviceName",
         header: terminology.service.singular,
         sortable: true,
-        getValue: (row) => getOperationServiceName(row),
+        getValue: (row) => getOperationDisplayName(row),
+        render: (row) => {
+          const name = getOperationDisplayName(row);
+          return <EntityIdentity name={name} entityType="operation" />;
+        },
       },
       {
         key: "serviceAddress",
@@ -179,7 +185,10 @@ export function OperationsListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<OperationWithService>>(
     () => ({
-      title: (row) => getOperationServiceName(row),
+      title: (row) => {
+        const name = getOperationDisplayName(row);
+        return <EntityIdentity name={name} entityType="operation" />;
+      },
       subtitle: (row) => getOperationServiceAddress(row),
       status: (row) => (
         <StatusBadge label={operationStatusLabels[row.status]} tone="info" variant="light" />

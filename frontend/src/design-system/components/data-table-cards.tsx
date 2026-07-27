@@ -55,7 +55,7 @@ export function DataTableCards<T>({
               <Accordion.Control>
                 <Group justify="space-between" wrap="nowrap" gap="sm" pr="xs">
                   <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-                    <Text fw={600} size="sm" lineClamp={2}>
+                    <Text component="div" fw={600} size="sm" lineClamp={2}>
                       {mobileCard.title(row)}
                     </Text>
                     {mobileCard.subtitle ? (
@@ -121,7 +121,7 @@ export function DataTableCards<T>({
             <Stack gap="sm">
               <Group justify="space-between" align="flex-start" wrap="nowrap" gap="sm">
                 <Stack gap={2} style={{ minWidth: 0, flex: 1 }}>
-                  <Text fw={600} size="sm" lineClamp={2}>
+                  <Text component="div" fw={600} size="sm" lineClamp={2}>
                     {titleNode}
                   </Text>
                   {mobileCard.subtitle ? (

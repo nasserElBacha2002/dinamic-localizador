@@ -52,9 +52,12 @@ function useRemoteMultiSelectOptions(params: {
 
   const previousCompanyIdRef = useRef(params.companyId);
   const onChangeRef = useRef(params.onChange);
-  onChangeRef.current = params.onChange;
   const clearOnCompanyChange = params.clearValueOnCompanyChange !== false;
   const hasValue = params.value.length > 0;
+
+  useEffect(() => {
+    onChangeRef.current = params.onChange;
+  }, [params.onChange]);
 
   useEffect(() => {
     const previousCompanyId = previousCompanyIdRef.current;

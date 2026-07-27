@@ -7,6 +7,7 @@ import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAb
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeDeactivationDialog } from "../../components/employees/EmployeeDeactivationDialog";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
+import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
 import { ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
 import {
   useDeactivateEmployee,
@@ -149,6 +150,7 @@ export function EmployeeEditPage() {
       <PageHeader
         title={`Editar ${terminology.worker.singular.toLowerCase()}`}
         description={employee.name}
+        action={<EmployeeModuleQuickLinks employeeId={employee.id} />}
       />
       <EmployeeForm
         defaultValues={{

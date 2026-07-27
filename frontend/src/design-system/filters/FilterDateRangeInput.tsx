@@ -285,7 +285,7 @@ export function FilterDateRangeInput({
           variant="subtle"
           size="compact-sm"
         >
-          Limpiar
+          Limpiar fecha
         </Button>
       ) : null}
     </Group>

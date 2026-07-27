@@ -1,5 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router";
+import {
+  buildFilterResetState,
+  countActiveFilters,
+  DEFAULT_FILTER_ACTIVITY_IGNORE_KEYS,
+  DEFAULT_FILTER_RETAIN_KEYS,
+  hasActiveFilters,
+} from "../utils/filter-state";
 import type { SortOrder, TableUrlFieldMap } from "../utils/table-url-state";
 import {
   mergeTableUrlPatch,
@@ -14,6 +21,16 @@ export interface UseTableUrlStateOptions<T extends Record<string, unknown>> {
   shouldOmitFromUrl?: (key: keyof T, value: T[keyof T], defaults: T, state: T) => boolean;
   debounceSearch?: boolean;
   searchDebounceMs?: number;
+  /**
+   * Keys kept from current state when calling `resetFilters`
+   * (default: pageSize, sortBy, sortOrder).
+   */
+  filterRetainKeys?: readonly (keyof T | string)[];
+  /**
+   * Keys ignored by `hasActiveFilters` / `activeFilterCount`
+   * (default: page, pageSize, sortBy, sortOrder).
+   */
+  filterActivityIgnoreKeys?: readonly (keyof T | string)[];
 }
 
 export interface UseTableUrlStateResult<T extends Record<string, unknown>> {
@@ -30,8 +47,11 @@ export interface UseTableUrlStateResult<T extends Record<string, unknown>> {
   resetPage: () => void;
   setSorting: (sortBy: string, sortOrder: SortOrder) => void;
   toggleSorting: (sortBy: string, defaultOrder?: SortOrder) => void;
+  /** Atomically restore filter defaults; retains sort/pageSize (and configured keys). */
   resetFilters: () => void;
   clearState: () => void;
+  hasActiveFilters: boolean;
+  activeFilterCount: number;
   page: number;
   pageSize: number;
   sortBy: string | undefined;
@@ -51,6 +71,8 @@ export function useTableUrlState<T extends Record<string, unknown>>(
     shouldOmitFromUrl,
     debounceSearch = hasSearchKey(defaults),
     searchDebounceMs = 300,
+    filterRetainKeys = DEFAULT_FILTER_RETAIN_KEYS,
+    filterActivityIgnoreKeys = DEFAULT_FILTER_ACTIVITY_IGNORE_KEYS,
   } = options;
 
   const [searchParams, setSearchParams] = useSearchParams();
@@ -255,11 +277,14 @@ export function useTableUrlState<T extends Record<string, unknown>>(
 
   const resetFilters = useCallback(() => {
     searchDirtyFromTypingRef.current = false;
-    writeState({ ...defaults });
+    const next = buildFilterResetState(stateRef.current, defaults, {
+      retainKeys: filterRetainKeys,
+    });
+    writeState(next);
     if (hasSearchKey(defaults)) {
-      updateSearchInput(String(defaults.search ?? ""));
+      updateSearchInput(String((next as { search?: string }).search ?? ""));
     }
-  }, [defaults, updateSearchInput, writeState]);
+  }, [defaults, filterRetainKeys, updateSearchInput, writeState]);
 
   const clearState = useCallback(() => {
     searchDirtyFromTypingRef.current = false;
@@ -268,6 +293,16 @@ export function useTableUrlState<T extends Record<string, unknown>>(
       updateSearchInput("");
     }
   }, [defaults, setSearchParams, updateSearchInput]);
+
+  const activeFilterCount = useMemo(
+    () => countActiveFilters(state, defaults, { ignoreKeys: filterActivityIgnoreKeys }),
+    [defaults, filterActivityIgnoreKeys, state],
+  );
+
+  const filtersAreActive = useMemo(
+    () => hasActiveFilters(state, defaults, { ignoreKeys: filterActivityIgnoreKeys }),
+    [defaults, filterActivityIgnoreKeys, state],
+  );
 
   const page = "page" in state ? Number(state.page) : 1;
   const pageSize = "pageSize" in state ? Number(state.pageSize) : 10;
@@ -290,6 +325,8 @@ export function useTableUrlState<T extends Record<string, unknown>>(
     toggleSorting,
     resetFilters,
     clearState,
+    hasActiveFilters: filtersAreActive,
+    activeFilterCount,
     page,
     pageSize,
     sortBy,

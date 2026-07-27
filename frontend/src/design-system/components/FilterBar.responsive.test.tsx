@@ -120,7 +120,7 @@ describe("FilterBar responsive", () => {
       assert.match(filtersTrigger.textContent ?? "", /1/);
     });
 
-    fireEvent.click(view.getAllByRole("button", { name: "Limpiar filtros" })[0]);
+    fireEvent.click(view.getAllByLabelText("Limpiar filtros")[0]);
     fireEvent.click(view.getAllByRole("button", { name: /^Filtros/ })[0]);
     await waitFor(() => {
       assert.equal(

@@ -1,4 +1,4 @@
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
@@ -70,22 +70,6 @@ export function AbsencesListPage() {
     dateFrom: dateQuery.from,
     dateTo: dateQuery.to,
   });
-
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.status !== ABSENCES_TABLE_DEFAULTS.status) count += 1;
-    if (table.state.absenceTypeId !== ABSENCES_TABLE_DEFAULTS.absenceTypeId) count += 1;
-    if (table.state.employeeIds.length > 0) count += 1;
-    return count;
-  }, [table.state]);
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      status: ABSENCES_TABLE_DEFAULTS.status,
-      absenceTypeId: ABSENCES_TABLE_DEFAULTS.absenceTypeId,
-      employeeIds: ABSENCES_TABLE_DEFAULTS.employeeIds,
-    });
-  }, [table]);
 
   const statusOptions = useMemo(
     () => [
@@ -215,8 +199,9 @@ export function AbsencesListPage() {
             allowCustomRange
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        hasActiveFilters={table.hasActiveFilters}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <FilterSelect

@@ -24,7 +24,6 @@ import type { DateRangeValue } from "../../types/date-range";
 import { terminology } from "../../domain/terminology";
 import { getDefaultOperationDateRange, getDateRangeQueryValue } from "../../utils/date-range";
 import {
-  areDateRangeUrlFieldsEqual,
   dateRangeToUrlFields,
   urlFieldsToDateRange,
 } from "../../utils/date-range-url";
@@ -103,40 +102,6 @@ export function OperationsListPage() {
     sortDirection: table.state.sortOrder,
   });
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.status) {
-      count += 1;
-    }
-    if (table.state.operationKind) {
-      count += 1;
-    }
-    if (table.state.serviceId) {
-      count += 1;
-    }
-    if (
-      !areDateRangeUrlFieldsEqual(
-        {
-          datePreset: table.state.datePreset,
-          dateFrom: table.state.dateFrom,
-          dateTo: table.state.dateTo,
-        },
-        defaultDateFields,
-      )
-    ) {
-      count += 1;
-    }
-    return count;
-  }, [
-    defaultDateFields,
-    table.state.dateFrom,
-    table.state.datePreset,
-    table.state.dateTo,
-    table.state.operationKind,
-    table.state.serviceId,
-    table.state.status,
-  ]);
-
   const handleSortChange = (field: string) => {
     table.toggleSorting(field, "asc");
   };
@@ -144,15 +109,6 @@ export function OperationsListPage() {
   const handleDateRangeChange = (nextDateRange: DateRangeValue) => {
     table.setState(dateRangeToUrlFields(nextDateRange));
   };
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      status: tableDefaults.status,
-      operationKind: tableDefaults.operationKind,
-      serviceId: tableDefaults.serviceId,
-      ...defaultDateFields,
-    });
-  }, [defaultDateFields, table, tableDefaults.operationKind, tableDefaults.serviceId, tableDefaults.status]);
 
   const statusOptions = useMemo(
     () => [
@@ -299,8 +255,9 @@ export function OperationsListPage() {
       />
 
       <FilterBar
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        hasActiveFilters={table.hasActiveFilters}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <FilterSelect

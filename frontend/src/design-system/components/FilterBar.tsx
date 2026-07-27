@@ -2,6 +2,7 @@ import { Badge, Button, Drawer, Group, Paper, SimpleGrid, Stack } from "@mantine
 import { useDisclosure } from "@mantine/hooks";
 import type { ReactNode } from "react";
 import { useIsBelow } from "../hooks/useIsBelow";
+import { ClearFiltersButton } from "./ClearFiltersButton";
 import { FilterBarItem, type FilterBarItemProps } from "./FilterBarItem";
 
 export type { FilterBarItemProps };
@@ -14,9 +15,15 @@ export interface FilterBarProps {
    * Secondary filters (`children`) open in a Drawer below `sm`.
    */
   search?: ReactNode;
-  /** Count of secondary filters that differ from defaults (shown on mobile trigger). */
+  /** Count of filters that differ from defaults (badge + enable clear). */
   activeFilterCount?: number;
+  /**
+   * When provided, renders "Limpiar filtros" on desktop and mobile.
+   * Inactive when `activeFilterCount` is 0 (or when `hasActiveFilters` is false).
+   */
   onClearFilters?: () => void;
+  /** Explicit override; defaults to `activeFilterCount > 0`. */
+  hasActiveFilters?: boolean;
   filtersTitle?: string;
   clearLabel?: string;
   /**
@@ -32,12 +39,14 @@ export function FilterBar({
   search,
   activeFilterCount = 0,
   onClearFilters,
+  hasActiveFilters,
   filtersTitle = "Filtros",
   clearLabel = "Limpiar filtros",
   applyLabel = "Listo",
 }: FilterBarProps) {
   const isMobile = useIsBelow("sm");
   const [opened, { open, close }] = useDisclosure(false);
+  const clearEnabled = hasActiveFilters ?? activeFilterCount > 0;
 
   const desktopFilters = (
     <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md" style={{ flex: 1, minWidth: 0 }}>
@@ -51,7 +60,19 @@ export function FilterBar({
       <Paper withBorder radius="md" p="md" mb="md">
         <Group justify="space-between" align="flex-end" wrap="wrap" gap="md">
           {desktopFilters}
-          {actions ? <Group gap="sm">{actions}</Group> : null}
+          {onClearFilters || actions ? (
+            <Group gap="sm" wrap="wrap">
+              {onClearFilters ? (
+                <ClearFiltersButton
+                  onClick={onClearFilters}
+                  disabled={!clearEnabled}
+                  label={clearLabel}
+                  variant="subtle"
+                />
+              ) : null}
+              {actions}
+            </Group>
+          ) : null}
         </Group>
       </Paper>
     );
@@ -71,10 +92,13 @@ export function FilterBar({
                 </Badge>
               ) : null}
             </Button>
-            {activeFilterCount > 0 && onClearFilters ? (
-              <Button variant="subtle" onClick={onClearFilters}>
-                {clearLabel}
-              </Button>
+            {onClearFilters ? (
+              <ClearFiltersButton
+                onClick={onClearFilters}
+                disabled={!clearEnabled}
+                label={clearLabel}
+                variant="subtle"
+              />
             ) : null}
             {actions}
           </Group>
@@ -99,9 +123,12 @@ export function FilterBar({
           </SimpleGrid>
           <Group justify="space-between" gap="sm" wrap="wrap">
             {onClearFilters ? (
-              <Button variant="default" onClick={onClearFilters}>
-                {clearLabel}
-              </Button>
+              <ClearFiltersButton
+                onClick={onClearFilters}
+                disabled={!clearEnabled}
+                label={clearLabel}
+                variant="default"
+              />
             ) : (
               <span />
             )}

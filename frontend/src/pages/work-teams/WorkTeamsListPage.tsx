@@ -66,11 +66,6 @@ export function WorkTeamsListPage() {
 
   const { data, isPending, isError, error, isCompanyLoading } = useWorkTeams(filters);
 
-  const activeSecondaryFilterCount = useMemo(
-    () => (table.state.active !== TABLE_DEFAULTS.active ? 1 : 0),
-    [table.state.active],
-  );
-
   const columns = useMemo<DataTableColumn<WorkTeam>[]>(
     () => [
       { key: "name", header: "Nombre", getValue: (row) => row.name },
@@ -152,10 +147,6 @@ export function WorkTeamsListPage() {
     [table],
   );
 
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setField("active", TABLE_DEFAULTS.active);
-  }, [table]);
-
   return (
     <>
       <PageHeader
@@ -180,8 +171,9 @@ export function WorkTeamsListPage() {
             label="Buscar"
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        hasActiveFilters={table.hasActiveFilters}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <Select

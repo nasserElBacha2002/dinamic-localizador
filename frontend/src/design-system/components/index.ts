@@ -17,6 +17,7 @@ export {
 } from "./DataTable";
 export { FilterBar, type FilterBarProps, type FilterBarItemProps } from "./FilterBar";
 export { FilterBarItem } from "./FilterBarItem";
+export { ClearFiltersButton, type ClearFiltersButtonProps } from "./ClearFiltersButton";
 export { ResponsiveModal, type ResponsiveModalProps, type ResponsiveModalBodyMode } from "./ResponsiveModal";
 export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from "./ActionMenu";
 export {

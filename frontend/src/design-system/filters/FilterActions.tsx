@@ -11,7 +11,7 @@ export interface FilterActionsProps {
 export function FilterActions({
   children,
   onClear,
-  clearLabel = "Limpiar",
+  clearLabel = "Limpiar filtros",
   disabled = false,
 }: FilterActionsProps) {
   if (!children && !onClear) {

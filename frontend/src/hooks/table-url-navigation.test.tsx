@@ -49,6 +49,11 @@ function OperationsListHarness() {
       <button type="button" onClick={() => table.setPage(2)}>
         Página 2
       </button>
+      <button type="button" onClick={() => table.resetFilters()}>
+        Limpiar filtros
+      </button>
+      <span data-testid="has-active">{String(table.hasActiveFilters)}</span>
+      <span data-testid="active-count">{String(table.activeFilterCount)}</span>
       <button
         type="button"
         onClick={(event) => {
@@ -170,6 +175,27 @@ describe("table URL navigation integration", () => {
     await waitFor(() => {
       assert.match(view.getByTestId("url").textContent ?? "", /search=carrefour/);
       assert.equal(view.getByTestId("search").textContent, "carrefour");
+    });
+  });
+
+  it("resetFilters restores defaults, page 1, and clears URL atomically", async () => {
+    const view = renderOperationsFlow("/operations");
+
+    fireEvent.click(view.getByRole("button", { name: "Filtrar programadas" }));
+    fireEvent.click(view.getByRole("button", { name: "Página 2" }));
+    await waitFor(() => {
+      assert.equal(view.getByTestId("has-active").textContent, "true");
+      assert.equal(view.getByTestId("page").textContent, "2");
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Limpiar filtros" }));
+
+    await waitFor(() => {
+      assert.equal(view.getByTestId("url").textContent, "/operations");
+      assert.equal(view.getByTestId("status").textContent, "");
+      assert.equal(view.getByTestId("page").textContent, "1");
+      assert.equal(view.getByTestId("has-active").textContent, "false");
+      assert.equal(view.getByTestId("active-count").textContent, "0");
     });
   });
 });

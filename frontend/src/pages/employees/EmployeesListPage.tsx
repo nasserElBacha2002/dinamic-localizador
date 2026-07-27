@@ -6,6 +6,7 @@ import {
   DataTable,
   FilterBar,
   mapApiPaginationMeta,
+  EntityIdentity,
   PageHeader,
   PaginationControls,
   SearchInput,
@@ -76,7 +77,13 @@ export function EmployeesListPage() {
 
   const columns = useMemo<DataTableColumn<Employee>[]>(
     () => [
-      { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
+      {
+        key: "name",
+        header: "Nombre",
+        sortable: true,
+        getValue: (row) => row.name,
+        render: (row) => <EntityIdentity name={row.name} entityType="collaborator" />,
+      },
       {
         key: "documentNumber",
         header: "Documento",
@@ -118,7 +125,9 @@ export function EmployeesListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<Employee>>(
     () => ({
-      title: (row) => row.name,
+      title: (row) => (
+        <EntityIdentity name={row.name} entityType="collaborator" />
+      ),
       status: (row) => (
         <StatusBadge
           label={activeStatusLabel(row.active)}

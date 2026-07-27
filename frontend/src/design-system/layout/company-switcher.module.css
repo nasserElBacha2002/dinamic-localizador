@@ -19,20 +19,6 @@
   padding: 0.25rem 0.5rem;
 }
 
-.icon {
-  flex-shrink: 0;
-  width: 2rem;
-  height: 2rem;
-  border-radius: var(--mantine-radius-md);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--mantine-color-brand-light);
-  color: var(--mantine-color-brand-7);
-  font-size: 0.875rem;
-  font-weight: 700;
-}
-
 .content {
   min-width: 0;
   text-align: left;

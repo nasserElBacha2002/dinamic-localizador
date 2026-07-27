@@ -5,6 +5,7 @@ import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLooku
 import {
   ActionMenu,
   DataTable,
+  EntityIdentity,
   FilterBar,
   FilterDateRangeInput,
   FilterSelect,
@@ -134,6 +135,10 @@ export function OperationsListPage() {
         header: terminology.service.singular,
         sortable: true,
         getValue: (row) => getOperationServiceName(row),
+        render: (row) => {
+          const name = getOperationServiceName(row);
+          return <EntityIdentity name={name} entityType="operation" />;
+        },
       },
       {
         key: "serviceAddress",
@@ -179,7 +184,10 @@ export function OperationsListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<OperationWithService>>(
     () => ({
-      title: (row) => getOperationServiceName(row),
+      title: (row) => {
+        const name = getOperationServiceName(row);
+        return <EntityIdentity name={name} entityType="operation" />;
+      },
       subtitle: (row) => getOperationServiceAddress(row),
       status: (row) => (
         <StatusBadge label={operationStatusLabels[row.status]} tone="info" variant="light" />

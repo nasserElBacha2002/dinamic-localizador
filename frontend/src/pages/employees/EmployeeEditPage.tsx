@@ -1,14 +1,14 @@
 import { notifications } from "@mantine/notifications";
 import { useRef, useState } from "react";
 import { useParams } from "react-router";
-import { Stack } from "@mantine/core";
+import { Stack, Group } from "@mantine/core";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeDeactivationDialog } from "../../components/employees/EmployeeDeactivationDialog";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
-import { ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
+import { EntityAvatar, ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
 import {
   useDeactivateEmployee,
   useEmployee,
@@ -148,8 +148,13 @@ export function EmployeeEditPage() {
   return (
     <Stack gap="md">
       <PageHeader
-        title={`Editar ${terminology.worker.singular.toLowerCase()}`}
-        description={employee.name}
+        title={
+          <Group gap="md" wrap="nowrap" align="center">
+            <EntityAvatar name={employee.name} entityType="collaborator" size="lg" />
+            <span>{employee.name}</span>
+          </Group>
+        }
+        description={`Editar ${terminology.worker.singular.toLowerCase()}`}
         action={<EmployeeModuleQuickLinks employeeId={employee.id} />}
       />
       <EmployeeForm

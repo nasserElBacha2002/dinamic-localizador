@@ -1,4 +1,4 @@
-import { Anchor, Box, Button, SimpleGrid, Stack } from "@mantine/core";
+import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router";
@@ -9,6 +9,7 @@ import { useCompanySettings } from "../../hooks/useCompanySettings";
 import {
   ActionMenu,
   ConfirmDialog,
+  EntityAvatar,
   ErrorState,
   LoadingState,
   MetricCard,
@@ -243,8 +244,13 @@ export function OperationDetailPage() {
   return (
     <>
       <PageHeader
-        title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
-        description={formatOperationDetailScheduleTitle(operation)}
+        title={
+          <Group gap="md" wrap="nowrap" align="center">
+            <EntityAvatar name={serviceDisplayName} entityType="operation" size="lg" />
+            <span>{serviceDisplayName}</span>
+          </Group>
+        }
+        description={`${`Detalle de la ${terminology.operation.singular.toLowerCase()}`} · ${formatOperationDetailScheduleTitle(operation)}`}
         action={
           <ActionMenu
             primary={

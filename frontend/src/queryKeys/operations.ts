@@ -15,8 +15,9 @@ export const operationKeys = {
     filters === undefined
       ? (["operations", companyId] as const)
       : (["operations", companyId, filters] as const),
+  details: (companyId: string | undefined) => ["operation", companyId] as const,
   detail: (companyId: string | undefined, operationId: string | undefined) =>
-    ["operation", companyId, operationId] as const,
+    [...operationKeys.details(companyId), operationId] as const,
 };
 
 export const operationEmployeeKeys = {
@@ -25,14 +26,16 @@ export const operationEmployeeKeys = {
 };
 
 export const operationAttendanceKeys = {
+  company: (companyId: string | undefined) =>
+    ["operation-attendance-summary", companyId] as const,
   summary: (
     companyId: string | undefined,
     operationId: string | undefined,
     filters?: unknown,
   ) =>
     filters === undefined
-      ? (["operation-attendance-summary", companyId, operationId] as const)
-      : (["operation-attendance-summary", companyId, operationId, filters] as const),
+      ? ([...operationAttendanceKeys.company(companyId), operationId] as const)
+      : ([...operationAttendanceKeys.company(companyId), operationId, filters] as const),
 };
 
 export const operationWorkdayKeys = {

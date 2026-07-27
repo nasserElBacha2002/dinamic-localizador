@@ -3,7 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { getEmployeeLookups } from "../../api/lookups.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import { LOOKUP_STALE_TIME_MS, lookupKeys } from "../../queryKeys/lookups";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+} from "../../queryKeys/lookups";
 import type { EmployeeLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
@@ -20,8 +24,6 @@ interface EmployeeLookupAutocompleteProps {
   required?: boolean;
   placeholder?: string;
 }
-
-const DEFAULT_LIMIT = 10;
 
 function mapEmployeeLookupToOption(employee: EmployeeLookup): SearchAutocompleteOption {
   return {
@@ -48,7 +50,7 @@ export function EmployeeLookupAutocomplete({
       getEmployeeLookups(
         {
           search: search || undefined,
-          limit: DEFAULT_LIMIT,
+          limit: DEFAULT_LOOKUP_LIMIT,
           active: activeOnly ? true : undefined,
         },
         { signal },
@@ -66,7 +68,7 @@ export function EmployeeLookupAutocomplete({
       lookupKeys.employeeSearch(companyId, {
         search,
         activeOnly,
-        limit: DEFAULT_LIMIT,
+        limit: DEFAULT_LOOKUP_LIMIT,
       }),
     [activeOnly, companyId],
   );
@@ -75,6 +77,7 @@ export function EmployeeLookupAutocomplete({
     getQueryKey,
     fetchItems: fetchEmployees,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
     staleTime: LOOKUP_STALE_TIME_MS,
   });

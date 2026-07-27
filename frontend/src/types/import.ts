@@ -73,6 +73,16 @@ export interface ImportExecuteResult {
   fileErrors: string[];
   importJobId?: string;
   status?: ImportJobStatus | string;
+  /**
+   * Optional: when the backend reports companies touched by the import
+   * (e.g. future employee transfers). Frontend invalidates only these.
+   */
+  affectedCompanyIds?: string[];
+  affectedEmployeeTransfers?: Array<{
+    employeeId: string;
+    sourceCompanyId: string;
+    targetCompanyId: string;
+  }>;
 }
 
 export interface ImportFilePayload {

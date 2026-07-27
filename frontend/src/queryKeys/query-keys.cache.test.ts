@@ -7,46 +7,88 @@ import {
   invalidateAfterImport,
   invalidateAttendanceReviewQueries,
   invalidateEmployeeScopedQueries,
+  invalidateEmployeeTransferQueries,
   invalidateServiceScopedQueries,
 } from "./invalidation";
-import { LOOKUP_STALE_TIME_MS, lookupKeys, normalizeLookupSearchParams } from "./lookups";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+  normalizeLookupSearchParams,
+} from "./lookups";
 import { operationKeys } from "./operations";
 import { serviceKeys } from "./services";
 import { statisticsKeys } from "./statistics";
+import { workTeamKeys } from "./work-teams";
 
 describe("normalizeLookupSearchParams", () => {
   it("normalizes equivalent params to the same shape", () => {
     assert.deepEqual(normalizeLookupSearchParams({ search: "  cafe  ", limit: undefined }), {
       search: "cafe",
       activeOnly: true,
-      limit: 10,
+      limit: DEFAULT_LOOKUP_LIMIT,
     });
-    assert.deepEqual(normalizeLookupSearchParams({ search: "cafe", activeOnly: true, limit: 10 }), {
-      search: "cafe",
-      activeOnly: true,
-      limit: 10,
-    });
+    assert.deepEqual(
+      normalizeLookupSearchParams({
+        search: "cafe",
+        activeOnly: true,
+        limit: DEFAULT_LOOKUP_LIMIT,
+      }),
+      {
+        search: "cafe",
+        activeOnly: true,
+        limit: DEFAULT_LOOKUP_LIMIT,
+      },
+    );
   });
 });
 
 describe("lookupKeys", () => {
   it("shares the same key for equivalent service searches", () => {
-    const a = lookupKeys.serviceSearch("co-1", { search: "  x ", activeOnly: true, limit: 10 });
-    const b = lookupKeys.serviceSearch("co-1", { search: "x", limit: 10 });
+    const a = lookupKeys.serviceSearch("co-1", {
+      search: "  x ",
+      activeOnly: true,
+      limit: DEFAULT_LOOKUP_LIMIT,
+    });
+    const b = lookupKeys.serviceSearch("co-1", { search: "x", limit: DEFAULT_LOOKUP_LIMIT });
     assert.deepEqual(a, b);
   });
 
   it("separates different searches and companies", () => {
-    const a = lookupKeys.serviceSearch("co-1", { search: "a", limit: 10 });
-    const b = lookupKeys.serviceSearch("co-1", { search: "b", limit: 10 });
-    const c = lookupKeys.serviceSearch("co-2", { search: "a", limit: 10 });
+    const a = lookupKeys.serviceSearch("co-1", { search: "a", limit: DEFAULT_LOOKUP_LIMIT });
+    const b = lookupKeys.serviceSearch("co-1", { search: "b", limit: DEFAULT_LOOKUP_LIMIT });
+    const c = lookupKeys.serviceSearch("co-2", { search: "a", limit: DEFAULT_LOOKUP_LIMIT });
     assert.notDeepEqual(a, b);
     assert.notDeepEqual(a, c);
   });
 
-  it("uses limit 10 in the normalized key by default", () => {
+  it("uses DEFAULT_LOOKUP_LIMIT in the normalized key by default", () => {
     const key = lookupKeys.serviceSearch("co-1", { search: "" });
-    assert.equal(key[key.length - 1]?.limit, 10);
+    assert.equal(key[key.length - 1]?.limit, DEFAULT_LOOKUP_LIMIT);
+  });
+
+  it("keeps selected-by-id keys distinct from search and from each other", () => {
+    const search = lookupKeys.serviceSearch("co-1", { search: "x", limit: DEFAULT_LOOKUP_LIMIT });
+    const selectedA = lookupKeys.serviceSelected("co-1", "svc-a");
+    const selectedB = lookupKeys.serviceSelected("co-1", "svc-b");
+    const selectedOtherCompany = lookupKeys.serviceSelected("co-2", "svc-a");
+
+    assert.notDeepEqual(search, selectedA);
+    assert.notDeepEqual(selectedA, selectedB);
+    assert.notDeepEqual(selectedA, selectedOtherCompany);
+
+    assert.notDeepEqual(
+      lookupKeys.employeeSelected("co-1", "emp-a"),
+      lookupKeys.employeeSelected("co-1", "emp-b"),
+    );
+    assert.notDeepEqual(
+      lookupKeys.operationSelected("co-1", "op-a"),
+      lookupKeys.operationSelected("co-1", "op-b"),
+    );
+    assert.notDeepEqual(
+      lookupKeys.employeeSearch("co-1", { search: "a", limit: DEFAULT_LOOKUP_LIMIT }),
+      lookupKeys.employeeSelected("co-1", "a"),
+    );
   });
 });
 
@@ -85,7 +127,7 @@ describe("attendanceKeys vs legacy invalidation", () => {
 });
 
 describe("invalidateServiceScopedQueries", () => {
-  it("invalidates lists, detail, facets and lookup prefixes for the company", async () => {
+  it("invalidates lists, facets and lookups but not the exact detail", async () => {
     const client = new QueryClient({
       defaultOptions: { queries: { retry: false, gcTime: 0 } },
     });
@@ -103,7 +145,7 @@ describe("invalidateServiceScopedQueries", () => {
     await invalidateServiceScopedQueries(client, companyId);
 
     assert.equal(client.getQueryState(listKey)?.isInvalidated, true);
-    assert.equal(client.getQueryState(detailKey)?.isInvalidated, true);
+    assert.equal(client.getQueryState(detailKey)?.isInvalidated, false);
     assert.equal(client.getQueryState(facetsKey)?.isInvalidated, true);
     assert.equal(client.getQueryState(lookupKey)?.isInvalidated, true);
     assert.equal(client.getQueryState(otherCompany)?.isInvalidated, false);
@@ -190,7 +232,10 @@ describe("lookup staleTime vs mutation invalidation", () => {
     });
     let fetches = 0;
     const companyId = "co-1";
-    const key = lookupKeys.serviceSearch(companyId, { search: "", limit: 10 });
+    const key = lookupKeys.serviceSearch(companyId, {
+      search: "",
+      limit: DEFAULT_LOOKUP_LIMIT,
+    });
 
     const options = {
       queryKey: key,
@@ -208,6 +253,106 @@ describe("lookup staleTime vs mutation invalidation", () => {
     await invalidateServiceScopedQueries(client, companyId);
     await client.fetchQuery(options);
     assert.equal(fetches, 2);
+    client.clear();
+  });
+});
+
+describe("invalidateEmployeeTransferQueries", () => {
+  it("invalidates source and target only; leaves a third company untouched", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const source = "co-a";
+    const target = "co-b";
+    const third = "co-c";
+    const employeeId = "emp-1";
+
+    const sourceList = employeeKeys.list(source, { page: 1 });
+    const targetList = employeeKeys.list(target, { page: 1 });
+    const thirdList = employeeKeys.list(third, { page: 1 });
+    const sourceDetail = employeeKeys.detail(source, employeeId);
+    const targetDetail = employeeKeys.detail(target, employeeId);
+    const sourceTeams = workTeamKeys.list(source, { page: 1 });
+    const thirdTeams = workTeamKeys.list(third, { page: 1 });
+
+    for (const key of [
+      sourceList,
+      targetList,
+      thirdList,
+      sourceDetail,
+      targetDetail,
+      sourceTeams,
+      thirdTeams,
+    ]) {
+      client.setQueryData(key, { ok: true });
+    }
+
+    await invalidateEmployeeTransferQueries(client, source, target, employeeId);
+
+    assert.equal(client.getQueryState(sourceList)?.isInvalidated, true);
+    assert.equal(client.getQueryState(targetList)?.isInvalidated, true);
+    assert.equal(client.getQueryState(thirdList)?.isInvalidated, false);
+    assert.equal(client.getQueryData(sourceDetail), undefined);
+    assert.equal(client.getQueryState(targetDetail)?.isInvalidated, true);
+    assert.equal(client.getQueryState(sourceTeams)?.isInvalidated, true);
+    assert.equal(client.getQueryState(thirdTeams)?.isInvalidated, false);
+    client.clear();
+  });
+});
+
+describe("invalidateAfterImport multi-company", () => {
+  it("invalidates only companies listed in affectedCompanyIds", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const listA = employeeKeys.list("co-a", { page: 1 });
+    const listB = employeeKeys.list("co-b", { page: 1 });
+    const listC = employeeKeys.list("co-c", { page: 1 });
+    client.setQueryData(listA, { ok: true });
+    client.setQueryData(listB, { ok: true });
+    client.setQueryData(listC, { ok: true });
+
+    await invalidateAfterImport(client, "co-a", "employees", ["co-a", "co-b"]);
+
+    assert.equal(client.getQueryState(listA)?.isInvalidated, true);
+    assert.equal(client.getQueryState(listB)?.isInvalidated, true);
+    assert.equal(client.getQueryState(listC)?.isInvalidated, false);
+    client.clear();
+  });
+});
+
+describe("captured company mutation write", () => {
+  it("writes detail under the company captured at mutation start, not the active company", async () => {
+    const client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+    const capturedCompanyId = "co-a";
+    const activeCompanyId = "co-b";
+    const employeeId = "emp-1";
+    const updated = { id: employeeId, name: "Updated" };
+
+    client.setQueryData(employeeKeys.detail(capturedCompanyId, employeeId), {
+      id: employeeId,
+      name: "Old",
+    });
+    client.setQueryData(employeeKeys.detail(activeCompanyId, employeeId), {
+      id: employeeId,
+      name: "B-side",
+    });
+
+    // Simulate onSuccess using variables.companyId (captured), not activeCompanyId.
+    client.setQueryData(employeeKeys.detail(capturedCompanyId, employeeId), updated);
+    await invalidateEmployeeScopedQueries(client, capturedCompanyId);
+
+    assert.deepEqual(client.getQueryData(employeeKeys.detail(capturedCompanyId, employeeId)), updated);
+    assert.deepEqual(client.getQueryData(employeeKeys.detail(activeCompanyId, employeeId)), {
+      id: employeeId,
+      name: "B-side",
+    });
+    assert.equal(
+      client.getQueryState(employeeKeys.list(activeCompanyId, { page: 1 }))?.isInvalidated,
+      undefined,
+    );
     client.clear();
   });
 });

@@ -4,7 +4,7 @@ import { getOperations } from "../../api/operations.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperation } from "../../hooks/useOperations";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import { LOOKUP_STALE_TIME_MS } from "../../queryKeys/lookups";
+import { DEFAULT_LOOKUP_LIMIT, LOOKUP_STALE_TIME_MS } from "../../queryKeys/lookups";
 import { operationKeys } from "../../queryKeys/operations";
 import type { OperationWithService } from "../../types/operation";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
@@ -23,8 +23,6 @@ interface OperationSearchAutocompleteProps {
   required?: boolean;
   placeholder?: string;
 }
-
-const DEFAULT_LIMIT = 10;
 
 function mapOperationToOption(operation: OperationWithService): SearchAutocompleteOption {
   return {
@@ -54,7 +52,7 @@ export function OperationSearchAutocomplete({
       {
         search: search || undefined,
         page: 1,
-        limit: DEFAULT_LIMIT,
+        limit: DEFAULT_LOOKUP_LIMIT,
       },
       { signal },
     );
@@ -73,7 +71,7 @@ export function OperationSearchAutocomplete({
         ...operationKeys.list(companyId, {
           search: search || undefined,
           page: 1,
-          limit: DEFAULT_LIMIT,
+          limit: DEFAULT_LOOKUP_LIMIT,
         }),
         "autocomplete",
       ] as const,
@@ -84,6 +82,7 @@ export function OperationSearchAutocomplete({
     getQueryKey,
     fetchItems: fetchOperations,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
     staleTime: LOOKUP_STALE_TIME_MS,
   });

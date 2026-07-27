@@ -9,12 +9,15 @@ import type {
   ListEmployeeCategoriesFilters,
   UpdateEmployeeCategoryInput,
 } from "../types/employee-category";
+import { employeeKeys } from "../queryKeys/employees";
+import { employeeCategoryKeys } from "../queryKeys/employee-categories";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
+/** @deprecated Prefer employeeCategoryKeys.list */
 export const employeeCategoriesQueryKey = (
   companyId: string | undefined,
   filters: ListEmployeeCategoriesFilters,
-) => ["employee-categories", companyId, filters] as const;
+) => employeeCategoryKeys.list(companyId, filters);
 
 export function useEmployeeCategories(
   filters: ListEmployeeCategoriesFilters = {},
@@ -23,7 +26,7 @@ export function useEmployeeCategories(
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
 
   return useQuery({
-    queryKey: employeeCategoriesQueryKey(companyId, filters),
+    queryKey: employeeCategoryKeys.list(companyId, filters),
     queryFn: () => getEmployeeCategories(filters),
     enabled,
     retry: 1,
@@ -36,8 +39,8 @@ export function useCreateEmployeeCategory() {
 
   return useMutation({
     mutationFn: (input: CreateEmployeeCategoryInput) => createEmployeeCategory(input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["employee-categories", companyId] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: employeeCategoryKeys.lists(companyId) });
     },
   });
 }
@@ -54,9 +57,11 @@ export function useUpdateEmployeeCategory() {
       categoryId: string;
       input: UpdateEmployeeCategoryInput;
     }) => updateEmployeeCategory(categoryId, input),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ["employee-categories", companyId] });
-      void queryClient.invalidateQueries({ queryKey: ["employees", companyId] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: employeeCategoryKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: employeeKeys.lists(companyId) }),
+      ]);
     },
   });
 }

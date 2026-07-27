@@ -9,6 +9,9 @@ export interface NormalizedLookupSearchParams {
   limit: number;
 }
 
+export const LOOKUP_STALE_TIME_MS = 30_000;
+export const DEFAULT_LOOKUP_LIMIT = 10;
+
 export function normalizeLookupSearchParams(params: {
   search?: string;
   activeOnly?: boolean;
@@ -17,7 +20,7 @@ export function normalizeLookupSearchParams(params: {
   return {
     search: params.search?.trim() ?? "",
     activeOnly: params.activeOnly ?? true,
-    limit: params.limit ?? 10,
+    limit: params.limit ?? DEFAULT_LOOKUP_LIMIT,
   };
 }
 
@@ -63,6 +66,3 @@ export const lookupKeys = {
   operationSelected: (companyId: string | undefined, operationId: string | undefined) =>
     [...lookupKeys.operationCompany(companyId), "selected", operationId] as const,
 };
-
-/** Catalog / autocomplete freshness — invalidate immediately after mutations. */
-export const LOOKUP_STALE_TIME_MS = 30_000;

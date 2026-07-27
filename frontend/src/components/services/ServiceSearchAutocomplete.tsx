@@ -4,9 +4,12 @@ import { useQuery } from "@tanstack/react-query";
 import { getServiceLookups } from "../../api/lookups.api";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
-import { useService } from "../../hooks/useServices";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import { LOOKUP_STALE_TIME_MS, lookupKeys } from "../../queryKeys/lookups";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+} from "../../queryKeys/lookups";
 import type { ServiceLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 
@@ -22,8 +25,6 @@ interface ServiceSearchAutocompleteProps {
   required?: boolean;
   placeholder?: string;
 }
-
-const DEFAULT_LIMIT = 10;
 
 function mapServiceLookupToOption(service: ServiceLookup): SearchAutocompleteOption {
   return {
@@ -47,14 +48,13 @@ export function ServiceSearchAutocomplete({
 }: ServiceSearchAutocompleteProps) {
   const navigate = useNavigate();
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
-  const selectedServiceQuery = useService(value ?? undefined);
 
   const fetchServices = useCallback(
     async (search: string, signal: AbortSignal) =>
       getServiceLookups(
         {
           search: search || undefined,
-          limit: DEFAULT_LIMIT,
+          limit: DEFAULT_LOOKUP_LIMIT,
           active: activeOnly ? true : undefined,
         },
         { signal },
@@ -69,7 +69,7 @@ export function ServiceSearchAutocomplete({
       lookupKeys.serviceSearch(companyId, {
         search,
         activeOnly,
-        limit: DEFAULT_LIMIT,
+        limit: DEFAULT_LOOKUP_LIMIT,
       }),
     [activeOnly, companyId],
   );
@@ -78,13 +78,15 @@ export function ServiceSearchAutocomplete({
     getQueryKey,
     fetchItems: fetchServices,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedLookupQuery = useQuery({
     queryKey: lookupKeys.serviceSelected(companyId, value),
-    queryFn: ({ signal }) => getServiceLookups({ id: value!, limit: 1 }, { signal }),
+    queryFn: ({ signal }) =>
+      getServiceLookups({ id: value!, limit: 1 }, { signal }),
     enabled: companyReady && Boolean(value),
     staleTime: LOOKUP_STALE_TIME_MS,
   });
@@ -99,21 +101,12 @@ export function ServiceSearchAutocomplete({
       return fromOptions;
     }
 
-    if (selectedServiceQuery.data) {
-      return {
-        id: selectedServiceQuery.data.id,
-        label: selectedServiceQuery.data.name,
-        description: selectedServiceQuery.data.address ?? undefined,
-        disabled: !selectedServiceQuery.data.active,
-      };
-    }
-
     if (selectedLookupQuery.data?.[0]) {
       return mapServiceLookupToOption(selectedLookupQuery.data[0]);
     }
 
     return null;
-  }, [options, selectedLookupQuery.data, selectedServiceQuery.data, value]);
+  }, [options, selectedLookupQuery.data, value]);
 
   return (
     <SearchAutocomplete
@@ -124,7 +117,7 @@ export function ServiceSearchAutocomplete({
       inputValue={inputValue}
       onInputChange={setInputValue}
       selectedOption={selectedOption}
-      loading={isLoading || selectedServiceQuery.isFetching || selectedLookupQuery.isFetching}
+      loading={isLoading || selectedLookupQuery.isFetching}
       hasSearched={hasSearched}
       error={error}
       helperText={helperText}

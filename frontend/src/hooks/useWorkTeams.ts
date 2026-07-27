@@ -12,6 +12,7 @@ import {
   updateWorkTeam,
 } from "../api/work-teams.api";
 import type { CreateWorkTeamInput, UpdateWorkTeamInput, WorkTeamFilters } from "../types/work-team";
+import { workTeamKeys } from "../queryKeys/work-teams";
 import { invalidateOperationScopedQueries } from "./useOperations";
 import { isRecurringWorkdaySyncError } from "../utils/errors";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
@@ -28,7 +29,7 @@ export function useWorkTeams(filters: WorkTeamFilters, extraEnabled = true) {
   const { companyId, enabled, isCompanyLoading } = useOperationalQueryEnabled(extraEnabled);
 
   const query = useQuery({
-    queryKey: ["work-teams", companyId, filters],
+    queryKey: workTeamKeys.list(companyId, filters),
     queryFn: () => getWorkTeams(filters),
     enabled,
     retry: 1,
@@ -41,7 +42,7 @@ export function useWorkTeam(workTeamId?: string) {
   const { companyId, enabled, isCompanyLoading } = useOperationalQueryEnabled(Boolean(workTeamId));
 
   const query = useQuery({
-    queryKey: ["work-team", companyId, workTeamId],
+    queryKey: workTeamKeys.detail(companyId, workTeamId),
     queryFn: () => getWorkTeamById(workTeamId!),
     enabled,
   });
@@ -53,7 +54,7 @@ export function useWorkTeamUsage(workTeamId: string, filters: { page?: number; l
   const { companyId, enabled, isCompanyLoading } = useOperationalQueryEnabled(Boolean(workTeamId));
 
   const query = useQuery({
-    queryKey: ["work-team-usage", companyId, workTeamId, filters],
+    queryKey: workTeamKeys.usage(companyId, workTeamId, filters),
     queryFn: () => getWorkTeamUsage(workTeamId, filters),
     enabled,
   });
@@ -63,54 +64,67 @@ export function useWorkTeamUsage(workTeamId: string, filters: { page?: number; l
 
 export function useCreateWorkTeam() {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: (input: CreateWorkTeamInput) => createWorkTeam(input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: workTeamKeys.lists(companyId) });
     },
   });
 }
 
 export function useUpdateWorkTeam(workTeamId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: (input: UpdateWorkTeamInput) => updateWorkTeam(workTeamId, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
-      queryClient.invalidateQueries({ queryKey: ["work-team"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.details(companyId) }),
+      ]);
     },
   });
 }
 
 export function useReplaceWorkTeamMembers(workTeamId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: (employeeIds: string[]) => replaceWorkTeamMembers(workTeamId, employeeIds),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
-      queryClient.invalidateQueries({ queryKey: ["work-team"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.details(companyId) }),
+      ]);
     },
   });
 }
 
 export function useActivateWorkTeam() {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: activateWorkTeam,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
-      queryClient.invalidateQueries({ queryKey: ["work-team"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.details(companyId) }),
+      ]);
     },
   });
 }
 
 export function useDeactivateWorkTeam() {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: deactivateWorkTeam,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
-      queryClient.invalidateQueries({ queryKey: ["work-team"] });
+    onSuccess: async () => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: workTeamKeys.details(companyId) }),
+      ]);
     },
   });
 }

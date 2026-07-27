@@ -7,10 +7,15 @@ import {
   getAttendanceReviews,
   reviewAttendanceRecord,
 } from "../api/attendance.api";
-import type { AttendanceFilters, ReviewAttendanceInput } from "../types/attendance";
+import type {
+  CreateAttendanceInput,
+  AttendanceFilters,
+  ReviewAttendanceInput,
+} from "../types/attendance";
 import { attendanceKeys } from "../queryKeys/attendance";
 import { invalidateAttendanceReviewQueries } from "../queryKeys/invalidation";
-import { operationKeys } from "../queryKeys/operations";
+import { operationAttendanceKeys, operationKeys } from "../queryKeys/operations";
+import { requireCompanyId } from "./require-company-id";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useAttendanceRecords(filters: AttendanceFilters) {
@@ -35,47 +40,122 @@ export function useAttendanceRecord(attendanceId?: string) {
 
 export function useCreateAttendanceRecord() {
   const queryClient = useQueryClient();
-  const { companyId } = useOperationalQueryEnabled();
+  const { companyId: activeCompanyId } = useOperationalQueryEnabled();
 
-  return useMutation({
-    mutationFn: createAttendanceRecord,
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: attendanceKeys.lists(companyId) });
-      void queryClient.invalidateQueries({ queryKey: operationKeys.list(companyId) });
-      void queryClient.invalidateQueries({ queryKey: ["operation", companyId] });
-      void queryClient.invalidateQueries({ queryKey: ["operation-attendance-summary"] });
+  const mutation = useMutation({
+    mutationFn: ({
+      companyId,
+      input,
+    }: {
+      companyId: string;
+      input: CreateAttendanceInput;
+    }) => createAttendanceRecord(input, { scopeCompanyId: companyId }),
+    onSuccess: async (_data, variables) => {
+      await Promise.all([
+        queryClient.invalidateQueries({ queryKey: attendanceKeys.lists(variables.companyId) }),
+        queryClient.invalidateQueries({ queryKey: operationKeys.list(variables.companyId) }),
+        queryClient.invalidateQueries({
+          queryKey: operationKeys.details(variables.companyId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: operationAttendanceKeys.company(variables.companyId),
+        }),
+      ]);
     },
   });
+
+  return {
+    ...mutation,
+    mutate: (
+      input: CreateAttendanceInput,
+      options?: Parameters<typeof mutation.mutate>[1],
+    ) => {
+      mutation.mutate({ companyId: requireCompanyId(activeCompanyId), input }, options);
+    },
+    mutateAsync: (
+      input: CreateAttendanceInput,
+      options?: Parameters<typeof mutation.mutateAsync>[1],
+    ) =>
+      mutation.mutateAsync({ companyId: requireCompanyId(activeCompanyId), input }, options),
+  };
 }
 
 export function useReviewAttendanceRecord(attendanceId: string) {
   const queryClient = useQueryClient();
-  const { companyId } = useOperationalQueryEnabled();
+  const { companyId: activeCompanyId } = useOperationalQueryEnabled();
 
-  return useMutation({
-    mutationFn: (input: ReviewAttendanceInput) => reviewAttendanceRecord(attendanceId, input),
-    onSuccess: () => {
-      void invalidateAttendanceReviewQueries(queryClient, companyId, attendanceId);
+  const mutation = useMutation({
+    mutationFn: ({
+      companyId,
+      input,
+    }: {
+      companyId: string;
+      input: ReviewAttendanceInput;
+    }) => reviewAttendanceRecord(attendanceId, input, { scopeCompanyId: companyId }),
+    onSuccess: async (_data, variables) => {
+      await invalidateAttendanceReviewQueries(queryClient, variables.companyId, attendanceId);
     },
   });
+
+  return {
+    ...mutation,
+    mutate: (
+      input: ReviewAttendanceInput,
+      options?: Parameters<typeof mutation.mutate>[1],
+    ) => {
+      mutation.mutate({ companyId: requireCompanyId(activeCompanyId), input }, options);
+    },
+    mutateAsync: (
+      input: ReviewAttendanceInput,
+      options?: Parameters<typeof mutation.mutateAsync>[1],
+    ) =>
+      mutation.mutateAsync({ companyId: requireCompanyId(activeCompanyId), input }, options),
+  };
 }
 
 export function useReviewAttendance() {
   const queryClient = useQueryClient();
-  const { companyId } = useOperationalQueryEnabled();
+  const { companyId: activeCompanyId } = useOperationalQueryEnabled();
 
-  return useMutation({
+  const mutation = useMutation({
     mutationFn: ({
+      companyId,
       attendanceId,
       input,
     }: {
+      companyId: string;
       attendanceId: string;
       input: ReviewAttendanceInput;
-    }) => reviewAttendanceRecord(attendanceId, input),
-    onSuccess: (_data, variables) => {
-      void invalidateAttendanceReviewQueries(queryClient, companyId, variables.attendanceId);
+    }) => reviewAttendanceRecord(attendanceId, input, { scopeCompanyId: companyId }),
+    onSuccess: async (_data, variables) => {
+      await invalidateAttendanceReviewQueries(
+        queryClient,
+        variables.companyId,
+        variables.attendanceId,
+      );
     },
   });
+
+  return {
+    ...mutation,
+    mutate: (
+      variables: { attendanceId: string; input: ReviewAttendanceInput },
+      options?: Parameters<typeof mutation.mutate>[1],
+    ) => {
+      mutation.mutate(
+        { companyId: requireCompanyId(activeCompanyId), ...variables },
+        options,
+      );
+    },
+    mutateAsync: (
+      variables: { attendanceId: string; input: ReviewAttendanceInput },
+      options?: Parameters<typeof mutation.mutateAsync>[1],
+    ) =>
+      mutation.mutateAsync(
+        { companyId: requireCompanyId(activeCompanyId), ...variables },
+        options,
+      ),
+  };
 }
 
 export function useAttendanceReviews(attendanceId?: string, page = 1, limit = 10) {

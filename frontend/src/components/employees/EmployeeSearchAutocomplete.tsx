@@ -6,7 +6,7 @@ import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useEmployee } from "../../hooks/useEmployees";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import { employeeKeys } from "../../queryKeys/employees";
-import { LOOKUP_STALE_TIME_MS } from "../../queryKeys/lookups";
+import { DEFAULT_LOOKUP_LIMIT, LOOKUP_STALE_TIME_MS } from "../../queryKeys/lookups";
 import type { Employee } from "../../types/employee";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { formatDate } from "../../utils/dates";
@@ -27,8 +27,6 @@ interface EmployeeSearchAutocompleteProps {
   descriptionMode?: "phone" | "assignment";
   onEmployeeSelected?: (employee: Employee) => void;
 }
-
-const DEFAULT_LIMIT = 10;
 
 function formatEmployeeAssignmentDescription(employee: Employee): string {
   const typeLabel = employeeTypeLabels[employee.employeeType];
@@ -77,7 +75,7 @@ export function EmployeeSearchAutocomplete({
         {
           search: search || undefined,
           page: 1,
-          limit: DEFAULT_LIMIT,
+          limit: DEFAULT_LOOKUP_LIMIT,
           active: activeOnly ? true : undefined,
         },
         { signal },
@@ -104,7 +102,7 @@ export function EmployeeSearchAutocomplete({
         ...employeeKeys.list(companyId, {
           search: search || undefined,
           page: 1,
-          limit: DEFAULT_LIMIT,
+          limit: DEFAULT_LOOKUP_LIMIT,
           active: activeOnly ? true : undefined,
         }),
         "autocomplete",
@@ -118,6 +116,7 @@ export function EmployeeSearchAutocomplete({
       getQueryKey,
       fetchItems: fetchEmployees,
       mapToOption,
+      scopeKey: companyId,
       enabled: companyReady,
       staleTime: LOOKUP_STALE_TIME_MS,
     });

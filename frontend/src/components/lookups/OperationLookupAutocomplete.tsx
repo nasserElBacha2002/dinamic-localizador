@@ -3,7 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { getOperationLookups } from "../../api/lookups.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import { LOOKUP_STALE_TIME_MS, lookupKeys } from "../../queryKeys/lookups";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+} from "../../queryKeys/lookups";
 import type { OperationLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
@@ -20,8 +24,6 @@ interface OperationLookupAutocompleteProps {
   required?: boolean;
   placeholder?: string;
 }
-
-const DEFAULT_LIMIT = 10;
 
 function mapOperationLookupToOption(operation: OperationLookup): SearchAutocompleteOption {
   return {
@@ -48,7 +50,7 @@ export function OperationLookupAutocomplete({
       getOperationLookups(
         {
           search: search || undefined,
-          limit: DEFAULT_LIMIT,
+          limit: DEFAULT_LOOKUP_LIMIT,
         },
         { signal },
       ),
@@ -65,7 +67,7 @@ export function OperationLookupAutocomplete({
       lookupKeys.operationSearch(companyId, {
         search,
         activeOnly: true,
-        limit: DEFAULT_LIMIT,
+        limit: DEFAULT_LOOKUP_LIMIT,
       }),
     [companyId],
   );
@@ -74,6 +76,7 @@ export function OperationLookupAutocomplete({
     getQueryKey,
     fetchItems: fetchOperations,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
     staleTime: LOOKUP_STALE_TIME_MS,
   });

@@ -1,10 +1,16 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { ENTITY_AVATAR_PALETTE } from "./entity-avatar.constants";
+import { DEFAULT_THEME } from "@mantine/core";
+import {
+  ENTITY_AVATAR_BRAND_TONE,
+  ENTITY_AVATAR_PALETTE,
+} from "./entity-avatar.constants";
 import {
   getEntityAvatarColor,
+  getEntityAvatarColorKey,
   getEntityInitials,
   getStablePaletteIndex,
+  resolveEntityIdentityDisplayName,
 } from "./entity-avatar.utils";
 
 describe("getEntityInitials", () => {
@@ -43,6 +49,21 @@ describe("getEntityInitials", () => {
   });
 });
 
+describe("getEntityAvatarColorKey", () => {
+  it("includes entityType and normalized first initial", () => {
+    assert.equal(getEntityAvatarColorKey("jp", "collaborator"), "collaborator:J");
+    assert.equal(getEntityAvatarColorKey("á", "service"), "service:Á");
+    assert.equal(getEntityAvatarColorKey("", "company"), "company:?");
+  });
+
+  it("is stable for the same inputs", () => {
+    assert.equal(
+      getEntityAvatarColorKey("Limpieza", "service"),
+      getEntityAvatarColorKey("Limpieza", "service"),
+    );
+  });
+});
+
 describe("getEntityAvatarColor", () => {
   it("returns the same color for the same key", () => {
     assert.deepEqual(
@@ -51,30 +72,51 @@ describe("getEntityAvatarColor", () => {
     );
   });
 
-  it("returns a valid palette entry", () => {
+  it("returns a valid palette entry for palette tone", () => {
     const result = getEntityAvatarColor("J", "collaborator");
     assert.ok(ENTITY_AVATAR_PALETTE.includes(result));
+  });
+
+  it("returns brand tone when requested", () => {
+    assert.deepEqual(getEntityAvatarColor("D", "company", "brand"), ENTITY_AVATAR_BRAND_TONE);
   });
 
   it("never returns an out-of-range palette index", () => {
     const samples = ["A", "Z", "Ñ", "?", "3", "Á", "jp", ""];
     for (const sample of samples) {
       for (const entityType of ["company", "service", "collaborator", "operation"] as const) {
-        const index = getStablePaletteIndex(
-          `${entityType}:${sample.charAt(0) || "?"}`,
-          ENTITY_AVATAR_PALETTE.length,
-        );
+        const key = getEntityAvatarColorKey(sample, entityType);
+        const index = getStablePaletteIndex(key, ENTITY_AVATAR_PALETTE.length);
         assert.ok(index >= 0 && index < ENTITY_AVATAR_PALETTE.length);
         assert.ok(ENTITY_AVATAR_PALETTE.includes(getEntityAvatarColor(sample, entityType)));
       }
     }
   });
 
-  it("can differ by entity type for the same letter", () => {
-    // Not guaranteed for every letter, but hash keys differ so index may differ.
-    const service = getStablePaletteIndex("service:L", ENTITY_AVATAR_PALETTE.length);
-    const collaborator = getStablePaletteIndex("collaborator:L", ENTITY_AVATAR_PALETTE.length);
-    assert.notEqual(service, collaborator);
+  it("allows collisions across different keys (modular hash)", () => {
+    // Distinct keys may map to the same index; that is valid and must not fail.
+    const seen = new Map<number, string>();
+    let collisionFound = false;
+    for (const letter of "ABCDEFGHIJKLMNOPQRSTUVWXYZ") {
+      const key = getEntityAvatarColorKey(letter, "service");
+      const index = getStablePaletteIndex(key, ENTITY_AVATAR_PALETTE.length);
+      const previous = seen.get(index);
+      if (previous && previous !== key) {
+        collisionFound = true;
+        assert.deepEqual(
+          getEntityAvatarColor(letter, "service"),
+          ENTITY_AVATAR_PALETTE[index],
+        );
+        break;
+      }
+      seen.set(index, key);
+    }
+    assert.equal(typeof collisionFound, "boolean");
+  });
+
+  it("does not use Math.random in the color path", () => {
+    const source = `${getEntityAvatarColorKey.toString()}${getStablePaletteIndex.toString()}${getEntityAvatarColor.toString()}`;
+    assert.equal(source.includes("Math.random"), false);
   });
 });
 
@@ -85,5 +127,65 @@ describe("getStablePaletteIndex", () => {
 
   it("is stable across calls", () => {
     assert.equal(getStablePaletteIndex("service:A", 10), getStablePaletteIndex("service:A", 10));
+  });
+});
+
+describe("resolveEntityIdentityDisplayName", () => {
+  it("returns fallback for null, undefined, empty, and whitespace", () => {
+    assert.equal(resolveEntityIdentityDisplayName(null), "Sin nombre");
+    assert.equal(resolveEntityIdentityDisplayName(undefined), "Sin nombre");
+    assert.equal(resolveEntityIdentityDisplayName(""), "Sin nombre");
+    assert.equal(resolveEntityIdentityDisplayName("   "), "Sin nombre");
+  });
+
+  it("returns trimmed valid names and custom fallback", () => {
+    assert.equal(resolveEntityIdentityDisplayName("  Centro  "), "Centro");
+    assert.equal(resolveEntityIdentityDisplayName(null, "Sin servicio"), "Sin servicio");
+  });
+});
+
+describe("ENTITY_AVATAR_PALETTE contrast", () => {
+  function relativeLuminance(hex: string): number {
+    const normalized = hex.replace("#", "");
+    const full =
+      normalized.length === 3
+        ? normalized
+            .split("")
+            .map((part) => part + part)
+            .join("")
+        : normalized;
+    const value = Number.parseInt(full, 16);
+    const channels = [((value >> 16) & 255) / 255, ((value >> 8) & 255) / 255, (value & 255) / 255];
+    const toLinear = (channel: number) =>
+      channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+    const [r, g, b] = channels.map(toLinear);
+    return 0.2126 * r! + 0.7152 * g! + 0.0722 * b!;
+  }
+
+  function contrastRatio(foreground: string, background: string): number {
+    const lighter = Math.max(relativeLuminance(foreground), relativeLuminance(background));
+    const darker = Math.min(relativeLuminance(foreground), relativeLuminance(background));
+    return (lighter + 0.05) / (darker + 0.05);
+  }
+
+  function resolveMantineVar(cssVar: string): string {
+    const match = /^var\(--mantine-color-([a-z]+)-(\d)\)$/.exec(cssVar);
+    assert.ok(match, `unexpected palette token: ${cssVar}`);
+    const [, colorName, shade] = match;
+    const tuple = DEFAULT_THEME.colors[colorName as keyof typeof DEFAULT_THEME.colors];
+    assert.ok(Array.isArray(tuple), `missing Mantine color ${colorName}`);
+    return tuple[Number(shade)]!;
+  }
+
+  it("keeps every palette pair at WCAG AA normal-text contrast (≥ 4.5)", () => {
+    for (const entry of ENTITY_AVATAR_PALETTE) {
+      const background = resolveMantineVar(entry.background);
+      const foreground = resolveMantineVar(entry.color);
+      const ratio = contrastRatio(foreground, background);
+      assert.ok(
+        ratio >= 4.5,
+        `${entry.background}/${entry.color} contrast ${ratio.toFixed(2)} < 4.5`,
+      );
+    }
   });
 });

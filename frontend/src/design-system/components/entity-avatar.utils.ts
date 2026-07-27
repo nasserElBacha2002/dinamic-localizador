@@ -1,10 +1,13 @@
 import {
+  ENTITY_AVATAR_BRAND_TONE,
   ENTITY_AVATAR_FALLBACK_INITIAL,
   ENTITY_AVATAR_PALETTE,
+  ENTITY_IDENTITY_FALLBACK_LABEL,
 } from "./entity-avatar.constants";
 import type {
   EntityAvatarEntityType,
   EntityAvatarPaletteEntry,
+  EntityAvatarTone,
 } from "./entity-avatar.types";
 
 /** Unicode letter or number (includes accented letters and Ñ). */
@@ -81,16 +84,31 @@ export function getStablePaletteIndex(value: string, paletteLength: number): num
 }
 
 /**
+ * Color key: `${entityType}:${firstInitial}` (first initial uppercased, es locale).
+ */
+export function getEntityAvatarColorKey(
+  initials: string,
+  entityType: EntityAvatarEntityType,
+): string {
+  const firstInitial =
+    initials.trim().charAt(0).toLocaleUpperCase("es") || ENTITY_AVATAR_FALLBACK_INITIAL;
+  return `${entityType}:${firstInitial}`;
+}
+
+/**
  * Deterministic palette entry from entity type + first initial.
- * Key: `${entityType}:${firstInitial}`
+ * Collisions across different keys are valid for modular hashing.
  */
 export function getEntityAvatarColor(
   initials: string,
   entityType: EntityAvatarEntityType,
+  tone: EntityAvatarTone = "palette",
 ): EntityAvatarPaletteEntry {
-  const firstInitial =
-    initials.trim().charAt(0).toLocaleUpperCase("es") || ENTITY_AVATAR_FALLBACK_INITIAL;
-  const key = `${entityType}:${firstInitial}`;
+  if (tone === "brand") {
+    return ENTITY_AVATAR_BRAND_TONE;
+  }
+
+  const key = getEntityAvatarColorKey(initials, entityType);
   const index = getStablePaletteIndex(key, ENTITY_AVATAR_PALETTE.length);
   return ENTITY_AVATAR_PALETTE[index] ?? ENTITY_AVATAR_PALETTE[0]!;
 }
@@ -103,4 +121,16 @@ export function getDefaultAvatarShape(
   entityType: EntityAvatarEntityType,
 ): "rounded" | "circle" {
   return entityType === "collaborator" ? "circle" : "rounded";
+}
+
+/**
+ * Visible title for EntityIdentity — never empty.
+ * Avatar initials still derive from the raw `name` (empty → "?").
+ */
+export function resolveEntityIdentityDisplayName(
+  name: string | null | undefined,
+  fallbackLabel: string = ENTITY_IDENTITY_FALLBACK_LABEL,
+): string {
+  const trimmed = name?.trim();
+  return trimmed ? trimmed : fallbackLabel;
 }

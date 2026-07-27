@@ -93,6 +93,8 @@ describe("OperationsListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Centro")));
     assert.ok(view.getByRole("table"));
+    assert.equal(view.container.querySelector("[data-entity-avatar='operation']")?.textContent, "S");
+    assert.match(view.container.textContent ?? "", /15 min/);
   });
 
   it("shows mobile cards, filters drawer, actions and navigates to detail", async () => {
@@ -107,6 +109,7 @@ describe("OperationsListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Centro")));
     assert.equal(view.queryByRole("table"), null);
+    assert.equal(view.container.querySelector("[data-entity-avatar='operation']")?.textContent, "S");
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));
     await waitFor(() => {

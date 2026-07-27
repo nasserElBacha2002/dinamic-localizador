@@ -58,3 +58,7 @@
 .menuItemActive {
   background: var(--mantine-color-brand-light);
 }
+
+.menuItemText {
+  min-width: 0;
+}

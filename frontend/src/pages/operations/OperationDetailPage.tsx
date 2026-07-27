@@ -36,6 +36,7 @@ import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
+import { getOperationDisplayName } from "../../utils/operation-display";
 import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
 import {
@@ -150,10 +151,10 @@ export function OperationDetailPage() {
   const canAssign = canManage && isOperationAssignable(operation.status);
   const canEdit = canManage && isOperationEditable(operation.status);
   const canReactivate = canManage && isOperationReactivatable(operation.status);
-  const serviceDisplayName = operation.service?.name ?? "—";
+  const serviceDisplayName = getOperationDisplayName(operation);
   const serviceDetailId = operation.serviceId || operation.service?.id;
   const serviceFieldValue =
-    serviceDetailId && serviceDisplayName !== "—" ? (
+    serviceDetailId && operation.service?.name?.trim() ? (
       <Anchor component={RouterLink} to={`/services/${serviceDetailId}`} size="sm">
         {serviceDisplayName}
       </Anchor>

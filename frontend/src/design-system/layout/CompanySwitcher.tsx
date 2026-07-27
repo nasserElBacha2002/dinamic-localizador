@@ -33,7 +33,12 @@ function CompanySwitcherDisplay({
         .filter(Boolean)
         .join(" ")}
     >
-      <EntityAvatar name={companyName} entityType="company" size={compact ? "xs" : "sm"} />
+      {/*
+        Visual decision: brand tone (not deterministic palette) to preserve the
+        previous active-company look. Size stays `sm` (32px) in compact and default
+        to match the pre-avatar switcher icon.
+      */}
+      <EntityAvatar name={companyName} entityType="company" size="sm" tone="brand" />
       <div className={classes.content}>
         {!compact ? <div className={classes.label}>Empresa activa</div> : null}
         <div className={[classes.name, compact ? classes.nameCompact : ""].filter(Boolean).join(" ")}>
@@ -90,8 +95,8 @@ export function CompanySwitcher({ compact = false }: CompanySwitcherProps) {
               rightSection={isActive ? "✓" : undefined}
             >
               <Group gap="sm" wrap="nowrap" align="flex-start">
-                <EntityAvatar name={company.companyName} entityType="company" size="xs" />
-                <div style={{ minWidth: 0 }}>
+                <EntityAvatar name={company.companyName} entityType="company" size="sm" tone="brand" />
+                <div className={classes.menuItemText}>
                   <Text size="sm" fw={isActive ? 600 : 500} lineClamp={1}>
                     {company.companyName}
                   </Text>

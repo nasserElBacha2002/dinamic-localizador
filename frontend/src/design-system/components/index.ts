@@ -28,6 +28,8 @@ export type {
   EntityAvatarProps,
   EntityAvatarShape,
   EntityAvatarSize,
+  EntityAvatarTone,
+  EntityAvatarAccessibility,
 } from "./entity-avatar.types";
 export { ResponsiveModal, type ResponsiveModalProps, type ResponsiveModalBodyMode } from "./ResponsiveModal";
 export { ActionMenu, type ActionMenuItem, type ActionMenuProps } from "./ActionMenu";

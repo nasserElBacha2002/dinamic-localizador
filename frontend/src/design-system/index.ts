@@ -49,6 +49,8 @@ export {
   type EntityAvatarProps,
   type EntityAvatarShape,
   type EntityAvatarSize,
+  type EntityAvatarTone,
+  type EntityAvatarAccessibility,
   type EntityIdentityProps,
   type ResponsiveModalProps,
   type ResponsiveModalBodyMode,

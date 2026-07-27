@@ -25,6 +25,7 @@ import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
+import { MODULE_ROUTE_ACCESS } from "../utils/company-modules";
 
 function lazyNamed<T extends Record<string, ComponentType>>(
   importer: () => Promise<T>,
@@ -132,10 +133,7 @@ const operationManage = {
   requiredAnyPermission: ["operations:manage"] as const,
 };
 
-const attendanceAccess = {
-  moduleKey: "attendance" as const,
-  requiredAnyPermission: ["attendance:read", "attendance:review", "attendance:export"] as const,
-};
+const attendanceAccess = MODULE_ROUTE_ACCESS.attendance;
 
 const attendanceReview = {
   ...attendanceAccess,
@@ -266,10 +264,7 @@ export function AppRoutes() {
         <Route
           path="/statistics"
           element={
-            <FeatureRouteGuard
-              moduleKey="reports"
-              requiredAnyPermission={["reports:read", "reports:export"]}
-            >
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.reports}>
               <LazyPage component={StatisticsPage} message="Cargando estadísticas..." />
             </FeatureRouteGuard>
           }
@@ -301,10 +296,7 @@ export function AppRoutes() {
         <Route
           path="/absences"
           element={
-            <FeatureRouteGuard
-              moduleKey="absences"
-              requiredAnyPermission={["absences:read", "absences:review"]}
-            >
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.absences}>
               <AbsencesListPage />
             </FeatureRouteGuard>
           }
@@ -312,10 +304,7 @@ export function AppRoutes() {
         <Route
           path="/absences/:id"
           element={
-            <FeatureRouteGuard
-              moduleKey="absences"
-              requiredAnyPermission={["absences:read", "absences:review"]}
-            >
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.absences}>
               <LazyPage component={AbsenceDetailPage} message="Cargando ausencia..." />
             </FeatureRouteGuard>
           }

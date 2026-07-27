@@ -75,11 +75,54 @@ export function moduleStatesEqual(a: CompanyModule[], b: CompanyModule[]): boole
   return b.every((module) => enabledByKey.get(module.moduleKey) === module.isEnabled);
 }
 
+/**
+ * Shared module ↔ permission matrix for route guards, sidebar, and contextual links.
+ * Keep FeatureRouteGuard / getAdminNavItems / EmployeeModuleQuickLinks in sync via this map.
+ */
+export const MODULE_ROUTE_ACCESS = {
+  attendance: {
+    moduleKey: "attendance" as const,
+    requiredAnyPermission: [
+      "attendance:read",
+      "attendance:review",
+      "attendance:export",
+    ] as const satisfies readonly CompanyPermission[],
+  },
+  absences: {
+    moduleKey: "absences" as const,
+    requiredAnyPermission: [
+      "absences:read",
+      "absences:review",
+    ] as const satisfies readonly CompanyPermission[],
+  },
+  reports: {
+    moduleKey: "reports" as const,
+    requiredAnyPermission: [
+      "reports:read",
+      "reports:export",
+    ] as const satisfies readonly CompanyPermission[],
+  },
+} as const;
+
+export type ModuleRouteAccessKey = keyof typeof MODULE_ROUTE_ACCESS;
+
+export function canAccessModuleRoute(
+  modules: CompanyModule[] | undefined,
+  permissions: string[] | undefined,
+  accessKey: ModuleRouteAccessKey,
+): boolean {
+  const access = MODULE_ROUTE_ACCESS[accessKey];
+  return (
+    isModuleEnabled(modules, access.moduleKey) &&
+    hasAnyPermission(permissions, access.requiredAnyPermission)
+  );
+}
+
 function canShowNavItem(
   modules: CompanyModule[] | undefined,
   permissions: string[] | undefined,
   moduleKeys: CompanyModuleKey[] | undefined,
-  requiredPermissions: CompanyPermission[],
+  requiredPermissions: readonly CompanyPermission[],
 ): boolean {
   if (moduleKeys && !isAnyModuleEnabled(modules, moduleKeys)) {
     return false;
@@ -125,25 +168,15 @@ export function getAdminNavItems({
       items.push({ label: terminology.operation.plural, path: "/operations", section: "operation" });
     }
 
-    if (
-      canShowNavItem(modules, permissions, ["attendance"], [
-        "attendance:read",
-        "attendance:review",
-        "attendance:export",
-      ])
-    ) {
+    if (canAccessModuleRoute(modules, permissions, "attendance")) {
       items.push({ label: terminology.attendance.plural, path: "/attendance", section: "operation" });
     }
 
-    if (
-      canShowNavItem(modules, permissions, ["absences"], ["absences:read", "absences:review"])
-    ) {
+    if (canAccessModuleRoute(modules, permissions, "absences")) {
       items.push({ label: terminology.absence.plural, path: "/absences", section: "operation" });
     }
 
-    if (
-      canShowNavItem(modules, permissions, ["reports"], ["reports:read", "reports:export"])
-    ) {
+    if (canAccessModuleRoute(modules, permissions, "reports")) {
       items.push({ label: "Estadísticas", path: "/statistics", section: "operation" });
     }
 

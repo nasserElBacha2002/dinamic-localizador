@@ -90,7 +90,7 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
 let EmployeesListPage: React.ComponentType;

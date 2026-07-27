@@ -11,7 +11,7 @@ import {
 } from "@mantine/core";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router";
 import { z } from "zod";
 import { FormErrorAlert } from "../design-system";
 import { useAuth } from "../hooks/useAuth";

@@ -1,5 +1,5 @@
 import { Button, Group, Stack, Text, Title } from "@mantine/core";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { FilterSelect } from "../../design-system";
 import { useCompany } from "../../hooks/useCompany";
 

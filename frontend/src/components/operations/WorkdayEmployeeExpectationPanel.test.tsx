@@ -7,7 +7,7 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, render } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import type { OperationWorkdayEmployeeSummary } from "../../types/operation-workday";
 import { WorkdayEmployeeExpectationPanel } from "./WorkdayEmployeeExpectationPanel";
 

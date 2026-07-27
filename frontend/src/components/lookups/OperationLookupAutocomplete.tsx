@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { getOperationLookups } from "../../api/lookups.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+} from "../../queryKeys/lookups";
 import type { OperationLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
@@ -41,11 +46,14 @@ export function OperationLookupAutocomplete({
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 
   const fetchOperations = useCallback(
-    async (search: string) =>
-      getOperationLookups({
-        search: search || undefined,
-        limit: 10,
-      }),
+    async (search: string, signal: AbortSignal) =>
+      getOperationLookups(
+        {
+          search: search || undefined,
+          limit: DEFAULT_LOOKUP_LIMIT,
+        },
+        { signal },
+      ),
     [],
   );
 
@@ -54,19 +62,30 @@ export function OperationLookupAutocomplete({
     [],
   );
 
+  const getQueryKey = useCallback(
+    (search: string) =>
+      lookupKeys.operationSearch(companyId, {
+        search,
+        activeOnly: true,
+        limit: DEFAULT_LOOKUP_LIMIT,
+      }),
+    [companyId],
+  );
+
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
-    queryKey: "operation-lookup-search",
+    getQueryKey,
     fetchItems: fetchOperations,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
-    queryExtra: { companyId },
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedLookupQuery = useQuery({
-    queryKey: ["lookups", "operations", companyId, "selected", value],
-    queryFn: () => getOperationLookups({ id: value!, limit: 1 }),
+    queryKey: lookupKeys.operationSelected(companyId, value),
+    queryFn: ({ signal }) => getOperationLookups({ id: value!, limit: 1 }, { signal }),
     enabled: companyReady && Boolean(value),
-    staleTime: 60_000,
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedOption = useMemo(() => {

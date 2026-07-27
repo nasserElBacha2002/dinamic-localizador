@@ -1,6 +1,6 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, useParams } from "react-router";
 import { WorkTeamForm } from "../../components/work-teams/WorkTeamForm";
 import {
   ConfirmDialog,

@@ -1,6 +1,6 @@
 import { Loader, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
-import { useLocation } from "react-router-dom";
+import { useLocation } from "react-router";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";

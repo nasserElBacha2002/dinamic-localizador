@@ -2,7 +2,7 @@ import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import { useEffect, type ReactElement, type ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { AuthContext, type AuthContextValue } from "../context/auth-context";
 import { CompanyContext, type CompanyContextValue } from "../context/company-context";
 import { setRuntimeCompanyId } from "../api/company-path";

@@ -10,7 +10,7 @@ import {
 } from "@mantine/core";
 import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import { useCompany } from "../../hooks/useCompany";
 import {
   invalidateOperationAssignmentQueries,

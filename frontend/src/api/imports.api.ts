@@ -29,11 +29,12 @@ export async function previewImport(
 export async function executeImport(
   entityType: ImportEntityType,
   payload: ImportExecutePayload,
+  options?: { scopeCompanyId?: string },
 ): Promise<ImportExecuteResult> {
   const { data } = await scopedApiClient.post<{ data: ImportExecuteResult }>(
     `imports/${entityType}/execute`,
     payload,
-    { timeout: 120_000 },
+    { timeout: 120_000, scopeCompanyId: options?.scopeCompanyId },
   );
   return data.data;
 }

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Navigate, Outlet, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";

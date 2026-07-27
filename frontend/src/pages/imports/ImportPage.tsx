@@ -1,7 +1,7 @@
 import { Alert, Badge, Button, Group, SegmentedControl, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { downloadImportTemplate } from "../../api/imports.api";
 import {
   DataTable,

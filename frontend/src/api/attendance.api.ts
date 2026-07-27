@@ -28,8 +28,15 @@ export async function getAttendanceById(id: string): Promise<AttendanceDetail> {
   return data.data;
 }
 
-export async function createAttendanceRecord(input: CreateAttendanceInput): Promise<AttendanceRecord> {
-  const { data } = await scopedApiClient.post<SingleResponse<AttendanceRecord>>("attendance", input);
+export async function createAttendanceRecord(
+  input: CreateAttendanceInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
+): Promise<AttendanceRecord> {
+  const { data } = await scopedApiClient.post<SingleResponse<AttendanceRecord>>(
+    "attendance",
+    input,
+    options,
+  );
   return data.data;
 }
 
@@ -50,10 +57,12 @@ export async function getAttendanceReviews(
 export async function reviewAttendanceRecord(
   id: string,
   input: ReviewAttendanceInput,
+  options?: { scopeCompanyId?: string; signal?: AbortSignal },
 ): Promise<AttendanceDetail> {
   const { data } = await scopedApiClient.patch<SingleResponse<AttendanceDetail>>(
     `attendance/${id}/review`,
     input,
+    options,
   );
   return data.data;
 }

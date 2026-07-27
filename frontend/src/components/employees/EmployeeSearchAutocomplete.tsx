@@ -1,14 +1,16 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { getEmployees } from "../../api/employees.api";
+import { SearchAutocomplete } from "../common/SearchAutocomplete";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useEmployee } from "../../hooks/useEmployees";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import { employeeKeys } from "../../queryKeys/employees";
+import { DEFAULT_LOOKUP_LIMIT, LOOKUP_STALE_TIME_MS } from "../../queryKeys/lookups";
 import type { Employee } from "../../types/employee";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { formatDate } from "../../utils/dates";
 import { employeeTypeLabels } from "../../utils/labels";
-import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
 interface EmployeeSearchAutocompleteProps {
   value: string | null;
@@ -68,13 +70,16 @@ export function EmployeeSearchAutocomplete({
   const excludeKey = excludeIds.join(",");
 
   const fetchEmployees = useCallback(
-    async (search: string) => {
-      const response = await getEmployees({
-        search: search || undefined,
-        page: 1,
-        limit: 20,
-        active: activeOnly ? true : undefined,
-      });
+    async (search: string, signal: AbortSignal) => {
+      const response = await getEmployees(
+        {
+          search: search || undefined,
+          page: 1,
+          limit: DEFAULT_LOOKUP_LIMIT,
+          active: activeOnly ? true : undefined,
+        },
+        { signal },
+      );
 
       if (excludeIds.length === 0) {
         return response.data;
@@ -91,20 +96,30 @@ export function EmployeeSearchAutocomplete({
     [descriptionMode],
   );
 
-  const {
-    inputValue,
-    setInputValue,
-    options,
-    items,
-    isLoading,
-    hasSearched,
-  } = useAsyncSearchOptions({
-    queryKey: "employee-search",
-    fetchItems: fetchEmployees,
-    mapToOption,
-    enabled: companyReady,
-    queryExtra: { activeOnly, excludeKey, companyId },
-  });
+  const getQueryKey = useCallback(
+    (search: string) =>
+      [
+        ...employeeKeys.list(companyId, {
+          search: search || undefined,
+          page: 1,
+          limit: DEFAULT_LOOKUP_LIMIT,
+          active: activeOnly ? true : undefined,
+        }),
+        "autocomplete",
+        excludeKey,
+      ] as const,
+    [activeOnly, companyId, excludeKey],
+  );
+
+  const { inputValue, setInputValue, options, items, isLoading, hasSearched } =
+    useAsyncSearchOptions({
+      getQueryKey,
+      fetchItems: fetchEmployees,
+      mapToOption,
+      scopeKey: companyId,
+      enabled: companyReady,
+      staleTime: LOOKUP_STALE_TIME_MS,
+    });
 
   const selectedOption = useMemo(() => {
     if (!value || !selectedEmployeeQuery.data) {

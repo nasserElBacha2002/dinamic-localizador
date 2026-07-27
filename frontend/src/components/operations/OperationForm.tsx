@@ -1,7 +1,7 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Anchor, Box, Paper, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
 import { useEffect, useMemo } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router";
 import { Controller, useForm, useWatch } from "react-hook-form";
 import { WeeklyScheduleEditor } from "../schedules/WeeklyScheduleEditor";
 import { WeeklySchedulePreview } from "../schedules/WeeklySchedulePreview";

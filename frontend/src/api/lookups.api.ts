@@ -7,31 +7,47 @@ import type {
 import { API_ENDPOINTS } from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
 
-export async function getEmployeeLookups(query: LookupQuery = {}): Promise<EmployeeLookup[]> {
+export type LookupRequestOptions = {
+  signal?: AbortSignal;
+};
+
+export async function getEmployeeLookups(
+  query: LookupQuery = {},
+  options?: LookupRequestOptions,
+): Promise<EmployeeLookup[]> {
   const { data } = await scopedApiClient.get<{ data: EmployeeLookup[] }>(
     API_ENDPOINTS.lookups.employees,
     {
       params: query,
+      signal: options?.signal,
     },
   );
   return data.data;
 }
 
-export async function getServiceLookups(query: LookupQuery = {}): Promise<ServiceLookup[]> {
+export async function getServiceLookups(
+  query: LookupQuery = {},
+  options?: LookupRequestOptions,
+): Promise<ServiceLookup[]> {
   const { data } = await scopedApiClient.get<{ data: ServiceLookup[] }>(
     API_ENDPOINTS.lookups.services,
     {
       params: query,
+      signal: options?.signal,
     },
   );
   return data.data;
 }
 
-export async function getOperationLookups(query: LookupQuery = {}): Promise<OperationLookup[]> {
+export async function getOperationLookups(
+  query: LookupQuery = {},
+  options?: LookupRequestOptions,
+): Promise<OperationLookup[]> {
   const { data } = await scopedApiClient.get<{ data: OperationLookup[] }>(
     API_ENDPOINTS.lookups.operations,
     {
       params: query,
+      signal: options?.signal,
     },
   );
   return data.data;

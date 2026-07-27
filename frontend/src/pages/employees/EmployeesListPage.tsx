@@ -1,6 +1,6 @@
 import { Button, Select, Stack, Text, Alert } from "@mantine/core";
 import { useCallback, useMemo } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router";
 import {
   ActionMenu,
   DataTable,

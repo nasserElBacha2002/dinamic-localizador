@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { getEmployeeLookups } from "../../api/lookups.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+} from "../../queryKeys/lookups";
 import type { EmployeeLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
@@ -41,12 +46,15 @@ export function EmployeeLookupAutocomplete({
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 
   const fetchEmployees = useCallback(
-    async (search: string) =>
-      getEmployeeLookups({
-        search: search || undefined,
-        limit: 10,
-        active: activeOnly ? true : undefined,
-      }),
+    async (search: string, signal: AbortSignal) =>
+      getEmployeeLookups(
+        {
+          search: search || undefined,
+          limit: DEFAULT_LOOKUP_LIMIT,
+          active: activeOnly ? true : undefined,
+        },
+        { signal },
+      ),
     [activeOnly],
   );
 
@@ -55,19 +63,30 @@ export function EmployeeLookupAutocomplete({
     [],
   );
 
+  const getQueryKey = useCallback(
+    (search: string) =>
+      lookupKeys.employeeSearch(companyId, {
+        search,
+        activeOnly,
+        limit: DEFAULT_LOOKUP_LIMIT,
+      }),
+    [activeOnly, companyId],
+  );
+
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
-    queryKey: "employee-lookup-search",
+    getQueryKey,
     fetchItems: fetchEmployees,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
-    queryExtra: { activeOnly, companyId },
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedLookupQuery = useQuery({
-    queryKey: ["lookups", "employees", companyId, "selected", value],
-    queryFn: () => getEmployeeLookups({ id: value!, limit: 1 }),
+    queryKey: lookupKeys.employeeSelected(companyId, value),
+    queryFn: ({ signal }) => getEmployeeLookups({ id: value!, limit: 1 }, { signal }),
     enabled: companyReady && Boolean(value),
-    staleTime: 60_000,
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedOption = useMemo(() => {

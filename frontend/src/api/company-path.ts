@@ -83,11 +83,27 @@ function isGlobalPath(path: string): boolean {
   return GLOBAL_API_PREFIXES.includes(firstSegment as (typeof GLOBAL_API_PREFIXES)[number]);
 }
 
+export function companyApiPath(resourcePath: string): string {
+  const companyId = getActiveCompanyId();
+  if (!companyId) {
+    throw new ActiveCompanyRequiredError();
+  }
+
+  return companyApiPathFor(companyId, resourcePath);
+}
+
 /**
- * Prefixes operational paths with companies/:activeCompanyId.
- * Global paths (auth, health, companies list/settings) are returned unchanged.
+ * Build a company-scoped path with an explicit company id (immutable for in-flight requests).
  */
-export function scopedApiPath(path: string): string {
+export function companyApiPathFor(companyId: string, resourcePath: string): string {
+  const normalized = normalizePath(resourcePath);
+  return `companies/${companyId}/${normalized}`;
+}
+
+/**
+ * Resolve operational path using either an explicit company scope or the active company.
+ */
+export function scopedApiPath(path: string, scopeCompanyId?: string): string {
   const normalized = normalizePath(path);
 
   if (!normalized) {
@@ -103,23 +119,13 @@ export function scopedApiPath(path: string): string {
   }
 
   if (isOperationalPath(normalized)) {
+    if (scopeCompanyId) {
+      return companyApiPathFor(scopeCompanyId, normalized);
+    }
     return companyApiPath(normalized);
   }
 
   return normalized;
-}
-
-/**
- * Low-level helper: prefixes a resource path with the active company id.
- */
-export function companyApiPath(resourcePath: string): string {
-  const companyId = getActiveCompanyId();
-  if (!companyId) {
-    throw new ActiveCompanyRequiredError();
-  }
-
-  const normalized = normalizePath(resourcePath);
-  return `companies/${companyId}/${normalized}`;
 }
 
 let companySelectionRequiredHandler: (() => void) | null = null;

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { AttendanceTestForm } from "../../components/attendance/AttendanceTestForm";
 import { PageHeader } from "../../design-system";
 import { useCreateAttendanceRecord } from "../../hooks/useAttendance";

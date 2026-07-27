@@ -1,8 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-
-const buildWorkTeamsQueryKey = (companyId: string | undefined, filters: unknown) =>
-  ["work-teams", companyId, filters] as const;
+import { workTeamKeys } from "../queryKeys/work-teams";
 
 describe("useWorkTeams query key", () => {
   it("includes companyId to avoid cross-company cache reuse", () => {
@@ -11,13 +9,13 @@ describe("useWorkTeams query key", () => {
     const companyB = "company-b";
 
     assert.notDeepEqual(
-      buildWorkTeamsQueryKey(companyA, filters),
-      buildWorkTeamsQueryKey(companyB, filters),
+      workTeamKeys.list(companyA, filters),
+      workTeamKeys.list(companyB, filters),
     );
   });
 
   it("does not run with an undefined company id in the key", () => {
-    const key = buildWorkTeamsQueryKey(undefined, { page: 1, limit: 10 });
+    const key = workTeamKeys.list(undefined, { page: 1, limit: 10 });
     assert.equal(key[1], undefined);
   });
 });

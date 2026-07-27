@@ -1,5 +1,5 @@
 import { Button, Text } from "@mantine/core";
-import { useCallback, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import { OperationMultiSelect } from "../../components/lookups/EntityMultiSelects";
@@ -94,30 +94,6 @@ export function AttendanceListPage() {
   };
 
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
-
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.operationIds.length > 0) count += 1;
-    if (table.state.employeeIds.length > 0) count += 1;
-    if (table.state.serviceIds.length > 0) count += 1;
-    if (table.state.validationStatus !== ATTENDANCE_TABLE_DEFAULTS.validationStatus) count += 1;
-    if (table.state.locationStatus !== ATTENDANCE_TABLE_DEFAULTS.locationStatus) count += 1;
-    if (table.state.punctualityStatus !== ATTENDANCE_TABLE_DEFAULTS.punctualityStatus) count += 1;
-    if (table.state.recordType !== ATTENDANCE_TABLE_DEFAULTS.recordType) count += 1;
-    return count;
-  }, [table.state]);
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      operationIds: ATTENDANCE_TABLE_DEFAULTS.operationIds,
-      employeeIds: ATTENDANCE_TABLE_DEFAULTS.employeeIds,
-      serviceIds: ATTENDANCE_TABLE_DEFAULTS.serviceIds,
-      validationStatus: ATTENDANCE_TABLE_DEFAULTS.validationStatus,
-      locationStatus: ATTENDANCE_TABLE_DEFAULTS.locationStatus,
-      punctualityStatus: ATTENDANCE_TABLE_DEFAULTS.punctualityStatus,
-      recordType: ATTENDANCE_TABLE_DEFAULTS.recordType,
-    });
-  }, [table]);
 
   const handleExport = async () => {
     if (exportsDisabled) {
@@ -318,8 +294,8 @@ export function AttendanceListPage() {
             allowCustomRange
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <OperationMultiSelect

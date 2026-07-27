@@ -30,6 +30,7 @@ interface StatisticsFiltersBarProps {
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
   punctualityStatus: string;
+  activeFilterCount: number;
   onDateRangeChange: (value: DateRangeValue) => void;
   onOperationChange: (value: string[]) => void;
   onServiceChange: (value: string[]) => void;
@@ -39,7 +40,7 @@ interface StatisticsFiltersBarProps {
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
   onPunctualityStatusChange: (value: string) => void;
-  onClearSecondaryFilters: () => void;
+  onClearFilters: () => void;
 }
 
 const EFFECTIVE_STATE_LABELS: Record<Exclude<StatisticsEffectiveState, "">, string> = {
@@ -61,6 +62,7 @@ export function StatisticsFiltersBar({
   validationStatus,
   locationStatus,
   punctualityStatus,
+  activeFilterCount,
   onDateRangeChange,
   onOperationChange,
   onServiceChange,
@@ -70,7 +72,7 @@ export function StatisticsFiltersBar({
   onValidationStatusChange,
   onLocationStatusChange,
   onPunctualityStatusChange,
-  onClearSecondaryFilters,
+  onClearFilters,
 }: StatisticsFiltersBarProps) {
   const validationOptions = useMemo(
     () => [
@@ -116,28 +118,6 @@ export function StatisticsFiltersBar({
     [],
   );
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (operationIds.length > 0) count += 1;
-    if (serviceIds.length > 0) count += 1;
-    if (employeeIds.length > 0) count += 1;
-    if (operationKind) count += 1;
-    if (effectiveState) count += 1;
-    if (validationStatus) count += 1;
-    if (locationStatus) count += 1;
-    if (punctualityStatus) count += 1;
-    return count;
-  }, [
-    employeeIds.length,
-    effectiveState,
-    locationStatus,
-    operationIds.length,
-    operationKind,
-    punctualityStatus,
-    serviceIds.length,
-    validationStatus,
-  ]);
-
   return (
     <FilterBar
       search={
@@ -150,8 +130,8 @@ export function StatisticsFiltersBar({
           allowCustomRange
         />
       }
-      activeFilterCount={activeSecondaryFilterCount}
-      onClearFilters={onClearSecondaryFilters}
+      activeFilterCount={activeFilterCount}
+      onClearFilters={onClearFilters}
     >
       <FilterBar.Item>
         <OperationMultiSelect

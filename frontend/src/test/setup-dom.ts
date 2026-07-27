@@ -1,8 +1,27 @@
 import { Window } from "happy-dom";
 import React from "react";
 
+type HappyDomWindow = Window & {
+  happyDOM?: {
+    close: () => void;
+    abort?: () => void;
+  };
+};
+
+let activeWindow: HappyDomWindow | null = null;
+
+export function teardownDomEnvironment(): void {
+  if (activeWindow?.happyDOM?.close) {
+    activeWindow.happyDOM.close();
+  }
+  activeWindow = null;
+}
+
 export function setupDomEnvironment(): void {
-  const window = new Window({ url: "http://localhost/" });
+  teardownDomEnvironment();
+
+  const window = new Window({ url: "http://localhost/" }) as HappyDomWindow;
+  activeWindow = window;
   const document = window.document;
 
   Object.defineProperty(globalThis, "React", {

@@ -68,20 +68,6 @@ export function CompanyUsersPage() {
   const updateMutation = useUpdateCompanyUser();
   const deactivateMutation = useDeactivateCompanyUser();
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.role !== COMPANY_USERS_TABLE_DEFAULTS.role) count += 1;
-    if (table.state.status !== COMPANY_USERS_TABLE_DEFAULTS.status) count += 1;
-    return count;
-  }, [table.state.role, table.state.status]);
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      role: COMPANY_USERS_TABLE_DEFAULTS.role,
-      status: COMPANY_USERS_TABLE_DEFAULTS.status,
-    });
-  }, [table]);
-
   const handleSearch = useCallback(
     (value: string) => {
       table.commitSearch(value);
@@ -253,8 +239,8 @@ export function CompanyUsersPage() {
             label="Buscar"
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <Select

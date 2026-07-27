@@ -96,28 +96,6 @@ export function ServicesListPage() {
     ];
   }, [facetsQuery.data, table.state.locality]);
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.serviceFormat !== SERVICE_TABLE_DEFAULTS.serviceFormat) {
-      count += 1;
-    }
-    if (table.state.locality !== SERVICE_TABLE_DEFAULTS.locality) {
-      count += 1;
-    }
-    if (table.state.neighborhood !== SERVICE_TABLE_DEFAULTS.neighborhood) {
-      count += 1;
-    }
-    if (table.state.active !== SERVICE_TABLE_DEFAULTS.active) {
-      count += 1;
-    }
-    return count;
-  }, [
-    table.state.active,
-    table.state.locality,
-    table.state.neighborhood,
-    table.state.serviceFormat,
-  ]);
-
   const columns = useMemo<DataTableColumn<Service>[]>(
     () => [
       { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
@@ -217,15 +195,6 @@ export function ServicesListPage() {
     [table],
   );
 
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      serviceFormat: SERVICE_TABLE_DEFAULTS.serviceFormat,
-      locality: SERVICE_TABLE_DEFAULTS.locality,
-      neighborhood: SERVICE_TABLE_DEFAULTS.neighborhood,
-      active: SERVICE_TABLE_DEFAULTS.active,
-    });
-  }, [table]);
-
   const facetsLoading = facetsQuery.isPending || facetsQuery.isFetching;
   const formatsLoading = locationTypesQuery.isPending || locationTypesQuery.isFetching;
   const facetsFailed = facetsQuery.isError;
@@ -284,8 +253,8 @@ export function ServicesListPage() {
             label="Buscar"
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <FilterSelect

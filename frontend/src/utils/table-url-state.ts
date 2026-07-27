@@ -28,6 +28,11 @@ export interface SerializeTableUrlStateOptions<T extends Record<string, unknown>
   defaults: T;
   fields?: TableUrlFieldMap<T>;
   shouldOmitFromUrl?: (key: keyof T, value: T[keyof T], defaults: T, state: T) => boolean;
+  /**
+   * Current URL search params. Keys that are not managed by this table state
+   * are copied through unchanged (e.g. `from`, `companyView`).
+   */
+  preserveParams?: URLSearchParams;
 }
 
 const PAGE_KEYS = new Set(["page", "pageSize"]);
@@ -35,6 +40,19 @@ const SORT_KEYS = new Set(["sortBy", "sortOrder"]);
 
 export function getTableUrlFieldKey<K extends string>(key: K, def?: TableUrlFieldDef): string {
   return def?.urlKey ?? key;
+}
+
+/** URL keys owned by this table state (defaults + optional urlKey aliases). */
+export function listManagedTableUrlKeys<T extends Record<string, unknown>>(
+  defaults: T,
+  fields?: TableUrlFieldMap<T>,
+): Set<string> {
+  const managed = new Set<string>();
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    const def = inferFieldDef(defaults[key], fields?.[key]);
+    managed.add(getTableUrlFieldKey(String(key), def));
+  }
+  return managed;
 }
 
 function inferFieldDef(value: unknown, explicit?: TableUrlFieldDef): TableUrlFieldDef {
@@ -192,8 +210,18 @@ export function serializeTableUrlState<T extends Record<string, unknown>>({
   defaults,
   fields,
   shouldOmitFromUrl,
+  preserveParams,
 }: SerializeTableUrlStateOptions<T>): URLSearchParams {
+  const managedKeys = listManagedTableUrlKeys(defaults, fields);
   const params = new URLSearchParams();
+
+  if (preserveParams) {
+    preserveParams.forEach((value, key) => {
+      if (!managedKeys.has(key)) {
+        params.append(key, value);
+      }
+    });
+  }
 
   for (const key of Object.keys(defaults) as (keyof T)[]) {
     const def = inferFieldDef(defaults[key], fields?.[key]);

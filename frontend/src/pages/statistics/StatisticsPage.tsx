@@ -29,6 +29,7 @@ export function StatisticsPage() {
         validationStatus={data.validationStatus}
         locationStatus={data.locationStatus}
         punctualityStatus={data.punctualityStatus}
+        activeFilterCount={data.activeFilterCount}
         onDateRangeChange={(value) => {
           data.resetAllPages();
           data.setDateRange(value);
@@ -65,17 +66,7 @@ export function StatisticsPage() {
           data.resetAllPages();
           data.setPunctualityStatus(value);
         }}
-        onClearSecondaryFilters={() => {
-          data.resetAllPages();
-          data.setOperationIds([]);
-          data.setServiceIds([]);
-          data.setEmployeeIds([]);
-          data.setOperationKind("");
-          data.setEffectiveState("");
-          data.setValidationStatus("");
-          data.setLocationStatus("");
-          data.setPunctualityStatus("");
-        }}
+        onClearFilters={data.resetFilters}
       />
 
       {data.exportsDisabled ? (

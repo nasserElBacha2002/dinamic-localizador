@@ -74,17 +74,6 @@ export function EmployeesListPage() {
     ];
   }, [catalogFailed, categoriesQuery.data]);
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.active !== EMPLOYEE_TABLE_DEFAULTS.active) {
-      count += 1;
-    }
-    if (table.state.categoryId !== EMPLOYEE_TABLE_DEFAULTS.categoryId) {
-      count += 1;
-    }
-    return count;
-  }, [table.state.active, table.state.categoryId]);
-
   const columns = useMemo<DataTableColumn<Employee>[]>(
     () => [
       { key: "name", header: "Nombre", sortable: true, getValue: (row) => row.name },
@@ -184,11 +173,6 @@ export function EmployeesListPage() {
     [table],
   );
 
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setField("active", EMPLOYEE_TABLE_DEFAULTS.active);
-    table.setField("categoryId", EMPLOYEE_TABLE_DEFAULTS.categoryId);
-  }, [table]);
-
   const handleSortChange = useCallback(
     (field: string) => {
       if (!(EMPLOYEE_TABLE_SORTABLE_COLUMN_KEYS as readonly string[]).includes(field)) {
@@ -252,8 +236,8 @@ export function EmployeesListPage() {
             label="Buscar"
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <Select

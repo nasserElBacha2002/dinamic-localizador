@@ -208,11 +208,11 @@ export const absenceRequestRepository = {
         apply: (request) => request.input("absenceTypeId", sql.UniqueIdentifier, query.absenceTypeId),
       });
     }
-    if (query.employeeIds.length > 0) {
+    if ((query.employeeIds?.length ?? 0) > 0) {
       const employeeFilter = createUuidInFilter({
         column: "ar.employee_id",
         parameterPrefix: "employeeId",
-        values: query.employeeIds,
+        values: query.employeeIds ?? [],
       });
       if (employeeFilter) {
         filters.push(employeeFilter);

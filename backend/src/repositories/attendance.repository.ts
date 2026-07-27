@@ -33,7 +33,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   const operationFilter = createUuidInFilter({
     column: "ar.operation_id",
     parameterPrefix: "operationId",
-    values: query.operationIds,
+    values: query.operationIds ?? [],
   });
   if (operationFilter) {
     filters.push(operationFilter);
@@ -42,7 +42,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   const employeeFilter = createUuidInFilter({
     column: "ar.employee_id",
     parameterPrefix: "employeeId",
-    values: query.employeeIds,
+    values: query.employeeIds ?? [],
   });
   if (employeeFilter) {
     filters.push(employeeFilter);
@@ -51,7 +51,7 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
   const serviceFilter = createUuidInFilter({
     column: "i.service_id",
     parameterPrefix: "serviceId",
-    values: query.serviceIds,
+    values: query.serviceIds ?? [],
   });
   if (serviceFilter) {
     filters.push(serviceFilter);

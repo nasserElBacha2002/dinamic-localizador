@@ -10,6 +10,17 @@ describe("createUuidInFilter", () => {
     assert.equal(createUuidInFilter({ column: "e.id", parameterPrefix: "employeeId", values: [] }), undefined);
   });
 
+  it("returns undefined when values are missing", () => {
+    assert.equal(
+      createUuidInFilter({
+        column: "e.id",
+        parameterPrefix: "employeeId",
+        values: undefined,
+      }),
+      undefined,
+    );
+  });
+
   it("uses equality for a single id", () => {
     const filter = createUuidInFilter({
       column: "e.id",

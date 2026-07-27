@@ -31,12 +31,13 @@ export const lookupRepository = {
       .input("limit", sql.Int, query.limit ?? 20);
 
     const filters = ["e.company_id = @companyId"];
+    const ids = query.ids ?? [];
 
-    if (query.ids.length === 1) {
-      request.input("id", sql.UniqueIdentifier, query.ids[0]);
+    if (ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, ids[0]);
       filters.push("e.id = @id");
-    } else if (query.ids.length > 1) {
-      const placeholders = query.ids.map((id, index) => {
+    } else if (ids.length > 1) {
+      const placeholders = ids.map((id, index) => {
         const param = `id${index}`;
         request.input(param, sql.UniqueIdentifier, id);
         return `@${param}`;
@@ -76,12 +77,13 @@ export const lookupRepository = {
       .input("limit", sql.Int, query.limit ?? 20);
 
     const filters = ["s.company_id = @companyId"];
+    const ids = query.ids ?? [];
 
-    if (query.ids.length === 1) {
-      request.input("id", sql.UniqueIdentifier, query.ids[0]);
+    if (ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, ids[0]);
       filters.push("s.id = @id");
-    } else if (query.ids.length > 1) {
-      const placeholders = query.ids.map((id, index) => {
+    } else if (ids.length > 1) {
+      const placeholders = ids.map((id, index) => {
         const param = `id${index}`;
         request.input(param, sql.UniqueIdentifier, id);
         return `@${param}`;
@@ -126,12 +128,13 @@ export const lookupRepository = {
       .input("limit", sql.Int, query.limit ?? 20);
 
     const filters = ["i.company_id = @companyId"];
+    const ids = query.ids ?? [];
 
-    if (query.ids.length === 1) {
-      request.input("id", sql.UniqueIdentifier, query.ids[0]);
+    if (ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, ids[0]);
       filters.push("i.id = @id");
-    } else if (query.ids.length > 1) {
-      const placeholders = query.ids.map((id, index) => {
+    } else if (ids.length > 1) {
+      const placeholders = ids.map((id, index) => {
         const param = `id${index}`;
         request.input(param, sql.UniqueIdentifier, id);
         return `@${param}`;

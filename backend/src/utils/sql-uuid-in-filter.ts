@@ -8,9 +8,10 @@ import type { SqlFilter } from "./sql-list-query";
 export function createUuidInFilter(options: {
   column: string;
   parameterPrefix: string;
-  values: string[];
+  /** Empty or missing → no filter (safe for callers that skip Zod transforms). */
+  values: string[] | undefined;
 }): SqlFilter | undefined {
-  const values = options.values;
+  const values = options.values ?? [];
   if (values.length === 0) {
     return undefined;
   }

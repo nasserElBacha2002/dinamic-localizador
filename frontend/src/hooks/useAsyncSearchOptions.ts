@@ -4,33 +4,36 @@ import type { SearchAutocompleteOption } from "../types/search-autocomplete";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 interface UseAsyncSearchOptionsParams<T> {
-  queryKey: string;
-  fetchItems: (search: string) => Promise<T[]>;
+  /** Stable key factory including company + normalized search params. */
+  getQueryKey: (debouncedSearch: string) => readonly unknown[];
+  fetchItems: (search: string, signal: AbortSignal) => Promise<T[]>;
   mapToOption: (item: T) => SearchAutocompleteOption;
   debounceMs?: number;
   minSearchLength?: number;
   enabled?: boolean;
-  queryExtra?: unknown;
+  staleTime?: number;
 }
 
 export function useAsyncSearchOptions<T>({
-  queryKey,
+  getQueryKey,
   fetchItems,
   mapToOption,
   debounceMs = 300,
   minSearchLength = 0,
   enabled = true,
-  queryExtra,
+  staleTime,
 }: UseAsyncSearchOptionsParams<T>) {
   const [inputValue, setInputValue] = useState("");
   const debouncedSearch = useDebouncedValue(inputValue, debounceMs);
   const canSearch = debouncedSearch.trim().length >= minSearchLength;
+  const trimmedSearch = debouncedSearch.trim();
 
   const { data, isFetching, isFetched } = useQuery({
-    queryKey: [queryKey, debouncedSearch, queryExtra],
-    queryFn: () => fetchItems(debouncedSearch.trim()),
+    queryKey: getQueryKey(trimmedSearch),
+    queryFn: ({ signal }) => fetchItems(trimmedSearch, signal),
     enabled: enabled && canSearch,
     placeholderData: keepPreviousData,
+    staleTime,
   });
 
   const options = useMemo(
@@ -45,6 +48,6 @@ export function useAsyncSearchOptions<T>({
     items: data ?? [],
     isLoading: isFetching,
     hasSearched: isFetched && canSearch,
-    debouncedSearch: debouncedSearch.trim(),
+    debouncedSearch: trimmedSearch,
   };
 }

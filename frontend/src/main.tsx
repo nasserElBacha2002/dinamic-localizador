@@ -8,6 +8,7 @@ import "@fontsource/inter/700.css";
 import { MantineProvider } from "@mantine/core";
 import { Notifications } from "@mantine/notifications";
 import { QueryClientProvider } from "@tanstack/react-query";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
@@ -29,6 +30,7 @@ createRoot(document.getElementById("root")!).render(
             </CompanyProviderGate>
           </AuthProvider>
         </BrowserRouter>
+        {import.meta.env.DEV ? <ReactQueryDevtools initialIsOpen={false} /> : null}
       </MantineProvider>
     </QueryClientProvider>
   </StrictMode>,

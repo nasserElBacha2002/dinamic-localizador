@@ -9,25 +9,10 @@ import {
   getAttendanceWorkdayDetails,
 } from "../api/statistics.api";
 import type { StatisticsFilters } from "../types/statistics";
+import { statisticsKeys } from "../queryKeys/statistics";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
-const statisticsKeys = {
-  all: ["statistics"] as const,
-  summary: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "summary", filters] as const,
-  timeline: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "timeline", filters] as const,
-  statusDistribution: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "status-distribution", filters] as const,
-  byEmployee: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "by-employee", filters] as const,
-  byOperation: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "by-operation", filters] as const,
-  byLocation: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "by-service", filters] as const,
-  workdayDetails: (companyId: string | undefined, filters: StatisticsFilters) =>
-    [...statisticsKeys.all, companyId, "workday-details", filters] as const,
-};
+export { statisticsKeys };
 
 export function useStatisticsSummary(filters: StatisticsFilters) {
   const { companyId, enabled } = useOperationalQueryEnabled();

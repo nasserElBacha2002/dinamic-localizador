@@ -12,9 +12,13 @@ import type {
 import { buildParams } from "./client";
 import { scopedApiClient } from "./scoped-client";
 
-export async function getEmployees(filters: EmployeeFilters = {}): Promise<PaginatedResponse<Employee>> {
+export async function getEmployees(
+  filters: EmployeeFilters = {},
+  options?: { signal?: AbortSignal },
+): Promise<PaginatedResponse<Employee>> {
   const { data } = await scopedApiClient.get<PaginatedResponse<Employee>>("employees", {
     params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+    signal: options?.signal,
   });
   return data;
 }

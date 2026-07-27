@@ -1,11 +1,13 @@
 import { useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { getServices } from "../../api/services.api";
+import { useQuery } from "@tanstack/react-query";
+import { getServiceLookups } from "../../api/lookups.api";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useService } from "../../hooks/useServices";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import type { Service } from "../../types/service";
+import { LOOKUP_STALE_TIME_MS, lookupKeys } from "../../queryKeys/lookups";
+import type { ServiceLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 
 interface ServiceSearchAutocompleteProps {
@@ -21,12 +23,13 @@ interface ServiceSearchAutocompleteProps {
   placeholder?: string;
 }
 
-function mapServiceToOption(service: Service): SearchAutocompleteOption {
+const DEFAULT_LIMIT = 10;
+
+function mapServiceLookupToOption(service: ServiceLookup): SearchAutocompleteOption {
   return {
     id: service.id,
     label: service.name,
-    description: service.address,
-    disabled: !service.active,
+    description: service.address ?? undefined,
   };
 }
 
@@ -47,42 +50,70 @@ export function ServiceSearchAutocomplete({
   const selectedServiceQuery = useService(value ?? undefined);
 
   const fetchServices = useCallback(
-    async (search: string) => {
-      const response = await getServices({
-        search: search || undefined,
-        page: 1,
-        limit: 20,
-        active: activeOnly ? true : undefined,
-      });
-
-      return response.data;
-    },
+    async (search: string, signal: AbortSignal) =>
+      getServiceLookups(
+        {
+          search: search || undefined,
+          limit: DEFAULT_LIMIT,
+          active: activeOnly ? true : undefined,
+        },
+        { signal },
+      ),
     [activeOnly],
   );
 
-  const mapToOption = useCallback((service: Service) => mapServiceToOption(service), []);
+  const mapToOption = useCallback((service: ServiceLookup) => mapServiceLookupToOption(service), []);
 
-  const {
-    inputValue,
-    setInputValue,
-    options,
-    isLoading,
-    hasSearched,
-  } = useAsyncSearchOptions({
-    queryKey: "service-search",
+  const getQueryKey = useCallback(
+    (search: string) =>
+      lookupKeys.serviceSearch(companyId, {
+        search,
+        activeOnly,
+        limit: DEFAULT_LIMIT,
+      }),
+    [activeOnly, companyId],
+  );
+
+  const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
+    getQueryKey,
     fetchItems: fetchServices,
     mapToOption,
     enabled: companyReady,
-    queryExtra: { activeOnly, companyId },
+    staleTime: LOOKUP_STALE_TIME_MS,
+  });
+
+  const selectedLookupQuery = useQuery({
+    queryKey: lookupKeys.serviceSelected(companyId, value),
+    queryFn: ({ signal }) => getServiceLookups({ id: value!, limit: 1 }, { signal }),
+    enabled: companyReady && Boolean(value),
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedOption = useMemo(() => {
-    if (!value || !selectedServiceQuery.data) {
+    if (!value) {
       return null;
     }
 
-    return mapServiceToOption(selectedServiceQuery.data);
-  }, [selectedServiceQuery.data, value]);
+    const fromOptions = options.find((option) => option.id === value);
+    if (fromOptions) {
+      return fromOptions;
+    }
+
+    if (selectedServiceQuery.data) {
+      return {
+        id: selectedServiceQuery.data.id,
+        label: selectedServiceQuery.data.name,
+        description: selectedServiceQuery.data.address ?? undefined,
+        disabled: !selectedServiceQuery.data.active,
+      };
+    }
+
+    if (selectedLookupQuery.data?.[0]) {
+      return mapServiceLookupToOption(selectedLookupQuery.data[0]);
+    }
+
+    return null;
+  }, [options, selectedLookupQuery.data, selectedServiceQuery.data, value]);
 
   return (
     <SearchAutocomplete
@@ -93,7 +124,7 @@ export function ServiceSearchAutocomplete({
       inputValue={inputValue}
       onInputChange={setInputValue}
       selectedOption={selectedOption}
-      loading={isLoading}
+      loading={isLoading || selectedServiceQuery.isFetching || selectedLookupQuery.isFetching}
       hasSearched={hasSearched}
       error={error}
       helperText={helperText}

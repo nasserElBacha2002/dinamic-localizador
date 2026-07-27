@@ -39,11 +39,13 @@ import { scopedApiClient } from "./scoped-client";
 
 export async function getOperations(
   filters: OperationFilters = {},
+  options?: { signal?: AbortSignal },
 ): Promise<PaginatedResponse<OperationWithService>> {
   const { data } = await scopedApiClient.get<PaginatedResponse<OperationWithService>>(
     API_ENDPOINTS.operations,
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+      signal: options?.signal,
     },
   );
   return data;

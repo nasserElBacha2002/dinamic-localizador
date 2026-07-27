@@ -6,18 +6,19 @@ import {
   getEmployees,
   updateEmployee,
 } from "../api/employees.api";
-import type { EmployeeFilters, UpdateEmployeeInput } from "../types/employee";
+import type { Employee, EmployeeFilters, UpdateEmployeeInput } from "../types/employee";
 import type { DeactivateEmployeeInput } from "../types/employee-deactivation";
+import { invalidateEmployeeScopedQueries } from "../queryKeys/invalidation";
+import { employeeKeys } from "../queryKeys/employees";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 export function useEmployees(filters: EmployeeFilters, extraEnabled = true) {
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
 
   return useQuery({
-    queryKey: ["employees", companyId, filters],
+    queryKey: employeeKeys.list(companyId, filters),
     queryFn: () => getEmployees(filters),
     enabled,
-    retry: 1,
   });
 }
 
@@ -25,7 +26,7 @@ export function useEmployee(employeeId?: string) {
   const { companyId, enabled } = useOperationalQueryEnabled(Boolean(employeeId));
 
   return useQuery({
-    queryKey: ["employee", companyId, employeeId],
+    queryKey: employeeKeys.detail(companyId, employeeId),
     queryFn: () => getEmployeeById(employeeId!),
     enabled,
   });
@@ -33,37 +34,38 @@ export function useEmployee(employeeId?: string) {
 
 export function useCreateEmployee() {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: createEmployee,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
+      void invalidateEmployeeScopedQueries(queryClient, companyId);
     },
   });
 }
 
 export function useUpdateEmployee(employeeId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (input: UpdateEmployeeInput) => updateEmployee(employeeId, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-      queryClient.invalidateQueries({ queryKey: ["employee"] });
+    onSuccess: (updated: Employee) => {
+      queryClient.setQueryData(employeeKeys.detail(companyId, employeeId), updated);
+      void invalidateEmployeeScopedQueries(queryClient, companyId);
     },
   });
 }
 
 export function useDeactivateEmployee(employeeId: string) {
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
 
   return useMutation({
     mutationFn: (input: DeactivateEmployeeInput) => deactivateEmployee(employeeId, input),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["employees"] });
-      queryClient.invalidateQueries({ queryKey: ["employee"] });
-      queryClient.invalidateQueries({ queryKey: ["operations"] });
-      queryClient.invalidateQueries({ queryKey: ["work-teams"] });
+    onSuccess: (updated: Employee) => {
+      queryClient.setQueryData(employeeKeys.detail(companyId, employeeId), updated);
+      void invalidateEmployeeScopedQueries(queryClient, companyId);
     },
   });
 }

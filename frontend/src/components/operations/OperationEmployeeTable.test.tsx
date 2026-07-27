@@ -7,7 +7,7 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
 import type { OperationEmployeeAssignment } from "../../types/operation";
 import { OperationEmployeeTable } from "./OperationEmployeeTable";

@@ -1,6 +1,6 @@
 import { Button } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
 import {
   ActionMenu,

@@ -1,7 +1,7 @@
 import { Button, Group } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
-import { useParams } from "react-router-dom";
+import { useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { SERVICE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
 import { ErrorState, LoadingState, PageHeader } from "../../design-system";

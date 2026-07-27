@@ -1,7 +1,7 @@
 import { Alert, Button, Group, Stack, Text, Textarea } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
-import { Link as RouterLink, useParams } from "react-router-dom";
+import { Link as RouterLink, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useQueryClient } from "@tanstack/react-query";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";

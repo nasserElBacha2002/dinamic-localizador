@@ -17,7 +17,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { cleanup, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import React from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { clearActiveCompanyId, setRuntimeCompanyId } from "../../api/company-path";
 import { scopedApiClient } from "../../api/scoped-client";
 import { CompanyContext } from "../../context/company-context";

@@ -1,5 +1,5 @@
 import { NavLink } from "@mantine/core";
-import { Link } from "react-router-dom";
+import { Link } from "react-router";
 import type { AdminNavItem } from "../../utils/company-modules";
 import classes from "./app-layout.module.css";
 

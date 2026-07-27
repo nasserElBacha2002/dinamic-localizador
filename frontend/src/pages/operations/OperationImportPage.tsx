@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate } from "react-router";
 
 /** @deprecated Use `/imports?entity=operations`. Kept for deep-link compatibility. */
 export function OperationImportPage() {

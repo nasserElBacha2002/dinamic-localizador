@@ -1,6 +1,6 @@
 import { Button, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router";
 import {
   DataTable,
   LoadingState,

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { getEmployees } from "../../api/employees.api";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";

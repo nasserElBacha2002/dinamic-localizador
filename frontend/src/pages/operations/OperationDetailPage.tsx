@@ -1,7 +1,7 @@
 import { Anchor, Box, Button, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { Link as RouterLink, useParams } from "react-router-dom";
+import { Link as RouterLink, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";

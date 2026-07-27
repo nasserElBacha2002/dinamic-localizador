@@ -1,6 +1,6 @@
 import { Button, Stack, Text, Title } from "@mantine/core";
 import type { PropsWithChildren } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router";
 import { LoadingState, SectionCard } from "../../design-system";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import type { CompanyModuleKey } from "../../types/company-module";

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { getOperations } from "../../api/operations.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperation } from "../../hooks/useOperations";

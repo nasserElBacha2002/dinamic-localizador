@@ -1,4 +1,4 @@
-import { Navigate } from "react-router-dom";
+import { Navigate } from "react-router";
 import { CompanySelectionPage } from "./CompanySelector";
 import { ErrorState, LoadingState } from "../../design-system";
 import { useCompany } from "../../hooks/useCompany";

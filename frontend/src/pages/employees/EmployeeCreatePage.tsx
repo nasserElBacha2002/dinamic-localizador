@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { PageHeader } from "../../design-system";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";

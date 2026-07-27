@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useQuery } from "@tanstack/react-query";
 import { getServiceLookups } from "../../api/lookups.api";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";

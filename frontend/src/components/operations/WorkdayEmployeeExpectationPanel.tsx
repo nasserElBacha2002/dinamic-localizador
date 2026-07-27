@@ -1,5 +1,5 @@
 import { Alert, Button, Stack, Text } from "@mantine/core";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router";
 import { StatusBadge } from "../../design-system/components/StatusBadge";
 import type { OperationWorkdayEmployeeSummary } from "../../types/operation-workday";
 import { formatDate } from "../../utils/dates";

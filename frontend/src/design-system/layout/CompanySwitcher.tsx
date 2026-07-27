@@ -1,5 +1,5 @@
 import { Menu, Text, UnstyledButton } from "@mantine/core";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { useCompany } from "../../hooks/useCompany";
 import { companyRoleLabels } from "../../utils/labels";
 import type { CompanyRole } from "../../types/company-user";

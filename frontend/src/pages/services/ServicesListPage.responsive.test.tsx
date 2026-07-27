@@ -98,7 +98,7 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 import { LocationMapCanvas } from "../../components/services/location-picker/components/LocationMapSection";
 import { mockViewport } from "../../test/mock-match-media";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";

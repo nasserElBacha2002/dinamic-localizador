@@ -7,7 +7,7 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import React from "react";
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useLocation } from "react-router";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import { ServicesListFiltersErrorBanner } from "./ServicesListFiltersErrorBanner";
 import {

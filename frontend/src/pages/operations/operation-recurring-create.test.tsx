@@ -8,7 +8,7 @@ import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter } from "react-router";
 import { OperationForm } from "../../components/operations/OperationForm";
 import { CompanyContext } from "../../context/company-context";
 import type { CompanySettings } from "../../types/company-settings";

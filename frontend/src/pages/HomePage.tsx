@@ -1,6 +1,6 @@
 import { Card, SimpleGrid, Stack, Text } from "@mantine/core";
 import type { KeyboardEvent } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import {
   EmptyState,
   ErrorState,

@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
-import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
+import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
   FilterBar,
@@ -66,7 +66,7 @@ export function AbsencesListPage() {
     limit: table.pageSize,
     status: apiStatus,
     absenceTypeId: table.state.absenceTypeId || undefined,
-    employeeId: table.state.employeeId || undefined,
+    employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
     dateFrom: dateQuery.from,
     dateTo: dateQuery.to,
   });
@@ -75,7 +75,7 @@ export function AbsencesListPage() {
     let count = 0;
     if (table.state.status !== ABSENCES_TABLE_DEFAULTS.status) count += 1;
     if (table.state.absenceTypeId !== ABSENCES_TABLE_DEFAULTS.absenceTypeId) count += 1;
-    if (table.state.employeeId !== ABSENCES_TABLE_DEFAULTS.employeeId) count += 1;
+    if (table.state.employeeIds.length > 0) count += 1;
     return count;
   }, [table.state]);
 
@@ -83,7 +83,7 @@ export function AbsencesListPage() {
     table.setState({
       status: ABSENCES_TABLE_DEFAULTS.status,
       absenceTypeId: ABSENCES_TABLE_DEFAULTS.absenceTypeId,
-      employeeId: ABSENCES_TABLE_DEFAULTS.employeeId,
+      employeeIds: ABSENCES_TABLE_DEFAULTS.employeeIds,
     });
   }, [table]);
 
@@ -239,12 +239,12 @@ export function AbsencesListPage() {
           />
         </FilterBar.Item>
         <FilterBar.Item>
-          <EmployeeSearchAutocomplete
-            value={table.state.employeeId || null}
-            onChange={(value) => {
-              table.setField("employeeId", value ?? "");
-            }}
-            label={terminology.worker.singular}
+          <EmployeeMultiSelect
+            label={terminology.worker.plural}
+            value={table.state.employeeIds}
+            onChange={(ids) => table.setField("employeeIds", ids)}
+            activeOnly={false}
+            maxVisibleChips={2}
           />
         </FilterBar.Item>
       </FilterBar>

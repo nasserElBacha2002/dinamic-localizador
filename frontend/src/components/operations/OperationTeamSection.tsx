@@ -5,7 +5,7 @@ import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
 import { SectionCard } from "../../design-system";
 import { useReviewAttendance } from "../../hooks/useAttendance";
 import {
-  useAssignOperationEmployee,
+  useAssignOperationEmployeesBatch,
   useCancelOperationAssignment,
   useEndOperationAssignment,
   useOperationAttendanceSummary,
@@ -75,7 +75,7 @@ export function OperationTeamSection({
 
   const assignmentsQuery = useOperationEmployees(operationId);
   const summaryQuery = useOperationAttendanceSummary(operationId, summaryFilters);
-  const assignMutation = useAssignOperationEmployee(operationId);
+  const assignBatchMutation = useAssignOperationEmployeesBatch(operationId);
   const cancelMutation = useCancelOperationAssignment(operationId);
   const endMutation = useEndOperationAssignment(operationId);
   const reviewMutation = useReviewAttendance();
@@ -131,46 +131,48 @@ export function OperationTeamSection({
     validFrom?: string;
     validUntil?: string | null;
   }): Promise<AssignEmployeesResult> => {
-    const added: string[] = [];
-    const skipped: AssignEmployeesResult["skipped"] = [];
+    try {
+      const result = await assignBatchMutation.mutateAsync({
+        employeeIds: input.employeeIds,
+        ...(input.validFrom
+          ? {
+              validFrom: input.validFrom,
+              validUntil: input.validUntil,
+            }
+          : {}),
+      });
 
-    for (const employeeId of input.employeeIds) {
-      try {
-        await assignMutation.mutateAsync({
-          employeeId,
-          ...(input.validFrom
-            ? {
-                validFrom: input.validFrom,
-                validUntil: input.validUntil,
-              }
-            : {}),
-        });
-        added.push(employeeId);
-      } catch (error) {
-        const parsed = parseApiError(error);
-        skipped.push({
-          employeeId,
-          reason: mapAssignmentErrorMessage(parsed.code, getApiErrorMessage(error)),
-        });
+      const added = result.assignedIds;
+      const skipped: AssignEmployeesResult["skipped"] = result.skipped.map((item) => ({
+        employeeId: item.employeeId,
+        employeeName: item.employeeName,
+        code: item.code,
+        reason: mapAssignmentErrorMessage(item.code, item.reason),
+      }));
+      const status = resolveAssignmentBatchStatus(added.length, skipped.length);
+
+      if (added.length > 0) {
+        onFeedback(
+          `${added.length} ${terminology.worker.plural.toLowerCase()} asignado(s) correctamente.`,
+          "success",
+        );
       }
-    }
+      if (status === "error") {
+        onFeedback(
+          skipped[0]?.reason ?? "No se pudo completar la asignación.",
+          "error",
+        );
+      }
 
-    const status = resolveAssignmentBatchStatus(added.length, skipped.length);
-
-    if (added.length > 0) {
-      onFeedback(
-        `${added.length} ${terminology.worker.plural.toLowerCase()} asignado(s) correctamente.`,
-        "success",
+      return { status, added, skipped };
+    } catch (error) {
+      const message = mapAssignmentErrorMessage(
+        parseApiError(error).code,
+        getApiErrorMessage(error),
       );
+      onFeedback(message, "error");
+      throw error;
     }
-    if (status === "error") {
-      onFeedback(
-        skipped[0]?.reason ?? "No se pudo completar la asignación.",
-        "error",
-      );
-    }
-
-    return { status, added, skipped };
   };
 
   const handleCancelAssignment = async (assignment: OperationEmployeeAssignment) => {
@@ -386,7 +388,7 @@ export function OperationTeamSection({
           operationKind={operationKind}
           operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
           excludeEmployeeIds={currentlyAssignedEmployeeIds}
-          assignLoading={assignMutation.isPending}
+          assignLoading={assignBatchMutation.isPending}
           onAssignEmployees={handleAssignEmployees}
           onCompleted={onFeedback}
         />

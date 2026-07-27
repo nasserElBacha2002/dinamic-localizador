@@ -43,6 +43,7 @@ export const OPERATIONS_API_EXPORTS = [
   "reactivateOperation",
   "getOperationEmployees",
   "assignEmployeeToOperation",
+  "assignEmployeesBatchToOperation",
   "cancelOperationAssignment",
   "unassignEmployeeFromOperation",
   "endOperationAssignment",

@@ -22,7 +22,7 @@ export async function getAbsenceRequests(
   const { data } = await scopedApiClient.get<PaginatedResponse<AbsenceRequestListItem>>(
     "absence-requests",
     {
-      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+      params: buildParams(filters as Record<string, string | number | boolean | string[] | undefined>),
     },
   );
   return data;

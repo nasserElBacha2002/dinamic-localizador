@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { assertWithinMultiFilterLimit, mergeLegacySingularId, uuidIdListSchema } from "./uuid-id-list";
 
 export const absenceDayPeriodSchema = z.enum(["FULL_DAY", "AM", "PM"]);
 
@@ -37,16 +38,24 @@ export const createAbsenceRequestSchema = z
     path: ["endDate"],
   });
 
-export const listAbsenceRequestsQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(20),
-  status: absenceRequestStatusSchema.optional(),
-  absenceTypeId: z.string().uuid().optional(),
-  employeeId: z.string().uuid().optional(),
-  dateFrom: absenceDateSchema.optional(),
-  dateTo: absenceDateSchema.optional(),
-  search: z.string().trim().min(1).optional(),
-});
+export const listAbsenceRequestsQuerySchema = z
+  .object({
+    page: z.coerce.number().int().min(1).default(1),
+    limit: z.coerce.number().int().min(1).max(100).default(20),
+    status: absenceRequestStatusSchema.optional(),
+    absenceTypeId: z.string().uuid().optional(),
+    employeeId: z.string().uuid().optional(),
+    employeeIds: uuidIdListSchema.optional(),
+    dateFrom: absenceDateSchema.optional(),
+    dateTo: absenceDateSchema.optional(),
+    search: z.string().trim().min(1).optional(),
+  })
+  .transform((query) => ({
+    ...query,
+    employeeIds: assertWithinMultiFilterLimit(
+      mergeLegacySingularId(query.employeeIds ?? [], query.employeeId),
+    ),
+  }));
 
 export const rejectAbsenceRequestSchema = z.object({
   reason: z.string().trim().min(3, "El motivo del rechazo es obligatorio").max(1000),

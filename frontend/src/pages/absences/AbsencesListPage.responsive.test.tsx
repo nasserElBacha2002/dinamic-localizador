@@ -100,6 +100,12 @@ mockApiModule("api/employees.api", {
   },
 });
 
+mockApiModule("api/lookups.api", {
+  getEmployeeLookups: async () => [],
+  getServiceLookups: async () => [],
+  getOperationLookups: async () => [],
+});
+
 import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";

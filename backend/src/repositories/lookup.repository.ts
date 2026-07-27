@@ -32,9 +32,16 @@ export const lookupRepository = {
 
     const filters = ["e.company_id = @companyId"];
 
-    if (query.id) {
-      request.input("id", sql.UniqueIdentifier, query.id);
+    if (query.ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, query.ids[0]);
       filters.push("e.id = @id");
+    } else if (query.ids.length > 1) {
+      const placeholders = query.ids.map((id, index) => {
+        const param = `id${index}`;
+        request.input(param, sql.UniqueIdentifier, id);
+        return `@${param}`;
+      });
+      filters.push(`e.id IN (${placeholders.join(", ")})`);
     }
 
     if (query.search) {
@@ -70,9 +77,16 @@ export const lookupRepository = {
 
     const filters = ["s.company_id = @companyId"];
 
-    if (query.id) {
-      request.input("id", sql.UniqueIdentifier, query.id);
+    if (query.ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, query.ids[0]);
       filters.push("s.id = @id");
+    } else if (query.ids.length > 1) {
+      const placeholders = query.ids.map((id, index) => {
+        const param = `id${index}`;
+        request.input(param, sql.UniqueIdentifier, id);
+        return `@${param}`;
+      });
+      filters.push(`s.id IN (${placeholders.join(", ")})`);
     }
 
     if (query.search) {
@@ -113,9 +127,16 @@ export const lookupRepository = {
 
     const filters = ["i.company_id = @companyId"];
 
-    if (query.id) {
-      request.input("id", sql.UniqueIdentifier, query.id);
+    if (query.ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, query.ids[0]);
       filters.push("i.id = @id");
+    } else if (query.ids.length > 1) {
+      const placeholders = query.ids.map((id, index) => {
+        const param = `id${index}`;
+        request.input(param, sql.UniqueIdentifier, id);
+        return `@${param}`;
+      });
+      filters.push(`i.id IN (${placeholders.join(", ")})`);
     }
 
     if (query.search) {

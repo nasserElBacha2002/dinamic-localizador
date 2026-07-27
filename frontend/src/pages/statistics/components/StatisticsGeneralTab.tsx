@@ -78,22 +78,25 @@ export function StatisticsGeneralTab({
     <Stack gap="lg">
       <Group justify="flex-end" gap="sm">
         <ExportActionButtons
-          baseName="attendance-summary"
-          headers={summaryHeaders}
-          rows={summaryExportRows}
           dateFrom={isoDateFrom}
           dateTo={isoDateTo}
-          sheetName="Resumen"
           disabled={exportsDisabled}
-        />
-        <ExportActionButtons
-          baseName="attendance-workday-details"
-          headers={workdayDetailHeaders}
-          loadRows={loadWorkdayDetailExportRows}
-          dateFrom={isoDateFrom}
-          dateTo={isoDateTo}
-          sheetName="Detalle jornadas"
-          disabled={exportsDisabled}
+          targets={[
+            {
+              label: "Resumen",
+              baseName: "attendance-summary",
+              headers: summaryHeaders,
+              rows: summaryExportRows,
+              sheetName: "Resumen",
+            },
+            {
+              label: "Detalle jornadas",
+              baseName: "attendance-workday-details",
+              headers: workdayDetailHeaders,
+              loadRows: loadWorkdayDetailExportRows,
+              sheetName: "Detalle jornadas",
+            },
+          ]}
         />
       </Group>
 

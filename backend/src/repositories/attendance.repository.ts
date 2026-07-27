@@ -7,6 +7,7 @@ import type { AttendanceRecord, AttendanceRecordWithRelations } from "../types/d
 import type { CheckoutEligibleOperation } from "../types/twilio.types";
 import { mapAttendanceRow, mapAttendanceWithRelationsRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
 import type { CreateAttendanceInput, ListAttendanceQuery } from "../schemas/attendance.schema";
 
 const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): SqlFilter[] => {
@@ -29,25 +30,31 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
     });
   }
 
-  if (query.operationId) {
-    filters.push({
-      clause: "ar.operation_id = @operationId",
-      apply: (request) => request.input("operationId", sql.UniqueIdentifier, query.operationId),
-    });
+  const operationFilter = createUuidInFilter({
+    column: "ar.operation_id",
+    parameterPrefix: "operationId",
+    values: query.operationIds,
+  });
+  if (operationFilter) {
+    filters.push(operationFilter);
   }
 
-  if (query.employeeId) {
-    filters.push({
-      clause: "ar.employee_id = @employeeId",
-      apply: (request) => request.input("employeeId", sql.UniqueIdentifier, query.employeeId),
-    });
+  const employeeFilter = createUuidInFilter({
+    column: "ar.employee_id",
+    parameterPrefix: "employeeId",
+    values: query.employeeIds,
+  });
+  if (employeeFilter) {
+    filters.push(employeeFilter);
   }
 
-  if (query.serviceId) {
-    filters.push({
-      clause: "i.service_id = @serviceId",
-      apply: (request) => request.input("serviceId", sql.UniqueIdentifier, query.serviceId),
-    });
+  const serviceFilter = createUuidInFilter({
+    column: "i.service_id",
+    parameterPrefix: "serviceId",
+    values: query.serviceIds,
+  });
+  if (serviceFilter) {
+    filters.push(serviceFilter);
   }
 
   if (query.validationStatus) {

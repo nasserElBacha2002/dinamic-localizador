@@ -138,6 +138,7 @@ export interface AbsenceRequestFilters {
   status?: AbsenceRequestStatus;
   absenceTypeId?: string;
   employeeId?: string;
+  employeeIds?: string[];
   dateFrom?: string;
   dateTo?: string;
   search?: string;

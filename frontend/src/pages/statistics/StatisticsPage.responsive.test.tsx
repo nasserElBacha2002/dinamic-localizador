@@ -101,6 +101,7 @@ mockApiModule("api/operations.api", {
   "reactivateOperation",
   "getOperationEmployees",
   "assignEmployeeToOperation",
+  "assignEmployeesBatchToOperation",
   "cancelOperationAssignment",
   "unassignEmployeeFromOperation",
   "endOperationAssignment",
@@ -130,6 +131,12 @@ mockApiModule("api/services.api", {
   deactivateService: async () => {
     throw new Error("not used");
   },
+});
+
+mockApiModule("api/lookups.api", {
+  getEmployeeLookups: async () => [],
+  getServiceLookups: async () => [],
+  getOperationLookups: async () => [],
 });
 
 import assert from "node:assert/strict";

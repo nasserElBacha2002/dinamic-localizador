@@ -102,6 +102,7 @@ export function resolveAssignmentBatchStatus(
 
 const assignmentErrorMessages: Record<string, string> = {
   ASSIGNMENT_PERIOD_OVERLAP: "Ya existe otra asignación en el período indicado.",
+  ASSIGNMENT_ALREADY_EXISTS: "Ya está asignado en el período indicado.",
   ASSIGNMENT_ATTENDANCE_CONFLICT:
     "No se puede modificar la asignación porque hay registros de asistencia vinculados.",
   ASSIGNMENT_HAS_ATTENDANCE_RECORDS:
@@ -133,6 +134,3 @@ export function displayStateTone(state: AssignmentDisplayState) {
       return "danger" as const;
   }
 }
-
-// Deuda técnica: la asignación individual múltiple sigue usando N requests secuenciales.
-// Pendiente un endpoint batch (POST .../assignments/batch) reutilizando operationAssignmentCore.

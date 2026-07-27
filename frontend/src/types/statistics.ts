@@ -148,6 +148,9 @@ export interface StatisticsFilters {
   operationId?: string;
   serviceId?: string;
   employeeId?: string;
+  operationIds?: string[];
+  serviceIds?: string[];
+  employeeIds?: string[];
   operationKind?: StatisticsOperationKind;
   effectiveState?: StatisticsEffectiveState;
   validationStatus?: StatisticsValidationStatus;

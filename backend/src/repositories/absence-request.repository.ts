@@ -13,6 +13,7 @@ import type { ListAbsenceRequestsQuery } from "../schemas/absence-request.schema
 import { getPagination } from "../utils/pagination";
 import { mapAbsenceRequestEventRow, mapAbsenceRequestRow } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
 
 const mapListRow = (row: Record<string, unknown>): AbsenceRequestWithRelations => {
   const request = mapAbsenceRequestRow(row);
@@ -207,11 +208,15 @@ export const absenceRequestRepository = {
         apply: (request) => request.input("absenceTypeId", sql.UniqueIdentifier, query.absenceTypeId),
       });
     }
-    if (query.employeeId) {
-      filters.push({
-        clause: "ar.employee_id = @employeeId",
-        apply: (request) => request.input("employeeId", sql.UniqueIdentifier, query.employeeId),
+    if ((query.employeeIds?.length ?? 0) > 0) {
+      const employeeFilter = createUuidInFilter({
+        column: "ar.employee_id",
+        parameterPrefix: "employeeId",
+        values: query.employeeIds ?? [],
       });
+      if (employeeFilter) {
+        filters.push(employeeFilter);
+      }
     }
     if (query.dateFrom) {
       filters.push({

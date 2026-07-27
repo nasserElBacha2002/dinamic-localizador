@@ -86,6 +86,44 @@ export const operationEmployeeRepository = {
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async listOverlappingForEmployeesInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      employeeIds: string[];
+      validFrom: string;
+      validUntil: string | null;
+    },
+  ): Promise<OperationEmployeeAssignment[]> {
+    if (input.employeeIds.length === 0) {
+      return [];
+    }
+
+    const request = new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("validFrom", sql.Date, input.validFrom)
+      .input("validUntil", sql.Date, input.validUntil);
+
+    const placeholders = input.employeeIds.map((employeeId, index) => {
+      const param = `employeeId${index}`;
+      request.input(param, sql.UniqueIdentifier, employeeId);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT *
+      FROM operation_assignments WITH (UPDLOCK, HOLDLOCK)
+      WHERE company_id = @companyId
+        AND operation_id = @operationId
+        AND employee_id IN (${placeholders.join(", ")})
+        AND ${OVERLAP_CLAUSE}
+    `);
+
+    return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
+  },
+
   async findOverlappingInTransaction(
     companyId: string,
     transaction: sql.Transaction,

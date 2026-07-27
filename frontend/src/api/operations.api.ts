@@ -101,6 +101,33 @@ export async function assignEmployeeToOperation(
   return data.data;
 }
 
+export interface AssignEmployeesBatchResult {
+  assignedCount: number;
+  assignedIds: string[];
+  skippedCount: number;
+  skipped: Array<{
+    employeeId: string;
+    employeeName: string;
+    code: string;
+    reason: string;
+  }>;
+}
+
+export async function assignEmployeesBatchToOperation(
+  operationId: string,
+  input: {
+    employeeIds: string[];
+    validFrom?: string;
+    validUntil?: string | null;
+  },
+): Promise<AssignEmployeesBatchResult> {
+  const { data } = await scopedApiClient.post<SingleResponse<AssignEmployeesBatchResult>>(
+    `${operationAssignmentPath(operationId)}/batch`,
+    input,
+  );
+  return data.data;
+}
+
 export async function cancelOperationAssignment(
   operationId: string,
   assignmentId: string,

@@ -74,12 +74,22 @@ apiClient.interceptors.response.use(
 );
 
 function buildParams(
-  filters: Record<string, string | number | boolean | undefined>,
+  filters: Record<string, string | number | boolean | string[] | undefined>,
 ): Record<string, string | number> {
   const params: Record<string, string | number> = {};
 
   for (const [key, value] of Object.entries(filters)) {
     if (value === undefined || value === "") {
+      continue;
+    }
+
+    if (Array.isArray(value)) {
+      const joined = value.map(String).map((item) => item.trim()).filter(Boolean);
+      const unique = [...new Set(joined)];
+      if (unique.length === 0) {
+        continue;
+      }
+      params[key] = unique.join(",");
       continue;
     }
 

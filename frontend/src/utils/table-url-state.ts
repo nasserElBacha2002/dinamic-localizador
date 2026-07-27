@@ -1,6 +1,6 @@
 export type SortOrder = "asc" | "desc";
 
-export type TableUrlFieldType = "string" | "number" | "boolean" | "enum";
+export type TableUrlFieldType = "string" | "number" | "boolean" | "enum" | "stringList";
 
 export interface TableUrlFieldDef {
   type: TableUrlFieldType;
@@ -48,6 +48,10 @@ function inferFieldDef(value: unknown, explicit?: TableUrlFieldDef): TableUrlFie
 
   if (typeof value === "boolean") {
     return { type: "boolean" };
+  }
+
+  if (Array.isArray(value)) {
+    return { type: "stringList" };
   }
 
   return { type: "string" };
@@ -109,6 +113,13 @@ export function parseTableUrlFieldValue(
         return "";
       }
       return def.values?.includes(raw) ? raw : defaultValue;
+    case "stringList": {
+      const ids = raw
+        .split(",")
+        .map((part) => part.trim())
+        .filter(Boolean);
+      return [...new Set(ids)];
+    }
     default:
       return defaultValue;
   }
@@ -142,6 +153,14 @@ export function serializeTableUrlFieldValue(
     case "enum": {
       const serialized = String(value);
       return def.values?.includes(serialized) ? serialized : null;
+    }
+    case "stringList": {
+      if (!Array.isArray(value) || value.length === 0) {
+        return null;
+      }
+      const ids = value.map(String).map((item) => item.trim()).filter(Boolean);
+      const unique = [...new Set(ids)];
+      return unique.length > 0 ? unique.join(",") : null;
     }
     default:
       return null;

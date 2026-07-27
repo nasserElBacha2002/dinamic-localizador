@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   assignEmployeeToOperation,
+  assignEmployeesBatchToOperation,
   cancelOperation,
   cancelOperationAssignment,
   createOperation,
@@ -159,6 +160,25 @@ export function useAssignOperationEmployee(operationId: string) {
   return useMutation({
     mutationFn: (input: { employeeId: string; validFrom?: string; validUntil?: string | null }) =>
       assignEmployeeToOperation(operationId, input),
+    onSettled: (_data, error) => {
+      if (error && !isRecurringWorkdaySyncError(error)) {
+        return;
+      }
+      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
+    },
+  });
+}
+
+export function useAssignOperationEmployeesBatch(operationId: string) {
+  const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
+
+  return useMutation({
+    mutationFn: (input: {
+      employeeIds: string[];
+      validFrom?: string;
+      validUntil?: string | null;
+    }) => assignEmployeesBatchToOperation(operationId, input),
     onSettled: (_data, error) => {
       if (error && !isRecurringWorkdaySyncError(error)) {
         return;

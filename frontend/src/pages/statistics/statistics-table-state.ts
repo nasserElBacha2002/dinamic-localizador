@@ -91,9 +91,9 @@ export const STATISTICS_LOCATION_SORT_FIELDS = [
 export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
   return {
     tab: "general" as StatisticsTabKey,
-    operationId: "",
-    serviceId: "",
-    employeeId: "",
+    operationIds: [] as string[],
+    serviceIds: [] as string[],
+    employeeIds: [] as string[],
     operationKind: "",
     effectiveState: "",
     validationStatus: "",
@@ -117,6 +117,9 @@ export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
 
 export const STATISTICS_TABLE_FIELDS = {
   tab: { type: "enum", values: STATISTICS_TAB_VALUES },
+  operationIds: { type: "stringList" as const },
+  serviceIds: { type: "stringList" as const },
+  employeeIds: { type: "stringList" as const },
   operationKind: { type: "enum", values: STATISTICS_OPERATION_KIND_VALUES },
   effectiveState: { type: "enum", values: STATISTICS_EFFECTIVE_STATE_VALUES },
   validationStatus: { type: "enum", values: STATISTICS_VALIDATION_STATUS_VALUES },

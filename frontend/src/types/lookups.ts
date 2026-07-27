@@ -21,5 +21,6 @@ export interface LookupQuery {
   search?: string;
   limit?: number;
   id?: string;
+  ids?: string[];
   active?: boolean;
 }

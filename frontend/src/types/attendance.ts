@@ -121,6 +121,9 @@ export interface AttendanceFilters {
   operationId?: string;
   employeeId?: string;
   serviceId?: string;
+  operationIds?: string[];
+  employeeIds?: string[];
+  serviceIds?: string[];
   validationStatus?: ValidationStatus;
   locationStatus?: LocationStatus;
   punctualityStatus?: PunctualityStatus;

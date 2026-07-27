@@ -17,7 +17,7 @@ export async function getAttendanceRecords(
   const { data } = await scopedApiClient.get<PaginatedResponse<AttendanceRecordWithRelations>>(
     "attendance",
     {
-      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+      params: buildParams(filters as Record<string, string | number | boolean | string[] | undefined>),
     },
   );
   return data;
@@ -69,7 +69,7 @@ export async function reviewAttendanceRecord(
 
 export async function exportAttendanceCsv(filters: AttendanceFilters = {}): Promise<Blob> {
   const response = await scopedApiClient.get<Blob>("attendance/export.csv", {
-    params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+    params: buildParams(filters as Record<string, string | number | boolean | string[] | undefined>),
     responseType: "blob",
   });
   return response.data;

@@ -5,11 +5,24 @@ import type {
   ServiceLookup,
 } from "../types/lookups";
 import { API_ENDPOINTS } from "./endpoints";
+import { buildParams } from "./client";
 import { scopedApiClient } from "./scoped-client";
 
 export type LookupRequestOptions = {
   signal?: AbortSignal;
 };
+
+function toLookupParams(
+  query: LookupQuery,
+): Record<string, string | number | boolean | string[] | undefined> {
+  return buildParams({
+    search: query.search,
+    limit: query.limit,
+    id: query.id,
+    ids: query.ids,
+    active: query.active,
+  });
+}
 
 export async function getEmployeeLookups(
   query: LookupQuery = {},
@@ -18,7 +31,7 @@ export async function getEmployeeLookups(
   const { data } = await scopedApiClient.get<{ data: EmployeeLookup[] }>(
     API_ENDPOINTS.lookups.employees,
     {
-      params: query,
+      params: toLookupParams(query),
       signal: options?.signal,
     },
   );
@@ -32,7 +45,7 @@ export async function getServiceLookups(
   const { data } = await scopedApiClient.get<{ data: ServiceLookup[] }>(
     API_ENDPOINTS.lookups.services,
     {
-      params: query,
+      params: toLookupParams(query),
       signal: options?.signal,
     },
   );
@@ -46,7 +59,7 @@ export async function getOperationLookups(
   const { data } = await scopedApiClient.get<{ data: OperationLookup[] }>(
     API_ENDPOINTS.lookups.operations,
     {
-      params: query,
+      params: toLookupParams(query),
       signal: options?.signal,
     },
   );

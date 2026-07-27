@@ -5,10 +5,14 @@ setupDomEnvironment();
 import assert from "node:assert/strict";
 import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import React, { useState } from "react";
 import { mockViewport } from "../../test/mock-match-media";
 import { FilterBar } from "./FilterBar";
+
+beforeEach(() => {
+  mockViewport("desktop");
+});
 
 afterEach(() => {
   cleanup();
@@ -22,7 +26,6 @@ function DesktopClearHarness() {
   return (
     <FilterBar
       activeFilterCount={activeCount}
-      hasActiveFilters={activeCount > 0}
       onClearFilters={() => setStatus("all")}
     >
       <FilterBar.Item>
@@ -42,8 +45,8 @@ function DesktopClearHarness() {
   );
 }
 
-describe("FilterBar clear filters (desktop)", () => {
-  it("shows Limpiar filtros disabled at defaults and clears when active", async () => {
+describe("FilterBar clear filters", () => {
+  it("shows Limpiar filtros disabled at defaults and clears when active on desktop", async () => {
     mockViewport("desktop");
     const view = render(
       <MantineProvider>
@@ -51,18 +54,20 @@ describe("FilterBar clear filters (desktop)", () => {
       </MantineProvider>,
     );
 
-    const clearControl = view.getByLabelText("Limpiar filtros");
-    assert.equal(clearControl.getAttribute("aria-disabled"), "true");
+    const clearButton = () =>
+      view.getByRole("button", { name: "Limpiar filtros" }) as HTMLButtonElement;
+    assert.equal(clearButton().disabled, true);
+    assert.equal(clearButton().type, "button");
 
     fireEvent.change(view.getByLabelText("Estado"), { target: { value: "true" } });
     await waitFor(() => {
-      assert.equal(view.getByLabelText("Limpiar filtros").getAttribute("aria-disabled"), null);
+      assert.equal(clearButton().disabled, false);
     });
 
-    fireEvent.click(view.getByLabelText("Limpiar filtros"));
+    fireEvent.click(clearButton());
     await waitFor(() => {
       assert.equal((view.getByLabelText("Estado") as HTMLSelectElement).value, "all");
-      assert.equal(view.getByLabelText("Limpiar filtros").getAttribute("aria-disabled"), "true");
+      assert.equal(clearButton().disabled, true);
     });
   });
 });

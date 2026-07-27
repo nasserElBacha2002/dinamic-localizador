@@ -19,11 +19,9 @@ export interface FilterBarProps {
   activeFilterCount?: number;
   /**
    * When provided, renders "Limpiar filtros" on desktop and mobile.
-   * Inactive when `activeFilterCount` is 0 (or when `hasActiveFilters` is false).
+   * Disabled when `activeFilterCount` is 0.
    */
   onClearFilters?: () => void;
-  /** Explicit override; defaults to `activeFilterCount > 0`. */
-  hasActiveFilters?: boolean;
   filtersTitle?: string;
   clearLabel?: string;
   /**
@@ -39,14 +37,13 @@ export function FilterBar({
   search,
   activeFilterCount = 0,
   onClearFilters,
-  hasActiveFilters,
   filtersTitle = "Filtros",
   clearLabel = "Limpiar filtros",
   applyLabel = "Listo",
 }: FilterBarProps) {
   const isMobile = useIsBelow("sm");
   const [opened, { open, close }] = useDisclosure(false);
-  const clearEnabled = hasActiveFilters ?? activeFilterCount > 0;
+  const hasActiveFilters = activeFilterCount > 0;
 
   const desktopFilters = (
     <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md" style={{ flex: 1, minWidth: 0 }}>
@@ -65,7 +62,7 @@ export function FilterBar({
               {onClearFilters ? (
                 <ClearFiltersButton
                   onClick={onClearFilters}
-                  disabled={!clearEnabled}
+                  disabled={!hasActiveFilters}
                   label={clearLabel}
                   variant="subtle"
                 />
@@ -95,7 +92,7 @@ export function FilterBar({
             {onClearFilters ? (
               <ClearFiltersButton
                 onClick={onClearFilters}
-                disabled={!clearEnabled}
+                disabled={!hasActiveFilters}
                 label={clearLabel}
                 variant="subtle"
               />
@@ -125,7 +122,7 @@ export function FilterBar({
             {onClearFilters ? (
               <ClearFiltersButton
                 onClick={onClearFilters}
-                disabled={!clearEnabled}
+                disabled={!hasActiveFilters}
                 label={clearLabel}
                 variant="default"
               />

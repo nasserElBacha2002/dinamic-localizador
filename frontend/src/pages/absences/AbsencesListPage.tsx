@@ -200,7 +200,6 @@ export function AbsencesListPage() {
           />
         }
         activeFilterCount={table.activeFilterCount}
-        hasActiveFilters={table.hasActiveFilters}
         onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>

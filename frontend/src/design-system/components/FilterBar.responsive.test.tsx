@@ -15,7 +15,7 @@ afterEach(() => {
   mockViewport("desktop");
 });
 
-function ControlledFiltersHarness() {
+function ControlledFiltersHarness({ withClear = false }: { withClear?: boolean }) {
   const [status, setStatus] = useState("all");
   const [category, setCategory] = useState("all");
   const activeCount = (status !== "all" ? 1 : 0) + (category !== "all" ? 1 : 0);
@@ -23,16 +23,20 @@ function ControlledFiltersHarness() {
   return (
     <FilterBar
       search={
-        <label htmlFor="search">
+        <label htmlFor="filterbar-search">
           Buscar
-          <input id="search" defaultValue="" />
+          <input id="filterbar-search" defaultValue="" />
         </label>
       }
-      activeFilterCount={activeCount}
-      onClearFilters={() => {
-        setStatus("all");
-        setCategory("all");
-      }}
+      activeFilterCount={withClear ? activeCount : undefined}
+      onClearFilters={
+        withClear
+          ? () => {
+              setStatus("all");
+              setCategory("all");
+            }
+          : undefined
+      }
     >
       <FilterBar.Item>
         <label>
@@ -96,37 +100,5 @@ describe("FilterBar responsive", () => {
       assert.ok(within(document.body).getByRole("dialog"));
     });
     assert.ok(within(document.body).getByLabelText("Estado"));
-  });
-
-  it("shows active filter count and clears with the same controlled values", async () => {
-    mockViewport("mobile");
-    const view = render(
-      <MantineProvider>
-        <ControlledFiltersHarness />
-      </MantineProvider>,
-    );
-
-    fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));
-    await waitFor(() => {
-      assert.ok(within(document.body).getByLabelText("Estado"));
-    });
-    fireEvent.change(within(document.body).getByLabelText("Estado"), {
-      target: { value: "true" },
-    });
-    fireEvent.click(within(document.body).getByRole("button", { name: "Listo" }));
-
-    await waitFor(() => {
-      const filtersTrigger = view.getAllByRole("button", { name: /^Filtros/ })[0];
-      assert.match(filtersTrigger.textContent ?? "", /1/);
-    });
-
-    fireEvent.click(view.getAllByLabelText("Limpiar filtros")[0]);
-    fireEvent.click(view.getAllByRole("button", { name: /^Filtros/ })[0]);
-    await waitFor(() => {
-      assert.equal(
-        (within(document.body).getByLabelText("Estado") as HTMLSelectElement).value,
-        "all",
-      );
-    });
   });
 });

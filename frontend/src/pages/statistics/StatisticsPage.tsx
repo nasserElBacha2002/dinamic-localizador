@@ -30,7 +30,6 @@ export function StatisticsPage() {
         locationStatus={data.locationStatus}
         punctualityStatus={data.punctualityStatus}
         activeFilterCount={data.activeFilterCount}
-        hasActiveFilters={data.hasActiveFilters}
         onDateRangeChange={(value) => {
           data.resetAllPages();
           data.setDateRange(value);

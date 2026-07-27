@@ -6,6 +6,13 @@
  * - Retained by default: pageSize, sortBy, sortOrder (and screen-specific keys like tab).
  * - Pagination page counters reset to defaults (usually 1).
  * - Tabs are retained unless listed as filter keys (statistics keeps `tab`).
+ *
+ * Equality policy:
+ * - `null` and `undefined` are equivalent (absent value).
+ * - `""` is NOT equivalent to null/undefined (empty string can be a valid enum/default).
+ * - Arrays compare positionally by default.
+ * - Multiselect ID lists may use set-like comparison (order-insensitive) via
+ *   `areIdSetsEqual` / per-key comparators.
  */
 
 export const DEFAULT_FILTER_RETAIN_KEYS = ["pageSize", "sortBy", "sortOrder"] as const;
@@ -18,24 +25,23 @@ export const DEFAULT_FILTER_ACTIVITY_IGNORE_KEYS = [
   "sortOrder",
 ] as const;
 
+export type FilterValueComparator = (left: unknown, right: unknown) => boolean;
+export type FilterValueNormalizer = (value: unknown) => unknown;
+
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value) && !(value instanceof Date);
 }
 
 /**
- * Normalize empty-ish values so null/undefined/"" compare equal when appropriate,
- * and arrays/objects/dates compare by value rather than reference.
+ * Normalize values for structural comparison.
+ * Does not coerce `""` to null — empty string remains distinct.
  */
 export function normalizeFilterValue(value: unknown): unknown {
   if (value === null || value === undefined) {
     return null;
   }
 
-  if (typeof value === "string") {
-    return value;
-  }
-
-  if (typeof value === "number" || typeof value === "boolean") {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return value;
   }
 
@@ -57,6 +63,21 @@ export function normalizeFilterValue(value: unknown): unknown {
   }
 
   return value;
+}
+
+/** Order-insensitive equality for multiselect ID arrays. */
+export function areIdSetsEqual(left: unknown, right: unknown): boolean {
+  if (!Array.isArray(left) || !Array.isArray(right)) {
+    return areFilterValuesEqual(left, right);
+  }
+
+  if (left.length !== right.length) {
+    return false;
+  }
+
+  const normalizedLeft = left.map((item) => String(normalizeFilterValue(item))).sort();
+  const normalizedRight = right.map((item) => String(normalizeFilterValue(item))).sort();
+  return normalizedLeft.every((item, index) => item === normalizedRight[index]);
 }
 
 export function areFilterValuesEqual(left: unknown, right: unknown): boolean {
@@ -89,6 +110,10 @@ export function areFilterValuesEqual(left: unknown, right: unknown): boolean {
 export interface FilterActivityOptions<T extends Record<string, unknown>> {
   /** Keys excluded from activity detection (pagination, sort, tabs). */
   ignoreKeys?: readonly (keyof T | string)[];
+  /** Per-key equality overrides (e.g. set-like ID lists). */
+  comparators?: Partial<Record<keyof T, FilterValueComparator>>;
+  /** Per-key normalizers applied before the default or custom comparator. */
+  normalizers?: Partial<Record<keyof T, FilterValueNormalizer>>;
 }
 
 export function listComparableFilterKeys<T extends Record<string, unknown>>(
@@ -99,13 +124,26 @@ export function listComparableFilterKeys<T extends Record<string, unknown>>(
   return (Object.keys(defaults) as (keyof T)[]).filter((key) => !ignored.has(String(key)));
 }
 
+function valuesEqualForKey<T extends Record<string, unknown>>(
+  key: keyof T,
+  left: unknown,
+  right: unknown,
+  options: FilterActivityOptions<T>,
+): boolean {
+  const normalize = options.normalizers?.[key];
+  const leftValue = normalize ? normalize(left) : left;
+  const rightValue = normalize ? normalize(right) : right;
+  const compare = options.comparators?.[key] ?? areFilterValuesEqual;
+  return compare(leftValue, rightValue);
+}
+
 export function hasActiveFilters<T extends Record<string, unknown>>(
   state: T,
   defaults: T,
   options: FilterActivityOptions<T> = {},
 ): boolean {
   const keys = listComparableFilterKeys(defaults, options.ignoreKeys);
-  return keys.some((key) => !areFilterValuesEqual(state[key], defaults[key]));
+  return keys.some((key) => !valuesEqualForKey(key, state[key], defaults[key], options));
 }
 
 export function countActiveFilters<T extends Record<string, unknown>>(
@@ -115,7 +153,7 @@ export function countActiveFilters<T extends Record<string, unknown>>(
 ): number {
   const keys = listComparableFilterKeys(defaults, options.ignoreKeys);
   return keys.reduce((count, key) => {
-    return areFilterValuesEqual(state[key], defaults[key]) ? count : count + 1;
+    return valuesEqualForKey(key, state[key], defaults[key], options) ? count : count + 1;
   }, 0);
 }
 

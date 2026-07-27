@@ -3,6 +3,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 setupDomEnvironment();
 
 import assert from "node:assert/strict";
+import { MantineProvider } from "@mantine/core";
 import { cleanup, fireEvent, render } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
@@ -13,49 +14,65 @@ afterEach(() => {
 });
 
 describe("ClearFiltersButton", () => {
-  it("renders Limpiar filtros and invokes onClick once", () => {
-    let clicks = 0;
+  it("renders a native button named Limpiar filtros", () => {
     const view = render(
-      <ClearFiltersButton
-        onClick={() => {
-          clicks += 1;
-        }}
-      />,
+      <MantineProvider>
+        <ClearFiltersButton onClick={() => undefined} />
+      </MantineProvider>,
     );
 
-    const control = view.getByLabelText("Limpiar filtros");
-    fireEvent.click(control);
+    const button = view.getByRole("button", { name: "Limpiar filtros" }) as HTMLButtonElement;
+    assert.equal(button.disabled, false);
+    assert.equal(button.type, "button");
+  });
+
+  it("invokes onClick when enabled", () => {
+    let clicks = 0;
+    const view = render(
+      <MantineProvider>
+        <ClearFiltersButton
+          onClick={() => {
+            clicks += 1;
+          }}
+        />
+      </MantineProvider>,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Limpiar filtros" }));
     assert.equal(clicks, 1);
   });
 
-  it("is inert when filters are at defaults", () => {
+  it("uses native disabled and does not fire when inactive", () => {
     let clicks = 0;
     const view = render(
-      <ClearFiltersButton
-        disabled
-        onClick={() => {
-          clicks += 1;
-        }}
-      />,
+      <MantineProvider>
+        <ClearFiltersButton
+          disabled
+          onClick={() => {
+            clicks += 1;
+          }}
+        />
+      </MantineProvider>,
     );
 
-    const control = view.getByLabelText("Limpiar filtros");
-    assert.equal(control.getAttribute("aria-disabled"), "true");
-    fireEvent.click(control);
+    const button = view.getByRole("button", { name: "Limpiar filtros" }) as HTMLButtonElement;
+    assert.equal(button.disabled, true);
+    fireEvent.click(button);
     assert.equal(clicks, 0);
   });
 
-  it("supports keyboard activation", () => {
-    let clicks = 0;
+  it("is keyboard-focusable when enabled", () => {
     const view = render(
-      <ClearFiltersButton
-        onClick={() => {
-          clicks += 1;
-        }}
-      />,
+      <MantineProvider>
+        <ClearFiltersButton onClick={() => undefined} />
+      </MantineProvider>,
     );
 
-    fireEvent.keyDown(view.getByLabelText("Limpiar filtros"), { key: "Enter" });
-    assert.equal(clicks, 1);
+    const button = view.getByRole("button", { name: "Limpiar filtros" }) as HTMLButtonElement;
+    button.focus();
+    assert.equal(document.activeElement, button);
+    // Native button activation (Enter/Space) is handled by the browser / Mantine Button.
+    // userEvent.setup() is incompatible with this suite's happy-dom document symbol.
+    fireEvent.keyDown(button, { key: "Enter", code: "Enter" });
   });
 });

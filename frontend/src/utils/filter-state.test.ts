@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   areFilterValuesEqual,
+  areIdSetsEqual,
   buildFilterResetState,
   countActiveFilters,
   hasActiveFilters,
@@ -9,23 +10,43 @@ import {
 } from "./filter-state";
 
 describe("filter-state", () => {
-  it("normalizes null and undefined to the same sentinel", () => {
+  it("treats null and undefined as equivalent absences", () => {
     assert.equal(normalizeFilterValue(null), null);
     assert.equal(normalizeFilterValue(undefined), null);
     assert.equal(areFilterValuesEqual(null, undefined), true);
   });
 
-  it("compares arrays by value", () => {
+  it("keeps empty string distinct from null/undefined", () => {
+    assert.equal(areFilterValuesEqual("", null), false);
+    assert.equal(areFilterValuesEqual("", undefined), false);
+    assert.equal(areFilterValuesEqual("", ""), true);
+  });
+
+  it("compares arrays positionally by default", () => {
     assert.equal(areFilterValuesEqual(["a", "b"], ["a", "b"]), true);
     assert.equal(areFilterValuesEqual(["a", "b"], ["b", "a"]), false);
     assert.equal(areFilterValuesEqual([], []), true);
   });
 
-  it("compares dates by ISO value", () => {
+  it("compares multiselect IDs as sets when requested", () => {
+    assert.equal(areIdSetsEqual(["b", "a"], ["a", "b"]), true);
+    assert.equal(areIdSetsEqual(["a", "b"], ["a", "b", "c"]), false);
+    assert.equal(
+      hasActiveFilters(
+        { employeeIds: ["b", "a"], page: 1 },
+        { employeeIds: ["a", "b"], page: 1 },
+        { comparators: { employeeIds: areIdSetsEqual } },
+      ),
+      false,
+    );
+  });
+
+  it("compares dates by ISO value and invalid dates as null", () => {
     const a = new Date("2026-07-01T00:00:00.000Z");
     const b = new Date("2026-07-01T00:00:00.000Z");
     assert.equal(areFilterValuesEqual(a, b), true);
     assert.equal(areFilterValuesEqual(a, new Date("2026-07-02T00:00:00.000Z")), false);
+    assert.equal(areFilterValuesEqual(new Date("invalid"), null), true);
   });
 
   it("compares option-like objects by sorted keys", () => {
@@ -35,6 +56,22 @@ describe("filter-state", () => {
     );
     assert.equal(
       areFilterValuesEqual({ value: "1", label: "A" }, { value: "2", label: "A" }),
+      false,
+    );
+  });
+
+  it("supports custom per-key comparators", () => {
+    const defaults = { mode: "strict", page: 1 };
+    assert.equal(
+      hasActiveFilters(
+        { mode: "loose", page: 1 },
+        defaults,
+        {
+          comparators: {
+            mode: () => true,
+          },
+        },
+      ),
       false,
     );
   });

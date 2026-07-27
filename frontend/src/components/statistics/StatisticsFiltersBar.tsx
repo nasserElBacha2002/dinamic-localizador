@@ -31,7 +31,6 @@ interface StatisticsFiltersBarProps {
   locationStatus: string;
   punctualityStatus: string;
   activeFilterCount: number;
-  hasActiveFilters: boolean;
   onDateRangeChange: (value: DateRangeValue) => void;
   onOperationChange: (value: string[]) => void;
   onServiceChange: (value: string[]) => void;
@@ -64,7 +63,6 @@ export function StatisticsFiltersBar({
   locationStatus,
   punctualityStatus,
   activeFilterCount,
-  hasActiveFilters,
   onDateRangeChange,
   onOperationChange,
   onServiceChange,
@@ -133,7 +131,6 @@ export function StatisticsFiltersBar({
         />
       }
       activeFilterCount={activeFilterCount}
-      hasActiveFilters={hasActiveFilters}
       onClearFilters={onClearFilters}
     >
       <FilterBar.Item>

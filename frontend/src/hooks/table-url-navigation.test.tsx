@@ -3,7 +3,7 @@ import { setupDomEnvironment } from "../test/setup-dom";
 setupDomEnvironment();
 
 import assert from "node:assert/strict";
-import { cleanup, fireEvent, render, waitFor } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, it } from "node:test";
 import React from "react";
 import { useLocation, useNavigate } from "react-router";
@@ -18,11 +18,17 @@ const LIST_DEFAULTS = {
   pageSize: 10,
   search: "",
   status: "" as "" | "SCHEDULED" | "COMPLETED",
+  sortBy: "scheduledStart",
+  sortOrder: "asc" as const,
+  employeeIds: [] as string[],
 };
 
 const LIST_FIELDS = {
-  status: { type: "enum", values: ["", "SCHEDULED", "COMPLETED"] },
-} as const;
+  status: { type: "enum" as const, values: ["", "SCHEDULED", "COMPLETED"] },
+  employeeIds: { type: "stringList" as const },
+  sortBy: { type: "enum" as const, values: ["scheduledStart", "name"] },
+  sortOrder: { type: "enum" as const, values: ["asc", "desc"] },
+};
 
 function OperationsListHarness() {
   const navigate = useNavigate();
@@ -30,14 +36,19 @@ function OperationsListHarness() {
   const table = useTableUrlState({
     defaults: LIST_DEFAULTS,
     fields: LIST_FIELDS,
+    searchDebounceMs: 40,
   });
 
   return (
     <div>
       <span data-testid="url">{`${location.pathname}${location.search}`}</span>
       <span data-testid="page">{table.page}</span>
+      <span data-testid="page-size">{table.pageSize}</span>
       <span data-testid="status">{table.state.status}</span>
       <span data-testid="search">{table.state.search}</span>
+      <span data-testid="sort-by">{table.sortBy}</span>
+      <span data-testid="sort-order">{table.sortOrder}</span>
+      <span data-testid="employee-ids">{table.state.employeeIds.join(",")}</span>
       <input
         aria-label="Buscar"
         value={table.searchInput}
@@ -46,8 +57,20 @@ function OperationsListHarness() {
       <button type="button" onClick={() => table.setField("status", "SCHEDULED")}>
         Filtrar programadas
       </button>
+      <button
+        type="button"
+        onClick={() => table.setField("employeeIds", ["b", "a"])}
+      >
+        Seleccionar empleados
+      </button>
       <button type="button" onClick={() => table.setPage(2)}>
         Página 2
+      </button>
+      <button type="button" onClick={() => table.setPageSize(25)}>
+        Page size 25
+      </button>
+      <button type="button" onClick={() => table.setSorting("name", "desc")}>
+        Ordenar nombre
       </button>
       <button type="button" onClick={() => table.resetFilters()}>
         Limpiar filtros
@@ -178,7 +201,7 @@ describe("table URL navigation integration", () => {
     });
   });
 
-  it("resetFilters restores defaults, page 1, and clears URL atomically", async () => {
+  it("resetFilters restores defaults, page 1, and clears managed URL keys atomically", async () => {
     const view = renderOperationsFlow("/operations");
 
     fireEvent.click(view.getByRole("button", { name: "Filtrar programadas" }));
@@ -196,6 +219,84 @@ describe("table URL navigation integration", () => {
       assert.equal(view.getByTestId("page").textContent, "1");
       assert.equal(view.getByTestId("has-active").textContent, "false");
       assert.equal(view.getByTestId("active-count").textContent, "0");
+    });
+  });
+
+  it("resetFilters preserves external params and pageSize/sort", async () => {
+    const view = renderOperationsFlow("/operations?from=dashboard&companyView=compact");
+
+    fireEvent.click(view.getByRole("button", { name: "Page size 25" }));
+    fireEvent.click(view.getByRole("button", { name: "Ordenar nombre" }));
+    fireEvent.click(view.getByRole("button", { name: "Filtrar programadas" }));
+    fireEvent.click(view.getByRole("button", { name: "Página 2" }));
+
+    await waitFor(() => {
+      assert.match(view.getByTestId("url").textContent ?? "", /status=SCHEDULED/);
+      assert.match(view.getByTestId("url").textContent ?? "", /from=dashboard/);
+      assert.equal(view.getByTestId("page-size").textContent, "25");
+      assert.equal(view.getByTestId("sort-by").textContent, "name");
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Limpiar filtros" }));
+
+    await waitFor(() => {
+      const url = view.getByTestId("url").textContent ?? "";
+      assert.match(url, /from=dashboard/);
+      assert.match(url, /companyView=compact/);
+      assert.doesNotMatch(url, /status=/);
+      assert.equal(view.getByTestId("page").textContent, "1");
+      assert.equal(view.getByTestId("page-size").textContent, "25");
+      assert.equal(view.getByTestId("sort-by").textContent, "name");
+      assert.equal(view.getByTestId("sort-order").textContent, "desc");
+    });
+  });
+
+  it("resetFilters cancels pending search debounce", async () => {
+    const view = renderOperationsFlow("/operations");
+
+    fireEvent.change(view.getByLabelText("Buscar"), { target: { value: "texto-viejo" } });
+    assert.equal((view.getByLabelText("Buscar") as HTMLInputElement).value, "texto-viejo");
+
+    fireEvent.click(view.getByRole("button", { name: "Limpiar filtros" }));
+
+    await waitFor(() => {
+      assert.equal((view.getByLabelText("Buscar") as HTMLInputElement).value, "");
+      assert.equal(view.getByTestId("search").textContent, "");
+    });
+
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 80));
+    });
+
+    assert.equal((view.getByLabelText("Buscar") as HTMLInputElement).value, "");
+    assert.doesNotMatch(view.getByTestId("url").textContent ?? "", /texto-viejo/);
+    assert.equal(view.getByTestId("search").textContent, "");
+  });
+
+  it("resetFilters is idempotent and treats ID order as inactive when equal as sets", async () => {
+    const view = renderOperationsFlow("/operations?employeeIds=a%2Cb");
+
+    await waitFor(() => {
+      assert.equal(view.getByTestId("employee-ids").textContent, "a,b");
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Seleccionar empleados" }));
+    await waitFor(() => {
+      // Order differs in state, but set-equality keeps activity false when same IDs as default? 
+      // Defaults are [] so selecting IDs is active.
+      assert.equal(view.getByTestId("has-active").textContent, "true");
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Limpiar filtros" }));
+    await waitFor(() => {
+      assert.equal(view.getByTestId("employee-ids").textContent, "");
+      assert.equal(view.getByTestId("has-active").textContent, "false");
+    });
+
+    fireEvent.click(view.getByRole("button", { name: "Limpiar filtros" }));
+    await waitFor(() => {
+      assert.equal(view.getByTestId("has-active").textContent, "false");
+      assert.equal(view.getByTestId("page").textContent, "1");
     });
   });
 });

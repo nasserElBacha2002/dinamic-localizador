@@ -172,7 +172,6 @@ export function WorkTeamsListPage() {
           />
         }
         activeFilterCount={table.activeFilterCount}
-        hasActiveFilters={table.hasActiveFilters}
         onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>

@@ -2,31 +2,20 @@ import { Button, Group } from "@mantine/core";
 import { Link } from "react-router";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import type { CompanyModuleKey } from "../../types/company-module";
-import type { CompanyPermission } from "../../types/permissions";
-import { isModuleEnabled } from "../../utils/company-modules";
-import {
-  buildEmployeeAbsencesPath,
-  buildEmployeeAttendancePath,
-  buildEmployeeStatisticsPath,
-} from "../../utils/employee-module-links";
-import { hasAnyPermission } from "../../utils/permissions";
+import { filterEmployeeModuleQuickLinks } from "../../utils/employee-module-quick-links";
 
 export interface EmployeeModuleQuickLinksProps {
   employeeId: string;
 }
 
-interface QuickLinkDef {
-  key: string;
-  label: string;
-  to: string;
-  moduleKey: CompanyModuleKey;
-  permissions: readonly CompanyPermission[];
-}
-
 /**
  * Compact secondary links from employee edit → filtered list/report modules.
  * Real `<a>` via React Router `Link` so middle-click / open-in-new-tab work.
+ *
+ * Access policy (safe default):
+ * - While modules/permissions load → hide links.
+ * - On modules/permissions error → hide links (never show potentially unauthorized destinations).
+ * - Visibility uses MODULE_ROUTE_ACCESS (same matrix as sidebar + route guards).
  */
 export function EmployeeModuleQuickLinks({ employeeId }: EmployeeModuleQuickLinksProps) {
   const modulesQuery = useCompanyModules();
@@ -34,49 +23,25 @@ export function EmployeeModuleQuickLinks({ employeeId }: EmployeeModuleQuickLink
   const modules = modulesQuery.data;
   const permissions = permissionsQuery.data?.permissions;
 
-  if (modulesQuery.isPending || permissionsQuery.isPending || !modules) {
+  if (modulesQuery.isPending || permissionsQuery.isPending) {
     return null;
   }
 
-  const candidates: QuickLinkDef[] = [
-    {
-      key: "attendance",
-      label: "Ver asistencias",
-      to: buildEmployeeAttendancePath(employeeId),
-      moduleKey: "attendance",
-      permissions: ["attendance:read", "attendance:review", "attendance:export"],
-    },
-    {
-      key: "absences",
-      label: "Ver ausencias",
-      to: buildEmployeeAbsencesPath(employeeId),
-      moduleKey: "absences",
-      permissions: ["absences:read", "absences:review"],
-    },
-    {
-      key: "statistics",
-      label: "Ver estadísticas",
-      to: buildEmployeeStatisticsPath(employeeId),
-      moduleKey: "reports",
-      permissions: ["reports:read", "reports:export"],
-    },
-  ];
+  // Fail closed: do not render destinations when access metadata is unavailable.
+  if (modulesQuery.isError || permissionsQuery.isError || !modules) {
+    return null;
+  }
 
-  const links = candidates.filter(
-    (link) =>
-      isModuleEnabled(modules, link.moduleKey) &&
-      hasAnyPermission(permissions, link.permissions),
-  );
-
+  const links = filterEmployeeModuleQuickLinks(employeeId, modules, permissions);
   if (links.length === 0) {
     return null;
   }
 
   return (
-    <Group gap="xs" wrap="wrap" justify="flex-end">
+    <Group gap="xs" wrap="wrap" justify="flex-end" data-testid="employee-module-quick-links">
       {links.map((link) => (
         <Button
-          key={link.key}
+          key={link.accessKey}
           component={Link}
           to={link.to}
           variant="default"

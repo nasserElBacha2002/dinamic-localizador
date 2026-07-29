@@ -67,25 +67,201 @@ function validateOptionalHHmm(raw: string, label: string): string | null {
   return null;
 }
 
-function validateTimezone(values: Pick<CompanySettingsFormValues, "operationTimezone">): string[] {
-  const errors: string[] = [];
+export type CompanySettingsFieldKey =
+  | "operationTimezone"
+  | "defaultRadiusMeters"
+  | "geofenceReviewMarginMeters"
+  | "defaultOperationStartTime"
+  | "defaultOperationEndTime"
+  | "defaultEarlyArrivalToleranceMinutes"
+  | "defaultLateArrivalToleranceMinutes"
+  | "lateGraceMinutes"
+  | "earlyLeaveToleranceMinutes"
+  | "pendingOperationExpirationHours"
+  | "confirmationReminderHoursBefore";
+
+export type CompanySettingsFieldErrors = Partial<Record<CompanySettingsFieldKey, string>>;
+
+function assignFieldError(
+  errors: CompanySettingsFieldErrors,
+  field: CompanySettingsFieldKey,
+  message: string | null,
+): void {
+  if (message) {
+    errors[field] = message;
+  }
+}
+
+export function validateGeneralSettingsFields(
+  values: Pick<CompanySettingsFormValues, "operationTimezone">,
+): CompanySettingsFieldErrors {
+  const errors: CompanySettingsFieldErrors = {};
   const timezone = values.operationTimezone.trim();
 
   if (!timezone) {
-    errors.push("La zona horaria operativa es obligatoria.");
+    errors.operationTimezone = "La zona horaria operativa es obligatoria.";
   } else if (timezone.length > LIMITS.operationTimezoneMaxLength) {
-    errors.push("La zona horaria operativa no puede superar 80 caracteres.");
+    errors.operationTimezone = "La zona horaria operativa no puede superar 80 caracteres.";
   } else if (!isValidTimezone(timezone)) {
-    errors.push("La zona horaria operativa no es válida.");
+    errors.operationTimezone = "La zona horaria operativa no es válida.";
   }
 
   return errors;
 }
 
+export function validateOperationOperationSettingsFields(
+  values: Pick<
+    CompanySettingsFormValues,
+    | "defaultRadiusMeters"
+    | "geofenceReviewMarginMeters"
+    | "defaultOperationStartTime"
+    | "defaultOperationEndTime"
+    | "defaultEarlyArrivalToleranceMinutes"
+    | "defaultLateArrivalToleranceMinutes"
+  >,
+): CompanySettingsFieldErrors {
+  const errors: CompanySettingsFieldErrors = {};
+
+  assignFieldError(
+    errors,
+    "defaultRadiusMeters",
+    validateIntegerField(
+      values.defaultRadiusMeters,
+      "El radio permitido por defecto",
+      LIMITS.defaultRadiusMeters.min,
+      LIMITS.defaultRadiusMeters.max,
+    ),
+  );
+  assignFieldError(
+    errors,
+    "geofenceReviewMarginMeters",
+    validateOptionalIntegerField(
+      values.geofenceReviewMarginMeters,
+      "El margen de revisión de geocerca",
+      LIMITS.geofenceReviewMarginMeters.min,
+      LIMITS.geofenceReviewMarginMeters.max,
+    ),
+  );
+  assignFieldError(
+    errors,
+    "defaultOperationStartTime",
+    validateOptionalHHmm(values.defaultOperationStartTime, "El horario de inicio por defecto"),
+  );
+  assignFieldError(
+    errors,
+    "defaultOperationEndTime",
+    validateOptionalHHmm(values.defaultOperationEndTime, "El horario de fin por defecto"),
+  );
+  assignFieldError(
+    errors,
+    "defaultEarlyArrivalToleranceMinutes",
+    validateIntegerField(
+      values.defaultEarlyArrivalToleranceMinutes,
+      "La tolerancia de llegada temprana para operaciones",
+      LIMITS.operationToleranceMinutes.min,
+      LIMITS.operationToleranceMinutes.max,
+    ),
+  );
+  assignFieldError(
+    errors,
+    "defaultLateArrivalToleranceMinutes",
+    validateIntegerField(
+      values.defaultLateArrivalToleranceMinutes,
+      "La tolerancia de llegada tardía para operaciones",
+      LIMITS.operationToleranceMinutes.min,
+      LIMITS.operationToleranceMinutes.max,
+    ),
+  );
+
+  return errors;
+}
+
+export function validateWhatsAppSettingsFields(
+  values: Pick<
+    CompanySettingsFormValues,
+    "lateGraceMinutes" | "earlyLeaveToleranceMinutes" | "pendingOperationExpirationHours"
+  >,
+): CompanySettingsFieldErrors {
+  const errors: CompanySettingsFieldErrors = {};
+
+  assignFieldError(
+    errors,
+    "lateGraceMinutes",
+    validateIntegerField(
+      values.lateGraceMinutes,
+      "La tolerancia de puntualidad WhatsApp",
+      LIMITS.lateGraceMinutes.min,
+      LIMITS.lateGraceMinutes.max,
+    ),
+  );
+  assignFieldError(
+    errors,
+    "earlyLeaveToleranceMinutes",
+    validateIntegerField(
+      values.earlyLeaveToleranceMinutes,
+      "La tolerancia de salida anticipada WhatsApp",
+      LIMITS.earlyLeaveToleranceMinutes.min,
+      LIMITS.earlyLeaveToleranceMinutes.max,
+    ),
+  );
+  assignFieldError(
+    errors,
+    "pendingOperationExpirationHours",
+    validateIntegerField(
+      values.pendingOperationExpirationHours,
+      "El vencimiento de salida pendiente",
+      LIMITS.pendingOperationExpirationHours.min,
+      LIMITS.pendingOperationExpirationHours.max,
+    ),
+  );
+
+  return errors;
+}
+
+export function validateConfirmationReminderSettingsFields(
+  values: Pick<
+    CompanySettingsFormValues,
+    "confirmationReminderEnabled" | "confirmationReminderHoursBefore"
+  >,
+): CompanySettingsFieldErrors {
+  const errors: CompanySettingsFieldErrors = {};
+  if (!values.confirmationReminderEnabled) {
+    return errors;
+  }
+
+  assignFieldError(
+    errors,
+    "confirmationReminderHoursBefore",
+    validateIntegerField(
+      values.confirmationReminderHoursBefore,
+      "Las horas del recordatorio de confirmación",
+      1,
+      168,
+    ),
+  );
+
+  return errors;
+}
+
+/** Typed field-keyed validation for full company settings forms. */
+export function validateCompanySettingsFields(
+  values: CompanySettingsFormValues,
+): CompanySettingsFieldErrors {
+  return {
+    ...validateGeneralSettingsFields(values),
+    ...validateOperationOperationSettingsFields(values),
+    ...validateWhatsAppSettingsFields(values),
+  };
+}
+
+function fieldErrorsToMessages(errors: CompanySettingsFieldErrors): string[] {
+  return Object.values(errors).filter((message): message is string => Boolean(message));
+}
+
 export function validateGeneralSettingsForm(
   values: Pick<CompanySettingsFormValues, "operationTimezone">,
 ): string[] {
-  return validateTimezone(values);
+  return fieldErrorsToMessages(validateGeneralSettingsFields(values));
 }
 
 export function validateOperationOperationSettingsForm(
@@ -99,65 +275,7 @@ export function validateOperationOperationSettingsForm(
     | "defaultLateArrivalToleranceMinutes"
   >,
 ): string[] {
-  const errors: string[] = [];
-
-  const radiusError = validateIntegerField(
-    values.defaultRadiusMeters,
-    "El radio permitido por defecto",
-    LIMITS.defaultRadiusMeters.min,
-    LIMITS.defaultRadiusMeters.max,
-  );
-  if (radiusError) {
-    errors.push(radiusError);
-  }
-
-  const reviewMarginError = validateOptionalIntegerField(
-    values.geofenceReviewMarginMeters,
-    "El margen de revisión de geocerca",
-    LIMITS.geofenceReviewMarginMeters.min,
-    LIMITS.geofenceReviewMarginMeters.max,
-  );
-  if (reviewMarginError) {
-    errors.push(reviewMarginError);
-  }
-
-  const startTimeError = validateOptionalHHmm(
-    values.defaultOperationStartTime,
-    "El horario de inicio por defecto",
-  );
-  if (startTimeError) {
-    errors.push(startTimeError);
-  }
-
-  const endTimeError = validateOptionalHHmm(
-    values.defaultOperationEndTime,
-    "El horario de fin por defecto",
-  );
-  if (endTimeError) {
-    errors.push(endTimeError);
-  }
-
-  const earlyArrivalError = validateIntegerField(
-    values.defaultEarlyArrivalToleranceMinutes,
-    "La tolerancia de llegada temprana para operaciones",
-    LIMITS.operationToleranceMinutes.min,
-    LIMITS.operationToleranceMinutes.max,
-  );
-  if (earlyArrivalError) {
-    errors.push(earlyArrivalError);
-  }
-
-  const lateArrivalError = validateIntegerField(
-    values.defaultLateArrivalToleranceMinutes,
-    "La tolerancia de llegada tardía para operaciones",
-    LIMITS.operationToleranceMinutes.min,
-    LIMITS.operationToleranceMinutes.max,
-  );
-  if (lateArrivalError) {
-    errors.push(lateArrivalError);
-  }
-
-  return errors;
+  return fieldErrorsToMessages(validateOperationOperationSettingsFields(values));
 }
 
 export function validateWhatsAppSettingsForm(
@@ -166,53 +284,21 @@ export function validateWhatsAppSettingsForm(
     "lateGraceMinutes" | "earlyLeaveToleranceMinutes" | "pendingOperationExpirationHours"
   >,
 ): string[] {
-  const errors: string[] = [];
-
-  const lateGraceError = validateIntegerField(
-    values.lateGraceMinutes,
-    "La tolerancia de puntualidad WhatsApp",
-    LIMITS.lateGraceMinutes.min,
-    LIMITS.lateGraceMinutes.max,
-  );
-  if (lateGraceError) {
-    errors.push(lateGraceError);
-  }
-
-  const earlyLeaveError = validateIntegerField(
-    values.earlyLeaveToleranceMinutes,
-    "La tolerancia de salida anticipada WhatsApp",
-    LIMITS.earlyLeaveToleranceMinutes.min,
-    LIMITS.earlyLeaveToleranceMinutes.max,
-  );
-  if (earlyLeaveError) {
-    errors.push(earlyLeaveError);
-  }
-
-  const pendingExpirationError = validateIntegerField(
-    values.pendingOperationExpirationHours,
-    "El vencimiento de salida pendiente",
-    LIMITS.pendingOperationExpirationHours.min,
-    LIMITS.pendingOperationExpirationHours.max,
-  );
-  if (pendingExpirationError) {
-    errors.push(pendingExpirationError);
-  }
-
-  return errors;
+  return fieldErrorsToMessages(validateWhatsAppSettingsFields(values));
 }
 
 export function validateOperationalSettingsForm(
   values: OperationalSettingsFormValues,
 ): string[] {
-  return [
-    ...validateGeneralSettingsForm(values),
-    ...validateOperationOperationSettingsForm({
+  return fieldErrorsToMessages({
+    ...validateGeneralSettingsFields(values),
+    ...validateOperationOperationSettingsFields({
       ...values,
       geofenceReviewMarginMeters: "",
     }),
-    ...validateWhatsAppSettingsForm(values),
-    ...validateConfirmationReminderSettingsForm(values),
-  ];
+    ...validateWhatsAppSettingsFields(values),
+    ...validateConfirmationReminderSettingsFields(values),
+  });
 }
 
 export type OperationalSettingsFormValues = Pick<
@@ -236,22 +322,7 @@ export function validateConfirmationReminderSettingsForm(
     "confirmationReminderEnabled" | "confirmationReminderHoursBefore"
   >,
 ): string[] {
-  const errors: string[] = [];
-  if (!values.confirmationReminderEnabled) {
-    return errors;
-  }
-
-  const hoursError = validateIntegerField(
-    values.confirmationReminderHoursBefore,
-    "Las horas del recordatorio de confirmación",
-    1,
-    168,
-  );
-  if (hoursError) {
-    errors.push(hoursError);
-  }
-
-  return errors;
+  return fieldErrorsToMessages(validateConfirmationReminderSettingsFields(values));
 }
 
 export function toOperationalSettingsFormValues(settings: {
@@ -318,11 +389,7 @@ export function operationalSettingsEqual(
 }
 
 export function validateCompanySettingsForm(values: CompanySettingsFormValues): string[] {
-  return [
-    ...validateGeneralSettingsForm(values),
-    ...validateOperationOperationSettingsForm(values),
-    ...validateWhatsAppSettingsForm(values),
-  ];
+  return fieldErrorsToMessages(validateCompanySettingsFields(values));
 }
 
 export function toCompanySettingsFormValues(settings: {

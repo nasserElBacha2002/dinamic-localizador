@@ -1,5 +1,5 @@
-import { Box, Modal, ScrollArea, Stack, type ModalProps } from "@mantine/core";
-import type { ReactNode } from "react";
+import { Box, Modal, type ModalProps } from "@mantine/core";
+import type { CSSProperties, ReactNode } from "react";
 import { useIsBelow } from "../hooks/useIsBelow";
 
 export type ResponsiveModalBodyMode = "normal" | "scroll";
@@ -9,23 +9,32 @@ export interface ResponsiveModalProps extends Omit<ModalProps, "fullScreen" | "c
   size?: ModalProps["size"];
   /** Sticky footer actions (Cancel / Confirm). */
   footer?: ReactNode;
+  /** Optional content pinned above the footer (outside the scroll body). */
+  footerBanner?: ReactNode;
   children: ReactNode;
   /** Force fullscreen below this breakpoint (default sm). */
   fullScreenBelow?: "xs" | "sm" | "md";
   /**
-   * `normal` — short content (confirmations); no nested ScrollArea.
+   * `normal` — short content (confirmations); no nested scroll region.
    * `scroll` — long content with a single controlled scroll region + sticky footer.
    */
   bodyMode?: ResponsiveModalBodyMode;
 }
 
+const DESKTOP_MAX_HEIGHT = "min(90dvh, 860px)";
+
 /**
  * Modal that becomes fullscreen below `sm` (configurable).
  * Same content tree for desktop and mobile.
+ *
+ * Scroll mode keeps header/footer fixed and scrolls only the body. A bounded
+ * flex chain (`flex: 1 1 0` + `minHeight: 0` + `overflow: auto`) is required so
+ * the scroll region does not grow with content and clip behind the footer.
  */
 export function ResponsiveModal({
   children,
   footer,
+  footerBanner,
   size = "md",
   fullScreenBelow = "sm",
   bodyMode = "normal",
@@ -34,6 +43,24 @@ export function ResponsiveModal({
   const isCompact = useIsBelow(fullScreenBelow);
   const { opened, onClose, title, ...rest } = modalProps;
   const useScrollBody = bodyMode === "scroll";
+  const hasPinnedBottom = Boolean(footer || footerBanner);
+
+  const scrollContentStyles = {
+    display: "flex",
+    flexDirection: "column",
+    overflow: "hidden",
+    maxHeight: isCompact ? "100dvh" : DESKTOP_MAX_HEIGHT,
+  } satisfies CSSProperties;
+
+  const scrollBodyStyles = {
+    display: "flex",
+    flexDirection: "column",
+    flex: "1 1 auto",
+    minHeight: 0,
+    overflow: "hidden",
+    // Footer owns bottom padding so the scroll viewport can use the full remaining height.
+    paddingBottom: hasPinnedBottom ? 0 : undefined,
+  } satisfies CSSProperties;
 
   return (
     <Modal
@@ -47,52 +74,77 @@ export function ResponsiveModal({
       closeButtonProps={{ "aria-label": "Cerrar" }}
       data-fullscreen={isCompact ? "true" : undefined}
       styles={
-        isCompact
+        useScrollBody
           ? {
-              body: {
-                display: "flex",
-                flexDirection: "column",
-                height: "calc(100dvh - var(--modal-header-height, 60px))",
-                maxHeight: "calc(100dvh - var(--modal-header-height, 60px))",
-                overflow: useScrollBody ? "hidden" : "auto",
-                paddingBottom: 0,
-              },
-              content: { display: "flex", flexDirection: "column" },
+              content: scrollContentStyles,
+              header: { flexShrink: 0 },
+              body: scrollBodyStyles,
             }
-          : useScrollBody
+          : isCompact
             ? {
-                body: {
+                content: {
                   display: "flex",
                   flexDirection: "column",
-                  maxHeight: "min(80dvh, 720px)",
-                  overflow: "hidden",
+                  maxHeight: "calc(100dvh - 16px)",
                 },
-                content: { display: "flex", flexDirection: "column" },
+                header: { flexShrink: 0 },
+                body: {
+                  flex: 1,
+                  minHeight: 0,
+                  overflow: "auto",
+                  paddingBottom: hasPinnedBottom ? 0 : undefined,
+                },
               }
             : undefined
       }
       {...rest}
     >
-      <Stack
-        gap="md"
+      <Box
         style={
           useScrollBody
-            ? { flex: 1, minHeight: 0, display: "flex", flexDirection: "column" }
-            : undefined
+            ? {
+                display: "flex",
+                flexDirection: "column",
+                flex: "1 1 auto",
+                minHeight: 0,
+                height: "100%",
+                overflow: "hidden",
+                gap: "var(--mantine-spacing-md)",
+              }
+            : {
+                display: "flex",
+                flexDirection: "column",
+                gap: "var(--mantine-spacing-md)",
+              }
         }
       >
         {useScrollBody ? (
-          <ScrollArea
-            type="auto"
-            offsetScrollbars
-            style={{ flex: 1, minHeight: 0 }}
-            styles={{ viewport: { paddingBottom: footer ? 8 : 0 } }}
+          <Box
+            data-testid="responsive-modal-scroll-body"
+            style={{
+              // flex-basis 0 forces this region to take only remaining space, not content height.
+              flex: "1 1 0%",
+              minHeight: 0,
+              overflowX: "hidden",
+              overflowY: "auto",
+              overscrollBehavior: "contain",
+              paddingBottom: hasPinnedBottom ? "var(--mantine-spacing-md)" : 0,
+              paddingRight: 4,
+            }}
           >
-            <Box pr={4}>{children}</Box>
-          </ScrollArea>
+            {children}
+          </Box>
         ) : (
           <Box>{children}</Box>
         )}
+        {footerBanner ? (
+          <Box
+            style={{ flexShrink: 0, maxHeight: "28%", overflow: "auto", minHeight: 0 }}
+            data-testid="responsive-modal-footer-banner"
+          >
+            {footerBanner}
+          </Box>
+        ) : null}
         {footer ? (
           <Box
             pt="sm"
@@ -102,11 +154,12 @@ export function ResponsiveModal({
               flexShrink: 0,
               background: "var(--mantine-color-body)",
             }}
+            data-testid="responsive-modal-footer"
           >
             {footer}
           </Box>
         ) : null}
-      </Stack>
+      </Box>
     </Modal>
   );
 }

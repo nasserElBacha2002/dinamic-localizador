@@ -1,7 +1,8 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router";
-import { WorkTeamForm } from "../../components/work-teams/WorkTeamForm";
+import { WorkTeamForm, type WorkTeamFormValues } from "../../components/work-teams/WorkTeamForm";
+import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
 import {
   ConfirmDialog,
   DataTable,
@@ -15,6 +16,7 @@ import {
 } from "../../design-system";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
 import {
   useActivateWorkTeam,
   useDeactivateWorkTeam,
@@ -30,6 +32,10 @@ import { getEntityDetailPath, isEntityEditPath } from "../../utils/entity-routes
 import { hasPermission } from "../../utils/permissions";
 import { operationKindLabels } from "../../utils/operation-schedule-display";
 import { safeText } from "../../utils/display-safe";
+import {
+  executeWorkTeamSave,
+  workTeamSaveErrorMessage,
+} from "../../utils/work-team-save";
 
 export function WorkTeamEditPage() {
   const { id } = useParams<{ id: string }>();
@@ -37,6 +43,7 @@ export function WorkTeamEditPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const onEditRoute = isEntityEditPath(location.pathname, "work-teams");
+  const unsaved = useUnsavedChangesController({ active: onEditRoute });
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
   const teamQuery = useWorkTeam(id);
@@ -47,6 +54,7 @@ export function WorkTeamEditPage() {
   const usageQuery = useWorkTeamUsage(id ?? "", { page: 1, limit: 10 });
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [deactivateOpen, setDeactivateOpen] = useState(false);
+  const submitInFlight = useRef(false);
 
   if (!id) {
     return <ErrorState message="Grupo no encontrado." />;
@@ -65,11 +73,28 @@ export function WorkTeamEditPage() {
     .map((member) => member.employee)
     .filter((employee): employee is NonNullable<typeof employee> => Boolean(employee));
 
+  const initialValues: WorkTeamFormValues = {
+    name: team.name,
+    description: team.description ?? "",
+    employeeIds: team.members.map((member) => member.employeeId),
+  };
+
   const goToDetail = () => {
     navigate(getEntityDetailPath("work-teams", id), { state: location.state });
   };
 
   const handleCancel = () => {
+    unsaved.requestNavigation(() => {
+      if (onEditRoute) {
+        goToDetail();
+        return;
+      }
+      goBackToList();
+    });
+  };
+
+  const handleSaveSuccess = () => {
+    unsaved.markClean();
     if (onEditRoute) {
       goToDetail();
       return;
@@ -77,12 +102,34 @@ export function WorkTeamEditPage() {
     goBackToList();
   };
 
-  const handleSaveSuccess = () => {
-    if (onEditRoute) {
-      goToDetail();
+  const handleSubmit = async (values: WorkTeamFormValues) => {
+    if (submitInFlight.current) {
       return;
     }
-    goBackToList();
+    submitInFlight.current = true;
+    setErrorMessage(null);
+    unsaved.setSubmitting(true);
+
+    try {
+      const result = await executeWorkTeamSave(initialValues, values, {
+        updateProfile: (input) => updateMutation.mutateAsync(input),
+        replaceMembers: (employeeIds) => replaceMembersMutation.mutateAsync(employeeIds),
+      });
+
+      if (result.status === "noop" || result.status === "success") {
+        handleSaveSuccess();
+        return;
+      }
+
+      if (result.status === "members_failed_after_profile") {
+        await teamQuery.refetch();
+      }
+
+      setErrorMessage(workTeamSaveErrorMessage(result, getApiErrorMessage(result.error)));
+    } finally {
+      unsaved.setSubmitting(false);
+      submitInFlight.current = false;
+    }
   };
 
   const usageColumns: DataTableColumn<WorkTeamUsageRecord>[] = [
@@ -166,31 +213,14 @@ export function WorkTeamEditPage() {
 
       {canManage ? (
         <WorkTeamForm
-          defaultValues={{
-            name: team.name,
-            description: team.description ?? "",
-            employeeIds: team.members.map((member) => member.employeeId),
-          }}
+          defaultValues={initialValues}
           existingMembers={existingMembers}
           submitLabel="Guardar cambios"
           loading={updateMutation.isPending || replaceMembersMutation.isPending}
           errorMessage={errorMessage}
+          onDirtyChange={onEditRoute ? unsaved.setDirty : undefined}
           onCancel={handleCancel}
-          onSubmit={async (values) => {
-            setErrorMessage(null);
-            try {
-              if (values.name !== team.name || values.description !== (team.description ?? "")) {
-                await updateMutation.mutateAsync({
-                  name: values.name,
-                  description: values.description || null,
-                });
-              }
-              await replaceMembersMutation.mutateAsync(values.employeeIds);
-              handleSaveSuccess();
-            } catch (error) {
-              setErrorMessage(getApiErrorMessage(error));
-            }
-          }}
+          onSubmit={handleSubmit}
         />
       ) : (
         <SectionCard title="Información general">
@@ -270,6 +300,11 @@ export function WorkTeamEditPage() {
         loading={deactivateMutation.isPending}
         onConfirm={() => void handleDeactivate()}
         onCancel={() => setDeactivateOpen(false)}
+      />
+      <UnsavedChangesDialog
+        open={unsaved.discardDialogOpen}
+        onConfirm={unsaved.confirmDiscard}
+        onCancel={unsaved.cancelDiscard}
       />
     </Stack>
   );

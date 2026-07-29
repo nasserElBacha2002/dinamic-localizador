@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Box, Input, Stack } from "@mantine/core";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
 import { terminology } from "../../domain/terminology";
@@ -15,7 +15,6 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
-import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
 import { employeeTypeLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
@@ -29,8 +28,8 @@ interface EmployeeFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   retainedCategory?: { id: string; name: string } | null;
-  /** When true, blocks leave/refresh while the form is dirty (edit routes). */
-  enableUnsavedGuard?: boolean;
+  /** Reports dirty state to the page-level unsaved controller (edit routes only). */
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: EmployeeFormValues) => Promise<void>;
 }
 
@@ -42,7 +41,7 @@ export function EmployeeForm({
   loading = false,
   errorMessage,
   retainedCategory = null,
-  enableUnsavedGuard = false,
+  onDirtyChange,
   onSubmit,
 }: EmployeeFormProps) {
   const permissionsQuery = useCompanyPermissions();
@@ -65,15 +64,21 @@ export function EmployeeForm({
   const {
     control,
     handleSubmit,
-    formState: { isDirty, isSubmitting },
+    formState: { isDirty },
   } = useForm<EmployeeFormInputValues, unknown, EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues,
   });
 
-  useUnsavedChangesGuard({
-    enabled: enableUnsavedGuard && isDirty && !isSubmitting && !loading,
-  });
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   return (
     <Box w="100%">

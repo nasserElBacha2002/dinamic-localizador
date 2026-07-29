@@ -15,7 +15,6 @@ import {
   RHFSelect,
   RHFTextarea,
 } from "../../design-system";
-import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import {
   createOperationFormSchema,
   operationFormSchema,
@@ -47,8 +46,8 @@ interface OperationFormProps {
   onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
-  /** When true, blocks leave/refresh while the form is dirty (dedicated edit routes). */
-  enableUnsavedGuard?: boolean;
+  /** Reports dirty state to the page-level unsaved controller (dedicated edit routes). */
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: OperationFormValues) => Promise<void>;
   embedded?: boolean;
   formId?: string;
@@ -101,7 +100,7 @@ export function OperationForm({
   onCancel,
   loading = false,
   errorMessage,
-  enableUnsavedGuard = false,
+  onDirtyChange,
   onSubmit,
   embedded = false,
   formId,
@@ -117,15 +116,21 @@ export function OperationForm({
     handleSubmit,
     reset,
     setValue,
-    formState: { isDirty, isSubmitting },
+    formState: { isDirty },
   } = useForm<OperationFormValues>({
     resolver: zodResolver(validationSchema),
     defaultValues,
   });
 
-  useUnsavedChangesGuard({
-    enabled: enableUnsavedGuard && isDirty && !isSubmitting && !loading,
-  });
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   const operationKind = useWatch({ control, name: "operationKind" });
   const scheduleSource = useWatch({ control, name: "scheduleSource" });

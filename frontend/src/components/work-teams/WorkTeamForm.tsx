@@ -1,8 +1,9 @@
 import { Button, Stack, Text, Textarea, TextInput } from "@mantine/core";
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { SectionCard } from "../../design-system";
 import { WorkTeamMemberMultiSelect } from "./WorkTeamMemberMultiSelect";
 import type { Employee } from "../../types/employee";
+import { areEmployeeIdSetsEqual } from "../../utils/work-team-save";
 
 export interface WorkTeamFormValues {
   name: string;
@@ -16,6 +17,7 @@ interface WorkTeamFormProps {
   submitLabel: string;
   loading?: boolean;
   errorMessage?: string | null;
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: WorkTeamFormValues) => Promise<void>;
   onCancel: () => void;
 }
@@ -33,12 +35,31 @@ function WorkTeamFormFields({
   submitLabel,
   loading = false,
   errorMessage,
+  onDirtyChange,
   onSubmit,
   onCancel,
 }: WorkTeamFormProps) {
   const [name, setName] = useState(defaultValues.name);
   const [description, setDescription] = useState(defaultValues.description);
   const [employeeIds, setEmployeeIds] = useState(defaultValues.employeeIds);
+
+  const isDirty = useMemo(() => {
+    return (
+      name !== defaultValues.name ||
+      description !== defaultValues.description ||
+      !areEmployeeIdSetsEqual(employeeIds, defaultValues.employeeIds)
+    );
+  }, [name, description, employeeIds, defaultValues]);
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   return (
     <SectionCard title="Datos del grupo" description="Plantilla reutilizable de colaboradores.">

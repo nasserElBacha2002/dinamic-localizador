@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Box } from "@mantine/core";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
   FormActions,
@@ -12,7 +12,6 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
-import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { serviceFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
 import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
 import { ServiceInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
@@ -29,8 +28,8 @@ interface ServiceFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   isEditMode?: boolean;
-  /** When true, blocks leave/refresh while the form is dirty (edit routes). */
-  enableUnsavedGuard?: boolean;
+  /** Reports dirty state to the page-level unsaved controller (edit routes only). */
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: ServiceFormValues) => Promise<void>;
   formId?: string;
   showBottomActions?: boolean;
@@ -44,7 +43,7 @@ export function ServiceForm({
   loading = false,
   errorMessage,
   isEditMode = false,
-  enableUnsavedGuard = false,
+  onDirtyChange,
   onSubmit,
   formId = SERVICE_FORM_ID,
   showBottomActions = true,
@@ -54,15 +53,21 @@ export function ServiceForm({
     handleSubmit,
     setValue,
     trigger,
-    formState: { isDirty, isSubmitting },
+    formState: { isDirty },
   } = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceFormSchema),
     defaultValues,
   });
 
-  useUnsavedChangesGuard({
-    enabled: enableUnsavedGuard && isDirty && !isSubmitting && !loading,
-  });
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   const watchedValues = useWatch({ control });
   const { data: locationTypes = [] } = useCompanyLocationTypes(false);

@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Navigate, Outlet, Route, Routes, useParams } from "react-router";
+import { Navigate, Outlet, Route, Routes } from "react-router";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
@@ -22,11 +22,21 @@ import { ServiceCreatePage } from "../pages/services/ServiceCreatePage";
 import { ServiceEditPage } from "../pages/services/ServiceEditPage";
 import { OperationsListPage } from "../pages/operations/OperationsListPage";
 import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
-import { OperationEditPage } from "../pages/operations/OperationEditPage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
 import { MODULE_ROUTE_ACCESS } from "../utils/company-modules";
+import {
+  employeeAccess,
+  employeeManage,
+  operationAccess,
+  operationManage,
+  serviceAccess,
+  serviceManage,
+  workTeamAccess,
+  workTeamManage,
+} from "./entity-route-access";
+import { LegacyOperationRedirect, LegacyServiceRedirect } from "./legacy-redirects";
 
 function lazyNamed<T extends Record<string, ComponentType>>(
   importer: () => Promise<T>,
@@ -51,6 +61,10 @@ const OperationDetailPage = lazyNamed(
   () => import("../pages/operations/OperationDetailPage"),
   "OperationDetailPage",
 );
+const OperationEditPage = lazyNamed(
+  () => import("../pages/operations/OperationEditPage"),
+  "OperationEditPage",
+);
 const AbsenceDetailPage = lazyNamed(
   () => import("../pages/absences/AbsenceDetailPage"),
   "AbsenceDetailPage",
@@ -74,16 +88,6 @@ function LazyPage({
   );
 }
 
-function LegacyOperationRedirect() {
-  const { id } = useParams();
-  return <Navigate to={id ? `/operations/${id}` : "/operations"} replace />;
-}
-
-function LegacyServiceRedirect() {
-  const { id } = useParams();
-  return <Navigate to={id ? `/services/${id}` : "/services"} replace />;
-}
-
 function ProtectedLayout() {
   return (
     <ProtectedRoute>
@@ -95,44 +99,6 @@ function ProtectedLayout() {
     </ProtectedRoute>
   );
 }
-
-const employeeAccess = {
-  anyModuleOf: ["attendance", "operations", "absences"] as const,
-  requiredAnyPermission: ["employees:read", "employees:manage"] as const,
-};
-
-const employeeManage = {
-  ...employeeAccess,
-  requiredAnyPermission: ["employees:manage"] as const,
-};
-
-const workTeamAccess = {
-  ...employeeAccess,
-};
-
-const workTeamManage = {
-  ...employeeManage,
-};
-
-const serviceAccess = {
-  moduleKey: "operations" as const,
-  requiredAnyPermission: ["services:read", "services:manage"] as const,
-};
-
-const serviceManage = {
-  ...serviceAccess,
-  requiredAnyPermission: ["services:manage"] as const,
-};
-
-const operationAccess = {
-  moduleKey: "operations" as const,
-  requiredAnyPermission: ["operations:read", "operations:manage"] as const,
-};
-
-const operationManage = {
-  ...operationAccess,
-  requiredAnyPermission: ["operations:manage"] as const,
-};
 
 const attendanceAccess = MODULE_ROUTE_ACCESS.attendance;
 
@@ -282,7 +248,7 @@ export function AppRoutes() {
           path="/operations/:id/edit"
           element={
             <FeatureRouteGuard {...operationManage}>
-              <OperationEditPage />
+              <LazyPage component={OperationEditPage} message="Cargando edición..." />
             </FeatureRouteGuard>
           }
         />

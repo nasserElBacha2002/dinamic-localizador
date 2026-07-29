@@ -15,18 +15,8 @@ const DEFAULT_MESSAGE =
   "Tenés cambios sin guardar. Si salís ahora, se perderán.";
 
 /**
- * Progressive unsaved-changes guard for edit forms.
- *
- * **Current support (BrowserRouter):**
- * - Browser leave/refresh/close via `beforeunload`.
- *
- * **Not available yet:**
- * - In-app React Router navigation blocking requires a data router
- *   (`createBrowserRouter` / `RouterProvider`) so `useBlocker` can run.
- *   The app still mounts with `BrowserRouter` (`main.tsx`). When that migrates,
- *   extend this hook to call `useBlocker(enabled)` without changing call sites.
- *
- * Mount only on edit surfaces; do not enable globally.
+ * Registers `beforeunload` while `enabled` is true.
+ * Prefer {@link useUnsavedChangesController} on edit pages so cancel also confirms.
  */
 export function useUnsavedChangesGuard({
   enabled,

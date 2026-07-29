@@ -1,16 +1,19 @@
 import { Button, Group } from "@mantine/core";
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { OperationForm } from "../../components/operations/OperationForm";
 import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
-import { EntityAvatar, ErrorState, LoadingState } from "../../design-system";
+import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
+import { ConfirmDialog, EntityAvatar, ErrorState, LoadingState } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
+import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
 import { useOperation, useUpdateOperation } from "../../hooks/useOperations";
 import type { OperationFormValues } from "../../schemas/operation.schema";
 import { terminology } from "../../domain/terminology";
-import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
+import { getApiErrorMessage } from "../../utils/errors";
 import { getEntityDetailPath } from "../../utils/entity-routes";
+import { doesOperationUpdateResetConfirmations } from "../../utils/operation-confirmation-reset";
 import {
   buildOperationEditDefaultValues,
   toOperationUpdatePayload,
@@ -20,19 +23,23 @@ import { isOperationEditable } from "../../utils/operation-status";
 import { hasPermission } from "../../utils/permissions";
 
 /**
- * Phase 1 wrapper: dedicated `/operations/:id/edit` route reusing OperationForm.
- * Embedded edit toggle on OperationDetailPage remains until the operations migration phase.
+ * Dedicated `/operations/:id/edit` route reusing OperationForm.
+ * Embedded edit on OperationDetailPage remains until the operations migration phase.
  */
 export function OperationEditPage() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const location = useLocation();
+  const unsaved = useUnsavedChangesController({ active: true });
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "operations:manage");
   const operationQuery = useOperation(id);
   const updateMutation = useUpdateOperation(id ?? "");
   const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(operationQuery.data));
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [pendingValues, setPendingValues] = useState<OperationFormValues | null>(null);
+  const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
+  const submitInFlight = useRef(false);
 
   if (!id) {
     return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
@@ -61,6 +68,10 @@ export function OperationEditPage() {
     navigate(getEntityDetailPath("operations", id), { state: location.state });
   };
 
+  const handleCancel = () => {
+    unsaved.requestNavigation(goToDetail);
+  };
+
   if (!canEdit) {
     return (
       <ErrorState
@@ -74,18 +85,34 @@ export function OperationEditPage() {
     );
   }
 
-  const handleSubmit = async (values: OperationFormValues) => {
+  const runUpdate = async (values: OperationFormValues) => {
+    if (submitInFlight.current) {
+      return;
+    }
+    submitInFlight.current = true;
     setErrorMessage(null);
+    unsaved.setSubmitting(true);
     try {
       await updateMutation.mutateAsync(toOperationUpdatePayload(operation, values));
+      unsaved.markClean();
+      setResetConfirmOpen(false);
+      setPendingValues(null);
       goToDetail();
     } catch (error) {
-      if (isRecurringWorkdaySyncError(error)) {
-        setErrorMessage(getApiErrorMessage(error));
-        return;
-      }
       setErrorMessage(getApiErrorMessage(error));
+    } finally {
+      unsaved.setSubmitting(false);
+      submitInFlight.current = false;
     }
+  };
+
+  const handleSubmit = async (values: OperationFormValues) => {
+    if (doesOperationUpdateResetConfirmations(operation, values)) {
+      setPendingValues(values);
+      setResetConfirmOpen(true);
+      return;
+    }
+    await runUpdate(values);
   };
 
   return (
@@ -98,7 +125,7 @@ export function OperationEditPage() {
       }
       description={`Editar ${terminology.operation.singular.toLowerCase()}`}
       action={
-        <Button variant="default" onClick={goToDetail}>
+        <Button variant="default" onClick={handleCancel}>
           Cancelar
         </Button>
       }
@@ -112,11 +139,37 @@ export function OperationEditPage() {
         defaultValues={buildOperationEditDefaultValues(operation)}
         submitLabel="Guardar cambios"
         cancelTo={getEntityDetailPath("operations", id)}
-        onCancel={goToDetail}
+        onCancel={handleCancel}
         loading={updateMutation.isPending}
         errorMessage={errorMessage}
-        enableUnsavedGuard
+        onDirtyChange={unsaved.setDirty}
         onSubmit={handleSubmit}
+      />
+      <ConfirmDialog
+        open={resetConfirmOpen}
+        title="Restablecer confirmaciones"
+        description="Cambiar la programación restablecerá las confirmaciones del equipo. Los colaboradores deberán confirmar nuevamente su participación. ¿Querés guardar los cambios?"
+        confirmLabel="Guardar y restablecer"
+        cancelLabel="Continuar editando"
+        destructive
+        loading={updateMutation.isPending}
+        onConfirm={() => {
+          if (pendingValues) {
+            void runUpdate(pendingValues);
+          }
+        }}
+        onCancel={() => {
+          if (updateMutation.isPending) {
+            return;
+          }
+          setResetConfirmOpen(false);
+          setPendingValues(null);
+        }}
+      />
+      <UnsavedChangesDialog
+        open={unsaved.discardDialogOpen}
+        onConfirm={unsaved.confirmDiscard}
+        onCancel={unsaved.cancelDiscard}
       />
     </EntityEditPageLayout>
   );

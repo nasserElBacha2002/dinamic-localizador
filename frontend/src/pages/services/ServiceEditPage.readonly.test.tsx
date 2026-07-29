@@ -99,5 +99,10 @@ describe("ServiceEditPage read-only gate", () => {
     });
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
     assert.ok(view.getByText(/mapa interactivo está disponible solo/i));
+    assert.equal(view.queryByRole("textbox"), null);
+    assert.equal(view.queryByRole("combobox"), null);
+    assert.equal(view.container.querySelector("[data-testid='service-map'], .gm-style"), null);
+    assert.ok(view.getByText("Información general"));
+    assert.ok(view.getByText(/-34\.6, -58\.4/));
   });
 });

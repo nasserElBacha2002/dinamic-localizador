@@ -5,6 +5,7 @@ import { useLocation, useNavigate, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { SERVICE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
 import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
+import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
 import {
   DetailFieldGrid,
   EntityAvatar,
@@ -15,6 +16,7 @@ import {
   StatusBadge,
 } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
 import { useService, useUpdateService } from "../../hooks/useServices";
 import type { ServiceFormValues } from "../../schemas/service.schema";
 import { toNullableServiceFormat, toNullableServiceText } from "../../schemas/service.schema";
@@ -31,6 +33,7 @@ export function ServiceEditPage() {
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const onEditRoute = isEntityEditPath(location.pathname, "services");
+  const unsaved = useUnsavedChangesController({ active: onEditRoute });
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "services:manage");
   const serviceQuery = useService(id);
@@ -63,15 +66,18 @@ export function ServiceEditPage() {
   };
 
   const handleCancel = () => {
-    if (onEditRoute) {
-      goToDetail();
-      return;
-    }
-    goBackToList();
+    unsaved.requestNavigation(() => {
+      if (onEditRoute) {
+        goToDetail();
+        return;
+      }
+      goBackToList();
+    });
   };
 
   const handleSubmit = async (values: ServiceFormValues) => {
     setErrorMessage(null);
+    unsaved.setSubmitting(true);
 
     try {
       await updateMutation.mutateAsync({
@@ -86,6 +92,7 @@ export function ServiceEditPage() {
         googlePlaceId: values.googlePlaceId?.trim() ? values.googlePlaceId.trim() : null,
         active: values.active,
       });
+      unsaved.markClean();
       notifications.show({
         color: "green",
         message: `${terminology.service.singular} actualizada correctamente.`,
@@ -97,10 +104,12 @@ export function ServiceEditPage() {
       goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
+    } finally {
+      unsaved.setSubmitting(false);
     }
   };
 
-  // Phase 1: until ServiceDetailPage exists, read-only users get a safe consultation view (no map/inputs).
+  // Until ServiceDetailPage exists, read-only users get a safe consultation view (no map/inputs).
   if (!canManage) {
     return (
       <Stack gap="md">
@@ -200,8 +209,13 @@ export function ServiceEditPage() {
         loading={updateMutation.isPending}
         errorMessage={errorMessage}
         isEditMode
-        enableUnsavedGuard={onEditRoute}
+        onDirtyChange={onEditRoute ? unsaved.setDirty : undefined}
         onSubmit={handleSubmit}
+      />
+      <UnsavedChangesDialog
+        open={unsaved.discardDialogOpen}
+        onConfirm={unsaved.confirmDiscard}
+        onCancel={unsaved.cancelDiscard}
       />
     </EntityEditPageLayout>
   );

@@ -1,5 +1,5 @@
 /**
- * Phase 1: read-only users must not see an editable employee form on /:id.
+ * Phase 1: edit ↔ detail navigation preserves list context (location.state).
  */
 import { setupDomEnvironment } from "../../test/setup-dom";
 
@@ -40,13 +40,23 @@ mockApiModule(
   ],
 );
 
+mockApiModule("api/employee-categories.api", {
+  getEmployeeCategories: async () => [],
+  createEmployeeCategory: async () => {
+    throw new Error("not used");
+  },
+  updateEmployeeCategory: async () => {
+    throw new Error("not used");
+  },
+});
+
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({
     companyId: "co-1",
     companyName: "Empresa Test",
-    role: "VIEWER",
+    role: "ADMIN",
     isPlatformAdmin: false,
-    permissions: ["employees:read"],
+    permissions: ["employees:manage", "employees:read", "absences:read"],
   }),
   getCompanyUsers: async () => ({ data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } }),
   getCompanyUserById: async () => {
@@ -77,13 +87,24 @@ mockApiModule(
 );
 
 import assert from "node:assert/strict";
-import { cleanup, waitFor } from "@testing-library/react";
+import { cleanup, fireEvent, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router";
+import { Route, Routes, useLocation } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
 let EmployeeEditPage: React.ComponentType;
+
+function LocationProbe() {
+  const location = useLocation();
+  return (
+    <div
+      data-testid="location-probe"
+      data-pathname={location.pathname}
+      data-state={JSON.stringify(location.state)}
+    />
+  );
+}
 
 before(async () => {
   ({ renderPage } = await import("../../test/render-page"));
@@ -94,24 +115,48 @@ afterEach(() => {
   cleanup();
 });
 
-describe("EmployeeEditPage read-only gate", () => {
-  it("hides Guardar cambios for read-only users on /:id", async () => {
+const listState = { fromList: true, page: 2, search: "ana" };
+
+describe("EmployeeEditPage navigation context", () => {
+  it("Cancelar on /edit returns to detail with preserved location.state", async () => {
     const view = renderPage(
       <Routes>
-        <Route path="/employees/:id" element={<EmployeeEditPage />} />
+        <Route
+          path="/employees/:id/edit"
+          element={
+            <>
+              <EmployeeEditPage />
+              <LocationProbe />
+            </>
+          }
+        />
+        <Route
+          path="/employees/:id"
+          element={
+            <>
+              <div>DETAIL_PAGE</div>
+              <LocationProbe />
+            </>
+          }
+        />
       </Routes>,
-      { route: "/employees/emp-1" },
+      {
+        initialEntries: [{ pathname: "/employees/emp-1/edit", state: listState }],
+      },
     );
 
     await waitFor(() => {
-      assert.ok(view.getAllByText("Ana López").length >= 1);
+      assert.ok(view.getByRole("button", { name: /Guardar cambios/i }));
     });
-    assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
-    assert.ok(view.getByText("Información general"));
-    assert.ok(view.getByText(/Consulta de colaborador/i));
-    assert.equal(view.queryByRole("textbox"), null);
-    assert.equal(view.queryByRole("switch"), null);
-    assert.equal(view.queryByRole("button", { name: /^Editar$/i }), null);
-    assert.ok(view.getByText(/Ausencias · Saldos/i));
+
+    fireEvent.click(view.getByRole("button", { name: /^Cancelar$/i }));
+
+    await waitFor(() => {
+      assert.ok(view.getByText("DETAIL_PAGE"));
+    });
+
+    const probe = view.getByTestId("location-probe");
+    assert.equal(probe.getAttribute("data-pathname"), "/employees/emp-1");
+    assert.equal(probe.getAttribute("data-state"), JSON.stringify(listState));
   });
 });

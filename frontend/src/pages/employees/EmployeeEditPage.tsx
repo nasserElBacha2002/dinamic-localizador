@@ -9,6 +9,7 @@ import { EmployeeDeactivationDialog } from "../../components/employees/EmployeeD
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
 import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
+import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
 import {
   DetailFieldGrid,
   EntityAvatar,
@@ -24,6 +25,7 @@ import {
   useUpdateEmployee,
 } from "../../hooks/useEmployees";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
 import { getEmployeeDeactivationImpact } from "../../api/employees.api";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
@@ -40,6 +42,7 @@ export function EmployeeEditPage() {
   const location = useLocation();
   const { id } = useParams<{ id: string }>();
   const onEditRoute = isEntityEditPath(location.pathname, "employees");
+  const unsaved = useUnsavedChangesController({ active: onEditRoute });
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
   const employeeQuery = useEmployee(id);
@@ -83,14 +86,18 @@ export function EmployeeEditPage() {
   };
 
   const handleCancel = () => {
-    if (onEditRoute) {
-      goToDetail();
-      return;
-    }
-    goBackToList();
+    const leave = () => {
+      if (onEditRoute) {
+        goToDetail();
+        return;
+      }
+      goBackToList();
+    };
+    unsaved.requestNavigation(leave);
   };
 
   const finishSuccess = () => {
+    unsaved.markClean();
     notifications.show({
       color: "green",
       message: `${terminology.worker.singular} actualizado correctamente.`,
@@ -112,6 +119,7 @@ export function EmployeeEditPage() {
 
   const handleSubmit = async (values: EmployeeFormValues) => {
     setErrorMessage(null);
+    unsaved.setSubmitting(true);
 
     const switchingToInactive = employee.active && !values.active;
     if (!switchingToInactive) {
@@ -123,6 +131,8 @@ export function EmployeeEditPage() {
         finishSuccess();
       } catch (error) {
         setErrorMessage(getApiErrorMessage(error));
+      } finally {
+        unsaved.setSubmitting(false);
       }
       return;
     }
@@ -146,6 +156,7 @@ export function EmployeeEditPage() {
       setErrorMessage(getApiErrorMessage(error));
     } finally {
       setImpactLoading(false);
+      unsaved.setSubmitting(false);
     }
   };
 
@@ -264,7 +275,7 @@ export function EmployeeEditPage() {
         onCancel={handleCancel}
         loading={formBusy}
         errorMessage={errorMessage}
-        enableUnsavedGuard={onEditRoute}
+        onDirtyChange={onEditRoute ? unsaved.setDirty : undefined}
         onSubmit={handleSubmit}
       />
       <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
@@ -282,6 +293,11 @@ export function EmployeeEditPage() {
         errorMessage={deactivationError}
         onConfirm={() => void handleConfirmDeactivation()}
         onCancel={handleCancelDeactivation}
+      />
+      <UnsavedChangesDialog
+        open={unsaved.discardDialogOpen}
+        onConfirm={unsaved.confirmDiscard}
+        onCancel={unsaved.cancelDiscard}
       />
     </EntityEditPageLayout>
   );

@@ -255,9 +255,7 @@ export function OperationDetailPage() {
         description={`${`Detalle de la ${terminology.operation.singular.toLowerCase()}`} · ${formatOperationDetailScheduleTitle(operation)}`}
         action={
           <Group gap="sm" wrap="wrap">
-            {canEdit && !editing ? (
-              <EntityEditAction entity="operations" id={operation.id} visible={canEdit} />
-            ) : null}
+            {canEdit && !editing ? <EntityEditAction entity="operations" id={operation.id} /> : null}
             <ActionMenu
               primary={
                 editing && canEdit ? (

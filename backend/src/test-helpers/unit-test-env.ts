@@ -1,4 +1,4 @@
-const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
+export const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   NODE_ENV: "test",
   FRONTEND_URL: "http://localhost:5173",
   TZ: "America/Argentina/Buenos_Aires",

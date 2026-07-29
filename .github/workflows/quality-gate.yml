@@ -145,6 +145,9 @@ jobs:
 
       - name: Integration tests
         run: npm run test:integration
+        env:
+          EMAIL_TRANSPORT: console
+          NODE_ENV: test
 
   audit-artifacts:
     name: audit-artifacts

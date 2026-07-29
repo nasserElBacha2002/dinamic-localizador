@@ -1,5 +1,5 @@
 /**
- * Phase 1: read-only users must not see editable work-team form on /:id.
+ * Detail page: cards + members + history; admin actions only with manage.
  */
 import { setupDomEnvironment } from "../../test/setup-dom";
 
@@ -55,13 +55,15 @@ mockApiModule(
   WORK_TEAMS_API_EXPORTS,
 );
 
+let membershipPermissions = ["employees:read"];
+
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({
     companyId: "co-1",
     companyName: "Empresa Test",
     role: "VIEWER",
     isPlatformAdmin: false,
-    permissions: ["employees:read"],
+    permissions: membershipPermissions,
   }),
   getCompanyUsers: async () => ({ data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } }),
   getCompanyUserById: async () => {
@@ -81,27 +83,33 @@ mockApiModule("api/company-users.api", {
 
 import assert from "node:assert/strict";
 import { cleanup, waitFor } from "@testing-library/react";
-import { afterEach, before, describe, it } from "node:test";
+import { afterEach, before, beforeEach, describe, it } from "node:test";
 import React from "react";
 import { Route, Routes } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
+let WorkTeamDetailPage: React.ComponentType;
 let WorkTeamEditPage: React.ComponentType;
 
 before(async () => {
   ({ renderPage } = await import("../../test/render-page"));
+  ({ WorkTeamDetailPage } = await import("./WorkTeamDetailPage"));
   ({ WorkTeamEditPage } = await import("./WorkTeamEditPage"));
+});
+
+beforeEach(() => {
+  membershipPermissions = ["employees:read"];
 });
 
 afterEach(() => {
   cleanup();
 });
 
-describe("WorkTeamEditPage read-only gate", () => {
-  it("shows info and history without editable form or member actions", async () => {
+describe("WorkTeamDetailPage", () => {
+  it("viewer sees cards, members and history without admin actions or form", async () => {
     const view = renderPage(
       <Routes>
-        <Route path="/work-teams/:id" element={<WorkTeamEditPage />} />
+        <Route path="/work-teams/:id" element={<WorkTeamDetailPage />} />
       </Routes>,
       { route: "/work-teams/wt-1" },
     );
@@ -109,17 +117,48 @@ describe("WorkTeamEditPage read-only gate", () => {
     await waitFor(() => {
       assert.ok(view.getAllByText("Equipo Mañana").length >= 1);
     });
-
     assert.ok(view.getByText("Información general"));
+    assert.ok(view.getByRole("list", { name: /Integrantes del grupo/i }));
     assert.ok(view.getByText("Historial de uso"));
+    assert.ok(view.getByText("Ana López"));
     assert.ok(view.getByText("Turno AM"));
-    assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
+    assert.equal(view.queryByRole("button", { name: /^Editar$/i }), null);
+    assert.equal(view.queryByRole("link", { name: /^Editar$/i }), null);
     assert.equal(view.queryByRole("button", { name: /Desactivar/i }), null);
-    assert.equal(view.queryByRole("button", { name: /Activar/i }), null);
     assert.equal(view.queryByText("Datos del grupo"), null);
-    assert.equal(view.queryByLabelText(/Agregar colaborador/i), null);
-    assert.equal(view.queryByPlaceholderText(/Buscar colaborador activo/i), null);
-    assert.equal(view.queryByRole("list", { name: /Integrantes seleccionados/i }), null);
-    assert.equal(view.queryByRole("textbox"), null);
+    assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
+  });
+
+  it("manager sees Editar and Desactivar without WorkTeamForm on detail", async () => {
+    membershipPermissions = ["employees:manage", "employees:read"];
+    const view = renderPage(
+      <Routes>
+        <Route path="/work-teams/:id" element={<WorkTeamDetailPage />} />
+      </Routes>,
+      { route: "/work-teams/wt-1" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("link", { name: /^Editar$/i }));
+    });
+    assert.ok(view.getByRole("button", { name: /Desactivar/i }));
+    assert.ok(view.getByText("Información general"));
+    assert.equal(view.queryByText("Datos del grupo"), null);
+    assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
+  });
+
+  it("edit route shows WorkTeamForm", async () => {
+    membershipPermissions = ["employees:manage"];
+    const view = renderPage(
+      <Routes>
+        <Route path="/work-teams/:id/edit" element={<WorkTeamEditPage />} />
+      </Routes>,
+      { route: "/work-teams/wt-1/edit" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Datos del grupo"));
+    });
+    assert.ok(view.getByRole("button", { name: /Guardar cambios/i }));
   });
 });

@@ -15,11 +15,14 @@ import { EmployeesListPage } from "../pages/employees/EmployeesListPage";
 import { WorkTeamsListPage } from "../pages/work-teams/WorkTeamsListPage";
 import { WorkTeamCreatePage } from "../pages/work-teams/WorkTeamCreatePage";
 import { WorkTeamEditPage } from "../pages/work-teams/WorkTeamEditPage";
+import { WorkTeamDetailPage } from "../pages/work-teams/WorkTeamDetailPage";
 import { EmployeeCreatePage } from "../pages/employees/EmployeeCreatePage";
 import { EmployeeEditPage } from "../pages/employees/EmployeeEditPage";
+import { EmployeeDetailPage } from "../pages/employees/EmployeeDetailPage";
 import { ServicesListPage } from "../pages/services/ServicesListPage";
 import { ServiceCreatePage } from "../pages/services/ServiceCreatePage";
 import { ServiceEditPage } from "../pages/services/ServiceEditPage";
+import { ServiceDetailPage } from "../pages/services/ServiceDetailPage";
 import { OperationsListPage } from "../pages/operations/OperationsListPage";
 import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
@@ -149,7 +152,7 @@ export function AppRoutes() {
           path="/employees/:id"
           element={
             <FeatureRouteGuard {...employeeAccess}>
-              <EmployeeEditPage />
+              <EmployeeDetailPage />
             </FeatureRouteGuard>
           }
         />
@@ -181,7 +184,7 @@ export function AppRoutes() {
           path="/work-teams/:id"
           element={
             <FeatureRouteGuard {...workTeamAccess}>
-              <WorkTeamEditPage />
+              <WorkTeamDetailPage />
             </FeatureRouteGuard>
           }
         />
@@ -213,7 +216,7 @@ export function AppRoutes() {
           path="/services/:id"
           element={
             <FeatureRouteGuard {...serviceAccess}>
-              <ServiceEditPage />
+              <ServiceDetailPage />
             </FeatureRouteGuard>
           }
         />

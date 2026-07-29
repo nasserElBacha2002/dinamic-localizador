@@ -1,5 +1,5 @@
 import sql from "mssql";
-import { ABSENCE_OVERLAP_STATUS_SQL } from "../constants/absence-transitions";
+import { ABSENCE_OVERLAP_STATUS_SQL, toAbsenceStatusSqlInList } from "../constants/absence-transitions";
 import { getPool } from "../database/connection";
 import type {
   AbsenceDayPeriod,
@@ -334,7 +334,7 @@ export const absenceRequestRepository = {
   ): Promise<AbsenceRequest | null> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const statusFilter = input.onlyIfStatusIn?.length
-      ? `AND status IN (${input.onlyIfStatusIn.map((status) => `'${status}'`).join(", ")})`
+      ? `AND status IN (${toAbsenceStatusSqlInList(input.onlyIfStatusIn)})`
       : "";
 
     const result = await request
@@ -387,7 +387,7 @@ export const absenceRequestRepository = {
   ): Promise<AbsenceRequest | null> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     const statusFilter = input.onlyIfStatusIn.length
-      ? `AND status IN (${input.onlyIfStatusIn.map((status) => `'${status}'`).join(", ")})`
+      ? `AND status IN (${toAbsenceStatusSqlInList(input.onlyIfStatusIn)})`
       : "";
 
     const result = await request

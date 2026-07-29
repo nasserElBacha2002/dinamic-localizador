@@ -1,8 +1,5 @@
 import sql from "mssql";
-import {
-  ABSENCE_REVIEWABLE_STATUSES,
-  assertAbsenceTransition,
-} from "../constants/absence-transitions";
+import { assertAbsenceTransition } from "../constants/absence-transitions";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
@@ -11,17 +8,19 @@ import type {
   RejectAbsenceRequestInput,
 } from "../schemas/absence-request.schema";
 import type { AbsenceRequestStatus } from "../types/absence";
+import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+import type { AbsenceWorkdaySyncOperation } from "../repositories/absence-workday-sync-job.repository";
 
 const transition = async (input: {
   companyId: string;
   requestId: string;
   userId: string;
-  action: "APPROVE" | "REJECT" | "NEEDS_INFO" | "CANCEL";
+  action: "APPROVE" | "REJECT" | "NEEDS_INFO" | "UPDATE_NEEDS_INFO_COMMENT" | "CANCEL";
   comment?: string | null;
   cancelledAt?: Date | null;
 }) => {
@@ -39,9 +38,17 @@ const transition = async (input: {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
 
-    const { to: newStatus, eventType } = assertAbsenceTransition(input.action, existing.status);
+    let action = input.action;
+    if (action === "NEEDS_INFO" && existing.status === "NEEDS_INFO") {
+      action = "UPDATE_NEEDS_INFO_COMMENT";
+    }
 
-    if (input.action === "APPROVE") {
+    const rule = assertAbsenceTransition(action, existing.status);
+    if (rule.requiresComment && !input.comment?.trim()) {
+      throw new AppError(400, "ABSENCE_COMMENT_REQUIRED", "El comentario es obligatorio");
+    }
+
+    if (rule.affectsBalance) {
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         input.companyId,
         existing,
@@ -53,12 +60,12 @@ const transition = async (input: {
       input.companyId,
       input.requestId,
       {
-        status: newStatus,
+        status: rule.to,
         reviewedByUserId: input.userId,
         reviewedAt: new Date(),
         reviewComment: input.comment ?? null,
         cancelledAt: input.cancelledAt ?? null,
-        onlyIfStatusIn: [...ABSENCE_REVIEWABLE_STATUSES],
+        onlyIfStatusIn: rule.fromStatusesForUpdate,
       },
       transaction,
     );
@@ -75,36 +82,57 @@ const transition = async (input: {
       input.companyId,
       {
         absenceRequestId: input.requestId,
-        eventType,
+        eventType: rule.eventType,
         oldStatus: existing.status,
-        newStatus,
+        newStatus: rule.to,
         performedByUserId: input.userId,
         comment: input.comment ?? null,
       },
       transaction,
     );
 
-    await transaction.commit();
+    if (rule.triggersReconciliation) {
+      const syncOperation: AbsenceWorkdaySyncOperation =
+        action === "APPROVE" ? "APPROVE" : action === "REJECT" ? "REJECT" : "CANCEL";
+      await absenceWorkdaySyncService.enqueueInTransaction(
+        {
+          companyId: input.companyId,
+          absenceRequestId: input.requestId,
+          absenceStatus: rule.to,
+          operation: syncOperation,
+        },
+        transaction,
+      );
+    }
 
-    await auditService.log(input.companyId, {
-      entityType: "absence_request",
-      entityId: input.requestId,
-      action: eventType,
-      previousData: existing as unknown as Record<string, unknown>,
-      newData: updated as unknown as Record<string, unknown>,
-      reason: input.comment ?? null,
-      userId: input.userId,
-    });
+    await auditService.log(
+      input.companyId,
+      {
+        entityType: "absence_request",
+        entityId: input.requestId,
+        action: rule.eventType,
+        previousData: existing as unknown as Record<string, unknown>,
+        newData: updated as unknown as Record<string, unknown>,
+        reason: input.comment ?? null,
+        userId: input.userId,
+      },
+      transaction,
+    );
+
+    await transaction.commit();
 
     // Proactive WhatsApp notifications are intentionally deferred to a later phase.
     return absenceRequestService.getById(input.companyId, input.requestId);
   } catch (error) {
-    try {
-      await transaction.rollback();
-    } catch {
-      // ignore
-    }
-    throw error;
+    return rollbackTransactionSafely(
+      transaction,
+      {
+        operation: `absence-review.${input.action}`,
+        companyId: input.companyId,
+        entityId: input.requestId,
+      },
+      error,
+    );
   }
 };
 

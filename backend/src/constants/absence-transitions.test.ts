@@ -2,30 +2,48 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   ABSENCE_ACTIVE_OVERLAP_STATUSES,
-  ABSENCE_EDITABLE_STATUSES,
-  ABSENCE_REVIEWABLE_STATUSES,
+  ABSENCE_ADMIN_EDITABLE_STATUSES,
   assertAbsenceTransition,
-  isAbsenceEditableStatus,
+  getAbsenceTransition,
+  isAbsenceAdminEditableStatus,
   isAbsenceReviewableStatus,
-} from "../constants/absence-transitions";
+  toAbsenceStatusSqlInList,
+} from "./absence-transitions";
 import { AppError } from "../errors/app-error";
 
 describe("absence transitions policy", () => {
-  it("allows approve/reject/needs-info/cancel from PENDING and NEEDS_INFO", () => {
-    for (const status of ABSENCE_REVIEWABLE_STATUSES) {
-      assert.equal(assertAbsenceTransition("APPROVE", status).to, "APPROVED");
-      assert.equal(assertAbsenceTransition("REJECT", status).to, "REJECTED");
-      assert.equal(assertAbsenceTransition("NEEDS_INFO", status).to, "NEEDS_INFO");
-      assert.equal(assertAbsenceTransition("CANCEL", status).to, "CANCELLED");
-    }
+  it("allows PENDING review actions including NEEDS_INFO", () => {
+    assert.equal(assertAbsenceTransition("APPROVE", "PENDING").to, "APPROVED");
+    assert.equal(assertAbsenceTransition("REJECT", "PENDING").to, "REJECTED");
+    assert.equal(assertAbsenceTransition("NEEDS_INFO", "PENDING").to, "NEEDS_INFO");
+    assert.equal(assertAbsenceTransition("CANCEL", "PENDING").to, "CANCELLED");
   });
 
-  it("allows resubmit only from NEEDS_INFO to PENDING", () => {
-    assert.equal(assertAbsenceTransition("RESUBMIT", "NEEDS_INFO").to, "PENDING");
+  it("allows NEEDS_INFO approve/reject/cancel but not NEEDS_INFO→NEEDS_INFO", () => {
+    assert.equal(assertAbsenceTransition("APPROVE", "NEEDS_INFO").to, "APPROVED");
+    assert.equal(assertAbsenceTransition("REJECT", "NEEDS_INFO").to, "REJECTED");
+    assert.equal(assertAbsenceTransition("CANCEL", "NEEDS_INFO").to, "CANCELLED");
     assert.throws(
-      () => assertAbsenceTransition("RESUBMIT", "PENDING"),
+      () => assertAbsenceTransition("NEEDS_INFO", "NEEDS_INFO"),
       (error: unknown) => error instanceof AppError && error.code === "ABSENCE_INVALID_TRANSITION",
     );
+  });
+
+  it("uses UPDATE_NEEDS_INFO_COMMENT to refresh comment without leaving NEEDS_INFO", () => {
+    const rule = assertAbsenceTransition("UPDATE_NEEDS_INFO_COMMENT", "NEEDS_INFO");
+    assert.equal(rule.to, "NEEDS_INFO");
+    assert.equal(rule.requiresComment, true);
+    assert.equal(rule.triggersReconciliation, false);
+  });
+
+  it("resubmits to PENDING and auto-approves only from PENDING", () => {
+    const resubmit = assertAbsenceTransition("RESUBMIT", "NEEDS_INFO");
+    assert.equal(resubmit.to, "PENDING");
+    assert.equal(resubmit.eventType, "RESUBMITTED");
+    const auto = assertAbsenceTransition("AUTO_APPROVE", "PENDING");
+    assert.equal(auto.to, "APPROVED");
+    assert.equal(auto.eventType, "APPROVED");
+    assert.throws(() => assertAbsenceTransition("AUTO_APPROVE", "NEEDS_INFO"), AppError);
   });
 
   it("rejects transitions from terminal statuses", () => {
@@ -35,16 +53,24 @@ describe("absence transitions policy", () => {
     }
   });
 
+  it("exposes fromStatusesForUpdate from the policy rule", () => {
+    const rule = assertAbsenceTransition("APPROVE", "PENDING");
+    assert.deepEqual(rule.fromStatusesForUpdate, [...getAbsenceTransition("APPROVE").from]);
+  });
+
   it("includes NEEDS_INFO in active overlap statuses", () => {
     assert.ok(ABSENCE_ACTIVE_OVERLAP_STATUSES.includes("NEEDS_INFO"));
-    assert.ok(ABSENCE_ACTIVE_OVERLAP_STATUSES.includes("PENDING"));
-    assert.ok(ABSENCE_ACTIVE_OVERLAP_STATUSES.includes("APPROVED"));
     assert.equal(ABSENCE_ACTIVE_OVERLAP_STATUSES.includes("REJECTED" as never), false);
   });
 
-  it("marks only NEEDS_INFO as editable", () => {
-    assert.deepEqual([...ABSENCE_EDITABLE_STATUSES], ["NEEDS_INFO"]);
-    assert.equal(isAbsenceEditableStatus("NEEDS_INFO"), true);
-    assert.equal(isAbsenceEditableStatus("PENDING"), false);
+  it("marks only NEEDS_INFO as admin-editable", () => {
+    assert.deepEqual([...ABSENCE_ADMIN_EDITABLE_STATUSES], ["NEEDS_INFO"]);
+    assert.equal(isAbsenceAdminEditableStatus("NEEDS_INFO"), true);
+    assert.equal(isAbsenceAdminEditableStatus("PENDING"), false);
+  });
+
+  it("builds SQL fragments only from known enums", () => {
+    assert.equal(toAbsenceStatusSqlInList(["PENDING", "NEEDS_INFO"]), "'PENDING', 'NEEDS_INFO'");
+    assert.throws(() => toAbsenceStatusSqlInList(["HACKED" as never]));
   });
 });

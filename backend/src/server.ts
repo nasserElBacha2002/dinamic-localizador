@@ -1,6 +1,7 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, connectDatabase } from "./database/connection";
+import { startAbsenceWorkdaySyncJob, stopAbsenceWorkdaySyncJob } from "./jobs/absence-workday-sync.job";
 import { startAttendanceReminderJob, stopAttendanceReminderJob } from "./jobs/attendance-reminder.job";
 import {
   startRecurringWorkdayMaterializationJob,
@@ -11,6 +12,7 @@ const startServer = async (): Promise<void> => {
   await connectDatabase();
   startAttendanceReminderJob();
   startRecurringWorkdayMaterializationJob();
+  startAbsenceWorkdaySyncJob();
 
   app.listen(env.PORT, () => {
     console.log(`API listening on port ${env.PORT}`);
@@ -20,6 +22,7 @@ const startServer = async (): Promise<void> => {
 const shutdown = async (): Promise<void> => {
   stopAttendanceReminderJob();
   stopRecurringWorkdayMaterializationJob();
+  stopAbsenceWorkdaySyncJob();
   await closeDatabase();
   process.exit(0);
 };

@@ -1,11 +1,9 @@
 import sql from "mssql";
 import {
-  ABSENCE_EDITABLE_STATUSES,
-  ABSENCE_REVIEWABLE_STATUSES,
+  ABSENCE_ADMIN_EDITABLE_STATUSES,
   assertAbsenceTransition,
-  isAbsenceEditableStatus,
+  isAbsenceAdminEditableStatus,
 } from "../constants/absence-transitions";
-import { env } from "../config/env";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
@@ -17,11 +15,7 @@ import type {
   UpdateNeedsInfoAbsenceRequestInput,
 } from "../schemas/absence-request.schema";
 import type { AbsenceDayPeriod, AbsenceRequestDetail } from "../types/absence";
-import { auditService } from "./audit.service";
-import { absenceBalanceService } from "./absence-balance.service";
-import { absenceOperationImpactService } from "./absence-operation-impact.service";
-import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
-import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import {
   calculateTotalAbsenceDays,
   compareAbsenceDates,
@@ -29,9 +23,14 @@ import {
   parseAbsenceDateInput,
 } from "../utils/absence-date";
 import { buildPaginationMeta } from "../utils/pagination";
+import { auditService } from "./audit.service";
+import { absenceBalanceService } from "./absence-balance.service";
+import { absenceOperationImpactService } from "./absence-operation-impact.service";
+import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
+import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 
-/** @deprecated Prefer ABSENCE_REVIEWABLE_STATUSES from absence-transitions. */
-const REVIEWABLE_STATUSES = ABSENCE_REVIEWABLE_STATUSES;
+const resolveCompanyTimezone = (companyId: string) =>
+  absenceOperationImpactService.getOperationTimezone(companyId);
 
 const validateEmployee = async (companyId: string, employeeId: string) => {
   const employee = await employeeRepository.findById(companyId, employeeId);
@@ -67,6 +66,7 @@ const validateDates = (input: {
   startDate: string;
   endDate: string;
   absenceTypeCode: string;
+  timezone: string;
 }) => {
   const start = parseAbsenceDateInput(input.startDate);
   const end = parseAbsenceDateInput(input.endDate);
@@ -81,7 +81,7 @@ const validateDates = (input: {
     );
   }
 
-  const today = getTodayAbsenceDateIso(env.BOT_OPERATION_TIMEZONE);
+  const today = getTodayAbsenceDateIso(input.timezone);
   if (input.absenceTypeCode !== "SICK_LEAVE" && compareAbsenceDates(start.iso, today) < 0) {
     throw new AppError(
       400,
@@ -116,29 +116,15 @@ const assertNoOverlap = async (
   }
 };
 
-const countAffectedOperationsSafely = async (
-  companyId: string,
-  input: {
-    employeeId: string;
-    startDate: string;
-    endDate: string;
-  },
-): Promise<number> => {
-  try {
-    const affectedOperations = await absenceOperationImpactService.findAffectedOperations(
-      companyId,
-      input,
-    );
-    return affectedOperations.length;
-  } catch (error) {
-    console.error("[absence-request] affected operations count failed", {
-      employeeId: input.employeeId,
-      startDate: input.startDate,
-      endDate: input.endDate,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    return 0;
+const normalizeHalfDayPeriods = (
+  allowsHalfDay: boolean,
+  startPeriod: AbsenceDayPeriod,
+  endPeriod: AbsenceDayPeriod,
+): { startPeriod: AbsenceDayPeriod; endPeriod: AbsenceDayPeriod } => {
+  if (!allowsHalfDay) {
+    return { startPeriod: "FULL_DAY", endPeriod: "FULL_DAY" };
   }
+  return { startPeriod, endPeriod };
 };
 
 const isDuplicateSourceMessageSidError = (error: unknown): boolean =>
@@ -162,6 +148,7 @@ const createRequest = async (
     performedByEmployeeId?: string | null;
   },
 ): Promise<AbsenceRequestDetail> => {
+  const timezone = await resolveCompanyTimezone(companyId);
   await validateEmployee(companyId, input.employeeId);
   const absenceType = await validateAbsenceType(companyId, input.absenceTypeId, {
     blockIfRequiresAttachment: input.requestedVia === "WHATSAPP",
@@ -170,13 +157,19 @@ const createRequest = async (
     startDate: input.startDate,
     endDate: input.endDate,
     absenceTypeCode: absenceType.code,
+    timezone,
   });
 
+  const periods = normalizeHalfDayPeriods(
+    absenceType.allowsHalfDay,
+    input.startPeriod,
+    input.endPeriod,
+  );
   const totalDays = calculateTotalAbsenceDays({
     startDate: input.startDate,
     endDate: input.endDate,
-    startPeriod: input.startPeriod,
-    endPeriod: input.endPeriod,
+    startPeriod: periods.startPeriod,
+    endPeriod: periods.endPeriod,
   });
 
   const pool = getPool();
@@ -203,8 +196,8 @@ const createRequest = async (
         absenceTypeId: input.absenceTypeId,
         startDate: input.startDate,
         endDate: input.endDate,
-        startPeriod: input.startPeriod,
-        endPeriod: input.endPeriod,
+        startPeriod: periods.startPeriod,
+        endPeriod: periods.endPeriod,
         totalDays,
         reason: input.reason,
         requestedVia: input.requestedVia,
@@ -229,7 +222,7 @@ const createRequest = async (
     );
 
     if (!absenceType.requiresApproval) {
-      assertAbsenceTransition("AUTO_APPROVE", "PENDING");
+      const autoRule = assertAbsenceTransition("AUTO_APPROVE", "PENDING");
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         companyId,
         {
@@ -246,11 +239,11 @@ const createRequest = async (
         companyId,
         created.id,
         {
-          status: "APPROVED",
+          status: autoRule.to,
           reviewedByUserId: input.performedByUserId ?? null,
           reviewedAt: new Date(),
           reviewComment: "Aprobación automática (tipo sin revisión requerida).",
-          onlyIfStatusIn: ["PENDING"],
+          onlyIfStatusIn: autoRule.fromStatusesForUpdate,
         },
         transaction,
       );
@@ -266,35 +259,48 @@ const createRequest = async (
         companyId,
         {
           absenceRequestId: created.id,
-          eventType: "APPROVED",
+          eventType: autoRule.eventType,
           oldStatus: "PENDING",
-          newStatus: "APPROVED",
+          newStatus: autoRule.to,
           performedByUserId: input.performedByUserId ?? null,
           performedByEmployeeId: input.performedByEmployeeId ?? null,
           comment: "Aprobación automática (tipo sin revisión requerida).",
         },
         transaction,
       );
+
+      await absenceWorkdaySyncService.enqueueInTransaction(
+        {
+          companyId,
+          absenceRequestId: created.id,
+          absenceStatus: autoRule.to,
+          operation: "AUTO_APPROVE",
+        },
+        transaction,
+      );
       autoApproved = true;
     }
 
+    await auditService.log(
+      companyId,
+      {
+        entityType: "absence_request",
+        entityId: requestId,
+        action: autoApproved ? "CREATED_AUTO_APPROVED" : "CREATED",
+        newData: { requestId, autoApproved },
+        userId: input.performedByUserId ?? null,
+      },
+      transaction,
+    );
+
     await transaction.commit();
   } catch (error) {
-    try {
-      await transaction.rollback();
-    } catch {
-      // ignore
-    }
-    throw error;
+    return rollbackTransactionSafely(
+      transaction,
+      { operation: "absence-request.create", companyId, entityId: requestId || undefined },
+      error,
+    );
   }
-
-  await auditService.log(companyId, {
-    entityType: "absence_request",
-    entityId: requestId,
-    action: autoApproved ? "CREATED_AUTO_APPROVED" : "CREATED",
-    newData: { requestId, autoApproved },
-    userId: input.performedByUserId ?? null,
-  });
 
   if (autoApproved) {
     return absenceWorkdaySyncService.runAfterAbsenceMutation(
@@ -326,13 +332,12 @@ const resolveEditablePayload = async (
     reason: string;
   },
   input: UpdateNeedsInfoAbsenceRequestInput,
+  timezone: string,
   options?: { blockIfRequiresAttachment?: boolean },
 ) => {
   const absenceTypeId = input.absenceTypeId ?? existing.absenceTypeId;
   const startDate = input.startDate ?? existing.startDate;
   const endDate = input.endDate ?? existing.endDate;
-  const startPeriod = input.startPeriod ?? existing.startPeriod;
-  const endPeriod = input.endPeriod ?? existing.endPeriod;
   const reason = input.reason ?? existing.reason;
 
   const absenceType = await validateAbsenceType(companyId, absenceTypeId, options);
@@ -340,13 +345,20 @@ const resolveEditablePayload = async (
     startDate,
     endDate,
     absenceTypeCode: absenceType.code,
+    timezone,
   });
+
+  const periods = normalizeHalfDayPeriods(
+    absenceType.allowsHalfDay,
+    input.startPeriod ?? existing.startPeriod,
+    input.endPeriod ?? existing.endPeriod,
+  );
 
   const totalDays = calculateTotalAbsenceDays({
     startDate,
     endDate,
-    startPeriod,
-    endPeriod,
+    startPeriod: periods.startPeriod,
+    endPeriod: periods.endPeriod,
   });
 
   return {
@@ -354,8 +366,8 @@ const resolveEditablePayload = async (
     absenceTypeId,
     startDate,
     endDate,
-    startPeriod,
-    endPeriod,
+    startPeriod: periods.startPeriod,
+    endPeriod: periods.endPeriod,
     reason,
     totalDays,
   };
@@ -364,19 +376,21 @@ const resolveEditablePayload = async (
 export const absenceRequestService = {
   async list(companyId: string, query: ListAbsenceRequestsQuery) {
     const result = await absenceRequestRepository.list(companyId, query);
-    const items = await Promise.all(
-      result.items.map(async (item) => ({
-        ...item,
-        affectedOperationsCount: await countAffectedOperationsSafely(companyId, {
-          employeeId: item.employeeId,
-          startDate: item.startDate,
-          endDate: item.endDate,
-        }),
+    const counts = await absenceOperationImpactService.countAffectedOperationsForList(
+      companyId,
+      result.items.map((item) => ({
+        id: item.id,
+        employeeId: item.employeeId,
+        startDate: item.startDate,
+        endDate: item.endDate,
       })),
     );
 
     return {
-      data: items,
+      data: result.items.map((item) => ({
+        ...item,
+        affectedOperationsCount: counts.get(item.id) ?? 0,
+      })),
       meta: buildPaginationMeta(query.page, query.limit, result.total),
     };
   },
@@ -387,17 +401,23 @@ export const absenceRequestService = {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
 
+    const timezone = await resolveCompanyTimezone(companyId);
     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
     const [events, affectedOperations, balanceImpact] = await Promise.all([
       absenceRequestRepository.listEvents(companyId, id),
       absenceOperationImpactService
-        .findAffectedOperations(companyId, {
-          employeeId: request.employeeId,
-          startDate: request.startDate,
-          endDate: request.endDate,
-        })
+        .findAffectedOperations(
+          companyId,
+          {
+            employeeId: request.employeeId,
+            startDate: request.startDate,
+            endDate: request.endDate,
+          },
+          timezone,
+        )
         .catch((error) => {
           console.error("[absence-request] affected operations detail failed", {
+            companyId,
             requestId: id,
             error: error instanceof Error ? error.message : String(error),
           });
@@ -406,6 +426,7 @@ export const absenceRequestService = {
       absenceType
         ? absenceBalanceService.getSummaryForRequest(companyId, request, absenceType).catch((error) => {
             console.error("[absence-request] balance impact failed", {
+              companyId,
               requestId: id,
               error: error instanceof Error ? error.message : String(error),
             });
@@ -489,8 +510,8 @@ export const absenceRequestService = {
   },
 
   /**
-   * Admin (or future employee channel) edits fields while status is NEEDS_INFO.
-   * Status stays NEEDS_INFO until explicit resubmit.
+   * Admin correction path: edit fields while status is NEEDS_INFO.
+   * Requires absences:review. Not an employee self-service endpoint.
    */
   async updateNeedsInfo(
     companyId: string,
@@ -498,6 +519,7 @@ export const absenceRequestService = {
     input: UpdateNeedsInfoAbsenceRequestInput,
     actorUserId: string,
   ): Promise<AbsenceRequestDetail> {
+    const timezone = await resolveCompanyTimezone(companyId);
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -511,7 +533,7 @@ export const absenceRequestService = {
       if (!existing) {
         throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
       }
-      if (!isAbsenceEditableStatus(existing.status)) {
+      if (!isAbsenceAdminEditableStatus(existing.status)) {
         throw new AppError(
           409,
           "ABSENCE_NOT_EDITABLE",
@@ -519,7 +541,7 @@ export const absenceRequestService = {
         );
       }
 
-      const payload = await resolveEditablePayload(companyId, existing, input);
+      const payload = await resolveEditablePayload(companyId, existing, input, timezone);
       await assertNoOverlap(
         companyId,
         existing.employeeId,
@@ -540,7 +562,7 @@ export const absenceRequestService = {
           endPeriod: payload.endPeriod,
           totalDays: payload.totalDays,
           reason: payload.reason,
-          onlyIfStatusIn: [...ABSENCE_EDITABLE_STATUSES],
+          onlyIfStatusIn: [...ABSENCE_ADMIN_EDITABLE_STATUSES],
         },
         transaction,
       );
@@ -560,37 +582,41 @@ export const absenceRequestService = {
           oldStatus: existing.status,
           newStatus: existing.status,
           performedByUserId: actorUserId,
-          comment: "Campos actualizados mientras requiere información.",
+          comment: "Corrección administrativa mientras requiere información.",
+        },
+        transaction,
+      );
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "absence_request",
+          entityId: requestId,
+          action: "UPDATED",
+          previousData: existing as unknown as Record<string, unknown>,
+          newData: updated as unknown as Record<string, unknown>,
+          userId: actorUserId,
         },
         transaction,
       );
 
       await transaction.commit();
-
-      await auditService.log(companyId, {
-        entityType: "absence_request",
-        entityId: requestId,
-        action: "UPDATED",
-        previousData: existing as unknown as Record<string, unknown>,
-        newData: updated as unknown as Record<string, unknown>,
-        userId: actorUserId,
-      });
-
       return this.getById(companyId, requestId);
     } catch (error) {
-      try {
-        await transaction.rollback();
-      } catch {
-        // ignore
-      }
-      throw error;
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "absence-request.updateNeedsInfo", companyId, entityId: requestId },
+        error,
+      );
     }
   },
 
   /**
-   * NEEDS_INFO → PENDING (or auto-APPROVED when type does not require approval).
+   * Admin resubmit: NEEDS_INFO → PENDING, then AUTO_APPROVE when type does not require approval.
+   * Events are recorded as separate RESUBMITTED then APPROVED steps (alternative A).
    */
   async resubmit(companyId: string, requestId: string, actorUserId: string): Promise<AbsenceRequestDetail> {
+    const timezone = await resolveCompanyTimezone(companyId);
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -607,13 +633,14 @@ export const absenceRequestService = {
         throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
       }
 
-      assertAbsenceTransition("RESUBMIT", existing.status);
+      const resubmitRule = assertAbsenceTransition("RESUBMIT", existing.status);
 
       const absenceType = await validateAbsenceType(companyId, existing.absenceTypeId);
       validateDates({
         startDate: existing.startDate,
         endDate: existing.endDate,
         absenceTypeCode: absenceType.code,
+        timezone,
       });
       await assertNoOverlap(
         companyId,
@@ -624,21 +651,55 @@ export const absenceRequestService = {
         transaction,
       );
 
+      const pending = await absenceRequestRepository.updateStatus(
+        companyId,
+        requestId,
+        {
+          status: resubmitRule.to,
+          reviewedByUserId: null,
+          reviewedAt: null,
+          reviewComment: null,
+          onlyIfStatusIn: resubmitRule.fromStatusesForUpdate,
+        },
+        transaction,
+      );
+      if (!pending) {
+        throw new AppError(
+          409,
+          "ABSENCE_ALREADY_REVIEWED",
+          "La solicitud cambió de estado. Recargá e intentá de nuevo.",
+        );
+      }
+
+      await absenceRequestRepository.createEvent(
+        companyId,
+        {
+          absenceRequestId: requestId,
+          eventType: resubmitRule.eventType,
+          oldStatus: existing.status,
+          newStatus: resubmitRule.to,
+          performedByUserId: actorUserId,
+          comment: "Reenvío administrativo a pendiente.",
+        },
+        transaction,
+      );
+
       if (!absenceType.requiresApproval) {
+        const autoRule = assertAbsenceTransition("AUTO_APPROVE", "PENDING");
         await absenceBalanceService.ensureSufficientBalanceForApproval(
           companyId,
-          existing,
+          pending,
           transaction,
         );
         const approved = await absenceRequestRepository.updateStatus(
           companyId,
           requestId,
           {
-            status: "APPROVED",
+            status: autoRule.to,
             reviewedByUserId: actorUserId,
             reviewedAt: new Date(),
-            reviewComment: "Reenvío con autoaprobación (tipo sin revisión requerida).",
-            onlyIfStatusIn: [...ABSENCE_EDITABLE_STATUSES],
+            reviewComment: "Autoaprobación tras reenvío (tipo sin revisión requerida).",
+            onlyIfStatusIn: autoRule.fromStatusesForUpdate,
           },
           transaction,
         );
@@ -646,72 +707,52 @@ export const absenceRequestService = {
           throw new AppError(
             409,
             "ABSENCE_ALREADY_REVIEWED",
-            "La solicitud cambió de estado. Recargá e intentá de nuevo.",
+            "La solicitud cambió durante la autoaprobación. Reintentá.",
           );
         }
         await absenceRequestRepository.createEvent(
           companyId,
           {
             absenceRequestId: requestId,
-            eventType: "RESUBMITTED",
-            oldStatus: existing.status,
-            newStatus: "APPROVED",
+            eventType: autoRule.eventType,
+            oldStatus: "PENDING",
+            newStatus: autoRule.to,
             performedByUserId: actorUserId,
-            comment: "Reenvío con autoaprobación.",
+            comment: "Aprobación automática tras reenvío.",
+          },
+          transaction,
+        );
+        await absenceWorkdaySyncService.enqueueInTransaction(
+          {
+            companyId,
+            absenceRequestId: requestId,
+            absenceStatus: autoRule.to,
+            operation: "RESUBMIT_AUTO_APPROVE",
           },
           transaction,
         );
         autoApproved = true;
-      } else {
-        const pending = await absenceRequestRepository.updateStatus(
-          companyId,
-          requestId,
-          {
-            status: "PENDING",
-            reviewedByUserId: null,
-            reviewedAt: null,
-            reviewComment: null,
-            onlyIfStatusIn: [...ABSENCE_EDITABLE_STATUSES],
-          },
-          transaction,
-        );
-        if (!pending) {
-          throw new AppError(
-            409,
-            "ABSENCE_ALREADY_REVIEWED",
-            "La solicitud cambió de estado. Recargá e intentá de nuevo.",
-          );
-        }
-        await absenceRequestRepository.createEvent(
-          companyId,
-          {
-            absenceRequestId: requestId,
-            eventType: "RESUBMITTED",
-            oldStatus: existing.status,
-            newStatus: "PENDING",
-            performedByUserId: actorUserId,
-            comment: "Solicitud reenviada a pendiente.",
-          },
-          transaction,
-        );
       }
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "absence_request",
+          entityId: requestId,
+          action: autoApproved ? "RESUBMITTED_AUTO_APPROVED" : "RESUBMITTED",
+          userId: actorUserId,
+        },
+        transaction,
+      );
 
       await transaction.commit();
     } catch (error) {
-      try {
-        await transaction.rollback();
-      } catch {
-        // ignore
-      }
-      throw error;
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "absence-request.resubmit", companyId, entityId: requestId },
+        error,
+      );
     }
-
-    await auditService.log(companyId, {
-      entityType: "absence_request",
-      entityId: requestId,
-      action: autoApproved ? "RESUBMITTED_AUTO_APPROVED" : "RESUBMITTED",
-      userId: actorUserId,
-    });
 
     if (autoApproved) {
       return absenceWorkdaySyncService.runAfterAbsenceMutation(
@@ -753,5 +794,3 @@ export const absenceRequestService = {
     return this.createFromAdmin(companyId, input, performedByUserId);
   },
 };
-
-export { REVIEWABLE_STATUSES };

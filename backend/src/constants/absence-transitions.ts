@@ -8,67 +8,102 @@ export const ABSENCE_ACTIVE_OVERLAP_STATUSES = [
   "APPROVED",
 ] as const satisfies readonly AbsenceRequestStatus[];
 
-/** Statuses that can receive admin review actions (approve/reject/needs-info/cancel). */
-export const ABSENCE_REVIEWABLE_STATUSES = [
-  "PENDING",
+/**
+ * Statuses where an admin may still edit request fields (admin correction path).
+ * Not an employee self-service path.
+ */
+export const ABSENCE_ADMIN_EDITABLE_STATUSES = [
   "NEEDS_INFO",
 ] as const satisfies readonly AbsenceRequestStatus[];
 
-/** Statuses that allow field edits by admin (employee resubmit path). */
-export const ABSENCE_EDITABLE_STATUSES = ["NEEDS_INFO"] as const satisfies readonly AbsenceRequestStatus[];
-
-type AbsenceTransitionAction =
+export type AbsenceTransitionAction =
   | "APPROVE"
   | "REJECT"
   | "NEEDS_INFO"
+  | "UPDATE_NEEDS_INFO_COMMENT"
   | "CANCEL"
   | "RESUBMIT"
   | "AUTO_APPROVE";
 
-const TRANSITIONS: Record<
-  AbsenceTransitionAction,
-  {
-    from: readonly AbsenceRequestStatus[];
-    to: AbsenceRequestStatus;
-    eventType: AbsenceRequestEventType;
-  }
-> = {
+export type AbsenceTransitionRule = {
+  from: readonly AbsenceRequestStatus[];
+  to: AbsenceRequestStatus;
+  eventType: AbsenceRequestEventType;
+  requiresComment: boolean;
+  /** Balance is validated/consumed only on approve paths (computed, not reserved). */
+  affectsBalance: boolean;
+  triggersReconciliation: boolean;
+};
+
+const TRANSITIONS: Record<AbsenceTransitionAction, AbsenceTransitionRule> = {
   APPROVE: {
-    from: ABSENCE_REVIEWABLE_STATUSES,
+    from: ["PENDING", "NEEDS_INFO"],
     to: "APPROVED",
     eventType: "APPROVED",
+    requiresComment: false,
+    affectsBalance: true,
+    triggersReconciliation: true,
   },
   REJECT: {
-    from: ABSENCE_REVIEWABLE_STATUSES,
+    from: ["PENDING", "NEEDS_INFO"],
     to: "REJECTED",
     eventType: "REJECTED",
+    requiresComment: true,
+    affectsBalance: false,
+    triggersReconciliation: true,
   },
+  /** First request for more information — only from PENDING. */
   NEEDS_INFO: {
-    from: ABSENCE_REVIEWABLE_STATUSES,
+    from: ["PENDING"],
     to: "NEEDS_INFO",
     eventType: "NEEDS_INFO",
+    requiresComment: true,
+    affectsBalance: false,
+    triggersReconciliation: false,
+  },
+  /** Update the needs-info comment without changing status. */
+  UPDATE_NEEDS_INFO_COMMENT: {
+    from: ["NEEDS_INFO"],
+    to: "NEEDS_INFO",
+    eventType: "NEEDS_INFO",
+    requiresComment: true,
+    affectsBalance: false,
+    triggersReconciliation: false,
   },
   CANCEL: {
-    from: ABSENCE_REVIEWABLE_STATUSES,
+    from: ["PENDING", "NEEDS_INFO"],
     to: "CANCELLED",
     eventType: "CANCELLED",
+    requiresComment: false,
+    affectsBalance: false,
+    triggersReconciliation: true,
   },
+  /** Admin resubmit after NEEDS_INFO corrections → PENDING. Auto-approve is a separate step. */
   RESUBMIT: {
-    from: ABSENCE_EDITABLE_STATUSES,
+    from: ["NEEDS_INFO"],
     to: "PENDING",
     eventType: "RESUBMITTED",
+    requiresComment: false,
+    affectsBalance: false,
+    triggersReconciliation: false,
   },
   AUTO_APPROVE: {
     from: ["PENDING"],
     to: "APPROVED",
     eventType: "APPROVED",
+    requiresComment: false,
+    affectsBalance: true,
+    triggersReconciliation: true,
   },
 };
+
+export const getAbsenceTransition = (action: AbsenceTransitionAction): AbsenceTransitionRule =>
+  TRANSITIONS[action];
 
 export const assertAbsenceTransition = (
   action: AbsenceTransitionAction,
   currentStatus: AbsenceRequestStatus,
-): { to: AbsenceRequestStatus; eventType: AbsenceRequestEventType } => {
+): AbsenceTransitionRule & { fromStatusesForUpdate: AbsenceRequestStatus[] } => {
   const rule = TRANSITIONS[action];
   if (!rule.from.includes(currentStatus)) {
     throw new AppError(
@@ -77,15 +112,42 @@ export const assertAbsenceTransition = (
       `No se puede ejecutar ${action} desde el estado ${currentStatus}.`,
     );
   }
-  return { to: rule.to, eventType: rule.eventType };
+  return {
+    ...rule,
+    fromStatusesForUpdate: [...rule.from],
+  };
 };
 
+export const isAbsenceAdminEditableStatus = (status: AbsenceRequestStatus): boolean =>
+  (ABSENCE_ADMIN_EDITABLE_STATUSES as readonly AbsenceRequestStatus[]).includes(status);
+
+/** Statuses that still accept admin review actions (approve/reject/cancel). */
 export const isAbsenceReviewableStatus = (status: AbsenceRequestStatus): boolean =>
-  (ABSENCE_REVIEWABLE_STATUSES as readonly AbsenceRequestStatus[]).includes(status);
+  status === "PENDING" || status === "NEEDS_INFO";
 
-export const isAbsenceEditableStatus = (status: AbsenceRequestStatus): boolean =>
-  (ABSENCE_EDITABLE_STATUSES as readonly AbsenceRequestStatus[]).includes(status);
+/**
+ * Builds a SQL `IN (...)` fragment from known enum statuses only.
+ * Never pass user input — values must come from transition policy constants.
+ */
+export const toAbsenceStatusSqlInList = (
+  statuses: readonly AbsenceRequestStatus[],
+): string => {
+  if (statuses.length === 0) {
+    throw new Error("toAbsenceStatusSqlInList requires at least one status");
+  }
+  const allowed = new Set<AbsenceRequestStatus>([
+    "PENDING",
+    "APPROVED",
+    "REJECTED",
+    "CANCELLED",
+    "NEEDS_INFO",
+  ]);
+  for (const status of statuses) {
+    if (!allowed.has(status)) {
+      throw new Error(`Invalid absence status for SQL fragment: ${status}`);
+    }
+  }
+  return statuses.map((status) => `'${status}'`).join(", ");
+};
 
-export const ABSENCE_OVERLAP_STATUS_SQL = ABSENCE_ACTIVE_OVERLAP_STATUSES.map(
-  (status) => `'${status}'`,
-).join(", ");
+export const ABSENCE_OVERLAP_STATUS_SQL = toAbsenceStatusSqlInList(ABSENCE_ACTIVE_OVERLAP_STATUSES);

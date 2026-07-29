@@ -26,10 +26,16 @@ function invalidateAbsenceDomain(
   queryClient: ReturnType<typeof useQueryClient>,
   companyId: string | null | undefined,
 ) {
+  if (!companyId) {
+    return;
+  }
   void queryClient.invalidateQueries({ queryKey: absenceKeys.company(companyId) });
-  void queryClient.invalidateQueries({ queryKey: ["operation-workdays"] });
-  void queryClient.invalidateQueries({ queryKey: ["operation-workday-detail"] });
+  // Prefix matches operationWorkdayKeys.list/detail for this company only.
+  void queryClient.invalidateQueries({ queryKey: ["operation-workdays", companyId] });
+  void queryClient.invalidateQueries({ queryKey: ["operation-workday-detail", companyId] });
 }
+
+type MutationCompanyContext = { companyId: string | undefined };
 
 export function useAbsenceTypes() {
   const { companyId, enabled } = useOperationalQueryEnabled();
@@ -66,8 +72,9 @@ export function useCreateAbsenceRequest() {
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: (input: CreateAbsenceRequestInput) => createAbsenceRequest(input),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -77,8 +84,9 @@ export function useApproveAbsenceRequest(absenceRequestId: string) {
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: () => approveAbsenceRequest(absenceRequestId),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -88,8 +96,9 @@ export function useRejectAbsenceRequest(absenceRequestId: string) {
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: (reason: string) => rejectAbsenceRequest(absenceRequestId, reason),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -99,8 +108,9 @@ export function useNeedsInfoAbsenceRequest(absenceRequestId: string) {
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: (comment: string) => needsInfoAbsenceRequest(absenceRequestId, comment),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -110,8 +120,9 @@ export function useCancelAbsenceRequest(absenceRequestId: string) {
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: () => cancelAbsenceRequest(absenceRequestId),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -122,8 +133,9 @@ export function useUpdateNeedsInfoAbsenceRequest(absenceRequestId: string) {
   return useMutation({
     mutationFn: (input: UpdateNeedsInfoAbsenceRequestInput) =>
       updateNeedsInfoAbsenceRequest(absenceRequestId, input),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -133,8 +145,9 @@ export function useResubmitAbsenceRequest(absenceRequestId: string) {
   const { companyId } = useOperationalQueryEnabled();
   return useMutation({
     mutationFn: () => resubmitAbsenceRequest(absenceRequestId),
-    onSuccess: () => {
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
     },
   });
 }
@@ -159,11 +172,15 @@ export function useUpsertEmployeeAbsenceBalance(employeeId: string) {
         totalDays: input.totalDays,
         notes: input.notes,
       }),
-    onSuccess: (_data, variables) => {
-      void queryClient.invalidateQueries({
-        queryKey: absenceKeys.balances(companyId, employeeId, variables.year),
-      });
-      invalidateAbsenceDomain(queryClient, companyId);
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, variables, context) => {
+      const scopedCompanyId = context?.companyId;
+      if (scopedCompanyId) {
+        void queryClient.invalidateQueries({
+          queryKey: absenceKeys.balances(scopedCompanyId, employeeId, variables.year),
+        });
+      }
+      invalidateAbsenceDomain(queryClient, scopedCompanyId);
     },
   });
 }

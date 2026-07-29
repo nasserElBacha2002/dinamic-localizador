@@ -22,6 +22,7 @@ import { ServiceCreatePage } from "../pages/services/ServiceCreatePage";
 import { ServiceEditPage } from "../pages/services/ServiceEditPage";
 import { OperationsListPage } from "../pages/operations/OperationsListPage";
 import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
+import { OperationEditPage } from "../pages/operations/OperationEditPage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
@@ -171,6 +172,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/employees/:id/edit"
+          element={
+            <FeatureRouteGuard {...employeeManage}>
+              <EmployeeEditPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/employees/:id"
           element={
             <FeatureRouteGuard {...employeeAccess}>
@@ -195,6 +204,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/work-teams/:id/edit"
+          element={
+            <FeatureRouteGuard {...workTeamManage}>
+              <WorkTeamEditPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/work-teams/:id"
           element={
             <FeatureRouteGuard {...workTeamAccess}>
@@ -215,6 +232,14 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard {...serviceManage}>
               <ServiceCreatePage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/services/:id/edit"
+          element={
+            <FeatureRouteGuard {...serviceManage}>
+              <ServiceEditPage />
             </FeatureRouteGuard>
           }
         />
@@ -250,6 +275,14 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard {...operationManage}>
               <OperationCreatePage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/operations/:id/edit"
+          element={
+            <FeatureRouteGuard {...operationManage}>
+              <OperationEditPage />
             </FeatureRouteGuard>
           }
         />

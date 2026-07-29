@@ -12,6 +12,7 @@ import {
   RHFTextInput,
 } from "../../design-system";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import { serviceFormSchema, type ServiceFormValues } from "../../schemas/service.schema";
 import { ManualCoordinatesFields } from "./location-picker/components/ManualCoordinatesFields";
 import { ServiceInteractiveMapPanel } from "./location-picker/components/LocationMapSection";
@@ -28,6 +29,8 @@ interface ServiceFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   isEditMode?: boolean;
+  /** When true, blocks leave/refresh while the form is dirty (edit routes). */
+  enableUnsavedGuard?: boolean;
   onSubmit: (values: ServiceFormValues) => Promise<void>;
   formId?: string;
   showBottomActions?: boolean;
@@ -41,13 +44,24 @@ export function ServiceForm({
   loading = false,
   errorMessage,
   isEditMode = false,
+  enableUnsavedGuard = false,
   onSubmit,
   formId = SERVICE_FORM_ID,
   showBottomActions = true,
 }: ServiceFormProps) {
-  const { control, handleSubmit, setValue, trigger } = useForm<ServiceFormValues>({
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    trigger,
+    formState: { isDirty, isSubmitting },
+  } = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceFormSchema),
     defaultValues,
+  });
+
+  useUnsavedChangesGuard({
+    enabled: enableUnsavedGuard && isDirty && !isSubmitting && !loading,
   });
 
   const watchedValues = useWatch({ control });

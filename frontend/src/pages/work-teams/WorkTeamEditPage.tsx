@@ -1,10 +1,11 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { Link, useLocation, useNavigate, useParams } from "react-router";
 import { WorkTeamForm } from "../../components/work-teams/WorkTeamForm";
 import {
   ConfirmDialog,
   DataTable,
+  DetailFieldGrid,
   ErrorState,
   LoadingState,
   PageHeader,
@@ -25,12 +26,17 @@ import {
 import type { WorkTeamUsageRecord } from "../../types/work-team";
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
+import { getEntityDetailPath, isEntityEditPath } from "../../utils/entity-routes";
 import { hasPermission } from "../../utils/permissions";
 import { operationKindLabels } from "../../utils/operation-schedule-display";
+import { safeText } from "../../utils/display-safe";
 
 export function WorkTeamEditPage() {
   const { id } = useParams<{ id: string }>();
   const { goBackToList } = useListBackNavigation("/work-teams");
+  const navigate = useNavigate();
+  const location = useLocation();
+  const onEditRoute = isEntityEditPath(location.pathname, "work-teams");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
   const teamQuery = useWorkTeam(id);
@@ -46,7 +52,7 @@ export function WorkTeamEditPage() {
     return <ErrorState message="Grupo no encontrado." />;
   }
 
-  if (teamQuery.isLoading) {
+  if (teamQuery.isLoading || permissionsQuery.isPending) {
     return <LoadingState />;
   }
 
@@ -58,6 +64,26 @@ export function WorkTeamEditPage() {
   const existingMembers = team.members
     .map((member) => member.employee)
     .filter((employee): employee is NonNullable<typeof employee> => Boolean(employee));
+
+  const goToDetail = () => {
+    navigate(getEntityDetailPath("work-teams", id), { state: location.state });
+  };
+
+  const handleCancel = () => {
+    if (onEditRoute) {
+      goToDetail();
+      return;
+    }
+    goBackToList();
+  };
+
+  const handleSaveSuccess = () => {
+    if (onEditRoute) {
+      goToDetail();
+      return;
+    }
+    goBackToList();
+  };
 
   const usageColumns: DataTableColumn<WorkTeamUsageRecord>[] = [
     {
@@ -149,7 +175,7 @@ export function WorkTeamEditPage() {
           submitLabel="Guardar cambios"
           loading={updateMutation.isPending || replaceMembersMutation.isPending}
           errorMessage={errorMessage}
-          onCancel={goBackToList}
+          onCancel={handleCancel}
           onSubmit={async (values) => {
             setErrorMessage(null);
             try {
@@ -160,13 +186,30 @@ export function WorkTeamEditPage() {
                 });
               }
               await replaceMembersMutation.mutateAsync(values.employeeIds);
-              goBackToList();
+              handleSaveSuccess();
             } catch (error) {
               setErrorMessage(getApiErrorMessage(error));
             }
           }}
         />
-      ) : null}
+      ) : (
+        <SectionCard title="Información general">
+          <DetailFieldGrid
+            fields={[
+              { label: "Nombre", value: team.name },
+              {
+                label: "Descripción",
+                value: safeText(team.description),
+                span: { base: 12, sm: 12, lg: 8 },
+              },
+              {
+                label: "Integrantes",
+                value: `${team.memberCount ?? 0} · ${team.activeMemberCount ?? 0} activos`,
+              },
+            ]}
+          />
+        </SectionCard>
+      )}
 
       <SectionCard title="Historial de uso" description="Operaciones donde se utilizó este grupo.">
         <DataTable

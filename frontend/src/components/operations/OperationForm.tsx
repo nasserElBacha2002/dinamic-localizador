@@ -15,6 +15,7 @@ import {
   RHFSelect,
   RHFTextarea,
 } from "../../design-system";
+import { useUnsavedChangesGuard } from "../../hooks/useUnsavedChangesGuard";
 import {
   createOperationFormSchema,
   operationFormSchema,
@@ -46,6 +47,8 @@ interface OperationFormProps {
   onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
+  /** When true, blocks leave/refresh while the form is dirty (dedicated edit routes). */
+  enableUnsavedGuard?: boolean;
   onSubmit: (values: OperationFormValues) => Promise<void>;
   embedded?: boolean;
   formId?: string;
@@ -98,6 +101,7 @@ export function OperationForm({
   onCancel,
   loading = false,
   errorMessage,
+  enableUnsavedGuard = false,
   onSubmit,
   embedded = false,
   formId,
@@ -108,9 +112,19 @@ export function OperationForm({
     [mode],
   );
 
-  const { control, handleSubmit, reset, setValue } = useForm<OperationFormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { isDirty, isSubmitting },
+  } = useForm<OperationFormValues>({
     resolver: zodResolver(validationSchema),
     defaultValues,
+  });
+
+  useUnsavedChangesGuard({
+    enabled: enableUnsavedGuard && isDirty && !isSubmitting && !loading,
   });
 
   const operationKind = useWatch({ control, name: "operationKind" });

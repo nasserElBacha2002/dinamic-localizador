@@ -1,28 +1,47 @@
+import { Button, Group, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useRef, useState } from "react";
-import { useParams } from "react-router";
-import { Stack, Group } from "@mantine/core";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeDeactivationDialog } from "../../components/employees/EmployeeDeactivationDialog";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
 import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
-import { EntityAvatar, ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
+import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
+import {
+  DetailFieldGrid,
+  EntityAvatar,
+  ErrorState,
+  LoadingState,
+  PageHeader,
+  SectionCard,
+  StatusBadge,
+} from "../../design-system";
 import {
   useDeactivateEmployee,
   useEmployee,
   useUpdateEmployee,
 } from "../../hooks/useEmployees";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { getEmployeeDeactivationImpact } from "../../api/employees.api";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
+import { getEntityDetailPath, isEntityEditPath } from "../../utils/entity-routes";
+import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
+import { safeText } from "../../utils/display-safe";
 
 export function EmployeeEditPage() {
   const { goBackToList } = useListBackNavigation("/employees");
+  const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
+  const onEditRoute = isEntityEditPath(location.pathname, "employees");
+  const permissionsQuery = useCompanyPermissions();
+  const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
   const employeeQuery = useEmployee(id);
   const updateMutation = useUpdateEmployee(id ?? "");
   const deactivateMutation = useDeactivateEmployee(id ?? "");
@@ -39,7 +58,7 @@ export function EmployeeEditPage() {
     return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
   }
 
-  if (employeeQuery.isLoading) {
+  if (employeeQuery.isLoading || permissionsQuery.isPending) {
     return <LoadingState />;
   }
 
@@ -59,6 +78,30 @@ export function EmployeeEditPage() {
   const formBusy =
     updateMutation.isPending || deactivateMutation.isPending || impactLoading;
 
+  const goToDetail = () => {
+    navigate(getEntityDetailPath("employees", id), { state: location.state });
+  };
+
+  const handleCancel = () => {
+    if (onEditRoute) {
+      goToDetail();
+      return;
+    }
+    goBackToList();
+  };
+
+  const finishSuccess = () => {
+    notifications.show({
+      color: "green",
+      message: `${terminology.worker.singular} actualizado correctamente.`,
+    });
+    if (onEditRoute) {
+      goToDetail();
+      return;
+    }
+    goBackToList();
+  };
+
   const buildProfilePayload = (values: EmployeeFormValues) => ({
     name: values.name,
     documentNumber: values.documentNumber?.trim() ? values.documentNumber.trim() : null,
@@ -66,14 +109,6 @@ export function EmployeeEditPage() {
     employeeType: values.employeeType,
     categoryId: values.categoryId ?? null,
   });
-
-  const finishSuccess = () => {
-    notifications.show({
-      color: "green",
-      message: `${terminology.worker.singular} actualizado correctamente.`,
-    });
-    goBackToList();
-  };
 
   const handleSubmit = async (values: EmployeeFormValues) => {
     setErrorMessage(null);
@@ -145,18 +180,71 @@ export function EmployeeEditPage() {
     setDeactivationError(null);
   };
 
+  // Phase 1: until EmployeeDetailPage exists, read-only users get a safe consultation view.
+  if (!canManage) {
+    return (
+      <Stack gap="md">
+        <PageHeader
+          title={
+            <Group gap="md" wrap="nowrap" align="center">
+              <EntityAvatar name={employee.name} entityType="collaborator" size="lg" />
+              <span>{employee.name}</span>
+            </Group>
+          }
+          description={`Consulta de ${terminology.worker.singular.toLowerCase()}`}
+          action={
+            <Group gap="sm">
+              <EmployeeModuleQuickLinks employeeId={employee.id} />
+              <Button variant="default" onClick={goBackToList}>
+                Volver al listado
+              </Button>
+            </Group>
+          }
+        />
+        <SectionCard title="Información general">
+          <DetailFieldGrid
+            fields={[
+              { label: "Nombre", value: employee.name },
+              { label: "Documento", value: safeText(employee.documentNumber) },
+              { label: "Teléfono", value: employee.phoneNumber },
+              {
+                label: `Tipo de ${terminology.worker.singular.toLowerCase()}`,
+                value: employeeTypeLabels[employee.employeeType],
+              },
+              { label: "Categoría", value: safeText(employee.category?.name ?? null) },
+              {
+                label: "Estado",
+                value: (
+                  <StatusBadge
+                    label={activeStatusLabel(employee.active)}
+                    tone={employee.active ? "success" : "neutral"}
+                  />
+                ),
+              },
+            ]}
+          />
+        </SectionCard>
+        <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
+          <EmployeeAbsenceBalanceCard employeeId={employee.id} year={currentYear} showEdit={false} />
+        </SectionCard>
+        <SectionCard title={`Ausencias · Historial ${currentYear}`}>
+          <EmployeeAbsenceHistoryTable employeeId={employee.id} year={currentYear} />
+        </SectionCard>
+      </Stack>
+    );
+  }
+
   return (
-    <Stack gap="md">
-      <PageHeader
-        title={
-          <Group gap="md" wrap="nowrap" align="center">
-            <EntityAvatar name={employee.name} entityType="collaborator" size="lg" />
-            <span>{employee.name}</span>
-          </Group>
-        }
-        description={`Editar ${terminology.worker.singular.toLowerCase()}`}
-        action={<EmployeeModuleQuickLinks employeeId={employee.id} />}
-      />
+    <EntityEditPageLayout
+      title={
+        <Group gap="md" wrap="nowrap" align="center">
+          <EntityAvatar name={employee.name} entityType="collaborator" size="lg" />
+          <span>{employee.name}</span>
+        </Group>
+      }
+      description={`Editar ${terminology.worker.singular.toLowerCase()}`}
+      action={<EmployeeModuleQuickLinks employeeId={employee.id} />}
+    >
       <EmployeeForm
         defaultValues={{
           name: employee.name,
@@ -173,9 +261,10 @@ export function EmployeeEditPage() {
         }
         submitLabel="Guardar cambios"
         cancelTo="/employees"
-        onCancel={goBackToList}
+        onCancel={handleCancel}
         loading={formBusy}
         errorMessage={errorMessage}
+        enableUnsavedGuard={onEditRoute}
         onSubmit={handleSubmit}
       />
       <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
@@ -194,6 +283,6 @@ export function EmployeeEditPage() {
         onConfirm={() => void handleConfirmDeactivation()}
         onCancel={handleCancelDeactivation}
       />
-    </Stack>
+    </EntityEditPageLayout>
   );
 }

@@ -131,6 +131,29 @@ describe("AbsencesListPage employee deep-link", () => {
     });
   });
 
+  it("normalizes legacy employeeId query param into employeeIds", async () => {
+    const view = renderPage(
+      <Routes>
+        <Route path="/absences" element={<AbsencesListPage />} />
+      </Routes>,
+      { route: `/absences?employeeId=${EMPLOYEE_ID}&status=all` },
+    );
+
+    await waitFor(() => {
+      assert.ok(absenceFilterCalls.length >= 1);
+    });
+
+    const matched = absenceFilterCalls.find(
+      (call) => Array.isArray(call.employeeIds) && call.employeeIds.includes(EMPLOYEE_ID),
+    );
+    assert.ok(matched);
+    assert.equal(matched?.employeeId, undefined);
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Ada Lovelace"));
+    });
+  });
+
   it("clears employeeIds via Limpiar filtros while leaving the page usable", async () => {
     const view = renderPage(
       <Routes>

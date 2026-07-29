@@ -28,6 +28,8 @@ export const absenceEventTypeLabels = {
   REJECTED: "Rechazada",
   NEEDS_INFO: "Requiere información",
   CANCELLED: "Cancelada",
+  UPDATED: "Actualizada",
+  RESUBMITTED: "Reenviada",
 } as const;
 
 export function formatAbsenceDate(dateValue: string): string {

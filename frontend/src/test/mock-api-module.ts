@@ -87,6 +87,8 @@ export const ABSENCES_API_EXPORTS = [
   "rejectAbsenceRequest",
   "needsInfoAbsenceRequest",
   "cancelAbsenceRequest",
+  "updateNeedsInfoAbsenceRequest",
+  "resubmitAbsenceRequest",
   "getEmployeeAbsenceBalances",
   "upsertEmployeeAbsenceBalance",
 ] as const;

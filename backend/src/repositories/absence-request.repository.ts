@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { ABSENCE_OVERLAP_STATUS_SQL } from "../constants/absence-transitions";
 import { getPool } from "../database/connection";
 import type {
   AbsenceDayPeriod,
@@ -309,7 +310,7 @@ export const absenceRequestRepository = {
       FROM absence_requests ${lockHint}
       WHERE employee_id = @employeeId
         AND company_id = @companyId
-        AND status IN ('PENDING', 'APPROVED')
+        AND status IN (${ABSENCE_OVERLAP_STATUS_SQL})
         AND start_date <= @endDate
         AND end_date >= @startDate
         ${excludeClause}
@@ -352,6 +353,63 @@ export const absenceRequestRepository = {
           reviewed_at = @reviewedAt,
           review_comment = @reviewComment,
           cancelled_at = @cancelledAt,
+          updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @id AND company_id = @companyId
+        ${statusFilter}
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAbsenceRequestRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Updates editable fields while the request remains in one of `onlyIfStatusIn`.
+   * Does not change status.
+   */
+  async updateEditableFields(
+    companyId: string,
+    id: string,
+    input: {
+      absenceTypeId: string;
+      startDate: string;
+      endDate: string;
+      startPeriod: AbsenceDayPeriod;
+      endPeriod: AbsenceDayPeriod;
+      totalDays: number;
+      reason: string;
+      onlyIfStatusIn: AbsenceRequestStatus[];
+    },
+    transaction?: sql.Transaction,
+  ): Promise<AbsenceRequest | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const statusFilter = input.onlyIfStatusIn.length
+      ? `AND status IN (${input.onlyIfStatusIn.map((status) => `'${status}'`).join(", ")})`
+      : "";
+
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
+      .input("startDate", sql.Date, input.startDate)
+      .input("endDate", sql.Date, input.endDate)
+      .input("startPeriod", sql.NVarChar(20), input.startPeriod)
+      .input("endPeriod", sql.NVarChar(20), input.endPeriod)
+      .input("totalDays", sql.Decimal(5, 1), input.totalDays)
+      .input("reason", sql.NVarChar(1000), input.reason)
+      .query(`
+        UPDATE absence_requests
+        SET
+          absence_type_id = @absenceTypeId,
+          start_date = @startDate,
+          end_date = @endDate,
+          start_period = @startPeriod,
+          end_period = @endPeriod,
+          total_days = @totalDays,
+          reason = @reason,
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @id AND company_id = @companyId

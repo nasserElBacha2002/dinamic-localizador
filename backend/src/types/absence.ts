@@ -17,7 +17,9 @@ export type AbsenceRequestEventType =
   | "APPROVED"
   | "REJECTED"
   | "NEEDS_INFO"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "UPDATED"
+  | "RESUBMITTED";
 
 export interface AbsenceType {
   id: string;

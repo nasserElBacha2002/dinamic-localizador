@@ -1,7 +1,9 @@
-import { env } from "../config/env";
+import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import type { AffectedOperationWarning } from "../types/absence";
 import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../utils/absence-date";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
+import { env } from "../config/env";
 
 export const absenceOperationImpactService = {
   async findAffectedOperations(
@@ -12,7 +14,10 @@ export const absenceOperationImpactService = {
       endDate: string;
     },
   ): Promise<AffectedOperationWarning[]> {
-    const timezone = env.BOT_OPERATION_TIMEZONE;
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const timezone = resolveOperationTimezone(
+      settings?.operationTimezone ?? env.BOT_OPERATION_TIMEZONE,
+    );
     const utcOffsetHours = getUtcOffsetHoursFromTimezone(timezone);
     const { startAt, endAt } = absenceDateRangeToUtcBounds(
       input.startDate,
@@ -37,7 +42,8 @@ export const absenceOperationImpactService = {
     }));
   },
 
-  getOperationTimezone(): string {
-    return env.BOT_OPERATION_TIMEZONE;
+  async getOperationTimezone(companyId: string): Promise<string> {
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    return resolveOperationTimezone(settings?.operationTimezone ?? env.BOT_OPERATION_TIMEZONE);
   },
 };

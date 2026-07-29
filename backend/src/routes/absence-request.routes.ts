@@ -9,6 +9,7 @@ import {
   listAbsenceRequestsQuerySchema,
   needsInfoAbsenceRequestSchema,
   rejectAbsenceRequestSchema,
+  updateNeedsInfoAbsenceRequestSchema,
 } from "../schemas/absence-request.schema";
 
 export const absenceRequestRouter = Router();
@@ -32,6 +33,21 @@ absenceRequestRouter.get(
   requirePermission("absences:read"),
   validate(absenceRequestIdParamSchema, "params"),
   asyncHandler(absenceRequestController.getById),
+);
+
+absenceRequestRouter.patch(
+  "/:id",
+  requirePermission("absences:review"),
+  validate(absenceRequestIdParamSchema, "params"),
+  validate(updateNeedsInfoAbsenceRequestSchema),
+  asyncHandler(absenceRequestController.updateNeedsInfo),
+);
+
+absenceRequestRouter.patch(
+  "/:id/resubmit",
+  requirePermission("absences:review"),
+  validate(absenceRequestIdParamSchema, "params"),
+  asyncHandler(absenceRequestController.resubmit),
 );
 
 absenceRequestRouter.patch(

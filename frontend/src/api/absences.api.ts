@@ -6,6 +6,7 @@ import type {
   AbsenceType,
   CreateAbsenceRequestInput,
   EmployeeAbsenceBalanceSummary,
+  UpdateNeedsInfoAbsenceRequestInput,
   UpsertEmployeeAbsenceBalanceInput,
 } from "../types/absence";
 import { buildParams } from "./client";
@@ -69,6 +70,24 @@ export async function needsInfoAbsenceRequest(id: string, comment: string): Prom
 export async function cancelAbsenceRequest(id: string): Promise<AbsenceRequestDetail> {
   const { data } = await scopedApiClient.patch<SingleResponse<AbsenceRequestDetail>>(
     `absence-requests/${id}/cancel`,
+  );
+  return data.data;
+}
+
+export async function updateNeedsInfoAbsenceRequest(
+  id: string,
+  input: UpdateNeedsInfoAbsenceRequestInput,
+): Promise<AbsenceRequestDetail> {
+  const { data } = await scopedApiClient.patch<SingleResponse<AbsenceRequestDetail>>(
+    `absence-requests/${id}`,
+    input,
+  );
+  return data.data;
+}
+
+export async function resubmitAbsenceRequest(id: string): Promise<AbsenceRequestDetail> {
+  const { data } = await scopedApiClient.patch<SingleResponse<AbsenceRequestDetail>>(
+    `absence-requests/${id}/resubmit`,
   );
   return data.data;
 }

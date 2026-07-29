@@ -1,11 +1,12 @@
-import { Alert, Button, Group, Stack, Text, Textarea } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router";
-import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useQueryClient } from "@tanstack/react-query";
+import { absenceKeys } from "../../api/absence-query-keys";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
+import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
 import {
   ActionMenu,
   DataTable,
@@ -22,14 +23,18 @@ import {
 } from "../../design-system";
 import {
   useAbsenceRequest,
+  useAbsenceTypes,
   useApproveAbsenceRequest,
+  useCancelAbsenceRequest,
   useNeedsInfoAbsenceRequest,
   useRejectAbsenceRequest,
+  useResubmitAbsenceRequest,
+  useUpdateNeedsInfoAbsenceRequest,
 } from "../../hooks/useAbsences";
-import type { AffectedOperationWarning } from "../../types/absence";
-import { formatDateTime } from "../../utils/dates";
-import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
-import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useListBackNavigation } from "../../hooks/useListBackNavigation";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import type { AbsenceRequestDetail, AffectedOperationWarning } from "../../types/absence";
 import {
   absenceEventTypeLabels,
   absenceRequestedViaLabels,
@@ -37,7 +42,10 @@ import {
   absenceTypeLabels,
   formatAbsenceDate,
 } from "../../utils/absence-labels";
+import { formatDateTime } from "../../utils/dates";
+import { getApiErrorMessage, isAbsenceWorkdaySyncError, parseApiError } from "../../utils/errors";
 import { operationStatusLabels } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
 
 const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
   { key: "service", header: "Servicio", getValue: (row) => row.serviceName },
@@ -92,24 +100,175 @@ const affectedOperationMobileCard: DataTableMobileCardConfig<AffectedOperationWa
   ],
 };
 
+function conflictUserMessage(error: unknown): string {
+  const parsed = parseApiError(error);
+  if (parsed.status === 403) {
+    return "No tenés permiso para realizar esta acción.";
+  }
+  if (parsed.status === 409 || parsed.code === "ABSENCE_ALREADY_REVIEWED") {
+    return (
+      parsed.message ||
+      "La solicitud cambió de estado. Recargá el detalle e intentá de nuevo."
+    );
+  }
+  return getApiErrorMessage(error);
+}
+
+function NeedsInfoEditSection({
+  detail,
+  typeOptions,
+  onSaved,
+  onConflict,
+}: {
+  detail: AbsenceRequestDetail;
+  typeOptions: Array<{ value: string; label: string }>;
+  onSaved: () => void;
+  onConflict: (error: unknown) => void;
+}) {
+  const updateMutation = useUpdateNeedsInfoAbsenceRequest(detail.id);
+  const resubmitMutation = useResubmitAbsenceRequest(detail.id);
+  const [editReason, setEditReason] = useState(detail.reason);
+  const [editStartDate, setEditStartDate] = useState(detail.startDate);
+  const [editEndDate, setEditEndDate] = useState(detail.endDate);
+  const [editAbsenceTypeId, setEditAbsenceTypeId] = useState(detail.absenceTypeId);
+
+  const notify = (message: string, color: "green" | "red" = "green") => {
+    notifications.show({ color, message });
+  };
+
+  const handleSaveNeedsInfoEdit = async () => {
+    if (!editReason.trim() || editReason.trim().length < 3) {
+      notify("El motivo es obligatorio (mínimo 3 caracteres).", "red");
+      return;
+    }
+    if (!editStartDate || !editEndDate) {
+      notify("Las fechas son obligatorias.", "red");
+      return;
+    }
+    if (editStartDate > editEndDate) {
+      notify("La fecha de inicio no puede ser posterior a la fecha de fin.", "red");
+      return;
+    }
+
+    try {
+      await updateMutation.mutateAsync({
+        reason: editReason.trim(),
+        startDate: editStartDate,
+        endDate: editEndDate,
+        absenceTypeId: editAbsenceTypeId || undefined,
+      });
+      notify("Solicitud actualizada. Reenviála para volver a revisión.");
+      onSaved();
+    } catch (error) {
+      onConflict(error);
+    }
+  };
+
+  const handleResubmit = async () => {
+    try {
+      await resubmitMutation.mutateAsync();
+      notify("Solicitud reenviada a revisión.");
+      onSaved();
+    } catch (error) {
+      onConflict(error);
+    }
+  };
+
+  return (
+    <SectionCard title="Editar y reenviar (requiere información)">
+      <Stack gap="md">
+        <Alert color="blue">
+          Corregí los datos y usá Reenviar para volver a dejar la solicitud pendiente de revisión.
+        </Alert>
+        <Select
+          label="Tipo de ausencia"
+          data={typeOptions}
+          value={editAbsenceTypeId}
+          onChange={(value) => setEditAbsenceTypeId(value ?? "")}
+          searchable
+          disabled={updateMutation.isPending || resubmitMutation.isPending}
+        />
+        <Group grow preventGrowOverflow={false} align="flex-start">
+          <TextInput
+            label="Fecha de inicio"
+            type="date"
+            value={editStartDate}
+            onChange={(event) => setEditStartDate(event.currentTarget.value)}
+            disabled={updateMutation.isPending || resubmitMutation.isPending}
+          />
+          <TextInput
+            label="Fecha de fin"
+            type="date"
+            value={editEndDate}
+            onChange={(event) => setEditEndDate(event.currentTarget.value)}
+            disabled={updateMutation.isPending || resubmitMutation.isPending}
+          />
+        </Group>
+        <Textarea
+          label="Motivo"
+          value={editReason}
+          onChange={(event) => setEditReason(event.currentTarget.value)}
+          minRows={3}
+          disabled={updateMutation.isPending || resubmitMutation.isPending}
+        />
+        <Group gap="sm">
+          <Button
+            variant="default"
+            onClick={() => void handleSaveNeedsInfoEdit()}
+            loading={updateMutation.isPending}
+            disabled={resubmitMutation.isPending}
+          >
+            Guardar cambios
+          </Button>
+          <Button
+            onClick={() => void handleResubmit()}
+            loading={resubmitMutation.isPending}
+            disabled={updateMutation.isPending}
+          >
+            Reenviar a revisión
+          </Button>
+        </Group>
+      </Stack>
+    </SectionCard>
+  );
+}
+
 export function AbsenceDetailPage() {
   const { id } = useParams<{ id: string }>();
   const { goBackToList } = useListBackNavigation("/absences");
   const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
+  const permissionsQuery = useCompanyPermissions();
+  const canReviewPermission = hasPermission(
+    permissionsQuery.data?.permissions,
+    "absences:review",
+  );
+
   const requestQuery = useAbsenceRequest(id);
+  const typesQuery = useAbsenceTypes();
   const approveMutation = useApproveAbsenceRequest(id ?? "");
   const rejectMutation = useRejectAbsenceRequest(id ?? "");
   const needsInfoMutation = useNeedsInfoAbsenceRequest(id ?? "");
+  const cancelMutation = useCancelAbsenceRequest(id ?? "");
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [needsInfoOpen, setNeedsInfoOpen] = useState(false);
   const [comment, setComment] = useState("");
 
+  const typeOptions = useMemo(
+    () =>
+      (typesQuery.data ?? []).map((type) => ({
+        value: type.id,
+        label: absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name,
+      })),
+    [typesQuery.data],
+  );
+
   if (!id) {
     return <ErrorState message="Solicitud no encontrada." />;
   }
 
-  if (requestQuery.isLoading) {
+  if (requestQuery.isLoading || permissionsQuery.isPending) {
     return <LoadingState />;
   }
 
@@ -117,13 +276,15 @@ export function AbsenceDetailPage() {
     return <ErrorState message={getApiErrorMessage(requestQuery.error, "Solicitud no encontrada.")} />;
   }
 
-  const request = requestQuery.data;
-  const canReview = request.status === "PENDING" || request.status === "NEEDS_INFO";
+  const detail = requestQuery.data;
+  const statusAllowsReview = detail.status === "PENDING" || detail.status === "NEEDS_INFO";
+  const canReview = canReviewPermission && statusAllowsReview;
+  const canEditNeedsInfo = canReviewPermission && detail.status === "NEEDS_INFO";
   const balanceYear =
-    request.balanceImpact?.year ?? Number.parseInt(request.startDate.slice(0, 4), 10);
+    detail.balanceImpact?.year ?? Number.parseInt(detail.startDate.slice(0, 4), 10);
   const insufficientBalance =
-    request.balanceImpact?.deductsBalance === true &&
-    request.balanceImpact.hasSufficientBalance === false;
+    detail.balanceImpact?.deductsBalance === true &&
+    detail.balanceImpact.hasSufficientBalance === false;
 
   const closeRejectModal = () => {
     setRejectOpen(false);
@@ -163,7 +324,8 @@ export function AbsenceDetailPage() {
         notify(getApiErrorMessage(error), "red");
         return;
       }
-      notify(getApiErrorMessage(error), "red");
+      notify(conflictUserMessage(error), "red");
+      void requestQuery.refetch();
     }
   };
 
@@ -178,7 +340,8 @@ export function AbsenceDetailPage() {
       closeRejectModal();
       notify("Solicitud rechazada.");
     } catch (error) {
-      notify(getApiErrorMessage(error), "red");
+      notify(conflictUserMessage(error), "red");
+      void requestQuery.refetch();
     }
   };
 
@@ -191,11 +354,20 @@ export function AbsenceDetailPage() {
     try {
       await needsInfoMutation.mutateAsync(comment.trim());
       closeNeedsInfoModal();
-      notify(
-        "La solicitud quedó marcada como requiere información. En esta fase el empleado todavía no será notificado automáticamente.",
-      );
+      notify("La solicitud quedó marcada como requiere información.");
     } catch (error) {
-      notify(getApiErrorMessage(error), "red");
+      notify(conflictUserMessage(error), "red");
+      void requestQuery.refetch();
+    }
+  };
+
+  const handleCancel = async () => {
+    try {
+      await cancelMutation.mutateAsync();
+      notify("Solicitud cancelada.");
+    } catch (error) {
+      notify(conflictUserMessage(error), "red");
+      void requestQuery.refetch();
     }
   };
 
@@ -205,6 +377,12 @@ export function AbsenceDetailPage() {
           key: "needs-info",
           label: "Requiere información",
           onClick: openNeedsInfoModal,
+        },
+        {
+          key: "cancel",
+          label: "Cancelar solicitud",
+          destructive: true,
+          onClick: () => void handleCancel(),
         },
         {
           key: "reject",
@@ -219,7 +397,7 @@ export function AbsenceDetailPage() {
     <Stack gap="md">
       <PageHeader
         title="Detalle de solicitud de ausencia"
-        description={`${request.employee.name} · ${formatAbsenceDate(request.startDate)} - ${formatAbsenceDate(request.endDate)}`}
+        description={`${detail.employee.name} · ${formatAbsenceDate(detail.startDate)} - ${formatAbsenceDate(detail.endDate)}`}
         action={
           <ActionMenu
             primary={
@@ -258,60 +436,78 @@ export function AbsenceDetailPage() {
       <SectionCard title="Datos generales">
         <DetailFieldGrid
           fields={[
-            { label: "Empleado", value: `${request.employee.name} (${request.employee.phoneNumber})` },
+            { label: "Empleado", value: `${detail.employee.name} (${detail.employee.phoneNumber})` },
             {
               label: "Tipo",
               value:
-                absenceTypeLabels[request.absenceType.code as keyof typeof absenceTypeLabels] ??
-                request.absenceType.name,
+                absenceTypeLabels[detail.absenceType.code as keyof typeof absenceTypeLabels] ??
+                detail.absenceType.name,
             },
-            { label: "Inicio", value: formatAbsenceDate(request.startDate) },
-            { label: "Fin", value: formatAbsenceDate(request.endDate) },
-            { label: "Días", value: request.totalDays },
-            { label: "Motivo", value: request.reason },
+            { label: "Inicio", value: formatAbsenceDate(detail.startDate) },
+            { label: "Fin", value: formatAbsenceDate(detail.endDate) },
+            { label: "Días", value: detail.totalDays },
+            { label: "Motivo", value: detail.reason },
             {
               label: "Estado",
-              value: <StatusBadge label={absenceStatusLabels[request.status]} tone="neutral" />,
+              value: <StatusBadge label={absenceStatusLabels[detail.status]} tone="neutral" />,
             },
-            { label: "Origen", value: absenceRequestedViaLabels[request.requestedVia] },
-            { label: "Creada", value: formatDateTime(request.createdAt) },
-            { label: "Revisada por", value: request.reviewerName ?? "—" },
-            { label: "Revisada el", value: request.reviewedAt ? formatDateTime(request.reviewedAt) : "—" },
-            { label: "Comentario de revisión", value: request.reviewComment ?? "—" },
+            { label: "Origen", value: absenceRequestedViaLabels[detail.requestedVia] },
+            { label: "Creada", value: formatDateTime(detail.createdAt) },
+            { label: "Revisada por", value: detail.reviewerName ?? "—" },
+            { label: "Revisada el", value: detail.reviewedAt ? formatDateTime(detail.reviewedAt) : "—" },
+            { label: "Comentario de revisión", value: detail.reviewComment ?? "—" },
           ]}
         />
       </SectionCard>
 
+      {canEditNeedsInfo ? (
+        <NeedsInfoEditSection
+          key={`${detail.id}-${detail.updatedAt}`}
+          detail={detail}
+          typeOptions={typeOptions}
+          onSaved={() => {
+            void requestQuery.refetch();
+          }}
+          onConflict={(error) => {
+            notify(conflictUserMessage(error), "red");
+            void requestQuery.refetch();
+          }}
+        />
+      ) : null}
+
       <SectionCard title="Saldo del empleado">
         <EmployeeAbsenceBalanceCard
-          employeeId={request.employeeId}
+          employeeId={detail.employeeId}
           year={balanceYear}
-          balanceImpact={request.balanceImpact}
+          balanceImpact={detail.balanceImpact}
+          showEdit={canReviewPermission}
           onBalanceSaved={() => {
             if (id) {
-              queryClient.invalidateQueries({ queryKey: ["absence-request", id] });
+              void queryClient.invalidateQueries({
+                queryKey: absenceKeys.detail(companyId, id),
+              });
             }
           }}
         />
       </SectionCard>
 
       <SectionCard title={`Historial del empleado (${balanceYear})`}>
-        <EmployeeAbsenceHistoryTable employeeId={request.employeeId} year={balanceYear} />
+        <EmployeeAbsenceHistoryTable employeeId={detail.employeeId} year={balanceYear} />
       </SectionCard>
 
       <SectionCard title="Operaciones afectadas">
-        {request.affectedOperations.length === 0 ? (
+        {detail.affectedOperations.length === 0 ? (
           <Text c="dimmed">
             No se detectaron operaciones asignadas que se superpongan con esta ausencia.
           </Text>
         ) : (
           <Stack gap="md">
             <Alert color="yellow">
-              Esta solicitud se superpone con {request.affectedOperations.length} operación(es)
+              Esta solicitud se superpone con {detail.affectedOperations.length} operación(es)
               asignado(s). Podés aprobar igualmente, pero conviene revisar la planificación.
             </Alert>
             <DataTable
-              rows={request.affectedOperations}
+              rows={detail.affectedOperations}
               columns={affectedOperationColumns}
               getRowKey={(row) => row.operationId}
               mobileView="cards"
@@ -324,7 +520,7 @@ export function AbsenceDetailPage() {
 
       <SectionCard title="Historial">
         <Stack gap="xs">
-          {request.events.map((event) => (
+          {detail.events.map((event) => (
             <Text key={event.id} size="sm">
               {formatDateTime(event.createdAt)} ·{" "}
               {absenceEventTypeLabels[event.eventType as keyof typeof absenceEventTypeLabels] ??

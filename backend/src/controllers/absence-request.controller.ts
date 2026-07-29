@@ -67,4 +67,25 @@ export const absenceRequestController = {
     const request = await absenceReviewService.cancel(companyId, String(req.params.id), req.auth!.userId);
     res.status(200).json({ data: request });
   },
+
+  async updateNeedsInfo(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const request = await absenceRequestService.updateNeedsInfo(
+      companyId,
+      String(req.params.id),
+      req.body,
+      req.auth!.userId,
+    );
+    res.status(200).json({ data: request });
+  },
+
+  async resubmit(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const request = await absenceRequestService.resubmit(
+      companyId,
+      String(req.params.id),
+      req.auth!.userId,
+    );
+    res.status(200).json({ data: request });
+  },
 };

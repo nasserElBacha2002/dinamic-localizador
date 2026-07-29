@@ -154,3 +154,13 @@ export interface CreateAbsenceRequestInput {
   reason: string;
   requestedVia?: AbsenceRequestedVia;
 }
+
+/** Editable fields while the request is in NEEDS_INFO (admin update before resubmit). */
+export interface UpdateNeedsInfoAbsenceRequestInput {
+  absenceTypeId?: string;
+  startDate?: string;
+  endDate?: string;
+  startPeriod?: AbsenceDayPeriod;
+  endPeriod?: AbsenceDayPeriod;
+  reason?: string;
+}

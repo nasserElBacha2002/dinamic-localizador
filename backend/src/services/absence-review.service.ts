@@ -1,4 +1,8 @@
 import sql from "mssql";
+import {
+  ABSENCE_REVIEWABLE_STATUSES,
+  assertAbsenceTransition,
+} from "../constants/absence-transitions";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
@@ -9,26 +13,15 @@ import type {
 import type { AbsenceRequestStatus } from "../types/absence";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
-import { absenceRequestService, REVIEWABLE_STATUSES } from "./absence-request.service";
+import { absenceRequestService } from "./absence-request.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
-
-const ensureReviewable = (status: AbsenceRequestStatus) => {
-  if (!REVIEWABLE_STATUSES.includes(status as (typeof REVIEWABLE_STATUSES)[number])) {
-    throw new AppError(
-      409,
-      "ABSENCE_NOT_REVIEWABLE",
-      "Solo se pueden revisar solicitudes pendientes o que requieren información",
-    );
-  }
-};
 
 const transition = async (input: {
   companyId: string;
   requestId: string;
   userId: string;
-  newStatus: AbsenceRequestStatus;
-  eventType: "APPROVED" | "REJECTED" | "NEEDS_INFO" | "CANCELLED";
+  action: "APPROVE" | "REJECT" | "NEEDS_INFO" | "CANCEL";
   comment?: string | null;
   cancelledAt?: Date | null;
 }) => {
@@ -46,9 +39,9 @@ const transition = async (input: {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
 
-    ensureReviewable(existing.status);
+    const { to: newStatus, eventType } = assertAbsenceTransition(input.action, existing.status);
 
-    if (input.eventType === "APPROVED") {
+    if (input.action === "APPROVE") {
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         input.companyId,
         existing,
@@ -60,12 +53,12 @@ const transition = async (input: {
       input.companyId,
       input.requestId,
       {
-        status: input.newStatus,
+        status: newStatus,
         reviewedByUserId: input.userId,
         reviewedAt: new Date(),
         reviewComment: input.comment ?? null,
         cancelledAt: input.cancelledAt ?? null,
-        onlyIfStatusIn: [...REVIEWABLE_STATUSES],
+        onlyIfStatusIn: [...ABSENCE_REVIEWABLE_STATUSES],
       },
       transaction,
     );
@@ -82,9 +75,9 @@ const transition = async (input: {
       input.companyId,
       {
         absenceRequestId: input.requestId,
-        eventType: input.eventType,
+        eventType,
         oldStatus: existing.status,
-        newStatus: input.newStatus,
+        newStatus,
         performedByUserId: input.userId,
         comment: input.comment ?? null,
       },
@@ -96,7 +89,7 @@ const transition = async (input: {
     await auditService.log(input.companyId, {
       entityType: "absence_request",
       entityId: input.requestId,
-      action: input.eventType,
+      action: eventType,
       previousData: existing as unknown as Record<string, unknown>,
       newData: updated as unknown as Record<string, unknown>,
       reason: input.comment ?? null,
@@ -106,7 +99,11 @@ const transition = async (input: {
     // Proactive WhatsApp notifications are intentionally deferred to a later phase.
     return absenceRequestService.getById(input.companyId, input.requestId);
   } catch (error) {
-    await transaction.rollback();
+    try {
+      await transaction.rollback();
+    } catch {
+      // ignore
+    }
     throw error;
   }
 };
@@ -121,8 +118,7 @@ export const absenceReviewService = {
           companyId,
           requestId,
           userId,
-          newStatus: "APPROVED",
-          eventType: "APPROVED",
+          action: "APPROVE",
         }),
       () =>
         employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
@@ -142,8 +138,7 @@ export const absenceReviewService = {
           companyId,
           requestId,
           userId,
-          newStatus: "REJECTED",
-          eventType: "REJECTED",
+          action: "REJECT",
           comment: input.reason,
         }),
       () =>
@@ -160,8 +155,7 @@ export const absenceReviewService = {
       companyId,
       requestId,
       userId,
-      newStatus: "NEEDS_INFO",
-      eventType: "NEEDS_INFO",
+      action: "NEEDS_INFO",
       comment: input.comment,
     });
   },
@@ -175,8 +169,7 @@ export const absenceReviewService = {
           companyId,
           requestId,
           userId,
-          newStatus: "CANCELLED",
-          eventType: "CANCELLED",
+          action: "CANCEL",
           cancelledAt: new Date(),
         }),
       () =>
@@ -188,3 +181,5 @@ export const absenceReviewService = {
     );
   },
 };
+
+export type { AbsenceRequestStatus };

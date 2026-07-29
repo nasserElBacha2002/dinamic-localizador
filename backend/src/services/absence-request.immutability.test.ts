@@ -14,5 +14,6 @@ describe("approved absence mutability", () => {
     const { REVIEWABLE_STATUSES } = await import("./absence-request.service");
     assert.equal(REVIEWABLE_STATUSES.includes("APPROVED"), false);
     assert.equal(REVIEWABLE_STATUSES.includes("PENDING"), true);
+    assert.equal(REVIEWABLE_STATUSES.includes("NEEDS_INFO"), true);
   });
 });

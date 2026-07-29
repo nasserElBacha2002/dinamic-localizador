@@ -1,5 +1,6 @@
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { normalizeAbsencesListSearch } from "../../api/absence-query-keys";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
@@ -40,6 +41,17 @@ const ABSENCES_LIST_PATH = "/absences";
 export function AbsencesListPage() {
   const navigate = useNavigate();
   const location = useLocation();
+
+  useEffect(() => {
+    const normalized = normalizeAbsencesListSearch(location.search);
+    if (normalized === null) {
+      return;
+    }
+    navigate(
+      { pathname: location.pathname, search: normalized ? `?${normalized}` : "" },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
 
   const table = useTableUrlState({
     defaults: ABSENCES_TABLE_DEFAULTS,

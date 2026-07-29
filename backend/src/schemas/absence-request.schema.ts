@@ -65,7 +65,29 @@ export const needsInfoAbsenceRequestSchema = z.object({
   comment: z.string().trim().min(3, "El comentario es obligatorio").max(1000),
 });
 
+export const updateNeedsInfoAbsenceRequestSchema = z
+  .object({
+    absenceTypeId: z.string().uuid("UUID de tipo de ausencia inválido").optional(),
+    startDate: absenceDateSchema.optional(),
+    endDate: absenceDateSchema.optional(),
+    startPeriod: absenceDayPeriodSchema.optional(),
+    endPeriod: absenceDayPeriodSchema.optional(),
+    reason: z.string().trim().min(3, "El motivo es obligatorio").max(1000).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Debés enviar al menos un campo para actualizar",
+  })
+  .refine(
+    (data) =>
+      !data.startDate || !data.endDate || data.startDate <= data.endDate,
+    {
+      message: "La fecha de inicio no puede ser posterior a la fecha de fin",
+      path: ["endDate"],
+    },
+  );
+
 export type CreateAbsenceRequestInput = z.infer<typeof createAbsenceRequestSchema>;
 export type ListAbsenceRequestsQuery = z.infer<typeof listAbsenceRequestsQuerySchema>;
 export type RejectAbsenceRequestInput = z.infer<typeof rejectAbsenceRequestSchema>;
 export type NeedsInfoAbsenceRequestInput = z.infer<typeof needsInfoAbsenceRequestSchema>;
+export type UpdateNeedsInfoAbsenceRequestInput = z.infer<typeof updateNeedsInfoAbsenceRequestSchema>;

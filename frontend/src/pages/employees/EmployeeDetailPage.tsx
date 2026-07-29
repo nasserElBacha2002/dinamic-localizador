@@ -27,6 +27,7 @@ export function EmployeeDetailPage() {
   const { goBackToList } = useListBackNavigation("/employees");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
+  const canReviewAbsences = hasPermission(permissionsQuery.data?.permissions, "absences:review");
   const employeeQuery = useEmployee(id);
 
   if (!id) {
@@ -100,7 +101,7 @@ export function EmployeeDetailPage() {
         <EmployeeAbsenceBalanceCard
           employeeId={employee.id}
           year={currentYear}
-          showEdit={canManage}
+          showEdit={canReviewAbsences}
         />
       </SectionCard>
 

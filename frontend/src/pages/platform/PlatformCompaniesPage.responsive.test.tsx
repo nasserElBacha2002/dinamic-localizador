@@ -17,6 +17,9 @@ mockApiModule("api/platform-companies.api", {
       name: "Dinamic Demo",
       status: "ACTIVE",
       defaultTimezone: "America/Argentina/Buenos_Aires",
+      ownerName: "Ada",
+      ownerEmail: "ada@example.com",
+      ownerStatus: "ACTIVE",
     },
   ],
   createPlatformCompany: async () => {

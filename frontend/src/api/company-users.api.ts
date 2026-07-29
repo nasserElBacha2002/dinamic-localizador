@@ -6,6 +6,7 @@ import type {
   CreateCompanyUserInput,
   UpdateCompanyUserInput,
 } from "../types/company-user";
+import type { CompanyUserInvitationResult } from "../types/user-invitation";
 import { getActiveCompanyId } from "./company-path";
 import { apiClient } from "./client";
 import { scopedApiClient } from "./scoped-client";
@@ -33,7 +34,7 @@ export async function getCompanyUserById(userId: string) {
 
 export async function createCompanyUser(input: CreateCompanyUserInput) {
   const { data } = await scopedApiClient.post<{
-    data: CompanyUser;
+    data: CompanyUserInvitationResult;
     message: string;
   }>("users", input);
   return data;

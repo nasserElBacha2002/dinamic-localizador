@@ -28,7 +28,9 @@ export const companyUserController = {
     const result = await companyUserService.create(
       companyId,
       req.body,
+      req.auth!.userId,
       Boolean(req.isPlatformAdmin),
+      req.companyRole,
     );
     res.status(201).json(result);
   },

@@ -30,6 +30,7 @@ export const OPERATIONAL_API_PREFIXES = [
   "work-teams",
   "work-team-assignment-batches",
   "imports",
+  "invitations",
   "dev",
 ] as const;
 

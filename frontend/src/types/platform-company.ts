@@ -5,6 +5,9 @@ export interface PlatformCompany {
   status: string;
   createdAt: string;
   updatedAt: string;
+  ownerName: string | null;
+  ownerEmail: string | null;
+  ownerStatus: "ACTIVE" | "INVITED" | "NONE";
 }
 
 export interface CreatePlatformCompanyInput {
@@ -30,7 +33,6 @@ export interface CreatePlatformCompanyInput {
   owner: {
     name: string;
     email: string;
-    temporaryPassword: string;
   };
 }
 
@@ -42,12 +44,12 @@ export interface PlatformCompanyCreateResult {
       status: string;
       defaultTimezone: string;
     };
-    owner: {
-      userId: string;
-      name: string;
+    ownerInvitation: {
+      id: string;
       email: string;
-      companyRole: string;
-      membershipStatus: string;
+      status: string;
+      expiresAt: string;
+      emailSent: boolean;
     };
     message: string;
   };

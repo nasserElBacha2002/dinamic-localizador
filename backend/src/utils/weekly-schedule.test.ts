@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import { WEEKDAYS } from "../constants/weekday";
 import type { WeeklyScheduleDay } from "../types/schedule";
 import {
+  createDefaultWeeklyScheduleDays,
   isOvernightSchedule,
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
@@ -22,6 +23,14 @@ function buildWeek(
 }
 
 describe("weekly schedule utils", () => {
+  it("creates a Mon–Fri default schedule", () => {
+    const days = createDefaultWeeklyScheduleDays();
+    assert.equal(days.length, 7);
+    assert.equal(validateWeeklyScheduleDays(days).valid, true);
+    assert.equal(days.find((day) => day.dayOfWeek === "MONDAY")?.startTime, "09:00");
+    assert.equal(days.find((day) => day.dayOfWeek === "SATURDAY")?.isEnabled, false);
+  });
+
   it("normalizes disabled days to null times", () => {
     const normalized = normalizeWeeklyScheduleDays(
       buildWeek({

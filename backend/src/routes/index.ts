@@ -24,6 +24,7 @@ import { companyUserRouter } from "./company-user.routes";
 import { importRouter } from "./import.routes";
 import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
+import { companyInvitationRouter, publicInvitationRouter } from "./user-invitation.routes";
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
 import { asyncHandler } from "../middleware/async-handler";
@@ -37,6 +38,7 @@ export const apiRouter = Router();
 
 apiRouter.use("/", healthRouter);
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/invitations", publicInvitationRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
@@ -66,6 +68,7 @@ const mountEmployeeRoutes = (router: Router) => {
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
 companyScopedOperationalRouter.use("/users", companyUserRouter);
+companyScopedOperationalRouter.use("/invitations", companyInvitationRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
 companyScopedOperationalRouter.use("/lookups", lookupRouter);
 companyScopedOperationalRouter.use("/imports", importRouter);

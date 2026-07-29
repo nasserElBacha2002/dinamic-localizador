@@ -54,7 +54,7 @@ describe("CreatePlatformCompanyDialog", () => {
     assert.ok(document.querySelector("[data-testid='responsive-modal-footer']"));
     assert.ok(view.getByRole("button", { name: /Cancelar/i }));
     assert.ok(view.getByRole("button", { name: /^Crear empresa$/i }));
-    assert.ok(document.querySelector('[data-create-company-field="ownerTemporaryPassword"] input'));
+    assert.ok(document.querySelector('[data-create-company-field="ownerEmail"] input'));
   });
 
   it("shows compact field errors and keeps submit enabled until request starts", async () => {
@@ -123,7 +123,6 @@ describe("CreatePlatformCompanyDialog", () => {
     await typeField(user, "name", "Nueva Empresa");
     await typeField(user, "ownerName", "Ana Owner");
     await typeField(user, "ownerEmail", "ana@example.com");
-    await typeField(user, "ownerTemporaryPassword", "secreto12");
 
     const submit = view.getByRole("button", { name: /^Crear empresa$/i });
     fireEvent.click(submit);
@@ -151,7 +150,6 @@ describe("CreatePlatformCompanyDialog", () => {
     await typeField(user, "name", "Nueva Empresa");
     await typeField(user, "ownerName", "Ana Owner");
     await typeField(user, "ownerEmail", "ana@example.com");
-    await typeField(user, "ownerTemporaryPassword", "secreto12");
 
     fireEvent.click(view.getByRole("button", { name: /^Crear empresa$/i }));
 

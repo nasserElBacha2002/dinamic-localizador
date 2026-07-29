@@ -6,14 +6,40 @@ import {
 } from "../schemas/company-user.schema";
 
 describe("company user schemas", () => {
-  it("requires temporary password fields only at API layer for new users", () => {
+  it("accepts invite payload without temporary password", () => {
     const parsed = createCompanyUserSchema.safeParse({
       name: "Nuevo Usuario",
       email: "nuevo@example.com",
       role: "ADMIN",
-      temporaryPassword: "temporal123",
     });
     assert.equal(parsed.success, true);
+  });
+
+  it("rejects temporaryPassword as unknown under strict schema", () => {
+    const parsed = createCompanyUserSchema.safeParse({
+      name: "Nuevo Usuario",
+      email: "nuevo@example.com",
+      role: "ADMIN",
+      temporaryPassword: "secret123",
+    });
+    assert.equal(parsed.success, false);
+  });
+
+  it("rejects ignored legacy status and isDefault fields", () => {
+    const withStatus = createCompanyUserSchema.safeParse({
+      name: "Nuevo Usuario",
+      email: "nuevo@example.com",
+      role: "ADMIN",
+      status: "INACTIVE",
+    });
+    const withDefault = createCompanyUserSchema.safeParse({
+      name: "Nuevo Usuario",
+      email: "nuevo@example.com",
+      role: "ADMIN",
+      isDefault: true,
+    });
+    assert.equal(withStatus.success, false);
+    assert.equal(withDefault.success, false);
   });
 
   it("rejects invalid role", () => {
@@ -21,7 +47,6 @@ describe("company user schemas", () => {
       name: "Nuevo Usuario",
       email: "nuevo@example.com",
       role: "SUPERADMIN",
-      temporaryPassword: "temporal123",
     });
     assert.equal(parsed.success, false);
   });

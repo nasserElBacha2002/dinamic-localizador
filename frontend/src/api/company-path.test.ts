@@ -91,6 +91,14 @@ describe("scopedApiPath", () => {
     );
     assert.equal(scopedApiPath("users"), `companies/${ACTIVE_COMPANY_ID}/users`);
     assert.equal(
+      scopedApiPath("invitations"),
+      `companies/${ACTIVE_COMPANY_ID}/invitations`,
+    );
+    assert.equal(
+      scopedApiPath("invitations/abc/resend"),
+      `companies/${ACTIVE_COMPANY_ID}/invitations/abc/resend`,
+    );
+    assert.equal(
       scopedApiPath("settings"),
       `companies/${ACTIVE_COMPANY_ID}/settings`,
     );

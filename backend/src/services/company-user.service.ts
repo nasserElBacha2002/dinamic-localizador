@@ -8,12 +8,12 @@ import type {
   UpdateCompanyUserInput,
 } from "../schemas/company-user.schema";
 import type { CompanyRole } from "../types/company";
-import type { CompanyUserDto, CreateCompanyUserResult } from "../types/company-user";
-import { hashPassword, normalizeEmail } from "../utils/password";
+import type { CompanyUserDto } from "../types/company-user";
 import { buildPaginationMeta } from "../utils/pagination";
 import {
   assertSelfMembershipChangeNotAllowed,
 } from "./company-user.guards";
+import { userInvitationService } from "./user-invitation.service";
 
 const toIsoString = (value: Date | string | null | undefined): string | null => {
   if (!value) {
@@ -138,102 +138,32 @@ export const companyUserService = {
   async create(
     companyId: string,
     input: CreateCompanyUserInput,
+    requesterUserId: string,
     requesterIsPlatformAdmin: boolean,
-  ): Promise<CreateCompanyUserResult> {
+    requesterCompanyRole?: CompanyRole,
+  ): Promise<{ data: { invitationId: string; email: string; status: string; expiresAt: string; emailSent: boolean }; message: string }> {
     await assertActiveCompany(companyId);
 
-    const email = normalizeEmail(input.email);
-    const existingUser = await userRepository.findByEmail(email);
-
-    if (existingUser) {
-      await assertTargetUserManageable(existingUser.id, requesterIsPlatformAdmin);
-
-      const existingMembership = await userCompanyMembershipRepository.findMembership(
-        existingUser.id,
-        companyId,
-      );
-
-      if (existingMembership?.status === "ACTIVE") {
-        throw new AppError(
-          409,
-          "MEMBERSHIP_ALREADY_EXISTS",
-          "El usuario ya tiene acceso activo a esta empresa.",
-        );
-      }
-
-      let membership = existingMembership;
-      if (existingMembership) {
-        membership = await userCompanyMembershipRepository.updateMembership(companyId, existingUser.id, {
-          role: input.role,
-          status: input.status ?? "ACTIVE",
-          isDefault: input.isDefault,
-        });
-      } else {
-        membership = await userCompanyMembershipRepository.create({
-          userId: existingUser.id,
-          companyId,
-          role: input.role,
-          status: input.status ?? "ACTIVE",
-          isDefault: input.isDefault,
-        });
-      }
-
-      if (!membership) {
-        throw new AppError(500, "MEMBERSHIP_UPDATE_FAILED", "No se pudo actualizar la membresía.");
-      }
-
-      if (input.isDefault) {
-        await userCompanyMembershipRepository.clearDefaultForUser(existingUser.id, companyId);
-      }
-
-      const row = await loadCompanyUserRow(companyId, existingUser.id);
-      if (!row) {
-        throw new AppError(500, "COMPANY_USER_LOAD_FAILED", "No se pudo cargar el usuario creado.");
-      }
-
-      return {
-        data: mapCompanyUserDto(row, requesterIsPlatformAdmin),
-        message: "Usuario agregado a la empresa.",
-      };
-    }
-
-    if (!input.temporaryPassword) {
-      throw new AppError(
-        400,
-        "TEMPORARY_PASSWORD_REQUIRED",
-        "La contraseña temporal es obligatoria para crear un usuario nuevo.",
-      );
-    }
-
-    const passwordHash = await hashPassword(input.temporaryPassword);
-    const createdUser = await userRepository.create({
-      name: input.name.trim(),
-      email,
-      passwordHash,
-      role: "ADMIN",
-    });
-
-    const membership = await userCompanyMembershipRepository.create({
-      userId: createdUser.id,
+    const canAssignOwner = requesterIsPlatformAdmin || requesterCompanyRole === "OWNER";
+    const result = await userInvitationService.issueInvitation({
       companyId,
+      email: input.email,
       role: input.role,
-      status: input.status ?? "ACTIVE",
-      isDefault: input.isDefault,
+      inviteeName: input.name,
+      invitedByUserId: requesterUserId,
+      origin: "MANUAL",
+      canAssignOwner,
     });
-
-    if (input.isDefault) {
-      await userCompanyMembershipRepository.clearDefaultForUser(createdUser.id, companyId);
-    }
-
-    const row = await loadCompanyUserRow(companyId, createdUser.id);
-    if (!row) {
-      throw new AppError(500, "COMPANY_USER_LOAD_FAILED", "No se pudo cargar el usuario creado.");
-    }
 
     return {
-      data: mapCompanyUserDto(row, requesterIsPlatformAdmin),
-      message:
-        "Usuario creado. Recordá compartir de forma segura la contraseña temporal que ingresaste.",
+      data: {
+        invitationId: result.invitation.id,
+        email: result.invitation.emailNormalized,
+        status: result.invitation.status,
+        expiresAt: result.invitation.expiresAt,
+        emailSent: result.emailSent,
+      },
+      message: result.message,
     };
   },
 

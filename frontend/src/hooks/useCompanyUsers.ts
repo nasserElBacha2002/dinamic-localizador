@@ -44,6 +44,7 @@ export function useCreateCompanyUser() {
     mutationFn: (input: CreateCompanyUserInput) => createCompanyUser(input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: ["company-users", companyId] });
+      void queryClient.invalidateQueries({ queryKey: ["company-invitations", companyId] });
     },
   });
 }

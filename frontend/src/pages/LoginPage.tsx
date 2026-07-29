@@ -11,11 +11,12 @@ import {
 } from "@mantine/core";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Navigate, useLocation } from "react-router";
+import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
 import { FormErrorAlert } from "../design-system";
 import { useAuth } from "../hooks/useAuth";
 import { getApiErrorMessage } from "../utils/errors";
+import { isSafeInternalPath } from "../utils/invitation-email";
 import classes from "./login-page.module.css";
 
 const loginSchema = z.object({
@@ -34,6 +35,8 @@ const highlights = [
 export function LoginPage() {
   const { login, isAuthenticated, isLoading } = useAuth();
   const location = useLocation();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const {
@@ -47,7 +50,10 @@ export function LoginPage() {
   });
 
   if (!isLoading && isAuthenticated) {
-    const redirectTo = (location.state as { from?: string } | null)?.from ?? "/";
+    const next = searchParams.get("next");
+    const redirectTo = isSafeInternalPath(next)
+      ? next
+      : (location.state as { from?: string } | null)?.from ?? "/";
     return <Navigate to={redirectTo} replace />;
   }
 
@@ -56,6 +62,11 @@ export function LoginPage() {
 
     try {
       await login(values.email, values.password);
+      const next = searchParams.get("next");
+      if (isSafeInternalPath(next)) {
+        navigate(next, { replace: true });
+        return;
+      }
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error, "Credenciales inválidas."));
     }

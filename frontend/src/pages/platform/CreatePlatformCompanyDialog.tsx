@@ -63,7 +63,6 @@ const DEFAULT_FORM_STATE = {
   modules: [...MODULE_OPTIONS] as CreatePlatformCompanyInput["modules"],
   ownerName: "",
   ownerEmail: "",
-  ownerTemporaryPassword: "",
 };
 
 interface CreatePlatformCompanyDialogProps {
@@ -102,9 +101,6 @@ export function CreatePlatformCompanyDialog({
   );
   const [ownerName, setOwnerName] = useState(DEFAULT_FORM_STATE.ownerName);
   const [ownerEmail, setOwnerEmail] = useState(DEFAULT_FORM_STATE.ownerEmail);
-  const [ownerTemporaryPassword, setOwnerTemporaryPassword] = useState(
-    DEFAULT_FORM_STATE.ownerTemporaryPassword,
-  );
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const [localSubmitting, setLocalSubmitting] = useState(false);
   const [focusRequest, setFocusRequest] = useState<CreateCompanyVisibleFieldKey | null>(null);
@@ -127,9 +123,8 @@ export function CreatePlatformCompanyDialog({
       modules: modules ?? [],
       ownerName,
       ownerEmail,
-      ownerTemporaryPassword,
     }),
-    [name, settings, modules, ownerName, ownerEmail, ownerTemporaryPassword],
+    [name, settings, modules, ownerName, ownerEmail],
   );
 
   const validation = useMemo(
@@ -162,7 +157,6 @@ export function CreatePlatformCompanyDialog({
     setModules([...DEFAULT_FORM_STATE.modules!]);
     setOwnerName(DEFAULT_FORM_STATE.ownerName);
     setOwnerEmail(DEFAULT_FORM_STATE.ownerEmail);
-    setOwnerTemporaryPassword(DEFAULT_FORM_STATE.ownerTemporaryPassword);
     setSubmitAttempted(false);
     setLocalSubmitting(false);
     setFocusRequest(null);
@@ -198,7 +192,6 @@ export function CreatePlatformCompanyDialog({
           owner: {
             name: ownerName.trim(),
             email: ownerEmail.trim(),
-            temporaryPassword: ownerTemporaryPassword,
           },
         }),
       );
@@ -568,19 +561,7 @@ export function CreatePlatformCompanyDialog({
               error={visibleErrors.ownerEmail}
               aria-invalid={Boolean(visibleErrors.ownerEmail)}
               disabled={busy}
-            />
-          </div>
-          <div {...fieldAnchor("ownerTemporaryPassword")}>
-            <TextInput
-              label="Contraseña temporal del owner"
-              type="password"
-              value={ownerTemporaryPassword}
-              onChange={(event) => setOwnerTemporaryPassword(event.currentTarget.value)}
-              required
-              error={visibleErrors.ownerTemporaryPassword}
-              aria-invalid={Boolean(visibleErrors.ownerTemporaryPassword)}
-              disabled={busy}
-              description="La contraseña se usará solo si el usuario owner no existe todavía. Si el usuario ya existe, el backend no cambiará su contraseña."
+              description="Se enviará una invitación por correo para que el owner active su acceso."
             />
           </div>
         </Stack>

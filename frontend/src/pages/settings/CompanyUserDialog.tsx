@@ -1,7 +1,8 @@
 import { Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { ResponsiveModal } from "../../design-system";
-import type { CompanyRole, CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
+import type { CompanyRole, CompanyUser } from "../../types/company-user";
+import type { CreateCompanyInvitationInput } from "../../types/user-invitation";
 import { companyRoleLabels } from "../../utils/labels";
 
 const COMPANY_ROLES: CompanyRole[] = [
@@ -24,7 +25,7 @@ interface CompanyUserDialogProps {
   onClose: () => void;
   onSubmit: (
     input:
-      | CreateCompanyUserInput
+      | CreateCompanyInvitationInput
       | { role: CompanyRole; status: CompanyUser["membershipStatus"]; isDefault: boolean },
   ) => void;
 }
@@ -58,7 +59,6 @@ function CompanyUserDialogForm({
   const [status, setStatus] = useState<CompanyUser["membershipStatus"]>(() =>
     mode === "edit" && initialUser ? initialUser.membershipStatus : "ACTIVE",
   );
-  const [temporaryPassword, setTemporaryPassword] = useState("");
   const [isDefault, setIsDefault] = useState(() =>
     mode === "edit" && initialUser ? initialUser.isDefault : false,
   );
@@ -82,14 +82,11 @@ function CompanyUserDialogForm({
       if (!name.trim()) {
         errors.push("El nombre es obligatorio.");
       }
-      if (!temporaryPassword || temporaryPassword.length < 8) {
-        errors.push("La contraseña temporal debe tener al menos 8 caracteres.");
-      }
       return errors;
     }
 
     return [];
-  }, [email, mode, name, temporaryPassword]);
+  }, [email, mode, name]);
 
   const isValid = mode === "create" ? validationErrors.length === 0 : Boolean(role && status);
 
@@ -103,9 +100,6 @@ function CompanyUserDialogForm({
         name: name.trim(),
         email: email.trim(),
         role,
-        status,
-        temporaryPassword,
-        isDefault,
       });
       return;
     }
@@ -113,15 +107,14 @@ function CompanyUserDialogForm({
     onSubmit({ role, status, isDefault });
   };
 
-  const handleClose = () => {
-    setTemporaryPassword("");
-    onClose();
-  };
-
   return (
     <Stack gap="md">
       {mode === "create" ? (
         <>
+          <Text size="sm" c="dimmed">
+            Enviaremos una invitación por correo. Si la persona ya tiene cuenta, podrá aceptar con su
+            usuario existente; si no, completará el alta desde el enlace.
+          </Text>
           <TextInput
             label="Email"
             type="email"
@@ -134,18 +127,7 @@ function CompanyUserDialogForm({
             value={name}
             onChange={(event) => setName(event.currentTarget.value)}
             required
-          />
-          <Text size="sm" c="dimmed">
-            Se usará solo si el usuario no existe todavía. Si el usuario ya existe, se agregará su
-            acceso a esta empresa.
-          </Text>
-          <TextInput
-            label="Contraseña temporal"
-            type="password"
-            value={temporaryPassword}
-            onChange={(event) => setTemporaryPassword(event.currentTarget.value)}
-            required
-            description="Obligatoria en el formulario. El backend la ignora si el usuario ya existe."
+            description="Se usará si la persona aún no tiene cuenta en la plataforma."
           />
         </>
       ) : (
@@ -163,23 +145,23 @@ function CompanyUserDialogForm({
       />
 
       {mode === "edit" ? (
-        <Select
-          label="Estado"
-          data={[
-            { value: "ACTIVE", label: "Activo" },
-            { value: "INACTIVE", label: "Inactivo" },
-          ]}
-          value={status}
-          onChange={(value) => setStatus((value ?? "ACTIVE") as CompanyUser["membershipStatus"])}
-        />
+        <>
+          <Select
+            label="Estado"
+            data={[
+              { value: "ACTIVE", label: "Activo" },
+              { value: "INACTIVE", label: "Inactivo" },
+            ]}
+            value={status}
+            onChange={(value) => setStatus((value ?? "ACTIVE") as CompanyUser["membershipStatus"])}
+          />
+          <Switch
+            label="Empresa predeterminada para este usuario"
+            checked={isDefault}
+            onChange={(event) => setIsDefault(event.currentTarget.checked)}
+          />
+        </>
       ) : null}
-
-      <Switch
-        label="Empresa predeterminada para este usuario"
-        checked={isDefault}
-        onChange={(event) => setIsDefault(event.currentTarget.checked)}
-      />
-
       {validationErrors.length > 0 ? (
         <Text size="sm" c="red">
           {validationErrors.join(" ")}
@@ -192,11 +174,11 @@ function CompanyUserDialogForm({
       ) : null}
 
       <Group justify="flex-end" gap="sm">
-        <Button variant="default" onClick={handleClose} disabled={loading}>
+        <Button variant="default" onClick={onClose} disabled={loading}>
           Cancelar
         </Button>
         <Button onClick={handleSubmit} disabled={loading || !isValid} loading={loading}>
-          Guardar
+          {mode === "create" ? "Enviar invitación" : "Guardar"}
         </Button>
       </Group>
     </Stack>
@@ -223,7 +205,7 @@ export function CompanyUserDialog({
     <ResponsiveModal
       opened={open}
       onClose={loading ? () => undefined : onClose}
-      title={mode === "create" ? "Agregar usuario" : "Editar usuario"}
+      title={mode === "create" ? "Invitar usuario" : "Editar usuario"}
       bodyMode="scroll"
       closeOnClickOutside={!loading}
       closeOnEscape={!loading}

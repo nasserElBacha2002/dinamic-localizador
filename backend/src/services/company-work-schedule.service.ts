@@ -6,6 +6,7 @@ import { companyWorkScheduleRepository } from "../repositories/company-work-sche
 import type { CompanyWorkSchedule, WeeklyScheduleDay } from "../types/schedule";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import {
+  createDefaultWeeklyScheduleDays,
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
   weeklySchedulesEqual,
@@ -14,17 +15,66 @@ import { recurringWorkdayMaterializationService } from "./recurring-workday-mate
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 
 export const companyWorkScheduleService = {
+  async ensureDefaultForCompany(
+    companyId: string,
+    timezone: string,
+    transaction?: sql.Transaction,
+  ): Promise<CompanyWorkSchedule> {
+    const existing = transaction
+      ? await companyWorkScheduleRepository.findByCompanyIdInTransaction(companyId, transaction)
+      : await companyWorkScheduleRepository.findByCompanyId(companyId);
+    if (existing) {
+      return existing;
+    }
+
+    const days = normalizeWeeklyScheduleDays(createDefaultWeeklyScheduleDays());
+    const validation = validateWeeklyScheduleDays(days);
+    if (!validation.valid) {
+      throw new AppError(400, validation.code, validation.message);
+    }
+
+    if (transaction) {
+      return companyWorkScheduleRepository.replaceInTransaction(companyId, transaction, {
+        timezone: resolveOperationTimezone(timezone),
+        days,
+        nextVersion: 1,
+      });
+    }
+
+    const pool = getPool();
+    const localTransaction = new sql.Transaction(pool);
+    await localTransaction.begin();
+    try {
+      const created = await companyWorkScheduleRepository.replaceInTransaction(
+        companyId,
+        localTransaction,
+        {
+          timezone: resolveOperationTimezone(timezone),
+          days,
+          nextVersion: 1,
+        },
+      );
+      await localTransaction.commit();
+      return created;
+    } catch (error) {
+      try {
+        await localTransaction.rollback();
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
+  },
+
   async getByCompanyId(companyId: string): Promise<CompanyWorkSchedule> {
     const existing = await companyWorkScheduleRepository.findByCompanyId(companyId);
     if (existing) {
       return existing;
     }
 
-    throw new AppError(
-      404,
-      "COMPANY_WORK_SCHEDULE_NOT_FOUND",
-      "La empresa no tiene un horario laboral semanal configurado",
-    );
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const timezone = resolveOperationTimezone(settings?.operationTimezone);
+    return this.ensureDefaultForCompany(companyId, timezone);
   },
 
   async update(

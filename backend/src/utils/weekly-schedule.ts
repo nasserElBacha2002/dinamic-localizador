@@ -8,6 +8,21 @@ export const isValidScheduleTime = (value: string): boolean => TIME_PATTERN.test
 export const isOvernightSchedule = (startTime: string, endTime: string): boolean =>
   endTime <= startTime;
 
+/** Default Mon–Fri schedule used when provisioning a new company. */
+export const createDefaultWeeklyScheduleDays = (
+  startTime = "09:00",
+  endTime = "18:00",
+): WeeklyScheduleDay[] =>
+  WEEKDAYS.map((dayOfWeek) => {
+    const isWeekend = dayOfWeek === "SATURDAY" || dayOfWeek === "SUNDAY";
+    return {
+      dayOfWeek,
+      isEnabled: !isWeekend,
+      startTime: isWeekend ? null : startTime,
+      endTime: isWeekend ? null : endTime,
+    };
+  });
+
 export const normalizeWeeklyScheduleDays = (
   days: WeeklyScheduleDay[],
 ): WeeklyScheduleDay[] => {

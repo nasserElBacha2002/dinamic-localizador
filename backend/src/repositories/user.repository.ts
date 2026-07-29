@@ -28,10 +28,9 @@ export const userRepository = {
     return mapUserRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findByEmail(email: string): Promise<User | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async findByEmail(email: string, transaction?: sql.Transaction): Promise<User | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("email", sql.NVarChar(255), email)
       .query("SELECT * FROM users WHERE email = @email");
 
@@ -42,10 +41,9 @@ export const userRepository = {
     return mapUserRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findById(id: string): Promise<User | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async findById(id: string, transaction?: sql.Transaction): Promise<User | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("id", sql.UniqueIdentifier, id)
       .query("SELECT * FROM users WHERE id = @id");
 

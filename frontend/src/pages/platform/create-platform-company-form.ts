@@ -18,8 +18,7 @@ export type CreateCompanyVisibleFieldKey =
   | "earlyLeaveToleranceMinutes"
   | "modules"
   | "ownerName"
-  | "ownerEmail"
-  | "ownerTemporaryPassword";
+  | "ownerEmail";
 
 /** @deprecated Prefer CreateCompanyVisibleFieldKey */
 export type CreatePlatformCompanyFieldKey = CreateCompanyVisibleFieldKey;
@@ -37,7 +36,6 @@ export const CREATE_PLATFORM_COMPANY_FIELD_ORDER: CreateCompanyVisibleFieldKey[]
   "modules",
   "ownerName",
   "ownerEmail",
-  "ownerTemporaryPassword",
 ];
 
 const VISIBLE_SETTINGS_FIELDS = new Set<CompanySettingsFieldKey>([
@@ -57,7 +55,6 @@ export interface CreatePlatformCompanyFormState {
   modules: CompanyModuleKey[];
   ownerName: string;
   ownerEmail: string;
-  ownerTemporaryPassword: string;
 }
 
 export interface CreateCompanyValidationResult {
@@ -110,11 +107,6 @@ export function validateCreatePlatformCompanyForm(
     fieldErrors.ownerEmail = "El email del owner es obligatorio.";
   } else if (!EMAIL_PATTERN.test(state.ownerEmail.trim())) {
     fieldErrors.ownerEmail = "El email del owner no es válido.";
-  }
-
-  if (!state.ownerTemporaryPassword || state.ownerTemporaryPassword.length < 8) {
-    fieldErrors.ownerTemporaryPassword =
-      "La contraseña temporal del owner debe tener al menos 8 caracteres.";
   }
 
   return { fieldErrors, formErrors };

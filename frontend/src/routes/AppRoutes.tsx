@@ -7,6 +7,7 @@ import { AppLayout } from "../design-system";
 import { LoadingState } from "../design-system";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
+import { AcceptInvitationPage } from "../pages/invitations/AcceptInvitationPage";
 import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";
 import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
@@ -114,6 +115,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/inventories" element={<Navigate to="/operations" replace />} />

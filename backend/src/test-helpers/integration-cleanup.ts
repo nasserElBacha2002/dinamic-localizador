@@ -174,6 +174,7 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
     DELETE FROM company_work_schedule_days WHERE company_id = @companyId;
     DELETE FROM company_work_schedules WHERE company_id = @companyId;
 
+    DELETE FROM user_invitations WHERE company_id = @companyId;
     DELETE FROM audit_logs WHERE company_id = @companyId;
     DELETE FROM attendance_reviews WHERE company_id = @companyId;
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;

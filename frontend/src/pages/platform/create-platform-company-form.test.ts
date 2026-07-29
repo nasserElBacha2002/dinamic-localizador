@@ -17,7 +17,6 @@ const validState = () => ({
   modules: ["attendance" as const, "operations" as const],
   ownerName: "Owner",
   ownerEmail: "owner@example.com",
-  ownerTemporaryPassword: "password1",
 });
 
 describe("validateCreatePlatformCompanyForm", () => {
@@ -37,12 +36,10 @@ describe("validateCreatePlatformCompanyForm", () => {
       name: " ",
       ownerName: "",
       ownerEmail: "",
-      ownerTemporaryPassword: "short",
     });
     assert.ok(result.fieldErrors.name);
     assert.ok(result.fieldErrors.ownerName);
     assert.ok(result.fieldErrors.ownerEmail);
-    assert.ok(result.fieldErrors.ownerTemporaryPassword);
     assert.equal(getFirstCreatePlatformCompanyErrorField(result), "name");
     assert.equal(isCreateCompanyValidationValid(result), false);
   });

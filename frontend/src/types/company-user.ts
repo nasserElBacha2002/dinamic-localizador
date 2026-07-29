@@ -44,9 +44,6 @@ export interface CreateCompanyUserInput {
   name: string;
   email: string;
   role: CompanyRole;
-  status?: CompanyMembershipStatus;
-  temporaryPassword?: string;
-  isDefault?: boolean;
 }
 
 export interface UpdateCompanyUserInput {

@@ -27,21 +27,23 @@ describe("platformCompanyService", () => {
 
     await assert.rejects(
       () =>
-        platformCompanyService.createCompany({
-          name: "Acme",
-          defaultTimezone: "America/Argentina/Buenos_Aires",
-          owner: {
-            name: "Owner",
-            email: "owner@example.com",
-            temporaryPassword: "password123",
+        platformCompanyService.createCompany(
+          {
+            name: "Acme",
+            defaultTimezone: "America/Argentina/Buenos_Aires",
+            owner: {
+              name: "Owner",
+              email: "owner@example.com",
+            },
           },
-        }),
+          "actor-1",
+        ),
       (error: unknown) =>
         error instanceof AppError && error.code === "COMPANY_NAME_ALREADY_EXISTS",
     );
   });
 
-  it("requires temporary password for new owner users", async () => {
+  it("does not require temporary password for new owners", async () => {
     setupUnitTestEnv();
     const { companyRepository } = await import("../repositories/company.repository");
     const { userRepository } = await import("../repositories/user.repository");
@@ -50,18 +52,22 @@ describe("platformCompanyService", () => {
     mock.method(companyRepository, "findByName", async () => null);
     mock.method(userRepository, "findByEmail", async () => null);
 
+    // Without DB transaction mocks this will fail later — assert it is NOT TEMPORARY_PASSWORD_REQUIRED
     await assert.rejects(
       () =>
-        platformCompanyService.createCompany({
-          name: "New Co",
-          defaultTimezone: "America/Argentina/Buenos_Aires",
-          owner: {
-            name: "Owner",
-            email: "owner@example.com",
+        platformCompanyService.createCompany(
+          {
+            name: "New Co",
+            defaultTimezone: "America/Argentina/Buenos_Aires",
+            owner: {
+              name: "Owner",
+              email: "owner@example.com",
+            },
           },
-        }),
+          "actor-1",
+        ),
       (error: unknown) =>
-        error instanceof AppError && error.code === "TEMPORARY_PASSWORD_REQUIRED",
+        !(error instanceof AppError && error.code === "TEMPORARY_PASSWORD_REQUIRED"),
     );
   });
 });

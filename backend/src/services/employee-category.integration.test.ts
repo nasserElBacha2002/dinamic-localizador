@@ -15,7 +15,7 @@ import { employeeRepository } from "../repositories/employee.repository";
 import { employeeCategoryService } from "./employee-category.service";
 import { employeeDeactivationService } from "./employee-deactivation.service";
 import { employeeService } from "./employee.service";
-import { platformCompanyService } from "./platform-company.service";
+import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -52,13 +52,12 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
     const ownerEmail = `cat-seed-${suffix}@integration.test`;
     createdUserEmails.push(ownerEmail);
 
-    const company = await platformCompanyService.createCompany({
+    const company = await createPlatformCompanyFixture({
       name: `Cat Seed ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner Seed",
         email: ownerEmail,
-        temporaryPassword: "password123",
       },
     });
     createdCompanyIds.push(company.data.company.id);
@@ -73,22 +72,20 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
     const ownerEmailB = `cat-b-${suffix}@integration.test`;
     createdUserEmails.push(ownerEmailA, ownerEmailB);
 
-    const companyA = await platformCompanyService.createCompany({
+    const companyA = await createPlatformCompanyFixture({
       name: `Cat Co A ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner A",
         email: ownerEmailA,
-        temporaryPassword: "password123",
       },
     });
-    const companyB = await platformCompanyService.createCompany({
+    const companyB = await createPlatformCompanyFixture({
       name: `Cat Co B ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner B",
         email: ownerEmailB,
-        temporaryPassword: "password123",
       },
     });
     createdCompanyIds.push(companyA.data.company.id, companyB.data.company.id);
@@ -211,22 +208,20 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
     const ownerEmailB = `cat-trig-b-${suffix}@integration.test`;
     createdUserEmails.push(ownerEmailA, ownerEmailB);
 
-    const companyA = await platformCompanyService.createCompany({
+    const companyA = await createPlatformCompanyFixture({
       name: `Cat Trig A ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner A",
         email: ownerEmailA,
-        temporaryPassword: "password123",
       },
     });
-    const companyB = await platformCompanyService.createCompany({
+    const companyB = await createPlatformCompanyFixture({
       name: `Cat Trig B ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner B",
         email: ownerEmailB,
-        temporaryPassword: "password123",
       },
     });
     createdCompanyIds.push(companyA.data.company.id, companyB.data.company.id);
@@ -258,13 +253,12 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
     const ownerEmail = `cat-atomic-${suffix}@integration.test`;
     createdUserEmails.push(ownerEmail);
 
-    const company = await platformCompanyService.createCompany({
+    const company = await createPlatformCompanyFixture({
       name: `Cat Atomic ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner Atomic",
         email: ownerEmail,
-        temporaryPassword: "password123",
       },
     });
     createdCompanyIds.push(company.data.company.id);
@@ -328,13 +322,12 @@ describeDatabaseIntegration("employee categories multi-company and sorting", () 
     const ownerEmail = `cat-sort-${suffix}@integration.test`;
     createdUserEmails.push(ownerEmail);
 
-    const company = await platformCompanyService.createCompany({
+    const company = await createPlatformCompanyFixture({
       name: `Cat Sort ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner Sort",
         email: ownerEmail,
-        temporaryPassword: "password123",
       },
     });
     const companyId = company.data.company.id;

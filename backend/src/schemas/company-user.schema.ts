@@ -11,14 +11,17 @@ export const listCompanyUsersQuerySchema = paginationQuerySchema.merge(searchFil
   status: z.enum(COMPANY_MEMBERSHIP_STATUSES).optional(),
 });
 
-export const createCompanyUserSchema = z.object({
-  name: z.string().trim().min(1, "El nombre es obligatorio").max(150),
-  email: z.string().trim().email("Email inválido").max(255),
-  role: z.enum(COMPANY_ROLES, { message: "Rol de empresa inválido" }),
-  status: z.enum(COMPANY_MEMBERSHIP_STATUSES).optional().default("ACTIVE"),
-  temporaryPassword: z.string().min(8, "La contraseña temporal debe tener al menos 8 caracteres").optional(),
-  isDefault: z.boolean().optional(),
-});
+/**
+ * Deprecated compatibility contract for POST /users.
+ * Invitation-only: name, email, role. Rejects legacy/ignored fields.
+ */
+export const createCompanyUserSchema = z
+  .object({
+    name: z.string().trim().min(1, "El nombre es obligatorio").max(150),
+    email: z.string().trim().email("Email inválido").max(255),
+    role: z.enum(COMPANY_ROLES, { message: "Rol de empresa inválido" }),
+  })
+  .strict();
 
 export const updateCompanyUserSchema = z
   .object({

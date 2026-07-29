@@ -13,7 +13,7 @@ import {
   Title,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { Link, useNavigate } from "react-router";
 import { z } from "zod";
@@ -79,11 +79,12 @@ export function AcceptInvitationPage() {
   const { user, isAuthenticated, isLoading: authLoading, login } = useAuth();
   const { refreshCompanies } = useCompany();
   const [token] = useState(() => readTokenFromLocation());
-  const [phase, setPhase] = useState<PagePhase>("loading");
+  const [phase, setPhase] = useState<PagePhase>(() => (token ? "loading" : "invalid"));
   const [preview, setPreview] = useState<UserInvitationPreview | null>(null);
-  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(() =>
+    token ? null : "El enlace de invitación no es válido o está incompleto.",
+  );
   const [submitting, setSubmitting] = useState(false);
-  const submitLockRef = useRef(false);
 
   const {
     control,
@@ -110,8 +111,6 @@ export function AcceptInvitationPage() {
 
   useEffect(() => {
     if (!token) {
-      setPhase("invalid");
-      setErrorMessage("El enlace de invitación no es válido o está incompleto.");
       return;
     }
 
@@ -165,7 +164,11 @@ export function AcceptInvitationPage() {
 
   const loginNext = encodeURIComponent(INVITATION_ACCEPT_PATH);
 
-  const finishAcceptance = async (options: { isNewUser: boolean; email?: string; password?: string }) => {
+  const finishAcceptance = async (options: {
+    isNewUser: boolean;
+    email?: string;
+    password?: string;
+  }) => {
     if (options.isNewUser) {
       if (!options.email || !options.password) {
         throw new Error("Missing credentials for new user login.");
@@ -178,11 +181,10 @@ export function AcceptInvitationPage() {
   };
 
   const runAccept = async (registration?: RegistrationFormValues) => {
-    if (!token || !preview || submitting || submitLockRef.current) {
+    if (!token || !preview || submitting) {
       return;
     }
 
-    submitLockRef.current = true;
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -207,17 +209,15 @@ export function AcceptInvitationPage() {
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     } finally {
-      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
 
   const runDecline = async () => {
-    if (!token || !preview || submitting || submitLockRef.current) {
+    if (!token || !preview || submitting) {
       return;
     }
 
-    submitLockRef.current = true;
     setSubmitting(true);
     setErrorMessage(null);
 
@@ -232,12 +232,11 @@ export function AcceptInvitationPage() {
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));
     } finally {
-      submitLockRef.current = false;
       setSubmitting(false);
     }
   };
 
-  const onRegistrationSubmit = handleSubmit(async (values) => {
+  const onRegistrationValid = async (values: RegistrationFormValues) => {
     const lockedEmail = preview?.email?.trim().toLowerCase() ?? "";
     const submittedEmail = values.email.trim().toLowerCase();
     if (!lockedEmail || submittedEmail !== lockedEmail) {
@@ -245,7 +244,7 @@ export function AcceptInvitationPage() {
       return;
     }
     await runAccept({ ...values, email: lockedEmail });
-  });
+  };
 
   const renderBody = () => {
     if (authLoading || phase === "loading") {
@@ -291,7 +290,12 @@ export function AcceptInvitationPage() {
         ) : null}
 
         {!preview.userExists ? (
-          <form onSubmit={onRegistrationSubmit} noValidate>
+          <form
+            onSubmit={(event) => {
+              void handleSubmit(onRegistrationValid)(event);
+            }}
+            noValidate
+          >
             <Stack gap="md">
               <Text size="sm" c="dimmed">
                 Creá tu cuenta para aceptar la invitación enviada a {preview.email}.

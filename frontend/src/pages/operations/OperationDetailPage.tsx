@@ -23,6 +23,7 @@ import { OperationTeamSection } from "../../components/operations/OperationTeamS
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import { OperationScheduledWorkdaysSection } from "../../components/operations/OperationScheduledWorkdaysSection";
+import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
   useCancelOperation,
@@ -253,25 +254,28 @@ export function OperationDetailPage() {
         }
         description={`${`Detalle de la ${terminology.operation.singular.toLowerCase()}`} · ${formatOperationDetailScheduleTitle(operation)}`}
         action={
-          <ActionMenu
-            primary={
-              editing && canEdit ? (
-                <Button
-                  type="submit"
-                  form={OPERATION_DETAIL_FORM_ID}
-                  loading={updateMutation.isPending}
-                >
-                  Guardar cambios
-                </Button>
-              ) : (
-                <Button variant="default" onClick={goBackToList}>
-                  Volver al listado
-                </Button>
-              )
-            }
-            items={headerMenuItems}
-            menuLabel="Más acciones de la operación"
-          />
+          <Group gap="sm" wrap="wrap">
+            {canEdit && !editing ? <EntityEditAction entity="operations" id={operation.id} /> : null}
+            <ActionMenu
+              primary={
+                editing && canEdit ? (
+                  <Button
+                    type="submit"
+                    form={OPERATION_DETAIL_FORM_ID}
+                    loading={updateMutation.isPending}
+                  >
+                    Guardar cambios
+                  </Button>
+                ) : (
+                  <Button variant="default" onClick={goBackToList}>
+                    Volver al listado
+                  </Button>
+                )
+              }
+              items={headerMenuItems}
+              menuLabel="Más acciones de la operación"
+            />
+          </Group>
         }
       />
 

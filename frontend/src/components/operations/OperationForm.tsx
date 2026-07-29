@@ -46,6 +46,8 @@ interface OperationFormProps {
   onCancel?: () => void;
   loading?: boolean;
   errorMessage?: string | null;
+  /** Reports dirty state to the page-level unsaved controller (dedicated edit routes). */
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: OperationFormValues) => Promise<void>;
   embedded?: boolean;
   formId?: string;
@@ -98,6 +100,7 @@ export function OperationForm({
   onCancel,
   loading = false,
   errorMessage,
+  onDirtyChange,
   onSubmit,
   embedded = false,
   formId,
@@ -108,10 +111,26 @@ export function OperationForm({
     [mode],
   );
 
-  const { control, handleSubmit, reset, setValue } = useForm<OperationFormValues>({
+  const {
+    control,
+    handleSubmit,
+    reset,
+    setValue,
+    formState: { isDirty },
+  } = useForm<OperationFormValues>({
     resolver: zodResolver(validationSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   const operationKind = useWatch({ control, name: "operationKind" });
   const scheduleSource = useWatch({ control, name: "scheduleSource" });

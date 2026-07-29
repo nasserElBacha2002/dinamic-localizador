@@ -20,6 +20,25 @@ export const waitForContainerRefs = async (
   return null;
 };
 
+/** Wait only for the map canvas (view-only maps have no autocomplete host). */
+export const waitForMapContainerRef = async (
+  getMapContainer: () => HTMLDivElement | null,
+  attempts = 40,
+): Promise<HTMLDivElement | null> => {
+  for (let index = 0; index < attempts; index += 1) {
+    const mapContainer = getMapContainer();
+    if (mapContainer) {
+      return mapContainer;
+    }
+
+    await new Promise<void>((resolve) => {
+      requestAnimationFrame(() => resolve());
+    });
+  }
+
+  return null;
+};
+
 export const readLatLng = (position: google.maps.LatLng | google.maps.LatLngLiteral | null | undefined) => {
   if (!position) {
     return null;

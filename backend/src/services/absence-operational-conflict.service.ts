@@ -72,7 +72,6 @@ export const absenceOperationalConflictService = {
       );
     }
 
-    /** @deprecated fallback kept only for documentation; client commandId is required above */
     const resolutionCommandId = buildResolutionCommandId({
       conflictId,
       resolutionCode: input.resolutionCode,

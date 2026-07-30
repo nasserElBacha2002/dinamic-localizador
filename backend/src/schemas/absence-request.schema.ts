@@ -91,7 +91,11 @@ export const resolveAbsenceOperationalConflictSchema = z.object({
 });
 
 export const reconcileAbsenceOperationalImpactSchema = z.object({
-  commandId: z.string().trim().min(8).max(120).optional(),
+  commandId: z
+    .string()
+    .trim()
+    .min(8, "commandId es obligatorio")
+    .max(120),
 });
 
 export const updateNeedsInfoAbsenceRequestSchema = z

@@ -20,6 +20,9 @@ const emitMetric = (name: string, labels: Record<string, string> = {}): void => 
   console.info(JSON.stringify({ metric: name, ...labels, ts: new Date().toISOString() }));
 };
 
+const LEASE_SECONDS = 180;
+const HEARTBEAT_EVERY_MS = Math.floor((LEASE_SECONDS * 1000) / 3);
+
 const isApproveOperation = (operation: AbsenceWorkdaySyncOperation | string): boolean =>
   operation === "APPROVE" ||
   operation === "AUTO_APPROVE" ||
@@ -33,6 +36,22 @@ const isRevokeOperation = (operation: AbsenceWorkdaySyncOperation | string): boo
   operation === "reject" ||
   operation === "cancel";
 
+const createLeaseGuard = (token: JobLeaseToken | undefined, leaseSeconds: number) => {
+  let lastHeartbeatAt = 0;
+  return async (): Promise<void> => {
+    if (!token) {
+      return;
+    }
+    const now = Date.now();
+    if (now - lastHeartbeatAt >= HEARTBEAT_EVERY_MS) {
+      await absenceWorkdaySyncJobRepository.renewLease(token, leaseSeconds);
+      lastHeartbeatAt = now;
+      return;
+    }
+    await absenceWorkdaySyncJobRepository.assertLeaseHeld(token);
+  };
+};
+
 const supersedeClaimed = async (
   token: JobLeaseToken | undefined,
   job: AbsenceWorkdaySyncJob,
@@ -42,12 +61,15 @@ const supersedeClaimed = async (
     if (token) {
       await absenceWorkdaySyncJobRepository.markSupersededWithLease(token, reason);
     } else {
-      await absenceWorkdaySyncJobRepository.markSuperseded(job.companyId, job.id, reason);
+      await absenceWorkdaySyncJobRepository.supersedeInlineJob(job.companyId, job.id, reason);
     }
     return "SUPERSEDED";
   } catch (error) {
     if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
       return "LEASE_LOST";
+    }
+    if (error instanceof AppError && error.code === "JOB_STATE_CONFLICT") {
+      return "SUPERSEDED";
     }
     throw error;
   }
@@ -71,10 +93,14 @@ export const absenceOperationalReconciliationService = {
   async applyApprovedOperationalSideEffects(
     companyId: string,
     absenceRequestId: string,
+    fence?: { token: JobLeaseToken; expectedVersion: number; expectedStatus: string },
   ): Promise<void> {
     if (!(await absenceOperationalImpactQueryService.isFeatureEnabled(companyId))) {
       return;
     }
+
+    const guard = createLeaseGuard(fence?.token, LEASE_SECONDS);
+    await guard();
 
     emitMetric("absence_operational_reconciliation_started", { status: "APPROVED" });
     const impact = await absenceOperationalImpactQueryService.computeImpact(
@@ -85,6 +111,20 @@ export const absenceOperationalReconciliationService = {
     if (!request || request.status !== "APPROVED") {
       return;
     }
+    if (fence) {
+      const currentVersion = request.operationalImpactVersion ?? 1;
+      if (
+        currentVersion !== fence.expectedVersion ||
+        request.status !== fence.expectedStatus
+      ) {
+        throw new AppError(
+          409,
+          "JOB_LEASE_LOST",
+          "La ausencia cambió de versión/estado durante la reconciliación",
+        );
+      }
+    }
+
     const plan = resolveAbsenceOperationalEffectPlan(request.status);
     if (!plan.createAssignmentConflicts) {
       return;
@@ -93,6 +133,7 @@ export const absenceOperationalReconciliationService = {
     const version = impact.operationalImpactVersion;
 
     for (const op of impact.operations) {
+      await guard();
       const key = buildOperationalConflictIdempotencyKey({
         requestId: absenceRequestId,
         version,
@@ -138,6 +179,7 @@ export const absenceOperationalReconciliationService = {
       if (!workday.conflictCode) {
         continue;
       }
+      await guard();
       const key = buildOperationalConflictIdempotencyKey({
         requestId: absenceRequestId,
         version,
@@ -177,6 +219,7 @@ export const absenceOperationalReconciliationService = {
       });
     }
 
+    await guard();
     emitMetric("absence_operational_reconciliation_completed", { status: "APPROVED" });
   },
 
@@ -184,19 +227,24 @@ export const absenceOperationalReconciliationService = {
     companyId: string,
     absenceRequestId: string,
     reason: string,
+    fence?: { token: JobLeaseToken },
   ): Promise<void> {
     if (!(await absenceOperationalImpactQueryService.isFeatureEnabled(companyId))) {
       return;
     }
+    const guard = createLeaseGuard(fence?.token, LEASE_SECONDS);
+    await guard();
     await absenceOperationalImpactRepository.dismissOpenConflictsForRequest(
       companyId,
       absenceRequestId,
       reason,
     );
+    await guard();
     await absenceOperationalImpactRepository.revertEffectsForRequest(
       companyId,
       absenceRequestId,
     );
+    await guard();
     emitMetric("absence_operational_effect_reverted", { status: "REVERTED" });
   },
 
@@ -204,15 +252,14 @@ export const absenceOperationalReconciliationService = {
     job: AbsenceWorkdaySyncJob,
     token?: JobLeaseToken,
   ): Promise<"APPLIED" | "SUPERSEDED" | "LEASE_LOST"> {
-    if (token) {
-      try {
-        await absenceWorkdaySyncJobRepository.renewLease(token, 180);
-      } catch (error) {
-        if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
-          return "LEASE_LOST";
-        }
-        throw error;
+    const guard = createLeaseGuard(token, LEASE_SECONDS);
+    try {
+      await guard();
+    } catch (error) {
+      if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
+        return "LEASE_LOST";
       }
+      throw error;
     }
 
     const request = await absenceRequestRepository.findById(
@@ -235,41 +282,34 @@ export const absenceOperationalReconciliationService = {
       );
     }
 
-    if (isApproveOperation(job.operation) && request.status === "APPROVED") {
-      await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
-        job.companyId,
-        job.absenceRequestId,
-      );
-      await this.applyApprovedOperationalSideEffects(job.companyId, job.absenceRequestId);
-      return "APPLIED";
-    }
+    const fence = token
+      ? {
+          token,
+          expectedVersion: job.expectedOperationalImpactVersion,
+          expectedStatus: job.absenceStatus,
+        }
+      : undefined;
 
-    if (
-      isRevokeOperation(job.operation) &&
-      (request.status === "CANCELLED" || request.status === "REJECTED")
-    ) {
-      await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
-        job.companyId,
-        job.absenceRequestId,
-      );
-      await this.revertOperationalSideEffects(
-        job.companyId,
-        job.absenceRequestId,
-        `job:${job.operation}`,
-      );
-      return "APPLIED";
-    }
-
-    if (job.operation === "MANUAL_RECONCILE") {
-      if (request.status === "APPROVED") {
+    try {
+      if (isApproveOperation(job.operation) && request.status === "APPROVED") {
+        await guard();
         await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
           job.companyId,
           job.absenceRequestId,
         );
-        await this.applyApprovedOperationalSideEffects(job.companyId, job.absenceRequestId);
+        await this.applyApprovedOperationalSideEffects(
+          job.companyId,
+          job.absenceRequestId,
+          fence,
+        );
         return "APPLIED";
       }
-      if (request.status === "CANCELLED" || request.status === "REJECTED") {
+
+      if (
+        isRevokeOperation(job.operation) &&
+        (request.status === "CANCELLED" || request.status === "REJECTED")
+      ) {
+        await guard();
         await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
           job.companyId,
           job.absenceRequestId,
@@ -277,10 +317,46 @@ export const absenceOperationalReconciliationService = {
         await this.revertOperationalSideEffects(
           job.companyId,
           job.absenceRequestId,
-          `job:MANUAL_RECONCILE:${request.status}`,
+          `job:${job.operation}`,
+          token ? { token } : undefined,
         );
         return "APPLIED";
       }
+
+      if (job.operation === "MANUAL_RECONCILE") {
+        if (request.status === "APPROVED") {
+          await guard();
+          await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
+            job.companyId,
+            job.absenceRequestId,
+          );
+          await this.applyApprovedOperationalSideEffects(
+            job.companyId,
+            job.absenceRequestId,
+            fence,
+          );
+          return "APPLIED";
+        }
+        if (request.status === "CANCELLED" || request.status === "REJECTED") {
+          await guard();
+          await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
+            job.companyId,
+            job.absenceRequestId,
+          );
+          await this.revertOperationalSideEffects(
+            job.companyId,
+            job.absenceRequestId,
+            `job:MANUAL_RECONCILE:${request.status}`,
+            token ? { token } : undefined,
+          );
+          return "APPLIED";
+        }
+      }
+    } catch (error) {
+      if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
+        return "LEASE_LOST";
+      }
+      throw error;
     }
 
     return supersedeClaimed(
@@ -294,7 +370,7 @@ export const absenceOperationalReconciliationService = {
     companyId: string,
     absenceRequestId: string,
     _userId: string,
-    commandId?: string | null,
+    commandId: string,
   ): Promise<{
     jobId: string;
     status: string;
@@ -307,6 +383,14 @@ export const absenceOperationalReconciliationService = {
         409,
         "ABSENCE_OPERATIONAL_INTEGRATION_DISABLED",
         "La integración operativa de ausencias no está habilitada",
+      );
+    }
+    const trimmedCommandId = commandId.trim();
+    if (trimmedCommandId.length < 8) {
+      throw new AppError(
+        400,
+        "RESOLUTION_COMMAND_ID_REQUIRED",
+        "commandId es obligatorio para reconciliar",
       );
     }
     const request = await absenceRequestRepository.findById(companyId, absenceRequestId);
@@ -332,7 +416,7 @@ export const absenceOperationalReconciliationService = {
       absenceStatus: request.status,
       operation: "MANUAL_RECONCILE",
       expectedOperationalImpactVersion: version,
-      enqueueCommandId: commandId?.trim() || null,
+      enqueueCommandId: trimmedCommandId,
     });
 
     return {

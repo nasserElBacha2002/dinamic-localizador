@@ -80,7 +80,7 @@ export const absenceWorkdaySyncService = {
           active &&
           (active.status === "PENDING" || active.status === "FAILED")
         ) {
-          await absenceWorkdaySyncJobRepository.markCompleted(companyId, active.id);
+          await absenceWorkdaySyncJobRepository.completeInlineJob(companyId, active.id);
         }
       } catch (jobError) {
         console.error("[absence-workday-sync] mark completed skipped", {
@@ -103,8 +103,8 @@ export const absenceWorkdaySyncService = {
           companyId,
           absenceRequestId,
         );
-        if (active && active.status !== "PROCESSING") {
-          await absenceWorkdaySyncJobRepository.markFailedAttempt(
+        if (active && (active.status === "PENDING" || active.status === "FAILED")) {
+          await absenceWorkdaySyncJobRepository.failInlineJob(
             companyId,
             active.id,
             message,
@@ -141,7 +141,10 @@ export const absenceWorkdaySyncService = {
     let superseded = 0;
     let leaseLost = 0;
 
-    const recovered = await absenceWorkdaySyncJobRepository.recoverExpiredLeases(RECOVERY_BATCH);
+    const recovered = await absenceWorkdaySyncJobRepository.recoverExpiredLeases(
+      RECOVERY_BATCH,
+      MAX_ATTEMPTS,
+    );
 
     for (let i = 0; i < limit; i += 1) {
       const job = await absenceWorkdaySyncJobRepository.claimNextPending(MAX_ATTEMPTS, {
@@ -155,7 +158,6 @@ export const absenceWorkdaySyncService = {
       const token: JobLeaseToken = absenceWorkdaySyncJobRepository.toLeaseToken(job);
 
       try {
-        await absenceWorkdaySyncJobRepository.renewLease(token, LEASE_SECONDS);
         const outcome =
           await absenceOperationalReconciliationService.executeClaimedJob(job, token);
         if (outcome === "SUPERSEDED") {

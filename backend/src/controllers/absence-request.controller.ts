@@ -138,7 +138,7 @@ export const absenceRequestController = {
 
   async reconcileOperationalImpact(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const body = (req.body ?? {}) as { commandId?: string };
+    const body = req.body as { commandId: string };
     const accepted = await absenceOperationImpactService.reconcileManually(
       companyId,
       String(req.params.id),

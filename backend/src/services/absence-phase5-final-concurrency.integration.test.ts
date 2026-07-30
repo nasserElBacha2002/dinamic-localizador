@@ -705,6 +705,6 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
     assert.equal(conflictRow?.sourceMessageSid, messageSid);
 
     const token = absenceWorkdaySyncJobRepository.toLeaseToken(claimed);
-    await absenceWorkdaySyncJobRepository.markFailedAttemptWithLease(token, "test-release", true);
+    await absenceWorkdaySyncJobRepository.markFailedAttemptWithLease(token, "test-release", 8);
   });
 });

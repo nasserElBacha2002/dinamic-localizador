@@ -118,6 +118,7 @@ export const absenceWorkdaySyncJobRepository = {
         UPDATE absence_workday_sync_jobs
         SET status = N'SUPERSEDED',
             superseded_at = SYSUTCDATETIME(),
+            last_error = N'SUPERSEDE_REQUESTED',
             lease_owner = NULL,
             lease_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
@@ -175,8 +176,9 @@ export const absenceWorkdaySyncJobRepository = {
 
   /**
    * Recover expired PROCESSING leases in bounded batches (not inside every claim).
+   * When attempt_count reaches maxAttempts, jobs become FAILED (never stuck PENDING).
    */
-  async recoverExpiredLeases(batchSize = 50): Promise<number> {
+  async recoverExpiredLeases(batchSize = 50, maxAttempts = 8): Promise<number> {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -197,11 +199,15 @@ export const absenceWorkdaySyncJobRepository = {
         const result = await new sql.Request(transaction)
           .input("jobId", sql.UniqueIdentifier, String(row.id))
           .input("companyId", sql.UniqueIdentifier, String(row.company_id))
+          .input("maxAttempts", sql.Int, maxAttempts)
           .query(`
             UPDATE absence_workday_sync_jobs
-            SET status = N'PENDING',
-                attempt_count = attempt_count + 1,
+            SET attempt_count = attempt_count + 1,
                 last_error = N'LEASE_EXPIRED',
+                status = CASE
+                  WHEN attempt_count + 1 >= @maxAttempts THEN N'FAILED'
+                  ELSE N'PENDING'
+                END,
                 lease_owner = NULL,
                 lease_expires_at = NULL,
                 updated_at = SYSUTCDATETIME()
@@ -223,6 +229,25 @@ export const absenceWorkdaySyncJobRepository = {
         /* ignore */
       }
       throw error;
+    }
+  },
+
+  /**
+   * Fail-closed check: worker still owns PROCESSING lease (no expiry extension).
+   */
+  async assertLeaseHeld(token: JobLeaseToken): Promise<void> {
+    const result = await applyLeasePredicate(getPool().request(), token).query(`
+      SELECT TOP 1 id
+      FROM absence_workday_sync_jobs
+      WHERE id = @jobId
+        AND company_id = @companyId
+        AND status = N'PROCESSING'
+        AND lease_owner = @leaseOwner
+        AND lease_version = @leaseVersion
+        AND (lease_expires_at IS NULL OR lease_expires_at >= SYSUTCDATETIME())
+    `);
+    if (!result.recordset[0]) {
+      throw new AppError(409, "JOB_LEASE_LOST", "El worker perdió el lease del job");
     }
   },
 
@@ -329,13 +354,14 @@ export const absenceWorkdaySyncJobRepository = {
 
   /**
    * Inline sync path: complete only non-claimed PENDING/FAILED jobs (never steal PROCESSING).
+   * Throws JOB_STATE_CONFLICT when no row matches.
    */
-  async markCompleted(
+  async completeInlineJob(
     companyId: string,
     jobId: string,
     transaction?: sql.Transaction,
   ): Promise<void> {
-    await requestFrom(transaction)
+    const result = await requestFrom(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("jobId", sql.UniqueIdentifier, jobId)
       .query(`
@@ -349,6 +375,22 @@ export const absenceWorkdaySyncJobRepository = {
           AND company_id = @companyId
           AND status IN (N'PENDING', N'FAILED')
       `);
+    if ((result.rowsAffected[0] ?? 0) === 0) {
+      throw new AppError(
+        409,
+        "JOB_STATE_CONFLICT",
+        "No se pudo completar el job (estado inesperado)",
+      );
+    }
+  },
+
+  /** @deprecated Use completeInlineJob or markCompletedWithLease */
+  async markCompleted(
+    companyId: string,
+    jobId: string,
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    return this.completeInlineJob(companyId, jobId, transaction);
   },
 
   async markSupersededWithLease(token: JobLeaseToken, reason: string): Promise<void> {
@@ -371,12 +413,16 @@ export const absenceWorkdaySyncJobRepository = {
     throwIfLeaseLost(result.rowsAffected[0] ?? 0);
   },
 
-  async markSuperseded(
+  /**
+   * Inline supersede for PENDING/FAILED only (never clears an active PROCESSING lease
+   * without the cooperative enqueue SUPERSEDE_REQUESTED path).
+   */
+  async supersedeInlineJob(
     companyId: string,
     jobId: string,
     reason: string,
   ): Promise<void> {
-    await getPool()
+    const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("jobId", sql.UniqueIdentifier, jobId)
@@ -390,8 +436,24 @@ export const absenceWorkdaySyncJobRepository = {
             lease_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
         WHERE id = @jobId AND company_id = @companyId
-          AND status IN (N'PENDING', N'PROCESSING', N'FAILED')
+          AND status IN (N'PENDING', N'FAILED')
       `);
+    if ((result.rowsAffected[0] ?? 0) === 0) {
+      throw new AppError(
+        409,
+        "JOB_STATE_CONFLICT",
+        "No se pudo superseder el job (estado inesperado)",
+      );
+    }
+  },
+
+  /** @deprecated Use supersedeInlineJob or markSupersededWithLease */
+  async markSuperseded(
+    companyId: string,
+    jobId: string,
+    reason: string,
+  ): Promise<void> {
+    return this.supersedeInlineJob(companyId, jobId, reason);
   },
 
   async markFailedAttemptWithLease(
@@ -422,13 +484,16 @@ export const absenceWorkdaySyncJobRepository = {
     throwIfLeaseLost(result.rowsAffected[0] ?? 0);
   },
 
-  async markFailedAttempt(
+  /**
+   * Inline failure for PENDING/FAILED only (never mutates PROCESSING without lease token).
+   */
+  async failInlineJob(
     companyId: string,
     jobId: string,
     errorMessage: string,
     maxAttempts: number,
   ): Promise<void> {
-    await getPool()
+    const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("jobId", sql.UniqueIdentifier, jobId)
@@ -447,8 +512,25 @@ export const absenceWorkdaySyncJobRepository = {
             updated_at = SYSUTCDATETIME()
         WHERE id = @jobId
           AND company_id = @companyId
-          AND status IN (N'PENDING', N'PROCESSING', N'FAILED')
+          AND status IN (N'PENDING', N'FAILED')
       `);
+    if ((result.rowsAffected[0] ?? 0) === 0) {
+      throw new AppError(
+        409,
+        "JOB_STATE_CONFLICT",
+        "No se pudo marcar fallo del job (estado inesperado)",
+      );
+    }
+  },
+
+  /** @deprecated Use failInlineJob or markFailedAttemptWithLease */
+  async markFailedAttempt(
+    companyId: string,
+    jobId: string,
+    errorMessage: string,
+    maxAttempts: number,
+  ): Promise<void> {
+    return this.failInlineJob(companyId, jobId, errorMessage, maxAttempts);
   },
 
   toLeaseToken(job: AbsenceWorkdaySyncJob): JobLeaseToken {

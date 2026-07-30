@@ -52,7 +52,7 @@ export const absenceOperationImpactService = {
     companyId: string,
     absenceRequestId: string,
     userId: string,
-    commandId?: string | null,
+    commandId: string,
   ) =>
     absenceOperationalReconciliationService.enqueueManualReconcile(
       companyId,

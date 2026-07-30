@@ -11,6 +11,7 @@ import {
   needsInfoAbsenceRequestSchema,
   rejectAbsenceRequestSchema,
   resolveAbsenceOperationalConflictSchema,
+  reconcileAbsenceOperationalImpactSchema,
   updateNeedsInfoAbsenceRequestSchema,
 } from "../schemas/absence-request.schema";
 
@@ -56,6 +57,7 @@ absenceRequestRouter.post(
   "/:id/reconcile-operational-impact",
   requirePermission("operations:manage"),
   validate(absenceRequestIdParamSchema, "params"),
+  validate(reconcileAbsenceOperationalImpactSchema),
   asyncHandler(absenceRequestController.reconcileOperationalImpact),
 );
 

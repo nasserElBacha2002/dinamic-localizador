@@ -2,6 +2,7 @@ import { AppError } from "../errors/app-error";
 import {
   absenceWorkdaySyncJobRepository,
   type AbsenceWorkdaySyncOperation,
+  type JobLeaseToken,
 } from "../repositories/absence-workday-sync-job.repository";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import type { AbsenceWorkdayReconciliationResult } from "../types/absence-workday-reconciliation";
@@ -12,6 +13,8 @@ const SYNC_FAILED_MESSAGE =
   "La ausencia fue guardada, pero no se pudieron actualizar las jornadas programadas. La sincronización se reintentará automáticamente.";
 
 const MAX_ATTEMPTS = 8;
+const LEASE_SECONDS = 180;
+const RECOVERY_BATCH = 50;
 
 export const absenceWorkdaySyncService = {
   async enqueueInTransaction(
@@ -55,7 +58,6 @@ export const absenceWorkdaySyncService = {
 
     try {
       const workdayReconciliation = await reconcile();
-      // Post-reconciliation operational effects (conflicts) — no business branching here.
       if (context === "approve") {
         await absenceOperationalReconciliationService.applyApprovedOperationalSideEffects(
           companyId,
@@ -76,9 +78,7 @@ export const absenceWorkdaySyncService = {
         );
         if (
           active &&
-          (active.status === "PENDING" ||
-            active.status === "PROCESSING" ||
-            active.status === "FAILED")
+          (active.status === "PENDING" || active.status === "FAILED")
         ) {
           await absenceWorkdaySyncJobRepository.markCompleted(companyId, active.id);
         }
@@ -103,7 +103,7 @@ export const absenceWorkdaySyncService = {
           companyId,
           absenceRequestId,
         );
-        if (active) {
+        if (active && active.status !== "PROCESSING") {
           await absenceWorkdaySyncJobRepository.markFailedAttempt(
             companyId,
             active.id,
@@ -129,30 +129,48 @@ export const absenceWorkdaySyncService = {
     }
   },
 
-  async processPendingJobs(limit = 20): Promise<{ processed: number; failed: number; superseded: number }> {
+  async processPendingJobs(limit = 20): Promise<{
+    processed: number;
+    failed: number;
+    superseded: number;
+    leaseLost: number;
+    recovered: number;
+  }> {
     let processed = 0;
     let failed = 0;
     let superseded = 0;
+    let leaseLost = 0;
+
+    const recovered = await absenceWorkdaySyncJobRepository.recoverExpiredLeases(RECOVERY_BATCH);
 
     for (let i = 0; i < limit; i += 1) {
       const job = await absenceWorkdaySyncJobRepository.claimNextPending(MAX_ATTEMPTS, {
         leaseOwner: `absence-sync-${process.pid}-${i}-${Date.now()}`,
-        leaseSeconds: 180,
+        leaseSeconds: LEASE_SECONDS,
       });
       if (!job) {
         break;
       }
 
+      const token: JobLeaseToken = absenceWorkdaySyncJobRepository.toLeaseToken(job);
+
       try {
+        await absenceWorkdaySyncJobRepository.renewLease(token, LEASE_SECONDS);
         const outcome =
-          await absenceOperationalReconciliationService.executeClaimedJob(job);
+          await absenceOperationalReconciliationService.executeClaimedJob(job, token);
         if (outcome === "SUPERSEDED") {
           superseded += 1;
+        } else if (outcome === "LEASE_LOST") {
+          leaseLost += 1;
         } else {
-          await absenceWorkdaySyncJobRepository.markCompleted(job.companyId, job.id);
+          await absenceWorkdaySyncJobRepository.markCompletedWithLease(token);
           processed += 1;
         }
       } catch (error) {
+        if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
+          leaseLost += 1;
+          continue;
+        }
         failed += 1;
         const message = error instanceof Error ? error.message : String(error);
         console.error("[absence-workday-sync] pending job failed", {
@@ -162,15 +180,21 @@ export const absenceWorkdaySyncService = {
           operation: job.operation,
           error: message,
         });
-        await absenceWorkdaySyncJobRepository.markFailedAttempt(
-          job.companyId,
-          job.id,
-          message,
-          MAX_ATTEMPTS,
-        );
+        try {
+          await absenceWorkdaySyncJobRepository.markFailedAttemptWithLease(
+            token,
+            message,
+            MAX_ATTEMPTS,
+          );
+        } catch (leaseError) {
+          if (!(leaseError instanceof AppError && leaseError.code === "JOB_LEASE_LOST")) {
+            throw leaseError;
+          }
+          leaseLost += 1;
+        }
       }
     }
 
-    return { processed, failed, superseded };
+    return { processed, failed, superseded, leaseLost, recovered };
   },
 };

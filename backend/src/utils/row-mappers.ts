@@ -269,6 +269,8 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   phoneNumber: String(row.phone_number),
   state: String(row.state) as import("../types/twilio.types").BotSessionState,
   contextJson: row.context_json ? String(row.context_json) : null,
+  sessionVersion: Number(row.session_version ?? 0),
+  lastMessageSid: row.last_message_sid ? String(row.last_message_sid) : null,
   expiresAt: toIsoString(row.expires_at as Date | string),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),

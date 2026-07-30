@@ -20,6 +20,11 @@ import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 
+const newCommandId = (): string =>
+  typeof crypto !== "undefined" && "randomUUID" in crypto
+    ? crypto.randomUUID()
+    : `cmd-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+
 const availabilityLabels: Record<string, string> = {
   AVAILABLE: "Disponible",
   PROVISIONALLY_UNAVAILABLE: "No disponible (provisional)",
@@ -36,8 +41,8 @@ const conflictTypeLabels: Record<string, string> = {
 
 const resolutionOptions: Array<{ value: AbsenceOperationalResolutionCode; label: string }> = [
   { value: "KEEP_REDUCED_STAFFING", label: "Mantener con dotación reducida" },
-  { value: "ASSIGN_REPLACEMENT", label: "Registrar reemplazo (manual)" },
-  { value: "CANCEL_ASSIGNMENT", label: "Registrar intención de cancelar asignación" },
+  { value: "ASSIGN_REPLACEMENT", label: "Asignar reemplazo" },
+  { value: "CANCEL_ASSIGNMENT", label: "Cancelar asignación afectada" },
   { value: "DISMISS_WITH_REASON", label: "Ignorar conflicto con motivo" },
 ];
 
@@ -56,7 +61,8 @@ export function AbsenceOperationalImpactSection({ requestId }: Props) {
     useState<AbsenceOperationalResolutionCode>("KEEP_REDUCED_STAFFING");
   const [resolutionReason, setResolutionReason] = useState("");
   const [resolveError, setResolveError] = useState<string | null>(null);
-
+  // Generated once per user intent; reused across retries of the same intent.
+  const [commandId, setCommandId] = useState(newCommandId);
   if (impactQuery.isLoading) {
     return (
       <SectionCard title="Impacto operativo">
@@ -180,18 +186,22 @@ export function AbsenceOperationalImpactSection({ requestId }: Props) {
                     label: `${conflictTypeLabels[c.conflictType] ?? c.conflictType} · ${c.severity}`,
                   }))}
                   value={selectedConflictId}
-                  onChange={(value) => setSelectedConflictId(value)}
+                  onChange={(value) => {
+                    setSelectedConflictId(value);
+                    setCommandId(newCommandId());
+                  }}
                 />
                 <Select
                   label="Resolución"
                   data={resolutionOptions}
                   value={resolutionCode}
-                  onChange={(value) =>
+                  onChange={(value) => {
                     setResolutionCode(
                       (value as AbsenceOperationalResolutionCode | null) ??
                         "KEEP_REDUCED_STAFFING",
-                    )
-                  }
+                    );
+                    setCommandId(newCommandId());
+                  }}
                 />
                 <Textarea
                   label="Motivo"
@@ -213,10 +223,12 @@ export function AbsenceOperationalImpactSection({ requestId }: Props) {
                         conflictId: selectedConflictId,
                         resolutionCode,
                         resolutionReason: resolutionReason.trim(),
+                        commandId,
                       })
                       .then(() => {
                         setSelectedConflictId(null);
                         setResolutionReason("");
+                        setCommandId(newCommandId());
                         void impactQuery.refetch();
                       })
                       .catch((error: unknown) =>

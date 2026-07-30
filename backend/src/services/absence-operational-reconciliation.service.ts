@@ -10,6 +10,7 @@ import {
   absenceWorkdaySyncJobRepository,
   type AbsenceWorkdaySyncJob,
   type AbsenceWorkdaySyncOperation,
+  type JobLeaseToken,
 } from "../repositories/absence-workday-sync-job.repository";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
@@ -32,6 +33,26 @@ const isRevokeOperation = (operation: AbsenceWorkdaySyncOperation | string): boo
   operation === "reject" ||
   operation === "cancel";
 
+const supersedeClaimed = async (
+  token: JobLeaseToken | undefined,
+  job: AbsenceWorkdaySyncJob,
+  reason: string,
+): Promise<"SUPERSEDED" | "LEASE_LOST"> => {
+  try {
+    if (token) {
+      await absenceWorkdaySyncJobRepository.markSupersededWithLease(token, reason);
+    } else {
+      await absenceWorkdaySyncJobRepository.markSuperseded(job.companyId, job.id, reason);
+    }
+    return "SUPERSEDED";
+  } catch (error) {
+    if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
+      return "LEASE_LOST";
+    }
+    throw error;
+  }
+};
+
 export const absenceOperationalReconciliationService = {
   async enqueueInTransaction(
     input: {
@@ -40,6 +61,7 @@ export const absenceOperationalReconciliationService = {
       absenceStatus: string;
       operation: AbsenceWorkdaySyncOperation;
       expectedOperationalImpactVersion: number;
+      enqueueCommandId?: string | null;
     },
     transaction: sql.Transaction,
   ) {
@@ -166,14 +188,11 @@ export const absenceOperationalReconciliationService = {
     if (!(await absenceOperationalImpactQueryService.isFeatureEnabled(companyId))) {
       return;
     }
-    // Observational effects: dismiss open conflicts created by this absence.
     await absenceOperationalImpactRepository.dismissOpenConflictsForRequest(
       companyId,
       absenceRequestId,
       reason,
     );
-    // Mutating effects are tracked by absence_request_id on workdays and reverted by
-    // employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence.
     await absenceOperationalImpactRepository.revertEffectsForRequest(
       companyId,
       absenceRequestId,
@@ -181,21 +200,27 @@ export const absenceOperationalReconciliationService = {
     emitMetric("absence_operational_effect_reverted", { status: "REVERTED" });
   },
 
-  /**
-   * Fence + execute a claimed sync job. Returns whether work was applied.
-   */
-  async executeClaimedJob(job: AbsenceWorkdaySyncJob): Promise<"APPLIED" | "SUPERSEDED"> {
+  async executeClaimedJob(
+    job: AbsenceWorkdaySyncJob,
+    token?: JobLeaseToken,
+  ): Promise<"APPLIED" | "SUPERSEDED" | "LEASE_LOST"> {
+    if (token) {
+      try {
+        await absenceWorkdaySyncJobRepository.renewLease(token, 180);
+      } catch (error) {
+        if (error instanceof AppError && error.code === "JOB_LEASE_LOST") {
+          return "LEASE_LOST";
+        }
+        throw error;
+      }
+    }
+
     const request = await absenceRequestRepository.findById(
       job.companyId,
       job.absenceRequestId,
     );
     if (!request) {
-      await absenceWorkdaySyncJobRepository.markSuperseded(
-        job.companyId,
-        job.id,
-        "ABSENCE_REQUEST_NOT_FOUND",
-      );
-      return "SUPERSEDED";
+      return supersedeClaimed(token, job, "ABSENCE_REQUEST_NOT_FOUND");
     }
 
     const currentVersion = request.operationalImpactVersion ?? 1;
@@ -203,12 +228,11 @@ export const absenceOperationalReconciliationService = {
       currentVersion !== job.expectedOperationalImpactVersion ||
       request.status !== job.absenceStatus
     ) {
-      await absenceWorkdaySyncJobRepository.markSuperseded(
-        job.companyId,
-        job.id,
+      return supersedeClaimed(
+        token,
+        job,
         `version/status mismatch current=${request.status}@${currentVersion} expected=${job.absenceStatus}@${job.expectedOperationalImpactVersion}`,
       );
-      return "SUPERSEDED";
     }
 
     if (isApproveOperation(job.operation) && request.status === "APPROVED") {
@@ -259,18 +283,18 @@ export const absenceOperationalReconciliationService = {
       }
     }
 
-    await absenceWorkdaySyncJobRepository.markSuperseded(
-      job.companyId,
-      job.id,
+    return supersedeClaimed(
+      token,
+      job,
       `operation ${job.operation} incompatible with status ${request.status}`,
     );
-    return "SUPERSEDED";
   },
 
   async enqueueManualReconcile(
     companyId: string,
     absenceRequestId: string,
     _userId: string,
+    commandId?: string | null,
   ): Promise<{
     jobId: string;
     status: string;
@@ -308,6 +332,7 @@ export const absenceOperationalReconciliationService = {
       absenceStatus: request.status,
       operation: "MANUAL_RECONCILE",
       expectedOperationalImpactVersion: version,
+      enqueueCommandId: commandId?.trim() || null,
     });
 
     return {

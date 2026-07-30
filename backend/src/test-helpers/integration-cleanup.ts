@@ -118,6 +118,21 @@ export const deleteEmployeeCascade = async (
         WHERE company_id = @companyId AND employee_id = @employeeId
       );
 
+      DELETE FROM absence_operational_conflicts
+      WHERE company_id = @companyId AND (
+        employee_id = @employeeId
+        OR absence_request_id IN (
+          SELECT id FROM absence_requests
+          WHERE company_id = @companyId AND employee_id = @employeeId
+        )
+      );
+
+      DELETE FROM absence_operational_effects
+      WHERE company_id = @companyId AND absence_request_id IN (
+        SELECT id FROM absence_requests
+        WHERE company_id = @companyId AND employee_id = @employeeId
+      );
+
       DELETE FROM absence_requests
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
@@ -191,6 +206,8 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
     DELETE FROM absence_request_events WHERE company_id = @companyId;
+    DELETE FROM absence_operational_conflicts WHERE company_id = @companyId;
+    DELETE FROM absence_operational_effects WHERE company_id = @companyId;
     DELETE FROM absence_workday_sync_jobs WHERE company_id = @companyId;
     DELETE FROM absence_requests WHERE company_id = @companyId;
 

@@ -28,6 +28,9 @@ export interface BotSession {
   phoneNumber: string;
   state: BotSessionState;
   contextJson: string | null;
+  /** Optimistic fencing token (Phase 6.1); defaults to 0 when column absent in older DBs. */
+  sessionVersion: number;
+  lastMessageSid: string | null;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;

@@ -12,12 +12,35 @@ import {
   type AbsenceOperationalResolutionCode,
 } from "../types/absence-operational-impact";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { auditService } from "./audit.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { employeeAvailabilityService } from "./employee-availability.service";
 import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { operationAssignmentService } from "./operation-assignment.service";
 import { operationWorkDateService } from "./operation-work-date.service";
+
+/** Test-only failure points for transactional atomicity evidence (Phase 5). */
+export type ResolveConflictFailurePoint =
+  | "after_assignment_created"
+  | "before_resolve_conflict"
+  | "after_resolve_conflict"
+  | "before_audit"
+  | "during_audit";
+
+let resolveConflictFailurePoint: ResolveConflictFailurePoint | null = null;
+
+export const __setResolveConflictFailurePointForTests = (
+  point: ResolveConflictFailurePoint | null,
+): void => {
+  resolveConflictFailurePoint = point;
+};
+
+const maybeInjectResolveFailure = (point: ResolveConflictFailurePoint): void => {
+  if (resolveConflictFailurePoint === point) {
+    throw new Error(`INJECTED_FAILURE:${point}`);
+  }
+};
 
 export const absenceOperationalConflictService = {
   async resolveConflict(
@@ -40,11 +63,21 @@ export const absenceOperationalConflictService = {
       );
     }
 
+    const clientCommandId = input.commandId?.trim();
+    if (!clientCommandId || clientCommandId.length < 8) {
+      throw new AppError(
+        400,
+        "RESOLUTION_COMMAND_ID_REQUIRED",
+        "commandId es obligatorio para resolver el conflicto",
+      );
+    }
+
+    /** @deprecated fallback kept only for documentation; client commandId is required above */
     const resolutionCommandId = buildResolutionCommandId({
       conflictId,
       resolutionCode: input.resolutionCode,
       replacementEmployeeId: input.replacementEmployeeId,
-      commandId: input.commandId,
+      commandId: clientCommandId,
     });
 
     const priorByCommand =
@@ -83,10 +116,21 @@ export const absenceOperationalConflictService = {
         throw new AppError(404, "ABSENCE_OPERATIONAL_CONFLICT_NOT_FOUND", "Conflicto no encontrado");
       }
       if (existing.status !== "OPEN") {
+        if (
+          existing.resolutionCommandId === resolutionCommandId &&
+          (existing.status === "RESOLVED" || existing.status === "DISMISSED")
+        ) {
+          await transaction.commit();
+          return existing;
+        }
         throw new AppError(
           409,
-          "ABSENCE_OPERATIONAL_CONFLICT_NOT_OPEN",
-          "El conflicto ya fue resuelto",
+          existing.resolutionCommandId && existing.resolutionCommandId !== resolutionCommandId
+            ? "RESOLUTION_COMMAND_CONFLICT"
+            : "ABSENCE_OPERATIONAL_CONFLICT_NOT_OPEN",
+          existing.resolutionCommandId && existing.resolutionCommandId !== resolutionCommandId
+            ? "El conflicto ya fue resuelto con otro commandId"
+            : "El conflicto ya fue resuelto",
         );
       }
 
@@ -227,6 +271,8 @@ export const absenceOperationalConflictService = {
             );
           }
         }
+
+        maybeInjectResolveFailure("after_assignment_created");
       }
 
       if (input.resolutionCode === "CANCEL_ASSIGNMENT") {
@@ -251,6 +297,8 @@ export const absenceOperationalConflictService = {
       const status =
         input.resolutionCode === "DISMISS_WITH_REASON" ? ("DISMISSED" as const) : ("RESOLVED" as const);
 
+      maybeInjectResolveFailure("before_resolve_conflict");
+
       const updated = await absenceOperationalImpactRepository.resolveConflict(
         {
           companyId,
@@ -268,6 +316,9 @@ export const absenceOperationalConflictService = {
       if (!updated) {
         throw new AppError(409, "ABSENCE_OPERATIONAL_CONFLICT_RACE", "El conflicto ya fue resuelto");
       }
+
+      maybeInjectResolveFailure("after_resolve_conflict");
+      maybeInjectResolveFailure("before_audit");
 
       await auditService.log(
         companyId,
@@ -288,18 +339,44 @@ export const absenceOperationalConflictService = {
         transaction,
       );
 
+      maybeInjectResolveFailure("during_audit");
+
       await transaction.commit();
       return updated;
     } catch (error) {
-      return rollbackTransactionSafely(
-        transaction,
-        {
-          operation: "absence-operational-conflict.resolve",
-          companyId,
-          entityId: conflictId,
-        },
-        error,
-      );
+      try {
+        await rollbackTransactionSafely(
+          transaction,
+          {
+            operation: "absence-operational-conflict.resolve",
+            companyId,
+            entityId: conflictId,
+          },
+          error,
+        );
+      } catch (rolledError) {
+        if (isDuplicateKeyError(rolledError) || isDuplicateKeyError(error)) {
+          const byCommand =
+            await absenceOperationalImpactRepository.findConflictByResolutionCommandId(
+              companyId,
+              resolutionCommandId,
+            );
+          if (
+            byCommand &&
+            byCommand.id === conflictId &&
+            byCommand.absenceRequestId === absenceRequestId
+          ) {
+            return byCommand;
+          }
+          throw new AppError(
+            409,
+            "RESOLUTION_COMMAND_CONFLICT",
+            "El commandId ya fue usado en otra resolución",
+          );
+        }
+        throw rolledError;
+      }
+      throw error;
     }
   },
 };

@@ -116,6 +116,7 @@ export function useResolveAbsenceOperationalConflict(absenceRequestId: string) {
         resolutionCode: input.resolutionCode,
         resolutionReason: input.resolutionReason,
         replacementEmployeeId: input.replacementEmployeeId,
+        commandId: input.commandId,
       }),
     onMutate: (): MutationCompanyContext => ({ companyId }),
     onSuccess: (_data, _vars, context) => {

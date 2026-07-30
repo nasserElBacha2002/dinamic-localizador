@@ -8,6 +8,10 @@ import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
+import {
+  hashWebhookPayload,
+  whatsappWebhookEventRepository,
+} from "../repositories/whatsapp-webhook-event.repository";
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
 import { resolveWorkdayOptionsFromSessionContext } from "../utils/legacy-operation-session-context";
 import { botSessionService } from "./bot-session.service";
@@ -235,7 +239,37 @@ export const whatsappBotService = {
     try {
       setLastTwilioPayload(payload as unknown as Record<string, string>);
 
+      let webhookEventId: string | null = null;
       if (!simulationContext) {
+        const payloadHash = hashWebhookPayload({
+          MessageSid: payload.MessageSid,
+          From: payload.From,
+          To: payload.To,
+          Body: payload.Body ?? null,
+          Latitude: payload.Latitude ?? null,
+          Longitude: payload.Longitude ?? null,
+          NumMedia: payload.NumMedia ?? null,
+        });
+        const claim = await whatsappWebhookEventRepository.claimInboundMessage({
+          companyId,
+          messageSid: payload.MessageSid,
+          payloadHash,
+        });
+        if (claim.outcome === "PAYLOAD_ANOMALY") {
+          throw new AppError(
+            409,
+            "WEBHOOK_PAYLOAD_ANOMALY",
+            "MessageSid reutilizado con payload distinto",
+          );
+        }
+        if (claim.outcome === "IDEMPOTENT_REPLAY") {
+          console.info("[whatsapp-bot] idempotent webhook replay", {
+            messageSid: payload.MessageSid,
+          });
+          return buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
+        }
+        webhookEventId = claim.event.id;
+
         const existingMessage = await whatsappMessageRepository.findByMessageSid(
           companyId,
           payload.MessageSid,
@@ -245,6 +279,11 @@ export const whatsappBotService = {
           await whatsappMessageRepository.updateProcessingStatus(companyId, payload.MessageSid, {
             processingStatus: "DUPLICATE",
             processingErrorCode: "DUPLICATE_MESSAGE_SID",
+          });
+          await whatsappWebhookEventRepository.markProcessed({
+            companyId,
+            eventId: webhookEventId,
+            responseReference: "DUPLICATE_MESSAGE_SID",
           });
           return buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
         }
@@ -306,6 +345,13 @@ export const whatsappBotService = {
         await whatsappMessageRepository.updateProcessingStatus(companyId, payload.MessageSid, {
           processingStatus: "PROCESSED",
         });
+        if (webhookEventId) {
+          await whatsappWebhookEventRepository.markProcessed({
+            companyId,
+            eventId: webhookEventId,
+            responseReference: "TwiML",
+          });
+        }
       } else if (response) {
         const outboundText = extractMessageFromTwiml(response);
         appendSimulatorMessage({
@@ -327,6 +373,10 @@ export const whatsappBotService = {
         setTechnicalDetail("error", error instanceof Error ? error.message : "UNKNOWN_ERROR");
         setLastBotResponse(GENERIC_ERROR_MESSAGE);
         return buildTwiml(GENERIC_ERROR_MESSAGE);
+      }
+
+      if (error instanceof AppError && error.code === "WEBHOOK_PAYLOAD_ANOMALY") {
+        throw error;
       }
 
       try {

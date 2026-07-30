@@ -97,4 +97,5 @@ export type ResolveAbsenceOperationalConflictInput = {
   resolutionCode: AbsenceOperationalResolutionCode;
   resolutionReason: string;
   replacementEmployeeId?: string | null;
+  commandId: string;
 };

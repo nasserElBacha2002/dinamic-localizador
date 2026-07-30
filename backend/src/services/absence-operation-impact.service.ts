@@ -48,10 +48,16 @@ export const absenceOperationImpactService = {
       conflictId,
       input,
     ),
-  reconcileManually: (companyId: string, absenceRequestId: string, userId: string) =>
+  reconcileManually: (
+    companyId: string,
+    absenceRequestId: string,
+    userId: string,
+    commandId?: string | null,
+  ) =>
     absenceOperationalReconciliationService.enqueueManualReconcile(
       companyId,
       absenceRequestId,
       userId,
+      commandId,
     ),
 };

@@ -36,6 +36,7 @@ export type UpdateCompanySettingsInput = Partial<
     | "confirmationReminderEnabled"
     | "confirmationReminderHoursBefore"
     | "pendingOperationExpirationHours"
+    | "absenceAdvancedCalendarEnabled"
   >
 >;
 

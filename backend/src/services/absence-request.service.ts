@@ -211,6 +211,9 @@ const createRequest = async (
         calendarId: snapshotCalendarId,
         calendarTimezone: calculation.timezone,
         calculationVersion: calculation.calculationVersion,
+        calendarVersion:
+          calculation.calendarId === "legacy" ? null : calculation.calendarVersion,
+        calculationInputHash: calculation.calculationInputHash ?? null,
       },
       transaction,
     );
@@ -385,6 +388,9 @@ const resolveEditablePayload = async (
     calendarId: calculation.calendarId === "legacy" ? null : calculation.calendarId,
     calendarTimezone: calculation.timezone,
     calculationVersion: calculation.calculationVersion,
+    calendarVersion:
+      calculation.calendarId === "legacy" ? null : calculation.calendarVersion,
+    calculationInputHash: calculation.calculationInputHash ?? null,
   };
 };
 
@@ -581,6 +587,8 @@ export const absenceRequestService = {
           calendarId: payload.calendarId,
           calendarTimezone: payload.calendarTimezone,
           calculationVersion: payload.calculationVersion,
+          calendarVersion: payload.calendarVersion,
+          calculationInputHash: payload.calculationInputHash,
           onlyIfStatusIn: [...ABSENCE_ADMIN_EDITABLE_STATUSES],
         },
         transaction,

@@ -60,6 +60,8 @@ export interface AbsenceRequest {
   calendarId: string | null;
   calendarTimezone: string | null;
   calculationVersion: number | null;
+  calendarVersion: number | null;
+  calculationInputHash: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -370,6 +370,10 @@ export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
   calendarTimezone: row.calendar_timezone ? String(row.calendar_timezone) : null,
   calculationVersion:
     row.calculation_version == null ? null : Number(row.calculation_version),
+  calendarVersion: row.calendar_version == null ? null : Number(row.calendar_version),
+  calculationInputHash: row.calculation_input_hash
+    ? String(row.calculation_input_hash)
+    : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

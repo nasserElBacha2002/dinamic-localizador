@@ -19,6 +19,7 @@ import {
 } from "./company-settings-summaries";
 import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
+import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypePolicyDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
@@ -29,6 +30,7 @@ import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 type DialogKey =
   | "operational"
   | "absences"
+  | "absenceTypePolicy"
   | "absenceCalendar"
   | "locationTypes"
   | "workSchedule"
@@ -140,6 +142,20 @@ export function CompanySettingsPage() {
         />
 
         <SettingsSummaryCard
+          title="Cálculo por tipo de ausencia"
+          description="Días corridos o hábiles, y calendario aplicable a cada tipo."
+          summaryItems={[
+            {
+              label: "Tipos",
+              value: "Configurá el modo de conteo sin SQL",
+            },
+          ]}
+          actionLabel="Gestionar políticas"
+          canEdit={canUpdate}
+          onAction={() => setOpenDialog("absenceTypePolicy")}
+        />
+
+        <SettingsSummaryCard
           title="Calendario de ausencias"
           description="Días laborables, feriados y excepciones para el cálculo de duración."
           summaryItems={
@@ -240,6 +256,15 @@ export function CompanySettingsPage() {
           opened
           onClose={() => setOpenDialog(null)}
           settings={absenceSettingsQuery.data}
+          canUpdate={canUpdate}
+          onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "absenceTypePolicy" ? (
+        <CompanyAbsenceTypePolicyDialog
+          opened
+          onClose={() => setOpenDialog(null)}
           canUpdate={canUpdate}
           onSaved={handleSaved}
         />

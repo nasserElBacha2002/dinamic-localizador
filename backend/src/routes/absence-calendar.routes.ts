@@ -7,6 +7,7 @@ import {
   absenceCalendarDateIdParamSchema,
   absenceCalendarIdParamSchema,
   calculateAbsenceDurationSchema,
+  createAbsenceCalendarSchema,
   createCalendarDateSchema,
   listCalendarDatesQuerySchema,
   updateAbsenceCalendarSchema,
@@ -25,6 +26,19 @@ absenceCalendarRouter.get(
   "/default",
   requirePermission("company:read"),
   asyncHandler(absenceCalendarController.getDefault),
+);
+
+absenceCalendarRouter.post(
+  "/",
+  requirePermission("company:settings:update"),
+  validate(createAbsenceCalendarSchema),
+  asyncHandler(absenceCalendarController.createCalendar),
+);
+
+absenceCalendarRouter.post(
+  "/bootstrap-default",
+  requirePermission("company:settings:update"),
+  asyncHandler(absenceCalendarController.bootstrapDefault),
 );
 
 absenceCalendarRouter.patch(

@@ -80,6 +80,7 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
 
   it("backfills default calendar and preserves calendar-day totals", async () => {
     const companyId = await seedCompany();
+    await absenceCalendarService.bootstrapDefaultCalendar(companyId);
     const calendar = await absenceCalendarService.getDefaultCalendar(companyId);
     assert.equal(calendar.isDefault, true);
     assert.equal(calendar.weekdays.length, 7);
@@ -122,11 +123,103 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
     );
     assert.equal(created.totalDays, 3);
     assert.equal(created.calculationMode, "CALENDAR_DAYS");
-    assert.ok(created.calendarId);
+    // Flag off → legacy path: no calendar snapshot (preserves pre–Phase 2 behavior).
+    assert.equal(created.calendarId, null);
+  });
+
+  it("rejects stale expectedVersion on calendar update", async () => {
+    const companyId = await seedCompany();
+    await absenceCalendarService.bootstrapDefaultCalendar(companyId);
+    const calendar = await absenceCalendarService.getDefaultCalendar(companyId);
+
+    await absenceCalendarService.updateCalendar(
+      companyId,
+      calendar.id,
+      {
+        name: "Calendario v2",
+        expectedVersion: calendar.version,
+      },
+      actorUserId,
+    );
+
+    await assert.rejects(
+      () =>
+        absenceCalendarService.updateCalendar(
+          companyId,
+          calendar.id,
+          {
+            name: "Stale",
+            expectedVersion: calendar.version,
+          },
+          actorUserId,
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "ABSENCE_CALENDAR_CONFLICT",
+    );
+
+    const refreshed = await absenceCalendarService.getDefaultCalendar(companyId);
+    assert.equal(refreshed.version, calendar.version + 1);
+  });
+
+  it("rejects deactivating a calendar referenced by an active type", async () => {
+    const companyId = await seedCompany();
+    await absenceCalendarService.bootstrapDefaultCalendar(companyId);
+    const calendar = await absenceCalendarService.getDefaultCalendar(companyId);
+    const types = await absenceTypeRepository.listAll(companyId, true);
+    const vacation = types.find((type) => type.code === "VACATION");
+    assert.ok(vacation);
+    const { absenceTypeService } = await import("./absence-type.service");
+    await absenceTypeService.update(
+      companyId,
+      vacation.id,
+      { dayCountingMode: "BUSINESS_DAYS", calendarId: calendar.id },
+      actorUserId,
+    );
+
+    await assert.rejects(
+      () =>
+        absenceCalendarService.updateCalendar(
+          companyId,
+          calendar.id,
+          {
+            isActive: false,
+            expectedVersion: calendar.version,
+          },
+          actorUserId,
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "ABSENCE_CALENDAR_IN_USE",
+    );
+  });
+
+  it("rejects invalid IANA timezone on calendar create", async () => {
+    const companyId = await seedCompany();
+    await assert.rejects(
+      () =>
+        absenceCalendarService.createCalendar(
+          companyId,
+          {
+            name: "Bad TZ",
+            timezone: "Not/A_Real_Zone",
+            isDefault: false,
+          },
+          actorUserId,
+        ),
+      (error: unknown) => error instanceof AppError && error.code === "INVALID_TIMEZONE",
+    );
   });
 
   it("applies business days after holiday override", async () => {
     const companyId = await seedCompany();
+    await absenceCalendarService.bootstrapDefaultCalendar(companyId);
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        UPDATE company_settings
+        SET absence_advanced_calendar_enabled = 1
+        WHERE company_id = @companyId
+      `);
     const calendar = await absenceCalendarService.getDefaultCalendar(companyId);
     const types = await absenceTypeRepository.listAll(companyId, true);
     const vacation = types.find((type) => type.code === "VACATION") ?? types[0];
@@ -173,6 +266,8 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
   it("rejects cross-company calendar date access and duplicates", async () => {
     const companyA = await seedCompany();
     const companyB = await seedCompany();
+    await absenceCalendarService.bootstrapDefaultCalendar(companyA);
+    await absenceCalendarService.bootstrapDefaultCalendar(companyB);
     const calendarA = await absenceCalendarService.getDefaultCalendar(companyA);
     const calendarB = await absenceCalendarService.getDefaultCalendar(companyB);
 
@@ -214,5 +309,85 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
       (error: unknown) =>
         error instanceof AppError && error.code === "ABSENCE_CALENDAR_DATE_DUPLICATE",
     );
+  });
+
+  it("GET default does not create calendars", async () => {
+    const companyId = await seedCompany();
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        DELETE FROM company_calendar_dates WHERE company_id = @companyId;
+        DELETE FROM company_work_calendar_weekdays WHERE company_id = @companyId;
+        DELETE FROM company_work_calendars WHERE company_id = @companyId;
+      `);
+
+    await assert.rejects(
+      () => absenceCalendarService.getDefaultCalendar(companyId),
+      (error: unknown) => error instanceof AppError && error.code === "ABSENCE_CALENDAR_NOT_FOUND",
+    );
+    const listed = await absenceCalendarService.listCalendars(companyId);
+    assert.equal(listed.length, 0);
+  });
+
+  it("configures BUSINESS_DAYS via type policy and creates request", async () => {
+    const companyId = await seedCompany();
+    await absenceCalendarService.bootstrapDefaultCalendar(companyId);
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        UPDATE company_settings
+        SET absence_advanced_calendar_enabled = 1
+        WHERE company_id = @companyId
+      `);
+
+    const { absenceTypeService } = await import("./absence-type.service");
+    const types = await absenceTypeRepository.listAll(companyId, true);
+    const vacation = types.find((type) => type.code === "VACATION");
+    assert.ok(vacation);
+    const calendar = await absenceCalendarService.getDefaultCalendar(companyId);
+
+    const updatedType = await absenceTypeService.update(
+      companyId,
+      vacation.id,
+      { dayCountingMode: "BUSINESS_DAYS", calendarId: calendar.id },
+      actorUserId,
+    );
+    assert.equal(updatedType.dayCountingMode, "BUSINESS_DAYS");
+    assert.equal(updatedType.calendarId, calendar.id);
+
+    await absenceCalendarService.createDate(companyId, {
+      calendarId: calendar.id,
+      date: "2026-08-05",
+      name: "Feriado policy",
+      dateType: "HOLIDAY",
+      isWorkingDay: false,
+    });
+
+    const employee = await employeeRepository.create(companyId, {
+      name: "Policy Emp",
+      phoneNumber: uniquePhone(),
+      employeeType: "fijo",
+      documentNumber: null,
+      categoryId: null,
+    });
+
+    const created = await absenceRequestService.createFromAdmin(
+      companyId,
+      {
+        employeeId: employee.id,
+        absenceTypeId: vacation.id,
+        startDate: "2026-08-03",
+        endDate: "2026-08-07",
+        startPeriod: "FULL_DAY",
+        endPeriod: "FULL_DAY",
+        reason: "Prueba business days policy",
+      },
+      actorUserId,
+    );
+    assert.equal(created.totalDays, 4);
+    assert.equal(created.calculationMode, "BUSINESS_DAYS");
+    assert.ok(created.calculationInputHash);
   });
 });

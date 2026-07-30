@@ -80,6 +80,7 @@ export const ATTENDANCE_API_EXPORTS = [
 
 export const ABSENCES_API_EXPORTS = [
   "getAbsenceTypes",
+  "updateAbsenceType",
   "getAbsenceRequests",
   "getAbsenceRequestById",
   "createAbsenceRequest",

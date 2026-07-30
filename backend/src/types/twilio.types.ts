@@ -74,6 +74,20 @@ export interface BotSessionContext {
     startDate?: string;
     endDate?: string;
     reason?: string;
+    calculationFingerprint?: {
+      absenceTypeId: string;
+      startDate: string;
+      endDate: string;
+      startPeriod: string;
+      endPeriod: string;
+      calendarId: string;
+      calendarVersion: number;
+      countingMode: string;
+      timezone: string;
+      totalDays: number;
+      calculationVersion: number;
+      inputHash: string;
+    };
   };
 }
 

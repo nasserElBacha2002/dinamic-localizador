@@ -247,11 +247,9 @@ export const absenceBotService = {
         ? await absenceTypeRepository.findById(companyId, draft.absenceTypeId)
         : null;
 
-      let totalDays: number;
-      let countingMode = "CALENDAR_DAYS";
-      let excludedSummary: string[] = [];
+      let calculation;
       try {
-        const calculation = await absenceCalendarService.calculateDuration(companyId, {
+        calculation = await absenceCalendarService.calculateDuration(companyId, {
           employeeId: input.employeeId,
           absenceTypeId: draft.absenceTypeId!,
           startDate: draft.startDate!,
@@ -259,9 +257,6 @@ export const absenceBotService = {
           startPeriod: "FULL_DAY",
           endPeriod: "FULL_DAY",
         });
-        totalDays = calculation.totalDays;
-        countingMode = calculation.countingMode;
-        excludedSummary = calculation.excludedSummary;
       } catch (error) {
         const message =
           error instanceof AppError
@@ -275,6 +270,8 @@ export const absenceBotService = {
         });
       }
 
+      draft.calculationFingerprint = calculation.fingerprint;
+
       await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_CONFIRMATION",
         contextJson: serializeContext({ ...context, absenceDraft: draft }),
@@ -286,9 +283,9 @@ export const absenceBotService = {
           startDate: draft.startDate!,
           endDate: draft.endDate!,
           reason: draft.reason,
-          totalDays,
-          countingMode,
-          excludedSummary,
+          totalDays: calculation.totalDays,
+          countingMode: calculation.countingMode,
+          excludedSummary: calculation.excludedSummary,
         }),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
@@ -327,6 +324,43 @@ export const absenceBotService = {
       }
 
       try {
+        const current = await absenceCalendarService.calculateDuration(companyId, {
+          employeeId: input.employeeId,
+          absenceTypeId: draft.absenceTypeId,
+          startDate: draft.startDate,
+          endDate: draft.endDate,
+          startPeriod: "FULL_DAY",
+          endPeriod: "FULL_DAY",
+        });
+
+        const previousHash = draft.calculationFingerprint?.inputHash;
+        if (previousHash && previousHash !== current.fingerprint.inputHash) {
+          draft.calculationFingerprint = current.fingerprint;
+          await botSessionService.updateAbsenceSession(companyId, input.session.id, {
+            state: "WAITING_ABSENCE_CONFIRMATION",
+            contextJson: serializeContext({ ...context, absenceDraft: draft }),
+          });
+          const absenceType = await absenceTypeRepository.findById(companyId, draft.absenceTypeId);
+          return input.respond({
+            message: [
+              "El cálculo cambió desde el último resumen. Revisá el nuevo total y confirmá de nuevo:",
+              "",
+              buildSummary({
+                typeName: absenceType?.name ?? "Ausencia",
+                startDate: draft.startDate,
+                endDate: draft.endDate,
+                reason: draft.reason,
+                totalDays: current.totalDays,
+                countingMode: current.countingMode,
+                excludedSummary: current.excludedSummary,
+              }),
+            ].join("\n"),
+            employeeId: input.employeeId,
+            phoneFrom: input.phoneTo,
+            phoneTo: input.phoneFrom,
+          });
+        }
+
         const { isExisting } = await absenceRequestService.createFromWhatsapp(companyId, {
           employeeId: input.employeeId,
           absenceTypeId: draft.absenceTypeId,

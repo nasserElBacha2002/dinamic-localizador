@@ -3,6 +3,7 @@ import {
   ABSENCE_CALENDAR_DATE_TYPES,
   ABSENCE_DAY_COUNTING_MODES,
 } from "../constants/absence-calendar";
+import { isValidOperationTimezone } from "../constants/company-settings";
 import { WEEKDAY_NUMBERS } from "../constants/weekday";
 import { absenceDayPeriodSchema } from "./absence-request.schema";
 
@@ -11,11 +12,23 @@ const absenceDateSchema = z
   .regex(/^\d{4}-\d{2}-\d{2}$/, "La fecha debe tener formato YYYY-MM-DD");
 
 const weekdayRuleSchema = z.object({
-  dayOfWeek: z.coerce.number().int().refine((value) => (WEEKDAY_NUMBERS as readonly number[]).includes(value), {
-    message: "Día de semana inválido (1-7)",
-  }),
+  dayOfWeek: z.coerce
+    .number()
+    .int()
+    .refine((value) => (WEEKDAY_NUMBERS as readonly number[]).includes(value), {
+      message: "Día de semana inválido (1-7)",
+    }),
   isWorkingDay: z.boolean(),
 });
+
+const timezoneSchema = z
+  .string()
+  .trim()
+  .min(1)
+  .max(80)
+  .refine((value) => isValidOperationTimezone(value), {
+    message: "La zona horaria no es una zona IANA válida",
+  });
 
 export const absenceCalendarIdParamSchema = z.object({
   calendarId: z.string().uuid("UUID de calendario inválido"),
@@ -33,13 +46,20 @@ export const listCalendarDatesQuerySchema = z.object({
     .transform((value) => value === true || value === "true"),
 });
 
+export const createAbsenceCalendarSchema = z.object({
+  name: z.string().trim().min(1).max(120),
+  timezone: timezoneSchema,
+  isDefault: z.boolean().optional().default(false),
+  weekdays: z.array(weekdayRuleSchema).length(7).optional(),
+});
+
 export const updateAbsenceCalendarSchema = z.object({
   name: z.string().trim().min(1).max(120).optional(),
-  timezone: z.string().trim().min(1).max(80).optional(),
+  timezone: timezoneSchema.optional(),
   isDefault: z.boolean().optional(),
   isActive: z.boolean().optional(),
   weekdays: z.array(weekdayRuleSchema).length(7).optional(),
-  expectedUpdatedAt: z.string().datetime({ offset: true }).or(z.string().min(1)),
+  expectedVersion: z.coerce.number().int().min(1),
 });
 
 export const createCalendarDateSchema = z.object({
@@ -57,7 +77,7 @@ export const updateCalendarDateSchema = z.object({
   isWorkingDay: z.boolean().optional(),
   notes: z.string().trim().max(500).nullable().optional(),
   isActive: z.boolean().optional(),
-  expectedUpdatedAt: z.string().datetime({ offset: true }).or(z.string().min(1)),
+  expectedVersion: z.coerce.number().int().min(1),
 });
 
 export const calculateAbsenceDurationSchema = z
@@ -76,6 +96,7 @@ export const calculateAbsenceDurationSchema = z
 
 export const absenceDayCountingModeSchema = z.enum(ABSENCE_DAY_COUNTING_MODES);
 
+export type CreateAbsenceCalendarInput = z.infer<typeof createAbsenceCalendarSchema>;
 export type UpdateAbsenceCalendarInput = z.infer<typeof updateAbsenceCalendarSchema>;
 export type CreateCalendarDateInput = z.infer<typeof createCalendarDateSchema>;
 export type UpdateCalendarDateInput = z.infer<typeof updateCalendarDateSchema>;

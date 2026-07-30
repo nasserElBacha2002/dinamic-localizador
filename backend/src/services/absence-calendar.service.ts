@@ -5,6 +5,7 @@ import {
   ABSENCE_MAX_RANGE_CALENDAR_DAYS,
   type AbsenceDayCountingMode,
 } from "../constants/absence-calendar";
+import { isValidOperationTimezone } from "../constants/company-settings";
 import { WEEKDAY_NUMBERS, type WeekdayNumber } from "../constants/weekday";
 import { AppError } from "../errors/app-error";
 import { getPool } from "../database/connection";
@@ -13,7 +14,11 @@ import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import type { AbsenceDayPeriod, AbsenceType } from "../types/absence";
-import type { CompanyWorkCalendar } from "../types/absence-calendar";
+import type {
+  AbsenceCalculationFingerprint,
+  CompanyWorkCalendar,
+} from "../types/absence-calendar";
+import { buildAbsenceCalculationInputHash } from "../utils/absence-calculation-hash";
 import {
   calculateAbsenceDuration,
   type AbsenceDurationCalculation,
@@ -25,6 +30,7 @@ import {
 } from "../utils/absence-date";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
+import { safeRollback } from "../utils/safe-transaction";
 import { auditService } from "./audit.service";
 import { absenceOperationImpactService } from "./absence-operation-impact.service";
 
@@ -42,46 +48,55 @@ const parseCountingMode = (value: unknown): AbsenceDayCountingMode => {
   return "CALENDAR_DAYS";
 };
 
-const ensureDefaultCalendar = async (companyId: string): Promise<CompanyWorkCalendar> => {
-  const existing = await absenceCalendarRepository.findDefaultCalendar(companyId);
+const assertValidTimezone = (timezone: string) => {
+  if (!isValidOperationTimezone(timezone)) {
+    throw new AppError(400, "INVALID_TIMEZONE", "La zona horaria no es una zona IANA válida");
+  }
+};
+
+/**
+ * Explicit bootstrap for company create / admin repair. Not used by GET handlers.
+ */
+const bootstrapDefaultCalendarInTransaction = async (
+  companyId: string,
+  timezone: string,
+  transaction: sql.Transaction,
+  userId?: string | null,
+): Promise<CompanyWorkCalendar> => {
+  assertValidTimezone(timezone);
+  const existing = await absenceCalendarRepository.findDefaultCalendar(companyId, transaction);
   if (existing) {
     return existing;
   }
 
-  const timezone = await absenceOperationImpactService.getOperationTimezone(companyId);
-  const pool = getPool();
-  const transaction = new sql.Transaction(pool);
-  await transaction.begin();
-  try {
-    const created = await absenceCalendarRepository.createCalendar(
-      companyId,
-      {
-        name: "Calendario laboral",
-        timezone,
-        isDefault: true,
-        weekdays: DEFAULT_WEEKDAYS,
-      },
-      transaction,
-    );
-    await transaction.commit();
-    return created;
-  } catch (error) {
-    try {
-      await transaction.rollback();
-    } catch {
-      /* ignore */
-    }
-    const raced = await absenceCalendarRepository.findDefaultCalendar(companyId);
-    if (raced) {
-      return raced;
-    }
-    throw error;
-  }
+  const created = await absenceCalendarRepository.createCalendar(
+    companyId,
+    {
+      name: "Calendario laboral",
+      timezone,
+      isDefault: true,
+      weekdays: DEFAULT_WEEKDAYS,
+    },
+    transaction,
+  );
+  await auditService.log(
+    companyId,
+    {
+      entityType: "company_work_calendar",
+      entityId: created.id,
+      action: "CREATE",
+      newData: created as unknown as Record<string, unknown>,
+      userId: userId ?? null,
+      reason: "Bootstrap calendario por defecto",
+    },
+    transaction,
+  );
+  return created;
 };
 
 const resolveCalendarForType = async (
   companyId: string,
-  absenceType: AbsenceType & { dayCountingMode?: AbsenceDayCountingMode; calendarId?: string | null },
+  absenceType: AbsenceType,
 ): Promise<CompanyWorkCalendar> => {
   if (absenceType.calendarId) {
     const typed = await absenceCalendarRepository.findCalendarById(
@@ -93,26 +108,137 @@ const resolveCalendarForType = async (
     }
     return typed;
   }
-  return ensureDefaultCalendar(companyId);
+  const defaultCalendar = await absenceCalendarRepository.findDefaultCalendar(companyId);
+  if (!defaultCalendar) {
+    throw new AppError(
+      409,
+      "ABSENCE_CALENDAR_MISSING",
+      "La empresa no tiene un calendario laboral por defecto. Creá uno desde configuración.",
+    );
+  }
+  return defaultCalendar;
 };
 
 const isAdvancedCalendarEnabled = async (companyId: string): Promise<boolean> => {
   const settings = await companySettingsRepository.findByCompanyId(companyId);
-  if (!settings) {
-    return true;
-  }
-  const flag = settings.absenceAdvancedCalendarEnabled;
-  return flag !== false;
+  return Boolean(settings?.absenceAdvancedCalendarEnabled);
 };
 
 export const absenceCalendarService = {
   async listCalendars(companyId: string) {
-    await ensureDefaultCalendar(companyId);
     return absenceCalendarRepository.listCalendars(companyId);
   },
 
   async getDefaultCalendar(companyId: string) {
-    return ensureDefaultCalendar(companyId);
+    const calendar = await absenceCalendarRepository.findDefaultCalendar(companyId);
+    if (!calendar) {
+      throw new AppError(
+        404,
+        "ABSENCE_CALENDAR_NOT_FOUND",
+        "No hay un calendario laboral por defecto para esta empresa",
+      );
+    }
+    return calendar;
+  },
+
+  async bootstrapDefaultCalendar(
+    companyId: string,
+    options?: { timezone?: string; userId?: string | null; transaction?: sql.Transaction },
+  ): Promise<CompanyWorkCalendar> {
+    const timezone =
+      options?.timezone ?? (await absenceOperationImpactService.getOperationTimezone(companyId));
+    assertValidTimezone(timezone);
+
+    if (options?.transaction) {
+      return bootstrapDefaultCalendarInTransaction(
+        companyId,
+        timezone,
+        options.transaction,
+        options.userId,
+      );
+    }
+
+    const existing = await absenceCalendarRepository.findDefaultCalendar(companyId);
+    if (existing) {
+      return existing;
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const created = await bootstrapDefaultCalendarInTransaction(
+        companyId,
+        timezone,
+        transaction,
+        options?.userId,
+      );
+      await transaction.commit();
+      return created;
+    } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        /* ignore */
+      }
+      const raced = await absenceCalendarRepository.findDefaultCalendar(companyId);
+      if (raced) {
+        return raced;
+      }
+      throw error;
+    }
+  },
+
+  async createCalendar(
+    companyId: string,
+    input: {
+      name: string;
+      timezone: string;
+      isDefault?: boolean;
+      weekdays?: Array<{ dayOfWeek: WeekdayNumber; isWorkingDay: boolean }>;
+    },
+    userId?: string | null,
+  ) {
+    assertValidTimezone(input.timezone);
+    const weekdays = input.weekdays ?? DEFAULT_WEEKDAYS;
+    if (weekdays.length !== 7) {
+      throw new AppError(400, "INVALID_WEEKDAYS", "Debés definir los 7 días de la semana");
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const created = await absenceCalendarRepository.createCalendar(
+        companyId,
+        {
+          name: input.name.trim(),
+          timezone: input.timezone,
+          isDefault: input.isDefault ?? false,
+          weekdays,
+        },
+        transaction,
+      );
+      await auditService.log(
+        companyId,
+        {
+          entityType: "company_work_calendar",
+          entityId: created.id,
+          action: "CREATE",
+          newData: created as unknown as Record<string, unknown>,
+          userId: userId ?? null,
+        },
+        transaction,
+      );
+      await transaction.commit();
+      return created;
+    } catch (error) {
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "absence-calendar.create", companyId },
+        error,
+      );
+    }
   },
 
   async updateCalendar(
@@ -124,33 +250,68 @@ export const absenceCalendarService = {
       isDefault?: boolean;
       isActive?: boolean;
       weekdays?: Array<{ dayOfWeek: WeekdayNumber; isWorkingDay: boolean }>;
-      expectedUpdatedAt: string;
+      expectedVersion: number;
     },
     userId?: string | null,
   ) {
-    const existing = await absenceCalendarRepository.findCalendarById(companyId, calendarId);
-    if (!existing) {
-      throw new AppError(404, "ABSENCE_CALENDAR_NOT_FOUND", "Calendario no encontrado");
-    }
-
-    if (input.isActive === false) {
-      const usage = await absenceCalendarRepository.countRequestsUsingCalendar(
-        companyId,
-        calendarId,
-      );
-      if (usage > 0 && existing.isDefault) {
-        throw new AppError(
-          409,
-          "ABSENCE_CALENDAR_IN_USE",
-          "No se puede desactivar el calendario por defecto mientras haya solicitudes que lo referencian. Asigná otro calendario por defecto primero.",
-        );
-      }
+    if (input.timezone !== undefined) {
+      assertValidTimezone(input.timezone);
     }
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
+      const existing = await absenceCalendarRepository.findCalendarById(
+        companyId,
+        calendarId,
+        transaction,
+      );
+      if (!existing) {
+        throw new AppError(404, "ABSENCE_CALENDAR_NOT_FOUND", "Calendario no encontrado");
+      }
+
+      if (input.isActive === false) {
+        const typeCount = await absenceCalendarRepository.countActiveTypesUsingCalendar(
+          companyId,
+          calendarId,
+          transaction,
+        );
+        const requestCount = await absenceCalendarRepository.countRequestsUsingCalendar(
+          companyId,
+          calendarId,
+          transaction,
+        );
+
+        if (typeCount > 0) {
+          throw new AppError(
+            409,
+            "ABSENCE_CALENDAR_IN_USE",
+            `No se puede desactivar: ${typeCount} tipo(s) de ausencia activos lo referencian`,
+            { typeCount, requestCount },
+          );
+        }
+        if (requestCount > 0) {
+          throw new AppError(
+            409,
+            "ABSENCE_CALENDAR_IN_USE",
+            `No se puede desactivar: ${requestCount} solicitud(es) históricas lo referencian`,
+            { typeCount, requestCount },
+          );
+        }
+        if (existing.isDefault) {
+          const defaults =
+            await absenceCalendarRepository.countActiveDefaultCalendars(companyId, transaction);
+          if (defaults <= 1) {
+            throw new AppError(
+              409,
+              "ABSENCE_CALENDAR_DEFAULT_REQUIRED",
+              "La empresa no puede quedar sin un calendario por defecto activo. Asigná otro default antes de desactivar.",
+            );
+          }
+        }
+      }
+
       const updated = await absenceCalendarRepository.updateCalendar(
         companyId,
         calendarId,
@@ -179,9 +340,13 @@ export const absenceCalendarService = {
       await transaction.commit();
       return updated;
     } catch (error) {
+      if (error instanceof AppError) {
+        await safeRollback(transaction);
+        throw error;
+      }
       return rollbackTransactionSafely(
         transaction,
-        { operation: "absence-calendar", companyId },
+        { operation: "absence-calendar.update", companyId, entityId: calendarId },
         error,
       );
     }
@@ -241,7 +406,7 @@ export const absenceCalendarService = {
       try {
         await transaction.rollback();
       } catch {
-        /* ignore rollback failure */
+        /* ignore */
       }
       if (isDuplicateKeyError(error)) {
         throw new AppError(
@@ -263,7 +428,7 @@ export const absenceCalendarService = {
       isWorkingDay?: boolean;
       notes?: string | null;
       isActive?: boolean;
-      expectedUpdatedAt: string;
+      expectedVersion: number;
     },
     userId?: string | null,
   ) {
@@ -271,13 +436,13 @@ export const absenceCalendarService = {
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
-      const updated = await absenceCalendarRepository.updateDate(
+      const result = await absenceCalendarRepository.updateDate(
         companyId,
         dateId,
         input,
         transaction,
       );
-      if (!updated) {
+      if (!result) {
         throw new AppError(
           409,
           "ABSENCE_CALENDAR_DATE_CONFLICT",
@@ -290,25 +455,31 @@ export const absenceCalendarService = {
           entityType: "company_calendar_date",
           entityId: dateId,
           action: "UPDATE",
-          newData: updated as unknown as Record<string, unknown>,
+          previousData: result.previous as unknown as Record<string, unknown>,
+          newData: result.updated as unknown as Record<string, unknown>,
           userId: userId ?? null,
         },
         transaction,
       );
       await transaction.commit();
-      return updated;
+      return result.updated;
     } catch (error) {
+      if (error instanceof AppError) {
+        try {
+          await transaction.rollback();
+        } catch {
+          /* ignore */
+        }
+        throw error;
+      }
       return rollbackTransactionSafely(
         transaction,
-        { operation: "absence-calendar", companyId },
+        { operation: "absence-calendar-date.update", companyId, entityId: dateId },
         error,
       );
     }
   },
 
-  /**
-   * Domain duration calculation used by create/edit/preview/WhatsApp.
-   */
   async calculateDuration(
     companyId: string,
     input: {
@@ -319,7 +490,7 @@ export const absenceCalendarService = {
       endPeriod: AbsenceDayPeriod;
       employeeId?: string;
     },
-  ): Promise<AbsenceDurationCalculation> {
+  ): Promise<AbsenceDurationCalculation & { fingerprint: AbsenceCalculationFingerprint }> {
     const start = parseAbsenceDateInput(input.startDate);
     const end = parseAbsenceDateInput(input.endDate);
     if (!start || !end) {
@@ -379,6 +550,31 @@ export const absenceCalendarService = {
         endPeriod,
       });
       const timezone = await absenceOperationImpactService.getOperationTimezone(companyId);
+      const inputHash = buildAbsenceCalculationInputHash({
+        absenceTypeId: absenceType.id,
+        startDate: start.iso,
+        endDate: end.iso,
+        startPeriod,
+        endPeriod,
+        countingMode: "CALENDAR_DAYS",
+        calendarId: "legacy",
+        calendarVersion: 0,
+        timezone,
+      });
+      const fingerprint: AbsenceCalculationFingerprint = {
+        absenceTypeId: absenceType.id,
+        startDate: start.iso,
+        endDate: end.iso,
+        startPeriod,
+        endPeriod,
+        calendarId: "legacy",
+        calendarVersion: 0,
+        countingMode: "CALENDAR_DAYS",
+        timezone,
+        totalDays,
+        calculationVersion: 1,
+        inputHash,
+      };
       return {
         totalDays,
         countingMode: "CALENDAR_DAYS",
@@ -389,20 +585,17 @@ export const absenceCalendarService = {
         partialDays: totalDays % 1 === 0.5 ? 0.5 : 0,
         timezone,
         calendarId: "legacy",
+        calendarVersion: 0,
         calculationVersion: 1,
+        calculationInputHash: inputHash,
         breakdown: [],
         excludedSummary: [],
+        fingerprint,
       };
     }
 
-    const typed = absenceType as AbsenceType & {
-      dayCountingMode?: AbsenceDayCountingMode;
-      calendarId?: string | null;
-    };
-    const countingMode = parseCountingMode(
-      typed.dayCountingMode ?? (absenceType as { dayCountingMode?: string }).dayCountingMode,
-    );
-    const calendar = await resolveCalendarForType(companyId, typed);
+    const countingMode = parseCountingMode(absenceType.dayCountingMode);
+    const calendar = await resolveCalendarForType(companyId, absenceType);
 
     const exceptions = await absenceCalendarRepository.listDatesInRange(
       companyId,
@@ -419,6 +612,7 @@ export const absenceCalendarService = {
       countingMode,
       timezone: calendar.timezone,
       calendarId: calendar.id,
+      calendarVersion: calendar.version,
       calculationVersion: ABSENCE_CALCULATION_VERSION,
       weekdays: calendar.weekdays.map((day) => ({
         dayOfWeek: day.dayOfWeek,
@@ -442,7 +636,38 @@ export const absenceCalendarService = {
       );
     }
 
-    return result;
+    const inputHash = buildAbsenceCalculationInputHash({
+      absenceTypeId: absenceType.id,
+      startDate: start.iso,
+      endDate: end.iso,
+      startPeriod,
+      endPeriod,
+      countingMode,
+      calendarId: calendar.id,
+      calendarVersion: calendar.version,
+      timezone: calendar.timezone,
+    });
+
+    const fingerprint: AbsenceCalculationFingerprint = {
+      absenceTypeId: absenceType.id,
+      startDate: start.iso,
+      endDate: end.iso,
+      startPeriod,
+      endPeriod,
+      calendarId: calendar.id,
+      calendarVersion: calendar.version,
+      countingMode,
+      timezone: calendar.timezone,
+      totalDays: result.totalDays,
+      calculationVersion: ABSENCE_CALCULATION_VERSION,
+      inputHash,
+    };
+
+    return {
+      ...result,
+      calculationInputHash: inputHash,
+      fingerprint,
+    };
   },
 
   async preview(

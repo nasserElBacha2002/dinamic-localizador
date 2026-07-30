@@ -37,7 +37,9 @@ export type AbsenceDurationCalculation = {
   partialDays: number;
   timezone: string;
   calendarId: string;
+  calendarVersion: number;
   calculationVersion: number;
+  calculationInputHash?: string;
   breakdown: AbsenceDayBreakdownItem[];
   excludedSummary: string[];
 };
@@ -141,6 +143,7 @@ export const calculateAbsenceDuration = (input: {
   countingMode: AbsenceDayCountingMode;
   timezone: string;
   calendarId: string;
+  calendarVersion: number;
   calculationVersion: number;
   weekdays: CalendarWeekdayRule[];
   exceptions: CalendarDateException[];
@@ -239,6 +242,7 @@ export const calculateAbsenceDuration = (input: {
     partialDays,
     timezone: input.timezone,
     calendarId: input.calendarId,
+    calendarVersion: input.calendarVersion,
     calculationVersion: input.calculationVersion,
     breakdown,
     excludedSummary: [...new Set(excludedSummary)].slice(0, 12),

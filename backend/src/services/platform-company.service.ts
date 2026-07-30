@@ -110,6 +110,12 @@ export const platformCompanyService = {
         settingsInput.operationTimezone,
         transaction,
       );
+      const { absenceCalendarService } = await import("./absence-calendar.service");
+      await absenceCalendarService.bootstrapDefaultCalendar(company.id, {
+        timezone: settingsInput.operationTimezone,
+        userId: actorUserId,
+        transaction,
+      });
 
       const moduleKeys = [
         ...new Set(input.modules?.length ? input.modules : DEFAULT_COMPANY_MODULE_KEYS),

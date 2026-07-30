@@ -105,4 +105,41 @@ export const absenceTypeRepository = {
     const types = await this.listAll(companyId, false);
     return types.map((type) => type.code);
   },
+
+  async updateCalendarPolicy(
+    companyId: string,
+    typeId: string,
+    input: {
+      dayCountingMode?: string;
+      calendarId?: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<AbsenceType | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const fields: string[] = ["updated_at = SYSUTCDATETIME()"];
+    request.input("companyId", sql.UniqueIdentifier, companyId).input("id", sql.UniqueIdentifier, typeId);
+
+    if (input.dayCountingMode !== undefined) {
+      request.input("dayCountingMode", sql.NVarChar(30), input.dayCountingMode);
+      fields.push("day_counting_mode = @dayCountingMode");
+    }
+    if (input.calendarId !== undefined) {
+      request.input("calendarId", sql.UniqueIdentifier, input.calendarId);
+      fields.push("calendar_id = @calendarId");
+    }
+    if (fields.length === 1) {
+      return this.findById(companyId, typeId);
+    }
+
+    const result = await request.query(`
+      UPDATE absence_types
+      SET ${fields.join(", ")}
+      OUTPUT INSERTED.*
+      WHERE id = @id AND company_id = @companyId
+    `);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapAbsenceTypeRow(result.recordset[0] as Record<string, unknown>);
+  },
 };

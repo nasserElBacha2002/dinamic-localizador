@@ -50,7 +50,7 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   ),
   absenceAdvancedCalendarEnabled:
     row.absence_advanced_calendar_enabled == null
-      ? true
+      ? false
       : Boolean(row.absence_advanced_calendar_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
@@ -188,6 +188,7 @@ export const companySettingsRepository = {
         | "confirmationReminderEnabled"
         | "confirmationReminderHoursBefore"
         | "pendingOperationExpirationHours"
+        | "absenceAdvancedCalendarEnabled"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -286,6 +287,14 @@ export const companySettingsRepository = {
         input.pendingOperationExpirationHours,
       );
       fields.push("pending_operation_expiration_hours = @pendingOperationExpirationHours");
+    }
+    if (input.absenceAdvancedCalendarEnabled !== undefined) {
+      request.input(
+        "absenceAdvancedCalendarEnabled",
+        sql.Bit,
+        input.absenceAdvancedCalendarEnabled ? 1 : 0,
+      );
+      fields.push("absence_advanced_calendar_enabled = @absenceAdvancedCalendarEnabled");
     }
 
     if (fields.length === 0) {

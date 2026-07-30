@@ -11,6 +11,7 @@ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
 import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
 import { serviceService } from "../services/service.service";
 import { serviceRepository } from "../repositories/service.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -19,27 +20,6 @@ import { hashPassword } from "../utils/password";
 import { companyLocationTypesRepository } from "../repositories/company-location-types.repository";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-const deleteCompanyCascade = async (companyId: string): Promise<void> => {
-  const pool = getPool();
-  await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
-    DELETE FROM operational_locations WHERE company_id = @companyId;
-    DELETE FROM employee_absence_balances WHERE company_id = @companyId;
-    DELETE FROM employees WHERE company_id = @companyId;
-    DELETE FROM employee_categories WHERE company_id = @companyId;
-    DELETE FROM company_absence_settings WHERE company_id = @companyId;
-    DELETE FROM absence_types WHERE company_id = @companyId;
-    DELETE FROM company_location_types WHERE company_id = @companyId;
-    DELETE FROM user_company_memberships WHERE company_id = @companyId;
-    DELETE FROM company_modules WHERE company_id = @companyId;
-    DELETE FROM company_settings WHERE company_id = @companyId;
-    DELETE FROM company_work_schedule_days WHERE company_id = @companyId;
-    DELETE FROM company_work_schedules WHERE company_id = @companyId;
-    DELETE FROM user_invitations WHERE company_id = @companyId;
-    DELETE FROM audit_logs WHERE company_id = @companyId;
-    DELETE FROM companies WHERE id = @companyId;
-  `);
-};
 
 describeDatabaseIntegration("services list filters, facets, and sorting", () => {
   const createdCompanyIds: string[] = [];

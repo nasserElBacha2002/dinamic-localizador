@@ -23,6 +23,7 @@ export type CompanyWorkCalendar = {
   isDefault: boolean;
   timezone: string;
   isActive: boolean;
+  version: number;
   createdAt: string;
   updatedAt: string;
   weekdays: CompanyWorkCalendarWeekday[];
@@ -38,6 +39,7 @@ export type CompanyCalendarDate = {
   isWorkingDay: boolean;
   notes: string | null;
   isActive: boolean;
+  version: number;
   createdAt: string;
   updatedAt: string;
 };

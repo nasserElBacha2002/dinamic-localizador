@@ -32,6 +32,7 @@ const mapCalendarRow = (
   isDefault: Boolean(row.is_default),
   timezone: String(row.timezone),
   isActive: Boolean(row.is_active),
+  version: Number(row.version ?? 1),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
   weekdays,
@@ -47,6 +48,7 @@ const mapDateRow = (row: Record<string, unknown>): CompanyCalendarDate => ({
   isWorkingDay: Boolean(row.is_working_day),
   notes: row.notes ? String(row.notes) : null,
   isActive: Boolean(row.is_active),
+  version: Number(row.version ?? 1),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -70,7 +72,7 @@ const loadWeekdays = async (
 export const absenceCalendarRepository = {
   async listCalendars(companyId: string): Promise<CompanyWorkCalendar[]> {
     const pool = getPool();
-    const result = await pool
+    const calendarsResult = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -80,13 +82,29 @@ export const absenceCalendarRepository = {
         ORDER BY is_default DESC, name ASC
       `);
 
-    const calendars: CompanyWorkCalendar[] = [];
-    for (const row of result.recordset) {
-      const mapped = row as Record<string, unknown>;
-      const weekdays = await loadWeekdays(String(mapped.id));
-      calendars.push(mapCalendarRow(mapped, weekdays));
+    const weekdaysResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT *
+        FROM company_work_calendar_weekdays
+        WHERE company_id = @companyId
+        ORDER BY calendar_id ASC, day_of_week ASC
+      `);
+
+    const weekdaysByCalendar = new Map<string, CompanyWorkCalendarWeekday[]>();
+    for (const row of weekdaysResult.recordset) {
+      const mapped = mapWeekdayRow(row as Record<string, unknown>);
+      const list = weekdaysByCalendar.get(mapped.calendarId) ?? [];
+      list.push(mapped);
+      weekdaysByCalendar.set(mapped.calendarId, list);
     }
-    return calendars;
+
+    return calendarsResult.recordset.map((row) => {
+      const mapped = row as Record<string, unknown>;
+      const id = String(mapped.id);
+      return mapCalendarRow(mapped, weekdaysByCalendar.get(id) ?? []);
+    });
   },
 
   async findCalendarById(
@@ -193,15 +211,12 @@ export const absenceCalendarRepository = {
       isDefault?: boolean;
       isActive?: boolean;
       weekdays?: Array<{ dayOfWeek: WeekdayNumber; isWorkingDay: boolean }>;
-      expectedUpdatedAt: string;
+      expectedVersion: number;
     },
     transaction: sql.Transaction,
   ): Promise<CompanyWorkCalendar | null> {
     const existing = await this.findCalendarById(companyId, calendarId, transaction);
     if (!existing) {
-      return null;
-    }
-    if (new Date(existing.updatedAt).toISOString() !== new Date(input.expectedUpdatedAt).toISOString()) {
       return null;
     }
 
@@ -211,7 +226,7 @@ export const absenceCalendarRepository = {
         .input("calendarId", sql.UniqueIdentifier, calendarId)
         .query(`
           UPDATE company_work_calendars
-          SET is_default = 0, updated_at = SYSUTCDATETIME()
+          SET is_default = 0, updated_at = SYSUTCDATETIME(), version = version + 1
           WHERE company_id = @companyId AND is_default = 1 AND id <> @calendarId
         `);
     }
@@ -223,7 +238,7 @@ export const absenceCalendarRepository = {
       .input("timezone", sql.NVarChar(80), input.timezone ?? existing.timezone)
       .input("isDefault", sql.Bit, (input.isDefault ?? existing.isDefault) ? 1 : 0)
       .input("isActive", sql.Bit, (input.isActive ?? existing.isActive) ? 1 : 0)
-      .input("expectedUpdatedAt", sql.DateTime2, new Date(input.expectedUpdatedAt))
+      .input("expectedVersion", sql.Int, input.expectedVersion)
       .query(`
         UPDATE company_work_calendars
         SET
@@ -231,11 +246,12 @@ export const absenceCalendarRepository = {
           timezone = @timezone,
           is_default = @isDefault,
           is_active = @isActive,
+          version = version + 1,
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @calendarId
           AND company_id = @companyId
-          AND updated_at = @expectedUpdatedAt
+          AND version = @expectedVersion
       `);
 
     if (!result.recordset[0]) {
@@ -275,8 +291,10 @@ export const absenceCalendarRepository = {
       filters.push("is_active = 1");
     }
     if (options?.year != null) {
-      filters.push("YEAR([date]) = @year");
-      request.input("year", sql.Int, options.year);
+      const year = options.year;
+      filters.push("[date] >= @yearStart AND [date] < @nextYearStart");
+      request.input("yearStart", sql.Date, `${year}-01-01`);
+      request.input("nextYearStart", sql.Date, `${year + 1}-01-01`);
     }
 
     const result = await request.query(`
@@ -356,10 +374,10 @@ export const absenceCalendarRepository = {
       isWorkingDay?: boolean;
       notes?: string | null;
       isActive?: boolean;
-      expectedUpdatedAt: string;
+      expectedVersion: number;
     },
     transaction: sql.Transaction,
-  ): Promise<CompanyCalendarDate | null> {
+  ): Promise<{ previous: CompanyCalendarDate; updated: CompanyCalendarDate } | null> {
     const existingResult = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("dateId", sql.UniqueIdentifier, dateId)
@@ -368,32 +386,29 @@ export const absenceCalendarRepository = {
         FROM company_calendar_dates
         WHERE id = @dateId AND company_id = @companyId
       `);
-    const existing = existingResult.recordset[0] as Record<string, unknown> | undefined;
-    if (!existing) {
+    const existingRow = existingResult.recordset[0] as Record<string, unknown> | undefined;
+    if (!existingRow) {
       return null;
     }
+    const previous = mapDateRow(existingRow);
 
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("dateId", sql.UniqueIdentifier, dateId)
-      .input("name", sql.NVarChar(200), input.name ?? String(existing.name))
-      .input("dateType", sql.NVarChar(40), input.dateType ?? String(existing.date_type))
+      .input("name", sql.NVarChar(200), input.name ?? previous.name)
+      .input("dateType", sql.NVarChar(40), input.dateType ?? previous.dateType)
       .input(
         "isWorkingDay",
         sql.Bit,
-        (input.isWorkingDay ?? Boolean(existing.is_working_day)) ? 1 : 0,
+        (input.isWorkingDay ?? previous.isWorkingDay) ? 1 : 0,
       )
       .input(
         "notes",
         sql.NVarChar(500),
-        input.notes !== undefined
-          ? input.notes
-          : existing.notes
-            ? String(existing.notes)
-            : null,
+        input.notes !== undefined ? input.notes : previous.notes,
       )
-      .input("isActive", sql.Bit, (input.isActive ?? Boolean(existing.is_active)) ? 1 : 0)
-      .input("expectedUpdatedAt", sql.DateTime2, new Date(input.expectedUpdatedAt))
+      .input("isActive", sql.Bit, (input.isActive ?? previous.isActive) ? 1 : 0)
+      .input("expectedVersion", sql.Int, input.expectedVersion)
       .query(`
         UPDATE company_calendar_dates
         SET
@@ -402,29 +417,70 @@ export const absenceCalendarRepository = {
           is_working_day = @isWorkingDay,
           notes = @notes,
           is_active = @isActive,
+          version = version + 1,
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @dateId
           AND company_id = @companyId
-          AND updated_at = @expectedUpdatedAt
+          AND version = @expectedVersion
       `);
 
     if (!result.recordset[0]) {
       return null;
     }
-    return mapDateRow(result.recordset[0] as Record<string, unknown>);
+    return {
+      previous,
+      updated: mapDateRow(result.recordset[0] as Record<string, unknown>),
+    };
   },
 
-  async countRequestsUsingCalendar(companyId: string, calendarId: string): Promise<number> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async countRequestsUsingCalendar(
+    companyId: string,
+    calendarId: string,
+    transaction?: sql.Transaction,
+  ): Promise<number> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("calendarId", sql.UniqueIdentifier, calendarId)
       .query(`
         SELECT COUNT(1) AS cnt
         FROM absence_requests
         WHERE company_id = @companyId AND calendar_id = @calendarId
+      `);
+    return Number(result.recordset[0]?.cnt ?? 0);
+  },
+
+  async countActiveTypesUsingCalendar(
+    companyId: string,
+    calendarId: string,
+    transaction?: sql.Transaction,
+  ): Promise<number> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("calendarId", sql.UniqueIdentifier, calendarId)
+      .query(`
+        SELECT COUNT(1) AS cnt
+        FROM absence_types
+        WHERE company_id = @companyId
+          AND calendar_id = @calendarId
+          AND is_active = 1
+      `);
+    return Number(result.recordset[0]?.cnt ?? 0);
+  },
+
+  async countActiveDefaultCalendars(
+    companyId: string,
+    transaction?: sql.Transaction,
+  ): Promise<number> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT COUNT(1) AS cnt
+        FROM company_work_calendars
+        WHERE company_id = @companyId AND is_default = 1 AND is_active = 1
       `);
     return Number(result.recordset[0]?.cnt ?? 0);
   },

@@ -8,6 +8,7 @@ export type CompanyWorkCalendar = {
   isDefault: boolean;
   timezone: string;
   isActive: boolean;
+  version: number;
   createdAt: string;
   updatedAt: string;
   weekdays: CompanyWorkCalendarWeekday[];
@@ -33,6 +34,7 @@ export type CompanyCalendarDate = {
   isWorkingDay: boolean;
   notes: string | null;
   isActive: boolean;
+  version: number;
   createdAt: string;
   updatedAt: string;
 };
@@ -47,4 +49,21 @@ export type AbsenceCalculationSnapshot = {
   calendarId: string | null;
   calendarTimezone: string | null;
   calculationVersion: number | null;
+  calendarVersion: number | null;
+  calculationInputHash: string | null;
+};
+
+export type AbsenceCalculationFingerprint = {
+  absenceTypeId: string;
+  startDate: string;
+  endDate: string;
+  startPeriod: string;
+  endPeriod: string;
+  calendarId: string;
+  calendarVersion: number;
+  countingMode: AbsenceDayCountingMode;
+  timezone: string;
+  totalDays: number;
+  calculationVersion: number;
+  inputHash: string;
 };

@@ -14,11 +14,15 @@ import {
 import { useMemo, useState } from "react";
 import {
   useAbsenceCalendarDates,
+  useAbsenceCalendars,
+  useCreateAbsenceCalendar,
   useCreateAbsenceCalendarDate,
   useDefaultAbsenceCalendar,
   useUpdateAbsenceCalendar,
   useUpdateAbsenceCalendarDate,
+  useBootstrapDefaultAbsenceCalendar,
 } from "../../../hooks/useAbsenceCalendar";
+import { useCompanySettings, useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { SettingsDialog } from "./SettingsDialog";
 
@@ -55,12 +59,18 @@ export function CompanyAbsenceCalendarDialog({
   const year = new Date().getFullYear();
   const [selectedYear, setSelectedYear] = useState(year);
   const calendarQuery = useDefaultAbsenceCalendar(opened);
+  const calendarsQuery = useAbsenceCalendars(opened);
   const datesQuery = useAbsenceCalendarDates(calendarQuery.data?.id, selectedYear, opened);
   const updateCalendar = useUpdateAbsenceCalendar();
+  const createCalendar = useCreateAbsenceCalendar();
   const createDate = useCreateAbsenceCalendarDate();
   const updateDate = useUpdateAbsenceCalendarDate();
+  const bootstrap = useBootstrapDefaultAbsenceCalendar();
+  const settingsQuery = useCompanySettings(opened);
+  const updateSettings = useUpdateCompanySettings();
 
   const [name, setName] = useState("");
+  const [newCalendarName, setNewCalendarName] = useState("");
   const [date, setDate] = useState("");
   const [dateType, setDateType] = useState<string>("HOLIDAY");
   const [isWorkingDay, setIsWorkingDay] = useState(false);
@@ -78,7 +88,7 @@ export function CompanyAbsenceCalendarDialog({
     try {
       await updateCalendar.mutateAsync({
         calendarId: calendar.id,
-        expectedUpdatedAt: calendar.updatedAt,
+        expectedVersion: calendar.version,
         weekdays: weekdays.map((day) =>
           day.dayOfWeek === dayOfWeek ? { dayOfWeek, isWorkingDay: isWorking } : {
             dayOfWeek: day.dayOfWeek,
@@ -117,7 +127,7 @@ export function CompanyAbsenceCalendarDialog({
     }
   };
 
-  const handleDeactivate = async (dateId: string, expectedUpdatedAt: string) => {
+  const handleDeactivate = async (dateId: string, expectedVersion: number) => {
     if (!calendar || !canUpdate) {
       return;
     }
@@ -130,7 +140,7 @@ export function CompanyAbsenceCalendarDialog({
         dateId,
         calendarId: calendar.id,
         isActive: false,
-        expectedUpdatedAt,
+        expectedVersion,
       });
       onSaved("Fecha especial desactivada.");
     } catch (error) {
@@ -152,9 +162,88 @@ export function CompanyAbsenceCalendarDialog({
       submitError={submitError}
     >
       <Stack gap="md">
-        {calendarQuery.isError ? (
-          <Alert color="red">{getApiErrorMessage(calendarQuery.error)}</Alert>
+        {settingsQuery.data ? (
+          <Switch
+            label="Calendario avanzado de ausencias"
+            description="Cuando está activo, los tipos en días hábiles usan feriados y weekdays. Las solicitudes históricas no se recalculan."
+            checked={Boolean(settingsQuery.data.absenceAdvancedCalendarEnabled)}
+            disabled={!canUpdate || updateSettings.isPending}
+            onChange={(event) => {
+              void updateSettings
+                .mutateAsync({
+                  absenceAdvancedCalendarEnabled: event.currentTarget.checked,
+                })
+                .then(() =>
+                  onSaved(
+                    event.currentTarget.checked
+                      ? "Calendario avanzado activado."
+                      : "Calendario avanzado desactivado (modo legacy).",
+                  ),
+                )
+                .catch((error: unknown) => setSubmitError(getApiErrorMessage(error)));
+            }}
+          />
         ) : null}
+        {calendarQuery.isError ? (
+          <Stack gap="sm">
+            <Alert color="red">{getApiErrorMessage(calendarQuery.error)}</Alert>
+            {canUpdate ? (
+              <Button
+                onClick={() =>
+                  void bootstrap.mutateAsync().then(() => onSaved("Calendario por defecto creado."))
+                }
+                loading={bootstrap.isPending}
+              >
+                Crear calendario por defecto
+              </Button>
+            ) : null}
+          </Stack>
+        ) : null}
+        {(calendarsQuery.data?.length ?? 0) > 0 ? (
+          <Stack gap={4}>
+            <Text fw={600}>Calendarios de la empresa</Text>
+            {(calendarsQuery.data ?? []).map((item) => (
+              <Text key={item.id} size="sm" c="dimmed">
+                {item.name}
+                {item.isDefault ? " · default" : ""}
+                {!item.isActive ? " · inactivo" : ""} · {item.timezone}
+              </Text>
+            ))}
+          </Stack>
+        ) : null}
+
+        {canUpdate && calendar ? (
+          <Group align="flex-end" grow preventGrowOverflow={false}>
+            <TextInput
+              label="Nuevo calendario"
+              placeholder="Nombre"
+              value={newCalendarName}
+              onChange={(event) => setNewCalendarName(event.currentTarget.value)}
+            />
+            <Button
+              loading={createCalendar.isPending}
+              onClick={() => {
+                if (!newCalendarName.trim()) {
+                  return;
+                }
+                void createCalendar
+                  .mutateAsync({
+                    name: newCalendarName.trim(),
+                    timezone: calendar.timezone,
+                    isDefault: false,
+                  })
+                  .then(() => {
+                    setNewCalendarName("");
+                    onSaved("Calendario creado.");
+                  })
+                  .catch((error: unknown) => setSubmitError(getApiErrorMessage(error)));
+              }}
+            >
+              Crear
+            </Button>
+          </Group>
+        ) : null}
+
         {calendar ? (
           <>
             <Text size="sm" c="dimmed">
@@ -271,7 +360,7 @@ export function CompanyAbsenceCalendarDialog({
                               size="xs"
                               variant="light"
                               color="red"
-                              onClick={() => void handleDeactivate(item.id, item.updatedAt)}
+                              onClick={() => void handleDeactivate(item.id, item.version)}
                               loading={updateDate.isPending}
                             >
                               Desactivar

@@ -13,6 +13,7 @@ import {
   resubmitAbsenceRequest,
   updateNeedsInfoAbsenceRequest,
   upsertEmployeeAbsenceBalance,
+  updateAbsenceType,
 } from "../api/absences.api";
 import type {
   AbsenceRequestFilters,
@@ -44,6 +45,24 @@ export function useAbsenceTypes() {
     queryKey: absenceKeys.types(companyId),
     queryFn: getAbsenceTypes,
     enabled,
+  });
+}
+
+export function useUpdateAbsenceType() {
+  const { companyId } = useOperationalQueryEnabled();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      ...input
+    }: {
+      id: string;
+      dayCountingMode?: "CALENDAR_DAYS" | "BUSINESS_DAYS";
+      calendarId?: string | null;
+    }) => updateAbsenceType(id, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: absenceKeys.types(companyId) });
+    },
   });
 }
 

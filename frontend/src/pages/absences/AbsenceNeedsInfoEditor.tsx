@@ -1,6 +1,7 @@
-import { Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
+import { AbsenceDurationPreviewPanel } from "../../components/absences/AbsenceDurationPreviewPanel";
 import { SectionCard } from "../../design-system";
 import { useAbsenceDurationPreview } from "../../hooks/useAbsenceCalendar";
 import {
@@ -8,7 +9,6 @@ import {
   useUpdateNeedsInfoAbsenceRequest,
 } from "../../hooks/useAbsences";
 import type { AbsenceDayPeriod, AbsenceRequestDetail } from "../../types/absence";
-import { getApiErrorMessage } from "../../utils/errors";
 
 const PERIOD_OPTIONS: Array<{ value: AbsenceDayPeriod; label: string }> = [
   { value: "FULL_DAY", label: "Día completo" },
@@ -123,9 +123,6 @@ export function AbsenceNeedsInfoEditor({
     }
   };
 
-  const countingLabel =
-    previewQuery.data?.countingMode === "BUSINESS_DAYS" ? "días hábiles" : "días corridos";
-
   return (
     <SectionCard title="Corrección administrativa (requiere información)">
       <Stack gap="md">
@@ -135,7 +132,11 @@ export function AbsenceNeedsInfoEditor({
         </Alert>
         <Select
           label="Tipo de ausencia"
-          data={typeOptions.map(({ value, label }) => ({ value, label }))}
+          data={typeOptions.map(({ value, label, dayCountingMode }) => ({
+            value,
+            label:
+              dayCountingMode === "BUSINESS_DAYS" ? `${label} (días hábiles)` : label,
+          }))}
           value={editAbsenceTypeId}
           onChange={handleTypeChange}
           searchable
@@ -176,37 +177,7 @@ export function AbsenceNeedsInfoEditor({
           </Group>
         ) : null}
 
-        {previewQuery.isFetching ? (
-          <Text size="sm" c="dimmed">
-            Calculando duración…
-          </Text>
-        ) : null}
-        {previewQuery.isError ? (
-          <Alert color="red">{getApiErrorMessage(previewQuery.error)}</Alert>
-        ) : null}
-        {previewQuery.data ? (
-          <Alert color="gray">
-            <Stack gap={4}>
-              <Text size="sm">
-                Duración calculada: {previewQuery.data.totalDays} {countingLabel}
-              </Text>
-              <Text size="xs" c="dimmed">
-                Zona horaria: {previewQuery.data.timezone}
-              </Text>
-              {previewQuery.data.warnings.map((warning) => (
-                <Text key={warning} size="sm">
-                  {warning}
-                </Text>
-              ))}
-              {previewQuery.data.excludedSummary.length > 0 ? (
-                <Text size="sm">
-                  Se excluyen: {previewQuery.data.excludedSummary.slice(0, 8).join(", ")}
-                  {previewQuery.data.excludedSummary.length > 8 ? "…" : ""}
-                </Text>
-              ) : null}
-            </Stack>
-          </Alert>
-        ) : null}
+        <AbsenceDurationPreviewPanel query={previewQuery} />
 
         <Textarea
           label="Motivo"

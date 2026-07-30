@@ -1,8 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  bootstrapDefaultAbsenceCalendar,
   calculateAbsenceDuration,
+  createAbsenceCalendar,
   createAbsenceCalendarDate,
   getDefaultAbsenceCalendar,
+  listAbsenceCalendars,
   listAbsenceCalendarDates,
   updateAbsenceCalendar,
   updateAbsenceCalendarDate,
@@ -11,12 +14,33 @@ import { absenceKeys } from "../api/absence-query-keys";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 import type { AbsenceDayPeriod } from "../types/absence";
 
+export function useAbsenceCalendars(extraEnabled = true) {
+  const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
+  return useQuery({
+    queryKey: absenceKeys.calendars(companyId),
+    queryFn: listAbsenceCalendars,
+    enabled,
+  });
+}
+
 export function useDefaultAbsenceCalendar(extraEnabled = true) {
   const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
   return useQuery({
     queryKey: absenceKeys.calendarDefault(companyId),
     queryFn: getDefaultAbsenceCalendar,
     enabled,
+    retry: false,
+  });
+}
+
+export function useCreateAbsenceCalendar() {
+  const { companyId } = useOperationalQueryEnabled();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: createAbsenceCalendar,
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: absenceKeys.calendars(companyId) });
+    },
   });
 }
 
@@ -74,8 +98,19 @@ export function useUpdateAbsenceCalendar() {
       isDefault?: boolean;
       isActive?: boolean;
       weekdays?: Array<{ dayOfWeek: number; isWorkingDay: boolean }>;
-      expectedUpdatedAt: string;
+      expectedVersion: number;
     }) => updateAbsenceCalendar(calendarId, input),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: absenceKeys.calendars(companyId) });
+    },
+  });
+}
+
+export function useBootstrapDefaultAbsenceCalendar() {
+  const { companyId } = useOperationalQueryEnabled();
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: bootstrapDefaultAbsenceCalendar,
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: absenceKeys.calendars(companyId) });
     },
@@ -112,7 +147,7 @@ export function useUpdateAbsenceCalendarDate() {
       isWorkingDay?: boolean;
       notes?: string | null;
       isActive?: boolean;
-      expectedUpdatedAt: string;
+      expectedVersion: number;
       calendarId: string;
     }) => updateAbsenceCalendarDate(dateId, input),
     onSuccess: (_data, variables) => {

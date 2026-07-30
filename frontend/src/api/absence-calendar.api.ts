@@ -31,12 +31,32 @@ export async function updateAbsenceCalendar(
     isDefault?: boolean;
     isActive?: boolean;
     weekdays?: Array<{ dayOfWeek: number; isWorkingDay: boolean }>;
-    expectedUpdatedAt: string;
+    expectedVersion: number;
   },
 ): Promise<CompanyWorkCalendar> {
   const { data } = await scopedApiClient.patch<SingleResponse<CompanyWorkCalendar>>(
     `absence-calendars/${calendarId}`,
     input,
+  );
+  return data.data;
+}
+
+export async function createAbsenceCalendar(input: {
+  name: string;
+  timezone: string;
+  isDefault?: boolean;
+  weekdays?: Array<{ dayOfWeek: number; isWorkingDay: boolean }>;
+}): Promise<CompanyWorkCalendar> {
+  const { data } = await scopedApiClient.post<SingleResponse<CompanyWorkCalendar>>(
+    "absence-calendars",
+    input,
+  );
+  return data.data;
+}
+
+export async function bootstrapDefaultAbsenceCalendar(): Promise<CompanyWorkCalendar> {
+  const { data } = await scopedApiClient.post<SingleResponse<CompanyWorkCalendar>>(
+    "absence-calendars/bootstrap-default",
   );
   return data.data;
 }
@@ -75,7 +95,7 @@ export async function updateAbsenceCalendarDate(
     isWorkingDay?: boolean;
     notes?: string | null;
     isActive?: boolean;
-    expectedUpdatedAt: string;
+    expectedVersion: number;
   },
 ): Promise<CompanyCalendarDate> {
   const { data } = await scopedApiClient.patch<SingleResponse<CompanyCalendarDate>>(

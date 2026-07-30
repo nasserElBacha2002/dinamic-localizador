@@ -15,6 +15,24 @@ export const absenceCalendarController = {
     res.status(200).json({ data });
   },
 
+  async createCalendar(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await absenceCalendarService.createCalendar(
+      companyId,
+      req.body,
+      req.auth?.userId ?? null,
+    );
+    res.status(201).json({ data });
+  },
+
+  async bootstrapDefault(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const data = await absenceCalendarService.bootstrapDefaultCalendar(companyId, {
+      userId: req.auth?.userId ?? null,
+    });
+    res.status(200).json({ data });
+  },
+
   async updateCalendar(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const data = await absenceCalendarService.updateCalendar(

@@ -17,6 +17,20 @@ export async function getAbsenceTypes(): Promise<AbsenceType[]> {
   return data.data;
 }
 
+export async function updateAbsenceType(
+  id: string,
+  input: {
+    dayCountingMode?: "CALENDAR_DAYS" | "BUSINESS_DAYS";
+    calendarId?: string | null;
+  },
+): Promise<AbsenceType> {
+  const { data } = await scopedApiClient.patch<SingleResponse<AbsenceType>>(
+    `absence-types/${id}`,
+    input,
+  );
+  return data.data;
+}
+
 export async function getAbsenceRequests(
   filters: AbsenceRequestFilters = {},
 ): Promise<PaginatedResponse<AbsenceRequestListItem>> {

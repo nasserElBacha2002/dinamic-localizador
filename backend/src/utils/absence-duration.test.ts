@@ -16,6 +16,7 @@ const monFri: CalendarWeekdayRule[] = [
 const base = {
   timezone: "America/Argentina/Buenos_Aires",
   calendarId: "cal-1",
+  calendarVersion: 1,
   calculationVersion: 2,
   weekdays: monFri,
   exceptions: [] as [],

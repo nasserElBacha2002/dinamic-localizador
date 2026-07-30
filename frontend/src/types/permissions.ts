@@ -13,6 +13,7 @@ export type CompanyPermission =
   | "attendance:export"
   | "absences:read"
   | "absences:review"
+  | "absences:balance:update"
   | "reports:read"
   | "reports:export"
   | "bot_simulator:use";

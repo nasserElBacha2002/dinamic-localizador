@@ -525,6 +525,38 @@ export const operationAssignmentService = {
     return assignments.map((assignment) => withLifecycleState(assignment, referenceDate));
   },
 
+  /**
+   * Cancel an assignment inside a caller-owned transaction (no nested commit).
+   */
+  async cancelAssignmentInSharedTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: { operationId: string; assignmentId: string },
+  ): Promise<OperationEmployeeAssignment> {
+    const assignment = await operationEmployeeRepository.findByIdInTransaction(
+      companyId,
+      transaction,
+      input.assignmentId,
+    );
+    if (!assignment || assignment.operationId !== input.operationId) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+    if (assignment.cancelledAt) {
+      throw new AppError(409, "ASSIGNMENT_ALREADY_CANCELLED", "La asignación ya está cancelada");
+    }
+
+    await cancelExpectedEmployeeWorkdaysForAssignment(companyId, transaction, input.assignmentId);
+    const cancelledAssignment = await operationEmployeeRepository.cancelAssignmentInTransaction(
+      companyId,
+      transaction,
+      input.assignmentId,
+    );
+    if (!cancelledAssignment) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+    return cancelledAssignment;
+  },
+
   async cancelAssignment(
     companyId: string,
     operationId: string,
@@ -552,15 +584,11 @@ export const operationAssignmentService = {
     let cancelled: OperationEmployeeAssignment | null = null;
 
     try {
-      await cancelExpectedEmployeeWorkdaysForAssignment(companyId, transaction, assignmentId);
-      const cancelledAssignment = await operationEmployeeRepository.cancelAssignmentInTransaction(
+      const cancelledAssignment = await this.cancelAssignmentInSharedTransaction(
         companyId,
         transaction,
-        assignmentId,
+        { operationId, assignmentId },
       );
-      if (!cancelledAssignment) {
-        throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
-      }
 
       await transaction.commit();
       transactionClosed = true;

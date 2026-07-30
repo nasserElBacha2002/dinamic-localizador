@@ -65,7 +65,67 @@ export const needsInfoAbsenceRequestSchema = z.object({
   comment: z.string().trim().min(3, "El comentario es obligatorio").max(1000),
 });
 
+export const absenceOperationalConflictIdParamSchema = z.object({
+  id: z.string().uuid("UUID inválido"),
+  conflictId: z.string().uuid("UUID de conflicto inválido"),
+});
+
+export const resolveAbsenceOperationalConflictSchema = z.object({
+  resolutionCode: z.enum([
+    "ASSIGN_REPLACEMENT",
+    "KEEP_REDUCED_STAFFING",
+    "CANCEL_ASSIGNMENT",
+    "DISMISS_WITH_REASON",
+  ]),
+  resolutionReason: z
+    .string()
+    .trim()
+    .min(3, "El motivo de resolución es obligatorio")
+    .max(1000),
+  replacementEmployeeId: z.string().uuid("UUID de reemplazo inválido").nullable().optional(),
+  commandId: z
+    .string()
+    .trim()
+    .min(8, "commandId es obligatorio")
+    .max(120),
+});
+
+export const reconcileAbsenceOperationalImpactSchema = z.object({
+  commandId: z
+    .string()
+    .trim()
+    .min(8, "commandId es obligatorio")
+    .max(120),
+});
+
+export const updateNeedsInfoAbsenceRequestSchema = z
+  .object({
+    absenceTypeId: z.string().uuid("UUID de tipo de ausencia inválido").optional(),
+    startDate: absenceDateSchema.optional(),
+    endDate: absenceDateSchema.optional(),
+    startPeriod: absenceDayPeriodSchema.optional(),
+    endPeriod: absenceDayPeriodSchema.optional(),
+    reason: z.string().trim().min(3, "El motivo es obligatorio").max(1000).optional(),
+  })
+  .refine((data) => Object.keys(data).length > 0, {
+    message: "Debés enviar al menos un campo para actualizar",
+  })
+  .refine(
+    (data) =>
+      !data.startDate || !data.endDate || data.startDate <= data.endDate,
+    {
+      message: "La fecha de inicio no puede ser posterior a la fecha de fin",
+      path: ["endDate"],
+    },
+  );
+
 export type CreateAbsenceRequestInput = z.infer<typeof createAbsenceRequestSchema>;
 export type ListAbsenceRequestsQuery = z.infer<typeof listAbsenceRequestsQuerySchema>;
 export type RejectAbsenceRequestInput = z.infer<typeof rejectAbsenceRequestSchema>;
 export type NeedsInfoAbsenceRequestInput = z.infer<typeof needsInfoAbsenceRequestSchema>;
+export type UpdateNeedsInfoAbsenceRequestInput = z.infer<
+  typeof updateNeedsInfoAbsenceRequestSchema
+>;
+export type ResolveAbsenceOperationalConflictInput = z.infer<
+  typeof resolveAbsenceOperationalConflictSchema
+>;

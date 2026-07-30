@@ -17,7 +17,9 @@ export type AbsenceRequestEventType =
   | "APPROVED"
   | "REJECTED"
   | "NEEDS_INFO"
-  | "CANCELLED";
+  | "CANCELLED"
+  | "UPDATED"
+  | "RESUBMITTED";
 
 export interface AbsenceType {
   id: string;
@@ -25,9 +27,15 @@ export interface AbsenceType {
   name: string;
   description: string | null;
   requiresApproval: boolean;
+  /** @deprecated Prefer attachmentPolicy; kept for backward compatibility. */
   requiresAttachment: boolean;
+  attachmentPolicy: import("./absence-attachment").AbsenceAttachmentPolicy;
   deductsBalance: boolean;
   allowsHalfDay: boolean;
+  /** CALENDAR_DAYS preserves legacy inclusive counting; BUSINESS_DAYS uses company calendar. */
+  dayCountingMode: import("./absence-calendar").AbsenceTypeCalendarFields["dayCountingMode"];
+  /** When null, the company default work calendar is used. */
+  calendarId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -50,6 +58,16 @@ export interface AbsenceRequest {
   reviewedAt: string | null;
   reviewComment: string | null;
   cancelledAt: string | null;
+  calculationMode: import("./absence-calendar").AbsenceCalculationSnapshot["calculationMode"];
+  calendarId: string | null;
+  calendarTimezone: string | null;
+  calculationVersion: number | null;
+  calendarVersion: number | null;
+  calculationInputHash: string | null;
+  reservationVersion: number;
+  yearAllocationsJson: string | null;
+  attachmentPolicySnapshot: import("./absence-attachment").AbsenceAttachmentPolicy | null;
+  operationalImpactVersion: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,6 +113,11 @@ export interface EmployeeAbsenceBalance {
   absenceTypeId: string;
   year: number;
   totalDays: number;
+  grantedDays?: number;
+  reservedDays?: number;
+  consumedDays?: number;
+  availableDays?: number;
+  version?: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -103,14 +126,21 @@ export interface EmployeeAbsenceBalance {
 export interface AbsenceBalanceSummary {
   absenceType: Pick<AbsenceType, "id" | "code" | "name" | "deductsBalance">;
   year: number;
+  /** @deprecated Use grantedDays */
   assignedDays: number;
+  /** @deprecated Use consumedDays */
   approvedDays: number;
+  /** @deprecated Use reservedDays */
   pendingDays: number;
   rejectedDays: number;
   cancelledDays: number;
+  grantedDays: number;
+  reservedDays: number;
+  consumedDays: number;
   availableDays: number;
   projectedAvailableDays: number;
   notes: string | null;
+  version?: number;
 }
 
 export interface AbsenceBalanceImpact {

@@ -1,5 +1,7 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@mantine/core";
 import { useLocation, useNavigate } from "react-router";
+import { normalizeAbsencesListSearch } from "../../api/absence-query-keys";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
@@ -14,6 +16,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import type { AbsenceRequestListItem, AbsenceRequestStatus } from "../../types/absence";
 import { terminology } from "../../domain/terminology";
@@ -34,12 +37,28 @@ import {
   ABSENCES_TABLE_FIELDS,
   shouldOmitAbsencesTableValue,
 } from "./absences-list-table-state";
+import { CreateAbsenceRequestDialog } from "./CreateAbsenceRequestDialog";
 
 const ABSENCES_LIST_PATH = "/absences";
 
 export function AbsencesListPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const permissionsQuery = useCompanyPermissions();
+  const canCreate =
+    permissionsQuery.data?.permissions.includes("absences:review") ?? false;
+  const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    const normalized = normalizeAbsencesListSearch(location.search);
+    if (normalized === null) {
+      return;
+    }
+    navigate(
+      { pathname: location.pathname, search: normalized ? `?${normalized}` : "" },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
 
   const table = useTableUrlState({
     defaults: ABSENCES_TABLE_DEFAULTS,
@@ -48,6 +67,18 @@ export function AbsencesListPage() {
   });
 
   const typesQuery = useAbsenceTypes();
+  const createTypeOptions = useMemo(
+    () =>
+      (typesQuery.data ?? []).map((type) => ({
+        value: type.id,
+        label: absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name,
+        allowsHalfDay: type.allowsHalfDay,
+        dayCountingMode: type.dayCountingMode,
+        attachmentPolicy: type.attachmentPolicy,
+        requiresAttachment: type.requiresAttachment,
+      })),
+    [typesQuery.data],
+  );
   const dateRange = useMemo(
     () =>
       urlFieldsToDateRange({
@@ -79,7 +110,7 @@ export function AbsencesListPage() {
     [],
   );
 
-  const typeOptions = useMemo(
+  const typeFilterOptions = useMemo(
     () => [
       { value: "", label: "Todos" },
       ...(typesQuery.data ?? []).map((type) => ({
@@ -185,7 +216,23 @@ export function AbsencesListPage() {
       <PageHeader
         title="Solicitudes de ausencia"
         description="Revisá y gestioná las solicitudes enviadas por WhatsApp o administración."
+        action={
+          canCreate ? (
+            <Button onClick={() => setCreateOpen(true)}>Nueva solicitud</Button>
+          ) : null
+        }
       />
+
+      {createOpen ? (
+        <CreateAbsenceRequestDialog
+          opened
+          onClose={() => setCreateOpen(false)}
+          typeOptions={createTypeOptions}
+          onCreated={() => {
+            /* list query invalidates via mutation */
+          }}
+        />
+      ) : null}
 
       <FilterBar
         search={
@@ -219,7 +266,7 @@ export function AbsencesListPage() {
             onChange={(nextValue) => {
               table.setField("absenceTypeId", nextValue);
             }}
-            data={typeOptions}
+            data={typeFilterOptions}
           />
         </FilterBar.Item>
         <FilterBar.Item>

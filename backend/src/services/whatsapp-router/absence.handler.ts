@@ -22,6 +22,7 @@ export const handleActiveAbsenceSession = async (
     phoneFrom: ctx.phoneFrom,
     phoneTo: ctx.phoneTo,
     messageSid: ctx.payload.MessageSid,
+    webhookPayload: ctx.payload as Record<string, unknown>,
     respond: boundRespond,
   });
 };

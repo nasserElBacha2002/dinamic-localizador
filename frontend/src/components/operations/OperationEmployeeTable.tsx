@@ -1,4 +1,4 @@
-import { Button, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
 import {
@@ -117,6 +117,24 @@ export function OperationEmployeeTable({
                 <Text size="xs" c="dimmed">
                   {secondary}
                 </Text>
+              ) : null}
+              {row.absenceBadges && row.absenceBadges.length > 0 ? (
+                <Group gap={4} wrap="wrap">
+                  {row.absenceBadges.map((badge) => (
+                    <StatusBadge
+                      key={`${row.assignmentId}-${badge.code}`}
+                      label={badge.label}
+                      tone={
+                        badge.code === "OPEN_CONFLICT" || badge.code === "ABSENT"
+                          ? "danger"
+                          : badge.code === "REPLACEMENT_PENDING" ||
+                              badge.code === "PARTIAL_ABSENCE"
+                            ? "warning"
+                            : "neutral"
+                      }
+                    />
+                  ))}
+                </Group>
               ) : null}
             </Stack>
           );
@@ -240,8 +258,8 @@ export function OperationEmployeeTable({
             : resolvedAction;
         const canReview = canReviewAttendance(row);
 
-        if (!canReview && !assignmentAction && !hasAttendanceDetail) {
-          return null;
+        if (!canReview && !assignmentAction && !hasAttendanceDetail && !(row.absenceBadges?.length)) {
+          // Still allow opening collaborator / absence deep-links when badges exist.
         }
 
         const items = [];
@@ -258,6 +276,46 @@ export function OperationEmployeeTable({
               ),
           });
         }
+        const absenceLink = row.absenceBadges?.find((b) => b.absenceRequestId)?.absenceRequestId
+          ?? row.absenceRequestId;
+        if (absenceLink) {
+          items.push({
+            key: "absence",
+            label: "Ver ausencia",
+            onClick: () =>
+              navigateWithListContext(
+                navigate,
+                `/absences/${absenceLink}`,
+                operationDetailPath,
+                location,
+              ),
+          });
+        }
+        const conflictLink = row.absenceBadges?.find((b) => b.conflictId);
+        if (conflictLink?.absenceRequestId && conflictLink.conflictId) {
+          items.push({
+            key: "conflict",
+            label: "Ver conflicto",
+            onClick: () =>
+              navigateWithListContext(
+                navigate,
+                `/absences/${conflictLink.absenceRequestId}`,
+                operationDetailPath,
+                location,
+              ),
+          });
+        }
+        items.push({
+          key: "employee",
+          label: "Ver colaborador",
+          onClick: () =>
+            navigateWithListContext(
+              navigate,
+              `/employees/${row.employee.id}`,
+              operationDetailPath,
+              location,
+            ),
+        });
         if (canReview) {
           items.push(
             {

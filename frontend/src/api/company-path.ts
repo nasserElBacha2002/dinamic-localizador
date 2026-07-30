@@ -22,6 +22,7 @@ export const OPERATIONAL_API_PREFIXES = [
   "statistics",
   "absence-types",
   "absence-requests",
+  "absence-calendars",
   "bot-simulator",
   "users",
   "settings",

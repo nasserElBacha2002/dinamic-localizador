@@ -1,7 +1,9 @@
 import { config } from "dotenv";
 import { z } from "zod";
+import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
 
 config();
+resolveGoogleApplicationCredentialsPath();
 
 const envSchema = z
   .object({
@@ -56,6 +58,17 @@ const envSchema = z
     SMTP_FROM: z.string().optional(),
     SMTP_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
     SMTP_SOCKET_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+    /** Google Cloud Storage — absence attachments (optional until feature enabled). */
+    GCS_PROJECT_ID: z.string().min(1).optional(),
+    GCS_BUCKET_NAME: z.string().min(1).optional(),
+    GCS_STORAGE_PREFIX: z.string().min(1).default("absence-attachments"),
+    GCS_SIGNED_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(300),
+    GCS_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(5_242_880),
+    GCS_MAX_FILES_PER_REQUEST: z.coerce.number().int().positive().default(5),
+    GCS_MAX_TOTAL_SIZE_BYTES: z.coerce.number().int().positive().default(15_728_640),
+    GCS_UPLOAD_MODE: z.enum(["BACKEND_STREAM"]).default("BACKEND_STREAM"),
+    ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
+    ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
   })
   .superRefine((data, ctx) => {
     const validateSignature = data.TWILIO_VALIDATE_SIGNATURE ?? data.NODE_ENV === "production";

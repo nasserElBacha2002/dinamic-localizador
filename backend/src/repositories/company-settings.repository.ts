@@ -48,6 +48,22 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.pending_operation_expiration_hours ??
       DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours,
   ),
+  absenceAdvancedCalendarEnabled:
+    row.absence_advanced_calendar_enabled == null
+      ? false
+      : Boolean(row.absence_advanced_calendar_enabled),
+  absenceBalanceLedgerEnabled:
+    row.absence_balance_ledger_enabled == null
+      ? false
+      : Boolean(row.absence_balance_ledger_enabled),
+  absenceAttachmentsEnabled:
+    row.absence_attachments_enabled == null
+      ? false
+      : Boolean(row.absence_attachments_enabled),
+  absenceOperationalIntegrationEnabled:
+    row.absence_operational_integration_enabled == null
+      ? false
+      : Boolean(row.absence_operational_integration_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -184,6 +200,9 @@ export const companySettingsRepository = {
         | "confirmationReminderEnabled"
         | "confirmationReminderHoursBefore"
         | "pendingOperationExpirationHours"
+        | "absenceAdvancedCalendarEnabled"
+        | "absenceAttachmentsEnabled"
+        | "absenceOperationalIntegrationEnabled"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -282,6 +301,32 @@ export const companySettingsRepository = {
         input.pendingOperationExpirationHours,
       );
       fields.push("pending_operation_expiration_hours = @pendingOperationExpirationHours");
+    }
+    if (input.absenceAdvancedCalendarEnabled !== undefined) {
+      request.input(
+        "absenceAdvancedCalendarEnabled",
+        sql.Bit,
+        input.absenceAdvancedCalendarEnabled ? 1 : 0,
+      );
+      fields.push("absence_advanced_calendar_enabled = @absenceAdvancedCalendarEnabled");
+    }
+    if (input.absenceAttachmentsEnabled !== undefined) {
+      request.input(
+        "absenceAttachmentsEnabled",
+        sql.Bit,
+        input.absenceAttachmentsEnabled ? 1 : 0,
+      );
+      fields.push("absence_attachments_enabled = @absenceAttachmentsEnabled");
+    }
+    if (input.absenceOperationalIntegrationEnabled !== undefined) {
+      request.input(
+        "absenceOperationalIntegrationEnabled",
+        sql.Bit,
+        input.absenceOperationalIntegrationEnabled ? 1 : 0,
+      );
+      fields.push(
+        "absence_operational_integration_enabled = @absenceOperationalIntegrationEnabled",
+      );
     }
 
     if (fields.length === 0) {

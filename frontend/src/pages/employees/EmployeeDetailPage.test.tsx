@@ -5,7 +5,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule, ABSENCES_API_EXPORTS } from "../../test/mock-api-module";
+import { mockApiModule, ABSENCES_API_EXPORTS, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 
@@ -30,14 +30,7 @@ mockApiModule(
   {
     getEmployeeById: async () => employee,
   },
-  [
-    "getEmployees",
-    "getEmployeeById",
-    "getEmployeeDeactivationImpact",
-    "createEmployee",
-    "updateEmployee",
-    "deactivateEmployee",
-  ],
+  EMPLOYEES_API_EXPORTS,
 );
 
 mockApiModule("api/employee-categories.api", {
@@ -51,6 +44,7 @@ mockApiModule("api/employee-categories.api", {
 });
 
 let membershipPermissions = ["employees:read"];
+let absenceBalances: Array<Record<string, unknown>> = [];
 
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({
@@ -79,7 +73,7 @@ mockApiModule("api/company-users.api", {
 mockApiModule(
   "api/absences.api",
   {
-    getEmployeeAbsenceBalances: async () => [],
+    getEmployeeAbsenceBalances: async () => absenceBalances,
     getAbsenceRequests: async () => ({
       data: [],
       meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 },
@@ -111,6 +105,7 @@ before(async () => {
 
 beforeEach(() => {
   membershipPermissions = ["employees:read"];
+  absenceBalances = [];
 });
 
 afterEach(() => {
@@ -133,8 +128,79 @@ describe("EmployeeDetailPage", () => {
     assert.ok(view.getByText(/Detalle de colaborador/i));
     assert.equal(view.queryByRole("button", { name: /^Editar$/i }), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
+    assert.equal(view.queryByRole("button", { name: /Ajustar/i }), null);
     assert.equal(view.queryByRole("textbox"), null);
     assert.equal(view.queryByRole("switch"), null);
+  });
+
+  it("manager with employees:manage but without absences:balance:update cannot edit balance", async () => {
+    membershipPermissions = ["employees:manage", "employees:read"];
+    absenceBalances = [
+      {
+        absenceType: {
+          id: "type-1",
+          code: "VACATION",
+          name: "Vacaciones",
+          deductsBalance: true,
+        },
+        year: new Date().getFullYear(),
+        assignedDays: 10,
+        approvedDays: 0,
+        pendingDays: 0,
+        rejectedDays: 0,
+        cancelledDays: 0,
+        availableDays: 10,
+        projectedAvailableDays: 10,
+        notes: null,
+      },
+    ];
+    const view = renderPage(
+      <Routes>
+        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+      </Routes>,
+      { route: "/employees/emp-1" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("link", { name: /^Editar$/i }));
+    });
+    await waitFor(() => {
+      assert.ok(view.getByText("Vacaciones"));
+    });
+    assert.equal(view.queryByRole("button", { name: /Ajustar/i }), null);
+  });
+
+  it("user with absences:balance:update can see Ajustar", async () => {
+    membershipPermissions = ["employees:read", "absences:balance:update", "absences:read"];
+    absenceBalances = [
+      {
+        absenceType: {
+          id: "type-1",
+          code: "VACATION",
+          name: "Vacaciones",
+          deductsBalance: true,
+        },
+        year: new Date().getFullYear(),
+        assignedDays: 10,
+        approvedDays: 0,
+        pendingDays: 0,
+        rejectedDays: 0,
+        cancelledDays: 0,
+        availableDays: 10,
+        projectedAvailableDays: 10,
+        notes: null,
+      },
+    ];
+    const view = renderPage(
+      <Routes>
+        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+      </Routes>,
+      { route: "/employees/emp-1" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("button", { name: /Ajustar/i }));
+    });
   });
 
   it("manager sees the same cards plus Editar, without form inputs", async () => {

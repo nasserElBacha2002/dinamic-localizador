@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
+import { EmployeeOperationalAvailabilityCard } from "../../components/employees/EmployeeOperationalAvailabilityCard";
 import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
   DetailFieldGrid,
@@ -27,6 +28,10 @@ export function EmployeeDetailPage() {
   const { goBackToList } = useListBackNavigation("/employees");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
+  const canUpdateBalance = hasPermission(
+    permissionsQuery.data?.permissions,
+    "absences:balance:update",
+  );
   const employeeQuery = useEmployee(id);
 
   if (!id) {
@@ -96,11 +101,15 @@ export function EmployeeDetailPage() {
         />
       </SectionCard>
 
+      <SectionCard title="Disponibilidad operacional">
+        <EmployeeOperationalAvailabilityCard employeeId={employee.id} />
+      </SectionCard>
+
       <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
         <EmployeeAbsenceBalanceCard
           employeeId={employee.id}
           year={currentYear}
-          showEdit={canManage}
+          showEdit={canUpdateBalance}
         />
       </SectionCard>
 

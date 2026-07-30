@@ -45,6 +45,58 @@ export async function getEmployeeDeactivationImpact(
   return data.data;
 }
 
+export type EmployeeOperationalAvailability = {
+  currentStatus: string;
+  timezone: string;
+  intervalStartAt: string;
+  intervalEndAt: string;
+  coveringAbsenceIds: string[];
+  nextApprovedAbsence: {
+    id: string;
+    startDate: string;
+    endDate: string;
+    startPeriod: string;
+    endPeriod: string;
+    status: string;
+  } | null;
+  pendingRequests: Array<{
+    id: string;
+    status: string;
+    startDate: string;
+    endDate: string;
+    startPeriod: string;
+    endPeriod: string;
+  }>;
+  affectedOperationIds: string[];
+  openConflicts: Array<{
+    id: string;
+    absenceRequestId: string;
+    conflictType: string;
+    operationId: string | null;
+    assignmentId: string | null;
+    status: string;
+  }>;
+  relatedReplacements: Array<{
+    conflictId: string;
+    absenceRequestId: string;
+    operationId: string | null;
+    assignmentId: string | null;
+    status: string;
+    replacementEmployeeId: string | null;
+  }>;
+};
+
+export async function getEmployeeOperationalAvailability(
+  id: string,
+  options?: EmployeeRequestOptions,
+): Promise<EmployeeOperationalAvailability> {
+  const { data } = await scopedApiClient.get<SingleResponse<EmployeeOperationalAvailability>>(
+    `employees/${id}/operational-availability`,
+    options,
+  );
+  return data.data;
+}
+
 export async function createEmployee(
   input: CreateEmployeeInput,
   options?: EmployeeRequestOptions,

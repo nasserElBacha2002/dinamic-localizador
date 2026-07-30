@@ -2,6 +2,11 @@ import type { BotSession } from "../types/twilio.types";
 import type { AbsenceType } from "../types/absence";
 import { AppError } from "../errors/app-error";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
+import { absenceAttachmentService } from "./absence-attachment.service";
+import {
+  extractTwilioMediaItems,
+  ingestTwilioMediaAsAbsenceAttachments,
+} from "./absence-attachment-whatsapp.service";
 import { absenceRequestService } from "./absence-request.service";
 import { botSessionService } from "./bot-session.service";
 import {
@@ -10,7 +15,8 @@ import {
   isAffirmativeConfirmation,
   isNegativeConfirmation,
 } from "../utils/absence-intent";
-import { calculateTotalAbsenceDays, formatAbsenceDateDisplay } from "../utils/absence-date";
+import { formatAbsenceDateDisplay } from "../utils/absence-date";
+import { absenceCalendarService } from "./absence-calendar.service";
 import { parseSpanishDateInput } from "./bot/bot-date.parser";
 import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../utils/bot-session-states";
 
@@ -49,17 +55,25 @@ const buildSummary = (input: {
   endDate: string;
   reason: string;
   totalDays: number;
-}): string =>
-  [
+  countingMode?: string;
+  excludedSummary?: string[];
+}): string => {
+  const modeLabel =
+    input.countingMode === "BUSINESS_DAYS" ? "días hábiles" : "días corridos";
+  const lines = [
     "Resumen de tu solicitud de ausencia:",
     `Tipo: ${input.typeName}`,
     `Desde: ${formatAbsenceDateDisplay(input.startDate)}`,
     `Hasta: ${formatAbsenceDateDisplay(input.endDate)}`,
-    `Días: ${input.totalDays}`,
+    `Se computarán ${input.totalDays} ${modeLabel}.`,
     `Motivo: ${input.reason}`,
-    "",
-    "¿Confirmás la solicitud? Respondé SI o NO.",
-  ].join("\n");
+  ];
+  if (input.excludedSummary && input.excludedSummary.length > 0) {
+    lines.push(`No se cuentan: ${input.excludedSummary.slice(0, 5).join(", ")}.`);
+  }
+  lines.push("", "¿Confirmás la solicitud? Respondé SI o NO.");
+  return lines.join("\n");
+};
 
 const serializeContext = (context: ReturnType<typeof botSessionService.parseContext>) =>
   JSON.stringify(context);
@@ -129,6 +143,7 @@ export const absenceBotService = {
     phoneFrom: string;
     phoneTo: string;
     messageSid: string;
+    webhookPayload?: Record<string, unknown>;
     respond: RespondFn;
   }): Promise<string> {
     if (isAbsenceCancelIntent(input.body)) {
@@ -238,12 +253,30 @@ export const absenceBotService = {
         ? await absenceTypeRepository.findById(companyId, draft.absenceTypeId)
         : null;
 
-      const totalDays = calculateTotalAbsenceDays({
-        startDate: draft.startDate!,
-        endDate: draft.endDate!,
-        startPeriod: "FULL_DAY",
-        endPeriod: "FULL_DAY",
-      });
+      let calculation;
+      try {
+        calculation = await absenceCalendarService.calculateDuration(companyId, {
+          employeeId: input.employeeId,
+          absenceTypeId: draft.absenceTypeId!,
+          startDate: draft.startDate!,
+          endDate: draft.endDate!,
+          startPeriod: "FULL_DAY",
+          endPeriod: "FULL_DAY",
+        });
+      } catch (error) {
+        const message =
+          error instanceof AppError
+            ? error.message
+            : "No pudimos calcular la duración de la ausencia. Revisá las fechas.";
+        return input.respond({
+          message,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      draft.calculationFingerprint = calculation.fingerprint;
 
       await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_CONFIRMATION",
@@ -256,7 +289,9 @@ export const absenceBotService = {
           startDate: draft.startDate!,
           endDate: draft.endDate!,
           reason: draft.reason,
-          totalDays,
+          totalDays: calculation.totalDays,
+          countingMode: calculation.countingMode,
+          excludedSummary: calculation.excludedSummary,
         }),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
@@ -295,7 +330,64 @@ export const absenceBotService = {
       }
 
       try {
-        const { isExisting } = await absenceRequestService.createFromWhatsapp(companyId, {
+        const current = await absenceCalendarService.calculateDuration(companyId, {
+          employeeId: input.employeeId,
+          absenceTypeId: draft.absenceTypeId,
+          startDate: draft.startDate,
+          endDate: draft.endDate,
+          startPeriod: "FULL_DAY",
+          endPeriod: "FULL_DAY",
+        });
+
+        const previousHash = draft.calculationFingerprint?.inputHash;
+        if (previousHash && previousHash !== current.fingerprint.inputHash) {
+          draft.calculationFingerprint = current.fingerprint;
+          await botSessionService.updateAbsenceSession(companyId, input.session.id, {
+            state: "WAITING_ABSENCE_CONFIRMATION",
+            contextJson: serializeContext({ ...context, absenceDraft: draft }),
+          });
+          const absenceType = await absenceTypeRepository.findById(companyId, draft.absenceTypeId);
+          return input.respond({
+            message: [
+              "El cálculo cambió desde el último resumen. Revisá el nuevo total y confirmá de nuevo:",
+              "",
+              buildSummary({
+                typeName: absenceType?.name ?? "Ausencia",
+                startDate: draft.startDate,
+                endDate: draft.endDate,
+                reason: draft.reason,
+                totalDays: current.totalDays,
+                countingMode: current.countingMode,
+                excludedSummary: current.excludedSummary,
+              }),
+            ].join("\n"),
+            employeeId: input.employeeId,
+            phoneFrom: input.phoneTo,
+            phoneTo: input.phoneFrom,
+          });
+        }
+
+        const absenceTypeForAttach = await absenceTypeRepository.findById(
+          companyId,
+          draft.absenceTypeId,
+        );
+        const policy =
+          absenceTypeForAttach?.attachmentPolicy ??
+          (absenceTypeForAttach?.requiresAttachment ? "REQUIRED" : "OPTIONAL");
+        const attachmentsEnabled = await absenceAttachmentService.isFeatureEnabled(companyId);
+        const mediaItems = extractTwilioMediaItems(input.webhookPayload ?? {});
+
+        if (policy === "REQUIRED" && attachmentsEnabled && mediaItems.length === 0) {
+          return input.respond({
+            message:
+              "Este tipo de ausencia requiere un comprobante. Enviá una foto o PDF junto con la confirmación (sí).",
+            employeeId: input.employeeId,
+            phoneFrom: input.phoneTo,
+            phoneTo: input.phoneFrom,
+          });
+        }
+
+        const { isExisting, detail } = await absenceRequestService.createFromWhatsapp(companyId, {
           employeeId: input.employeeId,
           absenceTypeId: draft.absenceTypeId,
           startDate: draft.startDate,
@@ -305,6 +397,34 @@ export const absenceBotService = {
           reason: draft.reason,
           sourceMessageSid: input.messageSid,
         });
+
+        if (!isExisting && attachmentsEnabled && mediaItems.length > 0 && policy !== "FORBIDDEN") {
+          try {
+            await ingestTwilioMediaAsAbsenceAttachments({
+              companyId,
+              requestId: detail.id,
+              employeeId: input.employeeId,
+              messageSid: input.messageSid,
+              mediaItems,
+            });
+          } catch (mediaError) {
+            const mediaMessage =
+              mediaError instanceof AppError
+                ? mediaError.message
+                : "No se pudo guardar el comprobante.";
+            if (policy === "REQUIRED") {
+              throw new AppError(409, "ABSENCE_ATTACHMENT_REQUIRED", mediaMessage);
+            }
+          }
+        }
+
+        if (!isExisting && policy === "REQUIRED" && attachmentsEnabled) {
+          await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
+            companyId,
+            detail.id,
+            draft.absenceTypeId,
+          );
+        }
 
         await botSessionService.completeSession(companyId, input.session.id);
         return input.respond({

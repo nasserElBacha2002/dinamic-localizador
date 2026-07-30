@@ -2,7 +2,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule } from "../../test/mock-api-module";
+import { mockApiModule, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import { mockViewport } from "../../test/mock-match-media";
@@ -77,7 +77,7 @@ mockApiModule("api/employees.api", {
   deactivateEmployee: async () => {
     throw new Error("not used");
   },
-});
+}, EMPLOYEES_API_EXPORTS);
 
 mockApiModule("api/lookups.api", {
   getEmployeeLookups: async () => [],

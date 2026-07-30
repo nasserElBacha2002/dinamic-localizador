@@ -106,6 +106,14 @@ describe("scopedApiPath", () => {
       scopedApiPath("modules"),
       `companies/${ACTIVE_COMPANY_ID}/modules`,
     );
+    assert.equal(
+      scopedApiPath("absence-calendars"),
+      `companies/${ACTIVE_COMPANY_ID}/absence-calendars`,
+    );
+    assert.equal(
+      scopedApiPath("absence-calendars/default"),
+      `companies/${ACTIVE_COMPANY_ID}/absence-calendars/default`,
+    );
   });
 
   it("leaves global paths unchanged", () => {

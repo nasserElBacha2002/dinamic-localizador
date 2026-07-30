@@ -14,6 +14,9 @@ export interface CompanySettings {
   confirmationReminderEnabled: boolean;
   confirmationReminderHoursBefore: number;
   pendingOperationExpirationHours: number;
+  absenceAdvancedCalendarEnabled?: boolean;
+  absenceAttachmentsEnabled?: boolean;
+  absenceOperationalIntegrationEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -35,6 +38,9 @@ export type UpdateCompanySettingsInput = Partial<
     | "confirmationReminderEnabled"
     | "confirmationReminderHoursBefore"
     | "pendingOperationExpirationHours"
+    | "absenceAdvancedCalendarEnabled"
+    | "absenceAttachmentsEnabled"
+    | "absenceOperationalIntegrationEnabled"
   >
 >;
 

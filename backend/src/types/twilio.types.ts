@@ -28,6 +28,9 @@ export interface BotSession {
   phoneNumber: string;
   state: BotSessionState;
   contextJson: string | null;
+  /** Optimistic fencing token (Phase 6.1); defaults to 0 when column absent in older DBs. */
+  sessionVersion: number;
+  lastMessageSid: string | null;
   expiresAt: string;
   createdAt: string;
   updatedAt: string;
@@ -74,6 +77,20 @@ export interface BotSessionContext {
     startDate?: string;
     endDate?: string;
     reason?: string;
+    calculationFingerprint?: {
+      absenceTypeId: string;
+      startDate: string;
+      endDate: string;
+      startPeriod: string;
+      endPeriod: string;
+      calendarId: string;
+      calendarVersion: number;
+      countingMode: string;
+      timezone: string;
+      totalDays: number;
+      calculationVersion: number;
+      inputHash: string;
+    };
   };
 }
 

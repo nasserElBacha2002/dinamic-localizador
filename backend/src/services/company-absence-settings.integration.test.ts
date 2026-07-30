@@ -95,6 +95,10 @@ describeDatabaseIntegration("company absence settings integration", () => {
         DELETE FROM employees WHERE company_id = @companyId;
         DELETE FROM employee_categories WHERE company_id = @companyId;
         DELETE FROM company_absence_settings WHERE company_id = @companyId;
+        UPDATE absence_types SET calendar_id = NULL WHERE company_id = @companyId;
+        DELETE FROM company_calendar_dates WHERE company_id = @companyId;
+        DELETE FROM company_work_calendar_weekdays WHERE company_id = @companyId;
+        DELETE FROM company_work_calendars WHERE company_id = @companyId;
         DELETE FROM absence_types WHERE company_id = @companyId;
         DELETE FROM company_location_types WHERE company_id = @companyId;
         DELETE FROM user_company_memberships WHERE company_id = @companyId;

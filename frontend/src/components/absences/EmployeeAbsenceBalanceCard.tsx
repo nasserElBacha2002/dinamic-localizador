@@ -1,20 +1,21 @@
-import { Alert, Button, Group, NumberInput, SimpleGrid, Stack, Text, Textarea } from "@mantine/core";
+import { Alert, Button, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import {
   DataTable,
   LoadingState,
-  ResponsiveModal,
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
+  useAdjustEmployeeAbsenceBalance,
   useEmployeeAbsenceBalances,
-  useUpsertEmployeeAbsenceBalance,
 } from "../../hooks/useAbsences";
 import type { AbsenceBalanceImpact, EmployeeAbsenceBalanceSummary } from "../../types/absence";
 import { getApiErrorMessage } from "../../utils/errors";
 import { safeText } from "../../utils/display-safe";
+import { AbsenceBalanceAdjustmentDialog } from "./AbsenceBalanceAdjustmentDialog";
+import { AbsenceBalanceMovementHistory } from "./AbsenceBalanceMovementHistory";
 
 interface EmployeeAbsenceBalanceCardProps {
   employeeId: string;
@@ -32,24 +33,26 @@ export function EmployeeAbsenceBalanceCard({
   onBalanceSaved,
 }: EmployeeAbsenceBalanceCardProps) {
   const balancesQuery = useEmployeeAbsenceBalances(employeeId, year);
-  const upsertMutation = useUpsertEmployeeAbsenceBalance(employeeId);
+  const adjustMutation = useAdjustEmployeeAbsenceBalance(employeeId);
   const [editTarget, setEditTarget] = useState<EmployeeAbsenceBalanceSummary | null>(null);
-  const [totalDays, setTotalDays] = useState("");
-  const [notes, setNotes] = useState("");
+  const [historyTarget, setHistoryTarget] = useState<EmployeeAbsenceBalanceSummary | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [adjustCommandId, setAdjustCommandId] = useState("");
 
   const visibleBalances = useMemo(() => {
     const rows = balancesQuery.data ?? [];
     if (showEdit) {
       return rows;
     }
-
     return rows.filter(
       (row) =>
         row.absenceType?.deductsBalance ||
         row.assignedDays > 0 ||
         row.approvedDays > 0 ||
-        row.pendingDays > 0,
+        row.pendingDays > 0 ||
+        (row.grantedDays ?? 0) > 0 ||
+        (row.reservedDays ?? 0) > 0 ||
+        (row.consumedDays ?? 0) > 0,
     );
   }, [balancesQuery.data, showEdit]);
 
@@ -57,34 +60,53 @@ export function EmployeeAbsenceBalanceCard({
     (row) => row.availableDays < 0 || row.projectedAvailableDays < 0,
   );
 
-  const openEdit = (row: EmployeeAbsenceBalanceSummary) => {
-    setEditTarget(row);
-    setTotalDays(String(row.assignedDays));
-    setNotes(row.notes ?? "");
-    setError(null);
-  };
-
   const columns = useMemo<DataTableColumn<EmployeeAbsenceBalanceSummary>[]>(
     () => [
       { key: "type", header: "Tipo", getValue: (row) => safeText(row.absenceType?.name ?? null) },
-      { key: "assigned", header: "Asignados", getValue: (row) => row.assignedDays, align: "right" },
-      { key: "approved", header: "Aprobados", getValue: (row) => row.approvedDays, align: "right" },
-      { key: "pending", header: "Pendientes", getValue: (row) => row.pendingDays, align: "right" },
+      {
+        key: "granted",
+        header: "Otorgados",
+        getValue: (row) => row.grantedDays ?? row.assignedDays,
+        align: "right",
+      },
+      {
+        key: "reserved",
+        header: "Reservados",
+        getValue: (row) => row.reservedDays ?? row.pendingDays,
+        align: "right",
+      },
+      {
+        key: "consumed",
+        header: "Consumidos",
+        getValue: (row) => row.consumedDays ?? row.approvedDays,
+        align: "right",
+      },
       { key: "available", header: "Disponibles", getValue: (row) => row.availableDays, align: "right" },
-      ...(showEdit
-        ? [
-            {
-              key: "actions",
-              header: "Acción",
-              align: "right" as const,
-              render: (row: EmployeeAbsenceBalanceSummary) => (
-                <Button size="compact-xs" variant="light" onClick={() => openEdit(row)}>
-                  Editar saldo
-                </Button>
-              ),
-            },
-          ]
-        : []),
+      {
+        key: "actions",
+        header: "Acción",
+        align: "right" as const,
+        render: (row: EmployeeAbsenceBalanceSummary) => (
+          <Group gap="xs" justify="flex-end" wrap="nowrap">
+            <Button size="compact-xs" variant="subtle" onClick={() => setHistoryTarget(row)}>
+              Historial
+            </Button>
+            {showEdit ? (
+              <Button
+                size="compact-xs"
+                variant="light"
+                onClick={() => {
+                  setError(null);
+                  setAdjustCommandId(crypto.randomUUID());
+                  setEditTarget(row);
+                }}
+              >
+                Ajustar
+              </Button>
+            ) : null}
+          </Group>
+        ),
+      },
     ],
     [showEdit],
   );
@@ -100,56 +122,27 @@ export function EmployeeAbsenceBalanceCard({
           visibility: "always",
         },
         {
-          key: "assigned",
-          label: "Asignados",
-          getValue: (row) => String(row.assignedDays),
+          key: "granted",
+          label: "Otorgados",
+          getValue: (row) => String(row.grantedDays ?? row.assignedDays),
           visibility: "always",
         },
         {
-          key: "approved",
-          label: "Aprobados",
-          getValue: (row) => String(row.approvedDays),
+          key: "reserved",
+          label: "Reservados",
+          getValue: (row) => String(row.reservedDays ?? row.pendingDays),
           visibility: "expanded",
         },
         {
-          key: "pending",
-          label: "Pendientes",
-          getValue: (row) => String(row.pendingDays),
+          key: "consumed",
+          label: "Consumidos",
+          getValue: (row) => String(row.consumedDays ?? row.approvedDays),
           visibility: "expanded",
         },
       ],
     }),
     [],
   );
-
-  const handleSave = async () => {
-    if (!editTarget) {
-      return;
-    }
-
-    const parsedTotalDays = Number(totalDays);
-    if (!Number.isFinite(parsedTotalDays) || parsedTotalDays < 0) {
-      setError("Los días asignados deben ser un número mayor o igual a 0.");
-      return;
-    }
-
-    try {
-      await upsertMutation.mutateAsync({
-        absenceTypeId: editTarget.absenceType.id,
-        year,
-        totalDays: parsedTotalDays,
-        notes: notes.trim() ? notes.trim() : null,
-      });
-      setEditTarget(null);
-      notifications.show({
-        color: "green",
-        message: "Saldo actualizado correctamente.",
-      });
-      onBalanceSaved?.();
-    } catch (saveError) {
-      setError(getApiErrorMessage(saveError, "No se pudo guardar el saldo."));
-    }
-  };
 
   if (balancesQuery.isLoading) {
     return <LoadingState />;
@@ -191,7 +184,7 @@ export function EmployeeAbsenceBalanceCard({
 
       {hasNegativeBalance ? (
         <Alert color="yellow">
-          El empleado tiene saldo negativo para este tipo de ausencia. Revisá los días asignados o las
+          El empleado tiene saldo negativo para este tipo de ausencia. Revisá los días otorgados o las
           solicitudes aprobadas.
         </Alert>
       ) : null}
@@ -210,48 +203,49 @@ export function EmployeeAbsenceBalanceCard({
         <Text c="dimmed">No hay tipos de ausencia activos para mostrar en {year}.</Text>
       )}
 
-      <ResponsiveModal
+      <AbsenceBalanceAdjustmentDialog
         opened={Boolean(editTarget)}
-        onClose={upsertMutation.isPending ? () => undefined : () => setEditTarget(null)}
-        title={`Editar saldo · ${editTarget?.absenceType.name} · ${year}`}
-        bodyMode="normal"
-        closeOnClickOutside={!upsertMutation.isPending}
-        closeOnEscape={!upsertMutation.isPending}
-        footer={
-          <Group justify="flex-end" gap="sm" wrap="wrap">
-            <Button
-              variant="default"
-              onClick={() => setEditTarget(null)}
-              disabled={upsertMutation.isPending}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => void handleSave()} loading={upsertMutation.isPending}>
-              Guardar
-            </Button>
-          </Group>
-        }
-      >
-        <Stack gap="md">
-          <NumberInput
-            label="Días asignados"
-            value={totalDays === "" ? "" : Number(totalDays)}
-            onChange={(value) => setTotalDays(value === "" || value === undefined ? "" : String(value))}
-            min={0}
-            step={0.5}
-            decimalScale={1}
-            disabled={upsertMutation.isPending}
-          />
-          <Textarea
-            label="Notas"
-            value={notes}
-            onChange={(event) => setNotes(event.currentTarget.value)}
-            minRows={2}
-            disabled={upsertMutation.isPending}
-          />
-          {error ? <Alert color="red">{error}</Alert> : null}
-        </Stack>
-      </ResponsiveModal>
+        year={year}
+        target={editTarget}
+        loading={adjustMutation.isPending}
+        error={error}
+        commandId={adjustCommandId}
+        onClose={() => setEditTarget(null)}
+        onConfirm={(input) => {
+          if (!editTarget) {
+            return;
+          }
+          void (async () => {
+            try {
+              await adjustMutation.mutateAsync({
+                absenceTypeId: editTarget.absenceType.id,
+                year,
+                quantity: input.quantity,
+                operation: input.operation,
+                reason: input.reason,
+                idempotencyKey: input.idempotencyKey,
+              });
+              setEditTarget(null);
+              setError(null);
+              notifications.show({
+                color: "green",
+                message: "Ajuste de saldo registrado correctamente.",
+              });
+              onBalanceSaved?.();
+            } catch (saveError) {
+              setError(getApiErrorMessage(saveError, "No se pudo registrar el ajuste."));
+            }
+          })();
+        }}
+      />
+
+      <AbsenceBalanceMovementHistory
+        opened={Boolean(historyTarget)}
+        employeeId={employeeId}
+        year={year}
+        target={historyTarget}
+        onClose={() => setHistoryTarget(null)}
+      />
     </Stack>
   );
 }
@@ -265,9 +259,9 @@ function DetailBalanceGrid(input: {
   availableAfterApproval?: number;
 }) {
   const fields = [
-    { label: "Días asignados", value: input.assignedDays },
-    { label: "Días aprobados", value: input.approvedDays },
-    { label: "Días pendientes", value: input.pendingDays },
+    { label: "Días otorgados", value: input.assignedDays },
+    { label: "Días consumidos", value: input.approvedDays },
+    { label: "Días reservados", value: input.pendingDays },
     { label: "Saldo disponible", value: input.availableDays },
     { label: "Días solicitados", value: input.requestDays },
     { label: "Saldo luego de aprobar", value: input.availableAfterApproval },

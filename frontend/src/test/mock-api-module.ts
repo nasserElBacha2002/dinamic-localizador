@@ -78,8 +78,19 @@ export const ATTENDANCE_API_EXPORTS = [
   "exportAttendanceCsv",
 ] as const;
 
+export const EMPLOYEES_API_EXPORTS = [
+  "getEmployees",
+  "getEmployeeById",
+  "getEmployeeDeactivationImpact",
+  "getEmployeeOperationalAvailability",
+  "createEmployee",
+  "updateEmployee",
+  "deactivateEmployee",
+] as const;
+
 export const ABSENCES_API_EXPORTS = [
   "getAbsenceTypes",
+  "updateAbsenceType",
   "getAbsenceRequests",
   "getAbsenceRequestById",
   "createAbsenceRequest",
@@ -87,6 +98,22 @@ export const ABSENCES_API_EXPORTS = [
   "rejectAbsenceRequest",
   "needsInfoAbsenceRequest",
   "cancelAbsenceRequest",
+  "updateNeedsInfoAbsenceRequest",
+  "resubmitAbsenceRequest",
+  "getAbsenceOperationalImpact",
+  "getAbsenceOperationalConflicts",
+  "resolveAbsenceOperationalConflict",
   "getEmployeeAbsenceBalances",
   "upsertEmployeeAbsenceBalance",
+  "adjustEmployeeAbsenceBalance",
+  "getEmployeeAbsenceBalanceMovements",
+  "listAbsenceAttachments",
+  "uploadAbsenceAttachment",
+  "createAbsenceRequestDraft",
+  "uploadAbsenceDraftAttachment",
+  "submitAbsenceRequestDraft",
+  "deleteAbsenceAttachment",
+  "getAbsenceAttachmentContentUrl",
+  "downloadAbsenceAttachmentContent",
+  "getAbsenceAttachmentStorageHealth",
 ] as const;

@@ -13,6 +13,18 @@ export interface OperationAttendanceSummaryEmployee {
   confirmationStatus: AssignmentConfirmationStatus;
   confirmedAt: string | null;
   unavailableAt: string | null;
+  expectationStatus?: string | null;
+  absenceRequestId?: string | null;
+  employeeWorkdayId?: string | null;
+  absenceBadges?: Array<{
+    code: string;
+    label: string;
+    absenceRequestId: string | null;
+    conflictId: string | null;
+    replacementEmployeeId: string | null;
+    employeeId: string;
+    assignmentId: string | null;
+  }>;
 }
 
 export interface OperationAttendanceSummaryResponse {

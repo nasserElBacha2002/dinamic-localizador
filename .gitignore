@@ -43,3 +43,18 @@ audit/baseline/audit-status.baseline.json
 !audit/raw/.gitkeep
 !audit/raw/runs/.gitkeep
 !audit/baseline/.gitkeep
+
+# Google Cloud credentials (never commit)
+*service-account*.json
+*gcp-credentials*.json
+google-credentials.json
+
+# GCP secrets folder (dinamic-gemini pattern) — real keys only; keep docs/examples
+secrets/*
+!secrets/.gitkeep
+!secrets/README.md
+!secrets/*.example
+# Negate after *service-account*.json so the example stays tracked
+!secrets/gcp-service-account.json.example
+backend/secrets/
+!backend/secrets/.gitkeep

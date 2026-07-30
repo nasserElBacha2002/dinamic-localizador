@@ -823,8 +823,13 @@ describe("whatsapp webhook bot simulator regression", () => {
 
   it("returns duplicate MessageSid response without simulation context", async () => {
     setupUnitTestEnv();
+    const { env } = await import("../config/env");
+    Object.assign(env, { TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000" });
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { whatsappMessageRepository } = await import("../repositories/whatsapp-message.repository");
+    const { whatsappWebhookEventRepository } = await import(
+      "../repositories/whatsapp-webhook-event.repository"
+    );
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
     const { companyModuleService } = await import("./company-module.service");
     const { employeeRepository } = await import("../repositories/employee.repository");
@@ -838,6 +843,29 @@ describe("whatsapp webhook bot simulator regression", () => {
       activeSession: null,
       recentlyExpired: false,
     }));
+    mock.method(whatsappWebhookEventRepository, "claimInboundMessage", async () => ({
+      outcome: "CLAIMED" as const,
+      event: {
+        id: "evt-1",
+        companyId: companyA,
+        messageSid: "SM-DUP",
+        eventType: "INBOUND_MESSAGE" as const,
+        payloadHash: "hash",
+        processingStatus: "PROCESSING" as const,
+        responseReference: null,
+        responseBody: null,
+        responseType: null,
+        processedAt: null,
+        attemptCount: 1,
+        maxAttempts: 8,
+        processingOwner: "test",
+        processingExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+        processingVersion: 1,
+        nextAttemptAt: null,
+        lastError: null,
+      },
+    }));
+    mock.method(whatsappWebhookEventRepository, "markProcessed", async () => undefined);
     mock.method(whatsappMessageRepository, "findByMessageSid", async () => ({
       id: "existing-message",
       messageSid: "SM-DUP",

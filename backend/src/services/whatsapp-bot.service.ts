@@ -228,28 +228,26 @@ export const whatsappBotService = {
       );
     }
 
+    const maskPhone = (phone: string): string =>
+      phone.length <= 6 ? "***" : `${phone.slice(0, 4)}***${phone.slice(-3)}`;
+
     console.info("[whatsapp-bot] webhook received", {
       messageSid: payload.MessageSid,
-      from: phoneFrom,
+      from: maskPhone(phoneFrom),
       type: getMessageType(payload),
       companyId,
       resolutionSource: inbound.resolutionSource,
     });
 
+    let webhookEventId: string | null = null;
+    let webhookProcessingVersion = 0;
+
     try {
       setLastTwilioPayload(payload as unknown as Record<string, string>);
 
-      let webhookEventId: string | null = null;
       if (!simulationContext) {
-        const payloadHash = hashWebhookPayload({
-          MessageSid: payload.MessageSid,
-          From: payload.From,
-          To: payload.To,
-          Body: payload.Body ?? null,
-          Latitude: payload.Latitude ?? null,
-          Longitude: payload.Longitude ?? null,
-          NumMedia: payload.NumMedia ?? null,
-        });
+        const payloadRecord = payload as unknown as Record<string, unknown>;
+        const payloadHash = hashWebhookPayload(payloadRecord);
         const claim = await whatsappWebhookEventRepository.claimInboundMessage({
           companyId,
           messageSid: payload.MessageSid,
@@ -266,9 +264,20 @@ export const whatsappBotService = {
           console.info("[whatsapp-bot] idempotent webhook replay", {
             messageSid: payload.MessageSid,
           });
+          const prior =
+            claim.event.responseBody?.trim() ||
+            DUPLICATE_MESSAGE_SID_RESPONSE;
+          return prior.startsWith("<?xml") ? prior : buildTwiml(prior);
+        }
+        if (claim.outcome === "IN_PROGRESS" || claim.outcome === "EXHAUSTED") {
+          console.info("[whatsapp-bot] webhook claim not acquired", {
+            messageSid: payload.MessageSid,
+            outcome: claim.outcome,
+          });
           return buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
         }
         webhookEventId = claim.event.id;
+        webhookProcessingVersion = claim.event.processingVersion;
 
         const existingMessage = await whatsappMessageRepository.findByMessageSid(
           companyId,
@@ -280,12 +289,16 @@ export const whatsappBotService = {
             processingStatus: "DUPLICATE",
             processingErrorCode: "DUPLICATE_MESSAGE_SID",
           });
+          const duplicateTwiml = buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
           await whatsappWebhookEventRepository.markProcessed({
             companyId,
             eventId: webhookEventId,
+            processingVersion: webhookProcessingVersion,
+            responseBody: DUPLICATE_MESSAGE_SID_RESPONSE,
+            responseType: "DUPLICATE",
             responseReference: "DUPLICATE_MESSAGE_SID",
           });
-          return buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
+          return duplicateTwiml;
         }
       }
 
@@ -346,10 +359,14 @@ export const whatsappBotService = {
           processingStatus: "PROCESSED",
         });
         if (webhookEventId) {
+          const outboundText = extractMessageFromTwiml(response) || response;
           await whatsappWebhookEventRepository.markProcessed({
             companyId,
             eventId: webhookEventId,
-            responseReference: "TwiML",
+            processingVersion: webhookProcessingVersion,
+            responseBody: outboundText,
+            responseType: "TwiML",
+            responseReference: payload.MessageSid,
           });
         }
       } else if (response) {
@@ -367,7 +384,11 @@ export const whatsappBotService = {
 
       return response;
     } catch (error) {
-      console.error("[whatsapp-bot] unexpected webhook error", error);
+      console.error("[whatsapp-bot] unexpected webhook error", {
+        messageSid: payload.MessageSid,
+        companyId,
+        error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
 
       if (isSimulationActive()) {
         setTechnicalDetail("error", error instanceof Error ? error.message : "UNKNOWN_ERROR");
@@ -377,6 +398,25 @@ export const whatsappBotService = {
 
       if (error instanceof AppError && error.code === "WEBHOOK_PAYLOAD_ANOMALY") {
         throw error;
+      }
+
+      if (webhookEventId) {
+        try {
+          await whatsappWebhookEventRepository.markFailed({
+            companyId,
+            eventId: webhookEventId,
+            processingVersion: webhookProcessingVersion,
+            error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+          });
+        } catch (markFailedError) {
+          console.error("[whatsapp-bot] failed to mark webhook event failed", {
+            messageSid: payload.MessageSid,
+            error:
+              markFailedError instanceof Error
+                ? markFailedError.message
+                : "UNKNOWN_ERROR",
+          });
+        }
       }
 
       try {

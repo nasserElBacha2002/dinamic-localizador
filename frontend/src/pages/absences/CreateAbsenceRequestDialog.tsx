@@ -1,19 +1,30 @@
 import {
   Button,
+  FileButton,
   Group,
+  Progress,
   Select,
   Stack,
+  Text,
   Textarea,
   TextInput,
 } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
+import { useQueryClient } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
 import { AbsenceDurationPreviewPanel } from "../../components/absences/AbsenceDurationPreviewPanel";
 import { ResponsiveModal } from "../../design-system";
+import { absenceAttachmentKeys } from "../../api/absence-query-keys";
+import {
+  createAbsenceRequestDraft,
+  submitAbsenceRequestDraft,
+  uploadAbsenceDraftAttachment,
+} from "../../api/absences.api";
 import { useAbsenceDurationPreview } from "../../hooks/useAbsenceCalendar";
 import { useCreateAbsenceRequest } from "../../hooks/useAbsences";
-import type { AbsenceDayPeriod } from "../../types/absence";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import type { AbsenceAttachmentPolicy, AbsenceDayPeriod } from "../../types/absence";
 import { getApiErrorMessage } from "../../utils/errors";
 
 const PERIOD_OPTIONS: Array<{ value: AbsenceDayPeriod; label: string }> = [
@@ -21,6 +32,18 @@ const PERIOD_OPTIONS: Array<{ value: AbsenceDayPeriod; label: string }> = [
   { value: "AM", label: "Mañana (AM)" },
   { value: "PM", label: "Tarde (PM)" },
 ];
+
+const ACCEPTED_TYPES = "application/pdf,image/jpeg,image/png,image/webp";
+
+function resolvePolicy(
+  policy: AbsenceAttachmentPolicy | null | undefined,
+  requiresAttachment?: boolean,
+): AbsenceAttachmentPolicy {
+  if (policy) {
+    return policy;
+  }
+  return requiresAttachment ? "REQUIRED" : "OPTIONAL";
+}
 
 export function CreateAbsenceRequestDialog({
   opened,
@@ -35,10 +58,14 @@ export function CreateAbsenceRequestDialog({
     label: string;
     allowsHalfDay?: boolean;
     dayCountingMode?: string;
+    attachmentPolicy?: AbsenceAttachmentPolicy;
+    requiresAttachment?: boolean;
   }>;
   onCreated: () => void;
 }) {
   const createMutation = useCreateAbsenceRequest();
+  const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
   const [employeeId, setEmployeeId] = useState<string | null>(null);
   const [absenceTypeId, setAbsenceTypeId] = useState<string | null>(null);
   const [startDate, setStartDate] = useState("");
@@ -46,12 +73,22 @@ export function CreateAbsenceRequestDialog({
   const [startPeriod, setStartPeriod] = useState<AbsenceDayPeriod>("FULL_DAY");
   const [endPeriod, setEndPeriod] = useState<AbsenceDayPeriod>("FULL_DAY");
   const [reason, setReason] = useState("");
+  const [pendingFiles, setPendingFiles] = useState<
+    Array<{ file: File; idempotencyKey: string }>
+  >([]);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
   const selectedType = useMemo(
     () => typeOptions.find((option) => option.value === absenceTypeId),
     [absenceTypeId, typeOptions],
   );
   const allowsHalfDay = selectedType?.allowsHalfDay === true;
+  const attachmentPolicy = resolvePolicy(
+    selectedType?.attachmentPolicy,
+    selectedType?.requiresAttachment,
+  );
+  const allowsAttachment = attachmentPolicy !== "FORBIDDEN";
 
   const previewInput = useMemo(
     () =>
@@ -77,6 +114,21 @@ export function CreateAbsenceRequestDialog({
       setStartPeriod("FULL_DAY");
       setEndPeriod("FULL_DAY");
     }
+    if (resolvePolicy(next?.attachmentPolicy, next?.requiresAttachment) === "FORBIDDEN") {
+      setPendingFiles([]);
+    }
+  };
+
+  const resetForm = () => {
+    setEmployeeId(null);
+    setAbsenceTypeId(null);
+    setStartDate("");
+    setEndDate("");
+    setStartPeriod("FULL_DAY");
+    setEndPeriod("FULL_DAY");
+    setReason("");
+    setPendingFiles([]);
+    setUploadProgress(null);
   };
 
   const handleSubmit = async () => {
@@ -94,24 +146,74 @@ export function CreateAbsenceRequestDialog({
       });
       return;
     }
+    if (attachmentPolicy === "REQUIRED" && pendingFiles.length === 0) {
+      notifications.show({
+        color: "red",
+        message: "Este tipo de ausencia requiere documentación adjunta.",
+      });
+      return;
+    }
 
+    setSubmitting(true);
     try {
-      await createMutation.mutateAsync({
+      const payload = {
         employeeId,
         absenceTypeId,
         startDate,
         endDate,
-        startPeriod: allowsHalfDay ? startPeriod : "FULL_DAY",
-        endPeriod: allowsHalfDay ? endPeriod : "FULL_DAY",
+        startPeriod: allowsHalfDay ? startPeriod : ("FULL_DAY" as const),
+        endPeriod: allowsHalfDay ? endPeriod : ("FULL_DAY" as const),
         reason: reason.trim(),
-      });
+      };
+
+      // Draft → upload → submit when attachments are allowed (avoids auto-approve without docs).
+      if (allowsAttachment && (attachmentPolicy === "REQUIRED" || pendingFiles.length > 0)) {
+        const draft = await createAbsenceRequestDraft(payload);
+        setUploadProgress(0);
+        try {
+          for (const [index, item] of pendingFiles.entries()) {
+            await uploadAbsenceDraftAttachment(
+              draft.id,
+              item.file,
+              item.idempotencyKey,
+              (percent) => {
+                const base = (index / pendingFiles.length) * 100;
+                const slice = percent / pendingFiles.length;
+                setUploadProgress(Math.round(base + slice));
+              },
+            );
+          }
+          await submitAbsenceRequestDraft(draft.id, crypto.randomUUID());
+        } catch (error) {
+          notifications.show({
+            color: "red",
+            message: getApiErrorMessage(error),
+          });
+          return;
+        } finally {
+          setUploadProgress(null);
+        }
+        if (companyId) {
+          void queryClient.invalidateQueries({
+            queryKey: absenceAttachmentKeys.storageHealth(companyId),
+          });
+        }
+      } else {
+        await createMutation.mutateAsync(payload);
+      }
+
       notifications.show({ color: "green", message: "Solicitud creada." });
       onCreated();
+      resetForm();
       onClose();
     } catch (error) {
       notifications.show({ color: "red", message: getApiErrorMessage(error) });
+    } finally {
+      setSubmitting(false);
     }
   };
+
+  const busy = submitting || createMutation.isPending;
 
   return (
     <ResponsiveModal
@@ -127,7 +229,7 @@ export function CreateAbsenceRequestDialog({
           value={employeeId}
           onChange={setEmployeeId}
           activeOnly
-          disabled={createMutation.isPending}
+          disabled={busy}
         />
         <Select
           label="Tipo de ausencia"
@@ -139,7 +241,7 @@ export function CreateAbsenceRequestDialog({
           value={absenceTypeId}
           onChange={handleTypeChange}
           searchable
-          disabled={createMutation.isPending}
+          disabled={busy}
         />
         <Group grow preventGrowOverflow={false} align="flex-start">
           <TextInput
@@ -147,14 +249,14 @@ export function CreateAbsenceRequestDialog({
             type="date"
             value={startDate}
             onChange={(event) => setStartDate(event.currentTarget.value)}
-            disabled={createMutation.isPending}
+            disabled={busy}
           />
           <TextInput
             label="Fecha de fin"
             type="date"
             value={endDate}
             onChange={(event) => setEndDate(event.currentTarget.value)}
-            disabled={createMutation.isPending}
+            disabled={busy}
           />
         </Group>
         {allowsHalfDay ? (
@@ -164,14 +266,14 @@ export function CreateAbsenceRequestDialog({
               data={PERIOD_OPTIONS}
               value={startPeriod}
               onChange={(value) => setStartPeriod((value as AbsenceDayPeriod) ?? "FULL_DAY")}
-              disabled={createMutation.isPending}
+              disabled={busy}
             />
             <Select
               label="Período de fin"
               data={PERIOD_OPTIONS}
               value={endPeriod}
               onChange={(value) => setEndPeriod((value as AbsenceDayPeriod) ?? "FULL_DAY")}
-              disabled={createMutation.isPending}
+              disabled={busy}
             />
           </Group>
         ) : null}
@@ -181,13 +283,64 @@ export function CreateAbsenceRequestDialog({
           value={reason}
           onChange={(event) => setReason(event.currentTarget.value)}
           minRows={3}
-          disabled={createMutation.isPending}
+          disabled={busy}
         />
+        {allowsAttachment ? (
+          <Stack gap="xs">
+            <Group gap="sm" align="center">
+              <FileButton
+                onChange={(file) => {
+                  if (!file) {
+                    return;
+                  }
+                  setPendingFiles((prev) => [
+                    ...prev,
+                    { file, idempotencyKey: crypto.randomUUID() },
+                  ]);
+                }}
+                accept={ACCEPTED_TYPES}
+                disabled={busy}
+              >
+                {(props) => (
+                  <Button {...props} variant="light" size="sm" disabled={busy}>
+                    {attachmentPolicy === "REQUIRED"
+                      ? "Adjuntar documentación (obligatorio)"
+                      : "Adjuntar documentación (opcional)"}
+                  </Button>
+                )}
+              </FileButton>
+            </Group>
+            {pendingFiles.map((item) => (
+              <Group key={item.idempotencyKey} gap="xs">
+                <Text size="sm">{item.file.name}</Text>
+                <Button
+                  size="compact-xs"
+                  variant="subtle"
+                  color="red"
+                  disabled={busy}
+                  onClick={() =>
+                    setPendingFiles((prev) =>
+                      prev.filter((entry) => entry.idempotencyKey !== item.idempotencyKey),
+                    )
+                  }
+                >
+                  Quitar
+                </Button>
+              </Group>
+            ))}
+            {uploadProgress != null ? (
+              <Stack gap={4}>
+                <Text size="sm">Subiendo archivos… {uploadProgress}%</Text>
+                <Progress value={uploadProgress} animated />
+              </Stack>
+            ) : null}
+          </Stack>
+        ) : null}
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose} disabled={createMutation.isPending}>
+          <Button variant="default" onClick={onClose} disabled={busy}>
             Cancelar
           </Button>
-          <Button onClick={() => void handleSubmit()} loading={createMutation.isPending}>
+          <Button onClick={() => void handleSubmit()} loading={busy}>
             Crear solicitud
           </Button>
         </Group>

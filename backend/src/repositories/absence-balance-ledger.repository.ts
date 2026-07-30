@@ -30,6 +30,7 @@ const mapMovement = (row: Record<string, unknown>): AbsenceBalanceMovement => ({
   performedByEmployeeId: row.performed_by_employee_id
     ? String(row.performed_by_employee_id)
     : null,
+  reversedMovementId: row.reversed_movement_id ? String(row.reversed_movement_id) : null,
   createdAt: toIsoString(row.created_at as Date | string),
 });
 
@@ -112,6 +113,7 @@ export const absenceBalanceLedgerRepository = {
       metadataJson?: string | null;
       performedByUserId?: string | null;
       performedByEmployeeId?: string | null;
+      reversedMovementId?: string | null;
     },
     transaction: sql.Transaction,
   ): Promise<AbsenceBalanceMovement> {
@@ -130,20 +132,55 @@ export const absenceBalanceLedgerRepository = {
       .input("metadataJson", sql.NVarChar(sql.MAX), input.metadataJson ?? null)
       .input("performedByUserId", sql.UniqueIdentifier, input.performedByUserId ?? null)
       .input("performedByEmployeeId", sql.UniqueIdentifier, input.performedByEmployeeId ?? null)
+      .input("reversedMovementId", sql.UniqueIdentifier, input.reversedMovementId ?? null)
       .query(`
         INSERT INTO employee_absence_balance_movements (
           company_id, balance_id, employee_id, absence_type_id, period_year,
           absence_request_id, movement_type, quantity, direction, idempotency_key,
-          reason, metadata_json, performed_by_user_id, performed_by_employee_id
+          reason, metadata_json, performed_by_user_id, performed_by_employee_id,
+          reversed_movement_id
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @balanceId, @employeeId, @absenceTypeId, @periodYear,
           @absenceRequestId, @movementType, @quantity, @direction, @idempotencyKey,
-          @reason, @metadataJson, @performedByUserId, @performedByEmployeeId
+          @reason, @metadataJson, @performedByUserId, @performedByEmployeeId,
+          @reversedMovementId
         )
       `);
     return mapMovement(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Net reservation still held for a request/type/year:
+   * RESERVE − RELEASE − CONSUME (consume-from-reserve reduces reserved).
+   */
+  async getNetReservationForRequest(
+    companyId: string,
+    absenceRequestId: string,
+    absenceTypeId: string,
+    year: number,
+    transaction: sql.Transaction,
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .input("absenceTypeId", sql.UniqueIdentifier, absenceTypeId)
+      .input("year", sql.Int, year)
+      .query(`
+        SELECT
+          COALESCE(SUM(CASE WHEN movement_type = N'RESERVE' THEN quantity ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN movement_type = N'RELEASE' THEN quantity ELSE 0 END), 0)
+          - COALESCE(SUM(CASE WHEN movement_type = N'CONSUME' THEN quantity ELSE 0 END), 0)
+          AS net_reserved
+        FROM employee_absence_balance_movements WITH (UPDLOCK, HOLDLOCK)
+        WHERE company_id = @companyId
+          AND absence_request_id = @absenceRequestId
+          AND absence_type_id = @absenceTypeId
+          AND period_year = @year
+          AND movement_type IN (N'RESERVE', N'RELEASE', N'CONSUME')
+      `);
+    return Number(result.recordset[0]?.net_reserved ?? 0);
   },
 
   async listMovements(

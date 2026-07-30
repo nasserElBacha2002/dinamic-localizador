@@ -6,6 +6,7 @@ import {
   compareAbsenceDates,
   parseAbsenceDateInput,
 } from "./absence-date";
+import { allocationsByYearFromBreakdown } from "./absence-year-allocations";
 
 export type CalendarWeekdayRule = {
   dayOfWeek: WeekdayNumber;
@@ -42,6 +43,7 @@ export type AbsenceDurationCalculation = {
   calculationInputHash?: string;
   breakdown: AbsenceDayBreakdownItem[];
   excludedSummary: string[];
+  allocationsByYear: Array<{ year: number; quantity: number }>;
 };
 
 const addDaysIso = (iso: string, days: number): string => {
@@ -246,5 +248,31 @@ export const calculateAbsenceDuration = (input: {
     calculationVersion: input.calculationVersion,
     breakdown,
     excludedSummary: [...new Set(excludedSummary)].slice(0, 12),
+    allocationsByYear: allocationsByYearFromBreakdown(breakdown),
   };
+};
+
+/** Calendar-days breakdown for legacy (flag-off) duration calculation. */
+export const buildLegacyCalendarDaysBreakdown = (input: {
+  startDate: string;
+  endDate: string;
+  startPeriod: AbsenceDayPeriod;
+  endPeriod: AbsenceDayPeriod;
+}): AbsenceDayBreakdownItem[] => {
+  const dates = enumerateDatesInclusive(input.startDate, input.endDate);
+  return dates.map((date) => {
+    const counted = fractionForDay(
+      date,
+      input.startDate,
+      input.endDate,
+      input.startPeriod,
+      input.endPeriod,
+    );
+    return {
+      date,
+      counted,
+      isWorkingDay: true,
+      reason: counted < 1 ? ("PARTIAL" as const) : ("WORKING" as const),
+    };
+  });
 };

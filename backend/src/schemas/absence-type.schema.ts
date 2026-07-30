@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { ABSENCE_DAY_COUNTING_MODES } from "../constants/absence-calendar";
+import { ABSENCE_ATTACHMENT_POLICIES } from "../types/absence-attachment";
 
 export const listAbsenceTypesQuerySchema = z.object({
   activeOnly: z
@@ -15,6 +16,7 @@ export const absenceTypeIdParamSchema = z.object({
 export const updateAbsenceTypeSchema = z.object({
   dayCountingMode: z.enum(ABSENCE_DAY_COUNTING_MODES).optional(),
   calendarId: z.string().uuid("UUID de calendario inválido").nullable().optional(),
+  attachmentPolicy: z.enum(ABSENCE_ATTACHMENT_POLICIES).optional(),
   expectedVersion: z.coerce.number().int().min(1).optional(),
 });
 

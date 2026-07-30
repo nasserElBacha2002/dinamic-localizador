@@ -19,6 +19,7 @@ export interface AbsenceBalanceMovement {
   metadataJson: string | null;
   performedByUserId: string | null;
   performedByEmployeeId: string | null;
+  reversedMovementId: string | null;
   createdAt: string;
 }
 

@@ -196,7 +196,7 @@ export function getAdminNavItems({
   }
 
   if (hasAnyPermission(permissions, ["company:settings:update"])) {
-    items.push({ label: "Configuración de empresa", path: "/settings/company", section: "settings" });
+    items.push({ label: "Configuración", path: "/settings/company", section: "settings" });
   }
 
   if (hasAnyPermission(permissions, ["users:manage"])) {

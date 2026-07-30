@@ -1,47 +1,21 @@
-import {
-  Alert,
-  Button,
-  Group,
-  NumberInput,
-  Select,
-  SimpleGrid,
-  Stack,
-  Text,
-  Textarea,
-} from "@mantine/core";
+import { Alert, Button, Group, SimpleGrid, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import {
   DataTable,
   LoadingState,
-  ResponsiveModal,
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
   useAdjustEmployeeAbsenceBalance,
-  useEmployeeAbsenceBalanceMovements,
   useEmployeeAbsenceBalances,
 } from "../../hooks/useAbsences";
-import type {
-  AbsenceBalanceAdjustmentOperation,
-  AbsenceBalanceMovement,
-  EmployeeAbsenceBalanceSummary,
-  AbsenceBalanceImpact,
-} from "../../types/absence";
+import type { AbsenceBalanceImpact, EmployeeAbsenceBalanceSummary } from "../../types/absence";
 import { getApiErrorMessage } from "../../utils/errors";
 import { safeText } from "../../utils/display-safe";
-
-const MOVEMENT_LABELS: Record<string, string> = {
-  INITIAL_GRANT: "Otorgamiento inicial",
-  MANUAL_CREDIT: "Ajuste (+)",
-  MANUAL_DEBIT: "Ajuste (−)",
-  RESERVE: "Reserva",
-  RELEASE: "Liberación",
-  CONSUME: "Consumo",
-  REVERSAL: "Reversión",
-  MIGRATION_ADJUSTMENT: "Migración",
-};
+import { AbsenceBalanceAdjustmentDialog } from "./AbsenceBalanceAdjustmentDialog";
+import { AbsenceBalanceMovementHistory } from "./AbsenceBalanceMovementHistory";
 
 interface EmployeeAbsenceBalanceCardProps {
   employeeId: string;
@@ -62,24 +36,14 @@ export function EmployeeAbsenceBalanceCard({
   const adjustMutation = useAdjustEmployeeAbsenceBalance(employeeId);
   const [editTarget, setEditTarget] = useState<EmployeeAbsenceBalanceSummary | null>(null);
   const [historyTarget, setHistoryTarget] = useState<EmployeeAbsenceBalanceSummary | null>(null);
-  const [operation, setOperation] = useState<AbsenceBalanceAdjustmentOperation>("CREDIT");
-  const [quantity, setQuantity] = useState("");
-  const [reason, setReason] = useState("");
   const [error, setError] = useState<string | null>(null);
-
-  const movementsQuery = useEmployeeAbsenceBalanceMovements(
-    employeeId,
-    historyTarget?.absenceType.id,
-    { year, page: 1, limit: 20 },
-    Boolean(historyTarget),
-  );
+  const [adjustCommandId, setAdjustCommandId] = useState("");
 
   const visibleBalances = useMemo(() => {
     const rows = balancesQuery.data ?? [];
     if (showEdit) {
       return rows;
     }
-
     return rows.filter(
       (row) =>
         row.absenceType?.deductsBalance ||
@@ -95,14 +59,6 @@ export function EmployeeAbsenceBalanceCard({
   const hasNegativeBalance = visibleBalances.some(
     (row) => row.availableDays < 0 || row.projectedAvailableDays < 0,
   );
-
-  const openEdit = (row: EmployeeAbsenceBalanceSummary) => {
-    setEditTarget(row);
-    setOperation("CREDIT");
-    setQuantity("");
-    setReason("");
-    setError(null);
-  };
 
   const columns = useMemo<DataTableColumn<EmployeeAbsenceBalanceSummary>[]>(
     () => [
@@ -136,7 +92,15 @@ export function EmployeeAbsenceBalanceCard({
               Historial
             </Button>
             {showEdit ? (
-              <Button size="compact-xs" variant="light" onClick={() => openEdit(row)}>
+              <Button
+                size="compact-xs"
+                variant="light"
+                onClick={() => {
+                  setError(null);
+                  setAdjustCommandId(crypto.randomUUID());
+                  setEditTarget(row);
+                }}
+              >
                 Ajustar
               </Button>
             ) : null}
@@ -179,78 +143,6 @@ export function EmployeeAbsenceBalanceCard({
     }),
     [],
   );
-
-  const movementColumns = useMemo<DataTableColumn<AbsenceBalanceMovement>[]>(
-    () => [
-      {
-        key: "date",
-        header: "Fecha",
-        getValue: (row) => new Date(row.createdAt).toLocaleString("es-AR"),
-      },
-      {
-        key: "movement",
-        header: "Movimiento",
-        getValue: (row) => MOVEMENT_LABELS[row.movementType] ?? row.movementType,
-      },
-      {
-        key: "quantity",
-        header: "Cantidad",
-        getValue: (row) => `${row.direction === "DEBIT" ? "−" : "+"}${row.quantity}`,
-        align: "right",
-      },
-      {
-        key: "request",
-        header: "Solicitud",
-        getValue: (row) => row.absenceRequestId?.slice(0, 8) ?? "—",
-      },
-      {
-        key: "reason",
-        header: "Motivo",
-        getValue: (row) => safeText(row.reason),
-      },
-      {
-        key: "actor",
-        header: "Actor",
-        getValue: (row) =>
-          row.performedByUserId?.slice(0, 8) ?? row.performedByEmployeeId?.slice(0, 8) ?? "—",
-      },
-    ],
-    [],
-  );
-
-  const handleSave = async () => {
-    if (!editTarget) {
-      return;
-    }
-
-    const parsedQuantity = Number(quantity);
-    if (!Number.isFinite(parsedQuantity) || parsedQuantity <= 0) {
-      setError("La cantidad debe ser un número mayor a 0.");
-      return;
-    }
-    if (!reason.trim()) {
-      setError("El motivo es obligatorio.");
-      return;
-    }
-
-    try {
-      await adjustMutation.mutateAsync({
-        absenceTypeId: editTarget.absenceType.id,
-        year,
-        quantity: parsedQuantity,
-        operation,
-        reason: reason.trim(),
-      });
-      setEditTarget(null);
-      notifications.show({
-        color: "green",
-        message: "Ajuste de saldo registrado correctamente.",
-      });
-      onBalanceSaved?.();
-    } catch (saveError) {
-      setError(getApiErrorMessage(saveError, "No se pudo registrar el ajuste."));
-    }
-  };
 
   if (balancesQuery.isLoading) {
     return <LoadingState />;
@@ -311,92 +203,49 @@ export function EmployeeAbsenceBalanceCard({
         <Text c="dimmed">No hay tipos de ausencia activos para mostrar en {year}.</Text>
       )}
 
-      <ResponsiveModal
+      <AbsenceBalanceAdjustmentDialog
         opened={Boolean(editTarget)}
-        onClose={adjustMutation.isPending ? () => undefined : () => setEditTarget(null)}
-        title={`Ajustar saldo · ${editTarget?.absenceType.name} · ${year}`}
-        bodyMode="normal"
-        closeOnClickOutside={!adjustMutation.isPending}
-        closeOnEscape={!adjustMutation.isPending}
-        footer={
-          <Group justify="flex-end" gap="sm" wrap="wrap">
-            <Button
-              variant="default"
-              onClick={() => setEditTarget(null)}
-              disabled={adjustMutation.isPending}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={() => void handleSave()} loading={adjustMutation.isPending}>
-              Confirmar ajuste
-            </Button>
-          </Group>
-        }
-      >
-        <Stack gap="md">
-          <Text size="sm" c="dimmed">
-            Disponibles actuales: {editTarget?.availableDays ?? "—"} · Otorgados:{" "}
-            {editTarget?.grantedDays ?? editTarget?.assignedDays ?? "—"}
-          </Text>
-          <Select
-            label="Operación"
-            data={[
-              { value: "CREDIT", label: "Agregar días" },
-              { value: "DEBIT", label: "Descontar días" },
-            ]}
-            value={operation}
-            onChange={(value) =>
-              setOperation((value as AbsenceBalanceAdjustmentOperation | null) ?? "CREDIT")
+        year={year}
+        target={editTarget}
+        loading={adjustMutation.isPending}
+        error={error}
+        commandId={adjustCommandId}
+        onClose={() => setEditTarget(null)}
+        onConfirm={(input) => {
+          if (!editTarget) {
+            return;
+          }
+          void (async () => {
+            try {
+              await adjustMutation.mutateAsync({
+                absenceTypeId: editTarget.absenceType.id,
+                year,
+                quantity: input.quantity,
+                operation: input.operation,
+                reason: input.reason,
+                idempotencyKey: input.idempotencyKey,
+              });
+              setEditTarget(null);
+              setError(null);
+              notifications.show({
+                color: "green",
+                message: "Ajuste de saldo registrado correctamente.",
+              });
+              onBalanceSaved?.();
+            } catch (saveError) {
+              setError(getApiErrorMessage(saveError, "No se pudo registrar el ajuste."));
             }
-            disabled={adjustMutation.isPending}
-          />
-          <NumberInput
-            label="Cantidad"
-            value={quantity === "" ? "" : Number(quantity)}
-            onChange={(value) => setQuantity(value === "" || value === undefined ? "" : String(value))}
-            min={0.5}
-            step={0.5}
-            decimalScale={1}
-            disabled={adjustMutation.isPending}
-          />
-          <Textarea
-            label="Motivo"
-            description="Obligatorio. Queda registrado en el historial de movimientos."
-            value={reason}
-            onChange={(event) => setReason(event.currentTarget.value)}
-            minRows={2}
-            required
-            disabled={adjustMutation.isPending}
-          />
-          {error ? <Alert color="red">{error}</Alert> : null}
-        </Stack>
-      </ResponsiveModal>
+          })();
+        }}
+      />
 
-      <ResponsiveModal
+      <AbsenceBalanceMovementHistory
         opened={Boolean(historyTarget)}
+        employeeId={employeeId}
+        year={year}
+        target={historyTarget}
         onClose={() => setHistoryTarget(null)}
-        title={`Historial · ${historyTarget?.absenceType.name} · ${year}`}
-        bodyMode="normal"
-        size="xl"
-      >
-        <Stack gap="md">
-          {movementsQuery.isLoading ? <LoadingState /> : null}
-          {movementsQuery.isError ? (
-            <Alert color="red">
-              {getApiErrorMessage(movementsQuery.error, "No se pudo cargar el historial.")}
-            </Alert>
-          ) : null}
-          {!movementsQuery.isLoading && !movementsQuery.isError ? (
-            <DataTable
-              rows={movementsQuery.data?.data ?? []}
-              columns={movementColumns}
-              getRowKey={(row) => row.id}
-              emptyTitle="No hay movimientos para este saldo."
-              aria-label="Historial de movimientos de saldo"
-            />
-          ) : null}
-        </Stack>
-      </ResponsiveModal>
+      />
     </Stack>
   );
 }

@@ -21,8 +21,10 @@ import type {
 import { buildAbsenceCalculationInputHash } from "../utils/absence-calculation-hash";
 import {
   calculateAbsenceDuration,
+  buildLegacyCalendarDaysBreakdown,
   type AbsenceDurationCalculation,
 } from "../utils/absence-duration";
+import { allocationsByYearFromBreakdown } from "../utils/absence-year-allocations";
 import {
   calculateTotalAbsenceDays,
   compareAbsenceDates,
@@ -549,6 +551,12 @@ export const absenceCalendarService = {
         startPeriod,
         endPeriod,
       });
+      const breakdown = buildLegacyCalendarDaysBreakdown({
+        startDate: start.iso,
+        endDate: end.iso,
+        startPeriod,
+        endPeriod,
+      });
       const timezone = await absenceOperationImpactService.getOperationTimezone(companyId);
       const inputHash = buildAbsenceCalculationInputHash({
         absenceTypeId: absenceType.id,
@@ -588,8 +596,9 @@ export const absenceCalendarService = {
         calendarVersion: 0,
         calculationVersion: 1,
         calculationInputHash: inputHash,
-        breakdown: [],
+        breakdown,
         excludedSummary: [],
+        allocationsByYear: allocationsByYearFromBreakdown(breakdown),
         fingerprint,
       };
     }

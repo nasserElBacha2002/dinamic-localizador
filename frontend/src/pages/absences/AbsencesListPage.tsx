@@ -74,6 +74,8 @@ export function AbsencesListPage() {
         label: absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name,
         allowsHalfDay: type.allowsHalfDay,
         dayCountingMode: type.dayCountingMode,
+        attachmentPolicy: type.attachmentPolicy,
+        requiresAttachment: type.requiresAttachment,
       })),
     [typesQuery.data],
   );

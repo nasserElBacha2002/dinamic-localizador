@@ -64,6 +64,7 @@ export interface CompanySettings {
   pendingOperationExpirationHours: number;
   absenceAdvancedCalendarEnabled: boolean;
   absenceBalanceLedgerEnabled: boolean;
+  absenceAttachmentsEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

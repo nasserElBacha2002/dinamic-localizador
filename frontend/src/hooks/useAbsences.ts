@@ -18,6 +18,7 @@ import {
   updateAbsenceType,
 } from "../api/absences.api";
 import type {
+  AbsenceAttachmentPolicy,
   AbsenceBalanceMovementsFilters,
   AbsenceRequestFilters,
   AdjustEmployeeAbsenceBalanceInput,
@@ -63,6 +64,7 @@ export function useUpdateAbsenceType() {
       id: string;
       dayCountingMode?: "CALENDAR_DAYS" | "BUSINESS_DAYS";
       calendarId?: string | null;
+      attachmentPolicy?: AbsenceAttachmentPolicy;
     }) => updateAbsenceType(id, input),
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: absenceKeys.types(companyId) });

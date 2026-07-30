@@ -36,7 +36,7 @@ describe("company settings frontend module", () => {
   it("shows settings nav for company:settings:update permission", () => {
     const navFile = readFileSync(join(process.cwd(), "src/utils/company-modules.ts"), "utf8");
     assert.match(navFile, /company:settings:update/);
-    assert.match(navFile, /Configuración de empresa/);
+    assert.match(navFile, /Configuración/);
   });
 
   it("uses operational settings dialog for core company settings", () => {

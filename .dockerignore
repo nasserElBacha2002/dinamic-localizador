@@ -25,3 +25,10 @@ yarn-error.log*
 
 tmp
 temp
+
+# Never send GCP keys into image build context
+secrets
+**/secrets
+*service-account*.json
+*gcp-credentials*.json
+google-credentials.json

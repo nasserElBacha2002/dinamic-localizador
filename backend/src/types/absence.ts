@@ -27,7 +27,9 @@ export interface AbsenceType {
   name: string;
   description: string | null;
   requiresApproval: boolean;
+  /** @deprecated Prefer attachmentPolicy; kept for backward compatibility. */
   requiresAttachment: boolean;
+  attachmentPolicy: import("./absence-attachment").AbsenceAttachmentPolicy;
   deductsBalance: boolean;
   allowsHalfDay: boolean;
   /** CALENDAR_DAYS preserves legacy inclusive counting; BUSINESS_DAYS uses company calendar. */
@@ -62,6 +64,9 @@ export interface AbsenceRequest {
   calculationVersion: number | null;
   calendarVersion: number | null;
   calculationInputHash: string | null;
+  reservationVersion: number;
+  yearAllocationsJson: string | null;
+  attachmentPolicySnapshot: import("./absence-attachment").AbsenceAttachmentPolicy | null;
   createdAt: string;
   updatedAt: string;
 }

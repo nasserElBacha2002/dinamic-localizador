@@ -1,6 +1,10 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { absenceKeys, normalizeAbsencesListSearch } from "./absence-query-keys";
+import {
+  absenceAttachmentKeys,
+  absenceKeys,
+  normalizeAbsencesListSearch,
+} from "./absence-query-keys";
 
 describe("absenceKeys", () => {
   it("scopes list/detail/balances under companyId", () => {
@@ -17,6 +21,31 @@ describe("absenceKeys", () => {
     const a = JSON.stringify(absenceKeys.list("co-a", { status: "PENDING" }));
     const b = JSON.stringify(absenceKeys.list("co-b", { status: "PENDING" }));
     assert.notEqual(a, b);
+  });
+});
+
+describe("absenceAttachmentKeys", () => {
+  it("scopes request/detail/storageHealth under companyId", () => {
+    const companyId = "co-1";
+    assert.deepEqual(absenceAttachmentKeys.company(companyId), [
+      "absence-attachments",
+      "company",
+      "co-1",
+    ]);
+    assert.deepEqual(absenceAttachmentKeys.request(companyId, "req-1"), [
+      "absence-attachments",
+      "company",
+      "co-1",
+      "request",
+      "req-1",
+    ]);
+    assert.ok(absenceAttachmentKeys.detail(companyId, "req-1", "att-1").includes("att-1"));
+    assert.deepEqual(absenceAttachmentKeys.storageHealth(companyId), [
+      "absence-attachments",
+      "company",
+      "co-1",
+      "storage-health",
+    ]);
   });
 });
 

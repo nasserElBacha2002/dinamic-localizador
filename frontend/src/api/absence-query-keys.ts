@@ -47,6 +47,22 @@ export const absenceKeys = {
   ) => [...absenceKeys.company(companyId), "calculate", payload] as const,
 };
 
+/** Phase 4 absence attachment query keys. */
+export const absenceAttachmentKeys = {
+  all: ["absence-attachments"] as const,
+  company: (companyId: string | null | undefined) =>
+    [...absenceAttachmentKeys.all, "company", companyId ?? "none"] as const,
+  request: (companyId: string | null | undefined, requestId: string) =>
+    [...absenceAttachmentKeys.company(companyId), "request", requestId] as const,
+  detail: (
+    companyId: string | null | undefined,
+    requestId: string,
+    attachmentId: string,
+  ) => [...absenceAttachmentKeys.request(companyId, requestId), attachmentId] as const,
+  storageHealth: (companyId: string | null | undefined) =>
+    [...absenceAttachmentKeys.company(companyId), "storage-health"] as const,
+};
+
 /** Alias aligned with Phase 3 balance ledger query-key naming. */
 export const absenceBalanceKeys = {
   summary: (

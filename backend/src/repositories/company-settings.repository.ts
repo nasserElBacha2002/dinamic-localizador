@@ -56,6 +56,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.absence_balance_ledger_enabled == null
       ? false
       : Boolean(row.absence_balance_ledger_enabled),
+  absenceAttachmentsEnabled:
+    row.absence_attachments_enabled == null
+      ? false
+      : Boolean(row.absence_attachments_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -193,6 +197,7 @@ export const companySettingsRepository = {
         | "confirmationReminderHoursBefore"
         | "pendingOperationExpirationHours"
         | "absenceAdvancedCalendarEnabled"
+        | "absenceAttachmentsEnabled"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -299,6 +304,14 @@ export const companySettingsRepository = {
         input.absenceAdvancedCalendarEnabled ? 1 : 0,
       );
       fields.push("absence_advanced_calendar_enabled = @absenceAdvancedCalendarEnabled");
+    }
+    if (input.absenceAttachmentsEnabled !== undefined) {
+      request.input(
+        "absenceAttachmentsEnabled",
+        sql.Bit,
+        input.absenceAttachmentsEnabled ? 1 : 0,
+      );
+      fields.push("absence_attachments_enabled = @absenceAttachmentsEnabled");
     }
 
     if (fields.length === 0) {

@@ -15,15 +15,29 @@ export const ABSENCE_BALANCE_MOVEMENT_DIRECTIONS = ["CREDIT", "DEBIT"] as const;
 export type AbsenceBalanceMovementDirection = (typeof ABSENCE_BALANCE_MOVEMENT_DIRECTIONS)[number];
 
 export const buildAbsenceBalanceIdempotencyKey = {
-  reserve: (requestId: string, year: number): string =>
-    `absence:${requestId}:reserve:${year}:v1`,
-  release: (requestId: string, year: number): string =>
-    `absence:${requestId}:release:${year}:v1`,
-  consume: (requestId: string, year: number): string =>
-    `absence:${requestId}:consume:${year}:v1`,
-  reservationAdjustment: (requestId: string, year: number, version: number): string =>
-    `absence:${requestId}:reservation-adjustment:${year}:v${version}`,
-  manual: (balanceId: string, nonce: string): string => `balance:${balanceId}:manual:${nonce}`,
+  reserve: (
+    requestId: string,
+    reservationVersion: number,
+    absenceTypeId: string,
+    year: number,
+  ): string =>
+    `absence:${requestId}:reservation:${reservationVersion}:${absenceTypeId}:${year}:reserve`,
+  release: (
+    requestId: string,
+    reservationVersion: number,
+    absenceTypeId: string,
+    year: number,
+  ): string =>
+    `absence:${requestId}:reservation:${reservationVersion}:${absenceTypeId}:${year}:release`,
+  consume: (
+    requestId: string,
+    reservationVersion: number,
+    absenceTypeId: string,
+    year: number,
+  ): string =>
+    `absence:${requestId}:reservation:${reservationVersion}:${absenceTypeId}:${year}:consume`,
+  manual: (balanceId: string, commandId: string): string =>
+    `balance:${balanceId}:manual:${commandId}`,
   initialGrant: (balanceId: string): string => `migration:initial-grant:${balanceId}`,
   reversal: (movementId: string): string => `absence:movement:${movementId}:reversal:v1`,
 };

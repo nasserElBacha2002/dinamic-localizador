@@ -7,9 +7,11 @@ import { validate } from "../middleware/validate";
 import {
   absenceBalanceYearQuerySchema,
   adjustEmployeeAbsenceBalanceSchema,
+  employeeAbsenceBalanceMovementParamsSchema,
   employeeAbsenceBalanceParamsSchema,
   employeeIdRouteParamSchema,
   listAbsenceBalanceMovementsQuerySchema,
+  reverseAbsenceBalanceMovementSchema,
   upsertEmployeeAbsenceBalanceSchema,
 } from "../schemas/absence-balance.schema";
 import {
@@ -61,6 +63,13 @@ employeeRouter.post(
   validate(employeeAbsenceBalanceParamsSchema, "params"),
   validate(adjustEmployeeAbsenceBalanceSchema),
   asyncHandler(absenceBalanceController.adjust),
+);
+employeeRouter.post(
+  "/:employeeId/absence-balances/:absenceTypeId/movements/:movementId/reversal",
+  requirePermission("absences:balance:update"),
+  validate(employeeAbsenceBalanceMovementParamsSchema, "params"),
+  validate(reverseAbsenceBalanceMovementSchema),
+  asyncHandler(absenceBalanceController.reverse),
 );
 employeeRouter.get(
   "/:id/deactivation-impact",

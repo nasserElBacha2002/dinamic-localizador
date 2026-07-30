@@ -4,7 +4,7 @@
  * Usage: npx tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/reconcile-absence-balance-ledger.ts
  */
 import sql from "mssql";
-import { writeFileSync } from "node:fs";
+import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { migrationEnv as env } from "../config/env-migrations";
 
@@ -101,12 +101,9 @@ const main = async (): Promise<void> => {
           `${row.companyId} | ${row.employeeId} | ${row.absenceTypeId} | ${row.year} | g:${row.projectedGranted}/${row.ledgerGranted} r:${row.projectedReserved}/${row.ledgerReserved} c:${row.projectedConsumed}/${row.ledgerConsumed} | ${row.status}`,
       ),
     ];
-    const outPath = join(
-      process.cwd(),
-      "..",
-      "review",
-      "absence-phase-3-balances-reconciliation.txt",
-    );
+    const outDir = join(process.cwd(), "..", "review");
+    mkdirSync(outDir, { recursive: true });
+    const outPath = join(outDir, "absence-phase-3-balances-reconciliation.txt");
     writeFileSync(outPath, `${lines.join("\n")}\n`, "utf8");
     console.log(lines.join("\n"));
     console.log(`Wrote ${outPath}`);

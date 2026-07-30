@@ -16,6 +16,8 @@ import { statisticsRouter } from "./statistics.routes";
 import { serviceRouter } from "./service.routes";
 import { twilioRouter } from "./twilio.routes";
 import { absenceRequestRouter } from "./absence-request.routes";
+import { absenceAttachmentRouter } from "./absence-attachment.routes";
+import { absenceRequestDraftRouter } from "./absence-request-draft.routes";
 import { absenceTypesRouter } from "./absence-type.routes";
 import {
   absenceCalendarRouter,
@@ -124,9 +126,19 @@ companyScopedOperationalRouter.use(
   absenceTypesRouter,
 );
 companyScopedOperationalRouter.use(
+  "/absence-request-drafts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceRequestDraftRouter,
+);
+companyScopedOperationalRouter.use(
   "/absence-requests",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceCalculateRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceAttachmentRouter,
 );
 companyScopedOperationalRouter.use(
   "/absence-requests",
@@ -199,9 +211,19 @@ operationalRouter.use(
   absenceTypesRouter,
 );
 operationalRouter.use(
+  "/absence-request-drafts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceRequestDraftRouter,
+);
+operationalRouter.use(
   "/absence-requests",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceCalculateRouter,
+);
+operationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceAttachmentRouter,
 );
 operationalRouter.use(
   "/absence-requests",

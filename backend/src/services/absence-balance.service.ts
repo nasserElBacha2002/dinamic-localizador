@@ -1,12 +1,16 @@
 import { AppError } from "../errors/app-error";
 import sql from "mssql";
-import { randomUUID } from "node:crypto";
 import { buildAbsenceBalanceIdempotencyKey } from "../constants/absence-balance-ledger";
 import { getPool } from "../database/connection";
 import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
+import { absenceBalanceLedgerRepository } from "../repositories/absence-balance-ledger.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
-import type { UpsertEmployeeAbsenceBalanceInput } from "../schemas/absence-balance.schema";
+import type {
+  AdjustEmployeeAbsenceBalanceInput,
+  ReverseAbsenceBalanceMovementInput,
+  UpsertEmployeeAbsenceBalanceInput,
+} from "../schemas/absence-balance.schema";
 import type {
   AbsenceBalanceImpact,
   AbsenceBalanceSummary,
@@ -21,7 +25,7 @@ import {
   getAbsenceRequestYear,
   hasSufficientBalanceForApproval,
 } from "../utils/absence-balance.utils";
-import { splitAbsenceQuantityByYear } from "../utils/absence-balance-year-split";
+import { resolveYearAllocations } from "../utils/absence-year-allocations";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
 
 const sumDaysForStatuses = (
@@ -107,13 +111,16 @@ const buildLedgerSummaryForType = (input: {
 });
 
 export const allocationsForRequest = (
-  request: Pick<AbsenceRequest, "startDate" | "endDate" | "totalDays">,
+  request: Pick<AbsenceRequest, "startDate" | "endDate" | "totalDays"> & {
+    yearAllocationsJson?: string | null;
+  },
 ) =>
-  splitAbsenceQuantityByYear({
+  resolveYearAllocations({
+    persistedJson: request.yearAllocationsJson ?? null,
     startDate: request.startDate,
     endDate: request.endDate,
     totalDays: request.totalDays,
-  });
+  }).allocations;
 
 export const absenceBalanceService = {
   async listEmployeeBalances(
@@ -363,9 +370,6 @@ export const absenceBalanceService = {
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
       try {
-        const { absenceBalanceLedgerRepository } = await import(
-          "../repositories/absence-balance-ledger.repository"
-        );
         const current = await absenceBalanceLedgerRepository.ensureBalanceRow(
           companyId,
           employeeId,
@@ -373,6 +377,13 @@ export const absenceBalanceService = {
           input.year,
           transaction,
         );
+        if (current.version !== input.expectedVersion) {
+          throw new AppError(
+            409,
+            "ABSENCE_BALANCE_VERSION_CONFLICT",
+            "El saldo fue modificado por otro proceso. Recargá e intentá de nuevo.",
+          );
+        }
         const delta = Number((input.totalDays - current.grantedDays).toFixed(1));
         if (delta !== 0) {
           await absenceBalanceLedgerService.manualAdjustment(
@@ -386,7 +397,7 @@ export const absenceBalanceService = {
               reason: input.notes?.trim() || "Ajuste de saldo (API legacy PUT)",
               idempotencyKey: buildAbsenceBalanceIdempotencyKey.manual(
                 current.id,
-                randomUUID(),
+                `put-v${input.expectedVersion}-to-${input.totalDays}`,
               ),
               actor: { userId },
             },
@@ -451,5 +462,119 @@ export const absenceBalanceService = {
     ).filter((item) => item.absenceType.id === absenceTypeId);
 
     return summary;
+  },
+
+  async adjustEmployeeBalance(
+    companyId: string,
+    employeeId: string,
+    absenceTypeId: string,
+    input: AdjustEmployeeAbsenceBalanceInput,
+    userId: string,
+  ) {
+    if (!(await absenceBalanceLedgerService.isLedgerEnabled(companyId))) {
+      throw new AppError(
+        409,
+        "ABSENCE_BALANCE_LEDGER_DISABLED",
+        "El ledger de saldos no está activo para esta empresa",
+      );
+    }
+
+    const employee = await employeeRepository.findById(companyId, employeeId);
+    if (!employee) {
+      throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
+    }
+    const absenceType = await absenceTypeRepository.findById(companyId, absenceTypeId);
+    if (!absenceType) {
+      throw new AppError(404, "ABSENCE_TYPE_NOT_FOUND", "Tipo de ausencia no encontrado");
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const balance = await absenceBalanceLedgerRepository.ensureBalanceRow(
+        companyId,
+        employeeId,
+        absenceTypeId,
+        input.year,
+        transaction,
+      );
+      const movement = await absenceBalanceLedgerService.manualAdjustment(
+        companyId,
+        {
+          employeeId,
+          absenceTypeId,
+          year: input.year,
+          quantity: input.quantity,
+          operation: input.operation,
+          reason: input.reason,
+          idempotencyKey: buildAbsenceBalanceIdempotencyKey.manual(
+            balance.id,
+            input.idempotencyKey,
+          ),
+          actor: { userId },
+        },
+        transaction,
+      );
+      await transaction.commit();
+      return movement;
+    } catch (error) {
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "absence-balance.adjust", companyId, entityId: employeeId },
+        error,
+      );
+    }
+  },
+
+  async reverseEmployeeBalanceMovement(
+    companyId: string,
+    employeeId: string,
+    absenceTypeId: string,
+    movementId: string,
+    input: ReverseAbsenceBalanceMovementInput,
+    userId: string,
+  ) {
+    if (!(await absenceBalanceLedgerService.isLedgerEnabled(companyId))) {
+      throw new AppError(
+        409,
+        "ABSENCE_BALANCE_LEDGER_DISABLED",
+        "El ledger de saldos no está activo para esta empresa",
+      );
+    }
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const original = await absenceBalanceLedgerRepository.findMovementById(
+        companyId,
+        movementId,
+        transaction,
+      );
+      if (
+        !original ||
+        original.employeeId !== employeeId ||
+        original.absenceTypeId !== absenceTypeId
+      ) {
+        throw new AppError(404, "ABSENCE_BALANCE_MOVEMENT_NOT_FOUND", "Movimiento no encontrado");
+      }
+
+      const movement = await absenceBalanceLedgerService.reverseMovement(
+        companyId,
+        movementId,
+        { userId },
+        input.reason,
+        transaction,
+      );
+      await transaction.commit();
+      return movement;
+    } catch (error) {
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "absence-balance.reverse", companyId, entityId: movementId },
+        error,
+      );
+    }
   },
 };

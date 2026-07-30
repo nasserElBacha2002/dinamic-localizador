@@ -326,23 +326,36 @@ export const mapAttendanceReviewRow = (row: Record<string, unknown>): Attendance
     : undefined,
 });
 
-export const mapAbsenceTypeRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  code: String(row.code),
-  name: String(row.name),
-  description: row.description ? String(row.description) : null,
-  requiresApproval: Boolean(row.requires_approval),
-  requiresAttachment: Boolean(row.requires_attachment),
-  deductsBalance: Boolean(row.deducts_balance),
-  allowsHalfDay: Boolean(row.allows_half_day),
-  dayCountingMode: (row.day_counting_mode
-    ? String(row.day_counting_mode)
-    : "CALENDAR_DAYS") as import("../types/absence-calendar").AbsenceTypeCalendarFields["dayCountingMode"],
-  calendarId: row.calendar_id ? String(row.calendar_id) : null,
-  isActive: Boolean(row.is_active),
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+export const mapAbsenceTypeRow = (row: Record<string, unknown>) => {
+  const requiresAttachment = Boolean(row.requires_attachment);
+  const rawPolicy = row.attachment_policy ? String(row.attachment_policy) : null;
+  const attachmentPolicy = (
+    rawPolicy === "FORBIDDEN" || rawPolicy === "OPTIONAL" || rawPolicy === "REQUIRED"
+      ? rawPolicy
+      : requiresAttachment
+        ? "REQUIRED"
+        : "OPTIONAL"
+  ) as import("../types/absence-attachment").AbsenceAttachmentPolicy;
+
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    description: row.description ? String(row.description) : null,
+    requiresApproval: Boolean(row.requires_approval),
+    requiresAttachment: attachmentPolicy === "REQUIRED",
+    attachmentPolicy,
+    deductsBalance: Boolean(row.deducts_balance),
+    allowsHalfDay: Boolean(row.allows_half_day),
+    dayCountingMode: (row.day_counting_mode
+      ? String(row.day_counting_mode)
+      : "CALENDAR_DAYS") as import("../types/absence-calendar").AbsenceTypeCalendarFields["dayCountingMode"],
+    calendarId: row.calendar_id ? String(row.calendar_id) : null,
+    isActive: Boolean(row.is_active),
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};
 
 export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
@@ -373,6 +386,13 @@ export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
   calendarVersion: row.calendar_version == null ? null : Number(row.calendar_version),
   calculationInputHash: row.calculation_input_hash
     ? String(row.calculation_input_hash)
+    : null,
+  reservationVersion: Number(row.reservation_version ?? 1),
+  yearAllocationsJson: row.year_allocations_json ? String(row.year_allocations_json) : null,
+  attachmentPolicySnapshot: row.attachment_policy_snapshot
+    ? (String(
+        row.attachment_policy_snapshot,
+      ) as import("../types/absence-attachment").AbsenceAttachmentPolicy)
     : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),

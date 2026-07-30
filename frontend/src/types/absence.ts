@@ -9,18 +9,61 @@ export type AbsenceRequestedVia = "WHATSAPP" | "ADMIN";
 
 export type AbsenceDayPeriod = "FULL_DAY" | "AM" | "PM";
 
+export type AbsenceAttachmentPolicy = "FORBIDDEN" | "OPTIONAL" | "REQUIRED";
+
+export type AbsenceAttachmentStatus =
+  | "PENDING_UPLOAD"
+  | "UPLOADING"
+  | "AVAILABLE"
+  | "QUARANTINED"
+  | "REJECTED"
+  | "FAILED"
+  | "PENDING_DELETE"
+  | "DELETED";
+
+export type AbsenceAttachmentScanStatus = "UNSCANNED" | "CLEAN" | "INFECTED" | "SKIPPED";
+
+export type AbsenceAttachmentSource = "ADMIN" | "WHATSAPP" | "EMPLOYEE";
+
 export interface AbsenceType {
   id: string;
   code: string;
   name: string;
   description: string | null;
   requiresApproval: boolean;
+  /** @deprecated Prefer attachmentPolicy; kept for backward compatibility. */
   requiresAttachment: boolean;
+  attachmentPolicy?: AbsenceAttachmentPolicy;
   deductsBalance: boolean;
   allowsHalfDay: boolean;
   dayCountingMode?: "CALENDAR_DAYS" | "BUSINESS_DAYS";
   calendarId?: string | null;
   isActive: boolean;
+}
+
+/** Safe DTO — never includes bucket, objectKey, or checksum. */
+export interface AbsenceRequestAttachmentDto {
+  id: string;
+  absenceRequestId: string;
+  originalFileName: string;
+  normalizedFileName: string;
+  detectedContentType: string;
+  sizeBytes: number;
+  status: AbsenceAttachmentStatus;
+  scanStatus: AbsenceAttachmentScanStatus;
+  source: AbsenceAttachmentSource;
+  uploadedByUserId: string | null;
+  uploadedByEmployeeId: string | null;
+  createdAt: string;
+  updatedAt: string;
+  availableAt: string | null;
+}
+
+export interface AbsenceAttachmentStorageHealth {
+  featureEnabled: boolean;
+  storageConfigured: boolean;
+  storageAvailable: boolean;
+  message: string | null;
 }
 
 export interface AbsenceRequest {
@@ -149,7 +192,7 @@ export interface AdjustEmployeeAbsenceBalanceInput {
   quantity: number;
   operation: AbsenceBalanceAdjustmentOperation;
   reason: string;
-  idempotencyKey?: string;
+  idempotencyKey: string;
 }
 
 export type AbsenceBalanceMovementType =

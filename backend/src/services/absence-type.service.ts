@@ -18,7 +18,11 @@ export const absenceTypeService = {
     input: UpdateAbsenceTypeInput,
     userId?: string | null,
   ) {
-    if (input.dayCountingMode === undefined && input.calendarId === undefined) {
+    if (
+      input.dayCountingMode === undefined &&
+      input.calendarId === undefined &&
+      input.attachmentPolicy === undefined
+    ) {
       throw new AppError(400, "ABSENCE_TYPE_NO_CHANGES", "No hay cambios para aplicar");
     }
 
@@ -52,6 +56,7 @@ export const absenceTypeService = {
         {
           dayCountingMode: input.dayCountingMode,
           calendarId: input.calendarId,
+          attachmentPolicy: input.attachmentPolicy,
         },
         transaction,
       );
@@ -64,14 +69,16 @@ export const absenceTypeService = {
         {
           entityType: "absence_type",
           entityId: typeId,
-          action: "UPDATE_CALENDAR_POLICY",
+          action: "UPDATE_TYPE_POLICY",
           previousData: {
             dayCountingMode: existing.dayCountingMode,
             calendarId: existing.calendarId,
+            attachmentPolicy: existing.attachmentPolicy,
           },
           newData: {
             dayCountingMode: updated.dayCountingMode,
             calendarId: updated.calendarId,
+            attachmentPolicy: updated.attachmentPolicy,
           },
           userId: userId ?? null,
         },

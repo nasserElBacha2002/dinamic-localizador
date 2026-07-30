@@ -2,6 +2,11 @@ import type { BotSession } from "../types/twilio.types";
 import type { AbsenceType } from "../types/absence";
 import { AppError } from "../errors/app-error";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
+import { absenceAttachmentService } from "./absence-attachment.service";
+import {
+  extractTwilioMediaItems,
+  ingestTwilioMediaAsAbsenceAttachments,
+} from "./absence-attachment-whatsapp.service";
 import { absenceRequestService } from "./absence-request.service";
 import { botSessionService } from "./bot-session.service";
 import {
@@ -138,6 +143,7 @@ export const absenceBotService = {
     phoneFrom: string;
     phoneTo: string;
     messageSid: string;
+    webhookPayload?: Record<string, unknown>;
     respond: RespondFn;
   }): Promise<string> {
     if (isAbsenceCancelIntent(input.body)) {
@@ -361,7 +367,27 @@ export const absenceBotService = {
           });
         }
 
-        const { isExisting } = await absenceRequestService.createFromWhatsapp(companyId, {
+        const absenceTypeForAttach = await absenceTypeRepository.findById(
+          companyId,
+          draft.absenceTypeId,
+        );
+        const policy =
+          absenceTypeForAttach?.attachmentPolicy ??
+          (absenceTypeForAttach?.requiresAttachment ? "REQUIRED" : "OPTIONAL");
+        const attachmentsEnabled = await absenceAttachmentService.isFeatureEnabled(companyId);
+        const mediaItems = extractTwilioMediaItems(input.webhookPayload ?? {});
+
+        if (policy === "REQUIRED" && attachmentsEnabled && mediaItems.length === 0) {
+          return input.respond({
+            message:
+              "Este tipo de ausencia requiere un comprobante. Enviá una foto o PDF junto con la confirmación (sí).",
+            employeeId: input.employeeId,
+            phoneFrom: input.phoneTo,
+            phoneTo: input.phoneFrom,
+          });
+        }
+
+        const { isExisting, detail } = await absenceRequestService.createFromWhatsapp(companyId, {
           employeeId: input.employeeId,
           absenceTypeId: draft.absenceTypeId,
           startDate: draft.startDate,
@@ -371,6 +397,34 @@ export const absenceBotService = {
           reason: draft.reason,
           sourceMessageSid: input.messageSid,
         });
+
+        if (!isExisting && attachmentsEnabled && mediaItems.length > 0 && policy !== "FORBIDDEN") {
+          try {
+            await ingestTwilioMediaAsAbsenceAttachments({
+              companyId,
+              requestId: detail.id,
+              employeeId: input.employeeId,
+              messageSid: input.messageSid,
+              mediaItems,
+            });
+          } catch (mediaError) {
+            const mediaMessage =
+              mediaError instanceof AppError
+                ? mediaError.message
+                : "No se pudo guardar el comprobante.";
+            if (policy === "REQUIRED") {
+              throw new AppError(409, "ABSENCE_ATTACHMENT_REQUIRED", mediaMessage);
+            }
+          }
+        }
+
+        if (!isExisting && policy === "REQUIRED" && attachmentsEnabled) {
+          await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
+            companyId,
+            detail.id,
+            draft.absenceTypeId,
+          );
+        }
 
         await botSessionService.completeSession(companyId, input.session.id);
         return input.respond({

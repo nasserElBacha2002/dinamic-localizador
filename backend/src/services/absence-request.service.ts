@@ -24,10 +24,13 @@ import {
 import { buildPaginationMeta } from "../utils/pagination";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
+import { absenceBalanceImpactService } from "./absence-balance-impact.service";
 import { absenceCalendarService } from "./absence-calendar.service";
 import { absenceOperationImpactService } from "./absence-operation-impact.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+import { resolveAttachmentPolicy } from "../domain/absence-attachment-policy";
+import { absenceAttachmentService } from "./absence-attachment.service";
 
 const resolveCompanyTimezone = (companyId: string) =>
   absenceOperationImpactService.getOperationTimezone(companyId);
@@ -52,15 +55,30 @@ const validateAbsenceType = async (
   if (!absenceType || !absenceType.isActive) {
     throw new AppError(404, "ABSENCE_TYPE_NOT_FOUND", "Tipo de ausencia no encontrado");
   }
-  if (options?.blockIfRequiresAttachment && absenceType.requiresAttachment) {
-    throw new AppError(
-      409,
-      "ABSENCE_ATTACHMENT_REQUIRED",
-      "Este tipo de ausencia requiere adjunto y aún no está disponible por WhatsApp",
-    );
+  const policy =
+    absenceType.attachmentPolicy ??
+    (absenceType.requiresAttachment ? "REQUIRED" : "OPTIONAL");
+  if (options?.blockIfRequiresAttachment && policy === "REQUIRED") {
+    const enabled = await absenceAttachmentService.isFeatureEnabled(companyId);
+    if (!enabled) {
+      throw new AppError(
+        409,
+        "ABSENCE_ATTACHMENT_REQUIRED",
+        "Este tipo de ausencia requiere adjunto y aún no está disponible por WhatsApp",
+      );
+    }
   }
   return absenceType;
 };
+
+const resolvePolicyForType = (absenceType: {
+  attachmentPolicy?: string;
+  requiresAttachment: boolean;
+}) =>
+  resolveAttachmentPolicy({
+    attachmentPolicy: absenceType.attachmentPolicy,
+    requiresAttachment: absenceType.requiresAttachment,
+  });
 
 const validateDates = (input: {
   startDate: string;
@@ -176,6 +194,7 @@ const createRequest = async (
   const totalDays = calculation.totalDays;
   const snapshotCalendarId =
     calculation.calendarId === "legacy" ? null : calculation.calendarId;
+  const yearAllocationsJson = JSON.stringify(calculation.allocationsByYear);
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -193,6 +212,8 @@ const createRequest = async (
       undefined,
       transaction,
     );
+
+    const attachmentPolicySnapshot = resolvePolicyForType(absenceType);
 
     const created = await absenceRequestRepository.create(
       companyId,
@@ -214,6 +235,9 @@ const createRequest = async (
         calendarVersion:
           calculation.calendarId === "legacy" ? null : calculation.calendarVersion,
         calculationInputHash: calculation.calculationInputHash ?? null,
+        reservationVersion: 1,
+        yearAllocationsJson,
+        attachmentPolicySnapshot,
       },
       transaction,
     );
@@ -233,7 +257,12 @@ const createRequest = async (
       transaction,
     );
 
-    if (!absenceType.requiresApproval) {
+    const attachmentsEnabled = await absenceAttachmentService.isFeatureEnabled(companyId);
+    const canAutoApprove =
+      !absenceType.requiresApproval &&
+      !(attachmentsEnabled && attachmentPolicySnapshot === "REQUIRED");
+
+    if (canAutoApprove) {
       const autoRule = assertAbsenceTransition("AUTO_APPROVE", "PENDING");
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         companyId,
@@ -250,20 +279,16 @@ const createRequest = async (
         { mode: "direct" },
       );
 
-      const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
-      const { allocationsForRequest } = await import("./absence-balance.service");
-      if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
-        await absenceBalanceLedgerService.consumeDirect(
-          companyId,
-          created,
-          allocationsForRequest(created),
-          {
-            userId: input.performedByUserId ?? null,
-            employeeId: input.performedByEmployeeId ?? null,
-          },
-          transaction,
-        );
-      }
+      await absenceBalanceImpactService.onRequestCreated(
+        companyId,
+        created,
+        {
+          userId: input.performedByUserId ?? null,
+          employeeId: input.performedByEmployeeId ?? null,
+        },
+        transaction,
+        { autoApproved: true },
+      );
 
       const approved = await absenceRequestRepository.updateStatus(
         companyId,
@@ -310,20 +335,16 @@ const createRequest = async (
       );
       autoApproved = true;
     } else {
-      const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
-      const { allocationsForRequest } = await import("./absence-balance.service");
-      if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
-        await absenceBalanceLedgerService.reserveForRequest(
-          companyId,
-          created,
-          allocationsForRequest(created),
-          {
-            userId: input.performedByUserId ?? null,
-            employeeId: input.performedByEmployeeId ?? null,
-          },
-          transaction,
-        );
-      }
+      await absenceBalanceImpactService.onRequestCreated(
+        companyId,
+        created,
+        {
+          userId: input.performedByUserId ?? null,
+          employeeId: input.performedByEmployeeId ?? null,
+        },
+        transaction,
+        { autoApproved: false },
+      );
     }
 
     await auditService.log(
@@ -424,6 +445,7 @@ const resolveEditablePayload = async (
     calendarVersion:
       calculation.calendarId === "legacy" ? null : calculation.calendarVersion,
     calculationInputHash: calculation.calculationInputHash ?? null,
+    yearAllocationsJson: JSON.stringify(calculation.allocationsByYear),
   };
 };
 
@@ -498,7 +520,12 @@ export const absenceRequestService = {
     };
   },
 
-  async createFromAdmin(companyId: string, input: CreateAbsenceRequestInput, performedByUserId: string) {
+  async createFromAdmin(
+    companyId: string,
+    input: CreateAbsenceRequestInput,
+    performedByUserId: string,
+    _options?: { fromDraftId?: string; skipAttachmentFeatureGate?: boolean },
+  ) {
     return createRequest(companyId, {
       employeeId: input.employeeId,
       absenceTypeId: input.absenceTypeId,
@@ -605,35 +632,26 @@ export const absenceRequestService = {
         transaction,
       );
 
-      const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
-      const { allocationsForRequest } = await import("./absence-balance.service");
-      if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
-        await absenceBalanceLedgerService.syncReservationAfterEdit(
-          companyId,
-          {
-            requestId,
-            employeeId: existing.employeeId,
-            previousAbsenceTypeId: existing.absenceTypeId,
-            nextAbsenceTypeId: payload.absenceTypeId,
-            previousAllocations: allocationsForRequest(existing),
-            nextAllocations: allocationsForRequest({
-              startDate: payload.startDate,
-              endDate: payload.endDate,
-              totalDays: payload.totalDays,
-            }),
-            nextRequest: {
-              id: requestId,
-              employeeId: existing.employeeId,
-              absenceTypeId: payload.absenceTypeId,
-              startDate: payload.startDate,
-              endDate: payload.endDate,
-              totalDays: payload.totalDays,
-            },
+      const nextReservationVersion = (existing.reservationVersion ?? 1) + 1;
+      await absenceBalanceImpactService.onRequestEdited(
+        companyId,
+        {
+          requestId,
+          employeeId: existing.employeeId,
+          previous: existing,
+          next: {
+            absenceTypeId: payload.absenceTypeId,
+            startDate: payload.startDate,
+            endDate: payload.endDate,
+            totalDays: payload.totalDays,
+            reservationVersion: nextReservationVersion,
+            yearAllocationsJson: payload.yearAllocationsJson,
           },
-          { userId: actorUserId },
-          transaction,
-        );
-      }
+          nextReservationVersion,
+        },
+        { userId: actorUserId },
+        transaction,
+      );
 
       const updated = await absenceRequestRepository.updateEditableFields(
         companyId,
@@ -652,6 +670,8 @@ export const absenceRequestService = {
           calculationVersion: payload.calculationVersion,
           calendarVersion: payload.calendarVersion,
           calculationInputHash: payload.calculationInputHash,
+          reservationVersion: nextReservationVersion,
+          yearAllocationsJson: payload.yearAllocationsJson,
           onlyIfStatusIn: [...ABSENCE_ADMIN_EDITABLE_STATUSES],
         },
         transaction,
@@ -723,6 +743,12 @@ export const absenceRequestService = {
         throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
       }
 
+      await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
+        companyId,
+        requestId,
+        existing.absenceTypeId,
+      );
+
       const resubmitRule = assertAbsenceTransition("RESUBMIT", existing.status);
 
       const absenceType = await validateAbsenceType(companyId, existing.absenceTypeId);
@@ -782,17 +808,12 @@ export const absenceRequestService = {
           transaction,
           { mode: "from-reserve" },
         );
-        const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
-        const { allocationsForRequest } = await import("./absence-balance.service");
-        if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
-          await absenceBalanceLedgerService.consumeReservation(
-            companyId,
-            pending,
-            allocationsForRequest(pending),
-            { userId: actorUserId },
-            transaction,
-          );
-        }
+        await absenceBalanceImpactService.onRequestAutoApprovedFromResubmit(
+          companyId,
+          pending,
+          { userId: actorUserId },
+          transaction,
+        );
         const approved = await absenceRequestRepository.updateStatus(
           companyId,
           requestId,

@@ -2,7 +2,11 @@ import { Alert, Select, Stack, Table, Text } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { useAbsenceCalendars } from "../../../hooks/useAbsenceCalendar";
 import { useAbsenceTypes, useUpdateAbsenceType } from "../../../hooks/useAbsences";
-import { absenceTypeLabels } from "../../../utils/absence-labels";
+import type { AbsenceAttachmentPolicy } from "../../../types/absence";
+import {
+  absenceAttachmentPolicyLabels,
+  absenceTypeLabels,
+} from "../../../utils/absence-labels";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { SettingsDialog } from "./SettingsDialog";
 
@@ -11,6 +15,21 @@ interface CompanyAbsenceTypePolicyDialogProps {
   onClose: () => void;
   canUpdate: boolean;
   onSaved: (message: string) => void;
+}
+
+const ATTACHMENT_POLICY_OPTIONS: Array<{ value: AbsenceAttachmentPolicy; label: string }> = [
+  { value: "FORBIDDEN", label: absenceAttachmentPolicyLabels.FORBIDDEN },
+  { value: "OPTIONAL", label: absenceAttachmentPolicyLabels.OPTIONAL },
+  { value: "REQUIRED", label: absenceAttachmentPolicyLabels.REQUIRED },
+];
+
+function resolveAttachmentPolicy(type: {
+  attachmentPolicy?: AbsenceAttachmentPolicy;
+  requiresAttachment: boolean;
+}): AbsenceAttachmentPolicy {
+  return (
+    type.attachmentPolicy ?? (type.requiresAttachment ? "REQUIRED" : "OPTIONAL")
+  );
 }
 
 export function CompanyAbsenceTypePolicyDialog({
@@ -72,12 +91,28 @@ export function CompanyAbsenceTypePolicyDialog({
     }
   };
 
+  const handleAttachmentPolicyChange = async (
+    typeId: string,
+    attachmentPolicy: AbsenceAttachmentPolicy,
+  ) => {
+    if (!canUpdate) {
+      return;
+    }
+    setSubmitError(null);
+    try {
+      await updateMutation.mutateAsync({ id: typeId, attachmentPolicy });
+      onSaved("Política de adjuntos actualizada.");
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    }
+  };
+
   return (
     <SettingsDialog
       opened={opened}
       onClose={onClose}
       title="Política de cálculo por tipo"
-      subtitle="Definí si cada tipo usa días corridos o días hábiles, y qué calendario aplica."
+      subtitle="Definí si cada tipo usa días corridos o días hábiles, qué calendario aplica, y la política de adjuntos."
       onSave={() => onClose()}
       saveLabel="Cerrar"
       saving={false}
@@ -93,13 +128,14 @@ export function CompanyAbsenceTypePolicyDialog({
         {typesQuery.isError ? (
           <Alert color="red">{getApiErrorMessage(typesQuery.error)}</Alert>
         ) : null}
-        <Table.ScrollContainer minWidth={640}>
+        <Table.ScrollContainer minWidth={860}>
           <Table striped highlightOnHover>
             <Table.Thead>
               <Table.Tr>
                 <Table.Th>Tipo</Table.Th>
                 <Table.Th>Modo de conteo</Table.Th>
                 <Table.Th>Calendario</Table.Th>
+                <Table.Th>Adjuntos</Table.Th>
               </Table.Tr>
             </Table.Thead>
             <Table.Tbody>
@@ -139,6 +175,19 @@ export function CompanyAbsenceTypePolicyDialog({
                       }
                       disabled={!canUpdate || updateMutation.isPending}
                       clearable
+                    />
+                  </Table.Td>
+                  <Table.Td>
+                    <Select
+                      data={ATTACHMENT_POLICY_OPTIONS}
+                      value={resolveAttachmentPolicy(type)}
+                      onChange={(value) =>
+                        void handleAttachmentPolicyChange(
+                          type.id,
+                          (value as AbsenceAttachmentPolicy) ?? "OPTIONAL",
+                        )
+                      }
+                      disabled={!canUpdate || updateMutation.isPending}
                     />
                   </Table.Td>
                 </Table.Tr>

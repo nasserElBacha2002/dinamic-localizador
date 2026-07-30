@@ -133,6 +133,7 @@ export const updateCompanySettingsSchema = z
       )
       .optional(),
     absenceAdvancedCalendarEnabled: z.boolean().optional(),
+    absenceAttachmentsEnabled: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

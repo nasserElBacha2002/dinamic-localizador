@@ -10,7 +10,9 @@ import type {
 import type { AbsenceRequestStatus } from "../types/absence";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import { auditService } from "./audit.service";
+import { absenceAttachmentService } from "./absence-attachment.service";
 import { absenceBalanceService } from "./absence-balance.service";
+import { absenceBalanceImpactService } from "./absence-balance-impact.service";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
@@ -56,25 +58,19 @@ const transition = async (input: {
       );
     }
 
-    const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
-    const { allocationsForRequest } = await import("./absence-balance.service");
-    const ledgerEnabled = await absenceBalanceLedgerService.isLedgerEnabled(input.companyId);
-    if (ledgerEnabled && existing.totalDays > 0) {
-      const allocations = allocationsForRequest(existing);
+    if (rule.affectsBalance || action === "REJECT" || action === "CANCEL") {
       const actor = { userId: input.userId };
       if (action === "APPROVE") {
-        await absenceBalanceLedgerService.consumeReservation(
+        await absenceBalanceImpactService.onRequestApproved(
           input.companyId,
           existing,
-          allocations,
           actor,
           transaction,
         );
       } else if (action === "REJECT" || action === "CANCEL") {
-        await absenceBalanceLedgerService.releaseReservation(
+        await absenceBalanceImpactService.onRequestRejectedOrCancelled(
           input.companyId,
           existing,
-          allocations,
           actor,
           transaction,
         );
@@ -162,7 +158,17 @@ const transition = async (input: {
 };
 
 export const absenceReviewService = {
-  approve(companyId: string, requestId: string, userId: string) {
+  async approve(companyId: string, requestId: string, userId: string) {
+    const existing = await absenceRequestRepository.findById(companyId, requestId);
+    if (!existing) {
+      throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
+    }
+    await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
+      companyId,
+      requestId,
+      existing.absenceTypeId,
+    );
+
     return absenceWorkdaySyncService.runAfterAbsenceMutation(
       companyId,
       requestId,

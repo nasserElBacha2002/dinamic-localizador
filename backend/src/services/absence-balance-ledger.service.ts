@@ -22,6 +22,7 @@ type RequestRef = {
   startDate: string;
   endDate: string;
   totalDays: number;
+  reservationVersion: number;
 };
 
 const assertPositiveAllocations = (allocations: YearQuantity[]) => {
@@ -60,6 +61,8 @@ const applyMovement = async (input: {
   idempotencyKey: string;
   reason?: string | null;
   actor: LedgerActor;
+  reversedMovementId?: string | null;
+  metadataJson?: string | null;
   delta: {
     granted?: number;
     reserved?: number;
@@ -118,8 +121,10 @@ const applyMovement = async (input: {
         direction: input.direction,
         idempotencyKey: input.idempotencyKey,
         reason: input.reason ?? null,
+        metadataJson: input.metadataJson ?? null,
         performedByUserId: input.actor.userId ?? null,
         performedByEmployeeId: input.actor.employeeId ?? null,
+        reversedMovementId: input.reversedMovementId ?? null,
       },
       input.transaction,
     );
@@ -232,7 +237,12 @@ export const absenceBalanceLedgerService = {
           movementType: "RESERVE",
           quantity: allocation.quantity,
           direction: "DEBIT",
-          idempotencyKey: buildAbsenceBalanceIdempotencyKey.reserve(request.id, allocation.year),
+          idempotencyKey: buildAbsenceBalanceIdempotencyKey.reserve(
+            request.id,
+            request.reservationVersion,
+            request.absenceTypeId,
+            allocation.year,
+          ),
           reason: "Reserva por solicitud pendiente",
           actor,
           delta: {
@@ -261,6 +271,21 @@ export const absenceBalanceLedgerService = {
 
     const movements: AbsenceBalanceMovement[] = [];
     for (const allocation of allocations) {
+      const net = await absenceBalanceLedgerRepository.getNetReservationForRequest(
+        companyId,
+        request.id,
+        request.absenceTypeId,
+        allocation.year,
+        transaction,
+      );
+      if (Number(net.toFixed(1)) < Number(allocation.quantity.toFixed(1))) {
+        throw new AppError(
+          409,
+          "ABSENCE_RESERVATION_NOT_FOUND",
+          "No hay reserva suficiente vinculada a esta solicitud para liberar",
+        );
+      }
+
       movements.push(
         await applyMovement({
           companyId,
@@ -271,7 +296,12 @@ export const absenceBalanceLedgerService = {
           movementType: "RELEASE",
           quantity: allocation.quantity,
           direction: "CREDIT",
-          idempotencyKey: buildAbsenceBalanceIdempotencyKey.release(request.id, allocation.year),
+          idempotencyKey: buildAbsenceBalanceIdempotencyKey.release(
+            request.id,
+            request.reservationVersion,
+            request.absenceTypeId,
+            allocation.year,
+          ),
           reason: "Liberación de reserva",
           actor,
           delta: {
@@ -300,7 +330,21 @@ export const absenceBalanceLedgerService = {
 
     const movements: AbsenceBalanceMovement[] = [];
     for (const allocation of allocations) {
-      // Convert reserve → consume without changing available.
+      const net = await absenceBalanceLedgerRepository.getNetReservationForRequest(
+        companyId,
+        request.id,
+        request.absenceTypeId,
+        allocation.year,
+        transaction,
+      );
+      if (Number(net.toFixed(1)) < Number(allocation.quantity.toFixed(1))) {
+        throw new AppError(
+          409,
+          "ABSENCE_RESERVATION_NOT_FOUND",
+          "No hay reserva suficiente vinculada a esta solicitud para consumir",
+        );
+      }
+
       movements.push(
         await applyMovement({
           companyId,
@@ -311,7 +355,12 @@ export const absenceBalanceLedgerService = {
           movementType: "CONSUME",
           quantity: allocation.quantity,
           direction: "DEBIT",
-          idempotencyKey: buildAbsenceBalanceIdempotencyKey.consume(request.id, allocation.year),
+          idempotencyKey: buildAbsenceBalanceIdempotencyKey.consume(
+            request.id,
+            request.reservationVersion,
+            request.absenceTypeId,
+            allocation.year,
+          ),
           reason: "Consumo por aprobación",
           actor,
           delta: {
@@ -350,7 +399,12 @@ export const absenceBalanceLedgerService = {
           movementType: "CONSUME",
           quantity: allocation.quantity,
           direction: "DEBIT",
-          idempotencyKey: buildAbsenceBalanceIdempotencyKey.consume(request.id, allocation.year),
+          idempotencyKey: buildAbsenceBalanceIdempotencyKey.consume(
+            request.id,
+            request.reservationVersion,
+            request.absenceTypeId,
+            allocation.year,
+          ),
           reason: "Consumo por autoaprobación",
           actor,
           delta: {
@@ -364,81 +418,9 @@ export const absenceBalanceLedgerService = {
     return movements;
   },
 
-  async adjustReservation(
-    companyId: string,
-    request: RequestRef,
-    previousAllocations: YearQuantity[],
-    nextAllocations: YearQuantity[],
-    actor: LedgerActor,
-    transaction: sql.Transaction,
-  ): Promise<void> {
-    const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
-    if (!absenceType?.deductsBalance) {
-      return;
-    }
-
-    const prevMap = new Map(previousAllocations.map((row) => [row.year, row.quantity]));
-    const nextMap = new Map(nextAllocations.map((row) => [row.year, row.quantity]));
-    const years = new Set([...prevMap.keys(), ...nextMap.keys()]);
-    const version = Date.now();
-
-    for (const year of years) {
-      const previous = prevMap.get(year) ?? 0;
-      const next = nextMap.get(year) ?? 0;
-      const delta = Number((next - previous).toFixed(1));
-      if (delta === 0) {
-        continue;
-      }
-
-      if (delta > 0) {
-        await applyMovement({
-          companyId,
-          employeeId: request.employeeId,
-          absenceTypeId: request.absenceTypeId,
-          year,
-          absenceRequestId: request.id,
-          movementType: "RESERVE",
-          quantity: delta,
-          direction: "DEBIT",
-          idempotencyKey: buildAbsenceBalanceIdempotencyKey.reservationAdjustment(
-            request.id,
-            year,
-            version,
-          ),
-          reason: "Ajuste de reserva (aumento)",
-          actor,
-          delta: { reserved: delta, available: -delta },
-          transaction,
-        });
-      } else {
-        const releaseQty = Math.abs(delta);
-        await applyMovement({
-          companyId,
-          employeeId: request.employeeId,
-          absenceTypeId: request.absenceTypeId,
-          year,
-          absenceRequestId: request.id,
-          movementType: "RELEASE",
-          quantity: releaseQty,
-          direction: "CREDIT",
-          idempotencyKey: buildAbsenceBalanceIdempotencyKey.reservationAdjustment(
-            request.id,
-            year,
-            version,
-          ),
-          reason: "Ajuste de reserva (reducción)",
-          actor,
-          delta: { reserved: -releaseQty, available: releaseQty },
-          transaction,
-        });
-      }
-    }
-  },
-
   /**
-   * Recalculates reservation after NEEDS_INFO edit (dates/type/duration).
-   * Same type → net RESERVE/RELEASE deltas.
-   * Type change → release previous type, reserve next type (adjustment keys; never reuse release:v1).
+   * Replace reservation after NEEDS_INFO edit using a bumped reservationVersion.
+   * Releases previous version (previous type), then reserves next version (next type).
    */
   async syncReservationAfterEdit(
     companyId: string,
@@ -447,9 +429,13 @@ export const absenceBalanceLedgerService = {
       employeeId: string;
       previousAbsenceTypeId: string;
       nextAbsenceTypeId: string;
+      previousVersion: number;
+      nextVersion: number;
       previousAllocations: YearQuantity[];
       nextAllocations: YearQuantity[];
-      nextRequest: RequestRef;
+      startDate: string;
+      endDate: string;
+      totalDays: number;
     },
     actor: LedgerActor,
     transaction: sql.Transaction,
@@ -460,75 +446,46 @@ export const absenceBalanceLedgerService = {
     );
     const nextType = await absenceTypeRepository.findById(companyId, input.nextAbsenceTypeId);
 
-    const previousAllocations = previousType?.deductsBalance ? input.previousAllocations : [];
-    const nextAllocations = nextType?.deductsBalance ? input.nextAllocations : [];
-
-    if (input.previousAbsenceTypeId === input.nextAbsenceTypeId) {
-      if (!nextType?.deductsBalance) {
-        return;
+    if (previousType?.deductsBalance) {
+      const toRelease = input.previousAllocations.filter((row) => row.quantity > 0);
+      if (toRelease.length > 0) {
+        await this.releaseReservation(
+          companyId,
+          {
+            id: input.requestId,
+            employeeId: input.employeeId,
+            absenceTypeId: input.previousAbsenceTypeId,
+            startDate: input.startDate,
+            endDate: input.endDate,
+            totalDays: input.totalDays,
+            reservationVersion: input.previousVersion,
+          },
+          toRelease,
+          actor,
+          transaction,
+        );
       }
-      await this.adjustReservation(
-        companyId,
-        input.nextRequest,
-        previousAllocations,
-        nextAllocations,
-        actor,
-        transaction,
-      );
-      return;
     }
 
-    const version = Date.now();
-    for (const allocation of previousAllocations) {
-      if (allocation.quantity <= 0) {
-        continue;
+    if (nextType?.deductsBalance) {
+      const toReserve = input.nextAllocations.filter((row) => row.quantity > 0);
+      if (toReserve.length > 0) {
+        await this.reserveForRequest(
+          companyId,
+          {
+            id: input.requestId,
+            employeeId: input.employeeId,
+            absenceTypeId: input.nextAbsenceTypeId,
+            startDate: input.startDate,
+            endDate: input.endDate,
+            totalDays: input.totalDays,
+            reservationVersion: input.nextVersion,
+          },
+          toReserve,
+          actor,
+          transaction,
+        );
       }
-      await applyMovement({
-        companyId,
-        employeeId: input.employeeId,
-        absenceTypeId: input.previousAbsenceTypeId,
-        year: allocation.year,
-        absenceRequestId: input.requestId,
-        movementType: "RELEASE",
-        quantity: allocation.quantity,
-        direction: "CREDIT",
-        idempotencyKey: buildAbsenceBalanceIdempotencyKey.reservationAdjustment(
-          input.requestId,
-          allocation.year,
-          version,
-        ),
-        reason: "Liberación por cambio de tipo en NEEDS_INFO",
-        actor,
-        delta: { reserved: -allocation.quantity, available: allocation.quantity },
-        transaction,
-      });
-    }
-
-    // Offset version so type-change reserve keys cannot collide with release keys same ms.
-    const reserveVersion = version + 1;
-    for (const allocation of nextAllocations) {
-      if (allocation.quantity <= 0) {
-        continue;
-      }
-      await applyMovement({
-        companyId,
-        employeeId: input.employeeId,
-        absenceTypeId: input.nextAbsenceTypeId,
-        year: allocation.year,
-        absenceRequestId: input.requestId,
-        movementType: "RESERVE",
-        quantity: allocation.quantity,
-        direction: "DEBIT",
-        idempotencyKey: buildAbsenceBalanceIdempotencyKey.reservationAdjustment(
-          input.requestId,
-          allocation.year,
-          reserveVersion,
-        ),
-        reason: "Reserva por cambio de tipo en NEEDS_INFO",
-        actor,
-        delta: { reserved: allocation.quantity, available: -allocation.quantity },
-        transaction,
-      });
     }
   },
 
@@ -611,6 +568,8 @@ export const absenceBalanceLedgerService = {
       idempotencyKey: buildAbsenceBalanceIdempotencyKey.reversal(original.id),
       reason: reason.trim(),
       actor,
+      reversedMovementId: original.id,
+      metadataJson: JSON.stringify({ reversedMovementId: original.id }),
       delta: {
         granted: signed,
         available: signed,

@@ -1,18 +1,13 @@
 import type { Request, Response } from "express";
-import { randomUUID } from "node:crypto";
-import sql from "mssql";
-import { getPool } from "../database/connection";
-import { buildAbsenceBalanceIdempotencyKey } from "../constants/absence-balance-ledger";
 import { absenceBalanceService } from "../services/absence-balance.service";
 import { absenceBalanceLedgerService } from "../services/absence-balance-ledger.service";
-import { absenceBalanceLedgerRepository } from "../repositories/absence-balance-ledger.repository";
 import type {
   AdjustEmployeeAbsenceBalanceInput,
+  ReverseAbsenceBalanceMovementInput,
   UpsertEmployeeAbsenceBalanceInput,
 } from "../schemas/absence-balance.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
-import { rollbackTransactionSafely } from "../utils/sql-transaction";
-import { AppError } from "../errors/app-error";
+import type { AbsenceBalanceMovementType } from "../constants/absence-balance-ledger";
 
 export const absenceBalanceController = {
   async listByEmployee(req: Request, res: Response) {
@@ -23,7 +18,10 @@ export const absenceBalanceController = {
     res.status(200).json({ data });
   },
 
+  /** @deprecated Prefer POST .../adjustments. Requires expectedVersion. */
   async upsert(req: Request, res: Response) {
+    res.setHeader("Deprecation", "true");
+    res.setHeader("Sunset", "absences-balance-put-legacy");
     const companyId = requireRequestCompanyId(req);
     const employeeId = String(req.params.employeeId);
     const absenceTypeId = String(req.params.absenceTypeId);
@@ -45,7 +43,7 @@ export const absenceBalanceController = {
       year?: number;
       page: number;
       limit: number;
-      movementType?: string;
+      movementType?: AbsenceBalanceMovementType;
     };
     const result = await absenceBalanceLedgerService.listMovements(
       companyId,
@@ -55,7 +53,7 @@ export const absenceBalanceController = {
         year: query.year,
         page: query.page,
         limit: query.limit,
-        movementType: query.movementType as never,
+        movementType: query.movementType,
       },
     );
     res.status(200).json({
@@ -74,50 +72,30 @@ export const absenceBalanceController = {
     const employeeId = String(req.params.employeeId);
     const absenceTypeId = String(req.params.absenceTypeId);
     const body = req.body as AdjustEmployeeAbsenceBalanceInput;
+    const movement = await absenceBalanceService.adjustEmployeeBalance(
+      companyId,
+      employeeId,
+      absenceTypeId,
+      body,
+      req.auth!.userId,
+    );
+    res.status(201).json({ data: movement });
+  },
 
-    if (!(await absenceBalanceLedgerService.isLedgerEnabled(companyId))) {
-      throw new AppError(
-        409,
-        "ABSENCE_BALANCE_LEDGER_DISABLED",
-        "El ledger de saldos no está activo para esta empresa",
-      );
-    }
-
-    const pool = getPool();
-    const transaction = new sql.Transaction(pool);
-    await transaction.begin();
-    try {
-      const balance = await absenceBalanceLedgerRepository.ensureBalanceRow(
-        companyId,
-        employeeId,
-        absenceTypeId,
-        body.year,
-        transaction,
-      );
-      const movement = await absenceBalanceLedgerService.manualAdjustment(
-        companyId,
-        {
-          employeeId,
-          absenceTypeId,
-          year: body.year,
-          quantity: body.quantity,
-          operation: body.operation,
-          reason: body.reason,
-          idempotencyKey:
-            body.idempotencyKey ??
-            buildAbsenceBalanceIdempotencyKey.manual(balance.id, randomUUID()),
-          actor: { userId: req.auth!.userId },
-        },
-        transaction,
-      );
-      await transaction.commit();
-      res.status(201).json({ data: movement });
-    } catch (error) {
-      return rollbackTransactionSafely(
-        transaction,
-        { operation: "absence-balance.adjust", companyId, entityId: employeeId },
-        error,
-      );
-    }
+  async reverse(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const employeeId = String(req.params.employeeId);
+    const absenceTypeId = String(req.params.absenceTypeId);
+    const movementId = String(req.params.movementId);
+    const body = req.body as ReverseAbsenceBalanceMovementInput;
+    const movement = await absenceBalanceService.reverseEmployeeBalanceMovement(
+      companyId,
+      employeeId,
+      absenceTypeId,
+      movementId,
+      body,
+      req.auth!.userId,
+    );
+    res.status(201).json({ data: movement });
   },
 };

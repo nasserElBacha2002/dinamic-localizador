@@ -112,6 +112,7 @@ export const absenceTypeRepository = {
     input: {
       dayCountingMode?: string;
       calendarId?: string | null;
+      attachmentPolicy?: string;
     },
     transaction?: sql.Transaction,
   ): Promise<AbsenceType | null> {
@@ -126,6 +127,12 @@ export const absenceTypeRepository = {
     if (input.calendarId !== undefined) {
       request.input("calendarId", sql.UniqueIdentifier, input.calendarId);
       fields.push("calendar_id = @calendarId");
+    }
+    if (input.attachmentPolicy !== undefined) {
+      request.input("attachmentPolicy", sql.NVarChar(20), input.attachmentPolicy);
+      fields.push("attachment_policy = @attachmentPolicy");
+      request.input("requiresAttachment", sql.Bit, input.attachmentPolicy === "REQUIRED" ? 1 : 0);
+      fields.push("requires_attachment = @requiresAttachment");
     }
     if (fields.length === 1) {
       return this.findById(companyId, typeId);

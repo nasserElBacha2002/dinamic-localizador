@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { absenceKeys } from "../../api/absence-query-keys";
+import { AbsenceAttachmentsSection } from "../../components/absences/AbsenceAttachmentsSection";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
@@ -151,6 +152,14 @@ export function AbsenceDetailPage() {
   const detail = requestQuery.data;
   const canReview = canShowAbsenceReviewActions(permissionsQuery.data?.permissions, detail.status);
   const canEditNeedsInfo = canAdminEditNeedsInfo(permissionsQuery.data?.permissions, detail.status);
+  const canManageAttachments = hasPermission(
+    permissionsQuery.data?.permissions,
+    "absences:review",
+  );
+  const attachmentType = typesQuery.data?.find((type) => type.id === detail.absenceTypeId);
+  const attachmentPolicy =
+    attachmentType?.attachmentPolicy ??
+    (attachmentType?.requiresAttachment ? "REQUIRED" : "OPTIONAL");
   const balanceYear =
     detail.balanceImpact?.year ?? Number.parseInt(detail.startDate.slice(0, 4), 10);
   const insufficientBalance =
@@ -303,6 +312,13 @@ export function AbsenceDetailPage() {
           }}
         />
       ) : null}
+
+      <AbsenceAttachmentsSection
+        requestId={detail.id}
+        requestStatus={detail.status}
+        attachmentPolicy={attachmentPolicy}
+        canManage={canManageAttachments}
+      />
 
       <SectionCard title="Saldo del empleado">
         <EmployeeAbsenceBalanceCard

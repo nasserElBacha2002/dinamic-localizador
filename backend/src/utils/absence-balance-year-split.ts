@@ -1,7 +1,8 @@
 /**
  * Split absence day quantities by calendar year using start/end date range.
- * For cross-year ranges, allocates totalDays proportionally to calendar days per year
- * (backend duration is the source of truth for totalDays).
+ *
+ * @deprecated Prefer allocationsByYearFromBreakdown / resolveYearAllocations.
+ * This proportional calendar-day split is an approximate LEGACY fallback only.
  */
 export const splitAbsenceQuantityByYear = (input: {
   startDate: string;

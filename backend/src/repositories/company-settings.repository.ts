@@ -60,6 +60,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.absence_attachments_enabled == null
       ? false
       : Boolean(row.absence_attachments_enabled),
+  absenceOperationalIntegrationEnabled:
+    row.absence_operational_integration_enabled == null
+      ? false
+      : Boolean(row.absence_operational_integration_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -198,6 +202,7 @@ export const companySettingsRepository = {
         | "pendingOperationExpirationHours"
         | "absenceAdvancedCalendarEnabled"
         | "absenceAttachmentsEnabled"
+        | "absenceOperationalIntegrationEnabled"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -312,6 +317,16 @@ export const companySettingsRepository = {
         input.absenceAttachmentsEnabled ? 1 : 0,
       );
       fields.push("absence_attachments_enabled = @absenceAttachmentsEnabled");
+    }
+    if (input.absenceOperationalIntegrationEnabled !== undefined) {
+      request.input(
+        "absenceOperationalIntegrationEnabled",
+        sql.Bit,
+        input.absenceOperationalIntegrationEnabled ? 1 : 0,
+      );
+      fields.push(
+        "absence_operational_integration_enabled = @absenceOperationalIntegrationEnabled",
+      );
     }
 
     if (fields.length === 0) {

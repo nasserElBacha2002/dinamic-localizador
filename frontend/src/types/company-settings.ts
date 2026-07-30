@@ -16,6 +16,7 @@ export interface CompanySettings {
   pendingOperationExpirationHours: number;
   absenceAdvancedCalendarEnabled?: boolean;
   absenceAttachmentsEnabled?: boolean;
+  absenceOperationalIntegrationEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -39,6 +40,7 @@ export type UpdateCompanySettingsInput = Partial<
     | "pendingOperationExpirationHours"
     | "absenceAdvancedCalendarEnabled"
     | "absenceAttachmentsEnabled"
+    | "absenceOperationalIntegrationEnabled"
   >
 >;
 

@@ -80,7 +80,14 @@ export class GoogleCloudStorageAttachmentStorage implements AttachmentStorage {
           writeStream.end(input.body);
         });
       } else {
-        await pipeline(input.body, writeStream);
+        const transforms = input.transforms ?? [];
+        if (transforms.length === 0) {
+          await pipeline(input.body, writeStream);
+        } else if (transforms.length === 1) {
+          await pipeline(input.body, transforms[0]!, writeStream);
+        } else {
+          await pipeline(input.body, transforms[0]!, ...transforms.slice(1), writeStream);
+        }
       }
 
       const [metadata] = await file.getMetadata();

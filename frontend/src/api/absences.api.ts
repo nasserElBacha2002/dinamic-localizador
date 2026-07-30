@@ -113,6 +113,35 @@ export async function resubmitAbsenceRequest(id: string): Promise<AbsenceRequest
   return data.data;
 }
 
+export async function getAbsenceOperationalImpact(
+  id: string,
+): Promise<import("../types/absence-operational-impact").AbsenceOperationalImpact> {
+  const { data } = await scopedApiClient.get<
+    SingleResponse<import("../types/absence-operational-impact").AbsenceOperationalImpact>
+  >(`absence-requests/${id}/operational-impact`);
+  return data.data;
+}
+
+export async function getAbsenceOperationalConflicts(
+  id: string,
+): Promise<import("../types/absence-operational-impact").AbsenceOperationalConflict[]> {
+  const { data } = await scopedApiClient.get<
+    SingleResponse<import("../types/absence-operational-impact").AbsenceOperationalConflict[]>
+  >(`absence-requests/${id}/operational-conflicts`);
+  return data.data;
+}
+
+export async function resolveAbsenceOperationalConflict(
+  requestId: string,
+  conflictId: string,
+  input: import("../types/absence-operational-impact").ResolveAbsenceOperationalConflictInput,
+): Promise<import("../types/absence-operational-impact").AbsenceOperationalConflict> {
+  const { data } = await scopedApiClient.post<
+    SingleResponse<import("../types/absence-operational-impact").AbsenceOperationalConflict>
+  >(`absence-requests/${requestId}/operational-conflicts/${conflictId}/resolve`, input);
+  return data.data;
+}
+
 export async function getEmployeeAbsenceBalances(
   employeeId: string,
   year: number,
@@ -267,12 +296,36 @@ export function getAbsenceAttachmentContentUrl(
 export async function downloadAbsenceAttachmentContent(
   requestId: string,
   attachmentId: string,
-): Promise<Blob> {
-  const { data } = await scopedApiClient.get<Blob>(
+): Promise<{ blob: Blob; fileName: string; contentType: string }> {
+  const response = await scopedApiClient.get<Blob>(
     getAbsenceAttachmentContentUrl(requestId, attachmentId),
     { responseType: "blob", timeout: 60_000 },
   );
-  return data;
+  const headerType = String(response.headers["content-type"] ?? "").split(";")[0]?.trim();
+  const contentType =
+    headerType && headerType !== "application/octet-stream"
+      ? headerType
+      : response.data.type || "application/octet-stream";
+  const blob =
+    response.data.type === contentType
+      ? response.data
+      : new Blob([response.data], { type: contentType });
+
+  const disposition = String(response.headers["content-disposition"] ?? "");
+  const starMatch = /filename\*\s*=\s*UTF-8''([^;]+)/i.exec(disposition);
+  const plainMatch = /filename\s*=\s*"([^"]+)"/i.exec(disposition);
+  let fileName = "adjunto";
+  if (starMatch?.[1]) {
+    try {
+      fileName = decodeURIComponent(starMatch[1]);
+    } catch {
+      fileName = starMatch[1];
+    }
+  } else if (plainMatch?.[1]) {
+    fileName = plainMatch[1];
+  }
+
+  return { blob, fileName, contentType };
 }
 
 export async function getAbsenceAttachmentStorageHealth(): Promise<AbsenceAttachmentStorageHealth> {

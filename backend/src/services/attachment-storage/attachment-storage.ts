@@ -1,8 +1,10 @@
-import type { Readable } from "node:stream";
+import type { Readable, Transform } from "node:stream";
 
 export type PutObjectInput = {
   objectKey: string;
   body: Readable | Buffer;
+  /** Optional transforms applied in order before writing (single pipeline). */
+  transforms?: Transform[];
   contentType: string;
   sizeBytes?: number;
   metadata?: Record<string, string>;

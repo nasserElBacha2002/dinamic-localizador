@@ -4,6 +4,7 @@ import {
   type AbsenceWorkdaySyncOperation,
 } from "../repositories/absence-workday-sync-job.repository";
 import type { AbsenceWorkdayReconciliationResult } from "../types/absence-workday-reconciliation";
+import { absenceOperationImpactService } from "./absence-operation-impact.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 import type sql from "mssql";
 
@@ -11,6 +12,38 @@ const SYNC_FAILED_MESSAGE =
   "La ausencia fue guardada, pero no se pudieron actualizar las jornadas programadas. La sincronización se reintentará automáticamente.";
 
 const MAX_ATTEMPTS = 8;
+
+const applyOperationalSideEffects = async (
+  companyId: string,
+  absenceRequestId: string,
+  operation: AbsenceWorkdaySyncOperation | string,
+): Promise<void> => {
+  if (
+    operation === "APPROVE" ||
+    operation === "AUTO_APPROVE" ||
+    operation === "RESUBMIT_AUTO_APPROVE" ||
+    operation === "approve"
+  ) {
+    await absenceOperationImpactService.applyApprovedOperationalSideEffects(
+      companyId,
+      absenceRequestId,
+    );
+    return;
+  }
+
+  if (
+    operation === "REJECT" ||
+    operation === "CANCEL" ||
+    operation === "reject" ||
+    operation === "cancel"
+  ) {
+    await absenceOperationImpactService.revertOperationalSideEffects(
+      companyId,
+      absenceRequestId,
+      `sync:${operation}`,
+    );
+  }
+};
 
 export const absenceWorkdaySyncService = {
   async enqueueInTransaction(
@@ -36,6 +69,8 @@ export const absenceWorkdaySyncService = {
 
     try {
       const workdayReconciliation = await reconcile();
+      await applyOperationalSideEffects(companyId, absenceRequestId, context);
+
       try {
         const active = await absenceWorkdaySyncJobRepository.findActiveByRequest(
           companyId,
@@ -107,7 +142,11 @@ export const absenceWorkdaySyncService = {
       }
 
       try {
-        if (job.operation === "APPROVE" || job.operation === "AUTO_APPROVE" || job.operation === "RESUBMIT_AUTO_APPROVE") {
+        if (
+          job.operation === "APPROVE" ||
+          job.operation === "AUTO_APPROVE" ||
+          job.operation === "RESUBMIT_AUTO_APPROVE"
+        ) {
           await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
             job.companyId,
             job.absenceRequestId,
@@ -118,6 +157,7 @@ export const absenceWorkdaySyncService = {
             job.absenceRequestId,
           );
         }
+        await applyOperationalSideEffects(job.companyId, job.absenceRequestId, job.operation);
         await absenceWorkdaySyncJobRepository.markCompleted(job.companyId, job.id);
         processed += 1;
       } catch (error) {

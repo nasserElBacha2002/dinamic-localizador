@@ -394,6 +394,7 @@ export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
         row.attachment_policy_snapshot,
       ) as import("../types/absence-attachment").AbsenceAttachmentPolicy)
     : null,
+  operationalImpactVersion: Number(row.operational_impact_version ?? 1),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

@@ -1,4 +1,5 @@
-import { Readable } from "node:stream";
+import { PassThrough, Readable } from "node:stream";
+import { pipeline } from "node:stream/promises";
 import { AppError } from "../../errors/app-error";
 import type {
   AttachmentStorage,
@@ -18,13 +19,22 @@ type StoredEntry = {
   metadata: Record<string, string>;
 };
 
-const readBody = async (body: PutObjectInput["body"]): Promise<Buffer> => {
-  if (Buffer.isBuffer(body)) {
-    return body;
+const readBody = async (input: PutObjectInput): Promise<Buffer> => {
+  if (Buffer.isBuffer(input.body)) {
+    return input.body;
   }
+  const sink = new PassThrough();
   const chunks: Buffer[] = [];
-  for await (const chunk of body) {
+  sink.on("data", (chunk: Buffer) => {
     chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+  });
+  const transforms = input.transforms ?? [];
+  if (transforms.length === 0) {
+    await pipeline(input.body, sink);
+  } else if (transforms.length === 1) {
+    await pipeline(input.body, transforms[0]!, sink);
+  } else {
+    await pipeline(input.body, transforms[0]!, ...transforms.slice(1), sink);
   }
   return Buffer.concat(chunks);
 };
@@ -47,7 +57,7 @@ export class InMemoryAttachmentStorage implements AttachmentStorage {
         "El objeto ya existe y no puede sobrescribirse",
       );
     }
-    const buffer = await readBody(input.body);
+    const buffer = await readBody(input);
     const generation = String(this.generationCounter++);
     this.objects.set(input.objectKey, {
       buffer,

@@ -41,6 +41,7 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   absenceAdvancedCalendarEnabled: settings.absenceAdvancedCalendarEnabled,
   absenceBalanceLedgerEnabled: settings.absenceBalanceLedgerEnabled,
   absenceAttachmentsEnabled: settings.absenceAttachmentsEnabled,
+  absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

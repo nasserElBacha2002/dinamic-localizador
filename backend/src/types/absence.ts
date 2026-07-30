@@ -67,6 +67,7 @@ export interface AbsenceRequest {
   reservationVersion: number;
   yearAllocationsJson: string | null;
   attachmentPolicySnapshot: import("./absence-attachment").AbsenceAttachmentPolicy | null;
+  operationalImpactVersion: number;
   createdAt: string;
   updatedAt: string;
 }

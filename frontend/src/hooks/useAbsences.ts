@@ -5,6 +5,7 @@ import {
   approveAbsenceRequest,
   cancelAbsenceRequest,
   createAbsenceRequest,
+  getAbsenceOperationalImpact,
   getAbsenceRequestById,
   getAbsenceRequests,
   getAbsenceTypes,
@@ -12,6 +13,7 @@ import {
   getEmployeeAbsenceBalances,
   needsInfoAbsenceRequest,
   rejectAbsenceRequest,
+  resolveAbsenceOperationalConflict,
   resubmitAbsenceRequest,
   updateNeedsInfoAbsenceRequest,
   upsertEmployeeAbsenceBalance,
@@ -26,6 +28,7 @@ import type {
   UpdateNeedsInfoAbsenceRequestInput,
   UpsertEmployeeAbsenceBalanceInput,
 } from "../types/absence";
+import type { ResolveAbsenceOperationalConflictInput } from "../types/absence-operational-impact";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 function invalidateAbsenceDomain(
@@ -89,6 +92,40 @@ export function useAbsenceRequest(absenceRequestId?: string) {
     queryKey: absenceKeys.detail(companyId, absenceRequestId ?? ""),
     queryFn: () => getAbsenceRequestById(absenceRequestId!),
     enabled,
+  });
+}
+
+export function useAbsenceOperationalImpact(absenceRequestId?: string) {
+  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(absenceRequestId));
+
+  return useQuery({
+    queryKey: absenceKeys.operationalImpact(companyId, absenceRequestId ?? ""),
+    queryFn: () => getAbsenceOperationalImpact(absenceRequestId!),
+    enabled,
+  });
+}
+
+export function useResolveAbsenceOperationalConflict(absenceRequestId: string) {
+  const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
+  return useMutation({
+    mutationFn: (input: {
+      conflictId: string;
+    } & ResolveAbsenceOperationalConflictInput) =>
+      resolveAbsenceOperationalConflict(absenceRequestId, input.conflictId, {
+        resolutionCode: input.resolutionCode,
+        resolutionReason: input.resolutionReason,
+        replacementEmployeeId: input.replacementEmployeeId,
+      }),
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, _vars, context) => {
+      invalidateAbsenceDomain(queryClient, context?.companyId);
+      if (context?.companyId) {
+        void queryClient.invalidateQueries({
+          queryKey: absenceKeys.operationalImpact(context.companyId, absenceRequestId),
+        });
+      }
+    },
   });
 }
 

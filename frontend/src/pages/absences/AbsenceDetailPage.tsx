@@ -5,6 +5,7 @@ import { Link as RouterLink, useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { absenceKeys } from "../../api/absence-query-keys";
 import { AbsenceAttachmentsSection } from "../../components/absences/AbsenceAttachmentsSection";
+import { AbsenceOperationalImpactSection } from "../../components/absences/AbsenceOperationalImpactSection";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
@@ -21,6 +22,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
+  useAbsenceOperationalImpact,
   useAbsenceRequest,
   useAbsenceTypes,
   useApproveAbsenceRequest,
@@ -124,7 +126,10 @@ export function AbsenceDetailPage() {
 
   const [rejectOpen, setRejectOpen] = useState(false);
   const [needsInfoOpen, setNeedsInfoOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
   const [comment, setComment] = useState("");
+
+  const impactQuery = useAbsenceOperationalImpact(id);
 
   const typeOptions = useMemo(
     () =>
@@ -183,12 +188,14 @@ export function AbsenceDetailPage() {
   const handleApprove = async () => {
     try {
       const result = await approveMutation.mutateAsync();
+      setApproveOpen(false);
       notify(
         buildAbsenceApprovalSuccessMessage({
           justified: result.workdayReconciliation?.justified,
           attendanceConflicts: result.workdayReconciliation?.attendanceConflicts,
         }),
       );
+      void impactQuery.refetch();
     } catch (error) {
       if (isAbsenceWorkdaySyncError(error)) {
         notify(getApiErrorMessage(error), "red");
@@ -251,7 +258,10 @@ export function AbsenceDetailPage() {
             canReview={canReview}
             insufficientBalance={insufficientBalance}
             approvePending={approveMutation.isPending}
-            onApprove={() => void handleApprove()}
+            onApprove={() => {
+              void impactQuery.refetch();
+              setApproveOpen(true);
+            }}
             onNeedsInfo={() => {
               setComment("");
               setNeedsInfoOpen(true);
@@ -339,6 +349,8 @@ export function AbsenceDetailPage() {
       <SectionCard title={`Historial del empleado (${balanceYear})`}>
         <EmployeeAbsenceHistoryTable employeeId={detail.employeeId} year={balanceYear} />
       </SectionCard>
+
+      <AbsenceOperationalImpactSection requestId={detail.id} />
 
       <SectionCard title="Operaciones afectadas">
         {detail.affectedOperations.length === 0 ? (
@@ -439,6 +451,59 @@ export function AbsenceDetailPage() {
           autoFocus
           disabled={needsInfoMutation.isPending}
         />
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        opened={approveOpen}
+        onClose={approveMutation.isPending ? () => undefined : () => setApproveOpen(false)}
+        title="Confirmar aprobación"
+        bodyMode="normal"
+        closeOnClickOutside={!approveMutation.isPending}
+        closeOnEscape={!approveMutation.isPending}
+        footer={
+          <Group justify="flex-end" gap="sm" wrap="wrap">
+            <Button
+              variant="default"
+              onClick={() => setApproveOpen(false)}
+              disabled={approveMutation.isPending}
+            >
+              Cancelar
+            </Button>
+            <Button
+              color="green"
+              onClick={() => void handleApprove()}
+              loading={approveMutation.isPending}
+            >
+              Aprobar
+            </Button>
+          </Group>
+        }
+      >
+        <Stack gap="sm">
+          {impactQuery.data ? (
+            <>
+              <Text size="sm">
+                Impacto estimado: {impactQuery.data.affectedOperations} operación(es),{" "}
+                {impactQuery.data.affectedWorkdays} jornada(s),{" "}
+                {impactQuery.data.attendanceConflicts} conflicto(s) de asistencia.
+              </Text>
+              {impactQuery.data.requiresManualAction ? (
+                <Alert color="yellow">
+                  Hay conflictos o operaciones afectadas. Podés aprobar igualmente; las asignaciones
+                  no se eliminan automáticamente.
+                </Alert>
+              ) : (
+                <Text c="dimmed" size="sm">
+                  No se detectaron conflictos críticos de planificación.
+                </Text>
+              )}
+            </>
+          ) : (
+            <Text c="dimmed" size="sm">
+              Calculando impacto operativo…
+            </Text>
+          )}
+        </Stack>
       </ResponsiveModal>
     </Stack>
   );

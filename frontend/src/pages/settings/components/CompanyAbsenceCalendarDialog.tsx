@@ -184,6 +184,28 @@ export function CompanyAbsenceCalendarDialog({
             }}
           />
         ) : null}
+        {settingsQuery.data ? (
+          <Switch
+            label="Integración operativa de ausencias"
+            description="Cuando está activo, las ausencias aprobadas generan conflictos operativos y efectos auditables sin desasignar automáticamente. Desactivado por defecto; activar solo en empresas piloto."
+            checked={Boolean(settingsQuery.data.absenceOperationalIntegrationEnabled)}
+            disabled={!canUpdate || updateSettings.isPending}
+            onChange={(event) => {
+              void updateSettings
+                .mutateAsync({
+                  absenceOperationalIntegrationEnabled: event.currentTarget.checked,
+                })
+                .then(() =>
+                  onSaved(
+                    event.currentTarget.checked
+                      ? "Integración operativa de ausencias activada."
+                      : "Integración operativa de ausencias desactivada.",
+                  ),
+                )
+                .catch((error: unknown) => setSubmitError(getApiErrorMessage(error)));
+            }}
+          />
+        ) : null}
         {calendarQuery.isError ? (
           <Stack gap="sm">
             <Alert color="red">{getApiErrorMessage(calendarQuery.error)}</Alert>

@@ -3,7 +3,9 @@ import { describe, it } from "node:test";
 import {
   assertAllowedAttachmentFile,
   buildAbsenceAttachmentObjectKey,
+  buildDownloadFileName,
   detectMimeFromMagicBytes,
+  normalizeFileName,
   sanitizeOriginalFileName,
   sha256Hex,
 } from "./file-validation";
@@ -89,6 +91,28 @@ describe("absence attachment file validation", () => {
         buffer: Buffer.alloc(0),
         maxFileSizeBytes: 1000,
       }),
+    );
+  });
+
+  it("normalizes ChatGPT p.m.png names without producing .mpng", () => {
+    assert.equal(
+      normalizeFileName("ChatGPT Image 28 jul 2026, 06_09_39 p.m.png", "image/png"),
+      "ChatGPT Image 28 jul 2026_ 06_09_39 pm.png",
+    );
+    assert.equal(
+      normalizeFileName("ChatGPT Image 28 jul 2026_ 06_09_39 p.mpng", "image/png"),
+      "ChatGPT Image 28 jul 2026_ 06_09_39 p.png",
+    );
+  });
+
+  it("buildDownloadFileName forces MIME extension", () => {
+    assert.equal(
+      buildDownloadFileName(
+        "foto.mpng",
+        "foto.mpng",
+        "image/png",
+      ),
+      "foto.png",
     );
   });
 });

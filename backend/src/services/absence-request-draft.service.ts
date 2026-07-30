@@ -73,15 +73,6 @@ export const absenceRequestDraftService = {
     },
     userId: string,
   ): Promise<AbsenceRequestDraft> {
-    const enabled = await absenceAttachmentService.isFeatureEnabled(companyId);
-    if (!enabled) {
-      throw new AppError(
-        409,
-        "ABSENCE_ATTACHMENTS_DISABLED",
-        "Los drafts de adjuntos requieren el módulo habilitado",
-      );
-    }
-
     const employee = await employeeRepository.findById(companyId, input.employeeId);
     if (!employee?.active) {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");

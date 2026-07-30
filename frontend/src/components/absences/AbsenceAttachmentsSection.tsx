@@ -90,11 +90,27 @@ export function AbsenceAttachmentsSection({
   const handleDownload = async (row: AbsenceRequestAttachmentDto) => {
     setDownloadingId(row.id);
     try {
-      const { blob, fileName } = await downloadMutation.mutateAsync({
+      const { blob, fileName, contentType } = await downloadMutation.mutateAsync({
         attachmentId: row.id,
-        fileName: row.originalFileName,
       });
-      triggerBlobDownload(blob, fileName);
+      const typedBlob =
+        blob.type === contentType ? blob : new Blob([blob], { type: contentType });
+      const canPreview =
+        contentType.startsWith("image/") || contentType === "application/pdf";
+      if (canPreview) {
+        const url = URL.createObjectURL(typedBlob);
+        const opened = window.open(url, "_blank", "noopener,noreferrer");
+        if (!opened) {
+          triggerBlobDownload(typedBlob, fileName || row.normalizedFileName || row.originalFileName);
+        } else {
+          window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+        }
+      } else {
+        triggerBlobDownload(
+          typedBlob,
+          fileName || row.normalizedFileName || row.originalFileName,
+        );
+      }
     } catch (error) {
       notifications.show({ color: "red", message: getApiErrorMessage(error) });
     } finally {

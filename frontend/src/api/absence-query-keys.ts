@@ -14,6 +14,10 @@ export const absenceKeys = {
     [...absenceKeys.company(companyId), "detail"] as const,
   detail: (companyId: string | null | undefined, requestId: string) =>
     [...absenceKeys.details(companyId), requestId] as const,
+  operationalImpact: (companyId: string | null | undefined, requestId: string) =>
+    [...absenceKeys.detail(companyId, requestId), "operational-impact"] as const,
+  operationalConflicts: (companyId: string | null | undefined, requestId: string) =>
+    [...absenceKeys.detail(companyId, requestId), "operational-conflicts"] as const,
   balances: (
     companyId: string | null | undefined,
     employeeId: string,

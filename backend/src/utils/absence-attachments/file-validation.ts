@@ -43,11 +43,49 @@ export const sanitizeOriginalFileName = (raw: string): string => {
   return sanitized.length > 0 ? sanitized : "file";
 };
 
-export const normalizeFileName = (original: string, detectedMime: AbsenceAttachmentAllowedMime): string => {
+export const normalizeFileName = (
+  original: string,
+  detectedMime: AbsenceAttachmentAllowedMime,
+): string => {
   const sanitized = sanitizeOriginalFileName(original);
   const ext = MIME_EXTENSIONS[detectedMime][0];
-  const withoutExt = sanitized.replace(/\.[^.]+$/, "");
-  return `${withoutExt || "file"}${ext}`;
+  const knownExts = Object.values(MIME_EXTENSIONS).flat();
+
+  let base = sanitized;
+  // Collapse corrupt ChatGPT-style names that lost a dot: "p.m.png" → "p.mpng".
+  if (/\.mpng$/i.test(base)) {
+    base = base.slice(0, -".mpng".length);
+  }
+  for (let i = 0; i < 4; i += 1) {
+    const lower = base.toLowerCase();
+    const matched = knownExts.find((candidate) => lower.endsWith(candidate));
+    if (!matched) {
+      break;
+    }
+    base = base.slice(0, -matched.length);
+  }
+  // "… p.m" / "… a.m" left after stripping .png → avoid producing ".mpng"
+  base = base.replace(/\b((?:a|p)\.m)$/i, (_, token: string) => token.replace(/\./g, ""));
+  base = base.replace(/\.+$/g, "").trim() || "file";
+  return `${base}${ext}`;
+};
+
+/** Download/display name always matches detected MIME extension. */
+export const buildDownloadFileName = (
+  originalFileName: string,
+  normalizedFileName: string,
+  detectedContentType: string,
+): string => {
+  const mime = ABSENCE_ATTACHMENT_ALLOWED_MIME_TYPES.includes(
+    detectedContentType as AbsenceAttachmentAllowedMime,
+  )
+    ? (detectedContentType as AbsenceAttachmentAllowedMime)
+    : null;
+  if (!mime) {
+    return sanitizeOriginalFileName(normalizedFileName || originalFileName || "file");
+  }
+  const preferred = normalizedFileName?.trim() || originalFileName || "file";
+  return normalizeFileName(preferred, mime);
 };
 
 export const buildAbsenceAttachmentObjectKey = (input: {

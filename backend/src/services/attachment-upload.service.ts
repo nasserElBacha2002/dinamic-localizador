@@ -175,10 +175,10 @@ export const attachmentUploadService = {
     input.body.on("error", onAbort);
 
     try {
-      input.body.pipe(transform);
       const stored = await storage.putObject({
         objectKey,
-        body: transform,
+        body: input.body,
+        transforms: [transform],
         contentType: input.declaredContentType || "application/octet-stream",
         ifGenerationMatch: 0,
         metadata: {

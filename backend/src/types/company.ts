@@ -65,6 +65,7 @@ export interface CompanySettings {
   absenceAdvancedCalendarEnabled: boolean;
   absenceBalanceLedgerEnabled: boolean;
   absenceAttachmentsEnabled: boolean;
+  absenceOperationalIntegrationEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

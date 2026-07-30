@@ -7,6 +7,7 @@ import {
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
+import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import type {
@@ -711,6 +712,10 @@ export const absenceRequestService = {
       );
 
       await transaction.commit();
+      await absenceOperationalImpactRepository.bumpOperationalImpactVersion(
+        companyId,
+        requestId,
+      );
       return this.getById(companyId, requestId);
     } catch (error) {
       return rollbackTransactionSafely(

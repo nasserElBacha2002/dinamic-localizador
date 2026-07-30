@@ -65,6 +65,26 @@ export const needsInfoAbsenceRequestSchema = z.object({
   comment: z.string().trim().min(3, "El comentario es obligatorio").max(1000),
 });
 
+export const absenceOperationalConflictIdParamSchema = z.object({
+  id: z.string().uuid("UUID inválido"),
+  conflictId: z.string().uuid("UUID de conflicto inválido"),
+});
+
+export const resolveAbsenceOperationalConflictSchema = z.object({
+  resolutionCode: z.enum([
+    "ASSIGN_REPLACEMENT",
+    "KEEP_REDUCED_STAFFING",
+    "CANCEL_ASSIGNMENT",
+    "DISMISS_WITH_REASON",
+  ]),
+  resolutionReason: z
+    .string()
+    .trim()
+    .min(3, "El motivo de resolución es obligatorio")
+    .max(1000),
+  replacementEmployeeId: z.string().uuid("UUID de reemplazo inválido").nullable().optional(),
+});
+
 export const updateNeedsInfoAbsenceRequestSchema = z
   .object({
     absenceTypeId: z.string().uuid("UUID de tipo de ausencia inválido").optional(),
@@ -90,4 +110,9 @@ export type CreateAbsenceRequestInput = z.infer<typeof createAbsenceRequestSchem
 export type ListAbsenceRequestsQuery = z.infer<typeof listAbsenceRequestsQuerySchema>;
 export type RejectAbsenceRequestInput = z.infer<typeof rejectAbsenceRequestSchema>;
 export type NeedsInfoAbsenceRequestInput = z.infer<typeof needsInfoAbsenceRequestSchema>;
-export type UpdateNeedsInfoAbsenceRequestInput = z.infer<typeof updateNeedsInfoAbsenceRequestSchema>;
+export type UpdateNeedsInfoAbsenceRequestInput = z.infer<
+  typeof updateNeedsInfoAbsenceRequestSchema
+>;
+export type ResolveAbsenceOperationalConflictInput = z.infer<
+  typeof resolveAbsenceOperationalConflictSchema
+>;

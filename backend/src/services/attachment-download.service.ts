@@ -1,7 +1,7 @@
 import type { Readable } from "node:stream";
 import { AppError } from "../errors/app-error";
 import { absenceAttachmentRepository } from "../repositories/absence-attachment.repository";
-import { isInlineDispositionMime } from "../utils/absence-attachments/file-validation";
+import { isInlineDispositionMime, buildDownloadFileName } from "../utils/absence-attachments/file-validation";
 import { absenceAttachmentMetrics } from "../utils/absence-attachments/metrics";
 import { assertAttachmentsFeatureEnabled } from "./attachment-policy.service";
 import { getAttachmentStorage } from "./attachment-storage";
@@ -47,7 +47,11 @@ export const attachmentDownloadService = {
         stream,
         contentType: row.detectedContentType,
         contentLength: row.sizeBytes,
-        fileName: row.normalizedFileName,
+        fileName: buildDownloadFileName(
+          row.originalFileName,
+          row.normalizedFileName,
+          row.detectedContentType,
+        ),
         disposition: isInlineDispositionMime(row.detectedContentType)
           ? "inline"
           : "attachment",

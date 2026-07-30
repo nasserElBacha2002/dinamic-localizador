@@ -59,15 +59,8 @@ export function useAbsenceAttachments(requestId?: string, queryEnabled = true) {
   });
 
   const downloadMutation = useMutation({
-    mutationFn: async ({
-      attachmentId,
-      fileName,
-    }: {
-      attachmentId: string;
-      fileName: string;
-    }) => {
-      const blob = await downloadAbsenceAttachmentContent(requestId!, attachmentId);
-      return { blob, fileName };
+    mutationFn: async ({ attachmentId }: { attachmentId: string }) => {
+      return downloadAbsenceAttachmentContent(requestId!, attachmentId);
     },
   });
 

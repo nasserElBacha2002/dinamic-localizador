@@ -7,21 +7,16 @@ import { absenceAttachmentRepository } from "../repositories/absence-attachment.
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import { absenceRequestDraftRepository } from "../repositories/absence-request-draft.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
-import { companySettingsRepository } from "../repositories/company-settings.repository";
 import type { AbsenceAttachmentPolicy } from "../types/absence-attachment";
 import { getGcsUnavailableReason, isGcsConfigured } from "./attachment-storage";
 
+/**
+ * Attachments are always on for every company.
+ * Uploads still require GCS to be configured and reachable.
+ */
 export const assertAttachmentsFeatureEnabled = async (
-  companyId: string,
+  _companyId: string,
 ): Promise<void> => {
-  const settings = await companySettingsRepository.findByCompanyId(companyId);
-  if (!settings?.absenceAttachmentsEnabled) {
-    throw new AppError(
-      409,
-      "ABSENCE_ATTACHMENTS_DISABLED",
-      "Los adjuntos de ausencias no están habilitados para esta empresa",
-    );
-  }
   const gcsReason = getGcsUnavailableReason();
   if (gcsReason || !isGcsConfigured()) {
     throw new AppError(
@@ -33,9 +28,8 @@ export const assertAttachmentsFeatureEnabled = async (
 };
 
 export const attachmentPolicyService = {
-  async isFeatureEnabled(companyId: string): Promise<boolean> {
-    const settings = await companySettingsRepository.findByCompanyId(companyId);
-    return Boolean(settings?.absenceAttachmentsEnabled);
+  async isFeatureEnabled(_companyId: string): Promise<boolean> {
+    return true;
   },
 
   resolvePolicyForType(absenceType: {
@@ -101,14 +95,6 @@ export const attachmentPolicyService = {
     });
     if (policy !== "REQUIRED") {
       return;
-    }
-    const enabled = await this.isFeatureEnabled(companyId);
-    if (!enabled) {
-      throw new AppError(
-        409,
-        "ABSENCE_ATTACHMENT_REQUIRED",
-        "Este tipo de ausencia requiere documentación adjunta y el módulo de adjuntos no está habilitado",
-      );
     }
     const count = await absenceAttachmentRepository.countAvailable(companyId, requestId);
     if (!isAttachmentPolicySatisfied(policy, count)) {

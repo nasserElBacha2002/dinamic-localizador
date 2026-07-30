@@ -1,7 +1,10 @@
 import type { Request, Response } from "express";
 import { absenceRequestService } from "../services/absence-request.service";
 import { absenceReviewService } from "../services/absence-review.service";
+import { absenceOperationImpactService } from "../services/absence-operation-impact.service";
+import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
+import type { ResolveAbsenceOperationalConflictInput } from "../schemas/absence-request.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const absenceRequestController = {
@@ -36,7 +39,11 @@ export const absenceRequestController = {
 
   async approve(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const request = await absenceReviewService.approve(companyId, String(req.params.id), req.auth!.userId);
+    const request = await absenceReviewService.approve(
+      companyId,
+      String(req.params.id),
+      req.auth!.userId,
+    );
     res.status(200).json({ data: request });
   },
 
@@ -64,7 +71,11 @@ export const absenceRequestController = {
 
   async cancel(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const request = await absenceReviewService.cancel(companyId, String(req.params.id), req.auth!.userId);
+    const request = await absenceReviewService.cancel(
+      companyId,
+      String(req.params.id),
+      req.auth!.userId,
+    );
     res.status(200).json({ data: request });
   },
 
@@ -87,5 +98,50 @@ export const absenceRequestController = {
       req.auth!.userId,
     );
     res.status(200).json({ data: request });
+  },
+
+  async getOperationalImpact(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const impact = await absenceOperationImpactService.computeImpact(
+      companyId,
+      String(req.params.id),
+    );
+    res.status(200).json({ data: impact });
+  },
+
+  async listOperationalConflicts(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const conflicts = await absenceOperationalImpactRepository.listConflictsByRequest(
+      companyId,
+      String(req.params.id),
+    );
+    res.status(200).json({ data: conflicts });
+  },
+
+  async resolveOperationalConflict(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const body = req.body as ResolveAbsenceOperationalConflictInput;
+    const conflict = await absenceOperationImpactService.resolveConflict(
+      companyId,
+      String(req.params.id),
+      String(req.params.conflictId),
+      {
+        resolutionCode: body.resolutionCode,
+        resolutionReason: body.resolutionReason,
+        replacementEmployeeId: body.replacementEmployeeId,
+        resolvedByUserId: req.auth!.userId,
+      },
+    );
+    res.status(200).json({ data: conflict });
+  },
+
+  async reconcileOperationalImpact(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const impact = await absenceOperationImpactService.reconcileManually(
+      companyId,
+      String(req.params.id),
+      req.auth!.userId,
+    );
+    res.status(200).json({ data: impact });
   },
 };

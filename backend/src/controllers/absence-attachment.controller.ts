@@ -41,12 +41,9 @@ export const absenceAttachmentController = {
     }
     const idempotencyKey = requireIdempotencyKey(req);
     const abort = new AbortController();
+    // Only abort on true client abort — not on req "close" after multipart is consumed
+    // (that would destroy the stream while GCS is still finishing the write).
     req.on("aborted", () => abort.abort());
-    req.on("close", () => {
-      if (!res.writableEnded) {
-        abort.abort();
-      }
-    });
 
     const data = await absenceAttachmentService.uploadFromStream({
       companyId,

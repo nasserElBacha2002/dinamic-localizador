@@ -1,4 +1,4 @@
-import { Alert, Badge, Group, SimpleGrid, Stack, Switch, Tabs, Text } from "@mantine/core";
+import { Alert, Badge, Group, SimpleGrid, Stack, Tabs, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router";
@@ -6,7 +6,7 @@ import { ErrorState, LoadingState, PageHeader } from "../../design-system";
 import { useAbsenceAttachmentStorageHealth } from "../../hooks/useAbsenceAttachments";
 import { useCompanyAbsenceSettings } from "../../hooks/useCompanyAbsenceSettings";
 import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
-import { useCompanySettings, useUpdateCompanySettings } from "../../hooks/useCompanySettings";
+import { useCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -29,8 +29,6 @@ import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog"
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
-import { useQueryClient } from "@tanstack/react-query";
-import { absenceAttachmentKeys } from "../../api/absence-query-keys";
 
 type SettingsTab = "company" | "absences";
 
@@ -72,8 +70,6 @@ export function CompanySettingsPage() {
   const storageHealthQuery = useAbsenceAttachmentStorageHealth(
     absencesTabEnabled && canUpdate,
   );
-  const updateSettingsMutation = useUpdateCompanySettings();
-  const queryClient = useQueryClient();
 
   const [openDialog, setOpenDialog] = useState<DialogKey | null>(null);
   const [dialogCompanyId, setDialogCompanyId] = useState(activeCompanyId);
@@ -93,25 +89,6 @@ export function CompanySettingsPage() {
 
   const handleSaved = (message: string) => {
     notifications.show({ color: "green", message });
-  };
-
-  const handleAttachmentsToggle = async (checked: boolean) => {
-    if (!canUpdate || updateSettingsMutation.isPending) {
-      return;
-    }
-    try {
-      await updateSettingsMutation.mutateAsync({ absenceAttachmentsEnabled: checked });
-      void queryClient.invalidateQueries({
-        queryKey: absenceAttachmentKeys.storageHealth(activeCompanyId),
-      });
-      handleSaved(
-        checked
-          ? "Adjuntos de ausencias habilitados."
-          : "Adjuntos de ausencias deshabilitados.",
-      );
-    } catch (error) {
-      notifications.show({ color: "red", message: getApiErrorMessage(error) });
-    }
   };
 
   const setTab = (tab: SettingsTab) => {
@@ -333,9 +310,7 @@ export function CompanySettingsPage() {
                     ? [
                         {
                           label: "Módulo",
-                          value: storageHealthQuery.data.featureEnabled
-                            ? "Habilitado"
-                            : "Deshabilitado",
+                          value: "Siempre habilitado",
                         },
                         {
                           label: "Almacenamiento",
@@ -365,17 +340,10 @@ export function CompanySettingsPage() {
                 onRetry={() => void storageHealthQuery.refetch()}
                 footer={
                   <Stack gap="xs">
-                    <Switch
-                      label="Habilitar adjuntos de ausencias"
-                      checked={Boolean(
-                        settingsQuery.data?.absenceAttachmentsEnabled ??
-                          storageHealthQuery.data?.featureEnabled,
-                      )}
-                      disabled={updateSettingsMutation.isPending || !settingsQuery.data}
-                      onChange={(event) =>
-                        void handleAttachmentsToggle(event.currentTarget.checked)
-                      }
-                    />
+                    <Text size="sm">
+                      Los adjuntos están siempre habilitados. El upload depende de que GCS esté
+                      configurado y accesible en el servidor.
+                    </Text>
                     {!storageHealthQuery.data?.storageConfigured ||
                     !storageHealthQuery.data?.storageAvailable ? (
                       <Text size="xs" c="dimmed">

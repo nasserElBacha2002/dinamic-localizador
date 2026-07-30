@@ -13,7 +13,7 @@ describe("absence operational effect matrix", () => {
   it("does not justify workdays for PENDING/NEEDS_INFO", () => {
     assert.equal(resolveAbsenceOperationalEffectPlan("PENDING").justifyWorkdays, false);
     assert.equal(resolveAbsenceOperationalEffectPlan("NEEDS_INFO").justifyWorkdays, false);
-    assert.equal(resolveAbsenceOperationalEffectPlan("PENDING").provisionalWarning, true);
+    assert.equal(resolveAbsenceOperationalEffectPlan("PENDING").createAssignmentConflicts, false);
   });
 
   it("justifies and creates conflicts only when APPROVED", () => {

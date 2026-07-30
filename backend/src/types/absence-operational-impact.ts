@@ -73,9 +73,14 @@ export type AbsenceOperationalAssignmentImpact = {
   operationId: string;
   serviceId: string;
   serviceName: string;
+  employeeId: string;
   scheduledStart: string;
   scheduledEnd: string | null;
   operationStatus: string;
+  validFrom: string;
+  validTo: string | null;
+  categoryId: string | null;
+  categoryName: string | null;
 };
 
 export type AbsenceOperationalStaffingWarning = {
@@ -100,7 +105,18 @@ export type AbsenceOperationalImpactResult = {
   operations: AbsenceOperationalAssignmentImpact[];
   workdays: AbsenceOperationalWorkdayImpact[];
   openConflicts: AbsenceOperationalConflictDto[];
-  reconciliationStatus: "NOT_APPLICABLE" | "PENDING" | "APPLIED" | "PARTIAL" | "FAILED";
+  reconciliationStatus:
+    | "NOT_APPLICABLE"
+    | "PENDING"
+    | "PROCESSING"
+    | "PARTIALLY_APPLIED"
+    | "APPLIED"
+    | "FAILED"
+    | "SUPERSEDED"
+    | "REVERTED";
+  reconciliationJobId: string | null;
+  reconciliationLastError: string | null;
+  reconciliationAttempts: number | null;
 };
 
 export type AbsenceOperationalConflictDto = {
@@ -118,6 +134,8 @@ export type AbsenceOperationalConflictDto = {
   resolutionCode: AbsenceOperationalResolutionCode | null;
   resolutionReason: string | null;
   resolvedAt: string | null;
+  rangeStartAt: string | null;
+  rangeEndAt: string | null;
   createdAt: string;
   updatedAt: string;
 };

@@ -331,6 +331,7 @@ const createRequest = async (
           absenceRequestId: created.id,
           absenceStatus: autoRule.to,
           operation: "AUTO_APPROVE",
+          expectedOperationalImpactVersion: created.operationalImpactVersion ?? 1,
         },
         transaction,
       );
@@ -856,6 +857,7 @@ export const absenceRequestService = {
             absenceRequestId: requestId,
             absenceStatus: autoRule.to,
             operation: "RESUBMIT_AUTO_APPROVE",
+            expectedOperationalImpactVersion: (existing.operationalImpactVersion ?? 1),
           },
           transaction,
         );

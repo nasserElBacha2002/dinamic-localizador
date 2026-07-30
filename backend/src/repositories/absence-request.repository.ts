@@ -12,7 +12,7 @@ import type {
 } from "../types/absence";
 import type { ListAbsenceRequestsQuery } from "../schemas/absence-request.schema";
 import { getPagination } from "../utils/pagination";
-import { mapAbsenceRequestEventRow, mapAbsenceRequestRow } from "../utils/row-mappers";
+import { mapAbsenceRequestEventRow, mapAbsenceRequestRow, toDateOnlyString } from "../utils/row-mappers";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
 import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
 
@@ -542,6 +542,100 @@ export const absenceRequestRepository = {
     );
   },
 
+  async findAffectedAssignments(
+    companyId: string,
+    employeeId: string,
+    absenceStartAt: Date,
+    absenceEndAt: Date,
+  ): Promise<
+    Array<{
+      assignmentId: string;
+      employeeId: string;
+      operationId: string;
+      serviceId: string;
+      serviceName: string;
+      scheduledStart: string;
+      scheduledEnd: string | null;
+      operationStatus: string;
+      validFrom: string;
+      validTo: string | null;
+      cancelledAt: string | null;
+      categoryId: string | null;
+      categoryName: string | null;
+    }>
+  > {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("absenceStartAt", sql.DateTime2, absenceStartAt)
+      .input("absenceEndAt", sql.DateTime2, absenceEndAt)
+      .query(`
+        SELECT
+          ie.id AS assignment_id,
+          ie.employee_id,
+          ie.valid_from,
+          ie.valid_until,
+          ie.cancelled_at,
+          e.category_id,
+          ec.name AS category_name,
+          i.id AS operation_id,
+          i.service_id,
+          s.name AS service_name,
+          i.scheduled_start,
+          i.scheduled_end,
+          i.status AS operation_status
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = @companyId
+        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        LEFT JOIN employee_categories ec ON ec.id = e.category_id AND ec.company_id = @companyId
+        WHERE ie.employee_id = @employeeId
+          AND ie.company_id = @companyId
+          AND ie.cancelled_at IS NULL
+          AND i.status NOT IN ('CANCELLED')
+          AND i.scheduled_start IS NOT NULL
+          AND DATEADD(
+            MINUTE,
+            -COALESCE(i.early_tolerance_minutes, 0),
+            i.scheduled_start
+          ) <= @absenceEndAt
+          AND COALESCE(
+            i.scheduled_end,
+            DATEADD(MINUTE, COALESCE(i.late_tolerance_minutes, 0), i.scheduled_start)
+          ) >= @absenceStartAt
+          AND ie.valid_from <= CAST(@absenceEndAt AS DATE)
+          AND (ie.valid_until IS NULL OR ie.valid_until >= CAST(@absenceStartAt AS DATE))
+        ORDER BY i.scheduled_start ASC, ie.id ASC
+      `);
+
+    return result.recordset
+      .filter((row) => row.scheduled_start != null)
+      .map((row) => ({
+        assignmentId: String(row.assignment_id),
+        employeeId: String(row.employee_id),
+        operationId: String(row.operation_id),
+        serviceId: String(row.service_id),
+        serviceName: String(row.service_name),
+        scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
+        scheduledEnd: row.scheduled_end
+          ? new Date(row.scheduled_end as Date | string).toISOString()
+          : null,
+        operationStatus: String(row.operation_status),
+        validFrom: toDateOnlyString(row.valid_from as Date | string),
+        validTo: row.valid_until
+          ? toDateOnlyString(row.valid_until as Date | string)
+          : null,
+        cancelledAt: row.cancelled_at
+          ? new Date(row.cancelled_at as Date | string).toISOString()
+          : null,
+        categoryId: row.category_id ? String(row.category_id) : null,
+        categoryName: row.category_name ? String(row.category_name) : null,
+      }));
+  },
+
+  /** @deprecated Prefer findAffectedAssignments — kept for list counts compatibility. */
   async findAffectedOperations(
     companyId: string,
     employeeId: string,
@@ -557,52 +651,36 @@ export const absenceRequestRepository = {
       status: string;
     }>
   > {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .input("absenceStartAt", sql.DateTime2, absenceStartAt)
-      .input("absenceEndAt", sql.DateTime2, absenceEndAt)
-      .query(`
-        SELECT
-          i.id AS operation_id,
-          i.service_id,
-          s.name AS service_name,
-          i.scheduled_start,
-          i.scheduled_end,
-          i.status
-        FROM operation_assignments ie
-        INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = @companyId
-        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
-        WHERE ie.employee_id = @employeeId
-          AND ie.company_id = @companyId
-          AND i.status NOT IN ('CANCELLED')
-          AND i.scheduled_start IS NOT NULL
-          AND DATEADD(
-            MINUTE,
-            -COALESCE(i.early_tolerance_minutes, 0),
-            i.scheduled_start
-          ) <= @absenceEndAt
-          AND COALESCE(
-            i.scheduled_end,
-            DATEADD(MINUTE, COALESCE(i.late_tolerance_minutes, 0), i.scheduled_start)
-          ) >= @absenceStartAt
-        ORDER BY i.scheduled_start ASC
-      `);
-
-    return result.recordset
-      .filter((row) => row.scheduled_start != null)
-      .map((row) => ({
-        operationId: String(row.operation_id),
-        serviceId: String(row.service_id),
-        serviceName: String(row.service_name),
-        scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
-        scheduledEnd: row.scheduled_end
-          ? new Date(row.scheduled_end as Date | string).toISOString()
-          : null,
-        status: String(row.status),
-      }));
+    const assignments = await this.findAffectedAssignments(
+      companyId,
+      employeeId,
+      absenceStartAt,
+      absenceEndAt,
+    );
+    const seen = new Set<string>();
+    const operations: Array<{
+      operationId: string;
+      serviceId: string;
+      serviceName: string;
+      scheduledStart: string;
+      scheduledEnd: string | null;
+      status: string;
+    }> = [];
+    for (const assignment of assignments) {
+      if (seen.has(assignment.operationId)) {
+        continue;
+      }
+      seen.add(assignment.operationId);
+      operations.push({
+        operationId: assignment.operationId,
+        serviceId: assignment.serviceId,
+        serviceName: assignment.serviceName,
+        scheduledStart: assignment.scheduledStart,
+        scheduledEnd: assignment.scheduledEnd,
+        status: assignment.operationStatus,
+      });
+    }
+    return operations;
   },
 
   async listApprovedByEmployeeAndDateRange(

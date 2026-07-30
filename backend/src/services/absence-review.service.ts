@@ -121,6 +121,7 @@ const transition = async (input: {
           absenceRequestId: input.requestId,
           absenceStatus: rule.to,
           operation: syncOperation,
+          expectedOperationalImpactVersion: updated.operationalImpactVersion ?? 1,
         },
         transaction,
       );

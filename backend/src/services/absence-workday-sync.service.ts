@@ -3,47 +3,15 @@ import {
   absenceWorkdaySyncJobRepository,
   type AbsenceWorkdaySyncOperation,
 } from "../repositories/absence-workday-sync-job.repository";
+import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import type { AbsenceWorkdayReconciliationResult } from "../types/absence-workday-reconciliation";
-import { absenceOperationImpactService } from "./absence-operation-impact.service";
-import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
+import { absenceOperationalReconciliationService } from "./absence-operational-reconciliation.service";
 import type sql from "mssql";
 
 const SYNC_FAILED_MESSAGE =
   "La ausencia fue guardada, pero no se pudieron actualizar las jornadas programadas. La sincronización se reintentará automáticamente.";
 
 const MAX_ATTEMPTS = 8;
-
-const applyOperationalSideEffects = async (
-  companyId: string,
-  absenceRequestId: string,
-  operation: AbsenceWorkdaySyncOperation | string,
-): Promise<void> => {
-  if (
-    operation === "APPROVE" ||
-    operation === "AUTO_APPROVE" ||
-    operation === "RESUBMIT_AUTO_APPROVE" ||
-    operation === "approve"
-  ) {
-    await absenceOperationImpactService.applyApprovedOperationalSideEffects(
-      companyId,
-      absenceRequestId,
-    );
-    return;
-  }
-
-  if (
-    operation === "REJECT" ||
-    operation === "CANCEL" ||
-    operation === "reject" ||
-    operation === "cancel"
-  ) {
-    await absenceOperationImpactService.revertOperationalSideEffects(
-      companyId,
-      absenceRequestId,
-      `sync:${operation}`,
-    );
-  }
-};
 
 export const absenceWorkdaySyncService = {
   async enqueueInTransaction(
@@ -52,10 +20,28 @@ export const absenceWorkdaySyncService = {
       absenceRequestId: string;
       absenceStatus: string;
       operation: AbsenceWorkdaySyncOperation;
+      expectedOperationalImpactVersion?: number;
     },
     transaction: sql.Transaction,
   ): Promise<void> {
-    await absenceWorkdaySyncJobRepository.enqueue(input, transaction);
+    let version = input.expectedOperationalImpactVersion;
+    if (version == null) {
+      const request = await absenceRequestRepository.findById(
+        input.companyId,
+        input.absenceRequestId,
+      );
+      version = request?.operationalImpactVersion ?? 1;
+    }
+    await absenceOperationalReconciliationService.enqueueInTransaction(
+      {
+        companyId: input.companyId,
+        absenceRequestId: input.absenceRequestId,
+        absenceStatus: input.absenceStatus,
+        operation: input.operation,
+        expectedOperationalImpactVersion: version,
+      },
+      transaction,
+    );
   },
 
   async runAfterAbsenceMutation<T extends { workdayReconciliation?: AbsenceWorkdayReconciliationResult }>(
@@ -69,7 +55,19 @@ export const absenceWorkdaySyncService = {
 
     try {
       const workdayReconciliation = await reconcile();
-      await applyOperationalSideEffects(companyId, absenceRequestId, context);
+      // Post-reconciliation operational effects (conflicts) — no business branching here.
+      if (context === "approve") {
+        await absenceOperationalReconciliationService.applyApprovedOperationalSideEffects(
+          companyId,
+          absenceRequestId,
+        );
+      } else if (context === "reject" || context === "cancel") {
+        await absenceOperationalReconciliationService.revertOperationalSideEffects(
+          companyId,
+          absenceRequestId,
+          `sync:${context}`,
+        );
+      }
 
       try {
         const active = await absenceWorkdaySyncJobRepository.findActiveByRequest(
@@ -131,9 +129,10 @@ export const absenceWorkdaySyncService = {
     }
   },
 
-  async processPendingJobs(limit = 20): Promise<{ processed: number; failed: number }> {
+  async processPendingJobs(limit = 20): Promise<{ processed: number; failed: number; superseded: number }> {
     let processed = 0;
     let failed = 0;
+    let superseded = 0;
 
     for (let i = 0; i < limit; i += 1) {
       const job = await absenceWorkdaySyncJobRepository.claimNextPending(MAX_ATTEMPTS);
@@ -142,24 +141,14 @@ export const absenceWorkdaySyncService = {
       }
 
       try {
-        if (
-          job.operation === "APPROVE" ||
-          job.operation === "AUTO_APPROVE" ||
-          job.operation === "RESUBMIT_AUTO_APPROVE"
-        ) {
-          await employeeWorkdayAbsenceReconciliationService.reconcileForApprovedAbsence(
-            job.companyId,
-            job.absenceRequestId,
-          );
+        const outcome =
+          await absenceOperationalReconciliationService.executeClaimedJob(job);
+        if (outcome === "SUPERSEDED") {
+          superseded += 1;
         } else {
-          await employeeWorkdayAbsenceReconciliationService.reconcileForRevokedAbsence(
-            job.companyId,
-            job.absenceRequestId,
-          );
+          await absenceWorkdaySyncJobRepository.markCompleted(job.companyId, job.id);
+          processed += 1;
         }
-        await applyOperationalSideEffects(job.companyId, job.absenceRequestId, job.operation);
-        await absenceWorkdaySyncJobRepository.markCompleted(job.companyId, job.id);
-        processed += 1;
       } catch (error) {
         failed += 1;
         const message = error instanceof Error ? error.message : String(error);
@@ -179,6 +168,6 @@ export const absenceWorkdaySyncService = {
       }
     }
 
-    return { processed, failed };
+    return { processed, failed, superseded };
   },
 };

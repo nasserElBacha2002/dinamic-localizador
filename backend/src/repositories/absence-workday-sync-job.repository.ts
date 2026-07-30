@@ -6,9 +6,15 @@ export type AbsenceWorkdaySyncOperation =
   | "AUTO_APPROVE"
   | "REJECT"
   | "CANCEL"
-  | "RESUBMIT_AUTO_APPROVE";
+  | "RESUBMIT_AUTO_APPROVE"
+  | "MANUAL_RECONCILE";
 
-export type AbsenceWorkdaySyncJobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+export type AbsenceWorkdaySyncJobStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "COMPLETED"
+  | "FAILED"
+  | "SUPERSEDED";
 
 export type AbsenceWorkdaySyncJob = {
   id: string;
@@ -19,6 +25,8 @@ export type AbsenceWorkdaySyncJob = {
   status: AbsenceWorkdaySyncJobStatus;
   attemptCount: number;
   lastError: string | null;
+  expectedOperationalImpactVersion: number;
+  supersededAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -32,6 +40,10 @@ const mapRow = (row: Record<string, unknown>): AbsenceWorkdaySyncJob => ({
   status: String(row.status) as AbsenceWorkdaySyncJobStatus,
   attemptCount: Number(row.attempt_count ?? 0),
   lastError: row.last_error ? String(row.last_error) : null,
+  expectedOperationalImpactVersion: Number(row.expected_operational_impact_version ?? 1),
+  supersededAt: row.superseded_at
+    ? new Date(row.superseded_at as Date | string).toISOString()
+    : null,
   createdAt: new Date(row.created_at as Date | string).toISOString(),
   updatedAt: new Date(row.updated_at as Date | string).toISOString(),
 });
@@ -46,24 +58,46 @@ export const absenceWorkdaySyncJobRepository = {
       absenceRequestId: string;
       absenceStatus: string;
       operation: AbsenceWorkdaySyncOperation;
+      expectedOperationalImpactVersion: number;
     },
     transaction?: sql.Transaction,
   ): Promise<AbsenceWorkdaySyncJob> {
-    const request = requestFrom(transaction)
+    // Supersede older active jobs for this request when version/status changes.
+    await requestFrom(transaction)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
+      .input("expectedVersion", sql.Int, input.expectedOperationalImpactVersion)
+      .input("absenceStatus", sql.NVarChar(30), input.absenceStatus)
+      .query(`
+        UPDATE absence_workday_sync_jobs
+        SET status = N'SUPERSEDED',
+            superseded_at = SYSUTCDATETIME(),
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND absence_request_id = @absenceRequestId
+          AND status IN (N'PENDING', N'PROCESSING', N'FAILED')
+          AND (
+            expected_operational_impact_version <> @expectedVersion
+            OR absence_status <> @absenceStatus
+          )
+      `);
+
+    const existing = await requestFrom(transaction)
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
       .input("absenceStatus", sql.NVarChar(30), input.absenceStatus)
-      .input("operation", sql.NVarChar(40), input.operation);
-
-    // Idempotent enqueue: reuse active job if present, otherwise insert.
-    const existing = await request.query(`
-      SELECT TOP 1 *
-      FROM absence_workday_sync_jobs WITH (UPDLOCK, HOLDLOCK)
-      WHERE company_id = @companyId
-        AND absence_request_id = @absenceRequestId
-        AND operation = @operation
-        AND status IN ('PENDING', 'PROCESSING')
-    `);
+      .input("operation", sql.NVarChar(40), input.operation)
+      .input("expectedVersion", sql.Int, input.expectedOperationalImpactVersion)
+      .query(`
+        SELECT TOP 1 *
+        FROM absence_workday_sync_jobs WITH (UPDLOCK, HOLDLOCK)
+        WHERE company_id = @companyId
+          AND absence_request_id = @absenceRequestId
+          AND operation = @operation
+          AND absence_status = @absenceStatus
+          AND expected_operational_impact_version = @expectedVersion
+          AND status IN (N'PENDING', N'PROCESSING')
+      `);
 
     if (existing.recordset[0]) {
       return mapRow(existing.recordset[0] as Record<string, unknown>);
@@ -74,13 +108,16 @@ export const absenceWorkdaySyncJobRepository = {
       .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
       .input("absenceStatus", sql.NVarChar(30), input.absenceStatus)
       .input("operation", sql.NVarChar(40), input.operation)
+      .input("expectedVersion", sql.Int, input.expectedOperationalImpactVersion)
       .query(`
         INSERT INTO absence_workday_sync_jobs (
-          company_id, absence_request_id, absence_status, operation, status
+          company_id, absence_request_id, absence_status, operation, status,
+          expected_operational_impact_version
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId, @absenceRequestId, @absenceStatus, @operation, 'PENDING'
+          @companyId, @absenceRequestId, @absenceStatus, @operation, N'PENDING',
+          @expectedVersion
         )
       `);
 
@@ -97,10 +134,31 @@ export const absenceWorkdaySyncJobRepository = {
       .input("jobId", sql.UniqueIdentifier, jobId)
       .query(`
         UPDATE absence_workday_sync_jobs
-        SET status = 'COMPLETED',
+        SET status = N'COMPLETED',
             last_error = NULL,
             updated_at = SYSUTCDATETIME()
         WHERE id = @jobId AND company_id = @companyId
+      `);
+  },
+
+  async markSuperseded(
+    companyId: string,
+    jobId: string,
+    reason: string,
+  ): Promise<void> {
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("jobId", sql.UniqueIdentifier, jobId)
+      .input("reason", sql.NVarChar(1000), reason.slice(0, 1000))
+      .query(`
+        UPDATE absence_workday_sync_jobs
+        SET status = N'SUPERSEDED',
+            superseded_at = SYSUTCDATETIME(),
+            last_error = @reason,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @jobId AND company_id = @companyId
+          AND status IN (N'PENDING', N'PROCESSING', N'FAILED')
       `);
   },
 
@@ -121,8 +179,8 @@ export const absenceWorkdaySyncJobRepository = {
         SET attempt_count = attempt_count + 1,
             last_error = @errorMessage,
             status = CASE
-              WHEN attempt_count + 1 >= @maxAttempts THEN 'FAILED'
-              ELSE 'PENDING'
+              WHEN attempt_count + 1 >= @maxAttempts THEN N'FAILED'
+              ELSE N'PENDING'
             END,
             updated_at = SYSUTCDATETIME()
         WHERE id = @jobId AND company_id = @companyId
@@ -139,7 +197,7 @@ export const absenceWorkdaySyncJobRepository = {
         .query(`
           SELECT TOP 1 *
           FROM absence_workday_sync_jobs WITH (UPDLOCK, READPAST)
-          WHERE status = 'PENDING'
+          WHERE status = N'PENDING'
             AND attempt_count < @maxAttempts
           ORDER BY updated_at ASC, created_at ASC
         `);
@@ -155,13 +213,13 @@ export const absenceWorkdaySyncJobRepository = {
         .input("companyId", sql.UniqueIdentifier, String(row.company_id))
         .query(`
           UPDATE absence_workday_sync_jobs
-          SET status = 'PROCESSING',
+          SET status = N'PROCESSING',
               updated_at = SYSUTCDATETIME()
-          WHERE id = @jobId AND company_id = @companyId AND status = 'PENDING'
+          WHERE id = @jobId AND company_id = @companyId AND status = N'PENDING'
         `);
 
       await transaction.commit();
-      return mapRow(row);
+      return mapRow({ ...row, status: "PROCESSING" });
     } catch (error) {
       try {
         await transaction.rollback();
@@ -187,10 +245,50 @@ export const absenceWorkdaySyncJobRepository = {
         FROM absence_workday_sync_jobs
         WHERE company_id = @companyId
           AND absence_request_id = @absenceRequestId
-          AND status IN ('PENDING', 'PROCESSING', 'FAILED')
+          AND status IN (N'PENDING', N'PROCESSING', N'FAILED')
         ORDER BY created_at DESC
       `);
 
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findLatestByRequest(
+    companyId: string,
+    absenceRequestId: string,
+  ): Promise<AbsenceWorkdaySyncJob | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .query(`
+        SELECT TOP 1 *
+        FROM absence_workday_sync_jobs
+        WHERE company_id = @companyId
+          AND absence_request_id = @absenceRequestId
+        ORDER BY created_at DESC
+      `);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findById(
+    companyId: string,
+    jobId: string,
+  ): Promise<AbsenceWorkdaySyncJob | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("jobId", sql.UniqueIdentifier, jobId)
+      .query(`
+        SELECT TOP 1 *
+        FROM absence_workday_sync_jobs
+        WHERE company_id = @companyId AND id = @jobId
+      `);
     if (!result.recordset[0]) {
       return null;
     }

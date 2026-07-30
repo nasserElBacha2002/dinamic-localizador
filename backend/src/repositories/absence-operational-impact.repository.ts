@@ -36,6 +36,8 @@ const mapConflict = (row: Record<string, unknown>): AbsenceOperationalConflictDt
     : null,
   resolutionReason: row.resolution_reason ? String(row.resolution_reason) : null,
   resolvedAt: toIso(row.resolved_at as Date | string | null),
+  rangeStartAt: toIso(row.range_start_at as Date | string | null),
+  rangeEndAt: toIso(row.range_end_at as Date | string | null),
   createdAt: toIso(row.created_at as Date | string)!,
   updatedAt: toIso(row.updated_at as Date | string)!,
 });
@@ -144,18 +146,21 @@ export const absenceOperationalImpactRepository = {
     }
   },
 
-  async resolveConflict(input: {
-    companyId: string;
-    absenceRequestId: string;
-    conflictId: string;
-    status: "RESOLVED" | "DISMISSED";
-    resolutionCode: AbsenceOperationalResolutionCode;
-    resolutionReason: string;
-    resolvedByUserId: string;
-    replacementEmployeeId?: string | null;
-  }): Promise<AbsenceOperationalConflictDto | null> {
-    const result = await getPool()
-      .request()
+  async resolveConflict(
+    input: {
+      companyId: string;
+      absenceRequestId: string;
+      conflictId: string;
+      status: "RESOLVED" | "DISMISSED";
+      resolutionCode: AbsenceOperationalResolutionCode;
+      resolutionReason: string;
+      resolvedByUserId: string;
+      replacementEmployeeId?: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<AbsenceOperationalConflictDto | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
       .input("id", sql.UniqueIdentifier, input.conflictId)

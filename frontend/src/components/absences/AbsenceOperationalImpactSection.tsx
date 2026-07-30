@@ -122,8 +122,18 @@ export function AbsenceOperationalImpactSection({ requestId }: Props) {
 
         <Text size="sm">
           {impact.affectedWorkdays} jornada(s) · {impact.affectedOperations} operación(es) ·{" "}
-          {impact.attendanceConflicts} conflicto(s) de asistencia · disponibilidad:{" "}
+          {impact.affectedAssignments} asignación(es) · {impact.attendanceConflicts} conflicto(s)
+          de asistencia · disponibilidad:{" "}
           {availabilityLabels[impact.availabilityStatus] ?? impact.availabilityStatus}
+        </Text>
+        <Text size="sm" c="dimmed">
+          Reconciliación: {impact.reconciliationStatus}
+          {impact.reconciliationAttempts != null
+            ? ` · intentos ${impact.reconciliationAttempts}`
+            : ""}
+          {impact.reconciliationLastError
+            ? ` · ${impact.reconciliationLastError}`
+            : ""}
         </Text>
 
         {impact.requiresManualAction ? (

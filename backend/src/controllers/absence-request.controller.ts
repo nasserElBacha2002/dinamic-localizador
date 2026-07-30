@@ -137,11 +137,11 @@ export const absenceRequestController = {
 
   async reconcileOperationalImpact(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const impact = await absenceOperationImpactService.reconcileManually(
+    const accepted = await absenceOperationImpactService.reconcileManually(
       companyId,
       String(req.params.id),
       req.auth!.userId,
     );
-    res.status(200).json({ data: impact });
+    res.status(202).json({ data: accepted });
   },
 };

@@ -10,14 +10,16 @@ describe("absenceWorkdaySyncService", () => {
 
   it("returns workdayReconciliation when reconciliation succeeds", async () => {
     setupUnitTestEnv();
-    const { absenceOperationImpactService } = await import("./absence-operation-impact.service");
+    const { absenceOperationalReconciliationService } = await import(
+      "./absence-operational-reconciliation.service"
+    );
     mock.method(
-      absenceOperationImpactService,
+      absenceOperationalReconciliationService,
       "applyApprovedOperationalSideEffects",
       async () => undefined,
     );
     mock.method(
-      absenceOperationImpactService,
+      absenceOperationalReconciliationService,
       "revertOperationalSideEffects",
       async () => undefined,
     );

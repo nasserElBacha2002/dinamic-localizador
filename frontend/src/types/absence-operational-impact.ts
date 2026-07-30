@@ -60,9 +60,14 @@ export type AbsenceOperationalImpact = {
     operationId: string;
     serviceId: string;
     serviceName: string;
+    employeeId: string;
     scheduledStart: string;
     scheduledEnd: string | null;
     operationStatus: string;
+    validFrom: string;
+    validTo: string | null;
+    categoryId: string | null;
+    categoryName: string | null;
   }>;
   workdays: Array<{
     employeeWorkdayId: string;
@@ -74,7 +79,18 @@ export type AbsenceOperationalImpact = {
     conflictCode: "ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE" | null;
   }>;
   openConflicts: AbsenceOperationalConflict[];
-  reconciliationStatus: "NOT_APPLICABLE" | "PENDING" | "APPLIED" | "PARTIAL" | "FAILED";
+  reconciliationStatus:
+    | "NOT_APPLICABLE"
+    | "PENDING"
+    | "PROCESSING"
+    | "PARTIALLY_APPLIED"
+    | "APPLIED"
+    | "FAILED"
+    | "SUPERSEDED"
+    | "REVERTED";
+  reconciliationJobId: string | null;
+  reconciliationLastError: string | null;
+  reconciliationAttempts: number | null;
 };
 
 export type ResolveAbsenceOperationalConflictInput = {

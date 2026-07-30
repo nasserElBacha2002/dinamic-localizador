@@ -11,7 +11,11 @@ const BATCH_CHUNK_SIZE = 40;
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
-export type EmployeeWorkdayWithSchedule = EmployeeWorkday & EmployeeWorkdayScheduleContext;
+export type EmployeeWorkdayWithSchedule = EmployeeWorkday &
+  EmployeeWorkdayScheduleContext & {
+    operationId: string | null;
+    serviceId: string | null;
+  };
 
 export const mapEmployeeWorkdayRow = (row: Record<string, unknown>): EmployeeWorkday => ({
   id: String(row.id),
@@ -42,6 +46,8 @@ const mapEmployeeWorkdayWithScheduleRow = (
   scheduleTimezone: row.schedule_timezone_snapshot
     ? String(row.schedule_timezone_snapshot)
     : "America/Argentina/Buenos_Aires",
+  operationId: row.operation_id ? String(row.operation_id) : null,
+  serviceId: row.service_id ? String(row.service_id) : null,
 });
 
 const WORKDAY_SCHEDULE_SELECT = `
@@ -50,7 +56,9 @@ const WORKDAY_SCHEDULE_SELECT = `
   ow.expected_end_at,
   ow.early_tolerance_minutes,
   ow.late_tolerance_minutes,
-  ow.schedule_timezone_snapshot
+  ow.schedule_timezone_snapshot,
+  ow.operation_id,
+  i.service_id
 `;
 
 export const employeeWorkdayRepository = {
@@ -875,6 +883,9 @@ export const employeeWorkdayRepository = {
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
          AND ow.company_id = ew.company_id
+        INNER JOIN scheduled_operations i
+          ON i.id = ow.operation_id
+         AND i.company_id = ew.company_id
         WHERE ew.company_id = @companyId
           AND ew.employee_id = @employeeId
           AND ow.work_date >= @dateFrom
@@ -916,6 +927,9 @@ export const employeeWorkdayRepository = {
       INNER JOIN operation_workdays ow
         ON ow.id = ew.operation_workday_id
        AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ew.company_id
       WHERE ew.company_id = @companyId
         AND ew.employee_id IN (${placeholders.join(", ")})
         AND ow.work_date >= @dateFrom
@@ -943,6 +957,9 @@ export const employeeWorkdayRepository = {
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
          AND ow.company_id = ew.company_id
+        INNER JOIN scheduled_operations i
+          ON i.id = ow.operation_id
+         AND i.company_id = ew.company_id
         WHERE ew.company_id = @companyId
           AND ew.absence_request_id = @absenceRequestId
       `);
@@ -975,6 +992,9 @@ export const employeeWorkdayRepository = {
       INNER JOIN operation_workdays ow
         ON ow.id = ew.operation_workday_id
        AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ew.company_id
       WHERE ew.company_id = @companyId
         AND ew.id IN (${placeholders.join(", ")})
     `);

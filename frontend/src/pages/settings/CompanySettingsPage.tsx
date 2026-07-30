@@ -20,6 +20,7 @@ import {
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
 import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
+import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypePolicyDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
@@ -37,6 +38,7 @@ type DialogKey =
   | "absences"
   | "absenceTypePolicy"
   | "absenceCalendar"
+  | "absenceOperationalIntegration"
   | "locationTypes"
   | "workSchedule"
   | "employeeCategories";
@@ -301,6 +303,33 @@ export function CompanySettingsPage() {
               onAction={() => setOpenDialog("absenceCalendar")}
             />
 
+            <SettingsSummaryCard
+              title="Integración operativa"
+              description="Impacto de ausencias sobre operaciones, jornadas y conflictos. Activación por empresa piloto."
+              summaryItems={
+                settingsQuery.data
+                  ? [
+                      {
+                        label: "Estado",
+                        value: settingsQuery.data.absenceOperationalIntegrationEnabled
+                          ? "Habilitada"
+                          : "Deshabilitada",
+                      },
+                      {
+                        label: "Rollout",
+                        value: "Off por defecto · activar solo piloto",
+                      },
+                    ]
+                  : []
+              }
+              loading={settingsQuery.isLoading}
+              error={settingsQuery.isError ? getApiErrorMessage(settingsQuery.error) : null}
+              onRetry={() => void settingsQuery.refetch()}
+              actionLabel="Gestionar integración"
+              canEdit={canUpdate && !settingsQuery.isError}
+              onAction={() => setOpenDialog("absenceOperationalIntegration")}
+            />
+
             {canUpdate ? (
               <SettingsSummaryCard
                 title="Documentación adjunta"
@@ -397,6 +426,15 @@ export function CompanySettingsPage() {
 
       {openDialog === "absenceCalendar" ? (
         <CompanyAbsenceCalendarDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          canUpdate={canUpdate}
+          onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "absenceOperationalIntegration" ? (
+        <CompanyAbsenceOperationalIntegrationDialog
           opened
           onClose={() => setOpenDialog(null)}
           canUpdate={canUpdate}

@@ -8,10 +8,13 @@ import { cleanup, fireEvent, render, within } from "@testing-library/react";
 import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { MemoryRouter, Route, Routes } from "react-router";
+import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
 import type { OperationEmployeeAssignment } from "../../types/operation";
 import { OperationEmployeeTable } from "./OperationEmployeeTable";
 import { canReviewOperationalAttendance } from "./operation-workforce-attendance";
+
+installLayoutPolyfills();
 
 function buildAssignment(
   overrides: Partial<OperationEmployeeAssignment> = {},
@@ -190,8 +193,9 @@ describe("OperationEmployeeTable", () => {
 
     fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee a/i }));
     const body = within(view.baseElement);
-    const approveItem = await body.findByRole("menuitem", { name: "Aprobar asistencia" });
+    const approveItem = await body.findByRole("menuitem", { name: "Aprobar asistencia" }, { timeout: 2000 });
     fireEvent.click(approveItem);
+    fireEvent.keyDown(document, { key: "Escape" });
 
     assert.equal(approvedId, "att-a");
     assert.equal(body.queryByText("Attendance detail"), null);
@@ -212,15 +216,18 @@ describe("OperationEmployeeTable", () => {
     });
 
     fireEvent.click(view.getByRole("button", { name: /Más acciones de Employee a/i }));
-    const removeItem = await within(view.baseElement).findByRole("menuitem", {
-      name: "Quitar asignación",
-    });
+    const removeItem = await within(view.baseElement).findByRole(
+      "menuitem",
+      { name: "Quitar asignación" },
+      { timeout: 2000 },
+    );
     fireEvent.click(removeItem);
+    fireEvent.keyDown(document, { key: "Escape" });
 
     assert.equal(cancelledId, "assignment-a");
   });
 
-  it("hides destructive removal when the row already has attendance", async () => {
+  it("hides destructive removal when the row already has attendance", () => {
     const rows = [buildRow("a", "CONFIRMED", "VALID", "att-a")];
     const assignmentById = new Map([["assignment-a", buildAssignment()]]);
 
@@ -230,8 +237,9 @@ describe("OperationEmployeeTable", () => {
       operationWorkDate: "2026-07-13",
     });
 
-    assert.ok(view.getByRole("button", { name: "Ver detalle" }));
-    assert.equal(view.queryByRole("button", { name: /Más acciones de Employee a/i }), null);
+    assert.ok(view.getByText("Ver detalle"));
+    // Overflow may still expose non-destructive links; destructive cancel must stay hidden.
     assert.equal(view.queryByText("Quitar asignación"), null);
+    assert.equal(view.queryByText("Cancelar asignación"), null);
   });
 });

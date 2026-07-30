@@ -184,21 +184,20 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
     return created.id;
   };
 
-  /** Isolate claimNextPending from leftover PENDING/PROCESSING jobs in the shared company DB. */
+  /**
+   * Isolate claimNextPending from leftover PENDING/PROCESSING jobs.
+   * claimNextPending is global (not company-scoped), so neutralize across all companies.
+   */
   const neutralizeOpenJobs = async (): Promise<void> => {
-    await getPool()
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`
-        UPDATE absence_workday_sync_jobs
-        SET status = N'FAILED',
-            last_error = N'test-isolation-neutralize',
-            lease_owner = NULL,
-            lease_expires_at = NULL,
-            updated_at = SYSUTCDATETIME()
-        WHERE company_id = @companyId
-          AND status IN (N'PENDING', N'PROCESSING')
-      `);
+    await getPool().request().query(`
+      UPDATE absence_workday_sync_jobs
+      SET status = N'FAILED',
+          last_error = N'test-isolation-neutralize',
+          lease_owner = NULL,
+          lease_expires_at = NULL,
+          updated_at = SYSUTCDATETIME()
+      WHERE status IN (N'PENDING', N'PROCESSING')
+    `);
   };
 
   it("8+10: two workers claim distinct jobs; expired lease recovers", async () => {

@@ -68,6 +68,9 @@ jobs:
 
       - name: Tests
         run: npm test
+        env:
+          # happy-dom page suites are memory-heavy; unbound parallel file runs OOM in CI.
+          NODE_OPTIONS: --max-old-space-size=6144
 
       - name: npm audit (high+)
         run: npm audit --audit-level=high

@@ -5,7 +5,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule, ABSENCES_API_EXPORTS } from "../../test/mock-api-module";
+import { mockApiModule, ABSENCES_API_EXPORTS, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 
@@ -30,14 +30,7 @@ mockApiModule(
   {
     getEmployeeById: async () => employee,
   },
-  [
-    "getEmployees",
-    "getEmployeeById",
-    "getEmployeeDeactivationImpact",
-    "createEmployee",
-    "updateEmployee",
-    "deactivateEmployee",
-  ],
+  EMPLOYEES_API_EXPORTS,
 );
 
 mockApiModule("api/employee-categories.api", {

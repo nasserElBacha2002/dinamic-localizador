@@ -17,16 +17,19 @@ import {
   buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
+import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
 import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
+import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 
 type DialogKey =
   | "operational"
   | "absences"
+  | "absenceCalendar"
   | "locationTypes"
   | "workSchedule"
   | "employeeCategories";
@@ -42,6 +45,7 @@ export function CompanySettingsPage() {
   const locationTypesQuery = useCompanyLocationTypes(false);
   const employeeCategoriesQuery = useEmployeeCategories({ includeInactive: true }, canRead);
   const workScheduleQuery = useCompanyWorkSchedule(canRead);
+  const absenceCalendarQuery = useDefaultAbsenceCalendar(canRead);
 
   const [openDialog, setOpenDialog] = useState<DialogKey | null>(null);
 
@@ -136,6 +140,42 @@ export function CompanySettingsPage() {
         />
 
         <SettingsSummaryCard
+          title="Calendario de ausencias"
+          description="Días laborables, feriados y excepciones para el cálculo de duración."
+          summaryItems={
+            absenceCalendarQuery.data
+              ? [
+                  {
+                    label: "Calendario",
+                    value: absenceCalendarQuery.data.name,
+                  },
+                  {
+                    label: "Zona horaria",
+                    value: absenceCalendarQuery.data.timezone,
+                  },
+                  {
+                    label: "Días laborables",
+                    value: String(
+                      absenceCalendarQuery.data.weekdays.filter((day) => day.isWorkingDay)
+                        .length,
+                    ),
+                  },
+                ]
+              : []
+          }
+          loading={absenceCalendarQuery.isLoading}
+          error={
+            absenceCalendarQuery.isError
+              ? getApiErrorMessage(absenceCalendarQuery.error)
+              : null
+          }
+          onRetry={() => void absenceCalendarQuery.refetch()}
+          actionLabel="Gestionar calendario"
+          canEdit={canUpdate && !absenceCalendarQuery.isError}
+          onAction={() => setOpenDialog("absenceCalendar")}
+        />
+
+        <SettingsSummaryCard
           title="Formato"
           description="Clasificación de servicios, depósitos y otros puntos operativos."
           summaryItems={
@@ -200,6 +240,15 @@ export function CompanySettingsPage() {
           opened
           onClose={() => setOpenDialog(null)}
           settings={absenceSettingsQuery.data}
+          canUpdate={canUpdate}
+          onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "absenceCalendar" ? (
+        <CompanyAbsenceCalendarDialog
+          opened
+          onClose={() => setOpenDialog(null)}
           canUpdate={canUpdate}
           onSaved={handleSaved}
         />

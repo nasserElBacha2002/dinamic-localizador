@@ -17,6 +17,10 @@ import { serviceRouter } from "./service.routes";
 import { twilioRouter } from "./twilio.routes";
 import { absenceRequestRouter } from "./absence-request.routes";
 import { absenceTypesRouter } from "./absence-type.routes";
+import {
+  absenceCalendarRouter,
+  absenceCalculateRouter,
+} from "./absence-calendar.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
@@ -122,7 +126,17 @@ companyScopedOperationalRouter.use(
 companyScopedOperationalRouter.use(
   "/absence-requests",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalculateRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceRequestRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-calendars",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalendarRouter,
 );
 companyScopedOperationalRouter.use(
   "/dev/attendance-reminders",
@@ -187,7 +201,17 @@ operationalRouter.use(
 operationalRouter.use(
   "/absence-requests",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalculateRouter,
+);
+operationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceRequestRouter,
+);
+operationalRouter.use(
+  "/absence-calendars",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalendarRouter,
 );
 operationalRouter.use(
   "/dev/attendance-reminders",

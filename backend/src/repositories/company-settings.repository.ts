@@ -48,6 +48,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.pending_operation_expiration_hours ??
       DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours,
   ),
+  absenceAdvancedCalendarEnabled:
+    row.absence_advanced_calendar_enabled == null
+      ? true
+      : Boolean(row.absence_advanced_calendar_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

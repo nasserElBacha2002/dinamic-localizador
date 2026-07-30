@@ -56,6 +56,10 @@ export const absenceRequestRepository = {
       reason: string;
       requestedVia: AbsenceRequestedVia;
       sourceMessageSid?: string | null;
+      calculationMode?: string | null;
+      calendarId?: string | null;
+      calendarTimezone?: string | null;
+      calculationVersion?: number | null;
     },
     transaction?: sql.Transaction,
   ): Promise<AbsenceRequest> {
@@ -72,17 +76,23 @@ export const absenceRequestRepository = {
       .input("reason", sql.NVarChar(1000), input.reason)
       .input("requestedVia", sql.NVarChar(30), input.requestedVia)
       .input("sourceMessageSid", sql.NVarChar(100), input.sourceMessageSid ?? null)
+      .input("calculationMode", sql.NVarChar(30), input.calculationMode ?? null)
+      .input("calendarId", sql.UniqueIdentifier, input.calendarId ?? null)
+      .input("calendarTimezone", sql.NVarChar(80), input.calendarTimezone ?? null)
+      .input("calculationVersion", sql.Int, input.calculationVersion ?? null)
       .query(`
         INSERT INTO absence_requests (
           company_id, employee_id, absence_type_id, start_date, end_date,
           start_period, end_period, total_days, reason,
-          status, requested_via, source_message_sid
+          status, requested_via, source_message_sid,
+          calculation_mode, calendar_id, calendar_timezone, calculation_version
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @employeeId, @absenceTypeId, @startDate, @endDate,
           @startPeriod, @endPeriod, @totalDays, @reason,
-          'PENDING', @requestedVia, @sourceMessageSid
+          'PENDING', @requestedVia, @sourceMessageSid,
+          @calculationMode, @calendarId, @calendarTimezone, @calculationVersion
         )
       `);
 
@@ -381,6 +391,10 @@ export const absenceRequestRepository = {
       endPeriod: AbsenceDayPeriod;
       totalDays: number;
       reason: string;
+      calculationMode?: string | null;
+      calendarId?: string | null;
+      calendarTimezone?: string | null;
+      calculationVersion?: number | null;
       onlyIfStatusIn: AbsenceRequestStatus[];
     },
     transaction?: sql.Transaction,
@@ -400,6 +414,10 @@ export const absenceRequestRepository = {
       .input("endPeriod", sql.NVarChar(20), input.endPeriod)
       .input("totalDays", sql.Decimal(5, 1), input.totalDays)
       .input("reason", sql.NVarChar(1000), input.reason)
+      .input("calculationMode", sql.NVarChar(30), input.calculationMode ?? null)
+      .input("calendarId", sql.UniqueIdentifier, input.calendarId ?? null)
+      .input("calendarTimezone", sql.NVarChar(80), input.calendarTimezone ?? null)
+      .input("calculationVersion", sql.Int, input.calculationVersion ?? null)
       .query(`
         UPDATE absence_requests
         SET
@@ -410,6 +428,10 @@ export const absenceRequestRepository = {
           end_period = @endPeriod,
           total_days = @totalDays,
           reason = @reason,
+          calculation_mode = @calculationMode,
+          calendar_id = @calendarId,
+          calendar_timezone = @calendarTimezone,
+          calculation_version = @calculationVersion,
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @id AND company_id = @companyId

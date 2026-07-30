@@ -62,6 +62,7 @@ export interface CompanySettings {
   confirmationReminderEnabled: boolean;
   confirmationReminderHoursBefore: number;
   pendingOperationExpirationHours: number;
+  absenceAdvancedCalendarEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

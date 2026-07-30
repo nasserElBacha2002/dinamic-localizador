@@ -1,12 +1,14 @@
-import { Alert, Button, Group, Select, Stack, Textarea, TextInput } from "@mantine/core";
+import { Alert, Button, Group, Select, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { SectionCard } from "../../design-system";
+import { useAbsenceDurationPreview } from "../../hooks/useAbsenceCalendar";
 import {
   useResubmitAbsenceRequest,
   useUpdateNeedsInfoAbsenceRequest,
 } from "../../hooks/useAbsences";
 import type { AbsenceDayPeriod, AbsenceRequestDetail } from "../../types/absence";
+import { getApiErrorMessage } from "../../utils/errors";
 
 const PERIOD_OPTIONS: Array<{ value: AbsenceDayPeriod; label: string }> = [
   { value: "FULL_DAY", label: "Día completo" },
@@ -21,7 +23,12 @@ export function AbsenceNeedsInfoEditor({
   onConflict,
 }: {
   detail: AbsenceRequestDetail;
-  typeOptions: Array<{ value: string; label: string; allowsHalfDay?: boolean }>;
+  typeOptions: Array<{
+    value: string;
+    label: string;
+    allowsHalfDay?: boolean;
+    dayCountingMode?: string;
+  }>;
   onSaved: () => void;
   onConflict: (error: unknown) => void;
 }) {
@@ -39,6 +46,28 @@ export function AbsenceNeedsInfoEditor({
     [editAbsenceTypeId, typeOptions],
   );
   const allowsHalfDay = selectedType?.allowsHalfDay === true;
+
+  const previewInput = useMemo(
+    () => ({
+      employeeId: detail.employeeId,
+      absenceTypeId: editAbsenceTypeId,
+      startDate: editStartDate,
+      endDate: editEndDate,
+      startPeriod: allowsHalfDay ? editStartPeriod : ("FULL_DAY" as const),
+      endPeriod: allowsHalfDay ? editEndPeriod : ("FULL_DAY" as const),
+    }),
+    [
+      allowsHalfDay,
+      detail.employeeId,
+      editAbsenceTypeId,
+      editEndDate,
+      editEndPeriod,
+      editStartDate,
+      editStartPeriod,
+    ],
+  );
+
+  const previewQuery = useAbsenceDurationPreview(previewInput, Boolean(editAbsenceTypeId));
 
   const notify = (message: string, color: "green" | "red" = "green") => {
     notifications.show({ color, message });
@@ -94,6 +123,9 @@ export function AbsenceNeedsInfoEditor({
     }
   };
 
+  const countingLabel =
+    previewQuery.data?.countingMode === "BUSINESS_DAYS" ? "días hábiles" : "días corridos";
+
   return (
     <SectionCard title="Corrección administrativa (requiere información)">
       <Stack gap="md">
@@ -143,6 +175,39 @@ export function AbsenceNeedsInfoEditor({
             />
           </Group>
         ) : null}
+
+        {previewQuery.isFetching ? (
+          <Text size="sm" c="dimmed">
+            Calculando duración…
+          </Text>
+        ) : null}
+        {previewQuery.isError ? (
+          <Alert color="red">{getApiErrorMessage(previewQuery.error)}</Alert>
+        ) : null}
+        {previewQuery.data ? (
+          <Alert color="gray">
+            <Stack gap={4}>
+              <Text size="sm">
+                Duración calculada: {previewQuery.data.totalDays} {countingLabel}
+              </Text>
+              <Text size="xs" c="dimmed">
+                Zona horaria: {previewQuery.data.timezone}
+              </Text>
+              {previewQuery.data.warnings.map((warning) => (
+                <Text key={warning} size="sm">
+                  {warning}
+                </Text>
+              ))}
+              {previewQuery.data.excludedSummary.length > 0 ? (
+                <Text size="sm">
+                  Se excluyen: {previewQuery.data.excludedSummary.slice(0, 8).join(", ")}
+                  {previewQuery.data.excludedSummary.length > 8 ? "…" : ""}
+                </Text>
+              ) : null}
+            </Stack>
+          </Alert>
+        ) : null}
+
         <Textarea
           label="Motivo"
           value={editReason}

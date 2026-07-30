@@ -191,6 +191,11 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
     DELETE FROM absence_workday_sync_jobs WHERE company_id = @companyId;
     DELETE FROM absence_requests WHERE company_id = @companyId;
 
+    UPDATE absence_types SET calendar_id = NULL WHERE company_id = @companyId;
+    DELETE FROM company_calendar_dates WHERE company_id = @companyId;
+    DELETE FROM company_work_calendar_weekdays WHERE company_id = @companyId;
+    DELETE FROM company_work_calendars WHERE company_id = @companyId;
+
     DELETE FROM operational_locations WHERE company_id = @companyId;
     DELETE FROM employee_absence_balances WHERE company_id = @companyId;
     DELETE FROM employee_categories WHERE company_id = @companyId;

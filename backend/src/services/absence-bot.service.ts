@@ -10,7 +10,8 @@ import {
   isAffirmativeConfirmation,
   isNegativeConfirmation,
 } from "../utils/absence-intent";
-import { calculateTotalAbsenceDays, formatAbsenceDateDisplay } from "../utils/absence-date";
+import { formatAbsenceDateDisplay } from "../utils/absence-date";
+import { absenceCalendarService } from "./absence-calendar.service";
 import { parseSpanishDateInput } from "./bot/bot-date.parser";
 import { isAbsenceSessionState, isCheckInSessionState, isCheckoutSessionState } from "../utils/bot-session-states";
 
@@ -49,17 +50,25 @@ const buildSummary = (input: {
   endDate: string;
   reason: string;
   totalDays: number;
-}): string =>
-  [
+  countingMode?: string;
+  excludedSummary?: string[];
+}): string => {
+  const modeLabel =
+    input.countingMode === "BUSINESS_DAYS" ? "días hábiles" : "días corridos";
+  const lines = [
     "Resumen de tu solicitud de ausencia:",
     `Tipo: ${input.typeName}`,
     `Desde: ${formatAbsenceDateDisplay(input.startDate)}`,
     `Hasta: ${formatAbsenceDateDisplay(input.endDate)}`,
-    `Días: ${input.totalDays}`,
+    `Se computarán ${input.totalDays} ${modeLabel}.`,
     `Motivo: ${input.reason}`,
-    "",
-    "¿Confirmás la solicitud? Respondé SI o NO.",
-  ].join("\n");
+  ];
+  if (input.excludedSummary && input.excludedSummary.length > 0) {
+    lines.push(`No se cuentan: ${input.excludedSummary.slice(0, 5).join(", ")}.`);
+  }
+  lines.push("", "¿Confirmás la solicitud? Respondé SI o NO.");
+  return lines.join("\n");
+};
 
 const serializeContext = (context: ReturnType<typeof botSessionService.parseContext>) =>
   JSON.stringify(context);
@@ -238,12 +247,33 @@ export const absenceBotService = {
         ? await absenceTypeRepository.findById(companyId, draft.absenceTypeId)
         : null;
 
-      const totalDays = calculateTotalAbsenceDays({
-        startDate: draft.startDate!,
-        endDate: draft.endDate!,
-        startPeriod: "FULL_DAY",
-        endPeriod: "FULL_DAY",
-      });
+      let totalDays: number;
+      let countingMode = "CALENDAR_DAYS";
+      let excludedSummary: string[] = [];
+      try {
+        const calculation = await absenceCalendarService.calculateDuration(companyId, {
+          employeeId: input.employeeId,
+          absenceTypeId: draft.absenceTypeId!,
+          startDate: draft.startDate!,
+          endDate: draft.endDate!,
+          startPeriod: "FULL_DAY",
+          endPeriod: "FULL_DAY",
+        });
+        totalDays = calculation.totalDays;
+        countingMode = calculation.countingMode;
+        excludedSummary = calculation.excludedSummary;
+      } catch (error) {
+        const message =
+          error instanceof AppError
+            ? error.message
+            : "No pudimos calcular la duración de la ausencia. Revisá las fechas.";
+        return input.respond({
+          message,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
 
       await botSessionService.updateAbsenceSession(companyId, input.session.id, {
         state: "WAITING_ABSENCE_CONFIRMATION",
@@ -257,6 +287,8 @@ export const absenceBotService = {
           endDate: draft.endDate!,
           reason: draft.reason,
           totalDays,
+          countingMode,
+          excludedSummary,
         }),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,

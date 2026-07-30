@@ -17,7 +17,6 @@ import type {
 import type { AbsenceDayPeriod, AbsenceRequestDetail } from "../types/absence";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import {
-  calculateTotalAbsenceDays,
   compareAbsenceDates,
   getTodayAbsenceDateIso,
   parseAbsenceDateInput,
@@ -25,6 +24,7 @@ import {
 import { buildPaginationMeta } from "../utils/pagination";
 import { auditService } from "./audit.service";
 import { absenceBalanceService } from "./absence-balance.service";
+import { absenceCalendarService } from "./absence-calendar.service";
 import { absenceOperationImpactService } from "./absence-operation-impact.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
@@ -165,12 +165,17 @@ const createRequest = async (
     input.startPeriod,
     input.endPeriod,
   );
-  const totalDays = calculateTotalAbsenceDays({
+  const calculation = await absenceCalendarService.calculateDuration(companyId, {
+    employeeId: input.employeeId,
+    absenceTypeId: input.absenceTypeId,
     startDate: input.startDate,
     endDate: input.endDate,
     startPeriod: periods.startPeriod,
     endPeriod: periods.endPeriod,
   });
+  const totalDays = calculation.totalDays;
+  const snapshotCalendarId =
+    calculation.calendarId === "legacy" ? null : calculation.calendarId;
 
   const pool = getPool();
   const transaction = new sql.Transaction(pool);
@@ -202,6 +207,10 @@ const createRequest = async (
         reason: input.reason,
         requestedVia: input.requestedVia,
         sourceMessageSid: input.sourceMessageSid ?? null,
+        calculationMode: calculation.countingMode,
+        calendarId: snapshotCalendarId,
+        calendarTimezone: calculation.timezone,
+        calculationVersion: calculation.calculationVersion,
       },
       transaction,
     );
@@ -354,7 +363,9 @@ const resolveEditablePayload = async (
     input.endPeriod ?? existing.endPeriod,
   );
 
-  const totalDays = calculateTotalAbsenceDays({
+  const calculation = await absenceCalendarService.calculateDuration(companyId, {
+    employeeId: existing.employeeId,
+    absenceTypeId,
     startDate,
     endDate,
     startPeriod: periods.startPeriod,
@@ -369,7 +380,11 @@ const resolveEditablePayload = async (
     startPeriod: periods.startPeriod,
     endPeriod: periods.endPeriod,
     reason,
-    totalDays,
+    totalDays: calculation.totalDays,
+    calculationMode: calculation.countingMode,
+    calendarId: calculation.calendarId === "legacy" ? null : calculation.calendarId,
+    calendarTimezone: calculation.timezone,
+    calculationVersion: calculation.calculationVersion,
   };
 };
 
@@ -562,6 +577,10 @@ export const absenceRequestService = {
           endPeriod: payload.endPeriod,
           totalDays: payload.totalDays,
           reason: payload.reason,
+          calculationMode: payload.calculationMode,
+          calendarId: payload.calendarId,
+          calendarTimezone: payload.calendarTimezone,
+          calculationVersion: payload.calculationVersion,
           onlyIfStatusIn: [...ABSENCE_ADMIN_EDITABLE_STATUSES],
         },
         transaction,

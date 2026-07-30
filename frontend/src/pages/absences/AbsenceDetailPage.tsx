@@ -128,6 +128,7 @@ export function AbsenceDetailPage() {
         value: type.id,
         label: absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name,
         allowsHalfDay: type.allowsHalfDay,
+        dayCountingMode: type.dayCountingMode,
       })),
     [typesQuery.data],
   );

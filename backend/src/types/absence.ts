@@ -30,6 +30,10 @@ export interface AbsenceType {
   requiresAttachment: boolean;
   deductsBalance: boolean;
   allowsHalfDay: boolean;
+  /** CALENDAR_DAYS preserves legacy inclusive counting; BUSINESS_DAYS uses company calendar. */
+  dayCountingMode: import("./absence-calendar").AbsenceTypeCalendarFields["dayCountingMode"];
+  /** When null, the company default work calendar is used. */
+  calendarId: string | null;
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
@@ -52,6 +56,10 @@ export interface AbsenceRequest {
   reviewedAt: string | null;
   reviewComment: string | null;
   cancelledAt: string | null;
+  calculationMode: import("./absence-calendar").AbsenceCalculationSnapshot["calculationMode"];
+  calendarId: string | null;
+  calendarTimezone: string | null;
+  calculationVersion: number | null;
   createdAt: string;
   updatedAt: string;
 }

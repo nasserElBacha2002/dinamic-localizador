@@ -335,6 +335,10 @@ export const mapAbsenceTypeRow = (row: Record<string, unknown>) => ({
   requiresAttachment: Boolean(row.requires_attachment),
   deductsBalance: Boolean(row.deducts_balance),
   allowsHalfDay: Boolean(row.allows_half_day),
+  dayCountingMode: (row.day_counting_mode
+    ? String(row.day_counting_mode)
+    : "CALENDAR_DAYS") as import("../types/absence-calendar").AbsenceTypeCalendarFields["dayCountingMode"],
+  calendarId: row.calendar_id ? String(row.calendar_id) : null,
   isActive: Boolean(row.is_active),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
@@ -357,6 +361,15 @@ export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
   reviewedAt: row.reviewed_at ? toIsoString(row.reviewed_at as Date | string) : null,
   reviewComment: row.review_comment ? String(row.review_comment) : null,
   cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at as Date | string) : null,
+  calculationMode: row.calculation_mode
+    ? (String(
+        row.calculation_mode,
+      ) as import("../types/absence-calendar").AbsenceCalculationSnapshot["calculationMode"])
+    : null,
+  calendarId: row.calendar_id ? String(row.calendar_id) : null,
+  calendarTimezone: row.calendar_timezone ? String(row.calendar_timezone) : null,
+  calculationVersion:
+    row.calculation_version == null ? null : Number(row.calculation_version),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

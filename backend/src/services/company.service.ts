@@ -37,6 +37,7 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   confirmationReminderEnabled: settings.confirmationReminderEnabled,
   confirmationReminderHoursBefore: settings.confirmationReminderHoursBefore,
   pendingOperationExpirationHours: settings.pendingOperationExpirationHours,
+  absenceAdvancedCalendarEnabled: settings.absenceAdvancedCalendarEnabled,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

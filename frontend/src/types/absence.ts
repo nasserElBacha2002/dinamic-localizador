@@ -18,6 +18,8 @@ export interface AbsenceType {
   requiresAttachment: boolean;
   deductsBalance: boolean;
   allowsHalfDay: boolean;
+  dayCountingMode?: "CALENDAR_DAYS" | "BUSINESS_DAYS";
+  calendarId?: string | null;
   isActive: boolean;
 }
 
@@ -38,6 +40,10 @@ export interface AbsenceRequest {
   reviewedAt: string | null;
   reviewComment: string | null;
   cancelledAt: string | null;
+  calculationMode?: "CALENDAR_DAYS" | "BUSINESS_DAYS" | null;
+  calendarId?: string | null;
+  calendarTimezone?: string | null;
+  calculationVersion?: number | null;
   createdAt: string;
   updatedAt: string;
 }

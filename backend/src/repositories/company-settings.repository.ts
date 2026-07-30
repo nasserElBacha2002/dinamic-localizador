@@ -52,6 +52,10 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.absence_advanced_calendar_enabled == null
       ? false
       : Boolean(row.absence_advanced_calendar_enabled),
+  absenceBalanceLedgerEnabled:
+    row.absence_balance_ledger_enabled == null
+      ? false
+      : Boolean(row.absence_balance_ledger_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

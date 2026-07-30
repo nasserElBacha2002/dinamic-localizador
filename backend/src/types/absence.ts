@@ -107,6 +107,11 @@ export interface EmployeeAbsenceBalance {
   absenceTypeId: string;
   year: number;
   totalDays: number;
+  grantedDays?: number;
+  reservedDays?: number;
+  consumedDays?: number;
+  availableDays?: number;
+  version?: number;
   notes: string | null;
   createdAt: string;
   updatedAt: string;
@@ -115,14 +120,21 @@ export interface EmployeeAbsenceBalance {
 export interface AbsenceBalanceSummary {
   absenceType: Pick<AbsenceType, "id" | "code" | "name" | "deductsBalance">;
   year: number;
+  /** @deprecated Use grantedDays */
   assignedDays: number;
+  /** @deprecated Use consumedDays */
   approvedDays: number;
+  /** @deprecated Use reservedDays */
   pendingDays: number;
   rejectedDays: number;
   cancelledDays: number;
+  grantedDays: number;
+  reservedDays: number;
+  consumedDays: number;
   availableDays: number;
   projectedAvailableDays: number;
   notes: string | null;
+  version?: number;
 }
 
 export interface AbsenceBalanceImpact {

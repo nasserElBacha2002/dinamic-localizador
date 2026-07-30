@@ -19,6 +19,19 @@ export const absenceKeys = {
     employeeId: string,
     year: number,
   ) => [...absenceKeys.company(companyId), "balances", employeeId, year] as const,
+  balanceMovements: (
+    companyId: string | null | undefined,
+    employeeId: string,
+    absenceTypeId: string,
+    filters: Record<string, unknown>,
+  ) =>
+    [
+      ...absenceKeys.company(companyId),
+      "balance-movements",
+      employeeId,
+      absenceTypeId,
+      filters,
+    ] as const,
   calendars: (companyId: string | null | undefined) =>
     [...absenceKeys.company(companyId), "calendars"] as const,
   calendarDefault: (companyId: string | null | undefined) =>
@@ -32,6 +45,21 @@ export const absenceKeys = {
     companyId: string | null | undefined,
     payload: Record<string, unknown>,
   ) => [...absenceKeys.company(companyId), "calculate", payload] as const,
+};
+
+/** Alias aligned with Phase 3 balance ledger query-key naming. */
+export const absenceBalanceKeys = {
+  summary: (
+    companyId: string | null | undefined,
+    employeeId: string,
+    year: number,
+  ) => absenceKeys.balances(companyId, employeeId, year),
+  movements: (
+    companyId: string | null | undefined,
+    employeeId: string,
+    absenceTypeId: string,
+    filters: Record<string, unknown>,
+  ) => absenceKeys.balanceMovements(companyId, employeeId, absenceTypeId, filters),
 };
 
 /** Normalize legacy `employeeId` query param into canonical `employeeIds`. */

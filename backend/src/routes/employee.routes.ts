@@ -6,8 +6,10 @@ import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   absenceBalanceYearQuerySchema,
+  adjustEmployeeAbsenceBalanceSchema,
   employeeAbsenceBalanceParamsSchema,
   employeeIdRouteParamSchema,
+  listAbsenceBalanceMovementsQuerySchema,
   upsertEmployeeAbsenceBalanceSchema,
 } from "../schemas/absence-balance.schema";
 import {
@@ -41,10 +43,24 @@ employeeRouter.get(
 );
 employeeRouter.put(
   "/:employeeId/absence-balances/:absenceTypeId",
-  requirePermission("absences:review"),
+  requirePermission("absences:balance:update"),
   validate(employeeAbsenceBalanceParamsSchema, "params"),
   validate(upsertEmployeeAbsenceBalanceSchema),
   asyncHandler(absenceBalanceController.upsert),
+);
+employeeRouter.get(
+  "/:employeeId/absence-balances/:absenceTypeId/movements",
+  requirePermission("absences:read"),
+  validate(employeeAbsenceBalanceParamsSchema, "params"),
+  validate(listAbsenceBalanceMovementsQuerySchema, "query"),
+  asyncHandler(absenceBalanceController.listMovements),
+);
+employeeRouter.post(
+  "/:employeeId/absence-balances/:absenceTypeId/adjustments",
+  requirePermission("absences:balance:update"),
+  validate(employeeAbsenceBalanceParamsSchema, "params"),
+  validate(adjustEmployeeAbsenceBalanceSchema),
+  asyncHandler(absenceBalanceController.adjust),
 );
 employeeRouter.get(
   "/:id/deactivation-impact",

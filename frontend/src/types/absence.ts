@@ -114,9 +114,13 @@ export interface EmployeeAbsenceBalanceSummary {
   pendingDays: number;
   rejectedDays: number;
   cancelledDays: number;
+  grantedDays?: number;
+  reservedDays?: number;
+  consumedDays?: number;
   availableDays: number;
   projectedAvailableDays: number;
   notes: string | null;
+  version?: number;
 }
 
 export interface AbsenceBalanceImpact {
@@ -136,6 +140,51 @@ export interface UpsertEmployeeAbsenceBalanceInput {
   year: number;
   totalDays: number;
   notes?: string | null;
+}
+
+export type AbsenceBalanceAdjustmentOperation = "CREDIT" | "DEBIT";
+
+export interface AdjustEmployeeAbsenceBalanceInput {
+  year: number;
+  quantity: number;
+  operation: AbsenceBalanceAdjustmentOperation;
+  reason: string;
+  idempotencyKey?: string;
+}
+
+export type AbsenceBalanceMovementType =
+  | "INITIAL_GRANT"
+  | "MANUAL_CREDIT"
+  | "MANUAL_DEBIT"
+  | "RESERVE"
+  | "RELEASE"
+  | "CONSUME"
+  | "REVERSAL"
+  | "MIGRATION_ADJUSTMENT";
+
+export interface AbsenceBalanceMovement {
+  id: string;
+  companyId: string;
+  balanceId: string;
+  employeeId: string;
+  absenceTypeId: string;
+  periodYear: number;
+  absenceRequestId: string | null;
+  movementType: AbsenceBalanceMovementType;
+  quantity: number;
+  direction: "CREDIT" | "DEBIT";
+  idempotencyKey: string;
+  reason: string | null;
+  performedByUserId: string | null;
+  performedByEmployeeId: string | null;
+  createdAt: string;
+}
+
+export interface AbsenceBalanceMovementsFilters {
+  year?: number;
+  page?: number;
+  limit?: number;
+  movementType?: AbsenceBalanceMovementType;
 }
 
 export interface AbsenceRequestFilters {

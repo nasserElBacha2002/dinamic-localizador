@@ -397,13 +397,27 @@ export const mapAbsenceRequestEventRow = (row: Record<string, unknown>) => ({
   performerName: row.performer_name ? String(row.performer_name) : null,
 });
 
-export const mapEmployeeAbsenceBalanceRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  employeeId: String(row.employee_id),
-  absenceTypeId: String(row.absence_type_id),
-  year: Number(row.year),
-  totalDays: Number(row.total_days),
-  notes: row.notes ? String(row.notes) : null,
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+export const mapEmployeeAbsenceBalanceRow = (row: Record<string, unknown>) => {
+  const totalDays = Number(row.total_days ?? 0);
+  const grantedDays = Number(row.granted_days ?? totalDays);
+  const reservedDays = Number(row.reserved_days ?? 0);
+  const consumedDays = Number(row.consumed_days ?? 0);
+  const availableDays = Number(
+    row.available_days ?? grantedDays - reservedDays - consumedDays,
+  );
+  return {
+    id: String(row.id),
+    employeeId: String(row.employee_id),
+    absenceTypeId: String(row.absence_type_id),
+    year: Number(row.year),
+    totalDays,
+    grantedDays,
+    reservedDays,
+    consumedDays,
+    availableDays,
+    version: Number(row.version ?? 1),
+    notes: row.notes ? String(row.notes) : null,
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};

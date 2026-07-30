@@ -109,6 +109,9 @@ export const deleteEmployeeCascade = async (
       )
          OR performed_by_employee_id = @employeeId;
 
+      DELETE FROM employee_absence_balance_movements
+      WHERE company_id = @companyId AND employee_id = @employeeId;
+
       DELETE FROM absence_workday_sync_jobs
       WHERE company_id = @companyId AND absence_request_id IN (
         SELECT id FROM absence_requests
@@ -191,6 +194,7 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
     DELETE FROM absence_workday_sync_jobs WHERE company_id = @companyId;
     DELETE FROM absence_requests WHERE company_id = @companyId;
 
+    DELETE FROM employee_absence_balance_movements WHERE company_id = @companyId;
     UPDATE absence_types SET calendar_id = NULL WHERE company_id = @companyId;
     DELETE FROM company_calendar_dates WHERE company_id = @companyId;
     DELETE FROM company_work_calendar_weekdays WHERE company_id = @companyId;

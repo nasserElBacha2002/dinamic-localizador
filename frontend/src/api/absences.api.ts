@@ -1,9 +1,12 @@
 import type { PaginatedResponse, SingleResponse } from "../types/api";
 import type {
+  AbsenceBalanceMovement,
+  AbsenceBalanceMovementsFilters,
   AbsenceRequestDetail,
   AbsenceRequestFilters,
   AbsenceRequestListItem,
   AbsenceType,
+  AdjustEmployeeAbsenceBalanceInput,
   CreateAbsenceRequestInput,
   EmployeeAbsenceBalanceSummary,
   UpdateNeedsInfoAbsenceRequestInput,
@@ -127,4 +130,28 @@ export async function upsertEmployeeAbsenceBalance(
     input,
   );
   return data.data;
+}
+
+export async function adjustEmployeeAbsenceBalance(
+  employeeId: string,
+  absenceTypeId: string,
+  input: AdjustEmployeeAbsenceBalanceInput,
+): Promise<AbsenceBalanceMovement> {
+  const { data } = await scopedApiClient.post<SingleResponse<AbsenceBalanceMovement>>(
+    `employees/${employeeId}/absence-balances/${absenceTypeId}/adjustments`,
+    input,
+  );
+  return data.data;
+}
+
+export async function getEmployeeAbsenceBalanceMovements(
+  employeeId: string,
+  absenceTypeId: string,
+  filters: AbsenceBalanceMovementsFilters = {},
+): Promise<PaginatedResponse<AbsenceBalanceMovement>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<AbsenceBalanceMovement>>(
+    `employees/${employeeId}/absence-balances/${absenceTypeId}/movements`,
+    { params: filters },
+  );
+  return data;
 }

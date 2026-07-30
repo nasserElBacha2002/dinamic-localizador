@@ -135,12 +135,12 @@ describe("EmployeeDetailPage", () => {
     assert.ok(view.getByText(/Detalle de colaborador/i));
     assert.equal(view.queryByRole("button", { name: /^Editar$/i }), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
-    assert.equal(view.queryByRole("button", { name: /Editar saldo/i }), null);
+    assert.equal(view.queryByRole("button", { name: /Ajustar/i }), null);
     assert.equal(view.queryByRole("textbox"), null);
     assert.equal(view.queryByRole("switch"), null);
   });
 
-  it("manager with employees:manage but without absences:review cannot edit balance", async () => {
+  it("manager with employees:manage but without absences:balance:update cannot edit balance", async () => {
     membershipPermissions = ["employees:manage", "employees:read"];
     absenceBalances = [
       {
@@ -174,11 +174,11 @@ describe("EmployeeDetailPage", () => {
     await waitFor(() => {
       assert.ok(view.getByText("Vacaciones"));
     });
-    assert.equal(view.queryByRole("button", { name: /Editar saldo/i }), null);
+    assert.equal(view.queryByRole("button", { name: /Ajustar/i }), null);
   });
 
-  it("user with absences:review can see Editar saldo", async () => {
-    membershipPermissions = ["employees:read", "absences:review", "absences:read"];
+  it("user with absences:balance:update can see Ajustar", async () => {
+    membershipPermissions = ["employees:read", "absences:balance:update", "absences:read"];
     absenceBalances = [
       {
         absenceType: {
@@ -206,7 +206,7 @@ describe("EmployeeDetailPage", () => {
     );
 
     await waitFor(() => {
-      assert.ok(view.getByRole("button", { name: /Editar saldo/i }));
+      assert.ok(view.getByRole("button", { name: /Ajustar/i }));
     });
   });
 

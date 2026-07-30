@@ -1,5 +1,8 @@
 import { AppError } from "../errors/app-error";
 import sql from "mssql";
+import { randomUUID } from "node:crypto";
+import { buildAbsenceBalanceIdempotencyKey } from "../constants/absence-balance-ledger";
+import { getPool } from "../database/connection";
 import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
@@ -11,12 +14,15 @@ import type {
   AbsenceType,
 } from "../types/absence";
 import { auditService } from "./audit.service";
+import { absenceBalanceLedgerService } from "./absence-balance-ledger.service";
 import {
   computeAvailableAfterApproval,
   computeBalanceCounters,
   getAbsenceRequestYear,
   hasSufficientBalanceForApproval,
 } from "../utils/absence-balance.utils";
+import { splitAbsenceQuantityByYear } from "../utils/absence-balance-year-split";
+import { rollbackTransactionSafely } from "../utils/sql-transaction";
 
 const sumDaysForStatuses = (
   aggregates: Array<{ absenceTypeId: string; status: string; totalDays: number }>,
@@ -60,11 +66,54 @@ const buildSummaryForType = (input: {
     pendingDays,
     rejectedDays,
     cancelledDays,
+    grantedDays: input.assignedDays,
+    reservedDays: pendingDays,
+    consumedDays: approvedDays,
     availableDays: counters.availableDays,
     projectedAvailableDays: counters.projectedAvailableDays,
     notes: input.notes,
   };
 };
+
+const buildLedgerSummaryForType = (input: {
+  absenceType: AbsenceType;
+  year: number;
+  grantedDays: number;
+  reservedDays: number;
+  consumedDays: number;
+  availableDays: number;
+  notes: string | null;
+  version?: number;
+}): AbsenceBalanceSummary => ({
+  absenceType: {
+    id: input.absenceType.id,
+    code: input.absenceType.code,
+    name: input.absenceType.name,
+    deductsBalance: input.absenceType.deductsBalance,
+  },
+  year: input.year,
+  assignedDays: input.grantedDays,
+  approvedDays: input.consumedDays,
+  pendingDays: input.reservedDays,
+  rejectedDays: 0,
+  cancelledDays: 0,
+  grantedDays: input.grantedDays,
+  reservedDays: input.reservedDays,
+  consumedDays: input.consumedDays,
+  availableDays: input.availableDays,
+  projectedAvailableDays: input.availableDays,
+  notes: input.notes,
+  version: input.version,
+});
+
+export const allocationsForRequest = (
+  request: Pick<AbsenceRequest, "startDate" | "endDate" | "totalDays">,
+) =>
+  splitAbsenceQuantityByYear({
+    startDate: request.startDate,
+    endDate: request.endDate,
+    totalDays: request.totalDays,
+  });
 
 export const absenceBalanceService = {
   async listEmployeeBalances(
@@ -77,12 +126,36 @@ export const absenceBalanceService = {
       throw new AppError(404, "EMPLOYEE_NOT_FOUND", "Empleado no encontrado");
     }
 
-    const [absenceTypes, balanceRows, aggregates] = await Promise.all([
-      absenceTypeRepository.listAll(companyId, true),
-      absenceBalanceRepository.listByEmployeeYear(companyId, employeeId, year),
-      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(companyId, employeeId, year),
-    ]);
+    const ledgerEnabled = await absenceBalanceLedgerService.isLedgerEnabled(companyId);
+    const absenceTypes = await absenceTypeRepository.listAll(companyId, true);
+    const balanceRows = await absenceBalanceRepository.listByEmployeeYear(
+      companyId,
+      employeeId,
+      year,
+    );
 
+    if (ledgerEnabled) {
+      const byType = new Map(balanceRows.map((row) => [row.absenceTypeId, row]));
+      return absenceTypes.map((absenceType) => {
+        const row = byType.get(absenceType.id);
+        return buildLedgerSummaryForType({
+          absenceType,
+          year,
+          grantedDays: row?.grantedDays ?? row?.totalDays ?? 0,
+          reservedDays: row?.reservedDays ?? 0,
+          consumedDays: row?.consumedDays ?? 0,
+          availableDays: row?.availableDays ?? row?.grantedDays ?? row?.totalDays ?? 0,
+          notes: row?.notes ?? null,
+          version: row?.version,
+        });
+      });
+    }
+
+    const aggregates = await absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(
+      companyId,
+      employeeId,
+      year,
+    );
     const assignedByType = new Map(balanceRows.map((row) => [row.absenceTypeId, row.totalDays]));
     const notesByType = new Map(balanceRows.map((row) => [row.absenceTypeId, row.notes]));
 
@@ -101,7 +174,7 @@ export const absenceBalanceService = {
     companyId: string,
     request: Pick<
       AbsenceRequest,
-      "employeeId" | "absenceTypeId" | "startDate" | "totalDays" | "status"
+      "employeeId" | "absenceTypeId" | "startDate" | "endDate" | "totalDays" | "status"
     >,
     absenceType: Pick<AbsenceType, "id" | "code" | "name" | "deductsBalance">,
   ): Promise<AbsenceBalanceImpact> {
@@ -116,6 +189,42 @@ export const absenceBalanceService = {
       };
     }
 
+    const ledgerEnabled = await absenceBalanceLedgerService.isLedgerEnabled(companyId);
+    if (ledgerEnabled) {
+      const balanceRow = await absenceBalanceRepository.findByEmployeeTypeYear(
+        companyId,
+        request.employeeId,
+        absenceType.id,
+        year,
+      );
+      const grantedDays = balanceRow?.grantedDays ?? balanceRow?.totalDays ?? 0;
+      const reservedDays = balanceRow?.reservedDays ?? 0;
+      const consumedDays = balanceRow?.consumedDays ?? 0;
+      const availableDays = balanceRow?.availableDays ?? grantedDays - reservedDays - consumedDays;
+      const availableAfterApproval =
+        request.status === "APPROVED"
+          ? availableDays
+          : availableDays -
+            (request.status === "PENDING" || request.status === "NEEDS_INFO"
+              ? 0
+              : request.totalDays);
+
+      return {
+        deductsBalance: true,
+        year,
+        assignedDays: grantedDays,
+        approvedDays: consumedDays,
+        pendingDays: reservedDays,
+        requestDays: request.totalDays,
+        availableDays,
+        availableAfterApproval,
+        hasSufficientBalance:
+          request.status === "PENDING" || request.status === "NEEDS_INFO"
+            ? availableDays >= 0
+            : availableDays >= request.totalDays,
+      };
+    }
+
     const [balanceRow, aggregates] = await Promise.all([
       absenceBalanceRepository.findByEmployeeTypeYear(
         companyId,
@@ -123,7 +232,11 @@ export const absenceBalanceService = {
         absenceType.id,
         year,
       ),
-      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(companyId, request.employeeId, year),
+      absenceBalanceRepository.aggregateRequestDaysByEmployeeYear(
+        companyId,
+        request.employeeId,
+        year,
+      ),
     ]);
 
     const assignedDays = balanceRow?.totalDays ?? 0;
@@ -158,12 +271,47 @@ export const absenceBalanceService = {
     companyId: string,
     request: Pick<
       AbsenceRequest,
-      "employeeId" | "absenceTypeId" | "startDate" | "totalDays" | "status"
+      "id" | "employeeId" | "absenceTypeId" | "startDate" | "endDate" | "totalDays" | "status"
     >,
     transaction: sql.Transaction,
+    options?: { mode?: "from-reserve" | "direct" },
   ): Promise<void> {
     const absenceType = await absenceTypeRepository.findById(companyId, request.absenceTypeId);
     if (!absenceType || !absenceType.deductsBalance) {
+      return;
+    }
+
+    const ledgerEnabled = await absenceBalanceLedgerService.isLedgerEnabled(companyId);
+    if (ledgerEnabled) {
+      const mode =
+        options?.mode ??
+        (request.status === "PENDING" || request.status === "NEEDS_INFO"
+          ? "from-reserve"
+          : "direct");
+      if (mode === "from-reserve") {
+        return;
+      }
+      const allocations = allocationsForRequest(request);
+      const { absenceBalanceLedgerRepository } = await import(
+        "../repositories/absence-balance-ledger.repository"
+      );
+      for (const allocation of allocations) {
+        const balance = await absenceBalanceLedgerRepository.lockBalanceForUpdate(
+          companyId,
+          request.employeeId,
+          request.absenceTypeId,
+          allocation.year,
+          transaction,
+        );
+        const available = balance?.availableDays ?? 0;
+        if (available < allocation.quantity) {
+          throw new AppError(
+            409,
+            "INSUFFICIENT_ABSENCE_BALANCE",
+            "El empleado no tiene saldo suficiente para aprobar esta ausencia",
+          );
+        }
+      }
       return;
     }
 
@@ -207,6 +355,70 @@ export const absenceBalanceService = {
     const absenceType = await absenceTypeRepository.findById(companyId, absenceTypeId);
     if (!absenceType) {
       throw new AppError(404, "ABSENCE_TYPE_NOT_FOUND", "Tipo de ausencia no encontrado");
+    }
+
+    const ledgerEnabled = await absenceBalanceLedgerService.isLedgerEnabled(companyId);
+    if (ledgerEnabled) {
+      const pool = getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
+      try {
+        const { absenceBalanceLedgerRepository } = await import(
+          "../repositories/absence-balance-ledger.repository"
+        );
+        const current = await absenceBalanceLedgerRepository.ensureBalanceRow(
+          companyId,
+          employeeId,
+          absenceTypeId,
+          input.year,
+          transaction,
+        );
+        const delta = Number((input.totalDays - current.grantedDays).toFixed(1));
+        if (delta !== 0) {
+          await absenceBalanceLedgerService.manualAdjustment(
+            companyId,
+            {
+              employeeId,
+              absenceTypeId,
+              year: input.year,
+              quantity: Math.abs(delta),
+              operation: delta > 0 ? "CREDIT" : "DEBIT",
+              reason: input.notes?.trim() || "Ajuste de saldo (API legacy PUT)",
+              idempotencyKey: buildAbsenceBalanceIdempotencyKey.manual(
+                current.id,
+                randomUUID(),
+              ),
+              actor: { userId },
+            },
+            transaction,
+          );
+        }
+
+        if (input.notes !== undefined) {
+          await new sql.Request(transaction)
+            .input("companyId", sql.UniqueIdentifier, companyId)
+            .input("balanceId", sql.UniqueIdentifier, current.id)
+            .input("notes", sql.NVarChar(500), input.notes ?? null)
+            .query(`
+              UPDATE employee_absence_balances
+              SET notes = @notes, updated_at = SYSUTCDATETIME()
+              WHERE id = @balanceId AND company_id = @companyId
+            `);
+        }
+
+        await transaction.commit();
+      } catch (error) {
+        return rollbackTransactionSafely(
+          transaction,
+          { operation: "absence-balance.upsert-ledger", companyId, entityId: employeeId },
+          error,
+        );
+      }
+
+      const [summary] = (
+        await this.listEmployeeBalances(companyId, employeeId, input.year)
+      ).filter((item) => item.absenceType.id === absenceTypeId);
+      return summary;
     }
 
     const previous = await absenceBalanceRepository.findByEmployeeTypeYear(

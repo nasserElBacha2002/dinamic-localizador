@@ -56,6 +56,31 @@ const transition = async (input: {
       );
     }
 
+    const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
+    const { allocationsForRequest } = await import("./absence-balance.service");
+    const ledgerEnabled = await absenceBalanceLedgerService.isLedgerEnabled(input.companyId);
+    if (ledgerEnabled && existing.totalDays > 0) {
+      const allocations = allocationsForRequest(existing);
+      const actor = { userId: input.userId };
+      if (action === "APPROVE") {
+        await absenceBalanceLedgerService.consumeReservation(
+          input.companyId,
+          existing,
+          allocations,
+          actor,
+          transaction,
+        );
+      } else if (action === "REJECT" || action === "CANCEL") {
+        await absenceBalanceLedgerService.releaseReservation(
+          input.companyId,
+          existing,
+          allocations,
+          actor,
+          transaction,
+        );
+      }
+    }
+
     const updated = await absenceRequestRepository.updateStatus(
       input.companyId,
       input.requestId,

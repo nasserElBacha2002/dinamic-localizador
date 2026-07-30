@@ -1,12 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { absenceKeys } from "../api/absence-query-keys";
+import { absenceBalanceKeys, absenceKeys } from "../api/absence-query-keys";
 import {
+  adjustEmployeeAbsenceBalance,
   approveAbsenceRequest,
   cancelAbsenceRequest,
   createAbsenceRequest,
   getAbsenceRequestById,
   getAbsenceRequests,
   getAbsenceTypes,
+  getEmployeeAbsenceBalanceMovements,
   getEmployeeAbsenceBalances,
   needsInfoAbsenceRequest,
   rejectAbsenceRequest,
@@ -16,7 +18,9 @@ import {
   updateAbsenceType,
 } from "../api/absences.api";
 import type {
+  AbsenceBalanceMovementsFilters,
   AbsenceRequestFilters,
+  AdjustEmployeeAbsenceBalanceInput,
   CreateAbsenceRequestInput,
   UpdateNeedsInfoAbsenceRequestInput,
   UpsertEmployeeAbsenceBalanceInput,
@@ -196,7 +200,62 @@ export function useUpsertEmployeeAbsenceBalance(employeeId: string) {
       const scopedCompanyId = context?.companyId;
       if (scopedCompanyId) {
         void queryClient.invalidateQueries({
-          queryKey: absenceKeys.balances(scopedCompanyId, employeeId, variables.year),
+          queryKey: absenceBalanceKeys.summary(scopedCompanyId, employeeId, variables.year),
+        });
+      }
+      invalidateAbsenceDomain(queryClient, scopedCompanyId);
+    },
+  });
+}
+
+export function useEmployeeAbsenceBalanceMovements(
+  employeeId: string | undefined,
+  absenceTypeId: string | undefined,
+  filters: AbsenceBalanceMovementsFilters,
+  enabled = true,
+) {
+  const { companyId, enabled: operationalEnabled } = useOperationalQueryEnabled(
+    Boolean(employeeId && absenceTypeId && enabled),
+  );
+
+  return useQuery({
+    queryKey: absenceBalanceKeys.movements(
+      companyId,
+      employeeId ?? "",
+      absenceTypeId ?? "",
+      filters as Record<string, unknown>,
+    ),
+    queryFn: () => getEmployeeAbsenceBalanceMovements(employeeId!, absenceTypeId!, filters),
+    enabled: operationalEnabled,
+  });
+}
+
+export function useAdjustEmployeeAbsenceBalance(employeeId: string) {
+  const queryClient = useQueryClient();
+  const { companyId } = useOperationalQueryEnabled();
+  return useMutation({
+    mutationFn: (input: AdjustEmployeeAbsenceBalanceInput & { absenceTypeId: string }) =>
+      adjustEmployeeAbsenceBalance(employeeId, input.absenceTypeId, {
+        year: input.year,
+        quantity: input.quantity,
+        operation: input.operation,
+        reason: input.reason,
+        idempotencyKey: input.idempotencyKey,
+      }),
+    onMutate: (): MutationCompanyContext => ({ companyId }),
+    onSuccess: (_data, variables, context) => {
+      const scopedCompanyId = context?.companyId;
+      if (scopedCompanyId) {
+        void queryClient.invalidateQueries({
+          queryKey: absenceBalanceKeys.summary(scopedCompanyId, employeeId, variables.year),
+        });
+        void queryClient.invalidateQueries({
+          queryKey: absenceBalanceKeys.movements(
+            scopedCompanyId,
+            employeeId,
+            variables.absenceTypeId,
+            { year: variables.year },
+          ),
         });
       }
       invalidateAbsenceDomain(queryClient, scopedCompanyId);

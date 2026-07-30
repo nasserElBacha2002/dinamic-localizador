@@ -238,14 +238,32 @@ const createRequest = async (
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         companyId,
         {
+          id: created.id,
           employeeId: created.employeeId,
           absenceTypeId: created.absenceTypeId,
           startDate: created.startDate,
+          endDate: created.endDate,
           totalDays: created.totalDays,
           status: "PENDING",
         },
         transaction,
+        { mode: "direct" },
       );
+
+      const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
+      const { allocationsForRequest } = await import("./absence-balance.service");
+      if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
+        await absenceBalanceLedgerService.consumeDirect(
+          companyId,
+          created,
+          allocationsForRequest(created),
+          {
+            userId: input.performedByUserId ?? null,
+            employeeId: input.performedByEmployeeId ?? null,
+          },
+          transaction,
+        );
+      }
 
       const approved = await absenceRequestRepository.updateStatus(
         companyId,
@@ -291,6 +309,21 @@ const createRequest = async (
         transaction,
       );
       autoApproved = true;
+    } else {
+      const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
+      const { allocationsForRequest } = await import("./absence-balance.service");
+      if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
+        await absenceBalanceLedgerService.reserveForRequest(
+          companyId,
+          created,
+          allocationsForRequest(created),
+          {
+            userId: input.performedByUserId ?? null,
+            employeeId: input.performedByEmployeeId ?? null,
+          },
+          transaction,
+        );
+      }
     }
 
     await auditService.log(
@@ -572,6 +605,36 @@ export const absenceRequestService = {
         transaction,
       );
 
+      const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
+      const { allocationsForRequest } = await import("./absence-balance.service");
+      if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
+        await absenceBalanceLedgerService.syncReservationAfterEdit(
+          companyId,
+          {
+            requestId,
+            employeeId: existing.employeeId,
+            previousAbsenceTypeId: existing.absenceTypeId,
+            nextAbsenceTypeId: payload.absenceTypeId,
+            previousAllocations: allocationsForRequest(existing),
+            nextAllocations: allocationsForRequest({
+              startDate: payload.startDate,
+              endDate: payload.endDate,
+              totalDays: payload.totalDays,
+            }),
+            nextRequest: {
+              id: requestId,
+              employeeId: existing.employeeId,
+              absenceTypeId: payload.absenceTypeId,
+              startDate: payload.startDate,
+              endDate: payload.endDate,
+              totalDays: payload.totalDays,
+            },
+          },
+          { userId: actorUserId },
+          transaction,
+        );
+      }
+
       const updated = await absenceRequestRepository.updateEditableFields(
         companyId,
         requestId,
@@ -717,7 +780,19 @@ export const absenceRequestService = {
           companyId,
           pending,
           transaction,
+          { mode: "from-reserve" },
         );
+        const { absenceBalanceLedgerService } = await import("./absence-balance-ledger.service");
+        const { allocationsForRequest } = await import("./absence-balance.service");
+        if (await absenceBalanceLedgerService.isLedgerEnabled(companyId)) {
+          await absenceBalanceLedgerService.consumeReservation(
+            companyId,
+            pending,
+            allocationsForRequest(pending),
+            { userId: actorUserId },
+            transaction,
+          );
+        }
         const approved = await absenceRequestRepository.updateStatus(
           companyId,
           requestId,

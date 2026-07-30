@@ -41,12 +41,12 @@ import {
 import { formatDateTime } from "../../utils/dates";
 import { getApiErrorMessage, isAbsenceWorkdaySyncError } from "../../utils/errors";
 import { operationStatusLabels } from "../../utils/labels";
+import { hasPermission } from "../../utils/permissions";
 import { AbsenceNeedsInfoEditor } from "./AbsenceNeedsInfoEditor";
 import { AbsenceReviewActions } from "./AbsenceReviewActions";
 import { absenceConflictUserMessage } from "./absence-conflict-message";
 import {
   canAdminEditNeedsInfo,
-  canReviewAbsences,
   canShowAbsenceReviewActions,
 } from "./absence-review-permissions";
 
@@ -109,7 +109,10 @@ export function AbsenceDetailPage() {
   const queryClient = useQueryClient();
   const { companyId } = useOperationalQueryEnabled();
   const permissionsQuery = useCompanyPermissions();
-  const canReviewPermission = canReviewAbsences(permissionsQuery.data?.permissions);
+  const canUpdateBalance = hasPermission(
+    permissionsQuery.data?.permissions,
+    "absences:balance:update",
+  );
 
   const requestQuery = useAbsenceRequest(id);
   const typesQuery = useAbsenceTypes();
@@ -306,7 +309,7 @@ export function AbsenceDetailPage() {
           employeeId={detail.employeeId}
           year={balanceYear}
           balanceImpact={detail.balanceImpact}
-          showEdit={canReviewPermission}
+          showEdit={canUpdateBalance}
           onBalanceSaved={() => {
             if (id) {
               void queryClient.invalidateQueries({

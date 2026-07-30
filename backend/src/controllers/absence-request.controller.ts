@@ -129,6 +129,7 @@ export const absenceRequestController = {
         resolutionCode: body.resolutionCode,
         resolutionReason: body.resolutionReason,
         replacementEmployeeId: body.replacementEmployeeId,
+        commandId: body.commandId,
         resolvedByUserId: req.auth!.userId,
       },
     );

@@ -276,6 +276,7 @@ export const absenceOperationalReconciliationService = {
     status: string;
     absenceVersion: number;
     operationalImpactVersion: number;
+    retryable: boolean;
   }> {
     if (!(await absenceOperationalImpactQueryService.isFeatureEnabled(companyId))) {
       throw new AppError(
@@ -314,6 +315,7 @@ export const absenceOperationalReconciliationService = {
       status: job.status,
       absenceVersion: version,
       operationalImpactVersion: version,
+      retryable: true,
     };
   },
 };

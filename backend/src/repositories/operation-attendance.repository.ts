@@ -16,6 +16,9 @@ export interface OperationAttendanceSummaryRow {
   confirmationStatus: AssignmentConfirmationStatus;
   confirmedAt: string | null;
   unavailableAt: string | null;
+  expectationStatus: string | null;
+  absenceRequestId: string | null;
+  employeeWorkdayId: string | null;
 }
 
 export interface OperationAttendanceSummaryCounts {
@@ -230,6 +233,8 @@ export const operationAttendanceRepository = {
         SELECT
           e.*,
           ew.operation_assignment_id AS assignment_id,
+          ew.expectation_status,
+          ew.absence_request_id,
           oa.confirmation_status,
           oa.confirmed_at,
           oa.unavailable_at,

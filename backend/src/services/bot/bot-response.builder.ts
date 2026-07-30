@@ -63,7 +63,10 @@ export const NO_OPERATION_MESSAGE =
   "No tenés una jornada disponible para registrar llegada en este momento.";
 
 export const NO_JUSTIFIED_ONLY_MESSAGE =
-  "Tenés una ausencia aprobada para este período. El registro quedó marcado para revisión; contactá a tu responsable si necesitás aclararlo.";
+  "Tenés una ausencia aprobada para este período. Si ya estás en el lugar de trabajo, escribí \"Llegué\" y compartí tu ubicación: registramos tu llegada y queda marcada para revisión.";
+
+export const ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE =
+  "Tenés una ausencia aprobada para este período. Registramos tu llegada y quedó marcada para revisión.";
 
 export const WORKDAY_NO_LONGER_AVAILABLE_MESSAGE =
   "La jornada seleccionada ya no está disponible para registrar llegada. Volvé a escribir \"Llegué\".";

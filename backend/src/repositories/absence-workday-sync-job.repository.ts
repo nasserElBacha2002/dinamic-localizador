@@ -27,6 +27,8 @@ export type AbsenceWorkdaySyncJob = {
   lastError: string | null;
   expectedOperationalImpactVersion: number;
   supersededAt: string | null;
+  leaseOwner: string | null;
+  leaseExpiresAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -43,6 +45,10 @@ const mapRow = (row: Record<string, unknown>): AbsenceWorkdaySyncJob => ({
   expectedOperationalImpactVersion: Number(row.expected_operational_impact_version ?? 1),
   supersededAt: row.superseded_at
     ? new Date(row.superseded_at as Date | string).toISOString()
+    : null,
+  leaseOwner: row.lease_owner ? String(row.lease_owner) : null,
+  leaseExpiresAt: row.lease_expires_at
+    ? new Date(row.lease_expires_at as Date | string).toISOString()
     : null,
   createdAt: new Date(row.created_at as Date | string).toISOString(),
   updatedAt: new Date(row.updated_at as Date | string).toISOString(),
@@ -136,6 +142,8 @@ export const absenceWorkdaySyncJobRepository = {
         UPDATE absence_workday_sync_jobs
         SET status = N'COMPLETED',
             last_error = NULL,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
         WHERE id = @jobId AND company_id = @companyId
       `);
@@ -187,11 +195,28 @@ export const absenceWorkdaySyncJobRepository = {
       `);
   },
 
-  async claimNextPending(maxAttempts: number): Promise<AbsenceWorkdaySyncJob | null> {
+  async claimNextPending(
+    maxAttempts: number,
+    options?: { leaseOwner?: string; leaseSeconds?: number },
+  ): Promise<AbsenceWorkdaySyncJob | null> {
+    const leaseOwner = options?.leaseOwner ?? `worker-${process.pid}`;
+    const leaseSeconds = options?.leaseSeconds ?? 120;
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
     try {
+      // Recover expired PROCESSING leases so a dead worker does not block forever.
+      await new sql.Request(transaction).query(`
+        UPDATE absence_workday_sync_jobs
+        SET status = N'PENDING',
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE status = N'PROCESSING'
+          AND lease_expires_at IS NOT NULL
+          AND lease_expires_at < SYSUTCDATETIME()
+      `);
+
       const result = await new sql.Request(transaction)
         .input("maxAttempts", sql.Int, maxAttempts)
         .query(`
@@ -199,6 +224,7 @@ export const absenceWorkdaySyncJobRepository = {
           FROM absence_workday_sync_jobs WITH (UPDLOCK, READPAST)
           WHERE status = N'PENDING'
             AND attempt_count < @maxAttempts
+            AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
           ORDER BY updated_at ASC, created_at ASC
         `);
 
@@ -208,18 +234,28 @@ export const absenceWorkdaySyncJobRepository = {
         return null;
       }
 
-      await new sql.Request(transaction)
+      const claimed = await new sql.Request(transaction)
         .input("jobId", sql.UniqueIdentifier, String(row.id))
         .input("companyId", sql.UniqueIdentifier, String(row.company_id))
+        .input("leaseOwner", sql.NVarChar(80), leaseOwner)
+        .input("leaseSeconds", sql.Int, leaseSeconds)
         .query(`
           UPDATE absence_workday_sync_jobs
           SET status = N'PROCESSING',
+              lease_owner = @leaseOwner,
+              lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
               updated_at = SYSUTCDATETIME()
-          WHERE id = @jobId AND company_id = @companyId AND status = N'PENDING'
+          OUTPUT INSERTED.*
+          WHERE id = @jobId
+            AND company_id = @companyId
+            AND status = N'PENDING'
         `);
 
       await transaction.commit();
-      return mapRow({ ...row, status: "PROCESSING" });
+      if (!claimed.recordset[0]) {
+        return null;
+      }
+      return mapRow(claimed.recordset[0] as Record<string, unknown>);
     } catch (error) {
       try {
         await transaction.rollback();
@@ -230,6 +266,20 @@ export const absenceWorkdaySyncJobRepository = {
       }
       throw error;
     }
+  },
+
+  async clearLease(companyId: string, jobId: string): Promise<void> {
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("jobId", sql.UniqueIdentifier, jobId)
+      .query(`
+        UPDATE absence_workday_sync_jobs
+        SET lease_owner = NULL,
+            lease_expires_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @jobId AND company_id = @companyId
+      `);
   },
 
   async findActiveByRequest(

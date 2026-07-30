@@ -77,6 +77,12 @@ employeeRouter.get(
   validate(employeeIdParamSchema, "params"),
   asyncHandler(employeeController.getDeactivationImpact),
 );
+employeeRouter.get(
+  "/:id/operational-availability",
+  requirePermission("employees:read"),
+  validate(employeeIdParamSchema, "params"),
+  asyncHandler(employeeController.getOperationalAvailability),
+);
 employeeRouter.post(
   "/:id/deactivate",
   requirePermission("employees:manage"),

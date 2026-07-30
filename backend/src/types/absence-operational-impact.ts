@@ -130,15 +130,60 @@ export type AbsenceOperationalConflictDto = {
   employeeId: string;
   assignmentId: string | null;
   employeeWorkdayId: string | null;
+  operationWorkdayId: string | null;
+  attendanceRecordId: string | null;
+  sourceMessageSid: string | null;
   replacementEmployeeId: string | null;
   resolutionCode: AbsenceOperationalResolutionCode | null;
   resolutionReason: string | null;
+  resolutionCommandId: string | null;
   resolvedAt: string | null;
   rangeStartAt: string | null;
   rangeEndAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type OperationAbsenceBadgeCode =
+  | "ABSENT"
+  | "PARTIAL_ABSENCE"
+  | "REPLACEMENT_PENDING"
+  | "REPLACED"
+  | "OPEN_CONFLICT"
+  | "RESOLVED_CONFLICT";
+
+export type OperationAbsenceBadge = {
+  code: OperationAbsenceBadgeCode;
+  label: string;
+  absenceRequestId: string | null;
+  conflictId: string | null;
+  replacementEmployeeId: string | null;
+  employeeId: string;
+  assignmentId: string | null;
+};
+
+export const buildResolutionCommandId = (input: {
+  conflictId: string;
+  resolutionCode: AbsenceOperationalResolutionCode;
+  replacementEmployeeId?: string | null;
+  commandId?: string | null;
+}): string => {
+  if (input.commandId?.trim()) {
+    return input.commandId.trim().slice(0, 120);
+  }
+  if (input.resolutionCode === "ASSIGN_REPLACEMENT") {
+    return `ASSIGN_REPLACEMENT:${input.conflictId}:${input.replacementEmployeeId ?? "none"}`.slice(
+      0,
+      120,
+    );
+  }
+  return `${input.resolutionCode}:${input.conflictId}`.slice(0, 120);
+};
+
+export const buildAttendanceDuringAbsenceConflictKey = (input: {
+  companyId: string;
+  messageSid: string;
+}): string => `attendance-during-absence:msg:${input.companyId}:${input.messageSid}`;
 
 export const buildOperationalEffectIdempotencyKey = (input: {
   requestId: string;

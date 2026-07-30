@@ -3,6 +3,7 @@ import { useParams } from "react-router";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
 import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
+import { EmployeeOperationalAvailabilityCard } from "../../components/employees/EmployeeOperationalAvailabilityCard";
 import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
   DetailFieldGrid,
@@ -98,6 +99,10 @@ export function EmployeeDetailPage() {
             },
           ]}
         />
+      </SectionCard>
+
+      <SectionCard title="Disponibilidad operacional">
+        <EmployeeOperationalAvailabilityCard employeeId={employee.id} />
       </SectionCard>
 
       <SectionCard title={`Ausencias · Saldos ${currentYear}`}>

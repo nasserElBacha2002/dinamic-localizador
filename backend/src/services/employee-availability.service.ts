@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import { resolveEmployeeAbsenceAvailabilityStatus } from "../domain/absence-operational-effects";
+import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import type { EmployeeAbsenceAvailabilityStatus } from "../types/absence-operational-impact";
@@ -139,5 +140,102 @@ export const employeeAvailabilityService = {
       "9999-12-31",
     );
     return approved.slice(0, limit);
+  },
+
+  async getOperationalSummary(companyId: string, employeeId: string) {
+    const timezone = await absenceOperationalImpactQueryService.getOperationTimezone(companyId);
+    const now = DateTime.now().setZone(timezone);
+    const startAt = now.toJSDate();
+    const endAt = now.plus({ hours: 24 }).toJSDate();
+
+    const current = await this.getAvailabilityForInterval({
+      companyId,
+      employeeId,
+      startAt,
+      endAt,
+      timezone,
+    });
+
+    const upcoming = await this.listUpcomingApprovedAbsences(
+      companyId,
+      employeeId,
+      now.toISODate()!,
+      5,
+    );
+
+    const pending = await absenceRequestRepository.list(companyId, {
+      page: 1,
+      limit: 20,
+      employeeIds: [employeeId],
+      status: "PENDING",
+    });
+    const needsInfo = await absenceRequestRepository.list(companyId, {
+      page: 1,
+      limit: 20,
+      employeeIds: [employeeId],
+      status: "NEEDS_INFO",
+    });
+
+    const openConflicts =
+      await absenceOperationalImpactRepository.listOpenConflictsByEmployee(
+        companyId,
+        employeeId,
+      );
+
+    const nextApproved = upcoming[0] ?? null;
+    const affectedOperations = [
+      ...new Set(
+        openConflicts
+          .map((c) => c.operationId)
+          .filter((id): id is string => Boolean(id)),
+      ),
+    ];
+
+    const replacements = openConflicts
+      .filter((c) => c.conflictType === "ASSIGNMENT_DURING_ABSENCE")
+      .map((c) => ({
+        conflictId: c.id,
+        absenceRequestId: c.absenceRequestId,
+        operationId: c.operationId,
+        assignmentId: c.assignmentId,
+        status: c.status,
+        replacementEmployeeId: c.replacementEmployeeId,
+      }));
+
+    return {
+      currentStatus: current.status,
+      timezone,
+      intervalStartAt: startAt.toISOString(),
+      intervalEndAt: endAt.toISOString(),
+      coveringAbsenceIds: current.coveringAbsenceIds,
+      nextApprovedAbsence: nextApproved
+        ? {
+            id: nextApproved.id,
+            startDate: nextApproved.startDate,
+            endDate: nextApproved.endDate,
+            startPeriod: nextApproved.startPeriod,
+            endPeriod: nextApproved.endPeriod,
+            status: nextApproved.status,
+          }
+        : null,
+      pendingRequests: [...pending.items, ...needsInfo.items].map((r) => ({
+        id: r.id,
+        status: r.status,
+        startDate: r.startDate,
+        endDate: r.endDate,
+        startPeriod: r.startPeriod,
+        endPeriod: r.endPeriod,
+      })),
+      affectedOperationIds: affectedOperations,
+      openConflicts: openConflicts.map((c) => ({
+        id: c.id,
+        absenceRequestId: c.absenceRequestId,
+        conflictType: c.conflictType,
+        operationId: c.operationId,
+        assignmentId: c.assignmentId,
+        status: c.status,
+      })),
+      relatedReplacements: replacements,
+    };
   },
 };

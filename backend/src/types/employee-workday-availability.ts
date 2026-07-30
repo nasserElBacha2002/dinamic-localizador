@@ -18,6 +18,9 @@ export type EmployeeWorkdayAttendanceContext = {
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   scheduleTimezone: string;
+  expectationStatus: "EXPECTED" | "JUSTIFIED";
+  absenceRequestId: string | null;
+  operationAssignmentId: string | null;
 };
 
 export type EmployeeWorkdayCheckInCandidate = EmployeeWorkdayAttendanceContext;

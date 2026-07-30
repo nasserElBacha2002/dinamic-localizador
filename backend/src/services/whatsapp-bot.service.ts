@@ -51,6 +51,7 @@ import {
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
   NO_CHECKOUT_OPERATION_MESSAGE,
   PENDING_CHECKOUT_EXPIRED_MESSAGE,
+  ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE,
   NO_JUSTIFIED_ONLY_MESSAGE,
   NO_OPERATION_MESSAGE,
   WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
@@ -875,7 +876,7 @@ export const whatsappBotService = {
         recordSimulationArtifact({
           type: "check-in",
           persisted: true,
-          attendanceId: created.id,
+          attendanceId: created.attendance.id,
           employeeWorkdayId: input.employeeWorkdayId,
           operationId: workday.operationId,
           employeeId: input.employeeId,
@@ -892,16 +893,19 @@ export const whatsappBotService = {
         employeeWorkdayId: input.employeeWorkdayId,
         operationId: workday.operationId,
         validationStatus: validation.validationStatus,
+        recordedDuringApprovedAbsence: created.recordedDuringApprovedAbsence,
       });
 
-      const responseMessage = buildArrivalRegisteredMessage({
-        compatible: workday,
-        distanceMeters: geoDistance,
-        validationStatus: validation.validationStatus,
-        punctualityStatus: validation.punctualityStatus,
-        validationReason: validation.validationReason,
-        receivedAt,
-      });
+      const responseMessage = created.recordedDuringApprovedAbsence
+        ? ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE
+        : buildArrivalRegisteredMessage({
+            compatible: workday,
+            distanceMeters: geoDistance,
+            validationStatus: validation.validationStatus,
+            punctualityStatus: validation.punctualityStatus,
+            validationReason: validation.validationReason,
+            receivedAt,
+          });
 
       return respond(companyId, {
         message: responseMessage,

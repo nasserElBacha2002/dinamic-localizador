@@ -1,13 +1,21 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { attendanceRepository } from "../repositories/attendance.repository";
+import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
+import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
+import {
+  buildAttendanceDuringAbsenceConflictKey,
+  buildOperationalConflictIdempotencyKey,
+} from "../types/absence-operational-impact";
 import type { AttendanceRecord } from "../types/domain";
 import type { EmployeeWorkdayCheckInCandidate } from "../types/employee-workday-availability";
 import type { AttendanceValidationResult } from "../utils/attendance-validation";
 import { isWithinCheckInAvailabilityWindow } from "../utils/resolve-check-in-availability-window";
 import { getSimulationSessionId } from "../utils/bot-runtime-context";
+import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
+import { auditService } from "./audit.service";
 
 export type CreateAttendanceForEmployeeWorkdayInput = {
   companyId: string;
@@ -20,6 +28,99 @@ export type CreateAttendanceForEmployeeWorkdayInput = {
   distanceMeters: number;
   validation: AttendanceValidationResult;
   messageSid: string;
+};
+
+export type CreateAttendanceForEmployeeWorkdayResult = {
+  attendance: AttendanceRecord;
+  recordedDuringApprovedAbsence: boolean;
+  absenceRequestId: string | null;
+  conflictId: string | null;
+};
+
+const recordAttendanceDuringAbsenceConflict = async (
+  input: {
+    companyId: string;
+    employeeId: string;
+    candidate: EmployeeWorkdayCheckInCandidate;
+    attendanceId: string;
+    messageSid: string;
+  },
+  transaction: sql.Transaction,
+): Promise<{ absenceRequestId: string; conflictId: string } | null> => {
+  if (
+    input.candidate.expectationStatus !== "JUSTIFIED" ||
+    !input.candidate.absenceRequestId
+  ) {
+    return null;
+  }
+
+  if (!(await absenceOperationalImpactQueryService.isFeatureEnabled(input.companyId))) {
+    return null;
+  }
+
+  const absence = await absenceRequestRepository.findById(
+    input.companyId,
+    input.candidate.absenceRequestId,
+  );
+  if (!absence || absence.status !== "APPROVED") {
+    return null;
+  }
+
+  const version = absence.operationalImpactVersion ?? 1;
+  const messageKey = buildAttendanceDuringAbsenceConflictKey({
+    companyId: input.companyId,
+    messageSid: input.messageSid,
+  });
+  const workdayKey = buildOperationalConflictIdempotencyKey({
+    requestId: absence.id,
+    version,
+    conflictType: "ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE",
+    targetEntityId: input.candidate.employeeWorkdayId,
+  });
+
+  const conflict = await absenceOperationalImpactRepository.upsertConflict(
+    {
+      companyId: input.companyId,
+      absenceRequestId: absence.id,
+      absenceVersion: version,
+      conflictType: "ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE",
+      severity: "CRITICAL",
+      employeeId: input.employeeId,
+      operationId: input.candidate.operationId,
+      serviceId: input.candidate.serviceId,
+      assignmentId: input.candidate.operationAssignmentId,
+      employeeWorkdayId: input.candidate.employeeWorkdayId,
+      operationWorkdayId: input.candidate.operationWorkdayId,
+      attendanceRecordId: input.attendanceId,
+      sourceMessageSid: input.messageSid,
+      idempotencyKey: messageKey.length <= 200 ? messageKey : workdayKey,
+      rangeStartAt: new Date(input.candidate.expectedStartAt),
+      rangeEndAt: input.candidate.expectedEndAt
+        ? new Date(input.candidate.expectedEndAt)
+        : null,
+    },
+    transaction,
+  );
+
+  await auditService.log(
+    input.companyId,
+    {
+      userId: null,
+      action: "ATTENDANCE_RECORDED_DURING_APPROVED_ABSENCE",
+      entityType: "absence_operational_conflict",
+      entityId: conflict.id,
+      newData: {
+        absenceRequestId: absence.id,
+        attendanceRecordId: input.attendanceId,
+        employeeWorkdayId: input.candidate.employeeWorkdayId,
+        operationId: input.candidate.operationId,
+        messageSid: input.messageSid,
+      },
+    },
+    transaction,
+  );
+
+  return { absenceRequestId: absence.id, conflictId: conflict.id };
 };
 
 export const employeeWorkdayAttendanceCommand = {
@@ -44,7 +145,7 @@ export const employeeWorkdayAttendanceCommand = {
 
   async createAttendanceForEmployeeWorkday(
     input: CreateAttendanceForEmployeeWorkdayInput,
-  ): Promise<AttendanceRecord> {
+  ): Promise<CreateAttendanceForEmployeeWorkdayResult> {
     const simulationSessionId = getSimulationSessionId();
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -103,6 +204,17 @@ export const employeeWorkdayAttendanceCommand = {
         simulationSessionId,
       });
 
+      const duringAbsence = await recordAttendanceDuringAbsenceConflict(
+        {
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          candidate,
+          attendanceId: created.id,
+          messageSid: input.messageSid,
+        },
+        transaction,
+      );
+
       await botSessionRepository.updateSession(
         input.companyId,
         input.sessionId,
@@ -111,7 +223,12 @@ export const employeeWorkdayAttendanceCommand = {
       );
 
       await transaction.commit();
-      return created;
+      return {
+        attendance: created,
+        recordedDuringApprovedAbsence: Boolean(duringAbsence),
+        absenceRequestId: duringAbsence?.absenceRequestId ?? null,
+        conflictId: duringAbsence?.conflictId ?? null,
+      };
     } catch (error) {
       await transaction.rollback();
       throw error;

@@ -135,7 +135,10 @@ export const absenceWorkdaySyncService = {
     let superseded = 0;
 
     for (let i = 0; i < limit; i += 1) {
-      const job = await absenceWorkdaySyncJobRepository.claimNextPending(MAX_ATTEMPTS);
+      const job = await absenceWorkdaySyncJobRepository.claimNextPending(MAX_ATTEMPTS, {
+        leaseOwner: `absence-sync-${process.pid}-${i}-${Date.now()}`,
+        leaseSeconds: 180,
+      });
       if (!job) {
         break;
       }

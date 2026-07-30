@@ -83,6 +83,7 @@ export const resolveAbsenceOperationalConflictSchema = z.object({
     .min(3, "El motivo de resolución es obligatorio")
     .max(1000),
   replacementEmployeeId: z.string().uuid("UUID de reemplazo inválido").nullable().optional(),
+  commandId: z.string().trim().min(8).max(120).optional(),
 });
 
 export const updateNeedsInfoAbsenceRequestSchema = z

@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { employeeService } from "../services/employee.service";
 import { employeeDeactivationService } from "../services/employee-deactivation.service";
+import { employeeAvailabilityService } from "../services/employee-availability.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const employeeController = {
@@ -20,6 +21,15 @@ export const employeeController = {
     const companyId = requireRequestCompanyId(req);
     const employee = await employeeService.getById(companyId, String(req.params.id));
     res.status(200).json({ data: employee });
+  },
+
+  async getOperationalAvailability(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const summary = await employeeAvailabilityService.getOperationalSummary(
+      companyId,
+      String(req.params.id),
+    );
+    res.status(200).json({ data: summary });
   },
 
   async getDeactivationImpact(req: Request, res: Response) {

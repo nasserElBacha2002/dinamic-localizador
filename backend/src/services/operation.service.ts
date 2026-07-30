@@ -2,7 +2,9 @@
 import { AppError } from "../errors/app-error";
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import { resolveOperationAbsenceBadges } from "../domain/operation-absence-badges";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
+import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationScheduleRepository } from "../repositories/operation-schedule.repository";
@@ -16,6 +18,7 @@ import type {
   UpdateOperationInput,
 } from "../schemas/operation.schema";
 import { auditService } from "./audit.service";
+import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
@@ -662,6 +665,39 @@ export const operationService = {
 
     const syncedOperation = await syncLifecycleStatus(companyId, summary.operation);
 
+    const featureEnabled =
+      await absenceOperationalImpactQueryService.isFeatureEnabled(companyId);
+    const conflicts = featureEnabled
+      ? await absenceOperationalImpactRepository.listConflictsByOperation(
+          companyId,
+          operationId,
+        )
+      : [];
+
+    const employees = summary.employees.map((employee) => {
+      const badges = featureEnabled
+        ? resolveOperationAbsenceBadges({
+            employeeId: employee.employee.id,
+            assignmentId: employee.assignmentId,
+            expectationStatus: employee.expectationStatus,
+            conflicts,
+          })
+        : [];
+      return {
+        assignmentId: employee.assignmentId,
+        employee: employee.employee,
+        attendance: employee.attendance,
+        operationalStatus: employee.operationalStatus,
+        confirmationStatus: employee.confirmationStatus,
+        confirmedAt: employee.confirmedAt,
+        unavailableAt: employee.unavailableAt,
+        expectationStatus: employee.expectationStatus,
+        absenceRequestId: employee.absenceRequestId,
+        employeeWorkdayId: employee.employeeWorkdayId,
+        absenceBadges: badges,
+      };
+    });
+
     return {
       operation: {
         ...summary.operation,
@@ -671,7 +707,7 @@ export const operationService = {
       operationWorkdayId: summary.operationWorkdayId,
       workDate: summary.workDate,
       summary: summary.summary,
-      employees: summary.employees,
+      employees,
       meta: buildPaginationMeta(page, limit, summary.total),
     };
   },

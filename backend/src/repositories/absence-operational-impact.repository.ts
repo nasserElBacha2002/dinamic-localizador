@@ -28,6 +28,9 @@ const mapConflict = (row: Record<string, unknown>): AbsenceOperationalConflictDt
   employeeId: String(row.employee_id),
   assignmentId: row.assignment_id ? String(row.assignment_id) : null,
   employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
+  operationWorkdayId: row.operation_workday_id ? String(row.operation_workday_id) : null,
+  attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
+  sourceMessageSid: row.source_message_sid ? String(row.source_message_sid) : null,
   replacementEmployeeId: row.replacement_employee_id
     ? String(row.replacement_employee_id)
     : null,
@@ -35,6 +38,7 @@ const mapConflict = (row: Record<string, unknown>): AbsenceOperationalConflictDt
     ? (String(row.resolution_code) as AbsenceOperationalResolutionCode)
     : null,
   resolutionReason: row.resolution_reason ? String(row.resolution_reason) : null,
+  resolutionCommandId: row.resolution_command_id ? String(row.resolution_command_id) : null,
   resolvedAt: toIso(row.resolved_at as Date | string | null),
   rangeStartAt: toIso(row.range_start_at as Date | string | null),
   rangeEndAt: toIso(row.range_end_at as Date | string | null),
@@ -84,24 +88,110 @@ export const absenceOperationalImpactRepository = {
     return mapConflict(result.recordset[0] as Record<string, unknown>);
   },
 
-  async upsertConflict(input: {
-    companyId: string;
-    absenceRequestId: string;
-    absenceVersion: number;
-    conflictType: AbsenceOperationalConflictType;
-    severity: AbsenceOperationalConflictSeverity;
-    employeeId: string;
-    operationId?: string | null;
-    serviceId?: string | null;
-    assignmentId?: string | null;
-    employeeWorkdayId?: string | null;
-    idempotencyKey: string;
-    rangeStartAt?: Date | null;
-    rangeEndAt?: Date | null;
-  }): Promise<AbsenceOperationalConflictDto> {
+  async findConflictByResolutionCommandId(
+    companyId: string,
+    resolutionCommandId: string,
+  ): Promise<AbsenceOperationalConflictDto | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("resolutionCommandId", sql.NVarChar(120), resolutionCommandId)
+      .query(`
+        SELECT TOP 1 *
+        FROM absence_operational_conflicts
+        WHERE company_id = @companyId
+          AND resolution_command_id = @resolutionCommandId
+      `);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapConflict(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findConflictForUpdate(
+    companyId: string,
+    absenceRequestId: string,
+    conflictId: string,
+    transaction: sql.Transaction,
+  ): Promise<AbsenceOperationalConflictDto | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
+      .input("id", sql.UniqueIdentifier, conflictId)
+      .query(`
+        SELECT TOP 1 *
+        FROM absence_operational_conflicts WITH (UPDLOCK, HOLDLOCK)
+        WHERE id = @id
+          AND company_id = @companyId
+          AND absence_request_id = @absenceRequestId
+      `);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapConflict(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async listConflictsByOperation(
+    companyId: string,
+    operationId: string,
+  ): Promise<AbsenceOperationalConflictDto[]> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .query(`
+        SELECT *
+        FROM absence_operational_conflicts
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+        ORDER BY created_at ASC
+      `);
+    return result.recordset.map((row) => mapConflict(row as Record<string, unknown>));
+  },
+
+  async listOpenConflictsByEmployee(
+    companyId: string,
+    employeeId: string,
+  ): Promise<AbsenceOperationalConflictDto[]> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT *
+        FROM absence_operational_conflicts
+        WHERE company_id = @companyId
+          AND employee_id = @employeeId
+          AND status = N'OPEN'
+        ORDER BY created_at DESC
+      `);
+    return result.recordset.map((row) => mapConflict(row as Record<string, unknown>));
+  },
+
+  async upsertConflict(
+    input: {
+      companyId: string;
+      absenceRequestId: string;
+      absenceVersion: number;
+      conflictType: AbsenceOperationalConflictType;
+      severity: AbsenceOperationalConflictSeverity;
+      employeeId: string;
+      operationId?: string | null;
+      serviceId?: string | null;
+      assignmentId?: string | null;
+      employeeWorkdayId?: string | null;
+      operationWorkdayId?: string | null;
+      attendanceRecordId?: string | null;
+      sourceMessageSid?: string | null;
+      idempotencyKey: string;
+      rangeStartAt?: Date | null;
+      rangeEndAt?: Date | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<AbsenceOperationalConflictDto> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
     try {
-      const result = await getPool()
-        .request()
+      const result = await request
         .input("companyId", sql.UniqueIdentifier, input.companyId)
         .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId)
         .input("absenceVersion", sql.Int, input.absenceVersion)
@@ -112,6 +202,9 @@ export const absenceOperationalImpactRepository = {
         .input("serviceId", sql.UniqueIdentifier, input.serviceId ?? null)
         .input("assignmentId", sql.UniqueIdentifier, input.assignmentId ?? null)
         .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId ?? null)
+        .input("operationWorkdayId", sql.UniqueIdentifier, input.operationWorkdayId ?? null)
+        .input("attendanceRecordId", sql.UniqueIdentifier, input.attendanceRecordId ?? null)
+        .input("sourceMessageSid", sql.NVarChar(64), input.sourceMessageSid ?? null)
         .input("idempotencyKey", sql.NVarChar(200), input.idempotencyKey)
         .input("rangeStartAt", sql.DateTime2, input.rangeStartAt ?? null)
         .input("rangeEndAt", sql.DateTime2, input.rangeEndAt ?? null)
@@ -119,12 +212,14 @@ export const absenceOperationalImpactRepository = {
           INSERT INTO absence_operational_conflicts (
             company_id, absence_request_id, absence_version, conflict_type, severity,
             employee_id, operation_id, service_id, assignment_id, employee_workday_id,
+            operation_workday_id, attendance_record_id, source_message_sid,
             idempotency_key, range_start_at, range_end_at, status
           )
           OUTPUT INSERTED.*
           VALUES (
             @companyId, @absenceRequestId, @absenceVersion, @conflictType, @severity,
             @employeeId, @operationId, @serviceId, @assignmentId, @employeeWorkdayId,
+            @operationWorkdayId, @attendanceRecordId, @sourceMessageSid,
             @idempotencyKey, @rangeStartAt, @rangeEndAt, N'OPEN'
           )
         `);
@@ -133,8 +228,10 @@ export const absenceOperationalImpactRepository = {
       if (!isDuplicateKeyError(error)) {
         throw error;
       }
-      const existing = await getPool()
-        .request()
+      const existingRequest = transaction
+        ? new sql.Request(transaction)
+        : getPool().request();
+      const existing = await existingRequest
         .input("companyId", sql.UniqueIdentifier, input.companyId)
         .input("idempotencyKey", sql.NVarChar(200), input.idempotencyKey)
         .query(`
@@ -156,6 +253,7 @@ export const absenceOperationalImpactRepository = {
       resolutionReason: string;
       resolvedByUserId: string;
       replacementEmployeeId?: string | null;
+      resolutionCommandId?: string | null;
     },
     transaction?: sql.Transaction,
   ): Promise<AbsenceOperationalConflictDto | null> {
@@ -173,6 +271,7 @@ export const absenceOperationalImpactRepository = {
         sql.UniqueIdentifier,
         input.replacementEmployeeId ?? null,
       )
+      .input("resolutionCommandId", sql.NVarChar(120), input.resolutionCommandId ?? null)
       .query(`
         UPDATE absence_operational_conflicts
         SET status = @status,
@@ -180,6 +279,7 @@ export const absenceOperationalImpactRepository = {
             resolution_reason = @resolutionReason,
             resolved_by_user_id = @resolvedByUserId,
             replacement_employee_id = @replacementEmployeeId,
+            resolution_command_id = @resolutionCommandId,
             resolved_at = SYSUTCDATETIME(),
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*

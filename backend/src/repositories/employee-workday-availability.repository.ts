@@ -31,6 +31,12 @@ const mapCheckInCandidateRow = (row: Record<string, unknown>): EmployeeWorkdayCh
   scheduleTimezone: row.schedule_timezone_snapshot
     ? String(row.schedule_timezone_snapshot)
     : "America/Argentina/Buenos_Aires",
+  expectationStatus:
+    String(row.expectation_status) === "JUSTIFIED" ? "JUSTIFIED" : "EXPECTED",
+  absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
+  operationAssignmentId: row.operation_assignment_id
+    ? String(row.operation_assignment_id)
+    : null,
 });
 
 const mapCheckoutCandidateRow = (row: Record<string, unknown>): EmployeeWorkdayCheckoutCandidate => ({
@@ -48,6 +54,9 @@ const simulationAttendanceFilter = (simulationSessionId: string | null): string 
 
 const CHECK_IN_CANDIDATE_SELECT = `
   ew.id AS employee_workday_id,
+  ew.expectation_status,
+  ew.absence_request_id,
+  ew.operation_assignment_id,
   ow.id AS operation_workday_id,
   i.id AS operation_id,
   i.service_id,
@@ -64,6 +73,16 @@ const CHECK_IN_CANDIDATE_SELECT = `
   s.latitude AS service_latitude,
   s.longitude AS service_longitude,
   s.allowed_radius_meters
+`;
+
+const CHECK_IN_EXPECTATION_FILTER = `
+  AND (
+    ew.expectation_status = 'EXPECTED'
+    OR (
+      ew.expectation_status = 'JUSTIFIED'
+      AND ew.absence_request_id IS NOT NULL
+    )
+  )
 `;
 
 export const employeeWorkdayAvailabilityRepository = {
@@ -108,7 +127,7 @@ export const employeeWorkdayAvailabilityRepository = {
        ${attendanceFilter}
       WHERE ew.company_id = @companyId
         AND ew.employee_id = @employeeId
-        AND ew.expectation_status = 'EXPECTED'
+        ${CHECK_IN_EXPECTATION_FILTER}
         AND ow.status = 'ACTIVE'
         AND i.status NOT IN ('COMPLETED', 'CANCELLED')
         AND s.active = 1
@@ -165,7 +184,7 @@ export const employeeWorkdayAvailabilityRepository = {
       WHERE ew.company_id = @companyId
         AND ew.employee_id = @employeeId
         AND ew.id = @employeeWorkdayId
-        AND ew.expectation_status = 'EXPECTED'
+        ${CHECK_IN_EXPECTATION_FILTER}
         AND ow.status = 'ACTIVE'
         AND i.status NOT IN ('COMPLETED', 'CANCELLED')
         AND s.active = 1

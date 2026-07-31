@@ -2,7 +2,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule, ABSENCES_API_EXPORTS } from "../../test/mock-api-module";
+import { mockApiModule, ABSENCES_API_EXPORTS, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import { mockViewport } from "../../test/mock-match-media";
@@ -98,13 +98,19 @@ mockApiModule("api/employees.api", {
   deactivateEmployee: async () => {
     throw new Error("not used");
   },
+}, EMPLOYEES_API_EXPORTS);
+
+mockApiModule("api/lookups.api", {
+  getEmployeeLookups: async () => [],
+  getServiceLookups: async () => [],
+  getOperationLookups: async () => [],
 });
 
 import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
 let clearActiveTestQueryClients: typeof import("../../test/render-page").clearActiveTestQueryClients;

@@ -6,7 +6,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule } from "../../test/mock-api-module";
+import { mockApiModule, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import { mockViewport } from "../../test/mock-match-media";
@@ -48,7 +48,7 @@ mockApiModule("api/employees.api", {
   deactivateEmployee: async () => {
     throw new Error("not used");
   },
-});
+}, EMPLOYEES_API_EXPORTS);
 
 mockApiModule("api/employee-categories.api", {
   getEmployeeCategories: async () => [
@@ -90,7 +90,7 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
 let EmployeesListPage: React.ComponentType;
@@ -120,6 +120,10 @@ describe("EmployeesListPage responsive (real page)", () => {
     });
     assert.ok(view.getByRole("table"));
     assert.equal(view.queryByRole("list", { name: /colaboradores/i }), null);
+    const avatar = view.container.querySelector("[data-entity-avatar='collaborator']");
+    assert.equal(avatar?.textContent, "AL");
+    assert.ok(view.getAllByText("Operaciones").length >= 1);
+    assert.ok(view.getByText("Activo"));
   });
 
   it("shows mobile cards, search, filter drawer, and actions without desktop table", async () => {
@@ -137,6 +141,7 @@ describe("EmployeesListPage responsive (real page)", () => {
     });
     assert.equal(view.queryByRole("table"), null);
     assert.ok(view.getByRole("list"));
+    assert.equal(view.container.querySelector("[data-entity-avatar='collaborator']")?.textContent, "AL");
     assert.ok(view.getByLabelText(/Buscar/i));
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));

@@ -1,6 +1,6 @@
 import { Button, Group } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
 import { SERVICE_FORM_ID, ServiceForm } from "../../components/services/ServiceForm";
 import { PageHeader } from "../../design-system";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";

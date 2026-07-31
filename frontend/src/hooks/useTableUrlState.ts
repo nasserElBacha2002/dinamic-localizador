@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams } from "react-router";
+import {
+  areIdSetsEqual,
+  buildFilterResetState,
+  countActiveFilters,
+  DEFAULT_FILTER_ACTIVITY_IGNORE_KEYS,
+  DEFAULT_FILTER_RETAIN_KEYS,
+  hasActiveFilters,
+  type FilterValueComparator,
+} from "../utils/filter-state";
 import type { SortOrder, TableUrlFieldMap } from "../utils/table-url-state";
 import {
   mergeTableUrlPatch,
   parseTableUrlState,
   serializeTableUrlState,
 } from "../utils/table-url-state";
-import { useDebouncedValue } from "./useDebouncedValue";
+import { useDebouncedValueController } from "./useDebouncedValue";
 
 export interface UseTableUrlStateOptions<T extends Record<string, unknown>> {
   defaults: T;
@@ -14,6 +23,18 @@ export interface UseTableUrlStateOptions<T extends Record<string, unknown>> {
   shouldOmitFromUrl?: (key: keyof T, value: T[keyof T], defaults: T, state: T) => boolean;
   debounceSearch?: boolean;
   searchDebounceMs?: number;
+  /**
+   * Keys kept from current state when calling `resetFilters`
+   * (default: pageSize, sortBy, sortOrder).
+   */
+  filterRetainKeys?: readonly (keyof T | string)[];
+  /**
+   * Keys ignored by `hasActiveFilters` / `activeFilterCount`
+   * (default: page, pageSize, sortBy, sortOrder).
+   */
+  filterActivityIgnoreKeys?: readonly (keyof T | string)[];
+  /** Optional per-key equality overrides for activity detection. */
+  filterComparators?: Partial<Record<keyof T, FilterValueComparator>>;
 }
 
 export interface UseTableUrlStateResult<T extends Record<string, unknown>> {
@@ -30,8 +51,11 @@ export interface UseTableUrlStateResult<T extends Record<string, unknown>> {
   resetPage: () => void;
   setSorting: (sortBy: string, sortOrder: SortOrder) => void;
   toggleSorting: (sortBy: string, defaultOrder?: SortOrder) => void;
+  /** Atomically restore filter defaults; retains sort/pageSize (and configured keys). */
   resetFilters: () => void;
   clearState: () => void;
+  hasActiveFilters: boolean;
+  activeFilterCount: number;
   page: number;
   pageSize: number;
   sortBy: string | undefined;
@@ -40,6 +64,27 @@ export interface UseTableUrlStateResult<T extends Record<string, unknown>> {
 
 function hasSearchKey<T extends Record<string, unknown>>(defaults: T): defaults is T & { search: string } {
   return "search" in defaults;
+}
+
+function buildStringListComparators<T extends Record<string, unknown>>(
+  defaults: T,
+  fields?: TableUrlFieldMap<T>,
+  explicit?: Partial<Record<keyof T, FilterValueComparator>>,
+): Partial<Record<keyof T, FilterValueComparator>> {
+  const comparators: Partial<Record<keyof T, FilterValueComparator>> = { ...explicit };
+
+  for (const key of Object.keys(defaults) as (keyof T)[]) {
+    if (comparators[key]) {
+      continue;
+    }
+    const fieldType = fields?.[key]?.type;
+    const defaultIsList = Array.isArray(defaults[key]);
+    if (fieldType === "stringList" || (!fields?.[key] && defaultIsList)) {
+      comparators[key] = areIdSetsEqual;
+    }
+  }
+
+  return comparators;
 }
 
 export function useTableUrlState<T extends Record<string, unknown>>(
@@ -51,9 +96,21 @@ export function useTableUrlState<T extends Record<string, unknown>>(
     shouldOmitFromUrl,
     debounceSearch = hasSearchKey(defaults),
     searchDebounceMs = 300,
+    filterRetainKeys = DEFAULT_FILTER_RETAIN_KEYS,
+    filterActivityIgnoreKeys = DEFAULT_FILTER_ACTIVITY_IGNORE_KEYS,
+    filterComparators,
   } = options;
 
   const [searchParams, setSearchParams] = useSearchParams();
+  const searchParamsRef = useRef(searchParams);
+  useEffect(() => {
+    searchParamsRef.current = searchParams;
+  }, [searchParams]);
+
+  const activityComparators = useMemo(
+    () => buildStringListComparators(defaults, fields, filterComparators),
+    [defaults, fields, filterComparators],
+  );
 
   const state = useMemo(
     () =>
@@ -99,7 +156,10 @@ export function useTableUrlState<T extends Record<string, unknown>>(
     }
   }, [defaults, state.search, updateSearchInput]);
 
-  const debouncedSearchInput = useDebouncedValue(searchInput, searchDebounceMs);
+  const { value: debouncedSearchInput, cancel: cancelSearchDebounce } = useDebouncedValueController(
+    searchInput,
+    searchDebounceMs,
+  );
 
   const writeState = useCallback(
     (nextState: T) => {
@@ -118,6 +178,7 @@ export function useTableUrlState<T extends Record<string, unknown>>(
         defaults,
         fields,
         shouldOmitFromUrl,
+        preserveParams: searchParamsRef.current,
       });
       setSearchParams(params, { replace: true });
     },
@@ -175,10 +236,11 @@ export function useTableUrlState<T extends Record<string, unknown>>(
       const nextValue = value ?? searchInputRef.current;
       const nextSearch = nextValue.trim();
       searchDirtyFromTypingRef.current = false;
+      cancelSearchDebounce();
       updateSearchInput(nextValue);
       setState({ search: nextSearch } as unknown as Partial<T>, { resetPage: true });
     },
-    [defaults, setState, updateSearchInput],
+    [cancelSearchDebounce, defaults, setState, updateSearchInput],
   );
 
   const setSearch = useCallback(
@@ -192,10 +254,11 @@ export function useTableUrlState<T extends Record<string, unknown>>(
 
       if (!value.trim()) {
         searchDirtyFromTypingRef.current = false;
+        cancelSearchDebounce();
         setState({ search: "" } as unknown as Partial<T>, { resetPage: true });
       }
     },
-    [defaults, setState, updateSearchInput],
+    [cancelSearchDebounce, defaults, setState, updateSearchInput],
   );
 
   const setPage = useCallback(
@@ -255,19 +318,42 @@ export function useTableUrlState<T extends Record<string, unknown>>(
 
   const resetFilters = useCallback(() => {
     searchDirtyFromTypingRef.current = false;
-    writeState({ ...defaults });
+    cancelSearchDebounce();
+    const next = buildFilterResetState(stateRef.current, defaults, {
+      retainKeys: filterRetainKeys,
+    });
     if (hasSearchKey(defaults)) {
-      updateSearchInput(String(defaults.search ?? ""));
+      updateSearchInput(String((next as { search?: string }).search ?? ""));
     }
-  }, [defaults, updateSearchInput, writeState]);
+    writeState(next);
+  }, [cancelSearchDebounce, defaults, filterRetainKeys, updateSearchInput, writeState]);
 
   const clearState = useCallback(() => {
     searchDirtyFromTypingRef.current = false;
+    cancelSearchDebounce();
     setSearchParams(new URLSearchParams(), { replace: true });
     if (hasSearchKey(defaults)) {
       updateSearchInput("");
     }
-  }, [defaults, setSearchParams, updateSearchInput]);
+  }, [cancelSearchDebounce, defaults, setSearchParams, updateSearchInput]);
+
+  const activeFilterCount = useMemo(
+    () =>
+      countActiveFilters(state, defaults, {
+        ignoreKeys: filterActivityIgnoreKeys,
+        comparators: activityComparators,
+      }),
+    [activityComparators, defaults, filterActivityIgnoreKeys, state],
+  );
+
+  const filtersAreActive = useMemo(
+    () =>
+      hasActiveFilters(state, defaults, {
+        ignoreKeys: filterActivityIgnoreKeys,
+        comparators: activityComparators,
+      }),
+    [activityComparators, defaults, filterActivityIgnoreKeys, state],
+  );
 
   const page = "page" in state ? Number(state.page) : 1;
   const pageSize = "pageSize" in state ? Number(state.pageSize) : 10;
@@ -290,6 +376,8 @@ export function useTableUrlState<T extends Record<string, unknown>>(
     toggleSorting,
     resetFilters,
     clearState,
+    hasActiveFilters: filtersAreActive,
+    activeFilterCount,
     page,
     pageSize,
     sortBy,

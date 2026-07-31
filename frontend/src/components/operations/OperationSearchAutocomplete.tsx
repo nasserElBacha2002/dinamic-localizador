@@ -1,9 +1,11 @@
 import { useCallback, useMemo } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router";
 import { getOperations } from "../../api/operations.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperation } from "../../hooks/useOperations";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import { DEFAULT_LOOKUP_LIMIT, LOOKUP_STALE_TIME_MS } from "../../queryKeys/lookups";
+import { operationKeys } from "../../queryKeys/operations";
 import type { OperationWithService } from "../../types/operation";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { formatDateTime } from "../../utils/dates";
@@ -45,12 +47,15 @@ export function OperationSearchAutocomplete({
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
   const selectedOperationQuery = useOperation(value ?? undefined);
 
-  const fetchOperations = useCallback(async (search: string) => {
-    const response = await getOperations({
-      search: search || undefined,
-      page: 1,
-      limit: 20,
-    });
+  const fetchOperations = useCallback(async (search: string, signal: AbortSignal) => {
+    const response = await getOperations(
+      {
+        search: search || undefined,
+        page: 1,
+        limit: DEFAULT_LOOKUP_LIMIT,
+      },
+      { signal },
+    );
 
     return response.data;
   }, []);
@@ -60,18 +65,26 @@ export function OperationSearchAutocomplete({
     [],
   );
 
-  const {
-    inputValue,
-    setInputValue,
-    options,
-    isLoading,
-    hasSearched,
-  } = useAsyncSearchOptions({
-    queryKey: "operation-search",
+  const getQueryKey = useCallback(
+    (search: string) =>
+      [
+        ...operationKeys.list(companyId, {
+          search: search || undefined,
+          page: 1,
+          limit: DEFAULT_LOOKUP_LIMIT,
+        }),
+        "autocomplete",
+      ] as const,
+    [companyId],
+  );
+
+  const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
+    getQueryKey,
     fetchItems: fetchOperations,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
-    queryExtra: { companyId },
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedOption = useMemo(() => {

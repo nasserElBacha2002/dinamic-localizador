@@ -1,7 +1,9 @@
 import { config } from "dotenv";
 import { z } from "zod";
+import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
 
 config();
+resolveGoogleApplicationCredentialsPath();
 
 const envSchema = z
   .object({
@@ -40,6 +42,33 @@ const envSchema = z
     BOT_DEFAULT_COMPANY_NAME: z.string().min(1).optional(),
     JWT_SECRET: z.string().min(16),
     JWT_EXPIRES_IN: z.string().default("8h"),
+    INVITATION_TTL_HOURS: z.coerce.number().int().positive().default(72),
+    /**
+     * Explicit email transport. When omitted:
+     * - smtp if SMTP_HOST is set
+     * - console in development/test
+     * - smtp required in production (validated below)
+     */
+    EMAIL_TRANSPORT: z.enum(["smtp", "console", "disabled"]).optional(),
+    SMTP_HOST: z.string().min(1).optional(),
+    SMTP_PORT: z.coerce.number().int().positive().default(587),
+    SMTP_SECURE: z.stringbool().default(false),
+    SMTP_USER: z.string().optional(),
+    SMTP_PASSWORD: z.string().optional(),
+    SMTP_FROM: z.string().optional(),
+    SMTP_CONNECTION_TIMEOUT_MS: z.coerce.number().int().positive().default(10_000),
+    SMTP_SOCKET_TIMEOUT_MS: z.coerce.number().int().positive().default(20_000),
+    /** Google Cloud Storage — absence attachments (optional until feature enabled). */
+    GCS_PROJECT_ID: z.string().min(1).optional(),
+    GCS_BUCKET_NAME: z.string().min(1).optional(),
+    GCS_STORAGE_PREFIX: z.string().min(1).default("absence-attachments"),
+    GCS_SIGNED_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(300),
+    GCS_MAX_FILE_SIZE_BYTES: z.coerce.number().int().positive().default(5_242_880),
+    GCS_MAX_FILES_PER_REQUEST: z.coerce.number().int().positive().default(5),
+    GCS_MAX_TOTAL_SIZE_BYTES: z.coerce.number().int().positive().default(15_728_640),
+    GCS_UPLOAD_MODE: z.enum(["BACKEND_STREAM"]).default("BACKEND_STREAM"),
+    ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
+    ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
   })
   .superRefine((data, ctx) => {
     const validateSignature = data.TWILIO_VALIDATE_SIGNATURE ?? data.NODE_ENV === "production";
@@ -140,6 +169,46 @@ const envSchema = z
         });
       }
     }
+
+    const emailTransport =
+      data.EMAIL_TRANSPORT ??
+      (data.SMTP_HOST ? "smtp" : data.NODE_ENV === "production" ? "smtp" : "console");
+
+    if (emailTransport === "console" && data.NODE_ENV === "production") {
+      ctx.addIssue({
+        code: "custom",
+        message: "EMAIL_TRANSPORT=console is not allowed in production",
+        path: ["EMAIL_TRANSPORT"],
+      });
+    }
+
+    if (emailTransport === "smtp") {
+      if (!data.SMTP_HOST) {
+        ctx.addIssue({
+          code: "custom",
+          message: "SMTP_HOST is required when EMAIL_TRANSPORT=smtp",
+          path: ["SMTP_HOST"],
+        });
+      }
+
+      if (!data.SMTP_FROM && !data.SMTP_USER) {
+        ctx.addIssue({
+          code: "custom",
+          message: "SMTP_FROM (or SMTP_USER) is required when EMAIL_TRANSPORT=smtp",
+          path: ["SMTP_FROM"],
+        });
+      }
+
+      const hasUser = Boolean(data.SMTP_USER);
+      const hasPassword = Boolean(data.SMTP_PASSWORD);
+      if (hasUser !== hasPassword) {
+        ctx.addIssue({
+          code: "custom",
+          message: "SMTP_USER and SMTP_PASSWORD must be set together",
+          path: hasUser ? ["SMTP_PASSWORD"] : ["SMTP_USER"],
+        });
+      }
+    }
   });
 
 const parsed = envSchema.safeParse(process.env);
@@ -184,8 +253,17 @@ const parseCorsOrigins = (
   return Array.from(origins);
 };
 
+const resolvedEmailTransport =
+  parsed.data.EMAIL_TRANSPORT ??
+  (parsed.data.SMTP_HOST
+    ? "smtp"
+    : parsed.data.NODE_ENV === "production"
+      ? "smtp"
+      : "console");
+
 export const env = {
   ...parsed.data,
+  EMAIL_TRANSPORT: resolvedEmailTransport as "smtp" | "console" | "disabled",
   corsOrigins: parseCorsOrigins(
     parsed.data.NODE_ENV,
     parsed.data.FRONTEND_URL,

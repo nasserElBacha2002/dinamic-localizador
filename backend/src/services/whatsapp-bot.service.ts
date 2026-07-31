@@ -8,6 +8,10 @@ import { attendanceRepository } from "../repositories/attendance.repository";
 import { botSessionRepository } from "../repositories/bot-session.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
+import {
+  hashWebhookPayload,
+  whatsappWebhookEventRepository,
+} from "../repositories/whatsapp-webhook-event.repository";
 import type { TwilioWebhookInput } from "../schemas/twilio-webhook.schema";
 import { resolveWorkdayOptionsFromSessionContext } from "../utils/legacy-operation-session-context";
 import { botSessionService } from "./bot-session.service";
@@ -51,6 +55,7 @@ import {
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
   NO_CHECKOUT_OPERATION_MESSAGE,
   PENDING_CHECKOUT_EXPIRED_MESSAGE,
+  ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE,
   NO_JUSTIFIED_ONLY_MESSAGE,
   NO_OPERATION_MESSAGE,
   WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
@@ -223,18 +228,57 @@ export const whatsappBotService = {
       );
     }
 
+    const maskPhone = (phone: string): string =>
+      phone.length <= 6 ? "***" : `${phone.slice(0, 4)}***${phone.slice(-3)}`;
+
     console.info("[whatsapp-bot] webhook received", {
       messageSid: payload.MessageSid,
-      from: phoneFrom,
+      from: maskPhone(phoneFrom),
       type: getMessageType(payload),
       companyId,
       resolutionSource: inbound.resolutionSource,
     });
 
+    let webhookEventId: string | null = null;
+    let webhookProcessingVersion = 0;
+
     try {
       setLastTwilioPayload(payload as unknown as Record<string, string>);
 
       if (!simulationContext) {
+        const payloadRecord = payload as unknown as Record<string, unknown>;
+        const payloadHash = hashWebhookPayload(payloadRecord);
+        const claim = await whatsappWebhookEventRepository.claimInboundMessage({
+          companyId,
+          messageSid: payload.MessageSid,
+          payloadHash,
+        });
+        if (claim.outcome === "PAYLOAD_ANOMALY") {
+          throw new AppError(
+            409,
+            "WEBHOOK_PAYLOAD_ANOMALY",
+            "MessageSid reutilizado con payload distinto",
+          );
+        }
+        if (claim.outcome === "IDEMPOTENT_REPLAY") {
+          console.info("[whatsapp-bot] idempotent webhook replay", {
+            messageSid: payload.MessageSid,
+          });
+          const prior =
+            claim.event.responseBody?.trim() ||
+            DUPLICATE_MESSAGE_SID_RESPONSE;
+          return prior.startsWith("<?xml") ? prior : buildTwiml(prior);
+        }
+        if (claim.outcome === "IN_PROGRESS" || claim.outcome === "EXHAUSTED") {
+          console.info("[whatsapp-bot] webhook claim not acquired", {
+            messageSid: payload.MessageSid,
+            outcome: claim.outcome,
+          });
+          return buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
+        }
+        webhookEventId = claim.event.id;
+        webhookProcessingVersion = claim.event.processingVersion;
+
         const existingMessage = await whatsappMessageRepository.findByMessageSid(
           companyId,
           payload.MessageSid,
@@ -245,7 +289,16 @@ export const whatsappBotService = {
             processingStatus: "DUPLICATE",
             processingErrorCode: "DUPLICATE_MESSAGE_SID",
           });
-          return buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
+          const duplicateTwiml = buildTwiml(DUPLICATE_MESSAGE_SID_RESPONSE);
+          await whatsappWebhookEventRepository.markProcessed({
+            companyId,
+            eventId: webhookEventId,
+            processingVersion: webhookProcessingVersion,
+            responseBody: DUPLICATE_MESSAGE_SID_RESPONSE,
+            responseType: "DUPLICATE",
+            responseReference: "DUPLICATE_MESSAGE_SID",
+          });
+          return duplicateTwiml;
         }
       }
 
@@ -305,6 +358,17 @@ export const whatsappBotService = {
         await whatsappMessageRepository.updateProcessingStatus(companyId, payload.MessageSid, {
           processingStatus: "PROCESSED",
         });
+        if (webhookEventId) {
+          const outboundText = extractMessageFromTwiml(response) || response;
+          await whatsappWebhookEventRepository.markProcessed({
+            companyId,
+            eventId: webhookEventId,
+            processingVersion: webhookProcessingVersion,
+            responseBody: outboundText,
+            responseType: "TwiML",
+            responseReference: payload.MessageSid,
+          });
+        }
       } else if (response) {
         const outboundText = extractMessageFromTwiml(response);
         appendSimulatorMessage({
@@ -320,12 +384,39 @@ export const whatsappBotService = {
 
       return response;
     } catch (error) {
-      console.error("[whatsapp-bot] unexpected webhook error", error);
+      console.error("[whatsapp-bot] unexpected webhook error", {
+        messageSid: payload.MessageSid,
+        companyId,
+        error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+      });
 
       if (isSimulationActive()) {
         setTechnicalDetail("error", error instanceof Error ? error.message : "UNKNOWN_ERROR");
         setLastBotResponse(GENERIC_ERROR_MESSAGE);
         return buildTwiml(GENERIC_ERROR_MESSAGE);
+      }
+
+      if (error instanceof AppError && error.code === "WEBHOOK_PAYLOAD_ANOMALY") {
+        throw error;
+      }
+
+      if (webhookEventId) {
+        try {
+          await whatsappWebhookEventRepository.markFailed({
+            companyId,
+            eventId: webhookEventId,
+            processingVersion: webhookProcessingVersion,
+            error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+          });
+        } catch (markFailedError) {
+          console.error("[whatsapp-bot] failed to mark webhook event failed", {
+            messageSid: payload.MessageSid,
+            error:
+              markFailedError instanceof Error
+                ? markFailedError.message
+                : "UNKNOWN_ERROR",
+          });
+        }
       }
 
       try {
@@ -575,7 +666,40 @@ export const whatsappBotService = {
     );
 
     if (candidates.length === 0) {
-      console.info("[whatsapp-bot] no available employee workday", { employeeId: input.employeeId });
+      try {
+        const diagnosis = await employeeWorkdayAvailabilityService.diagnoseCheckInUnavailability(
+          companyId,
+          input.employeeId,
+          now,
+          {
+            hasJustifiedWorkdayInWindow,
+            eligibleCandidateCount: 0,
+          },
+        );
+        console.info("[whatsapp-bot] no available employee workday", {
+          companyId,
+          employeeId: input.employeeId,
+          at: now.toISOString(),
+          candidateFrom: diagnosis.candidateFrom,
+          candidateTo: diagnosis.candidateTo,
+          rawCandidateCount: diagnosis.rawCandidateCount,
+          eligibleCandidateCount: diagnosis.eligibleCandidateCount,
+          hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
+          reasonCodes: diagnosis.reasonCodes,
+          nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
+          assignedOperationCount: diagnosis.assignedOperationCount,
+          operationIds: diagnosis.operationIds,
+          workdayIds: diagnosis.workdayIds,
+          timezone: diagnosis.timezone,
+        });
+      } catch (error) {
+        console.warn("[whatsapp-bot] CHECKIN_UNAVAILABILITY_DIAGNOSIS_FAILED", {
+          companyId,
+          employeeId: input.employeeId,
+          at: now.toISOString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       return respond(companyId, {
         message: hasJustifiedWorkdayInWindow ? NO_JUSTIFIED_ONLY_MESSAGE : NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,
@@ -875,7 +999,7 @@ export const whatsappBotService = {
         recordSimulationArtifact({
           type: "check-in",
           persisted: true,
-          attendanceId: created.id,
+          attendanceId: created.attendance.id,
           employeeWorkdayId: input.employeeWorkdayId,
           operationId: workday.operationId,
           employeeId: input.employeeId,
@@ -892,16 +1016,19 @@ export const whatsappBotService = {
         employeeWorkdayId: input.employeeWorkdayId,
         operationId: workday.operationId,
         validationStatus: validation.validationStatus,
+        recordedDuringApprovedAbsence: created.recordedDuringApprovedAbsence,
       });
 
-      const responseMessage = buildArrivalRegisteredMessage({
-        compatible: workday,
-        distanceMeters: geoDistance,
-        validationStatus: validation.validationStatus,
-        punctualityStatus: validation.punctualityStatus,
-        validationReason: validation.validationReason,
-        receivedAt,
-      });
+      const responseMessage = created.recordedDuringApprovedAbsence
+        ? ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE
+        : buildArrivalRegisteredMessage({
+            compatible: workday,
+            distanceMeters: geoDistance,
+            validationStatus: validation.validationStatus,
+            punctualityStatus: validation.punctualityStatus,
+            validationReason: validation.validationReason,
+            receivedAt,
+          });
 
       return respond(companyId, {
         message: responseMessage,

@@ -1,4 +1,4 @@
-const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
+export const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   NODE_ENV: "test",
   FRONTEND_URL: "http://localhost:5173",
   TZ: "America/Argentina/Buenos_Aires",
@@ -8,6 +8,7 @@ const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   DB_USER: "sa",
   DB_PASSWORD: "unit-test-db-password",
   JWT_SECRET: "unit-test-jwt-secret",
+  EMAIL_TRANSPORT: "console",
   TWILIO_VALIDATE_SIGNATURE: "false",
   TWILIO_ACCOUNT_SID: "AC_UNIT_TEST",
   TWILIO_AUTH_TOKEN: "unit-test-twilio-auth-token",

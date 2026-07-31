@@ -207,9 +207,7 @@ export function OperationalSettingsForm({
             disabled={disabled}
           />
         </SettingsFormField>
-      </FormGrid>
 
-      <FormGrid columns={{ base: 1, md: 2 }}>
         <SettingsFormField
           label="Enviar recordatorio (horas antes)"
           description="Ventana configurable por empresa antes del inicio de la operación."

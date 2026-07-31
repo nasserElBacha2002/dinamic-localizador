@@ -109,6 +109,30 @@ export const deleteEmployeeCascade = async (
       )
          OR performed_by_employee_id = @employeeId;
 
+      DELETE FROM employee_absence_balance_movements
+      WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      DELETE FROM absence_workday_sync_jobs
+      WHERE company_id = @companyId AND absence_request_id IN (
+        SELECT id FROM absence_requests
+        WHERE company_id = @companyId AND employee_id = @employeeId
+      );
+
+      DELETE FROM absence_operational_conflicts
+      WHERE company_id = @companyId AND (
+        employee_id = @employeeId
+        OR absence_request_id IN (
+          SELECT id FROM absence_requests
+          WHERE company_id = @companyId AND employee_id = @employeeId
+        )
+      );
+
+      DELETE FROM absence_operational_effects
+      WHERE company_id = @companyId AND absence_request_id IN (
+        SELECT id FROM absence_requests
+        WHERE company_id = @companyId AND employee_id = @employeeId
+      );
+
       DELETE FROM absence_requests
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
@@ -174,6 +198,7 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
     DELETE FROM company_work_schedule_days WHERE company_id = @companyId;
     DELETE FROM company_work_schedules WHERE company_id = @companyId;
 
+    DELETE FROM user_invitations WHERE company_id = @companyId;
     DELETE FROM audit_logs WHERE company_id = @companyId;
     DELETE FROM attendance_reviews WHERE company_id = @companyId;
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;
@@ -181,7 +206,16 @@ export const deleteCompanyCascade = async (companyId: string): Promise<void> => 
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
     DELETE FROM absence_request_events WHERE company_id = @companyId;
+    DELETE FROM absence_operational_conflicts WHERE company_id = @companyId;
+    DELETE FROM absence_operational_effects WHERE company_id = @companyId;
+    DELETE FROM absence_workday_sync_jobs WHERE company_id = @companyId;
     DELETE FROM absence_requests WHERE company_id = @companyId;
+
+    DELETE FROM employee_absence_balance_movements WHERE company_id = @companyId;
+    UPDATE absence_types SET calendar_id = NULL WHERE company_id = @companyId;
+    DELETE FROM company_calendar_dates WHERE company_id = @companyId;
+    DELETE FROM company_work_calendar_weekdays WHERE company_id = @companyId;
+    DELETE FROM company_work_calendars WHERE company_id = @companyId;
 
     DELETE FROM operational_locations WHERE company_id = @companyId;
     DELETE FROM employee_absence_balances WHERE company_id = @companyId;

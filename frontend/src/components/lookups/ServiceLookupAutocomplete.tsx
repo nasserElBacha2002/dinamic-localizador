@@ -3,6 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { getServiceLookups } from "../../api/lookups.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import {
+  DEFAULT_LOOKUP_LIMIT,
+  LOOKUP_STALE_TIME_MS,
+  lookupKeys,
+} from "../../queryKeys/lookups";
 import type { ServiceLookup } from "../../types/lookups";
 import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
@@ -42,30 +47,44 @@ export function ServiceLookupAutocomplete({
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
 
   const fetchServices = useCallback(
-    async (search: string) =>
-      getServiceLookups({
-        search: search || undefined,
-        limit: 10,
-        active: activeOnly ? true : undefined,
-      }),
+    async (search: string, signal: AbortSignal) =>
+      getServiceLookups(
+        {
+          search: search || undefined,
+          limit: DEFAULT_LOOKUP_LIMIT,
+          active: activeOnly ? true : undefined,
+        },
+        { signal },
+      ),
     [activeOnly],
   );
 
   const mapToOption = useCallback((service: ServiceLookup) => mapServiceLookupToOption(service), []);
 
+  const getQueryKey = useCallback(
+    (search: string) =>
+      lookupKeys.serviceSearch(companyId, {
+        search,
+        activeOnly,
+        limit: DEFAULT_LOOKUP_LIMIT,
+      }),
+    [activeOnly, companyId],
+  );
+
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
-    queryKey: "service-lookup-search",
+    getQueryKey,
     fetchItems: fetchServices,
     mapToOption,
+    scopeKey: companyId,
     enabled: companyReady,
-    queryExtra: { activeOnly, companyId },
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedLookupQuery = useQuery({
-    queryKey: ["lookups", "services", companyId, "selected", value],
-    queryFn: () => getServiceLookups({ id: value!, limit: 1 }),
+    queryKey: lookupKeys.serviceSelected(companyId, value),
+    queryFn: ({ signal }) => getServiceLookups({ id: value!, limit: 1 }, { signal }),
     enabled: companyReady && Boolean(value),
-    staleTime: 60_000,
+    staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedOption = useMemo(() => {

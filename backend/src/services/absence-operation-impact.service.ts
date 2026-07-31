@@ -1,43 +1,63 @@
-import { env } from "../config/env";
-import { absenceRequestRepository } from "../repositories/absence-request.repository";
-import type { AffectedOperationWarning } from "../types/absence";
-import { absenceDateRangeToUtcBounds, getUtcOffsetHoursFromTimezone } from "../utils/absence-date";
+import { absenceOperationalConflictService } from "./absence-operational-conflict.service";
+import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
+import { absenceOperationalReconciliationService } from "./absence-operational-reconciliation.service";
 
+/**
+ * Facade preserving previous import sites while responsibilities live in split services.
+ */
 export const absenceOperationImpactService = {
-  async findAffectedOperations(
+  isFeatureEnabled: (companyId: string) =>
+    absenceOperationalImpactQueryService.isFeatureEnabled(companyId),
+  getOperationTimezone: (companyId: string) =>
+    absenceOperationalImpactQueryService.getOperationTimezone(companyId),
+  findAffectedOperations: (
     companyId: string,
-    input: {
-      employeeId: string;
-      startDate: string;
-      endDate: string;
-    },
-  ): Promise<AffectedOperationWarning[]> {
-    const timezone = env.BOT_OPERATION_TIMEZONE;
-    const utcOffsetHours = getUtcOffsetHoursFromTimezone(timezone);
-    const { startAt, endAt } = absenceDateRangeToUtcBounds(
-      input.startDate,
-      input.endDate,
-      utcOffsetHours,
-    );
-
-    const operations = await absenceRequestRepository.findAffectedOperations(
+    input: { employeeId: string; startDate: string; endDate: string },
+    timezone?: string,
+  ) => absenceOperationalImpactQueryService.findAffectedOperations(companyId, input, timezone),
+  countAffectedOperationsForList: (
+    companyId: string,
+    items: Array<{ id: string; employeeId: string; startDate: string; endDate: string }>,
+  ) => absenceOperationalImpactQueryService.countAffectedOperationsForList(companyId, items),
+  computeImpact: (companyId: string, absenceRequestId: string) =>
+    absenceOperationalImpactQueryService.computeImpact(companyId, absenceRequestId),
+  applyApprovedOperationalSideEffects: (companyId: string, absenceRequestId: string) =>
+    absenceOperationalReconciliationService.applyApprovedOperationalSideEffects(
       companyId,
-      input.employeeId,
-      startAt,
-      endAt,
-    );
-
-    return operations.map((operation) => ({
-      operationId: operation.operationId,
-      serviceId: operation.serviceId,
-      serviceName: operation.serviceName,
-      scheduledStart: operation.scheduledStart,
-      scheduledEnd: operation.scheduledEnd,
-      status: operation.status,
-    }));
-  },
-
-  getOperationTimezone(): string {
-    return env.BOT_OPERATION_TIMEZONE;
-  },
+      absenceRequestId,
+    ),
+  revertOperationalSideEffects: (
+    companyId: string,
+    absenceRequestId: string,
+    reason: string,
+  ) =>
+    absenceOperationalReconciliationService.revertOperationalSideEffects(
+      companyId,
+      absenceRequestId,
+      reason,
+    ),
+  resolveConflict: (
+    companyId: string,
+    absenceRequestId: string,
+    conflictId: string,
+    input: Parameters<typeof absenceOperationalConflictService.resolveConflict>[3],
+  ) =>
+    absenceOperationalConflictService.resolveConflict(
+      companyId,
+      absenceRequestId,
+      conflictId,
+      input,
+    ),
+  reconcileManually: (
+    companyId: string,
+    absenceRequestId: string,
+    userId: string,
+    commandId: string,
+  ) =>
+    absenceOperationalReconciliationService.enqueueManualReconcile(
+      companyId,
+      absenceRequestId,
+      userId,
+      commandId,
+    ),
 };

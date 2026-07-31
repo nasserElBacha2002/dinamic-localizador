@@ -2,19 +2,21 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 
 export const auditRepository = {
-  async log(input: {
-    companyId: string;
-    entityType: string;
-    entityId: string;
-    action: string;
-    previousData?: string | null;
-    newData?: string | null;
-    reason?: string | null;
-    userId?: string | null;
-  }): Promise<void> {
-    const pool = getPool();
-    await pool
-      .request()
+  async log(
+    input: {
+      companyId: string;
+      entityType: string;
+      entityId: string;
+      action: string;
+      previousData?: string | null;
+      newData?: string | null;
+      reason?: string | null;
+      userId?: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    await request
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("entityType", sql.NVarChar(50), input.entityType)
       .input("entityId", sql.UniqueIdentifier, input.entityId)

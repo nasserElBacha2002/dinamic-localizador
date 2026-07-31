@@ -4,11 +4,15 @@ import { asyncHandler } from "../middleware/async-handler";
 import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
+  absenceOperationalConflictIdParamSchema,
   absenceRequestIdParamSchema,
   createAbsenceRequestSchema,
   listAbsenceRequestsQuerySchema,
   needsInfoAbsenceRequestSchema,
   rejectAbsenceRequestSchema,
+  resolveAbsenceOperationalConflictSchema,
+  reconcileAbsenceOperationalImpactSchema,
+  updateNeedsInfoAbsenceRequestSchema,
 } from "../schemas/absence-request.schema";
 
 export const absenceRequestRouter = Router();
@@ -28,10 +32,55 @@ absenceRequestRouter.post(
 );
 
 absenceRequestRouter.get(
+  "/:id/operational-impact",
+  requirePermission("absences:read"),
+  validate(absenceRequestIdParamSchema, "params"),
+  asyncHandler(absenceRequestController.getOperationalImpact),
+);
+
+absenceRequestRouter.get(
+  "/:id/operational-conflicts",
+  requirePermission("absences:read"),
+  validate(absenceRequestIdParamSchema, "params"),
+  asyncHandler(absenceRequestController.listOperationalConflicts),
+);
+
+absenceRequestRouter.post(
+  "/:id/operational-conflicts/:conflictId/resolve",
+  requirePermission("operations:manage"),
+  validate(absenceOperationalConflictIdParamSchema, "params"),
+  validate(resolveAbsenceOperationalConflictSchema),
+  asyncHandler(absenceRequestController.resolveOperationalConflict),
+);
+
+absenceRequestRouter.post(
+  "/:id/reconcile-operational-impact",
+  requirePermission("operations:manage"),
+  validate(absenceRequestIdParamSchema, "params"),
+  validate(reconcileAbsenceOperationalImpactSchema),
+  asyncHandler(absenceRequestController.reconcileOperationalImpact),
+);
+
+absenceRequestRouter.get(
   "/:id",
   requirePermission("absences:read"),
   validate(absenceRequestIdParamSchema, "params"),
   asyncHandler(absenceRequestController.getById),
+);
+
+absenceRequestRouter.patch(
+  "/:id",
+  requirePermission("absences:review"),
+  validate(absenceRequestIdParamSchema, "params"),
+  validate(updateNeedsInfoAbsenceRequestSchema),
+  asyncHandler(absenceRequestController.updateNeedsInfo),
+);
+
+absenceRequestRouter.patch(
+  "/:id/resubmit",
+  requirePermission("absences:review"),
+  validate(absenceRequestIdParamSchema, "params"),
+  asyncHandler(absenceRequestController.resubmit),
 );
 
 absenceRequestRouter.patch(

@@ -6,8 +6,12 @@ import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   absenceBalanceYearQuerySchema,
+  adjustEmployeeAbsenceBalanceSchema,
+  employeeAbsenceBalanceMovementParamsSchema,
   employeeAbsenceBalanceParamsSchema,
   employeeIdRouteParamSchema,
+  listAbsenceBalanceMovementsQuerySchema,
+  reverseAbsenceBalanceMovementSchema,
   upsertEmployeeAbsenceBalanceSchema,
 } from "../schemas/absence-balance.schema";
 import {
@@ -41,16 +45,43 @@ employeeRouter.get(
 );
 employeeRouter.put(
   "/:employeeId/absence-balances/:absenceTypeId",
-  requirePermission("absences:review"),
+  requirePermission("absences:balance:update"),
   validate(employeeAbsenceBalanceParamsSchema, "params"),
   validate(upsertEmployeeAbsenceBalanceSchema),
   asyncHandler(absenceBalanceController.upsert),
+);
+employeeRouter.get(
+  "/:employeeId/absence-balances/:absenceTypeId/movements",
+  requirePermission("absences:read"),
+  validate(employeeAbsenceBalanceParamsSchema, "params"),
+  validate(listAbsenceBalanceMovementsQuerySchema, "query"),
+  asyncHandler(absenceBalanceController.listMovements),
+);
+employeeRouter.post(
+  "/:employeeId/absence-balances/:absenceTypeId/adjustments",
+  requirePermission("absences:balance:update"),
+  validate(employeeAbsenceBalanceParamsSchema, "params"),
+  validate(adjustEmployeeAbsenceBalanceSchema),
+  asyncHandler(absenceBalanceController.adjust),
+);
+employeeRouter.post(
+  "/:employeeId/absence-balances/:absenceTypeId/movements/:movementId/reversal",
+  requirePermission("absences:balance:update"),
+  validate(employeeAbsenceBalanceMovementParamsSchema, "params"),
+  validate(reverseAbsenceBalanceMovementSchema),
+  asyncHandler(absenceBalanceController.reverse),
 );
 employeeRouter.get(
   "/:id/deactivation-impact",
   requirePermission("employees:manage"),
   validate(employeeIdParamSchema, "params"),
   asyncHandler(employeeController.getDeactivationImpact),
+);
+employeeRouter.get(
+  "/:id/operational-availability",
+  requirePermission("employees:read"),
+  validate(employeeIdParamSchema, "params"),
+  asyncHandler(employeeController.getOperationalAvailability),
 );
 employeeRouter.post(
   "/:id/deactivate",

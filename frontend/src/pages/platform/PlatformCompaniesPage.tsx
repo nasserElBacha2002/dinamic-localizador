@@ -37,7 +37,7 @@ export function PlatformCompaniesPage() {
         color: "green",
         message:
           result.data.message ||
-          "Empresa creada. Compartí la contraseña temporal que ingresaste con el usuario owner.",
+          "Empresa creada. Se envió una invitación al dueño por correo.",
       });
     } catch (error) {
       setDialogError(getApiErrorMessage(error));
@@ -47,6 +47,27 @@ export function PlatformCompaniesPage() {
   const columns = useMemo<DataTableColumn<PlatformCompany>[]>(
     () => [
       { key: "name", header: "Nombre", getValue: (row) => row.name },
+      {
+        key: "owner",
+        header: "Dueño",
+        render: (row) => {
+          if (!row.ownerEmail) {
+            return <span>—</span>;
+          }
+          const label = row.ownerName
+            ? `${row.ownerName} (${row.ownerEmail})`
+            : row.ownerEmail;
+          if (row.ownerStatus === "INVITED") {
+            return (
+              <span>
+                {label}{" "}
+                <StatusBadge label="Invitación pendiente" tone="warning" />
+              </span>
+            );
+          }
+          return <span>{label}</span>;
+        },
+      },
       {
         key: "status",
         header: "Estado",
@@ -72,6 +93,20 @@ export function PlatformCompaniesPage() {
         />
       ),
       fields: [
+        {
+          key: "owner",
+          label: "Dueño",
+          getValue: (row) => {
+            if (!row.ownerEmail) {
+              return "—";
+            }
+            const label = row.ownerName
+              ? `${row.ownerName} (${row.ownerEmail})`
+              : row.ownerEmail;
+            return row.ownerStatus === "INVITED" ? `${label} · invitación pendiente` : label;
+          },
+          visibility: "always",
+        },
         {
           key: "defaultTimezone",
           label: "Zona horaria",

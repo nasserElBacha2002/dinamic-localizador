@@ -17,6 +17,9 @@ mockApiModule("api/platform-companies.api", {
       name: "Dinamic Demo",
       status: "ACTIVE",
       defaultTimezone: "America/Argentina/Buenos_Aires",
+      ownerName: "Ada",
+      ownerEmail: "ada@example.com",
+      ownerStatus: "ACTIVE",
     },
   ],
   createPlatformCompany: async () => {
@@ -52,7 +55,7 @@ import assert from "node:assert/strict";
 import { cleanup, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
 let clearActiveTestQueryClients: typeof import("../../test/render-page").clearActiveTestQueryClients;

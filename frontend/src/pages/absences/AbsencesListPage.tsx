@@ -1,6 +1,8 @@
-import { useCallback, useMemo } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
-import { EmployeeSearchAutocomplete } from "../../components/employees/EmployeeSearchAutocomplete";
+import { useEffect, useMemo, useState } from "react";
+import { Button } from "@mantine/core";
+import { useLocation, useNavigate } from "react-router";
+import { normalizeAbsencesListSearch } from "../../api/absence-query-keys";
+import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
   FilterBar,
@@ -14,6 +16,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAbsenceRequests, useAbsenceTypes } from "../../hooks/useAbsences";
+import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import type { AbsenceRequestListItem, AbsenceRequestStatus } from "../../types/absence";
 import { terminology } from "../../domain/terminology";
@@ -34,12 +37,28 @@ import {
   ABSENCES_TABLE_FIELDS,
   shouldOmitAbsencesTableValue,
 } from "./absences-list-table-state";
+import { CreateAbsenceRequestDialog } from "./CreateAbsenceRequestDialog";
 
 const ABSENCES_LIST_PATH = "/absences";
 
 export function AbsencesListPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const permissionsQuery = useCompanyPermissions();
+  const canCreate =
+    permissionsQuery.data?.permissions.includes("absences:review") ?? false;
+  const [createOpen, setCreateOpen] = useState(false);
+
+  useEffect(() => {
+    const normalized = normalizeAbsencesListSearch(location.search);
+    if (normalized === null) {
+      return;
+    }
+    navigate(
+      { pathname: location.pathname, search: normalized ? `?${normalized}` : "" },
+      { replace: true },
+    );
+  }, [location.pathname, location.search, navigate]);
 
   const table = useTableUrlState({
     defaults: ABSENCES_TABLE_DEFAULTS,
@@ -48,6 +67,18 @@ export function AbsencesListPage() {
   });
 
   const typesQuery = useAbsenceTypes();
+  const createTypeOptions = useMemo(
+    () =>
+      (typesQuery.data ?? []).map((type) => ({
+        value: type.id,
+        label: absenceTypeLabels[type.code as keyof typeof absenceTypeLabels] ?? type.name,
+        allowsHalfDay: type.allowsHalfDay,
+        dayCountingMode: type.dayCountingMode,
+        attachmentPolicy: type.attachmentPolicy,
+        requiresAttachment: type.requiresAttachment,
+      })),
+    [typesQuery.data],
+  );
   const dateRange = useMemo(
     () =>
       urlFieldsToDateRange({
@@ -66,26 +97,10 @@ export function AbsencesListPage() {
     limit: table.pageSize,
     status: apiStatus,
     absenceTypeId: table.state.absenceTypeId || undefined,
-    employeeId: table.state.employeeId || undefined,
+    employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
     dateFrom: dateQuery.from,
     dateTo: dateQuery.to,
   });
-
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.status !== ABSENCES_TABLE_DEFAULTS.status) count += 1;
-    if (table.state.absenceTypeId !== ABSENCES_TABLE_DEFAULTS.absenceTypeId) count += 1;
-    if (table.state.employeeId !== ABSENCES_TABLE_DEFAULTS.employeeId) count += 1;
-    return count;
-  }, [table.state]);
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      status: ABSENCES_TABLE_DEFAULTS.status,
-      absenceTypeId: ABSENCES_TABLE_DEFAULTS.absenceTypeId,
-      employeeId: ABSENCES_TABLE_DEFAULTS.employeeId,
-    });
-  }, [table]);
 
   const statusOptions = useMemo(
     () => [
@@ -95,7 +110,7 @@ export function AbsencesListPage() {
     [],
   );
 
-  const typeOptions = useMemo(
+  const typeFilterOptions = useMemo(
     () => [
       { value: "", label: "Todos" },
       ...(typesQuery.data ?? []).map((type) => ({
@@ -201,7 +216,23 @@ export function AbsencesListPage() {
       <PageHeader
         title="Solicitudes de ausencia"
         description="Revisá y gestioná las solicitudes enviadas por WhatsApp o administración."
+        action={
+          canCreate ? (
+            <Button onClick={() => setCreateOpen(true)}>Nueva solicitud</Button>
+          ) : null
+        }
       />
+
+      {createOpen ? (
+        <CreateAbsenceRequestDialog
+          opened
+          onClose={() => setCreateOpen(false)}
+          typeOptions={createTypeOptions}
+          onCreated={() => {
+            /* list query invalidates via mutation */
+          }}
+        />
+      ) : null}
 
       <FilterBar
         search={
@@ -215,8 +246,8 @@ export function AbsencesListPage() {
             allowCustomRange
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <FilterSelect
@@ -235,16 +266,16 @@ export function AbsencesListPage() {
             onChange={(nextValue) => {
               table.setField("absenceTypeId", nextValue);
             }}
-            data={typeOptions}
+            data={typeFilterOptions}
           />
         </FilterBar.Item>
         <FilterBar.Item>
-          <EmployeeSearchAutocomplete
-            value={table.state.employeeId || null}
-            onChange={(value) => {
-              table.setField("employeeId", value ?? "");
-            }}
-            label={terminology.worker.singular}
+          <EmployeeMultiSelect
+            label={terminology.worker.plural}
+            value={table.state.employeeIds}
+            onChange={(ids) => table.setField("employeeIds", ids)}
+            activeOnly={false}
+            maxVisibleChips={2}
           />
         </FilterBar.Item>
       </FilterBar>

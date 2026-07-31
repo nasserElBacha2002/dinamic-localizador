@@ -16,7 +16,7 @@ import { companyAbsenceSettingsRepository } from "../repositories/company-absenc
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { userRepository } from "../repositories/user.repository";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
-import { platformCompanyService } from "./platform-company.service";
+import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { hashPassword } from "../utils/password";
 import { getCurrentYearInTimezone } from "../utils/operational-year";
 
@@ -68,6 +68,11 @@ describeDatabaseIntegration("company absence settings integration", () => {
         role: "OWNER",
         status: "ACTIVE",
       });
+    } else if (membership.role !== "OWNER" || membership.status !== "ACTIVE") {
+      await userCompanyMembershipRepository.updateMembership(dinamicCompanyId, owner.id, {
+        role: "OWNER",
+        status: "ACTIVE",
+      });
     }
 
     ownerUserId = owner.id;
@@ -90,11 +95,19 @@ describeDatabaseIntegration("company absence settings integration", () => {
         DELETE FROM employees WHERE company_id = @companyId;
         DELETE FROM employee_categories WHERE company_id = @companyId;
         DELETE FROM company_absence_settings WHERE company_id = @companyId;
+        UPDATE absence_types SET calendar_id = NULL WHERE company_id = @companyId;
+        DELETE FROM company_calendar_dates WHERE company_id = @companyId;
+        DELETE FROM company_work_calendar_weekdays WHERE company_id = @companyId;
+        DELETE FROM company_work_calendars WHERE company_id = @companyId;
         DELETE FROM absence_types WHERE company_id = @companyId;
         DELETE FROM company_location_types WHERE company_id = @companyId;
         DELETE FROM user_company_memberships WHERE company_id = @companyId;
         DELETE FROM company_modules WHERE company_id = @companyId;
         DELETE FROM company_settings WHERE company_id = @companyId;
+        DELETE FROM company_work_schedule_days WHERE company_id = @companyId;
+        DELETE FROM company_work_schedules WHERE company_id = @companyId;
+        DELETE FROM user_invitations WHERE company_id = @companyId;
+        DELETE FROM audit_logs WHERE company_id = @companyId;
         DELETE FROM companies WHERE id = @companyId;
       `);
     }
@@ -116,13 +129,12 @@ describeDatabaseIntegration("company absence settings integration", () => {
     const companyName = uniqueCompanyName();
     const ownerEmail = `absence-owner-${Date.now()}@integration.test`;
 
-    const result = await platformCompanyService.createCompany({
+    const result = await createPlatformCompanyFixture({
       name: companyName,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Absence Owner",
         email: ownerEmail,
-        temporaryPassword: "password123",
       },
     });
 
@@ -141,13 +153,12 @@ describeDatabaseIntegration("company absence settings integration", () => {
     const companyName = uniqueCompanyName();
     const ownerEmail = `absence-idempotent-${Date.now()}@integration.test`;
 
-    const result = await platformCompanyService.createCompany({
+    const result = await createPlatformCompanyFixture({
       name: companyName,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Idempotent Owner",
         email: ownerEmail,
-        temporaryPassword: "password123",
       },
     });
 
@@ -280,13 +291,12 @@ describeDatabaseIntegration("company absence settings integration", () => {
     const companyName = uniqueCompanyName();
     const ownerEmail = `absence-employee-${Date.now()}@integration.test`;
 
-    const created = await platformCompanyService.createCompany({
+    const created = await createPlatformCompanyFixture({
       name: companyName,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Employee Balance Owner",
         email: ownerEmail,
-        temporaryPassword: "password123",
       },
     });
 

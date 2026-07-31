@@ -1,36 +1,59 @@
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { useMemo, useState } from "react";
 import type { SearchAutocompleteOption } from "../types/search-autocomplete";
 import { useDebouncedValue } from "./useDebouncedValue";
 
 interface UseAsyncSearchOptionsParams<T> {
-  queryKey: string;
-  fetchItems: (search: string) => Promise<T[]>;
+  /** Stable key factory including company + normalized search params. */
+  getQueryKey: (debouncedSearch: string) => readonly unknown[];
+  fetchItems: (search: string, signal: AbortSignal) => Promise<T[]>;
   mapToOption: (item: T) => SearchAutocompleteOption;
+  /**
+   * Tenant / company scope. When this changes, previous search results are not
+   * kept as placeholderData (avoids cross-company flicker).
+   */
+  scopeKey?: string | undefined;
   debounceMs?: number;
   minSearchLength?: number;
   enabled?: boolean;
-  queryExtra?: unknown;
+  staleTime?: number;
 }
 
 export function useAsyncSearchOptions<T>({
-  queryKey,
+  getQueryKey,
   fetchItems,
   mapToOption,
+  scopeKey,
   debounceMs = 300,
   minSearchLength = 0,
   enabled = true,
-  queryExtra,
+  staleTime,
 }: UseAsyncSearchOptionsParams<T>) {
   const [inputValue, setInputValue] = useState("");
+  const [trackedScopeKey, setTrackedScopeKey] = useState(scopeKey);
+
+  // Reset local input when tenant scope changes (React-recommended prop→state sync).
+  if (trackedScopeKey !== scopeKey) {
+    setTrackedScopeKey(scopeKey);
+    setInputValue("");
+  }
+
   const debouncedSearch = useDebouncedValue(inputValue, debounceMs);
   const canSearch = debouncedSearch.trim().length >= minSearchLength;
+  const trimmedSearch = debouncedSearch.trim();
 
   const { data, isFetching, isFetched } = useQuery({
-    queryKey: [queryKey, debouncedSearch, queryExtra],
-    queryFn: () => fetchItems(debouncedSearch.trim()),
+    queryKey: getQueryKey(trimmedSearch),
+    queryFn: ({ signal }) => fetchItems(trimmedSearch, signal),
     enabled: enabled && canSearch,
-    placeholderData: keepPreviousData,
+    meta: { scopeKey },
+    placeholderData: (previousData, previousQuery) => {
+      if (previousQuery?.meta?.scopeKey !== scopeKey) {
+        return undefined;
+      }
+      return previousData;
+    },
+    staleTime,
   });
 
   const options = useMemo(
@@ -45,6 +68,6 @@ export function useAsyncSearchOptions<T>({
     items: data ?? [],
     isLoading: isFetching,
     hasSearched: isFetched && canSearch,
-    debouncedSearch: debouncedSearch.trim(),
+    debouncedSearch: trimmedSearch,
   };
 }

@@ -16,7 +16,13 @@ import { statisticsRouter } from "./statistics.routes";
 import { serviceRouter } from "./service.routes";
 import { twilioRouter } from "./twilio.routes";
 import { absenceRequestRouter } from "./absence-request.routes";
+import { absenceAttachmentRouter } from "./absence-attachment.routes";
+import { absenceRequestDraftRouter } from "./absence-request-draft.routes";
 import { absenceTypesRouter } from "./absence-type.routes";
+import {
+  absenceCalendarRouter,
+  absenceCalculateRouter,
+} from "./absence-calendar.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
@@ -24,6 +30,7 @@ import { companyUserRouter } from "./company-user.routes";
 import { importRouter } from "./import.routes";
 import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
+import { companyInvitationRouter, publicInvitationRouter } from "./user-invitation.routes";
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
 import { asyncHandler } from "../middleware/async-handler";
@@ -37,6 +44,7 @@ export const apiRouter = Router();
 
 apiRouter.use("/", healthRouter);
 apiRouter.use("/auth", authRouter);
+apiRouter.use("/invitations", publicInvitationRouter);
 apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
@@ -66,6 +74,7 @@ const mountEmployeeRoutes = (router: Router) => {
 const companyScopedOperationalRouter = Router({ mergeParams: true });
 companyScopedOperationalRouter.use(resolveCompanyContext);
 companyScopedOperationalRouter.use("/users", companyUserRouter);
+companyScopedOperationalRouter.use("/invitations", companyInvitationRouter);
 companyScopedOperationalRouter.use(asyncHandler(loadCompanyModuleStates));
 companyScopedOperationalRouter.use("/lookups", lookupRouter);
 companyScopedOperationalRouter.use("/imports", importRouter);
@@ -117,9 +126,29 @@ companyScopedOperationalRouter.use(
   absenceTypesRouter,
 );
 companyScopedOperationalRouter.use(
+  "/absence-request-drafts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceRequestDraftRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalculateRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceAttachmentRouter,
+);
+companyScopedOperationalRouter.use(
   "/absence-requests",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceRequestRouter,
+);
+companyScopedOperationalRouter.use(
+  "/absence-calendars",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalendarRouter,
 );
 companyScopedOperationalRouter.use(
   "/dev/attendance-reminders",
@@ -182,9 +211,29 @@ operationalRouter.use(
   absenceTypesRouter,
 );
 operationalRouter.use(
+  "/absence-request-drafts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceRequestDraftRouter,
+);
+operationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalculateRouter,
+);
+operationalRouter.use(
+  "/absence-requests",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceAttachmentRouter,
+);
+operationalRouter.use(
   "/absence-requests",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceRequestRouter,
+);
+operationalRouter.use(
+  "/absence-calendars",
+  requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
+  absenceCalendarRouter,
 );
 operationalRouter.use(
   "/dev/attendance-reminders",

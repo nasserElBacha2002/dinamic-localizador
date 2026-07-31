@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { OperationWithService } from "../../types/operation";
 import { UNASSIGNED_LABEL } from "../../utils/display-safe";
+import { getOperationDisplayName } from "../../utils/operation-display";
 import { getOperationServiceAddress, getOperationServiceName } from "./operations-list-columns";
 
 const baseOperation = {
@@ -30,6 +31,7 @@ describe("operations list column helpers", () => {
     };
 
     assert.equal(getOperationServiceName(row), "Centro");
+    assert.equal(getOperationDisplayName(row), getOperationServiceName(row));
     assert.equal(getOperationServiceAddress(row), "Av. Siempre Viva 742");
   });
 
@@ -40,6 +42,7 @@ describe("operations list column helpers", () => {
     } as unknown as OperationWithService;
 
     assert.equal(getOperationServiceName(row), UNASSIGNED_LABEL);
+    assert.equal(getOperationDisplayName(row), UNASSIGNED_LABEL);
     assert.equal(getOperationServiceAddress(row), "—");
   });
 });

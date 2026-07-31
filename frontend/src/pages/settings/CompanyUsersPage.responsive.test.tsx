@@ -48,11 +48,33 @@ mockApiModule("api/company-users.api", {
   getActiveCompanyMembershipPath: () => null,
 });
 
+mockApiModule("api/invitations.api", {
+  listCompanyInvitations: async () => ({
+    data: [],
+    meta: { page: 1, pageSize: 20, totalItems: 0, totalPages: 0 },
+  }),
+  createCompanyInvitation: async () => {
+    throw new Error("not used");
+  },
+  resendCompanyInvitation: async () => {
+    throw new Error("not used");
+  },
+  revokeCompanyInvitation: async () => {
+    throw new Error("not used");
+  },
+  previewInvitation: async () => {
+    throw new Error("not used");
+  },
+  acceptInvitation: async () => {
+    throw new Error("not used");
+  },
+});
+
 import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 
 let renderPage: typeof import("../../test/render-page").renderPage;
 let clearActiveTestQueryClients: typeof import("../../test/render-page").clearActiveTestQueryClients;

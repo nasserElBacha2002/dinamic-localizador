@@ -1,9 +1,9 @@
 import { Button, Text } from "@mantine/core";
-import { useCallback, useMemo } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { EmployeeLookupAutocomplete } from "../../components/lookups/EmployeeLookupAutocomplete";
-import { OperationLookupAutocomplete } from "../../components/lookups/OperationLookupAutocomplete";
-import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
+import { useMemo } from "react";
+import { Link, useLocation, useNavigate } from "react-router";
+import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
+import { OperationMultiSelect } from "../../components/lookups/EntityMultiSelects";
+import { ServiceMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   ActionMenu,
   DataTable,
@@ -81,9 +81,9 @@ export function AttendanceListPage() {
   const filters = {
     page: table.page,
     limit: table.pageSize,
-    operationId: table.state.operationId || undefined,
-    employeeId: table.state.employeeId || undefined,
-    serviceId: table.state.serviceId || undefined,
+    operationIds: table.state.operationIds.length > 0 ? table.state.operationIds : undefined,
+    employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
+    serviceIds: table.state.serviceIds.length > 0 ? table.state.serviceIds : undefined,
     validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
@@ -94,30 +94,6 @@ export function AttendanceListPage() {
   };
 
   const { data, isPending, isError, error } = useAttendanceRecords(filters);
-
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.operationId !== ATTENDANCE_TABLE_DEFAULTS.operationId) count += 1;
-    if (table.state.employeeId !== ATTENDANCE_TABLE_DEFAULTS.employeeId) count += 1;
-    if (table.state.serviceId !== ATTENDANCE_TABLE_DEFAULTS.serviceId) count += 1;
-    if (table.state.validationStatus !== ATTENDANCE_TABLE_DEFAULTS.validationStatus) count += 1;
-    if (table.state.locationStatus !== ATTENDANCE_TABLE_DEFAULTS.locationStatus) count += 1;
-    if (table.state.punctualityStatus !== ATTENDANCE_TABLE_DEFAULTS.punctualityStatus) count += 1;
-    if (table.state.recordType !== ATTENDANCE_TABLE_DEFAULTS.recordType) count += 1;
-    return count;
-  }, [table.state]);
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      operationId: ATTENDANCE_TABLE_DEFAULTS.operationId,
-      employeeId: ATTENDANCE_TABLE_DEFAULTS.employeeId,
-      serviceId: ATTENDANCE_TABLE_DEFAULTS.serviceId,
-      validationStatus: ATTENDANCE_TABLE_DEFAULTS.validationStatus,
-      locationStatus: ATTENDANCE_TABLE_DEFAULTS.locationStatus,
-      punctualityStatus: ATTENDANCE_TABLE_DEFAULTS.punctualityStatus,
-      recordType: ATTENDANCE_TABLE_DEFAULTS.recordType,
-    });
-  }, [table]);
 
   const handleExport = async () => {
     if (exportsDisabled) {
@@ -318,35 +294,35 @@ export function AttendanceListPage() {
             allowCustomRange
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
-          <OperationLookupAutocomplete
-            value={table.state.operationId || null}
-            onChange={(id) => {
-              table.setField("operationId", id ?? "");
-            }}
+          <OperationMultiSelect
+            label={terminology.operation.plural}
+            value={table.state.operationIds}
+            onChange={(ids) => table.setField("operationIds", ids)}
+            maxVisibleChips={2}
           />
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <EmployeeLookupAutocomplete
-            value={table.state.employeeId || null}
-            onChange={(id) => {
-              table.setField("employeeId", id ?? "");
-            }}
+          <EmployeeMultiSelect
+            label={terminology.worker.plural}
+            value={table.state.employeeIds}
+            onChange={(ids) => table.setField("employeeIds", ids)}
             activeOnly={false}
+            maxVisibleChips={2}
           />
         </FilterBar.Item>
 
         <FilterBar.Item>
-          <ServiceLookupAutocomplete
-            value={table.state.serviceId || null}
-            onChange={(id) => {
-              table.setField("serviceId", id ?? "");
-            }}
+          <ServiceMultiSelect
+            label={terminology.service.plural}
+            value={table.state.serviceIds}
+            onChange={(ids) => table.setField("serviceIds", ids)}
             activeOnly={false}
+            maxVisibleChips={2}
           />
         </FilterBar.Item>
 

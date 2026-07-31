@@ -1,8 +1,10 @@
 import type { OperationWithService } from "../../types/operation";
-import { getRelatedName, safeText } from "../../utils/display-safe";
+import { getOperationDisplayName } from "../../utils/operation-display";
+import { safeText } from "../../utils/display-safe";
 
+/** @deprecated Prefer {@link getOperationDisplayName} — same service-based identity. */
 export function getOperationServiceName(row: OperationWithService): string {
-  return getRelatedName(row.service);
+  return getOperationDisplayName(row);
 }
 
 export function getOperationServiceAddress(row: OperationWithService): string {

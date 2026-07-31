@@ -5,9 +5,9 @@ import { EMPTY_DATE_RANGE_VALUE } from "../../utils/date-range";
 export const ATTENDANCE_TABLE_DEFAULTS = {
   page: 1,
   pageSize: 10,
-  operationId: "",
-  employeeId: "",
-  serviceId: "",
+  operationIds: [] as string[],
+  employeeIds: [] as string[],
+  serviceIds: [] as string[],
   validationStatus: "",
   locationStatus: "",
   punctualityStatus: "",
@@ -16,6 +16,9 @@ export const ATTENDANCE_TABLE_DEFAULTS = {
 };
 
 export const ATTENDANCE_TABLE_FIELDS = {
+  operationIds: { type: "stringList" as const },
+  employeeIds: { type: "stringList" as const },
+  serviceIds: { type: "stringList" as const },
   recordType: { type: "enum", values: ["real", "simulation", "all"] },
   validationStatus: {
     type: "enum",
@@ -35,4 +38,9 @@ export const shouldOmitAttendanceTableValue = (
   key: keyof typeof ATTENDANCE_TABLE_DEFAULTS,
   value: (typeof ATTENDANCE_TABLE_DEFAULTS)[keyof typeof ATTENDANCE_TABLE_DEFAULTS],
   defaults: typeof ATTENDANCE_TABLE_DEFAULTS,
-): boolean => value === defaults[key] || value === "";
+): boolean => {
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+  return value === defaults[key] || value === "";
+};

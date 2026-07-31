@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -7,25 +7,28 @@ import {
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
 import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
+import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
 import { companyModuleRepository } from "../repositories/company-module.repository";
 import { companyRepository } from "../repositories/company.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+import { userInvitationRepository } from "../repositories/user-invitation.repository";
 import { userRepository } from "../repositories/user.repository";
-import { platformCompanyService } from "./platform-company.service";
+import { companyWorkScheduleService } from "./company-work-schedule.service";
+import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
 
 const uniqueCompanyName = (): string =>
   `Integration Test Co ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
+const deleteCreatedCompany = async (companyId: string): Promise<void> => {
+  await deleteCompanyCascade(companyId);
+};
+
 describeDatabaseIntegration("platform company creation integration", () => {
   let platformAdminId = "";
-  let platformAdminEmail = "";
-  let regularOwnerId = "";
-  let regularOwnerEmail = "";
   let createdCompanyIds: string[] = [];
-  let createdUserEmails: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();
@@ -34,73 +37,41 @@ describeDatabaseIntegration("platform company creation integration", () => {
     const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
     assert.ok(platformAdmin?.isPlatformAdmin, "platform superadmin must exist");
     platformAdminId = platformAdmin.id;
-    platformAdminEmail = platformAdmin.email;
-
-    const pool = getPool();
-    const ownerResult = await pool.request().query(`
-      SELECT TOP 1 u.id, u.email
-      FROM users u
-      INNER JOIN user_company_memberships m ON m.user_id = u.id
-      WHERE u.is_platform_admin = 0
-        AND u.active = 1
-        AND m.role = 'OWNER'
-        AND m.status = 'ACTIVE'
-    `);
-    assert.ok(ownerResult.recordset[0], "requires a regular OWNER user");
-    regularOwnerId = String(ownerResult.recordset[0].id);
-    regularOwnerEmail = String(ownerResult.recordset[0].email);
   });
 
   after(async () => {
-    const pool = getPool();
-    for (const companyId of createdCompanyIds) {
-      await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
-        DELETE FROM employee_absence_balances WHERE company_id = @companyId;
-        DELETE FROM employees WHERE company_id = @companyId;
-        DELETE FROM employee_categories WHERE company_id = @companyId;
-        DELETE FROM company_absence_settings WHERE company_id = @companyId;
-        DELETE FROM absence_types WHERE company_id = @companyId;
-        DELETE FROM company_location_types WHERE company_id = @companyId;
-        DELETE FROM user_company_memberships WHERE company_id = @companyId;
-        DELETE FROM company_modules WHERE company_id = @companyId;
-        DELETE FROM company_settings WHERE company_id = @companyId;
-        DELETE FROM companies WHERE id = @companyId;
-      `);
-    }
-
-    for (const email of createdUserEmails) {
-      const user = await userRepository.findByEmail(email);
-      if (user) {
-        await pool.request().input("userId", sql.UniqueIdentifier, user.id).query(`
-          DELETE FROM user_company_memberships WHERE user_id = @userId;
-          DELETE FROM users WHERE id = @userId;
-        `);
+    try {
+      for (const companyId of createdCompanyIds.splice(0)) {
+        await deleteCreatedCompany(companyId);
       }
+    } finally {
+      await teardownDatabaseIntegration();
     }
-
-    await teardownDatabaseIntegration();
   });
 
-  it("creates company, settings, modules, and OWNER membership for new owner", async () => {
+  it("creates company with settings, modules, work schedule, and OWNER invitation", async () => {
     const companyName = uniqueCompanyName();
     const ownerEmail = `owner-${Date.now()}@integration.test`;
-    createdUserEmails.push(ownerEmail);
 
-    const result = await platformCompanyService.createCompany({
-      name: companyName,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      modules: ["attendance", "attendance", "reports"],
-      owner: {
-        name: "Integration Owner",
-        email: ownerEmail,
-        temporaryPassword: "password123",
+    const result = await createPlatformCompanyFixture(
+      {
+        name: companyName,
+        defaultTimezone: "America/Argentina/Buenos_Aires",
+        modules: ["attendance", "attendance", "reports"],
+        owner: {
+          name: "Integration Owner",
+          email: ownerEmail,
+        },
       },
-    });
+      platformAdminId,
+    );
 
     createdCompanyIds.push(result.data.company.id);
     assert.equal(result.data.company.name, companyName);
     assert.equal("temporaryPassword" in result.data, false);
     assert.equal("passwordHash" in result.data, false);
+    assert.ok(result.data.ownerInvitation.id);
+    assert.equal(result.data.ownerInvitation.email, ownerEmail.toLowerCase());
 
     const settings = await companySettingsRepository.findByCompanyId(result.data.company.id);
     assert.ok(settings);
@@ -113,44 +84,55 @@ describeDatabaseIntegration("platform company creation integration", () => {
       1,
     );
 
-    const owner = await userRepository.findByEmail(ownerEmail);
-    assert.ok(owner);
-    const membership = await userCompanyMembershipRepository.findActiveMembership(
-      owner.id,
+    const schedule = await companyWorkScheduleService.getByCompanyId(result.data.company.id);
+    assert.ok(schedule);
+    assert.ok(schedule.days.length > 0);
+
+    const invitation = await userInvitationRepository.findById(result.data.ownerInvitation.id);
+    assert.ok(invitation);
+    assert.equal(invitation.status, "PENDING");
+    assert.equal(invitation.role, "OWNER");
+
+    const ownerUser = await userRepository.findByEmail(ownerEmail);
+    assert.equal(ownerUser, null);
+    const memberships = await userCompanyMembershipRepository.listByCompany(
       result.data.company.id,
+      { page: 1, limit: 20 },
     );
-    assert.ok(membership);
-    assert.equal(membership.role, "OWNER");
+    assert.equal(memberships.total, 0);
   });
 
   it("returns 409 COMPANY_NAME_ALREADY_EXISTS for duplicate company name", async () => {
     const companyName = uniqueCompanyName();
     const ownerEmail1 = `owner-a-${Date.now()}@integration.test`;
     const ownerEmail2 = `owner-b-${Date.now()}@integration.test`;
-    createdUserEmails.push(ownerEmail1, ownerEmail2);
 
-    const first = await platformCompanyService.createCompany({
-      name: companyName,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      owner: {
-        name: "Owner A",
-        email: ownerEmail1,
-        temporaryPassword: "password123",
+    const first = await createPlatformCompanyFixture(
+      {
+        name: companyName,
+        defaultTimezone: "America/Argentina/Buenos_Aires",
+        owner: {
+          name: "Owner A",
+          email: ownerEmail1,
+        },
       },
-    });
+      platformAdminId,
+    );
     createdCompanyIds.push(first.data.company.id);
 
     await assert.rejects(
       () =>
-        platformCompanyService.createCompany({
-          name: companyName,
-          defaultTimezone: "America/Argentina/Buenos_Aires",
-          owner: {
-            name: "Owner B",
-            email: ownerEmail2,
-            temporaryPassword: "password123",
+        createPlatformCompanyFixture(
+          {
+            name: companyName,
+            defaultTimezone: "America/Argentina/Buenos_Aires",
+            owner: {
+              name: "Owner B",
+              email: ownerEmail2,
+            },
           },
-        }),
+          platformAdminId,
+        ),
       (error: unknown) =>
         error instanceof Error &&
         "code" in error &&
@@ -158,25 +140,47 @@ describeDatabaseIntegration("platform company creation integration", () => {
     );
   });
 
-  it("reuses existing owner without changing password", async () => {
+  it("invites existing user as OWNER without changing their password", async () => {
     const companyName = uniqueCompanyName();
-    const existingOwner = await userRepository.findByEmail(regularOwnerEmail);
-    assert.ok(existingOwner);
-    const passwordBefore = existingOwner.passwordHash;
+    const pool = getPool();
+    const ownerResult = await pool.request().query(`
+      SELECT TOP 1 u.id, u.email, u.name, u.password_hash
+      FROM users u
+      INNER JOIN user_company_memberships m ON m.user_id = u.id
+      WHERE u.is_platform_admin = 0
+        AND u.active = 1
+        AND m.role = 'OWNER'
+        AND m.status = 'ACTIVE'
+    `);
+    assert.ok(ownerResult.recordset[0], "requires a regular OWNER user");
+    const existing = ownerResult.recordset[0] as {
+      id: string;
+      email: string;
+      name: string;
+      password_hash: string;
+    };
 
-    const result = await platformCompanyService.createCompany({
-      name: companyName,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      owner: {
-        name: existingOwner.name,
-        email: existingOwner.email,
+    const result = await createPlatformCompanyFixture(
+      {
+        name: companyName,
+        defaultTimezone: "America/Argentina/Buenos_Aires",
+        owner: {
+          name: existing.name,
+          email: existing.email,
+        },
       },
-    });
+      platformAdminId,
+    );
     createdCompanyIds.push(result.data.company.id);
 
-    const ownerAfter = await userRepository.findByEmail(regularOwnerEmail);
+    const ownerAfter = await userRepository.findByEmail(existing.email);
     assert.ok(ownerAfter);
-    assert.equal(ownerAfter.passwordHash, passwordBefore);
+    assert.equal(ownerAfter.passwordHash, existing.password_hash);
+
+    const invitation = await userInvitationRepository.findById(result.data.ownerInvitation.id);
+    assert.ok(invitation);
+    assert.equal(invitation.targetUserId, existing.id);
+    assert.equal(invitation.role, "OWNER");
   });
 });
 
@@ -187,7 +191,6 @@ describeDatabaseIntegration("platform company routes authorization", () => {
   let platformAdminEmail = "";
   let regularOwnerId = "";
   let regularOwnerEmail = "";
-  let dinamicCompanyId = "";
 
   before(async () => {
     setupUnitTestEnv();
@@ -205,7 +208,6 @@ describeDatabaseIntegration("platform company routes authorization", () => {
 
     const dinamic = await companyRepository.findByName("Dinamic Systems");
     assert.ok(dinamic);
-    dinamicCompanyId = dinamic.id;
 
     const pool = getPool();
     const ownerResult = await pool.request().query(`
@@ -223,10 +225,13 @@ describeDatabaseIntegration("platform company routes authorization", () => {
   });
 
   after(async () => {
-    if (closeServer) {
-      await closeServer();
+    try {
+      if (closeServer) {
+        await closeServer();
+      }
+    } finally {
+      await teardownDatabaseIntegration();
     }
-    await teardownDatabaseIntegration();
   });
 
   const createPayload = () => ({
@@ -235,7 +240,6 @@ describeDatabaseIntegration("platform company routes authorization", () => {
     owner: {
       name: "Route Owner",
       email: `route-owner-${Date.now()}@integration.test`,
-      temporaryPassword: "password123",
     },
   });
 
@@ -277,23 +281,12 @@ describeDatabaseIntegration("platform company routes authorization", () => {
     assert.equal(response.status, 201);
     const data = response.body.data as Record<string, unknown>;
     assert.ok(data.company);
+    assert.ok(data.ownerInvitation);
     assert.equal("temporaryPassword" in data, false);
 
     const company = data.company as { id?: string };
     if (company.id) {
-      const pool = getPool();
-      await pool.request().input("companyId", sql.UniqueIdentifier, company.id).query(`
-        DELETE FROM employee_absence_balances WHERE company_id = @companyId;
-        DELETE FROM employees WHERE company_id = @companyId;
-        DELETE FROM employee_categories WHERE company_id = @companyId;
-        DELETE FROM company_absence_settings WHERE company_id = @companyId;
-        DELETE FROM absence_types WHERE company_id = @companyId;
-        DELETE FROM company_location_types WHERE company_id = @companyId;
-        DELETE FROM user_company_memberships WHERE company_id = @companyId;
-        DELETE FROM company_modules WHERE company_id = @companyId;
-        DELETE FROM company_settings WHERE company_id = @companyId;
-        DELETE FROM companies WHERE id = @companyId;
-      `);
+      await deleteCreatedCompany(company.id);
     }
   });
 });

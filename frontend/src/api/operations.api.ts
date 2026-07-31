@@ -39,11 +39,13 @@ import { scopedApiClient } from "./scoped-client";
 
 export async function getOperations(
   filters: OperationFilters = {},
+  options?: { signal?: AbortSignal },
 ): Promise<PaginatedResponse<OperationWithService>> {
   const { data } = await scopedApiClient.get<PaginatedResponse<OperationWithService>>(
     API_ENDPOINTS.operations,
     {
       params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+      signal: options?.signal,
     },
   );
   return data;
@@ -94,6 +96,33 @@ export async function assignEmployeeToOperation(
 ): Promise<OperationEmployeeAssignment> {
   const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
     operationAssignmentPath(operationId),
+    input,
+  );
+  return data.data;
+}
+
+export interface AssignEmployeesBatchResult {
+  assignedCount: number;
+  assignedIds: string[];
+  skippedCount: number;
+  skipped: Array<{
+    employeeId: string;
+    employeeName: string;
+    code: string;
+    reason: string;
+  }>;
+}
+
+export async function assignEmployeesBatchToOperation(
+  operationId: string,
+  input: {
+    employeeIds: string[];
+    validFrom?: string;
+    validUntil?: string | null;
+  },
+): Promise<AssignEmployeesBatchResult> {
+  const { data } = await scopedApiClient.post<SingleResponse<AssignEmployeesBatchResult>>(
+    `${operationAssignmentPath(operationId)}/batch`,
     input,
   );
   return data.data;

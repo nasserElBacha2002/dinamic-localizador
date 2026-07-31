@@ -8,6 +8,7 @@ import { companyLocationTypesService } from "./company-location-types.service";
 import { companyWorkScheduleService } from "./company-work-schedule.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+import { absenceAttachmentService } from "./absence-attachment.service";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
 import type { UpdateCompanyAbsenceSettingsInput } from "../schemas/company-absence-settings.schema";
 import type {
@@ -37,6 +38,10 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   confirmationReminderEnabled: settings.confirmationReminderEnabled,
   confirmationReminderHoursBefore: settings.confirmationReminderHoursBefore,
   pendingOperationExpirationHours: settings.pendingOperationExpirationHours,
+  absenceAdvancedCalendarEnabled: settings.absenceAdvancedCalendarEnabled,
+  absenceBalanceLedgerEnabled: settings.absenceBalanceLedgerEnabled,
+  absenceAttachmentsEnabled: settings.absenceAttachmentsEnabled,
+  absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });
@@ -90,6 +95,17 @@ export const companyService = {
     }
 
     await this.getCompanyOrThrow(companyId);
+
+    if (input.absenceAttachmentsEnabled === true) {
+      const health = await absenceAttachmentService.getStorageHealth();
+      if (!health.configured || !health.available) {
+        throw new AppError(
+          503,
+          "GCS_NOT_CONFIGURED",
+          `No se pueden habilitar adjuntos: ${health.message ?? "GCS no disponible"}`,
+        );
+      }
+    }
 
     const existing = await companySettingsRepository.findByCompanyId(companyId);
     if (!existing) {

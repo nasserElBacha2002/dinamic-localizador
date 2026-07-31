@@ -36,12 +36,16 @@ const upsertInTransaction = async (
       UPDATE employee_absence_balances WITH (UPDLOCK, HOLDLOCK)
       SET
         total_days = @totalDays,
+        granted_days = @totalDays,
+        available_days = @totalDays - reserved_days - consumed_days,
         notes = @notes,
+        version = version + 1,
         updated_at = SYSUTCDATETIME()
       WHERE employee_id = @employeeId
         AND absence_type_id = @absenceTypeId
         AND year = @year
         AND company_id = @companyId
+        AND @totalDays - reserved_days - consumed_days >= 0
     `);
 
   if (updateResult.rowsAffected[0] === 0) {
@@ -55,9 +59,13 @@ const upsertInTransaction = async (
         .input("notes", sql.NVarChar(500), input.notes ?? null)
         .query(`
           INSERT INTO employee_absence_balances (
-            company_id, employee_id, absence_type_id, year, total_days, notes
+            company_id, employee_id, absence_type_id, year, total_days, notes,
+            granted_days, reserved_days, consumed_days, available_days, version
           )
-          VALUES (@companyId, @employeeId, @absenceTypeId, @year, @totalDays, @notes)
+          VALUES (
+            @companyId, @employeeId, @absenceTypeId, @year, @totalDays, @notes,
+            @totalDays, 0, 0, @totalDays, 1
+          )
         `);
     } catch (error) {
       if (!isUniqueConstraintError(error)) {
@@ -75,12 +83,16 @@ const upsertInTransaction = async (
           UPDATE employee_absence_balances WITH (UPDLOCK, HOLDLOCK)
           SET
             total_days = @totalDays,
+            granted_days = @totalDays,
+            available_days = @totalDays - reserved_days - consumed_days,
             notes = @notes,
+            version = version + 1,
             updated_at = SYSUTCDATETIME()
           WHERE employee_id = @employeeId
             AND absence_type_id = @absenceTypeId
             AND year = @year
             AND company_id = @companyId
+            AND @totalDays - reserved_days - consumed_days >= 0
         `);
 
       if (retryUpdate.rowsAffected[0] === 0) {
@@ -193,9 +205,13 @@ export const absenceBalanceRepository = {
           )
           BEGIN
             INSERT INTO employee_absence_balances (
-              company_id, employee_id, absence_type_id, year, total_days, notes
+              company_id, employee_id, absence_type_id, year, total_days, notes,
+              granted_days, reserved_days, consumed_days, available_days, version
             )
-            VALUES (@companyId, @employeeId, @absenceTypeId, @year, @totalDays, @notes);
+            VALUES (
+              @companyId, @employeeId, @absenceTypeId, @year, @totalDays, @notes,
+              @totalDays, 0, 0, @totalDays, 1
+            );
           END
 
           SELECT TOP 1 *

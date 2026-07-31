@@ -1,17 +1,13 @@
-import { Menu, Text, UnstyledButton } from "@mantine/core";
-import { useNavigate } from "react-router-dom";
+import { Group, Menu, Text, UnstyledButton } from "@mantine/core";
+import { useNavigate } from "react-router";
 import { useCompany } from "../../hooks/useCompany";
 import { companyRoleLabels } from "../../utils/labels";
 import type { CompanyRole } from "../../types/company-user";
+import { EntityAvatar } from "../components/EntityAvatar";
 import classes from "./company-switcher.module.css";
 
 interface CompanySwitcherProps {
   compact?: boolean;
-}
-
-function getCompanyInitial(name: string): string {
-  const trimmed = name.trim();
-  return trimmed ? trimmed.charAt(0).toUpperCase() : "?";
 }
 
 function getRoleLabel(role: string): string {
@@ -37,9 +33,12 @@ function CompanySwitcherDisplay({
         .filter(Boolean)
         .join(" ")}
     >
-      <span className={classes.icon} aria-hidden>
-        {getCompanyInitial(companyName)}
-      </span>
+      {/*
+        Visual decision: brand tone (not deterministic palette) to preserve the
+        previous active-company look. Size stays `sm` (32px) in compact and default
+        to match the pre-avatar switcher icon.
+      */}
+      <EntityAvatar name={companyName} entityType="company" size="sm" tone="brand" />
       <div className={classes.content}>
         {!compact ? <div className={classes.label}>Empresa activa</div> : null}
         <div className={[classes.name, compact ? classes.nameCompact : ""].filter(Boolean).join(" ")}>
@@ -95,12 +94,17 @@ export function CompanySwitcher({ compact = false }: CompanySwitcherProps) {
               onClick={() => handleSelect(company.companyId)}
               rightSection={isActive ? "✓" : undefined}
             >
-              <Text size="sm" fw={isActive ? 600 : 500}>
-                {company.companyName}
-              </Text>
-              <Text size="xs" c="dimmed">
-                {getRoleLabel(company.role)}
-              </Text>
+              <Group gap="sm" wrap="nowrap" align="flex-start">
+                <EntityAvatar name={company.companyName} entityType="company" size="sm" tone="brand" />
+                <div className={classes.menuItemText}>
+                  <Text size="sm" fw={isActive ? 600 : 500} lineClamp={1}>
+                    {company.companyName}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {getRoleLabel(company.role)}
+                  </Text>
+                </div>
+              </Group>
             </Menu.Item>
           );
         })}

@@ -45,6 +45,9 @@ export const mapOperationAttendanceSummaryRow = (
   confirmationStatus: AssignmentConfirmationStatus;
   confirmedAt: string | null;
   unavailableAt: string | null;
+  expectationStatus: string | null;
+  absenceRequestId: string | null;
+  employeeWorkdayId: string | null;
 } => {
   const employee = mapEmployeeRow(row);
   const attendance = row.attendance_id
@@ -85,5 +88,8 @@ export const mapOperationAttendanceSummaryRow = (
     confirmationStatus: parseConfirmationStatus(row.confirmation_status),
     confirmedAt: toIsoOrNull(row.confirmed_at),
     unavailableAt: toIsoOrNull(row.unavailable_at),
+    expectationStatus: row.expectation_status ? String(row.expectation_status) : null,
+    absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
+    employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
   };
 };

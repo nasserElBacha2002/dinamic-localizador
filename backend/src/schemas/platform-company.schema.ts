@@ -25,10 +25,6 @@ const companySettingsInputSchema = z.object({
 const ownerInputSchema = z.object({
   name: z.string().trim().min(1, "El nombre del owner es obligatorio").max(150),
   email: z.string().trim().email("Email inválido").max(255),
-  temporaryPassword: z
-    .string()
-    .min(8, "La contraseña temporal debe tener al menos 8 caracteres")
-    .optional(),
 });
 
 export const createPlatformCompanySchema = z.object({

@@ -21,29 +21,30 @@ export function StatisticsPage() {
       <StatisticsFiltersBar
         dateRange={data.dateRange}
         defaultDateRange={data.defaultDateRange}
-        operationId={data.operationId}
-        serviceId={data.serviceId}
-        employeeId={data.employeeId}
+        operationIds={data.operationIds}
+        serviceIds={data.serviceIds}
+        employeeIds={data.employeeIds}
         operationKind={data.operationKind}
         effectiveState={data.effectiveState}
         validationStatus={data.validationStatus}
         locationStatus={data.locationStatus}
         punctualityStatus={data.punctualityStatus}
+        activeFilterCount={data.activeFilterCount}
         onDateRangeChange={(value) => {
           data.resetAllPages();
           data.setDateRange(value);
         }}
         onOperationChange={(value) => {
           data.resetAllPages();
-          data.setOperationId(value);
+          data.setOperationIds(value);
         }}
         onServiceChange={(value) => {
           data.resetAllPages();
-          data.setServiceId(value);
+          data.setServiceIds(value);
         }}
         onEmployeeChange={(value) => {
           data.resetAllPages();
-          data.setEmployeeId(value);
+          data.setEmployeeIds(value);
         }}
         onOperationKindChange={(value) => {
           data.resetAllPages();
@@ -65,17 +66,7 @@ export function StatisticsPage() {
           data.resetAllPages();
           data.setPunctualityStatus(value);
         }}
-        onClearSecondaryFilters={() => {
-          data.resetAllPages();
-          data.setOperationId("");
-          data.setServiceId("");
-          data.setEmployeeId("");
-          data.setOperationKind("");
-          data.setEffectiveState("");
-          data.setValidationStatus("");
-          data.setLocationStatus("");
-          data.setPunctualityStatus("");
-        }}
+        onClearFilters={data.resetFilters}
       />
 
       {data.exportsDisabled ? (

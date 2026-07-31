@@ -18,6 +18,21 @@ export const operationAssignmentController = {
     res.status(201).json({ data: assignment });
   },
 
+  async assignEmployeesBatch(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await operationAssignmentService.assignEmployeesBatch(
+      companyId,
+      String(req.params.operationId),
+      req.body.employeeIds,
+      {
+        validFrom: req.body.validFrom,
+        validUntil: req.body.validUntil,
+      },
+      req.auth?.userId ?? null,
+    );
+    res.status(200).json({ data: result });
+  },
+
   async listAssignmentPeriods(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const items = await operationAssignmentService.listAssignmentPeriods(

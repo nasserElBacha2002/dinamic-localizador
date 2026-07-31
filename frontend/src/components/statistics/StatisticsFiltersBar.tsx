@@ -1,7 +1,9 @@
 import { useMemo } from "react";
-import { EmployeeSearchAutocomplete } from "../employees/EmployeeSearchAutocomplete";
-import { OperationSearchAutocomplete } from "../operations/OperationSearchAutocomplete";
-import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
+import {
+  EmployeeMultiSelect,
+  OperationMultiSelect,
+  ServiceMultiSelect,
+} from "../lookups/EntityMultiSelects";
 import { FilterBar, FilterDateRangeInput, FilterSelect } from "../../design-system";
 import type { DateRangeValue } from "../../types/date-range";
 import type {
@@ -15,28 +17,30 @@ import {
   validationStatusLabels,
 } from "../../utils/labels";
 import { operationKindLabels } from "../../utils/operation-schedule-display";
+import { terminology } from "../../domain/terminology";
 
 interface StatisticsFiltersBarProps {
   dateRange: DateRangeValue;
   defaultDateRange: DateRangeValue;
-  operationId: string;
-  serviceId: string;
-  employeeId: string;
+  operationIds: string[];
+  serviceIds: string[];
+  employeeIds: string[];
   operationKind: StatisticsOperationKind;
   effectiveState: StatisticsEffectiveState;
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
   punctualityStatus: string;
+  activeFilterCount: number;
   onDateRangeChange: (value: DateRangeValue) => void;
-  onOperationChange: (value: string) => void;
-  onServiceChange: (value: string) => void;
-  onEmployeeChange: (value: string) => void;
+  onOperationChange: (value: string[]) => void;
+  onServiceChange: (value: string[]) => void;
+  onEmployeeChange: (value: string[]) => void;
   onOperationKindChange: (value: StatisticsOperationKind) => void;
   onEffectiveStateChange: (value: StatisticsEffectiveState) => void;
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
   onPunctualityStatusChange: (value: string) => void;
-  onClearSecondaryFilters: () => void;
+  onClearFilters: () => void;
 }
 
 const EFFECTIVE_STATE_LABELS: Record<Exclude<StatisticsEffectiveState, "">, string> = {
@@ -50,14 +54,15 @@ const EFFECTIVE_STATE_LABELS: Record<Exclude<StatisticsEffectiveState, "">, stri
 export function StatisticsFiltersBar({
   dateRange,
   defaultDateRange,
-  operationId,
-  serviceId,
-  employeeId,
+  operationIds,
+  serviceIds,
+  employeeIds,
   operationKind,
   effectiveState,
   validationStatus,
   locationStatus,
   punctualityStatus,
+  activeFilterCount,
   onDateRangeChange,
   onOperationChange,
   onServiceChange,
@@ -67,7 +72,7 @@ export function StatisticsFiltersBar({
   onValidationStatusChange,
   onLocationStatusChange,
   onPunctualityStatusChange,
-  onClearSecondaryFilters,
+  onClearFilters,
 }: StatisticsFiltersBarProps) {
   const validationOptions = useMemo(
     () => [
@@ -113,28 +118,6 @@ export function StatisticsFiltersBar({
     [],
   );
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (operationId) count += 1;
-    if (serviceId) count += 1;
-    if (employeeId) count += 1;
-    if (operationKind) count += 1;
-    if (effectiveState) count += 1;
-    if (validationStatus) count += 1;
-    if (locationStatus) count += 1;
-    if (punctualityStatus) count += 1;
-    return count;
-  }, [
-    employeeId,
-    effectiveState,
-    locationStatus,
-    operationId,
-    operationKind,
-    punctualityStatus,
-    serviceId,
-    validationStatus,
-  ]);
-
   return (
     <FilterBar
       search={
@@ -147,29 +130,33 @@ export function StatisticsFiltersBar({
           allowCustomRange
         />
       }
-      activeFilterCount={activeSecondaryFilterCount}
-      onClearFilters={onClearSecondaryFilters}
+      activeFilterCount={activeFilterCount}
+      onClearFilters={onClearFilters}
     >
       <FilterBar.Item>
-        <OperationSearchAutocomplete
-          value={operationId || null}
-          onChange={(id) => onOperationChange(id ?? "")}
-          allowCreate={false}
+        <OperationMultiSelect
+          label={terminology.operation.plural}
+          value={operationIds}
+          onChange={onOperationChange}
+          maxVisibleChips={2}
         />
       </FilterBar.Item>
       <FilterBar.Item>
-        <ServiceSearchAutocomplete
-          value={serviceId || null}
-          onChange={(id) => onServiceChange(id ?? "")}
-          allowCreate={false}
-        />
-      </FilterBar.Item>
-      <FilterBar.Item>
-        <EmployeeSearchAutocomplete
-          value={employeeId || null}
-          onChange={(id) => onEmployeeChange(id ?? "")}
+        <ServiceMultiSelect
+          label={terminology.service.plural}
+          value={serviceIds}
+          onChange={onServiceChange}
           activeOnly={false}
-          allowCreate={false}
+          maxVisibleChips={2}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <EmployeeMultiSelect
+          label={terminology.worker.plural}
+          value={employeeIds}
+          onChange={onEmployeeChange}
+          activeOnly={false}
+          maxVisibleChips={2}
         />
       </FilterBar.Item>
       <FilterBar.Item>

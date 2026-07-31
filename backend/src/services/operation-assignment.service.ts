@@ -307,6 +307,208 @@ export const operationAssignmentService = {
     return withLifecycleState(committedAssignment!, operationWorkDate ?? validFrom);
   },
 
+  async assignEmployeesBatch(
+    companyId: string,
+    operationId: string,
+    employeeIds: string[],
+    input?: { validFrom?: string; validUntil?: string | null },
+    userId?: string | null,
+  ) {
+    const uniqueIds = [...new Set(employeeIds.map((id) => id.trim()).filter(Boolean))];
+    if (uniqueIds.length === 0) {
+      throw new AppError(400, "VALIDATION_ERROR", "Seleccioná al menos un colaborador");
+    }
+
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    if (!isOperationAssignable(operation.status)) {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_ASSIGNABLE",
+        "No se puede asignar empleados a operaciones canceladas o completadas",
+      );
+    }
+
+    const operationKind = operation.operationKind ?? "ONE_TIME";
+    const operationWorkDate =
+      operationKind === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+
+    const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
+      operationKind,
+      operationWorkDate,
+      input,
+    );
+
+    const employees = await employeeRepository.listByIds(companyId, uniqueIds);
+    const employeeById = new Map(employees.map((employee) => [employee.id, employee]));
+
+    for (const employeeId of uniqueIds) {
+      const employee = employeeById.get(employeeId);
+      if (!employee) {
+        throw new AppError(
+          404,
+          "EMPLOYEE_NOT_FOUND",
+          `Empleado no encontrado: ${employeeId}`,
+        );
+      }
+      if (!employee.active) {
+        throw new AppError(
+          409,
+          "EMPLOYEE_INACTIVE",
+          `No se puede asignar un empleado inactivo: ${employee.name}`,
+        );
+      }
+    }
+
+    const skipReasonMessage = (reason: string): { code: string; reason: string } => {
+      if (reason === "already_assigned") {
+        return {
+          code: "ASSIGNMENT_ALREADY_EXISTS",
+          reason: "Ya está asignado en el período indicado.",
+        };
+      }
+      return {
+        code: "ASSIGNMENT_PERIOD_OVERLAP",
+        reason: "Tiene una asignación que se superpone con esas fechas.",
+      };
+    };
+
+    const assignedIds: string[] = [];
+    const skipped: Array<{
+      employeeId: string;
+      employeeName: string;
+      code: string;
+      reason: string;
+    }> = [];
+    const committedAssignments: OperationEmployeeAssignment[] = [];
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    let transactionClosed = false;
+
+    try {
+      // Stable lock order to reduce deadlocks with concurrent singular/batch assigns.
+      const lockOrder = [...uniqueIds].sort((left, right) => left.localeCompare(right));
+      for (const employeeId of lockOrder) {
+        const locked = await employeeDeactivationRepository.lockEmployeeForUpdate(
+          companyId,
+          employeeId,
+          transaction,
+        );
+        if (!locked) {
+          throw new AppError(404, "EMPLOYEE_NOT_FOUND", `Empleado no encontrado: ${employeeId}`);
+        }
+        if (!locked.active) {
+          const employee = employeeById.get(employeeId);
+          throw new AppError(
+            409,
+            "EMPLOYEE_INACTIVE",
+            `No se puede asignar un empleado inactivo: ${employee?.name ?? employeeId}`,
+          );
+        }
+      }
+
+      for (const employeeId of uniqueIds) {
+        const employee = employeeById.get(employeeId)!;
+        const result = await operationAssignmentCore.assignEmployeeInTransaction(
+          companyId,
+          transaction,
+          {
+            operationId,
+            employeeId,
+            validFrom,
+            validUntil,
+            employeeActive: employee.active,
+            operationKind,
+            operationWorkDate,
+          },
+        );
+
+        if (result.outcome === "skipped") {
+          if (
+            result.reason === "already_assigned" ||
+            result.reason === "assignment_period_overlap"
+          ) {
+            skipped.push({
+              employeeId,
+              employeeName: employee.name,
+              ...skipReasonMessage(result.reason),
+            });
+            continue;
+          }
+          throw new AppError(
+            409,
+            "EMPLOYEE_INACTIVE",
+            `No se puede asignar un empleado inactivo: ${employee.name}`,
+          );
+        }
+
+        assignedIds.push(employeeId);
+        committedAssignments.push(result.assignment);
+      }
+
+      await transaction.commit();
+      transactionClosed = true;
+    } catch (error) {
+      if (!transactionClosed) {
+        await safeRollback(transaction);
+      }
+      throw error;
+    }
+
+    if (operationKind === "RECURRING" && committedAssignments.length > 0) {
+      try {
+        await recurringWorkdaySyncService.runOperationSync(
+          companyId,
+          operationId,
+          async () => {
+            for (const assignment of committedAssignments) {
+              await recurringWorkdayMaterializationService.reconcileAfterAssignmentChange(
+                companyId,
+                operationId,
+                assignment,
+              );
+            }
+          },
+          "recurring assignment batch create",
+        );
+      } catch (error) {
+        console.error("[operation-assignment] recurring sync failed after batch commit", error);
+      }
+    }
+
+    for (const assignment of committedAssignments) {
+      await logAuditSafe("operation_assignment.create", () =>
+        auditService.log(companyId, {
+          entityType: "operation_assignment",
+          entityId: assignment.id,
+          action: "create",
+          newData: {
+            operationId,
+            employeeId: assignment.employeeId,
+            validFrom,
+            validUntil,
+            assignmentOrigin: "MANUAL",
+            batch: true,
+          },
+          userId: userId ?? null,
+        }),
+      );
+    }
+
+    return {
+      assignedCount: assignedIds.length,
+      assignedIds,
+      skippedCount: skipped.length,
+      skipped,
+    };
+  },
+
   async listAssignmentPeriods(companyId: string, operationId: string) {
     const operation = await operationRepository.findById(companyId, operationId);
     if (!operation) {
@@ -321,6 +523,38 @@ export const operationAssignmentService = {
 
     const assignments = await operationEmployeeRepository.listByOperation(companyId, operationId);
     return assignments.map((assignment) => withLifecycleState(assignment, referenceDate));
+  },
+
+  /**
+   * Cancel an assignment inside a caller-owned transaction (no nested commit).
+   */
+  async cancelAssignmentInSharedTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: { operationId: string; assignmentId: string },
+  ): Promise<OperationEmployeeAssignment> {
+    const assignment = await operationEmployeeRepository.findByIdInTransaction(
+      companyId,
+      transaction,
+      input.assignmentId,
+    );
+    if (!assignment || assignment.operationId !== input.operationId) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+    if (assignment.cancelledAt) {
+      throw new AppError(409, "ASSIGNMENT_ALREADY_CANCELLED", "La asignación ya está cancelada");
+    }
+
+    await cancelExpectedEmployeeWorkdaysForAssignment(companyId, transaction, input.assignmentId);
+    const cancelledAssignment = await operationEmployeeRepository.cancelAssignmentInTransaction(
+      companyId,
+      transaction,
+      input.assignmentId,
+    );
+    if (!cancelledAssignment) {
+      throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
+    }
+    return cancelledAssignment;
   },
 
   async cancelAssignment(
@@ -350,15 +584,11 @@ export const operationAssignmentService = {
     let cancelled: OperationEmployeeAssignment | null = null;
 
     try {
-      await cancelExpectedEmployeeWorkdaysForAssignment(companyId, transaction, assignmentId);
-      const cancelledAssignment = await operationEmployeeRepository.cancelAssignmentInTransaction(
+      const cancelledAssignment = await this.cancelAssignmentInSharedTransaction(
         companyId,
         transaction,
-        assignmentId,
+        { operationId, assignmentId },
       );
-      if (!cancelledAssignment) {
-        throw new AppError(404, "OPERATION_ASSIGNMENT_NOT_FOUND", "La asignación no existe");
-      }
 
       await transaction.commit();
       transactionClosed = true;

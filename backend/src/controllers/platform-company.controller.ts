@@ -8,7 +8,7 @@ export const platformCompanyController = {
   },
 
   async createCompany(req: Request, res: Response) {
-    const result = await platformCompanyService.createCompany(req.body);
+    const result = await platformCompanyService.createCompany(req.body, req.auth!.userId);
     res.status(201).json(result);
   },
 };

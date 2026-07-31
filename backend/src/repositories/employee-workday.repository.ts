@@ -11,7 +11,11 @@ const BATCH_CHUNK_SIZE = 40;
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
-export type EmployeeWorkdayWithSchedule = EmployeeWorkday & EmployeeWorkdayScheduleContext;
+export type EmployeeWorkdayWithSchedule = EmployeeWorkday &
+  EmployeeWorkdayScheduleContext & {
+    operationId: string | null;
+    serviceId: string | null;
+  };
 
 export const mapEmployeeWorkdayRow = (row: Record<string, unknown>): EmployeeWorkday => ({
   id: String(row.id),
@@ -42,6 +46,8 @@ const mapEmployeeWorkdayWithScheduleRow = (
   scheduleTimezone: row.schedule_timezone_snapshot
     ? String(row.schedule_timezone_snapshot)
     : "America/Argentina/Buenos_Aires",
+  operationId: row.operation_id ? String(row.operation_id) : null,
+  serviceId: row.service_id ? String(row.service_id) : null,
 });
 
 const WORKDAY_SCHEDULE_SELECT = `
@@ -50,7 +56,9 @@ const WORKDAY_SCHEDULE_SELECT = `
   ow.expected_end_at,
   ow.early_tolerance_minutes,
   ow.late_tolerance_minutes,
-  ow.schedule_timezone_snapshot
+  ow.schedule_timezone_snapshot,
+  ow.operation_id,
+  i.service_id
 `;
 
 export const employeeWorkdayRepository = {
@@ -270,6 +278,53 @@ export const employeeWorkdayRepository = {
       `);
 
     return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Set-based ensure of missing EXPECTED employee_workdays for active assignments
+   * on a canonical ONE_TIME operation_workday. Existing rows are preserved.
+   */
+  async insertMissingForActiveAssignmentsInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      operationWorkdayId: string;
+      workDate: string;
+    },
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, input.operationWorkdayId)
+      .input("workDate", sql.Date, input.workDate)
+      .query(`
+        INSERT INTO employee_workdays (
+          company_id, operation_workday_id, employee_id, operation_assignment_id, expectation_status
+        )
+        OUTPUT INSERTED.id
+        SELECT
+          @companyId,
+          @operationWorkdayId,
+          oa.employee_id,
+          oa.id,
+          N'EXPECTED'
+        FROM operation_assignments oa
+        WHERE oa.company_id = @companyId
+          AND oa.operation_id = @operationId
+          AND oa.cancelled_at IS NULL
+          AND @workDate >= oa.valid_from
+          AND (oa.valid_until IS NULL OR @workDate <= oa.valid_until)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM employee_workdays ew
+            WHERE ew.company_id = @companyId
+              AND ew.operation_workday_id = @operationWorkdayId
+              AND ew.employee_id = oa.employee_id
+          )
+      `);
+
+    return result.recordset.length;
   },
 
   async findByWorkdayAndEmployeeInTransaction(
@@ -875,6 +930,9 @@ export const employeeWorkdayRepository = {
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
          AND ow.company_id = ew.company_id
+        INNER JOIN scheduled_operations i
+          ON i.id = ow.operation_id
+         AND i.company_id = ew.company_id
         WHERE ew.company_id = @companyId
           AND ew.employee_id = @employeeId
           AND ow.work_date >= @dateFrom
@@ -916,6 +974,9 @@ export const employeeWorkdayRepository = {
       INNER JOIN operation_workdays ow
         ON ow.id = ew.operation_workday_id
        AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ew.company_id
       WHERE ew.company_id = @companyId
         AND ew.employee_id IN (${placeholders.join(", ")})
         AND ow.work_date >= @dateFrom
@@ -943,6 +1004,9 @@ export const employeeWorkdayRepository = {
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
          AND ow.company_id = ew.company_id
+        INNER JOIN scheduled_operations i
+          ON i.id = ow.operation_id
+         AND i.company_id = ew.company_id
         WHERE ew.company_id = @companyId
           AND ew.absence_request_id = @absenceRequestId
       `);
@@ -975,6 +1039,9 @@ export const employeeWorkdayRepository = {
       INNER JOIN operation_workdays ow
         ON ow.id = ew.operation_workday_id
        AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ew.company_id
       WHERE ew.company_id = @companyId
         AND ew.id IN (${placeholders.join(", ")})
     `);

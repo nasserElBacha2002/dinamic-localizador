@@ -10,7 +10,8 @@ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
 import { SERVICE_FORMAT_MAX_LENGTH } from "../utils/normalize-optional-text";
-import { platformCompanyService } from "../services/platform-company.service";
+import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
 import { serviceService } from "../services/service.service";
 import { serviceRepository } from "../repositories/service.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -19,23 +20,6 @@ import { hashPassword } from "../utils/password";
 import { companyLocationTypesRepository } from "../repositories/company-location-types.repository";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-const deleteCompanyCascade = async (companyId: string): Promise<void> => {
-  const pool = getPool();
-  await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
-    DELETE FROM operational_locations WHERE company_id = @companyId;
-    DELETE FROM employee_absence_balances WHERE company_id = @companyId;
-    DELETE FROM employees WHERE company_id = @companyId;
-    DELETE FROM employee_categories WHERE company_id = @companyId;
-    DELETE FROM company_absence_settings WHERE company_id = @companyId;
-    DELETE FROM absence_types WHERE company_id = @companyId;
-    DELETE FROM company_location_types WHERE company_id = @companyId;
-    DELETE FROM user_company_memberships WHERE company_id = @companyId;
-    DELETE FROM company_modules WHERE company_id = @companyId;
-    DELETE FROM company_settings WHERE company_id = @companyId;
-    DELETE FROM companies WHERE id = @companyId;
-  `);
-};
 
 describeDatabaseIntegration("services list filters, facets, and sorting", () => {
   const createdCompanyIds: string[] = [];
@@ -60,22 +44,20 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
     closeServer = server.close;
 
     const suffix = uniqueSuffix();
-    const companyA = await platformCompanyService.createCompany({
+    const companyA = await createPlatformCompanyFixture({
       name: `Svc List A ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner A",
         email: `svc-list-owner-${suffix}@integration.test`,
-        temporaryPassword: "password123",
       },
     });
-    const companyB = await platformCompanyService.createCompany({
+    const companyB = await createPlatformCompanyFixture({
       name: `Svc List B ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner B",
         email: `svc-list-owner-b-${suffix}@integration.test`,
-        temporaryPassword: "password123",
       },
     });
 
@@ -83,12 +65,23 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
     companyBId = companyB.data.company.id;
     createdCompanyIds.push(companyAId, companyBId);
 
-    const owner = await userRepository.findByEmail(companyA.data.owner.email);
-    assert.ok(owner);
-    ownerUserId = owner.id;
-    ownerEmail = owner.email;
-
     const passwordHash = await hashPassword("integration-test-password");
+    ownerEmail = `svc-list-owner-${suffix}@integration.test`;
+    const owner = await userRepository.create({
+      name: "Owner A",
+      email: ownerEmail,
+      passwordHash,
+      role: "ADMIN",
+    });
+    createdUserIds.push(owner.id);
+    ownerUserId = owner.id;
+    await userCompanyMembershipRepository.create({
+      userId: owner.id,
+      companyId: companyAId,
+      role: "OWNER",
+      status: "ACTIVE",
+    });
+
     const noPerm = await userRepository.create({
       name: "No Services Perm",
       email: `svc-list-noperm-${suffix}@integration.test`,
@@ -370,13 +363,12 @@ describeDatabaseIntegration("services list filters, facets, and sorting", () => 
   });
 
   it("returns empty list for company without matching filters", async () => {
-    const emptyCompany = await platformCompanyService.createCompany({
+    const emptyCompany = await createPlatformCompanyFixture({
       name: `Svc Empty ${uniqueSuffix()}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Empty Owner",
         email: `svc-empty-${uniqueSuffix()}@integration.test`,
-        temporaryPassword: "password123",
       },
     });
     createdCompanyIds.push(emptyCompany.data.company.id);

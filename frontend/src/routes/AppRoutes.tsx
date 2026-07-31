@@ -1,5 +1,5 @@
 import { lazy, Suspense, type ComponentType, type LazyExoticComponent } from "react";
-import { Navigate, Outlet, Route, Routes, useParams } from "react-router-dom";
+import { Navigate, Outlet, Route, Routes } from "react-router";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
@@ -7,6 +7,7 @@ import { AppLayout } from "../design-system";
 import { LoadingState } from "../design-system";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
+import { AcceptInvitationPage } from "../pages/invitations/AcceptInvitationPage";
 import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";
 import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
@@ -15,16 +16,31 @@ import { EmployeesListPage } from "../pages/employees/EmployeesListPage";
 import { WorkTeamsListPage } from "../pages/work-teams/WorkTeamsListPage";
 import { WorkTeamCreatePage } from "../pages/work-teams/WorkTeamCreatePage";
 import { WorkTeamEditPage } from "../pages/work-teams/WorkTeamEditPage";
+import { WorkTeamDetailPage } from "../pages/work-teams/WorkTeamDetailPage";
 import { EmployeeCreatePage } from "../pages/employees/EmployeeCreatePage";
 import { EmployeeEditPage } from "../pages/employees/EmployeeEditPage";
+import { EmployeeDetailPage } from "../pages/employees/EmployeeDetailPage";
 import { ServicesListPage } from "../pages/services/ServicesListPage";
 import { ServiceCreatePage } from "../pages/services/ServiceCreatePage";
 import { ServiceEditPage } from "../pages/services/ServiceEditPage";
+import { ServiceDetailPage } from "../pages/services/ServiceDetailPage";
 import { OperationsListPage } from "../pages/operations/OperationsListPage";
 import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
+import { MODULE_ROUTE_ACCESS } from "../utils/company-modules";
+import {
+  employeeAccess,
+  employeeManage,
+  operationAccess,
+  operationManage,
+  serviceAccess,
+  serviceManage,
+  workTeamAccess,
+  workTeamManage,
+} from "./entity-route-access";
+import { LegacyOperationRedirect, LegacyServiceRedirect } from "./legacy-redirects";
 
 function lazyNamed<T extends Record<string, ComponentType>>(
   importer: () => Promise<T>,
@@ -49,6 +65,10 @@ const OperationDetailPage = lazyNamed(
   () => import("../pages/operations/OperationDetailPage"),
   "OperationDetailPage",
 );
+const OperationEditPage = lazyNamed(
+  () => import("../pages/operations/OperationEditPage"),
+  "OperationEditPage",
+);
 const AbsenceDetailPage = lazyNamed(
   () => import("../pages/absences/AbsenceDetailPage"),
   "AbsenceDetailPage",
@@ -72,16 +92,6 @@ function LazyPage({
   );
 }
 
-function LegacyOperationRedirect() {
-  const { id } = useParams();
-  return <Navigate to={id ? `/operations/${id}` : "/operations"} replace />;
-}
-
-function LegacyServiceRedirect() {
-  const { id } = useParams();
-  return <Navigate to={id ? `/services/${id}` : "/services"} replace />;
-}
-
 function ProtectedLayout() {
   return (
     <ProtectedRoute>
@@ -94,48 +104,7 @@ function ProtectedLayout() {
   );
 }
 
-const employeeAccess = {
-  anyModuleOf: ["attendance", "operations", "absences"] as const,
-  requiredAnyPermission: ["employees:read", "employees:manage"] as const,
-};
-
-const employeeManage = {
-  ...employeeAccess,
-  requiredAnyPermission: ["employees:manage"] as const,
-};
-
-const workTeamAccess = {
-  ...employeeAccess,
-};
-
-const workTeamManage = {
-  ...employeeManage,
-};
-
-const serviceAccess = {
-  moduleKey: "operations" as const,
-  requiredAnyPermission: ["services:read", "services:manage"] as const,
-};
-
-const serviceManage = {
-  ...serviceAccess,
-  requiredAnyPermission: ["services:manage"] as const,
-};
-
-const operationAccess = {
-  moduleKey: "operations" as const,
-  requiredAnyPermission: ["operations:read", "operations:manage"] as const,
-};
-
-const operationManage = {
-  ...operationAccess,
-  requiredAnyPermission: ["operations:manage"] as const,
-};
-
-const attendanceAccess = {
-  moduleKey: "attendance" as const,
-  requiredAnyPermission: ["attendance:read", "attendance:review", "attendance:export"] as const,
-};
+const attendanceAccess = MODULE_ROUTE_ACCESS.attendance;
 
 const attendanceReview = {
   ...attendanceAccess,
@@ -146,6 +115,7 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomePage />} />
         <Route path="/inventories" element={<Navigate to="/operations" replace />} />
@@ -173,10 +143,18 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/employees/:id/edit"
+          element={
+            <FeatureRouteGuard {...employeeManage}>
+              <EmployeeEditPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/employees/:id"
           element={
             <FeatureRouteGuard {...employeeAccess}>
-              <EmployeeEditPage />
+              <EmployeeDetailPage />
             </FeatureRouteGuard>
           }
         />
@@ -197,10 +175,18 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/work-teams/:id/edit"
+          element={
+            <FeatureRouteGuard {...workTeamManage}>
+              <WorkTeamEditPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/work-teams/:id"
           element={
             <FeatureRouteGuard {...workTeamAccess}>
-              <WorkTeamEditPage />
+              <WorkTeamDetailPage />
             </FeatureRouteGuard>
           }
         />
@@ -221,10 +207,18 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/services/:id/edit"
+          element={
+            <FeatureRouteGuard {...serviceManage}>
+              <ServiceEditPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/services/:id"
           element={
             <FeatureRouteGuard {...serviceAccess}>
-              <ServiceEditPage />
+              <ServiceDetailPage />
             </FeatureRouteGuard>
           }
         />
@@ -256,6 +250,14 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/operations/:id/edit"
+          element={
+            <FeatureRouteGuard {...operationManage}>
+              <LazyPage component={OperationEditPage} message="Cargando edición..." />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/operations/:id"
           element={
             <FeatureRouteGuard {...operationAccess}>
@@ -266,10 +268,7 @@ export function AppRoutes() {
         <Route
           path="/statistics"
           element={
-            <FeatureRouteGuard
-              moduleKey="reports"
-              requiredAnyPermission={["reports:read", "reports:export"]}
-            >
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.reports}>
               <LazyPage component={StatisticsPage} message="Cargando estadísticas..." />
             </FeatureRouteGuard>
           }
@@ -301,10 +300,7 @@ export function AppRoutes() {
         <Route
           path="/absences"
           element={
-            <FeatureRouteGuard
-              moduleKey="absences"
-              requiredAnyPermission={["absences:read", "absences:review"]}
-            >
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.absences}>
               <AbsencesListPage />
             </FeatureRouteGuard>
           }
@@ -312,10 +308,7 @@ export function AppRoutes() {
         <Route
           path="/absences/:id"
           element={
-            <FeatureRouteGuard
-              moduleKey="absences"
-              requiredAnyPermission={["absences:read", "absences:review"]}
-            >
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.absences}>
               <LazyPage component={AbsenceDetailPage} message="Cargando ausencia..." />
             </FeatureRouteGuard>
           }

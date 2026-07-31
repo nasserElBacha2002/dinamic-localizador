@@ -1,6 +1,6 @@
 import { Button, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
-import { Link as RouterLink } from "react-router-dom";
+import { Link as RouterLink } from "react-router";
 import {
   DataTable,
   LoadingState,
@@ -12,6 +12,7 @@ import { useAbsenceRequests } from "../../hooks/useAbsences";
 import type { AbsenceRequestListItem } from "../../types/absence";
 import { absenceStatusLabels, formatAbsenceDate } from "../../utils/absence-labels";
 import { safeText } from "../../utils/display-safe";
+import { serializeIdList } from "../../utils/multi-value-filter";
 
 interface EmployeeAbsenceHistoryTableProps {
   employeeId: string;
@@ -20,14 +21,24 @@ interface EmployeeAbsenceHistoryTableProps {
 
 export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenceHistoryTableProps) {
   const historyQuery = useAbsenceRequests({
-    employeeId,
+    employeeIds: [employeeId],
     dateFrom: `${year}-01-01`,
     dateTo: `${year}-12-31`,
     page: 1,
     limit: 10,
   });
 
-  const listHref = `/absences?employeeId=${employeeId}&dateFrom=${year}-01-01&dateTo=${year}-12-31`;
+  const listHref = useMemo(() => {
+    const params = new URLSearchParams();
+    const serialized = serializeIdList([employeeId]);
+    if (serialized) {
+      params.set("employeeIds", serialized);
+    }
+    params.set("status", "all");
+    params.set("dateFrom", `${year}-01-01`);
+    params.set("dateTo", `${year}-12-31`);
+    return `/absences?${params.toString()}`;
+  }, [employeeId, year]);
 
   const columns = useMemo<DataTableColumn<AbsenceRequestListItem>[]>(
     () => [
@@ -81,7 +92,7 @@ export function EmployeeAbsenceHistoryTable({ employeeId, year }: EmployeeAbsenc
   const rows = historyQuery.data?.data ?? [];
 
   if (rows.length === 0) {
-    return <Text c="dimmed">No hay solicitudes de ausencia registradas para {year}.</Text>;
+    return <Text c="dimmed">No hay solicitudes de ausencia registradas para {year}.</Text>
   }
 
   return (

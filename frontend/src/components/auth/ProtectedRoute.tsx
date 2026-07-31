@@ -1,4 +1,4 @@
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation } from "react-router";
 import { LoadingState } from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
 

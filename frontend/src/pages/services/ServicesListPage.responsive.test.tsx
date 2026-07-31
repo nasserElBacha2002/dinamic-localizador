@@ -98,7 +98,7 @@ import assert from "node:assert/strict";
 import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { Route, Routes } from "react-router-dom";
+import { Route, Routes } from "react-router";
 import { LocationMapCanvas } from "../../components/services/location-picker/components/LocationMapSection";
 import { mockViewport } from "../../test/mock-match-media";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
@@ -129,6 +129,7 @@ describe("ServicesListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Palermo")));
     assert.ok(view.getByRole("table"));
+    assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
   });
 
   it("shows mobile cards and filter drawer without rigid 360px min-width", async () => {
@@ -142,6 +143,7 @@ describe("ServicesListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Palermo")));
     assert.equal(view.queryByRole("table"), null);
+    assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
     assert.equal(view.container.innerHTML.includes("min-width: 360"), false);
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));

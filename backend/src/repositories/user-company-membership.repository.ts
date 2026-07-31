@@ -103,10 +103,10 @@ export const userCompanyMembershipRepository = {
   async findMembership(
     userId: string,
     companyId: string,
+    transaction?: sql.Transaction,
   ): Promise<UserCompanyMembership | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("userId", sql.UniqueIdentifier, userId)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
@@ -213,11 +213,10 @@ export const userCompanyMembershipRepository = {
       status?: CompanyMembershipStatus;
       isDefault?: boolean;
     },
+    transaction?: sql.Transaction,
   ): Promise<UserCompanyMembership | null> {
-    const pool = getPool();
     const fields: string[] = [];
-    const request = pool
-      .request()
+    const request = (transaction ? new sql.Request(transaction) : getPool().request())
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("userId", sql.UniqueIdentifier, userId);
 
@@ -237,7 +236,7 @@ export const userCompanyMembershipRepository = {
     }
 
     if (fields.length === 0) {
-      return this.findMembership(userId, companyId);
+      return this.findMembership(userId, companyId, transaction);
     }
 
     fields.push("updated_at = SYSUTCDATETIME()");
@@ -257,9 +256,16 @@ export const userCompanyMembershipRepository = {
     return mapMembershipRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async clearDefaultForUser(userId: string, exceptCompanyId?: string): Promise<void> {
-    const pool = getPool();
-    const request = pool.request().input("userId", sql.UniqueIdentifier, userId);
+  async clearDefaultForUser(
+    userId: string,
+    exceptCompanyId?: string,
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    const request = (transaction ? new sql.Request(transaction) : getPool().request()).input(
+      "userId",
+      sql.UniqueIdentifier,
+      userId,
+    );
 
     if (exceptCompanyId) {
       request.input("exceptCompanyId", sql.UniqueIdentifier, exceptCompanyId);
@@ -334,12 +340,12 @@ export const userCompanyMembershipRepository = {
     return Number(result.recordset[0].total);
   },
 
-  async userHasDefaultMembership(userId: string): Promise<boolean> {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("userId", sql.UniqueIdentifier, userId)
-      .query(`
+  async userHasDefaultMembership(
+    userId: string,
+    transaction?: sql.Transaction,
+  ): Promise<boolean> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request.input("userId", sql.UniqueIdentifier, userId).query(`
         SELECT TOP 1 1 AS found
         FROM user_company_memberships
         WHERE user_id = @userId

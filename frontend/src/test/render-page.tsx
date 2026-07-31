@@ -2,7 +2,7 @@ import { MantineProvider } from "@mantine/core";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { render, type RenderOptions, type RenderResult } from "@testing-library/react";
 import { useEffect, type ReactElement, type ReactNode } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, type InitialEntry } from "react-router";
 import { AuthContext, type AuthContextValue } from "../context/auth-context";
 import { CompanyContext, type CompanyContextValue } from "../context/company-context";
 import { setRuntimeCompanyId } from "../api/company-path";
@@ -73,6 +73,8 @@ export function createTestQueryClient(): QueryClient {
 
 export type RenderPageOptions = {
   route?: string;
+  /** When set, used as MemoryRouter initialEntries (supports location.state). */
+  initialEntries?: InitialEntry[];
   auth?: Partial<AuthContextValue>;
   company?: Partial<CompanyContextValue>;
   queryClient?: QueryClient;
@@ -82,6 +84,7 @@ export function renderPage(
   ui: ReactElement,
   {
     route = "/",
+    initialEntries,
     auth,
     company,
     queryClient = createTestQueryClient(),
@@ -92,6 +95,7 @@ export function renderPage(
   const companyValue = { ...defaultCompany, ...company };
   setRuntimeCompanyId(companyValue.activeCompany?.companyId ?? "co-1");
   activeTestQueryClients.add(queryClient);
+  const entries = initialEntries ?? [route];
 
   function Wrapper({ children }: { children: ReactNode }) {
     useEffect(() => {
@@ -106,7 +110,7 @@ export function renderPage(
         <AuthContext.Provider value={authValue}>
           <CompanyContext.Provider value={companyValue}>
             <MantineProvider theme={mantineTheme}>
-              <MemoryRouter initialEntries={[route]}>{children}</MemoryRouter>
+              <MemoryRouter initialEntries={entries}>{children}</MemoryRouter>
             </MantineProvider>
           </CompanyContext.Provider>
         </AuthContext.Provider>

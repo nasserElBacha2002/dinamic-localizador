@@ -5,6 +5,7 @@ import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   assignEmployeeSchema,
+  assignEmployeesBatchSchema,
   assignmentMemberParamsSchema,
   assignmentParamsSchema,
   endAssignmentSchema,
@@ -12,6 +13,13 @@ import {
 
 export const operationAssignmentRouter = Router({ mergeParams: true });
 
+operationAssignmentRouter.post(
+  "/batch",
+  requirePermission("operations:manage"),
+  validate(assignmentParamsSchema, "params"),
+  validate(assignEmployeesBatchSchema),
+  asyncHandler(operationAssignmentController.assignEmployeesBatch),
+);
 operationAssignmentRouter.post(
   "/",
   requirePermission("operations:manage"),

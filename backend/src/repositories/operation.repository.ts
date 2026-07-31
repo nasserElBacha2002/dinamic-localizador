@@ -238,6 +238,31 @@ export const operationRepository = {
     return mapOperationRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Locks the operation row for the duration of the caller transaction
+   * (serializes concurrent ONE_TIME schedule edits).
+   */
+  async findByIdForUpdate(
+    companyId: string,
+    id: string,
+    transaction: sql.Transaction,
+  ): Promise<Operation | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        SELECT *
+        FROM scheduled_operations WITH (UPDLOCK, HOLDLOCK, ROWLOCK)
+        WHERE id = @id AND company_id = @companyId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async findDetailById(
     companyId: string,
     id: string,

@@ -13,6 +13,10 @@ export const isNotificationRetryable = (
     return false;
   }
 
+  if (notification.status === "SUPERSEDED") {
+    return false;
+  }
+
   if (notification.status === "FAILED") {
     return notification.attemptCount < maxAttempts;
   }

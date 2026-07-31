@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Box, Input, Stack } from "@mantine/core";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm } from "react-hook-form";
 import { EMPLOYEE_TYPES } from "../../constants/employee-types";
 import { terminology } from "../../domain/terminology";
@@ -28,6 +28,8 @@ interface EmployeeFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   retainedCategory?: { id: string; name: string } | null;
+  /** Reports dirty state to the page-level unsaved controller (edit routes only). */
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: EmployeeFormValues) => Promise<void>;
 }
 
@@ -39,6 +41,7 @@ export function EmployeeForm({
   loading = false,
   errorMessage,
   retainedCategory = null,
+  onDirtyChange,
   onSubmit,
 }: EmployeeFormProps) {
   const permissionsQuery = useCompanyPermissions();
@@ -58,10 +61,24 @@ export function EmployeeForm({
 
   const workerTypeLabel = `Tipo de ${terminology.worker.singular.toLowerCase()}`;
 
-  const { control, handleSubmit } = useForm<EmployeeFormInputValues, unknown, EmployeeFormValues>({
+  const {
+    control,
+    handleSubmit,
+    formState: { isDirty },
+  } = useForm<EmployeeFormInputValues, unknown, EmployeeFormValues>({
     resolver: zodResolver(employeeFormSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   return (
     <Box w="100%">

@@ -269,6 +269,8 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   phoneNumber: String(row.phone_number),
   state: String(row.state) as import("../types/twilio.types").BotSessionState,
   contextJson: row.context_json ? String(row.context_json) : null,
+  sessionVersion: Number(row.session_version ?? 0),
+  lastMessageSid: row.last_message_sid ? String(row.last_message_sid) : null,
   expiresAt: toIsoString(row.expires_at as Date | string),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
@@ -326,19 +328,36 @@ export const mapAttendanceReviewRow = (row: Record<string, unknown>): Attendance
     : undefined,
 });
 
-export const mapAbsenceTypeRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  code: String(row.code),
-  name: String(row.name),
-  description: row.description ? String(row.description) : null,
-  requiresApproval: Boolean(row.requires_approval),
-  requiresAttachment: Boolean(row.requires_attachment),
-  deductsBalance: Boolean(row.deducts_balance),
-  allowsHalfDay: Boolean(row.allows_half_day),
-  isActive: Boolean(row.is_active),
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+export const mapAbsenceTypeRow = (row: Record<string, unknown>) => {
+  const requiresAttachment = Boolean(row.requires_attachment);
+  const rawPolicy = row.attachment_policy ? String(row.attachment_policy) : null;
+  const attachmentPolicy = (
+    rawPolicy === "FORBIDDEN" || rawPolicy === "OPTIONAL" || rawPolicy === "REQUIRED"
+      ? rawPolicy
+      : requiresAttachment
+        ? "REQUIRED"
+        : "OPTIONAL"
+  ) as import("../types/absence-attachment").AbsenceAttachmentPolicy;
+
+  return {
+    id: String(row.id),
+    code: String(row.code),
+    name: String(row.name),
+    description: row.description ? String(row.description) : null,
+    requiresApproval: Boolean(row.requires_approval),
+    requiresAttachment: attachmentPolicy === "REQUIRED",
+    attachmentPolicy,
+    deductsBalance: Boolean(row.deducts_balance),
+    allowsHalfDay: Boolean(row.allows_half_day),
+    dayCountingMode: (row.day_counting_mode
+      ? String(row.day_counting_mode)
+      : "CALENDAR_DAYS") as import("../types/absence-calendar").AbsenceTypeCalendarFields["dayCountingMode"],
+    calendarId: row.calendar_id ? String(row.calendar_id) : null,
+    isActive: Boolean(row.is_active),
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};
 
 export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
@@ -357,6 +376,27 @@ export const mapAbsenceRequestRow = (row: Record<string, unknown>) => ({
   reviewedAt: row.reviewed_at ? toIsoString(row.reviewed_at as Date | string) : null,
   reviewComment: row.review_comment ? String(row.review_comment) : null,
   cancelledAt: row.cancelled_at ? toIsoString(row.cancelled_at as Date | string) : null,
+  calculationMode: row.calculation_mode
+    ? (String(
+        row.calculation_mode,
+      ) as import("../types/absence-calendar").AbsenceCalculationSnapshot["calculationMode"])
+    : null,
+  calendarId: row.calendar_id ? String(row.calendar_id) : null,
+  calendarTimezone: row.calendar_timezone ? String(row.calendar_timezone) : null,
+  calculationVersion:
+    row.calculation_version == null ? null : Number(row.calculation_version),
+  calendarVersion: row.calendar_version == null ? null : Number(row.calendar_version),
+  calculationInputHash: row.calculation_input_hash
+    ? String(row.calculation_input_hash)
+    : null,
+  reservationVersion: Number(row.reservation_version ?? 1),
+  yearAllocationsJson: row.year_allocations_json ? String(row.year_allocations_json) : null,
+  attachmentPolicySnapshot: row.attachment_policy_snapshot
+    ? (String(
+        row.attachment_policy_snapshot,
+      ) as import("../types/absence-attachment").AbsenceAttachmentPolicy)
+    : null,
+  operationalImpactVersion: Number(row.operational_impact_version ?? 1),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -380,13 +420,27 @@ export const mapAbsenceRequestEventRow = (row: Record<string, unknown>) => ({
   performerName: row.performer_name ? String(row.performer_name) : null,
 });
 
-export const mapEmployeeAbsenceBalanceRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  employeeId: String(row.employee_id),
-  absenceTypeId: String(row.absence_type_id),
-  year: Number(row.year),
-  totalDays: Number(row.total_days),
-  notes: row.notes ? String(row.notes) : null,
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+export const mapEmployeeAbsenceBalanceRow = (row: Record<string, unknown>) => {
+  const totalDays = Number(row.total_days ?? 0);
+  const grantedDays = Number(row.granted_days ?? totalDays);
+  const reservedDays = Number(row.reserved_days ?? 0);
+  const consumedDays = Number(row.consumed_days ?? 0);
+  const availableDays = Number(
+    row.available_days ?? grantedDays - reservedDays - consumedDays,
+  );
+  return {
+    id: String(row.id),
+    employeeId: String(row.employee_id),
+    absenceTypeId: String(row.absence_type_id),
+    year: Number(row.year),
+    totalDays,
+    grantedDays,
+    reservedDays,
+    consumedDays,
+    availableDays,
+    version: Number(row.version ?? 1),
+    notes: row.notes ? String(row.notes) : null,
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};

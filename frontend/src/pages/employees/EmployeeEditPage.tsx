@@ -1,27 +1,31 @@
+import { Group } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useRef, useState } from "react";
-import { useParams } from "react-router-dom";
-import { Stack } from "@mantine/core";
-import { useListBackNavigation } from "../../hooks/useListBackNavigation";
-import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
-import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
+import { useLocation, useNavigate, useParams } from "react-router";
 import { EmployeeDeactivationDialog } from "../../components/employees/EmployeeDeactivationDialog";
 import { EmployeeForm } from "../../components/employees/EmployeeForm";
-import { ErrorState, LoadingState, PageHeader, SectionCard } from "../../design-system";
+import { EmployeeModuleQuickLinks } from "../../components/employees/EmployeeModuleQuickLinks";
+import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
+import { UnsavedChangesDialog } from "../../components/navigation/UnsavedChangesDialog";
+import { EntityAvatar, ErrorState, LoadingState } from "../../design-system";
 import {
   useDeactivateEmployee,
   useEmployee,
   useUpdateEmployee,
 } from "../../hooks/useEmployees";
+import { useUnsavedChangesController } from "../../hooks/useUnsavedChangesController";
 import { getEmployeeDeactivationImpact } from "../../api/employees.api";
 import type { EmployeeFormValues } from "../../schemas/employee.schema";
 import type { EmployeeDeactivationImpact } from "../../types/employee-deactivation";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
+import { getEntityDetailPath } from "../../utils/entity-routes";
 
 export function EmployeeEditPage() {
-  const { goBackToList } = useListBackNavigation("/employees");
+  const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams<{ id: string }>();
+  const unsaved = useUnsavedChangesController({ active: true });
   const employeeQuery = useEmployee(id);
   const updateMutation = useUpdateEmployee(id ?? "");
   const deactivateMutation = useDeactivateEmployee(id ?? "");
@@ -54,9 +58,25 @@ export function EmployeeEditPage() {
   }
 
   const employee = employeeQuery.data;
-  const currentYear = new Date().getFullYear();
   const formBusy =
     updateMutation.isPending || deactivateMutation.isPending || impactLoading;
+
+  const goToDetail = () => {
+    navigate(getEntityDetailPath("employees", id), { state: location.state });
+  };
+
+  const handleCancel = () => {
+    unsaved.requestNavigation(goToDetail);
+  };
+
+  const finishSuccess = () => {
+    unsaved.markClean();
+    notifications.show({
+      color: "green",
+      message: `${terminology.worker.singular} actualizado correctamente.`,
+    });
+    goToDetail();
+  };
 
   const buildProfilePayload = (values: EmployeeFormValues) => ({
     name: values.name,
@@ -66,16 +86,9 @@ export function EmployeeEditPage() {
     categoryId: values.categoryId ?? null,
   });
 
-  const finishSuccess = () => {
-    notifications.show({
-      color: "green",
-      message: `${terminology.worker.singular} actualizado correctamente.`,
-    });
-    goBackToList();
-  };
-
   const handleSubmit = async (values: EmployeeFormValues) => {
     setErrorMessage(null);
+    unsaved.setSubmitting(true);
 
     const switchingToInactive = employee.active && !values.active;
     if (!switchingToInactive) {
@@ -87,6 +100,8 @@ export function EmployeeEditPage() {
         finishSuccess();
       } catch (error) {
         setErrorMessage(getApiErrorMessage(error));
+      } finally {
+        unsaved.setSubmitting(false);
       }
       return;
     }
@@ -110,6 +125,7 @@ export function EmployeeEditPage() {
       setErrorMessage(getApiErrorMessage(error));
     } finally {
       setImpactLoading(false);
+      unsaved.setSubmitting(false);
     }
   };
 
@@ -145,11 +161,16 @@ export function EmployeeEditPage() {
   };
 
   return (
-    <Stack gap="md">
-      <PageHeader
-        title={`Editar ${terminology.worker.singular.toLowerCase()}`}
-        description={employee.name}
-      />
+    <EntityEditPageLayout
+      title={
+        <Group gap="md" wrap="nowrap" align="center">
+          <EntityAvatar name={employee.name} entityType="collaborator" size="lg" />
+          <span>{employee.name}</span>
+        </Group>
+      }
+      description={`Editar ${terminology.worker.singular.toLowerCase()}`}
+      action={<EmployeeModuleQuickLinks employeeId={employee.id} />}
+    >
       <EmployeeForm
         defaultValues={{
           name: employee.name,
@@ -165,18 +186,13 @@ export function EmployeeEditPage() {
             : null
         }
         submitLabel="Guardar cambios"
-        cancelTo="/employees"
-        onCancel={goBackToList}
+        cancelTo={getEntityDetailPath("employees", id)}
+        onCancel={handleCancel}
         loading={formBusy}
         errorMessage={errorMessage}
+        onDirtyChange={unsaved.setDirty}
         onSubmit={handleSubmit}
       />
-      <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
-        <EmployeeAbsenceBalanceCard employeeId={employee.id} year={currentYear} />
-      </SectionCard>
-      <SectionCard title={`Ausencias · Historial ${currentYear}`}>
-        <EmployeeAbsenceHistoryTable employeeId={employee.id} year={currentYear} />
-      </SectionCard>
 
       <EmployeeDeactivationDialog
         open={Boolean(deactivationImpact)}
@@ -187,6 +203,11 @@ export function EmployeeEditPage() {
         onConfirm={() => void handleConfirmDeactivation()}
         onCancel={handleCancelDeactivation}
       />
-    </Stack>
+      <UnsavedChangesDialog
+        open={unsaved.discardDialogOpen}
+        onConfirm={unsaved.confirmDiscard}
+        onCancel={unsaved.cancelDiscard}
+      />
+    </EntityEditPageLayout>
   );
 }

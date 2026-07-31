@@ -1,10 +1,11 @@
 import { Button } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router";
 import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
 import {
   ActionMenu,
   DataTable,
+  EntityIdentity,
   FilterBar,
   FilterDateRangeInput,
   FilterSelect,
@@ -24,7 +25,6 @@ import type { DateRangeValue } from "../../types/date-range";
 import { terminology } from "../../domain/terminology";
 import { getDefaultOperationDateRange, getDateRangeQueryValue } from "../../utils/date-range";
 import {
-  areDateRangeUrlFieldsEqual,
   dateRangeToUrlFields,
   urlFieldsToDateRange,
 } from "../../utils/date-range-url";
@@ -35,7 +35,8 @@ import {
 import { getApiErrorMessage } from "../../utils/errors";
 import { navigateWithListContext } from "../../utils/list-navigation";
 import { formatOperationScheduleListLabel, operationKindLabels } from "../../utils/operation-schedule-display";
-import { getOperationServiceAddress, getOperationServiceName } from "./operations-list-columns";
+import { getOperationServiceAddress } from "./operations-list-columns";
+import { getOperationDisplayName } from "../../utils/operation-display";
 import { operationStatusLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 import {
@@ -103,40 +104,6 @@ export function OperationsListPage() {
     sortDirection: table.state.sortOrder,
   });
 
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.status) {
-      count += 1;
-    }
-    if (table.state.operationKind) {
-      count += 1;
-    }
-    if (table.state.serviceId) {
-      count += 1;
-    }
-    if (
-      !areDateRangeUrlFieldsEqual(
-        {
-          datePreset: table.state.datePreset,
-          dateFrom: table.state.dateFrom,
-          dateTo: table.state.dateTo,
-        },
-        defaultDateFields,
-      )
-    ) {
-      count += 1;
-    }
-    return count;
-  }, [
-    defaultDateFields,
-    table.state.dateFrom,
-    table.state.datePreset,
-    table.state.dateTo,
-    table.state.operationKind,
-    table.state.serviceId,
-    table.state.status,
-  ]);
-
   const handleSortChange = (field: string) => {
     table.toggleSorting(field, "asc");
   };
@@ -144,15 +111,6 @@ export function OperationsListPage() {
   const handleDateRangeChange = (nextDateRange: DateRangeValue) => {
     table.setState(dateRangeToUrlFields(nextDateRange));
   };
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      status: tableDefaults.status,
-      operationKind: tableDefaults.operationKind,
-      serviceId: tableDefaults.serviceId,
-      ...defaultDateFields,
-    });
-  }, [defaultDateFields, table, tableDefaults.operationKind, tableDefaults.serviceId, tableDefaults.status]);
 
   const statusOptions = useMemo(
     () => [
@@ -177,7 +135,11 @@ export function OperationsListPage() {
         key: "serviceName",
         header: terminology.service.singular,
         sortable: true,
-        getValue: (row) => getOperationServiceName(row),
+        getValue: (row) => getOperationDisplayName(row),
+        render: (row) => {
+          const name = getOperationDisplayName(row);
+          return <EntityIdentity name={name} entityType="operation" />;
+        },
       },
       {
         key: "serviceAddress",
@@ -223,7 +185,10 @@ export function OperationsListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<OperationWithService>>(
     () => ({
-      title: (row) => getOperationServiceName(row),
+      title: (row) => {
+        const name = getOperationDisplayName(row);
+        return <EntityIdentity name={name} entityType="operation" />;
+      },
       subtitle: (row) => getOperationServiceAddress(row),
       status: (row) => (
         <StatusBadge label={operationStatusLabels[row.status]} tone="info" variant="light" />
@@ -299,8 +264,8 @@ export function OperationsListPage() {
       />
 
       <FilterBar
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <FilterSelect

@@ -9,29 +9,14 @@ import {
 import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
-import { platformCompanyService } from "./platform-company.service";
+import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
 import { userRepository } from "../repositories/user.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { hashPassword } from "../utils/password";
 import { employeeCategoryService } from "./employee-category.service";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-
-const deleteCompanyCascade = async (companyId: string): Promise<void> => {
-  const pool = getPool();
-  await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
-    DELETE FROM employee_absence_balances WHERE company_id = @companyId;
-    DELETE FROM employees WHERE company_id = @companyId;
-    DELETE FROM employee_categories WHERE company_id = @companyId;
-    DELETE FROM company_absence_settings WHERE company_id = @companyId;
-    DELETE FROM absence_types WHERE company_id = @companyId;
-    DELETE FROM company_location_types WHERE company_id = @companyId;
-    DELETE FROM user_company_memberships WHERE company_id = @companyId;
-    DELETE FROM company_modules WHERE company_id = @companyId;
-    DELETE FROM company_settings WHERE company_id = @companyId;
-    DELETE FROM companies WHERE id = @companyId;
-  `);
-};
 
 describeDatabaseIntegration("employee categories HTTP API", () => {
   const createdCompanyIds: string[] = [];
@@ -57,32 +42,34 @@ describeDatabaseIntegration("employee categories HTTP API", () => {
     closeServer = server.close;
 
     const suffix = uniqueSuffix();
-    const companyA = await platformCompanyService.createCompany({
+    const companyA = await createPlatformCompanyFixture({
       name: `Cat HTTP A ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner A",
         email: `cat-http-owner-a-${suffix}@integration.test`,
-        temporaryPassword: "password123",
       },
     });
-    const companyB = await platformCompanyService.createCompany({
+    const companyB = await createPlatformCompanyFixture({
       name: `Cat HTTP B ${suffix}`,
       defaultTimezone: "America/Argentina/Buenos_Aires",
       owner: {
         name: "Owner B",
         email: `cat-http-owner-b-${suffix}@integration.test`,
-        temporaryPassword: "password123",
       },
     });
     companyAId = companyA.data.company.id;
     companyBId = companyB.data.company.id;
     createdCompanyIds.push(companyAId, companyBId);
 
-    ownerUserId = companyA.data.owner.userId;
-    ownerEmail = companyA.data.owner.email;
-
     const passwordHash = await hashPassword("integration-test-password");
+    ownerEmail = `cat-http-owner-a-${suffix}@integration.test`;
+    const owner = await userRepository.create({
+      name: "Owner A",
+      email: ownerEmail,
+      passwordHash,
+      role: "ADMIN",
+    });
     const hr = await userRepository.create({
       name: "HR Cat",
       email: `cat-http-hr-${suffix}@integration.test`,
@@ -95,12 +82,19 @@ describeDatabaseIntegration("employee categories HTTP API", () => {
       passwordHash,
       role: "ADMIN",
     });
-    createdUserIds.push(hr.id, operator.id);
+    createdUserIds.push(owner.id, hr.id, operator.id);
+    ownerUserId = owner.id;
     hrUserId = hr.id;
     hrEmail = hr.email;
     operatorUserId = operator.id;
     operatorEmail = operator.email;
 
+    await userCompanyMembershipRepository.create({
+      userId: owner.id,
+      companyId: companyAId,
+      role: "OWNER",
+      status: "ACTIVE",
+    });
     await userCompanyMembershipRepository.create({
       userId: hr.id,
       companyId: companyAId,

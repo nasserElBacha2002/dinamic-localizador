@@ -18,16 +18,22 @@ export const ABSENCES_TABLE_DEFAULTS = {
   pageSize: 10,
   status: "PENDING",
   absenceTypeId: "",
-  employeeId: "",
+  employeeIds: [] as string[],
   ...dateRangeToUrlFields(EMPTY_DATE_RANGE_VALUE),
 };
 
 export const ABSENCES_TABLE_FIELDS = {
   status: { type: "enum", values: ABSENCE_STATUS_VALUES },
+  employeeIds: { type: "stringList" as const },
 } satisfies TableUrlFieldMap<typeof ABSENCES_TABLE_DEFAULTS>;
 
 export const shouldOmitAbsencesTableValue = (
   key: keyof typeof ABSENCES_TABLE_DEFAULTS,
   value: (typeof ABSENCES_TABLE_DEFAULTS)[keyof typeof ABSENCES_TABLE_DEFAULTS],
   defaults: typeof ABSENCES_TABLE_DEFAULTS,
-): boolean => value === defaults[key] || value === "";
+): boolean => {
+  if (Array.isArray(value)) {
+    return value.length === 0;
+  }
+  return value === defaults[key] || value === "";
+};

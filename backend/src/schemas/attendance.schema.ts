@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { dateRangeSchema, paginationQuerySchema } from "./common.schema";
+import { mergeLegacySingularId, assertWithinMultiFilterLimit, uuidIdListSchema } from "./uuid-id-list";
 
 const validationStatusSchema = z.enum(["VALID", "PENDING_REVIEW", "REJECTED"]);
 const locationStatusSchema = z.enum([
@@ -36,12 +37,26 @@ export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSc
   operationId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),
   serviceId: z.string().uuid().optional(),
+  operationIds: uuidIdListSchema.optional(),
+  employeeIds: uuidIdListSchema.optional(),
+  serviceIds: uuidIdListSchema.optional(),
   validationStatus: validationStatusSchema.optional(),
   locationStatus: locationStatusSchema.optional(),
   punctualityStatus: punctualityStatusSchema.optional(),
   includeSimulation: z.coerce.boolean().optional(),
   simulationOnly: z.coerce.boolean().optional(),
-});
+}).transform((query) => ({
+  ...query,
+  operationIds: assertWithinMultiFilterLimit(
+    mergeLegacySingularId(query.operationIds ?? [], query.operationId),
+  ),
+  employeeIds: assertWithinMultiFilterLimit(
+    mergeLegacySingularId(query.employeeIds ?? [], query.employeeId),
+  ),
+  serviceIds: assertWithinMultiFilterLimit(
+    mergeLegacySingularId(query.serviceIds ?? [], query.serviceId),
+  ),
+}));
 
 export type CreateAttendanceInput = z.infer<typeof createAttendanceSchema>;
 export type ListAttendanceQuery = z.infer<typeof listAttendanceQuerySchema>;

@@ -1,4 +1,4 @@
-import { Button, Select } from "@mantine/core";
+import { Button, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -18,14 +18,23 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import {
+  useCompanyInvitations,
+  useCreateCompanyInvitation,
+  useResendCompanyInvitation,
+  useRevokeCompanyInvitation,
+} from "../../hooks/useInvitations";
+import {
   useCompanyPermissions,
   useCompanyUsers,
-  useCreateCompanyUser,
   useDeactivateCompanyUser,
   useUpdateCompanyUser,
 } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
-import type { CompanyUser, CreateCompanyUserInput } from "../../types/company-user";
+import type { CompanyUser } from "../../types/company-user";
+import type {
+  CreateCompanyInvitationInput,
+  UserInvitationSummary,
+} from "../../types/user-invitation";
 import { formatDate } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { companyRoleLabels, membershipStatusLabels } from "../../utils/labels";
@@ -64,23 +73,15 @@ export function CompanyUsersPage() {
   );
 
   const usersQuery = useCompanyUsers(filters, canManageUsers);
-  const createMutation = useCreateCompanyUser();
+  const pendingInvitationsQuery = useCompanyInvitations(
+    { status: "PENDING", limit: 20, page: 1 },
+    canManageUsers,
+  );
+  const createMutation = useCreateCompanyInvitation();
   const updateMutation = useUpdateCompanyUser();
   const deactivateMutation = useDeactivateCompanyUser();
-
-  const activeSecondaryFilterCount = useMemo(() => {
-    let count = 0;
-    if (table.state.role !== COMPANY_USERS_TABLE_DEFAULTS.role) count += 1;
-    if (table.state.status !== COMPANY_USERS_TABLE_DEFAULTS.status) count += 1;
-    return count;
-  }, [table.state.role, table.state.status]);
-
-  const handleClearSecondaryFilters = useCallback(() => {
-    table.setState({
-      role: COMPANY_USERS_TABLE_DEFAULTS.role,
-      status: COMPANY_USERS_TABLE_DEFAULTS.status,
-    });
-  }, [table]);
+  const resendInvitationMutation = useResendCompanyInvitation();
+  const revokeInvitationMutation = useRevokeCompanyInvitation();
 
   const handleSearch = useCallback(
     (value: string) => {
@@ -112,20 +113,22 @@ export function CompanyUsersPage() {
 
   const handleDialogSubmit = async (
     input:
-      | CreateCompanyUserInput
+      | CreateCompanyInvitationInput
       | { role: CompanyUser["companyRole"]; status: CompanyUser["membershipStatus"]; isDefault: boolean },
   ) => {
     setDialogError(null);
 
     try {
       if (dialogMode === "create") {
-        const result = await createMutation.mutateAsync(input as CreateCompanyUserInput);
+        const result = await createMutation.mutateAsync(input as CreateCompanyInvitationInput);
         setDialogOpen(false);
         notifications.show({
           color: "green",
           message:
             result.message ||
-            "Usuario creado. Recordá compartir de forma segura la contraseña temporal que ingresaste.",
+            (result.data.emailSent
+              ? "Invitación enviada por correo."
+              : "Invitación creada, pero no se pudo enviar el correo. Podés reenviarla desde la lista de pendientes."),
         });
         return;
       }
@@ -157,6 +160,31 @@ export function CompanyUsersPage() {
     } catch (error) {
       setDialogError(getApiErrorMessage(error));
       setDeactivateTarget(null);
+    }
+  };
+
+  const handleResendInvitation = async (invitation: UserInvitationSummary) => {
+    try {
+      const result = await resendInvitationMutation.mutateAsync(invitation.id);
+      notifications.show({
+        color: "green",
+        message:
+          result.message ||
+          (result.data.emailSent
+            ? "Invitación reenviada."
+            : "No se pudo reenviar el correo. Intentá nuevamente más tarde."),
+      });
+    } catch (error) {
+      notifications.show({ color: "red", message: getApiErrorMessage(error) });
+    }
+  };
+
+  const handleRevokeInvitation = async (invitation: UserInvitationSummary) => {
+    try {
+      const result = await revokeInvitationMutation.mutateAsync(invitation.id);
+      notifications.show({ color: "green", message: result.message || "Invitación revocada." });
+    } catch (error) {
+      notifications.show({ color: "red", message: getApiErrorMessage(error) });
     }
   };
 
@@ -240,8 +268,55 @@ export function CompanyUsersPage() {
       <PageHeader
         title="Usuarios de empresa"
         description="Gestioná los usuarios que tienen acceso al panel para esta empresa."
-        action={<Button onClick={openCreateDialog}>Agregar usuario</Button>}
+        action={<Button onClick={openCreateDialog}>Invitar usuario</Button>}
       />
+
+      {pendingInvitationsQuery.data && pendingInvitationsQuery.data.data.length > 0 ? (
+        <Paper withBorder p="md" mb="lg" radius="md">
+          <Stack gap="sm">
+            <Title order={4}>Invitaciones pendientes</Title>
+            <Text size="sm" c="dimmed">
+              Invitaciones enviadas que aún no fueron aceptadas.
+            </Text>
+            {pendingInvitationsQuery.data.data.map((invitation) => (
+              <Group key={invitation.id} justify="space-between" align="flex-start" wrap="wrap">
+                <Stack gap={2}>
+                  <Text size="sm" fw={500}>
+                    {invitation.email}
+                  </Text>
+                  <Text size="xs" c="dimmed">
+                    {companyRoleLabels[invitation.role]} · vence {formatDate(invitation.expiresAt)}
+                    {invitation.deliveryStatus === "FAILED"
+                      ? " · correo pendiente de entrega"
+                      : invitation.deliveryStatus === "SENT"
+                        ? " · correo enviado"
+                        : ""}
+                  </Text>
+                </Stack>
+                <Group gap="xs">
+                  <Button
+                    size="compact-sm"
+                    variant="light"
+                    loading={resendInvitationMutation.isPending}
+                    onClick={() => void handleResendInvitation(invitation)}
+                  >
+                    Reenviar
+                  </Button>
+                  <Button
+                    size="compact-sm"
+                    variant="subtle"
+                    color="red"
+                    loading={revokeInvitationMutation.isPending}
+                    onClick={() => void handleRevokeInvitation(invitation)}
+                  >
+                    Revocar
+                  </Button>
+                </Group>
+              </Group>
+            ))}
+          </Stack>
+        </Paper>
+      ) : null}
 
       <FilterBar
         search={
@@ -253,8 +328,8 @@ export function CompanyUsersPage() {
             label="Buscar"
           />
         }
-        activeFilterCount={activeSecondaryFilterCount}
-        onClearFilters={handleClearSecondaryFilters}
+        activeFilterCount={table.activeFilterCount}
+        onClearFilters={table.resetFilters}
       >
         <FilterBar.Item>
           <Select

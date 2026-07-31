@@ -1,7 +1,7 @@
-import { Anchor, Box, Button, SimpleGrid, Stack } from "@mantine/core";
+import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { Link as RouterLink, useParams } from "react-router-dom";
+import { Link as RouterLink, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -9,6 +9,7 @@ import { useCompanySettings } from "../../hooks/useCompanySettings";
 import {
   ActionMenu,
   ConfirmDialog,
+  EntityAvatar,
   ErrorState,
   LoadingState,
   MetricCard,
@@ -22,6 +23,7 @@ import { OperationTeamSection } from "../../components/operations/OperationTeamS
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import { OperationScheduledWorkdaysSection } from "../../components/operations/OperationScheduledWorkdaysSection";
+import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
   useCancelOperation,
@@ -35,6 +37,7 @@ import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
+import { getOperationDisplayName } from "../../utils/operation-display";
 import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
 import {
@@ -149,10 +152,10 @@ export function OperationDetailPage() {
   const canAssign = canManage && isOperationAssignable(operation.status);
   const canEdit = canManage && isOperationEditable(operation.status);
   const canReactivate = canManage && isOperationReactivatable(operation.status);
-  const serviceDisplayName = operation.service?.name ?? "—";
+  const serviceDisplayName = getOperationDisplayName(operation);
   const serviceDetailId = operation.serviceId || operation.service?.id;
   const serviceFieldValue =
-    serviceDetailId && serviceDisplayName !== "—" ? (
+    serviceDetailId && operation.service?.name?.trim() ? (
       <Anchor component={RouterLink} to={`/services/${serviceDetailId}`} size="sm">
         {serviceDisplayName}
       </Anchor>
@@ -243,28 +246,36 @@ export function OperationDetailPage() {
   return (
     <>
       <PageHeader
-        title={`Detalle de la ${terminology.operation.singular.toLowerCase()}`}
-        description={formatOperationDetailScheduleTitle(operation)}
+        title={
+          <Group gap="md" wrap="nowrap" align="center">
+            <EntityAvatar name={serviceDisplayName} entityType="operation" size="lg" />
+            <span>{serviceDisplayName}</span>
+          </Group>
+        }
+        description={`${`Detalle de la ${terminology.operation.singular.toLowerCase()}`} · ${formatOperationDetailScheduleTitle(operation)}`}
         action={
-          <ActionMenu
-            primary={
-              editing && canEdit ? (
-                <Button
-                  type="submit"
-                  form={OPERATION_DETAIL_FORM_ID}
-                  loading={updateMutation.isPending}
-                >
-                  Guardar cambios
-                </Button>
-              ) : (
-                <Button variant="default" onClick={goBackToList}>
-                  Volver al listado
-                </Button>
-              )
-            }
-            items={headerMenuItems}
-            menuLabel="Más acciones de la operación"
-          />
+          <Group gap="sm" wrap="wrap">
+            {canEdit && !editing ? <EntityEditAction entity="operations" id={operation.id} /> : null}
+            <ActionMenu
+              primary={
+                editing && canEdit ? (
+                  <Button
+                    type="submit"
+                    form={OPERATION_DETAIL_FORM_ID}
+                    loading={updateMutation.isPending}
+                  >
+                    Guardar cambios
+                  </Button>
+                ) : (
+                  <Button variant="default" onClick={goBackToList}>
+                    Volver al listado
+                  </Button>
+                )
+              }
+              items={headerMenuItems}
+              menuLabel="Más acciones de la operación"
+            />
+          </Group>
         }
       />
 

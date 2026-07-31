@@ -12,8 +12,8 @@ import type {
 import { buildParams } from "./client";
 import { scopedApiClient } from "./scoped-client";
 
-function toParams(filters: StatisticsFilters): Record<string, string | number | boolean | undefined> {
-  return buildParams(filters as Record<string, string | number | boolean | undefined>);
+function toParams(filters: StatisticsFilters): Record<string, string | number | boolean | string[] | undefined> {
+  return buildParams(filters as Record<string, string | number | boolean | string[] | undefined>);
 }
 
 export async function getAttendanceStatisticsSummary(

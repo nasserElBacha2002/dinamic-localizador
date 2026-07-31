@@ -86,6 +86,44 @@ export const operationEmployeeRepository = {
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  async listOverlappingForEmployeesInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      employeeIds: string[];
+      validFrom: string;
+      validUntil: string | null;
+    },
+  ): Promise<OperationEmployeeAssignment[]> {
+    if (input.employeeIds.length === 0) {
+      return [];
+    }
+
+    const request = new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("validFrom", sql.Date, input.validFrom)
+      .input("validUntil", sql.Date, input.validUntil);
+
+    const placeholders = input.employeeIds.map((employeeId, index) => {
+      const param = `employeeId${index}`;
+      request.input(param, sql.UniqueIdentifier, employeeId);
+      return `@${param}`;
+    });
+
+    const result = await request.query(`
+      SELECT *
+      FROM operation_assignments WITH (UPDLOCK, HOLDLOCK)
+      WHERE company_id = @companyId
+        AND operation_id = @operationId
+        AND employee_id IN (${placeholders.join(", ")})
+        AND ${OVERLAP_CLAUSE}
+    `);
+
+    return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
+  },
+
   async findOverlappingInTransaction(
     companyId: string,
     transaction: sql.Transaction,
@@ -376,6 +414,38 @@ export const operationEmployeeRepository = {
     }
 
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Aligns active (non-cancelled) ONE_TIME assignment validity to the operational work date.
+   * Cancelled / historical assignments are left untouched.
+   */
+  async updateActiveValidityForOperationInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationId: string,
+    workDate: string,
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
+      .query(`
+        UPDATE operation_assignments
+        SET valid_from = @workDate,
+            valid_until = @workDate,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND cancelled_at IS NULL
+          AND (
+            valid_from <> @workDate
+            OR valid_until IS NULL
+            OR valid_until <> @workDate
+          )
+      `);
+
+    return result.rowsAffected[0] ?? 0;
   },
 
   async listOverlappingForOperationInDateRange(

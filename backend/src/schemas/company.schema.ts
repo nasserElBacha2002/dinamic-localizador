@@ -132,6 +132,9 @@ export const updateCompanySettingsSchema = z
         "Las horas de vencimiento de salida pendiente no pueden superar 168.",
       )
       .optional(),
+    absenceAdvancedCalendarEnabled: z.boolean().optional(),
+    absenceAttachmentsEnabled: z.boolean().optional(),
+    absenceOperationalIntegrationEnabled: z.boolean().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

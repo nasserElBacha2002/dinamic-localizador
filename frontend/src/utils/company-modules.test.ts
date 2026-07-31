@@ -179,14 +179,17 @@ describe("company modules frontend module", () => {
     assert.match(guardFile, /useCompanyPermissions/);
   });
 
-  it("uses lookup autocompletes on attendance filters", () => {
+  it("uses multi-select lookups on attendance filters", () => {
     const attendancePage = readFileSync(
       join(process.cwd(), "src/pages/attendance/AttendanceListPage.tsx"),
       "utf8",
     );
-    assert.match(attendancePage, /EmployeeLookupAutocomplete/);
-    assert.match(attendancePage, /ServiceLookupAutocomplete/);
-    assert.match(attendancePage, /OperationLookupAutocomplete/);
+    assert.match(attendancePage, /EmployeeMultiSelect/);
+    assert.match(attendancePage, /ServiceMultiSelect/);
+    assert.match(attendancePage, /OperationMultiSelect/);
+    assert.doesNotMatch(attendancePage, /EmployeeLookupAutocomplete/);
+    assert.doesNotMatch(attendancePage, /ServiceLookupAutocomplete/);
+    assert.doesNotMatch(attendancePage, /OperationLookupAutocomplete/);
     assert.doesNotMatch(attendancePage, /EmployeeSearchAutocomplete/);
     assert.doesNotMatch(attendancePage, /ServiceSearchAutocomplete/);
   });

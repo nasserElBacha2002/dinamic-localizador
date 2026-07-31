@@ -2,8 +2,9 @@
 import { AppError } from "../errors/app-error";
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import { resolveOperationAbsenceBadges } from "../domain/operation-absence-badges";
 import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
-import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
+import { absenceOperationalImpactRepository } from "../repositories/absence-operational-impact.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationScheduleRepository } from "../repositories/operation-schedule.repository";
 import { serviceRepository } from "../repositories/service.repository";
@@ -16,6 +17,7 @@ import type {
   UpdateOperationInput,
 } from "../schemas/operation.schema";
 import { auditService } from "./audit.service";
+import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
@@ -37,6 +39,8 @@ import {
 } from "../utils/weekly-schedule";
 import type { OperationDetail, OperationWithService } from "../types/domain";
 import { assertCompanyWorkScheduleExists } from "../utils/recurring-schedule-consistency";
+import { detectOneTimeScheduleAffectingChanges } from "../utils/one-time-schedule-change";
+import { oneTimeOperationScheduleReconciliationService } from "./one-time-operation-schedule-reconciliation.service";
 
 const validateOneTimeDates = (
   scheduledStart: string,
@@ -367,28 +371,60 @@ export const operationService = {
       validateOperationStartNotInPast(input.scheduledStart);
     }
 
-    const scheduleChanged =
-      input.scheduledStart !== undefined &&
-      current.scheduledStart &&
-      new Date(input.scheduledStart).getTime() !== new Date(current.scheduledStart).getTime();
+    const scheduleFlags = detectOneTimeScheduleAffectingChanges(current, input);
 
     let updated: OperationRecord | null;
-    let resetCount = 0;
+    let reconcileResult: Awaited<
+      ReturnType<typeof oneTimeOperationScheduleReconciliationService.reconcileInTransaction>
+    > | null = null;
 
-    if (scheduleChanged) {
+    if (scheduleFlags.scheduleAffecting) {
       const pool = getPool();
       const transaction = new sql.Transaction(pool);
       await transaction.begin();
 
       try {
+        const locked = await operationRepository.findByIdForUpdate(companyId, id, transaction);
+        if (!locked) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+
+        const lockedFlags = detectOneTimeScheduleAffectingChanges(locked, input);
         updated = await operationRepository.update(companyId, id, input, transaction);
         if (!updated) {
           throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
         }
 
-        resetCount = await employeeAssignmentQueryRepository.resetConfirmationsForOperationScheduleChange(
+        reconcileResult =
+          await oneTimeOperationScheduleReconciliationService.reconcileInTransaction(
+            companyId,
+            transaction,
+            updated,
+            lockedFlags,
+          );
+
+        await auditService.log(
           companyId,
-          id,
+          {
+            entityType: "operation",
+            entityId: id,
+            action: "update",
+            previousData: locked as unknown as Record<string, unknown>,
+            newData: {
+              ...(updated as unknown as Record<string, unknown>),
+              scheduleReconciliation: {
+                workdayAction: reconcileResult.workdayAction,
+                workDate: reconcileResult.workDate,
+                scheduleVersion: reconcileResult.scheduleVersion,
+                assignmentsUpdated: reconcileResult.assignmentsUpdated,
+                confirmationsReset: reconcileResult.confirmationsReset,
+                notificationsSuperseded: reconcileResult.notificationsSuperseded,
+                employeeWorkdaysEnsured: reconcileResult.employeeWorkdaysEnsured,
+                impact: lockedFlags,
+              },
+            },
+            reason: "Actualización vía API",
+          },
           transaction,
         );
 
@@ -402,24 +438,29 @@ export const operationService = {
       if (!updated) {
         throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
-    }
 
-    if (resetCount > 0) {
-      console.info("[operation] confirmation state reset after schedule change", {
-        companyId,
-        operationId: id,
-        resetAssignments: resetCount,
+      await auditService.log(companyId, {
+        entityType: "operation",
+        entityId: id,
+        action: "update",
+        previousData: current as unknown as Record<string, unknown>,
+        newData: updated as unknown as Record<string, unknown>,
+        reason: "Actualización vía API",
       });
     }
 
-    await auditService.log(companyId, {
-      entityType: "operation",
-      entityId: id,
-      action: "update",
-      previousData: current as unknown as Record<string, unknown>,
-      newData: updated as unknown as Record<string, unknown>,
-      reason: "Actualización vía API",
-    });
+    if (reconcileResult && reconcileResult.confirmationsReset > 0) {
+      console.info("[operation] confirmation state reset after schedule change", {
+        companyId,
+        operationId: id,
+        resetAssignments: reconcileResult.confirmationsReset,
+        assignmentsUpdated: reconcileResult.assignmentsUpdated,
+        notificationsSuperseded: reconcileResult.notificationsSuperseded,
+        workdayAction: reconcileResult.workdayAction,
+        workDate: reconcileResult.workDate,
+        scheduleVersion: reconcileResult.scheduleVersion,
+      });
+    }
 
     return updated;
   },
@@ -662,6 +703,39 @@ export const operationService = {
 
     const syncedOperation = await syncLifecycleStatus(companyId, summary.operation);
 
+    const featureEnabled =
+      await absenceOperationalImpactQueryService.isFeatureEnabled(companyId);
+    const conflicts = featureEnabled
+      ? await absenceOperationalImpactRepository.listConflictsByOperation(
+          companyId,
+          operationId,
+        )
+      : [];
+
+    const employees = summary.employees.map((employee) => {
+      const badges = featureEnabled
+        ? resolveOperationAbsenceBadges({
+            employeeId: employee.employee.id,
+            assignmentId: employee.assignmentId,
+            expectationStatus: employee.expectationStatus,
+            conflicts,
+          })
+        : [];
+      return {
+        assignmentId: employee.assignmentId,
+        employee: employee.employee,
+        attendance: employee.attendance,
+        operationalStatus: employee.operationalStatus,
+        confirmationStatus: employee.confirmationStatus,
+        confirmedAt: employee.confirmedAt,
+        unavailableAt: employee.unavailableAt,
+        expectationStatus: employee.expectationStatus,
+        absenceRequestId: employee.absenceRequestId,
+        employeeWorkdayId: employee.employeeWorkdayId,
+        absenceBadges: badges,
+      };
+    });
+
     return {
       operation: {
         ...summary.operation,
@@ -671,7 +745,7 @@ export const operationService = {
       operationWorkdayId: summary.operationWorkdayId,
       workDate: summary.workDate,
       summary: summary.summary,
-      employees: summary.employees,
+      employees,
       meta: buildPaginationMeta(page, limit, summary.total),
     };
   },

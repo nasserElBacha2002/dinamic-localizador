@@ -4,6 +4,7 @@ import type { DerivedEmployeeWorkdayState } from "../types/employee-workday-stat
 import { CANONICAL_PRODUCTION_ATTENDANCE_APPLY } from "./statistics-canonical-attendance";
 import { normalizeStatisticsFilters } from "../utils/statistics-display-labels";
 import { applySqlFilters, type SqlFilter } from "./sql-list-query";
+import { createUuidInFilter } from "./sql-uuid-in-filter";
 
 export const EFFECTIVE_STATE_SQL = `
   CASE
@@ -92,25 +93,35 @@ export const buildEmployeeWorkdayStatisticsFilters = (
     });
   }
 
-  if (normalized.operationId) {
-    sqlFilters.push({
-      clause: "o.id = @operationId",
-      apply: (request) => request.input("operationId", sql.UniqueIdentifier, normalized.operationId),
-    });
+  const operationIds = normalized.operationIds ?? [];
+  const serviceIds = normalized.serviceIds ?? [];
+  const employeeIds = normalized.employeeIds ?? [];
+
+  const operationFilter = createUuidInFilter({
+    column: "o.id",
+    parameterPrefix: "operationId",
+    values: operationIds,
+  });
+  if (operationFilter) {
+    sqlFilters.push(operationFilter);
   }
 
-  if (normalized.serviceId) {
-    sqlFilters.push({
-      clause: "s.id = @serviceId",
-      apply: (request) => request.input("serviceId", sql.UniqueIdentifier, normalized.serviceId),
-    });
+  const serviceFilter = createUuidInFilter({
+    column: "s.id",
+    parameterPrefix: "serviceId",
+    values: serviceIds,
+  });
+  if (serviceFilter) {
+    sqlFilters.push(serviceFilter);
   }
 
-  if (normalized.employeeId) {
-    sqlFilters.push({
-      clause: "e.id = @employeeId",
-      apply: (request) => request.input("employeeId", sql.UniqueIdentifier, normalized.employeeId),
-    });
+  const employeeFilter = createUuidInFilter({
+    column: "e.id",
+    parameterPrefix: "employeeId",
+    values: employeeIds,
+  });
+  if (employeeFilter) {
+    sqlFilters.push(employeeFilter);
   }
 
   if (normalized.operationKind) {

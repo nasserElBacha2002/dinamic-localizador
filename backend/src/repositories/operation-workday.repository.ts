@@ -283,6 +283,86 @@ export const operationWorkdayRepository = {
     return Boolean(result.recordset[0]);
   },
 
+  async hasAttendanceForWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+  ): Promise<boolean> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        SELECT TOP 1 1 AS found
+        FROM employee_workdays ew
+        INNER JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+         AND ar.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.operation_workday_id = @operationWorkdayId
+      `);
+
+    return Boolean(result.recordset[0]);
+  },
+
+  /**
+   * In-place ONE_TIME schedule reconciliation: updates work_date + snapshot on the
+   * canonical workday row so employee_workdays keep their operation_workday_id.
+   */
+  async updateWorkDateAndSnapshotInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+    input: {
+      workDate: string;
+      expectedStartAt: Date;
+      expectedEndAt: Date | null;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      /** Exact current version for optimistic CAS (with pessimistic op lock). */
+      expectedScheduleVersion: number;
+      /** Next version; equals expected when reminder schedule did not change. */
+      nextScheduleVersion: number;
+      scheduleTimezoneSnapshot: string;
+      status?: OperationWorkday["status"];
+    },
+  ): Promise<OperationWorkday | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .input("workDate", sql.Date, input.workDate)
+      .input("expectedStartAt", sql.DateTime2, input.expectedStartAt)
+      .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
+      .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
+      .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("expectedScheduleVersion", sql.Int, input.expectedScheduleVersion)
+      .input("nextScheduleVersion", sql.Int, input.nextScheduleVersion)
+      .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
+      .input("status", sql.NVarChar(20), input.status ?? "ACTIVE")
+      .query(`
+        UPDATE operation_workdays
+        SET work_date = @workDate,
+            expected_start_at = @expectedStartAt,
+            expected_end_at = @expectedEndAt,
+            early_tolerance_minutes = @earlyToleranceMinutes,
+            late_tolerance_minutes = @lateToleranceMinutes,
+            schedule_version = @nextScheduleVersion,
+            schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
+            status = @status,
+            cancellation_reason = CASE WHEN @status = 'ACTIVE' THEN NULL ELSE cancellation_reason END,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND id = @operationWorkdayId
+          AND schedule_version = @expectedScheduleVersion
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationWorkdayRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async updateSnapshot(
     companyId: string,
     operationWorkdayId: string,

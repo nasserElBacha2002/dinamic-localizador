@@ -1,6 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Alert, Box } from "@mantine/core";
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useForm, useWatch } from "react-hook-form";
 import {
   FormActions,
@@ -28,6 +28,8 @@ interface ServiceFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   isEditMode?: boolean;
+  /** Reports dirty state to the page-level unsaved controller (edit routes only). */
+  onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: ServiceFormValues) => Promise<void>;
   formId?: string;
   showBottomActions?: boolean;
@@ -41,14 +43,31 @@ export function ServiceForm({
   loading = false,
   errorMessage,
   isEditMode = false,
+  onDirtyChange,
   onSubmit,
   formId = SERVICE_FORM_ID,
   showBottomActions = true,
 }: ServiceFormProps) {
-  const { control, handleSubmit, setValue, trigger } = useForm<ServiceFormValues>({
+  const {
+    control,
+    handleSubmit,
+    setValue,
+    trigger,
+    formState: { isDirty },
+  } = useForm<ServiceFormValues>({
     resolver: zodResolver(serviceFormSchema),
     defaultValues,
   });
+
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => {
+      onDirtyChange?.(false);
+    };
+  }, [onDirtyChange]);
 
   const watchedValues = useWatch({ control });
   const { data: locationTypes = [] } = useCompanyLocationTypes(false);

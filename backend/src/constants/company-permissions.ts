@@ -15,6 +15,7 @@ const ALL_PERMISSIONS: CompanyPermission[] = [
   "attendance:export",
   "absences:read",
   "absences:review",
+  "absences:balance:update",
   "reports:read",
   "reports:export",
   "bot_simulator:use",
@@ -40,6 +41,7 @@ const ROLE_PERMISSIONS: Record<CompanyRole, CompanyPermission[]> = {
     "attendance:read",
     "absences:read",
     "absences:review",
+    "absences:balance:update",
     "reports:read",
   ],
   SUPERVISOR: [

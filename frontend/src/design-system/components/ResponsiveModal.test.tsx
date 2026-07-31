@@ -59,19 +59,19 @@ describe("ResponsiveModal", () => {
     assert.ok(document.body.textContent?.includes("Scroll body"));
   });
 
-  it("uses scroll body mode without forcing ScrollArea for normal mode", () => {
+  it("does not create a scroll body region in normal mode", () => {
     mockViewport("desktop");
-    const { container } = render(
+    render(
       <MantineProvider>
         <ResponsiveModal opened onClose={() => undefined} title="Normal" bodyMode="normal">
           <p>Sin scroll anidado</p>
         </ResponsiveModal>
       </MantineProvider>,
     );
-    assert.equal(container.querySelector(".mantine-ScrollArea-root"), null);
+    assert.equal(document.querySelector("[data-testid='responsive-modal-scroll-body']"), null);
   });
 
-  it("wraps long content with ScrollArea when bodyMode=scroll", () => {
+  it("keeps a bounded overflow scroll body with sticky footer when bodyMode=scroll", () => {
     mockViewport("desktop");
     render(
       <MantineProvider>
@@ -81,12 +81,21 @@ describe("ResponsiveModal", () => {
           title="Largo"
           bodyMode="scroll"
           footer={<Button>OK</Button>}
+          footerBanner={<p>Banner fijo</p>}
         >
           <div style={{ height: 1200 }}>Contenido extenso</div>
         </ResponsiveModal>
       </MantineProvider>,
     );
-    assert.ok(document.querySelector(".mantine-ScrollArea-root"));
+    const scrollBody = document.querySelector(
+      "[data-testid='responsive-modal-scroll-body']",
+    ) as HTMLElement | null;
+    assert.ok(scrollBody);
+    assert.match(scrollBody.style.overflowY, /auto|scroll/);
+    assert.match(scrollBody.style.flex, /1 1 0/);
+    assert.ok(document.querySelector("[data-testid='responsive-modal-footer']"));
+    assert.ok(document.querySelector("[data-testid='responsive-modal-footer-banner']"));
     assert.ok(document.body.textContent?.includes("Contenido extenso"));
+    assert.ok(document.body.textContent?.includes("Banner fijo"));
   });
 });

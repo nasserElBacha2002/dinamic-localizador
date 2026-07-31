@@ -24,6 +24,7 @@ const absenceTypes = STANDARD_ABSENCE_TYPE_CODES.map((code, index) => ({
   description: null,
   requiresApproval: true,
   requiresAttachment: false,
+    attachmentPolicy: "OPTIONAL",
   deductsBalance: code === "VACATION",
   allowsHalfDay: code === "STUDY_DAY",
   isActive: true,

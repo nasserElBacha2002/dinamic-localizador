@@ -9,3 +9,8 @@ review
 *.log
 npm-debug.log*
 .DS_Store
+secrets
+**/gcp-service-account.json
+*service-account*.json
+*gcp-credentials*.json
+google-credentials.json

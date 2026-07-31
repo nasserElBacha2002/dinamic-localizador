@@ -133,10 +133,9 @@ export const employeeWorkdayAvailabilityRepository = {
         AND i.status NOT IN ('COMPLETED', 'CANCELLED')
         AND s.active = 1
         AND ar.id IS NULL
-        AND @candidateFrom <= DATEADD(
-          MINUTE,
-          ow.late_tolerance_minutes,
-          COALESCE(ow.expected_end_at, ow.expected_start_at)
+        AND @candidateFrom < COALESCE(
+          ow.expected_end_at,
+          DATEADD(MINUTE, ow.late_tolerance_minutes, ow.expected_start_at)
         )
         AND @candidateTo >= DATEADD(MINUTE, -ow.early_tolerance_minutes, ow.expected_start_at)
       ORDER BY ow.expected_start_at ASC, s.name ASC, ew.id ASC
@@ -239,6 +238,7 @@ export const employeeWorkdayAvailabilityRepository = {
   ): Promise<
     Array<{
       operationId: string;
+      operationKind: string;
       operationWorkdayId: string;
       employeeWorkdayId: string;
       workDate: string;
@@ -249,7 +249,7 @@ export const employeeWorkdayAvailabilityRepository = {
       operationStatus: string;
       locationActive: boolean;
       hasAttendance: boolean;
-      scheduleStartMatches: boolean;
+      priorAttendanceId: string | null;
       earlyToleranceMinutes: number;
       lateToleranceMinutes: number;
     }>
@@ -266,6 +266,7 @@ export const employeeWorkdayAvailabilityRepository = {
       .query(`
         SELECT TOP 20
           i.id AS operation_id,
+          i.operation_kind,
           ow.id AS operation_workday_id,
           ew.id AS employee_workday_id,
           ow.work_date,
@@ -277,21 +278,15 @@ export const employeeWorkdayAvailabilityRepository = {
           s.active AS location_active,
           ow.early_tolerance_minutes,
           ow.late_tolerance_minutes,
-          CASE WHEN EXISTS (
-            SELECT 1
+          (
+            SELECT TOP 1 CAST(ar.id AS NVARCHAR(36))
             FROM attendance_records ar
             WHERE ar.employee_workday_id = ew.id
               AND ar.company_id = ew.company_id
               AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
-          ) THEN 1 ELSE 0 END AS has_attendance,
-          CASE
-            WHEN i.scheduled_start = ow.expected_start_at
-             AND (
-               (i.scheduled_end IS NULL AND ow.expected_end_at IS NULL)
-               OR i.scheduled_end = ow.expected_end_at
-             )
-            THEN 1 ELSE 0
-          END AS schedule_start_matches
+              AND ar.is_simulation = 0
+            ORDER BY ar.received_at ASC
+          ) AS prior_attendance_id
         FROM employee_workdays ew
         INNER JOIN operation_workdays ow
           ON ow.id = ew.operation_workday_id
@@ -311,6 +306,7 @@ export const employeeWorkdayAvailabilityRepository = {
 
     return result.recordset.map((row) => ({
       operationId: String(row.operation_id),
+      operationKind: String(row.operation_kind),
       operationWorkdayId: String(row.operation_workday_id),
       employeeWorkdayId: String(row.employee_workday_id),
       workDate: toDateOnlyString(row.work_date as Date | string),
@@ -322,10 +318,135 @@ export const employeeWorkdayAvailabilityRepository = {
       operationWorkdayStatus: String(row.operation_workday_status),
       operationStatus: String(row.operation_status),
       locationActive: Boolean(row.location_active),
-      hasAttendance: Number(row.has_attendance) === 1,
-      scheduleStartMatches: Number(row.schedule_start_matches) === 1,
+      hasAttendance: Boolean(row.prior_attendance_id),
+      priorAttendanceId: row.prior_attendance_id ? String(row.prior_attendance_id) : null,
       earlyToleranceMinutes: Number(row.early_tolerance_minutes),
       lateToleranceMinutes: Number(row.late_tolerance_minutes),
+    }));
+  },
+
+  /**
+   * Today's materialized workdays for WhatsApp "Mi jornada" (ONE_TIME + RECURRING).
+   */
+  async listTodayWorkdaysForEmployee(
+    companyId: string,
+    employeeId: string,
+    workDate: string,
+  ): Promise<
+    Array<{
+      assignmentId: string;
+      operationId: string;
+      serviceName: string;
+      serviceAddress: string | null;
+      serviceLocality: string | null;
+      serviceLatitude: number | null;
+      serviceLongitude: number | null;
+      scheduledStart: string;
+      scheduledEnd: string;
+      operationStatus: string;
+      confirmationStatus: string;
+      attendanceReceivedAt: string | null;
+      attendanceCheckoutAt: string | null;
+      punctualityStatus: string | null;
+      employeeWorkdayId: string;
+      operationWorkdayId: string;
+      expectationStatus: string;
+    }>
+  > {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("workDate", sql.Date, workDate)
+      .query(`
+        SELECT
+          COALESCE(CAST(ew.operation_assignment_id AS NVARCHAR(36)), CAST(ie.id AS NVARCHAR(36)), CAST(ew.id AS NVARCHAR(36))) AS assignment_id,
+          i.id AS operation_id,
+          ow.expected_start_at AS scheduled_start,
+          ow.expected_end_at AS scheduled_end,
+          i.status AS operation_status,
+          s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
+          s.latitude AS service_latitude,
+          s.longitude AS service_longitude,
+          COALESCE(ie.confirmation_status, N'PENDING') AS confirmation_status,
+          ar.received_at,
+          ar.checkout_at,
+          ar.punctuality_status,
+          ew.id AS employee_workday_id,
+          ow.id AS operation_workday_id,
+          ew.expectation_status
+        FROM employee_workdays ew
+        INNER JOIN operation_workdays ow
+          ON ow.id = ew.operation_workday_id
+         AND ow.company_id = ew.company_id
+        INNER JOIN scheduled_operations i
+          ON i.id = ow.operation_id
+         AND i.company_id = ew.company_id
+        INNER JOIN operational_locations s
+          ON s.id = i.service_id
+         AND s.company_id = ew.company_id
+        LEFT JOIN operation_assignments ie
+          ON ie.company_id = ew.company_id
+         AND ie.employee_id = ew.employee_id
+         AND ie.operation_id = i.id
+         AND ie.cancelled_at IS NULL
+         AND (
+           ew.operation_assignment_id IS NULL
+           OR ie.id = ew.operation_assignment_id
+         )
+        LEFT JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+         AND ar.company_id = @companyId
+         AND ar.is_simulation = 0
+         AND ar.validation_status IN (N'VALID', N'PENDING_REVIEW')
+        WHERE ew.company_id = @companyId
+          AND ew.employee_id = @employeeId
+          AND ow.work_date = @workDate
+          AND ow.status = N'ACTIVE'
+          AND i.status NOT IN (N'CANCELLED')
+          AND ew.expectation_status IN (N'EXPECTED', N'JUSTIFIED')
+          AND s.active = 1
+          AND (
+            ie.id IS NOT NULL
+            OR ew.operation_assignment_id IS NOT NULL
+            OR i.operation_kind = N'RECURRING'
+          )
+        ORDER BY ow.expected_start_at ASC, ow.expected_end_at ASC, ew.id ASC
+      `);
+
+    return result.recordset.map((row) => ({
+      assignmentId: String(row.assignment_id),
+      operationId: String(row.operation_id),
+      serviceName: String(row.service_name),
+      serviceAddress: row.service_address ? String(row.service_address) : null,
+      serviceLocality: row.service_locality ? String(row.service_locality) : null,
+      serviceLatitude:
+        row.service_latitude === null || row.service_latitude === undefined
+          ? null
+          : Number(row.service_latitude),
+      serviceLongitude:
+        row.service_longitude === null || row.service_longitude === undefined
+          ? null
+          : Number(row.service_longitude),
+      scheduledStart: toIsoString(row.scheduled_start as Date | string),
+      scheduledEnd: row.scheduled_end
+        ? toIsoString(row.scheduled_end as Date | string)
+        : toIsoString(row.scheduled_start as Date | string),
+      operationStatus: String(row.operation_status),
+      confirmationStatus: String(row.confirmation_status ?? "PENDING"),
+      attendanceReceivedAt: row.received_at
+        ? toIsoString(row.received_at as Date | string)
+        : null,
+      attendanceCheckoutAt: row.checkout_at
+        ? toIsoString(row.checkout_at as Date | string)
+        : null,
+      punctualityStatus: row.punctuality_status ? String(row.punctuality_status) : null,
+      employeeWorkdayId: String(row.employee_workday_id),
+      operationWorkdayId: String(row.operation_workday_id),
+      expectationStatus: String(row.expectation_status),
     }));
   },
 

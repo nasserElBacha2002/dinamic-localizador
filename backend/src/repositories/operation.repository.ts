@@ -615,7 +615,10 @@ export const operationRepository = {
         INNER JOIN operation_workdays ow
           ON ow.operation_id = i.id AND ow.company_id = i.company_id
          AND @at >= DATEADD(MINUTE, -i.early_tolerance_minutes, ow.expected_start_at)
-         AND @at <= DATEADD(MINUTE, i.late_tolerance_minutes, ow.expected_start_at)
+         AND @at < COALESCE(
+           ow.expected_end_at,
+           DATEADD(MINUTE, i.late_tolerance_minutes, ow.expected_start_at)
+         )
          AND ow.work_date >= ie.valid_from
          AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
@@ -623,8 +626,6 @@ export const operationRepository = {
           AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('COMPLETED', 'CANCELLED')
           AND s.active = 1
-          AND @at >= DATEADD(MINUTE, -i.early_tolerance_minutes, i.scheduled_start)
-          AND @at <= DATEADD(MINUTE, i.late_tolerance_minutes, i.scheduled_start)
         ORDER BY i.scheduled_start ASC
       `);
 

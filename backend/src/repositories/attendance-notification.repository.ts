@@ -45,6 +45,11 @@ const mapCandidateRow = (row: Record<string, unknown>): AttendanceReminderCandid
   scheduleVersion: Number(row.schedule_version ?? row.confirmation_schedule_version ?? 1),
   confirmationReminderHoursBefore: Number(row.confirmation_reminder_hours_before ?? 24),
   operationTimezone: row.operation_timezone ? String(row.operation_timezone) : undefined,
+  operationKind: row.operation_kind
+    ? (String(row.operation_kind) as AttendanceReminderCandidate["operationKind"])
+    : undefined,
+  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : undefined,
+  operationWorkdayId: row.operation_workday_id ? String(row.operation_workday_id) : undefined,
 });
 
 const PHONE_FILTER_SQL = `
@@ -53,38 +58,62 @@ const PHONE_FILTER_SQL = `
 `;
 
 /**
- * Arrival / no-check-in / exit reminders for ONE_TIME must share the same
- * materialized workday source of truth used by check-in eligibility.
+ * Workday-based reminder discovery (ONE_TIME + RECURRING).
  *
- * Structural invariants (shared by discovery + revalidation):
- * - ONE_TIME operation not cancelled/completed (status filter varies by type)
- * - ACTIVE coherent operation_workday matching scheduled start/end
+ * Source of truth is the materialized workday snapshot:
+ * - ACTIVE operation_workday
  * - EXPECTED employee_workday
- * - active assignment covering work_date
- * - active location + employee
- * - phone present for outbound
+ * - assignment covering work_date
+ * - operation not cancelled (and not completed for arrival/no-check-in)
+ *
+ * Window times use ow.expected_start_at / ow.expected_end_at (not scheduled_operations.*).
+ * Coherent equality (expected_* = scheduled_*) is intentionally NOT required so schedule
+ * drift does not silently drop eventual operations.
+ *
+ * Idempotency key schedule_version:
+ * - ONE_TIME → ow.schedule_version (bumps on timing reconciliation)
+ * - RECURRING → YYYYMMDD of work_date (one reminder cycle per calendar workday)
  */
-const ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL = `
-  AND ie.cancelled_at IS NULL
-  AND ow.work_date >= ie.valid_from
-  AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
+const REMINDER_SCHEDULE_VERSION_SQL = `
+  CASE
+    WHEN i.operation_kind = N'RECURRING' THEN
+      (YEAR(ow.work_date) * 10000 + MONTH(ow.work_date) * 100 + DAY(ow.work_date))
+    ELSE ow.schedule_version
+  END
 `;
 
-const ONE_TIME_COHERENT_WORKDAY_JOINS = `
+const WORKDAY_REMINDER_JOINS = `
         INNER JOIN operation_workdays ow
           ON ow.operation_id = i.id
          AND ow.company_id = @companyId
          AND ow.status = 'ACTIVE'
-         AND ow.expected_start_at = i.scheduled_start
-         AND (
-           (ow.expected_end_at IS NULL AND i.scheduled_end IS NULL)
-           OR ow.expected_end_at = i.scheduled_end
-         )
         INNER JOIN employee_workdays ew
           ON ew.operation_workday_id = ow.id
          AND ew.company_id = @companyId
          AND ew.employee_id = e.id
          AND ew.expectation_status = 'EXPECTED'
+`;
+
+const WORKDAY_ASSIGNMENT_COVERAGE_SQL = `
+  AND ie.cancelled_at IS NULL
+  AND ow.work_date >= ie.valid_from
+  AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
+`;
+
+const REMINDER_CANDIDATE_SELECT = `
+          i.id AS operation_id,
+          i.operation_kind,
+          ow.id AS operation_workday_id,
+          ew.id AS employee_workday_id,
+          ow.expected_start_at AS scheduled_start,
+          ow.expected_end_at AS scheduled_end,
+          s.name AS service_name,
+          s.address AS service_address,
+          s.locality AS service_locality,
+          e.id AS employee_id,
+          e.name AS employee_name,
+          e.phone_number AS employee_phone_number,
+          (${REMINDER_SCHEDULE_VERSION_SQL}) AS schedule_version
 `;
 
 /** SUPERSEDED is never retryable; FAILED retries under attempt budget. */
@@ -161,40 +190,80 @@ export const attendanceNotificationRepository = {
       .input("maxAttempts", sql.Int, maxAttempts)
       .query(`
         SELECT
-          i.id AS operation_id,
-          i.scheduled_start,
-          i.scheduled_end,
-          s.name AS service_name,
-          s.address AS service_address,
-          s.locality AS service_locality,
-          e.id AS employee_id,
-          e.name AS employee_name,
-          e.phone_number AS employee_phone_number,
-          ow.schedule_version AS schedule_version
+          ${REMINDER_CANDIDATE_SELECT}
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie ON ie.operation_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
+        ${WORKDAY_REMINDER_JOINS}
+        LEFT JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+          AND ar.company_id = @companyId
+          AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.operation_id = i.id
           AND wan.employee_id = e.id
           AND wan.notification_type = 'ARRIVAL_REMINDER_15_MIN'
           AND wan.company_id = @companyId
-          AND wan.schedule_version = ow.schedule_version
+          AND wan.schedule_version = (${REMINDER_SCHEDULE_VERSION_SQL})
         WHERE i.company_id = @companyId
-          AND i.operation_kind = N'ONE_TIME'
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
-          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
-          AND i.scheduled_start >= @windowStart
-          AND i.scheduled_start <= @windowEnd
+          AND ar.id IS NULL
+          AND ow.expected_start_at >= @windowStart
+          AND ow.expected_start_at <= @windowEnd
           ${buildNotificationEligibilitySql()}
       `);
 
     return result.recordset.map((row) => mapCandidateRow(row as Record<string, unknown>));
+  },
+
+  async isArrivalReminderEligible(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+    employeeWorkdayId?: string,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId);
+
+    if (employeeWorkdayId) {
+      request.input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1 1 AS found
+        FROM scheduled_operations i
+        INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
+        INNER JOIN operation_assignments ie
+          ON ie.operation_id = i.id AND ie.company_id = @companyId AND ie.employee_id = @employeeId
+        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        ${WORKDAY_REMINDER_JOINS}
+        LEFT JOIN attendance_records ar
+          ON ar.employee_workday_id = ew.id
+          AND ar.company_id = @companyId
+          AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+        WHERE i.id = @operationId
+          AND i.company_id = @companyId
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND s.active = 1
+          AND e.active = 1
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
+          ${PHONE_FILTER_SQL}
+          AND ar.id IS NULL
+          ${employeeWorkdayId ? "AND ew.id = @employeeWorkdayId" : ""}
+      `);
+
+    return Boolean(result.recordset[0]);
   },
 
   async findNoCheckInAtStartCandidates(
@@ -215,21 +284,12 @@ export const attendanceNotificationRepository = {
       .input("maxAttempts", sql.Int, maxAttempts)
       .query(`
         SELECT
-          i.id AS operation_id,
-          i.scheduled_start,
-          i.scheduled_end,
-          s.name AS service_name,
-          s.address AS service_address,
-          s.locality AS service_locality,
-          e.id AS employee_id,
-          e.name AS employee_name,
-          e.phone_number AS employee_phone_number,
-          ow.schedule_version AS schedule_version
+          ${REMINDER_CANDIDATE_SELECT}
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie ON ie.operation_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
+        ${WORKDAY_REMINDER_JOINS}
         LEFT JOIN attendance_records ar
           ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
@@ -239,16 +299,16 @@ export const attendanceNotificationRepository = {
           AND wan.employee_id = e.id
           AND wan.notification_type = 'NO_CHECKIN_AT_START'
           AND wan.company_id = @companyId
-          AND wan.schedule_version = ow.schedule_version
+          AND wan.schedule_version = (${REMINDER_SCHEDULE_VERSION_SQL})
         WHERE i.company_id = @companyId
-          AND i.operation_kind = N'ONE_TIME'
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
-          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           AND ar.id IS NULL
-          AND i.scheduled_start >= @windowStart
-          AND i.scheduled_start <= @windowEnd
+          AND ow.expected_start_at >= @windowStart
+          AND ow.expected_start_at <= @windowEnd
           ${PHONE_FILTER_SQL}
           ${buildNotificationEligibilitySql()}
       `);
@@ -260,34 +320,41 @@ export const attendanceNotificationRepository = {
     companyId: string,
     operationId: string,
     employeeId: string,
+    employeeWorkdayId?: string,
   ): Promise<boolean> {
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .query(`
+      .input("employeeId", sql.UniqueIdentifier, employeeId);
+
+    if (employeeWorkdayId) {
+      request.input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+    }
+
+    const result = await request.query(`
         SELECT TOP 1 1 AS found
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie
           ON ie.operation_id = i.id AND ie.company_id = @companyId AND ie.employee_id = @employeeId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
+        ${WORKDAY_REMINDER_JOINS}
         LEFT JOIN attendance_records ar
           ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         WHERE i.id = @operationId
           AND i.company_id = @companyId
-          AND i.operation_kind = N'ONE_TIME'
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
-          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
           AND ar.id IS NULL
+          ${employeeWorkdayId ? "AND ew.id = @employeeWorkdayId" : ""}
       `);
 
     return Boolean(result.recordset[0]);
@@ -311,21 +378,12 @@ export const attendanceNotificationRepository = {
       .input("maxAttempts", sql.Int, maxAttempts)
       .query(`
         SELECT
-          i.id AS operation_id,
-          i.scheduled_start,
-          i.scheduled_end,
-          s.name AS service_name,
-          s.address AS service_address,
-          s.locality AS service_locality,
-          e.id AS employee_id,
-          e.name AS employee_name,
-          e.phone_number AS employee_phone_number,
-          ow.schedule_version AS schedule_version
+          ${REMINDER_CANDIDATE_SELECT}
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie ON ie.operation_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
+        ${WORKDAY_REMINDER_JOINS}
         INNER JOIN attendance_records ar
           ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
@@ -336,17 +394,17 @@ export const attendanceNotificationRepository = {
           AND wan.employee_id = e.id
           AND wan.notification_type = 'EXIT_REMINDER_15_MIN'
           AND wan.company_id = @companyId
-          AND wan.schedule_version = ow.schedule_version
+          AND wan.schedule_version = (${REMINDER_SCHEDULE_VERSION_SQL})
         WHERE i.company_id = @companyId
-          AND i.operation_kind = N'ONE_TIME'
-          AND i.status <> 'CANCELLED'
-          AND i.scheduled_end IS NOT NULL
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND ow.expected_end_at IS NOT NULL
           AND s.active = 1
           AND e.active = 1
-          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
-          AND i.scheduled_end >= @windowStart
-          AND i.scheduled_end <= @windowEnd
+          AND ow.expected_end_at >= @windowStart
+          AND ow.expected_end_at <= @windowEnd
           ${buildNotificationEligibilitySql()}
       `);
 
@@ -357,21 +415,27 @@ export const attendanceNotificationRepository = {
     companyId: string,
     operationId: string,
     employeeId: string,
+    employeeWorkdayId?: string,
   ): Promise<boolean> {
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, operationId)
-      .input("employeeId", sql.UniqueIdentifier, employeeId)
-      .query(`
+      .input("employeeId", sql.UniqueIdentifier, employeeId);
+
+    if (employeeWorkdayId) {
+      request.input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId);
+    }
+
+    const result = await request.query(`
         SELECT TOP 1 1 AS found
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie
           ON ie.operation_id = i.id AND ie.company_id = @companyId AND ie.employee_id = @employeeId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
+        ${WORKDAY_REMINDER_JOINS}
         INNER JOIN attendance_records ar
           ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
@@ -379,13 +443,14 @@ export const attendanceNotificationRepository = {
           AND ar.checkout_at IS NULL
         WHERE i.id = @operationId
           AND i.company_id = @companyId
-          AND i.operation_kind = N'ONE_TIME'
-          AND i.status <> 'CANCELLED'
-          AND i.scheduled_end IS NOT NULL
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
+          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+          AND ow.expected_end_at IS NOT NULL
           AND s.active = 1
           AND e.active = 1
-          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
+          ${employeeWorkdayId ? "AND ew.id = @employeeWorkdayId" : ""}
       `);
 
     return Boolean(result.recordset[0]);
@@ -397,39 +462,103 @@ export const attendanceNotificationRepository = {
       operationId: string;
       employeeId: string;
       notificationType: AttendanceNotificationType;
+      /** Prefer exact workday identity when available (workday-based reminder types). */
+      employeeWorkdayId?: string;
+      operationWorkdayId?: string;
+      /** Matches REMINDER_SCHEDULE_VERSION_SQL (ow.schedule_version or YYYYMMDD). */
+      scheduleVersion?: number;
     },
   ): Promise<AttendanceReminderCandidate | null> {
     const pool = getPool();
-    const scheduledColumn =
-      input.notificationType === "EXIT_REMINDER_15_MIN" ? "i.scheduled_end" : "i.scheduled_start";
 
-    const result = await pool
+    // Confirmation reminders are assignment-scoped (ONE_TIME), not workday-scoped.
+    if (input.notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
+      const result = await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("operationId", sql.UniqueIdentifier, input.operationId)
+        .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+        .query(`
+          SELECT
+            i.id AS operation_id,
+            i.operation_kind,
+            i.scheduled_start,
+            i.scheduled_end,
+            s.name AS service_name,
+            s.address AS service_address,
+            s.locality AS service_locality,
+            e.id AS employee_id,
+            e.name AS employee_name,
+            e.phone_number AS employee_phone_number,
+            ie.confirmation_schedule_version AS schedule_version,
+            cs.confirmation_reminder_hours_before,
+            cs.operation_timezone
+          FROM scheduled_operations i
+          INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
+          INNER JOIN operation_assignments ie
+            ON ie.operation_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
+          INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+          INNER JOIN company_settings cs ON cs.company_id = @companyId
+          WHERE i.id = @operationId
+            AND i.company_id = @companyId
+            AND i.operation_kind = N'ONE_TIME'
+            AND s.active = 1
+            AND e.active = 1
+            AND ie.cancelled_at IS NULL
+            ${PHONE_FILTER_SQL}
+            AND i.scheduled_start IS NOT NULL
+        `);
+
+      if (!result.recordset[0]) {
+        return null;
+      }
+
+      return mapCandidateRow(result.recordset[0] as Record<string, unknown>);
+    }
+
+    const endRequired = input.notificationType === "EXIT_REMINDER_15_MIN";
+    const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
-      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
-      .query(`
-        SELECT
-          i.id AS operation_id,
-          i.scheduled_start,
-          i.scheduled_end,
-          s.name AS service_name,
-          s.address AS service_address,
-          s.locality AS service_locality,
-          e.id AS employee_id,
-          e.name AS employee_name,
-          e.phone_number AS employee_phone_number
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId);
+
+    if (input.employeeWorkdayId) {
+      request.input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId);
+    }
+    if (input.operationWorkdayId) {
+      request.input("operationWorkdayId", sql.UniqueIdentifier, input.operationWorkdayId);
+    }
+    if (input.scheduleVersion !== undefined) {
+      request.input("scheduleVersion", sql.Int, input.scheduleVersion);
+    }
+
+    const result = await request.query(`
+        SELECT TOP 1
+          ${REMINDER_CANDIDATE_SELECT}
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie
           ON ie.operation_id = i.id AND ie.employee_id = @employeeId AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        ${WORKDAY_REMINDER_JOINS}
         WHERE i.id = @operationId
           AND i.company_id = @companyId
+          AND i.operation_kind IN (N'ONE_TIME', N'RECURRING')
           AND s.active = 1
           AND e.active = 1
+          ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
-          AND ${scheduledColumn} IS NOT NULL
+          AND ow.expected_start_at IS NOT NULL
+          ${endRequired ? "AND ow.expected_end_at IS NOT NULL" : ""}
+          ${input.employeeWorkdayId ? "AND ew.id = @employeeWorkdayId" : ""}
+          ${input.operationWorkdayId ? "AND ow.id = @operationWorkdayId" : ""}
+          ${
+            input.scheduleVersion !== undefined
+              ? `AND (${REMINDER_SCHEDULE_VERSION_SQL}) = @scheduleVersion`
+              : ""
+          }
+        ORDER BY ow.expected_start_at DESC
       `);
 
     if (!result.recordset[0]) {
@@ -762,6 +891,34 @@ export const attendanceNotificationRepository = {
   },
 
   /**
+   * Terminal outcome for claimed reminders that lost business eligibility
+   * (check-in arrived, assignment cancelled, etc.). Not retryable — unlike FAILED.
+   */
+  async markSuperseded(
+    companyId: string,
+    input: {
+      notificationId: string;
+      errorMessage: string;
+    },
+  ): Promise<void> {
+    const pool = getPool();
+    await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
+      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET status = 'SUPERSEDED',
+            error_message = @errorMessage,
+            sent_at = NULL
+        WHERE id = @notificationId
+          AND company_id = @companyId
+          AND status IN ('PENDING', 'FAILED', 'SENT_RECOVERY_REQUIRED')
+      `);
+  },
+
+  /**
    * Marks pending notifications as SUPERSEDED after a timing schedule change.
    * SENT rows are preserved as history. SUPERSEDED is not retryable and is not
    * counted as a technical FAILED send.
@@ -819,6 +976,7 @@ export const attendanceNotificationRepository = {
       .query(`
         SELECT
           i.id AS operation_id,
+          i.operation_kind,
           i.scheduled_start,
           i.scheduled_end,
           s.name AS service_name,
@@ -846,6 +1004,7 @@ export const attendanceNotificationRepository = {
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
+          AND ie.cancelled_at IS NULL
           AND ie.confirmation_status = 'PENDING'
           AND cs.confirmation_reminder_enabled = 1
           AND i.scheduled_start > @referenceAt

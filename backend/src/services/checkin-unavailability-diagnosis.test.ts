@@ -9,7 +9,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
     mock.restoreAll();
   });
 
-  it("reports ASSIGNED_OPERATION_SCHEDULE_DRIFT from assignment-based diagnostics", async () => {
+  it("reports WORKDAY_NOT_ACTIVE from nearby candidate diagnostics", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
@@ -17,33 +17,26 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
 
     mock.method(
       employeeWorkdayAvailabilityRepository,
-      "listAssignedOneTimeDiagnostics",
+      "listNearbyWorkdayDiagnostics",
       async () => [
         {
           operationId: "op-1",
-          operationStatus: "SCHEDULED",
-          scheduledStart: "2026-07-27T23:30:00.000Z",
-          scheduledEnd: "2026-07-28T06:00:00.000Z",
-          assignmentId: "asg-1",
-          validFrom: "2026-07-16",
-          validUntil: "2026-07-16",
-          locationActive: true,
+          operationKind: "ONE_TIME",
           operationWorkdayId: "ow-1",
-          workDate: "2026-07-16",
-          expectedStartAt: "2026-07-16T23:30:00.000Z",
-          expectedEndAt: "2026-07-17T06:00:00.000Z",
-          operationWorkdayStatus: "ACTIVE",
-          scheduleMatches: false,
           employeeWorkdayId: "ew-1",
+          workDate: "2026-07-27",
+          expectedStartAt: "2026-07-27T23:30:00.000Z",
+          expectedEndAt: "2026-07-28T06:00:00.000Z",
           expectationStatus: "EXPECTED",
+          operationWorkdayStatus: "CANCELLED",
+          operationStatus: "SCHEDULED",
+          locationActive: true,
           hasAttendance: false,
+          priorAttendanceId: null,
+          earlyToleranceMinutes: 15,
+          lateToleranceMinutes: 30,
         },
       ],
-    );
-    mock.method(
-      employeeWorkdayAvailabilityRepository,
-      "listNearbyWorkdayDiagnostics",
-      async () => [],
     );
     mock.method(companySettingsRepository, "findByCompanyId", async () => ({
       operationTimezone: "America/Argentina/Buenos_Aires",
@@ -60,7 +53,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
       },
     );
 
-    assert.ok(diagnosis.reasonCodes.includes("ASSIGNED_OPERATION_SCHEDULE_DRIFT"));
+    assert.ok(diagnosis.reasonCodes.includes("WORKDAY_NOT_ACTIVE"));
     assert.equal(diagnosis.assignedOperationCount, 1);
   });
 
@@ -72,7 +65,7 @@ describe("diagnoseCheckInUnavailability best-effort", () => {
 
     mock.method(
       employeeWorkdayAvailabilityRepository,
-      "listAssignedOneTimeDiagnostics",
+      "listNearbyWorkdayDiagnostics",
       async () => {
         throw new Error("diag boom");
       },

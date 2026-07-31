@@ -1,7 +1,9 @@
 import { env } from "../config/env";
 import type { AttendanceNotificationType } from "../constants/attendance-notification";
 import {
+  NO_LONGER_ELIGIBLE_FOR_ARRIVAL_REMINDER,
   NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER,
+  NO_LONGER_ELIGIBLE_FOR_EXIT_REMINDER,
   NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START,
   SENT_CONTEXT_FAILED_ERROR,
   SENT_PERSISTENCE_UNKNOWN_ERROR,
@@ -12,6 +14,7 @@ import { companyRepository } from "../repositories/company.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
 import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
+import { countCandidatesByOperationKind } from "../utils/workday-reminder-eligibility";
 import { botSessionService } from "./bot-session.service";
 import { twilioOutboundService } from "./twilio-outbound.service";
 import type { BotSession } from "../types/twilio.types";
@@ -23,12 +26,22 @@ export type ReminderSendOutcome =
   | "sent_context_failed"
   | "sent_persistence_unknown";
 
+export interface ReminderKindCounts {
+  ONE_TIME: number;
+  RECURRING: number;
+  OTHER: number;
+}
+
 export interface AttendanceReminderRunSummary {
   referenceAt: string;
   arrivalCandidates: number;
   exitCandidates: number;
   noCheckInCandidates: number;
   confirmationCandidates: number;
+  arrivalCandidatesByKind: ReminderKindCounts;
+  exitCandidatesByKind: ReminderKindCounts;
+  noCheckInCandidatesByKind: ReminderKindCounts;
+  confirmationCandidatesByKind: ReminderKindCounts;
   arrivalSent: number;
   exitSent: number;
   noCheckInSent: number;
@@ -43,12 +56,24 @@ export interface AttendanceReminderRunSummary {
   confirmationSkipped: number;
 }
 
+const emptyKindCounts = (): ReminderKindCounts => ({ ONE_TIME: 0, RECURRING: 0, OTHER: 0 });
+
+const mergeKindCounts = (left: ReminderKindCounts, right: ReminderKindCounts): ReminderKindCounts => ({
+  ONE_TIME: left.ONE_TIME + right.ONE_TIME,
+  RECURRING: left.RECURRING + right.RECURRING,
+  OTHER: left.OTHER + right.OTHER,
+});
+
 const emptySummary = (referenceAt: Date): AttendanceReminderRunSummary => ({
   referenceAt: referenceAt.toISOString(),
   arrivalCandidates: 0,
   exitCandidates: 0,
   noCheckInCandidates: 0,
   confirmationCandidates: 0,
+  arrivalCandidatesByKind: emptyKindCounts(),
+  exitCandidatesByKind: emptyKindCounts(),
+  noCheckInCandidatesByKind: emptyKindCounts(),
+  confirmationCandidatesByKind: emptyKindCounts(),
   arrivalSent: 0,
   exitSent: 0,
   noCheckInSent: 0,
@@ -61,6 +86,16 @@ const emptySummary = (referenceAt: Date): AttendanceReminderRunSummary => ({
   exitSkipped: 0,
   noCheckInSkipped: 0,
   confirmationSkipped: 0,
+});
+
+const reminderCandidateLogFields = (candidate: AttendanceReminderCandidate) => ({
+  operationId: candidate.operationId,
+  employeeId: candidate.employeeId,
+  operationKind: candidate.operationKind ?? null,
+  operationWorkdayId: candidate.operationWorkdayId ?? null,
+  employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+  scheduledAt: candidate.scheduledStart,
+  scheduleVersion: candidate.scheduleVersion ?? 1,
 });
 
 const contentSidForType = (notificationType: AttendanceNotificationType): string | null => {
@@ -109,8 +144,10 @@ const sendReminderForCandidate = async (
   if (!contentSid) {
     console.info("[attendance-reminder] skipped notification because template SID is not configured", {
       notificationType,
-      operationId: candidate.operationId,
-      employeeId: candidate.employeeId,
+      evaluatedAt: new Date().toISOString(),
+      eligible: false,
+      rejectionReasons: ["TEMPLATE_SID_NOT_CONFIGURED"],
+      ...reminderCandidateLogFields(candidate),
     });
     return "skipped";
   }
@@ -127,8 +164,11 @@ const sendReminderForCandidate = async (
   if (!claimed) {
     console.info("[attendance-reminder] skipped concurrent or non-retryable notification", {
       notificationType,
-      operationId: candidate.operationId,
-      employeeId: candidate.employeeId,
+      evaluatedAt: new Date().toISOString(),
+      eligible: false,
+      rejectionReasons: ["CLAIM_UNAVAILABLE"],
+      existingReminderId: null,
+      ...reminderCandidateLogFields(candidate),
     });
     return "skipped";
   }
@@ -142,12 +182,42 @@ const sendReminderForCandidate = async (
 
     console.info("[attendance-reminder] reminder skipped because employee has no WhatsApp phone", {
       notificationType,
-      operationId: candidate.operationId,
-      employeeId: candidate.employeeId,
-      notificationId: claimed.id,
+      evaluatedAt: new Date().toISOString(),
+      eligible: false,
+      rejectionReasons: [errorMessage],
+      existingReminderId: claimed.id,
+      ...reminderCandidateLogFields(candidate),
     });
 
     return "failed";
+  }
+
+  if (notificationType === "ARRIVAL_REMINDER_15_MIN") {
+    const stillEligible = await attendanceNotificationRepository.isArrivalReminderEligible(
+      companyId,
+      candidate.operationId,
+      candidate.employeeId,
+      candidate.employeeWorkdayId,
+    );
+
+    if (!stillEligible) {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
+        notificationId: claimed.id,
+        errorMessage: NO_LONGER_ELIGIBLE_FOR_ARRIVAL_REMINDER,
+      });
+
+      console.info("[attendance-reminder] skipped arrival reminder because employee is no longer eligible", {
+        notificationType,
+        evaluatedAt: new Date().toISOString(),
+        eligible: false,
+        rejectionReasons: [NO_LONGER_ELIGIBLE_FOR_ARRIVAL_REMINDER],
+        existingReminderId: claimed.id,
+        result: "superseded",
+        ...reminderCandidateLogFields(candidate),
+      });
+
+      return "skipped";
+    }
   }
 
   if (notificationType === "NO_CHECKIN_AT_START") {
@@ -155,10 +225,11 @@ const sendReminderForCandidate = async (
       companyId,
       candidate.operationId,
       candidate.employeeId,
+      candidate.employeeWorkdayId,
     );
 
     if (!stillEligible) {
-      await attendanceNotificationRepository.markFailed(companyId, {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
         notificationId: claimed.id,
         errorMessage: NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START,
       });
@@ -167,11 +238,42 @@ const sendReminderForCandidate = async (
         "[attendance-reminder] skipped no-check-in notification because employee is no longer eligible",
         {
           notificationType,
-          operationId: candidate.operationId,
-          employeeId: candidate.employeeId,
-          notificationId: claimed.id,
+          evaluatedAt: new Date().toISOString(),
+          eligible: false,
+          rejectionReasons: [NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START],
+          existingReminderId: claimed.id,
+          result: "superseded",
+          ...reminderCandidateLogFields(candidate),
         },
       );
+
+      return "skipped";
+    }
+  }
+
+  if (notificationType === "EXIT_REMINDER_15_MIN") {
+    const stillEligible = await attendanceNotificationRepository.isExitReminderEligible(
+      companyId,
+      candidate.operationId,
+      candidate.employeeId,
+      candidate.employeeWorkdayId,
+    );
+
+    if (!stillEligible) {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
+        notificationId: claimed.id,
+        errorMessage: NO_LONGER_ELIGIBLE_FOR_EXIT_REMINDER,
+      });
+
+      console.info("[attendance-reminder] skipped exit reminder because employee is no longer eligible", {
+        notificationType,
+        evaluatedAt: new Date().toISOString(),
+        eligible: false,
+        rejectionReasons: [NO_LONGER_ELIGIBLE_FOR_EXIT_REMINDER],
+        existingReminderId: claimed.id,
+        result: "superseded",
+        ...reminderCandidateLogFields(candidate),
+      });
 
       return "skipped";
     }
@@ -186,7 +288,7 @@ const sendReminderForCandidate = async (
     );
 
     if (!stillEligible) {
-      await attendanceNotificationRepository.markFailed(companyId, {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
         notificationId: claimed.id,
         errorMessage: NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER,
       });
@@ -195,10 +297,12 @@ const sendReminderForCandidate = async (
         "[attendance-reminder] skipped confirmation reminder because employee is no longer eligible",
         {
           notificationType,
-          operationId: candidate.operationId,
-          employeeId: candidate.employeeId,
-          notificationId: claimed.id,
-          scheduleVersion,
+          evaluatedAt: new Date().toISOString(),
+          eligible: false,
+          rejectionReasons: [NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER],
+          existingReminderId: claimed.id,
+          result: "superseded",
+          ...reminderCandidateLogFields(candidate),
         },
       );
 
@@ -321,11 +425,13 @@ const sendReminderForCandidate = async (
 
     console.info("[attendance-reminder] reminder sent", {
       notificationType,
-      operationId: candidate.operationId,
-      employeeId: candidate.employeeId,
-      notificationId: claimed.id,
-      scheduleVersion,
-      twilioMessageSid: result.messageSid,
+      evaluatedAt: sentAt.toISOString(),
+      eligible: true,
+      result: "sent",
+      sendAttempt: claimed.attemptCount,
+      providerMessageSid: result.messageSid,
+      existingReminderId: claimed.id,
+      ...reminderCandidateLogFields(candidate),
     });
 
     if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && !preparedSession) {
@@ -371,10 +477,13 @@ const sendReminderForCandidate = async (
 
     console.error("[attendance-reminder] reminder failed", {
       notificationType,
-      operationId: candidate.operationId,
-      employeeId: candidate.employeeId,
-      notificationId: claimed.id,
+      evaluatedAt: new Date().toISOString(),
+      eligible: true,
+      result: "failed",
+      sendAttempt: claimed.attemptCount,
+      existingReminderId: claimed.id,
       errorMessage,
+      ...reminderCandidateLogFields(candidate),
     });
 
     return "failed";
@@ -432,6 +541,19 @@ const mergeSummaries = (
       exitCandidates: acc.exitCandidates + summary.exitCandidates,
       noCheckInCandidates: acc.noCheckInCandidates + summary.noCheckInCandidates,
       confirmationCandidates: acc.confirmationCandidates + summary.confirmationCandidates,
+      arrivalCandidatesByKind: mergeKindCounts(
+        acc.arrivalCandidatesByKind,
+        summary.arrivalCandidatesByKind,
+      ),
+      exitCandidatesByKind: mergeKindCounts(acc.exitCandidatesByKind, summary.exitCandidatesByKind),
+      noCheckInCandidatesByKind: mergeKindCounts(
+        acc.noCheckInCandidatesByKind,
+        summary.noCheckInCandidatesByKind,
+      ),
+      confirmationCandidatesByKind: mergeKindCounts(
+        acc.confirmationCandidatesByKind,
+        summary.confirmationCandidatesByKind,
+      ),
       arrivalSent: acc.arrivalSent + summary.arrivalSent,
       exitSent: acc.exitSent + summary.exitSent,
       noCheckInSent: acc.noCheckInSent + summary.noCheckInSent,
@@ -501,6 +623,10 @@ export const attendanceReminderService = {
       exitCandidates: exitCandidates.length,
       noCheckInCandidates: noCheckInCandidates.length,
       confirmationCandidates: confirmationCandidates.length,
+      arrivalCandidatesByKind: countCandidatesByOperationKind(arrivalCandidates),
+      exitCandidatesByKind: countCandidatesByOperationKind(exitCandidates),
+      noCheckInCandidatesByKind: countCandidatesByOperationKind(noCheckInCandidates),
+      confirmationCandidatesByKind: countCandidatesByOperationKind(confirmationCandidates),
       arrivalSent: arrivalResult.sent,
       exitSent: exitResult.sent,
       noCheckInSent: noCheckInResult.sent,
@@ -541,6 +667,9 @@ export const attendanceReminderService = {
       operationId: string;
       employeeId: string;
       notificationType: AttendanceNotificationType;
+      employeeWorkdayId?: string;
+      operationWorkdayId?: string;
+      scheduleVersion?: number;
     },
   ): Promise<ReminderSendOutcome> {
     const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);

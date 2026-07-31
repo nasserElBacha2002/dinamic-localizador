@@ -913,11 +913,29 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
       payload: webhookPayload({ Body: "mi jornada" }),
       simulation: { simulatedNow: new Date("2026-07-08T12:00:00.000Z") },
       setup: async () => {
-        const { employeeAssignmentQueryRepository } = await import(
-          "../repositories/employee-assignment-query.repository"
+        const { employeeWorkdayAvailabilityRepository } = await import(
+          "../repositories/employee-workday-availability.repository"
         );
-        mock.method(employeeAssignmentQueryRepository, "listTodayForEmployee", async () => [
-          sampleAssignment(),
+        mock.method(employeeWorkdayAvailabilityRepository, "listTodayWorkdaysForEmployee", async () => [
+          {
+            assignmentId: sampleAssignment().assignmentId,
+            operationId: sampleAssignment().operationId,
+            serviceName: sampleAssignment().serviceName,
+            serviceAddress: sampleAssignment().serviceAddress,
+            serviceLocality: sampleAssignment().serviceLocality,
+            serviceLatitude: sampleAssignment().serviceLatitude,
+            serviceLongitude: sampleAssignment().serviceLongitude,
+            scheduledStart: sampleAssignment().scheduledStart,
+            scheduledEnd: sampleAssignment().scheduledEnd,
+            operationStatus: sampleAssignment().operationStatus,
+            confirmationStatus: sampleAssignment().confirmationStatus,
+            attendanceReceivedAt: null,
+            attendanceCheckoutAt: null,
+            punctualityStatus: null,
+            employeeWorkdayId: "ew-today",
+            operationWorkdayId: "ow-today",
+            expectationStatus: "EXPECTED",
+          },
         ]);
       },
     });

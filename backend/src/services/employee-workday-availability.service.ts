@@ -9,6 +9,7 @@ import type {
 } from "../types/employee-workday-availability";
 import { formatServiceReferenceFromFields } from "../utils/format-service-reference";
 import {
+  evaluateCheckInWindow,
   isWithinCheckInAvailabilityWindow,
   resolveCheckInCandidateRange,
 } from "../utils/resolve-check-in-availability-window";
@@ -20,6 +21,37 @@ import {
 } from "../utils/pending-checkout-eligibility";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
+
+export type CheckInCandidateRejectionReason =
+  | "BEFORE_CHECK_IN_WINDOW"
+  | "AFTER_EXPECTED_END"
+  | "OPERATION_NOT_AVAILABLE"
+  | "WORKDAY_NOT_ACTIVE"
+  | "EMPLOYEE_NOT_EXPECTED"
+  | "PRIOR_ATTENDANCE"
+  | "JUSTIFIED_ABSENCE"
+  | "LOCATION_INACTIVE";
+
+export type CheckInCandidateEvaluation = {
+  companyId: string;
+  employeeId: string;
+  operationId: string;
+  operationKind: string;
+  operationWorkdayId: string;
+  employeeWorkdayId: string;
+  expectedStartAt: string;
+  expectedEndAt: string | null;
+  opensAt: string;
+  closesAt: string;
+  evaluatedAt: string;
+  operationStatus: string;
+  workdayStatus: string;
+  expectationStatus: string;
+  priorAttendanceId: string | null;
+  eligible: boolean;
+  rejectionReasons: CheckInCandidateRejectionReason[];
+  timezone: string;
+};
 
 const resolvePendingExpirationHours = (explicit?: number): number => {
   if (explicit != null && Number.isFinite(explicit) && explicit >= 1) {
@@ -44,11 +76,6 @@ const isCheckoutCandidateStillEligible = (
     expirationHours,
     now,
   });
-
-export type CheckoutCandidateRevalidationResult =
-  | { kind: "eligible"; candidate: EmployeeWorkdayCheckoutCandidate }
-  | { kind: "expired" }
-  | { kind: "not_available" };
 
 const sortCheckInCandidates = (
   candidates: EmployeeWorkdayCheckInCandidate[],
@@ -142,15 +169,82 @@ const loadOneTimeFallbackCandidates = async (
       employeeWorkday.id,
       { simulationSessionId },
     );
-    if (
-      candidate &&
-      isWithinCheckInAvailabilityWindow(candidate, at)
-    ) {
+    if (candidate && isWithinCheckInAvailabilityWindow(candidate, at)) {
       fallbackCandidates.push(candidate);
     }
   }
 
   return fallbackCandidates;
+};
+
+const evaluateNearbyCandidate = (
+  companyId: string,
+  employeeId: string,
+  at: Date,
+  timezone: string,
+  row: Awaited<
+    ReturnType<typeof employeeWorkdayAvailabilityRepository.listNearbyWorkdayDiagnostics>
+  >[number],
+): CheckInCandidateEvaluation => {
+  const rejectionReasons: CheckInCandidateRejectionReason[] = [];
+
+  if (row.operationStatus === "COMPLETED" || row.operationStatus === "CANCELLED") {
+    rejectionReasons.push("OPERATION_NOT_AVAILABLE");
+  }
+  if (row.operationWorkdayStatus !== "ACTIVE") {
+    rejectionReasons.push("WORKDAY_NOT_ACTIVE");
+  }
+  if (row.expectationStatus === "JUSTIFIED") {
+    rejectionReasons.push("JUSTIFIED_ABSENCE");
+  } else if (row.expectationStatus !== "EXPECTED") {
+    rejectionReasons.push("EMPLOYEE_NOT_EXPECTED");
+  }
+  if (!row.locationActive) {
+    rejectionReasons.push("LOCATION_INACTIVE");
+  }
+  if (row.priorAttendanceId) {
+    rejectionReasons.push("PRIOR_ATTENDANCE");
+  }
+
+  const window = evaluateCheckInWindow(
+    {
+      expectedStartAt: row.expectedStartAt,
+      expectedEndAt: row.expectedEndAt,
+      earlyToleranceMinutes: row.earlyToleranceMinutes,
+      lateToleranceMinutes: row.lateToleranceMinutes,
+    },
+    at,
+  );
+
+  if (window.rejectionReason === "BEFORE_CHECK_IN_WINDOW") {
+    rejectionReasons.push("BEFORE_CHECK_IN_WINDOW");
+  }
+  if (window.rejectionReason === "AFTER_EXPECTED_END") {
+    rejectionReasons.push("AFTER_EXPECTED_END");
+  }
+
+  const eligible = rejectionReasons.length === 0;
+
+  return {
+    companyId,
+    employeeId,
+    operationId: row.operationId,
+    operationKind: row.operationKind,
+    operationWorkdayId: row.operationWorkdayId,
+    employeeWorkdayId: row.employeeWorkdayId,
+    expectedStartAt: row.expectedStartAt,
+    expectedEndAt: row.expectedEndAt,
+    opensAt: window.opensAt.toISOString(),
+    closesAt: window.closesAt.toISOString(),
+    evaluatedAt: at.toISOString(),
+    operationStatus: row.operationStatus,
+    workdayStatus: row.operationWorkdayStatus,
+    expectationStatus: row.expectationStatus,
+    priorAttendanceId: row.priorAttendanceId,
+    eligible,
+    rejectionReasons,
+    timezone,
+  };
 };
 
 export const employeeWorkdayAvailabilityService = {
@@ -225,6 +319,7 @@ export const employeeWorkdayAvailabilityService = {
     eligibleCandidateCount: number;
     hasJustifiedWorkdayInWindow: boolean;
     reasonCodes: string[];
+    candidateEvaluations: CheckInCandidateEvaluation[];
     nearbyWorkdayCount: number;
     assignedOperationCount: number;
     operationIds: string[];
@@ -235,12 +330,7 @@ export const employeeWorkdayAvailabilityService = {
     const candidateFrom = precomputed?.candidateFrom ?? range.candidateFrom;
     const candidateTo = precomputed?.candidateTo ?? range.candidateTo;
 
-    const [assigned, nearby, settings] = await Promise.all([
-      employeeWorkdayAvailabilityRepository.listAssignedOneTimeDiagnostics(
-        companyId,
-        employeeId,
-        at,
-      ),
+    const [nearby, settings] = await Promise.all([
       employeeWorkdayAvailabilityRepository.listNearbyWorkdayDiagnostics(
         companyId,
         employeeId,
@@ -248,6 +338,8 @@ export const employeeWorkdayAvailabilityService = {
       ),
       companySettingsRepository.findByCompanyId(companyId),
     ]);
+
+    const timezone = resolveOperationTimezone(settings?.operationTimezone);
 
     let rawCandidateCount = precomputed?.rawCandidateCount;
     let eligibleCandidateCount = precomputed?.eligibleCandidateCount;
@@ -274,66 +366,54 @@ export const employeeWorkdayAvailabilityService = {
         );
     }
 
+    const candidateEvaluations = nearby
+      .filter((row) => {
+        const start = new Date(row.expectedStartAt).getTime();
+        const end = row.expectedEndAt
+          ? new Date(row.expectedEndAt).getTime()
+          : start + row.lateToleranceMinutes * 60_000;
+        return end >= candidateFrom.getTime() && start <= candidateTo.getTime();
+      })
+      .map((row) => evaluateNearbyCandidate(companyId, employeeId, at, timezone, row));
+
+    for (const evaluation of candidateEvaluations) {
+      console.info("[whatsapp-bot] check-in candidate evaluated", {
+        companyId: evaluation.companyId,
+        employeeId: evaluation.employeeId,
+        employeeWorkdayId: evaluation.employeeWorkdayId,
+        operationWorkdayId: evaluation.operationWorkdayId,
+        operationId: evaluation.operationId,
+        operationKind: evaluation.operationKind,
+        expectedStartAt: evaluation.expectedStartAt,
+        expectedEndAt: evaluation.expectedEndAt,
+        opensAt: evaluation.opensAt,
+        closesAt: evaluation.closesAt,
+        evaluatedAt: evaluation.evaluatedAt,
+        operationStatus: evaluation.operationStatus,
+        workdayStatus: evaluation.workdayStatus,
+        expectationStatus: evaluation.expectationStatus,
+        priorAttendanceId: evaluation.priorAttendanceId,
+        eligible: evaluation.eligible,
+        rejectionReasons: evaluation.rejectionReasons,
+        timezone: evaluation.timezone,
+      });
+    }
+
     const reasonCodes = new Set<string>();
-
-    if (assigned.length === 0) {
-      reasonCodes.add("NO_ACTIVE_ASSIGNMENT");
-    }
-
-    for (const row of assigned) {
-      if (!row.operationWorkdayId) {
-        reasonCodes.add("ASSIGNED_OPERATION_WITHOUT_WORKDAY");
-      } else if (!row.scheduleMatches) {
-        reasonCodes.add("ASSIGNED_OPERATION_SCHEDULE_DRIFT");
-      }
-      if (row.operationWorkdayId && !row.employeeWorkdayId) {
-        reasonCodes.add("EMPLOYEE_WORKDAY_MISSING");
-      }
-      if (row.expectationStatus === "JUSTIFIED") {
-        reasonCodes.add("EXPECTATION_JUSTIFIED");
-      }
-      if (row.operationWorkdayStatus && row.operationWorkdayStatus !== "ACTIVE") {
-        reasonCodes.add("OPERATION_WORKDAY_NOT_ACTIVE");
-      }
-      if (row.operationStatus === "COMPLETED" || row.operationStatus === "CANCELLED") {
-        reasonCodes.add("OPERATION_COMPLETED_OR_CANCELLED");
-      }
-      if (!row.locationActive) {
-        reasonCodes.add("LOCATION_INACTIVE");
-      }
-      if (row.hasAttendance) {
-        reasonCodes.add("PRIOR_ATTENDANCE");
-      }
-    }
-
-    for (const row of nearby) {
-      if (
-        row.scheduleStartMatches &&
-        row.expectationStatus === "EXPECTED" &&
-        row.operationWorkdayStatus === "ACTIVE" &&
-        row.operationStatus !== "COMPLETED" &&
-        row.operationStatus !== "CANCELLED" &&
-        row.locationActive &&
-        !row.hasAttendance &&
-        !isWithinCheckInAvailabilityWindow(
-          {
-            expectedStartAt: row.expectedStartAt,
-            earlyToleranceMinutes: row.earlyToleranceMinutes,
-            lateToleranceMinutes: row.lateToleranceMinutes,
-          },
-          at,
-        )
-      ) {
-        reasonCodes.add("OUTSIDE_CHECKIN_WINDOW");
+    for (const evaluation of candidateEvaluations) {
+      for (const reason of evaluation.rejectionReasons) {
+        reasonCodes.add(reason);
       }
     }
 
     if (hasJustifiedWorkdayInWindow) {
       reasonCodes.add("HAS_JUSTIFIED_WORKDAY_IN_WINDOW");
     }
-    if (reasonCodes.size === 0) {
+    if (candidateEvaluations.length === 0 && reasonCodes.size === 0) {
       reasonCodes.add("NO_AVAILABLE_EMPLOYEE_WORKDAY");
     }
+
+    const rejected = candidateEvaluations.filter((evaluation) => !evaluation.eligible);
 
     return {
       candidateFrom: candidateFrom.toISOString(),
@@ -342,13 +422,12 @@ export const employeeWorkdayAvailabilityService = {
       eligibleCandidateCount,
       hasJustifiedWorkdayInWindow,
       reasonCodes: [...reasonCodes].sort(),
+      candidateEvaluations,
       nearbyWorkdayCount: nearby.length,
-      assignedOperationCount: assigned.length,
-      operationIds: [...new Set(assigned.map((row) => row.operationId))],
-      workdayIds: assigned
-        .map((row) => row.operationWorkdayId)
-        .filter((id): id is string => Boolean(id)),
-      timezone: resolveOperationTimezone(settings?.operationTimezone),
+      assignedOperationCount: candidateEvaluations.length,
+      operationIds: [...new Set(rejected.map((row) => row.operationId))],
+      workdayIds: rejected.map((row) => row.operationWorkdayId),
+      timezone,
     };
   },
 
@@ -412,7 +491,11 @@ export const employeeWorkdayAvailabilityService = {
       simulationSessionId?: string | null;
       pendingOperationExpirationHours?: number;
     },
-  ): Promise<CheckoutCandidateRevalidationResult> {
+  ): Promise<
+    | { kind: "eligible"; candidate: EmployeeWorkdayCheckoutCandidate }
+    | { kind: "expired" }
+    | { kind: "not_available" }
+  > {
     const simulationSessionId = options?.simulationSessionId ?? getSimulationSessionId();
     const pendingOperationExpirationHours = resolvePendingExpirationHours(
       options?.pendingOperationExpirationHours,
@@ -430,13 +513,10 @@ export const employeeWorkdayAvailabilityService = {
       return { kind: "not_available" };
     }
 
-    if (
-      !isCheckoutCandidateStillEligible(openContext, at, pendingOperationExpirationHours)
-    ) {
+    if (!isCheckoutCandidateStillEligible(openContext, at, pendingOperationExpirationHours)) {
       return { kind: "expired" };
     }
 
-    // Defense in depth: keep SQL expiration predicate aligned with service rule.
     const eligible =
       await employeeWorkdayAvailabilityRepository.findCheckoutCandidateByAttendanceId(
         companyId,
@@ -449,7 +529,10 @@ export const employeeWorkdayAvailabilityService = {
         },
       );
 
-    if (!eligible || !isCheckoutCandidateStillEligible(eligible, at, pendingOperationExpirationHours)) {
+    if (
+      !eligible ||
+      !isCheckoutCandidateStillEligible(eligible, at, pendingOperationExpirationHours)
+    ) {
       return { kind: "expired" };
     }
 
@@ -468,3 +551,7 @@ export const employeeWorkdayAvailabilityService = {
     return candidates.map(mapCheckoutToSelectionOption);
   },
 };
+
+export type CheckoutCandidateRevalidationResult = Awaited<
+  ReturnType<typeof employeeWorkdayAvailabilityService.revalidateCheckoutCandidate>
+>;

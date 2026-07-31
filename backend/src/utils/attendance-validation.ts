@@ -3,6 +3,7 @@ import type {
   PunctualityStatus,
   ValidationStatus,
 } from "../types/domain";
+import { evaluateCheckInWindow } from "./resolve-check-in-availability-window";
 
 export interface GeofenceEvaluation {
   locationStatus: LocationStatus;
@@ -63,18 +64,33 @@ export const evaluateGeofence = (
   };
 };
 
+/**
+ * Shared check-in punctuality / availability.
+ *
+ * `onTimeGraceMinutes` is retained for call-site compatibility but is unused:
+ * ON_TIME extends through `scheduledStart + lateToleranceMinutes` per product policy.
+ * Availability closes at `expectedEndAt` (exclusive); when omitted, falls back to
+ * `scheduledStart + lateToleranceMinutes`.
+ */
 export const evaluatePunctuality = (
   receivedAt: Date,
   scheduledStart: Date,
   earlyToleranceMinutes: number,
   lateToleranceMinutes: number,
-  onTimeGraceMinutes: number,
+  _onTimeGraceMinutes: number,
+  expectedEndAt?: Date | null,
 ): PunctualityEvaluation => {
-  const windowStart = new Date(scheduledStart.getTime() - earlyToleranceMinutes * 60_000);
-  const windowEnd = new Date(scheduledStart.getTime() + lateToleranceMinutes * 60_000);
-  const onTimeEnd = new Date(scheduledStart.getTime() + onTimeGraceMinutes * 60_000);
+  const evaluation = evaluateCheckInWindow(
+    {
+      expectedStartAt: scheduledStart,
+      expectedEndAt: expectedEndAt ?? null,
+      earlyToleranceMinutes,
+      lateToleranceMinutes,
+    },
+    receivedAt,
+  );
 
-  if (receivedAt < windowStart || receivedAt > windowEnd) {
+  if (!evaluation.available || !evaluation.punctuality) {
     return {
       punctualityStatus: "OUTSIDE_TIME_WINDOW",
       timeValidationStatus: "REJECTED",
@@ -82,24 +98,8 @@ export const evaluatePunctuality = (
     };
   }
 
-  if (receivedAt < scheduledStart) {
-    return {
-      punctualityStatus: "EARLY",
-      timeValidationStatus: "VALID",
-      timeReason: null,
-    };
-  }
-
-  if (receivedAt <= onTimeEnd) {
-    return {
-      punctualityStatus: "ON_TIME",
-      timeValidationStatus: "VALID",
-      timeReason: null,
-    };
-  }
-
   return {
-    punctualityStatus: "LATE",
+    punctualityStatus: evaluation.punctuality,
     timeValidationStatus: "VALID",
     timeReason: null,
   };
@@ -110,11 +110,17 @@ export const isWithinOperationWindow = (
   scheduledStart: Date,
   earlyToleranceMinutes: number,
   lateToleranceMinutes: number,
-): boolean => {
-  const windowStart = new Date(scheduledStart.getTime() - earlyToleranceMinutes * 60_000);
-  const windowEnd = new Date(scheduledStart.getTime() + lateToleranceMinutes * 60_000);
-  return at >= windowStart && at <= windowEnd;
-};
+  expectedEndAt?: Date | null,
+): boolean =>
+  evaluateCheckInWindow(
+    {
+      expectedStartAt: scheduledStart,
+      expectedEndAt: expectedEndAt ?? null,
+      earlyToleranceMinutes,
+      lateToleranceMinutes,
+    },
+    at,
+  ).available;
 
 export const combineAttendanceValidation = (
   geo: GeofenceEvaluation,

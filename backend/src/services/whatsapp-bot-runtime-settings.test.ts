@@ -101,7 +101,7 @@ describe("whatsapp bot runtime settings integration", () => {
     assert.equal(loadCount, 1);
   });
 
-  it("marks check-in late when lateGraceMinutes is zero in runtime scope", async () => {
+  it("marks check-in late after lateTolerance when lateGraceMinutes is zero", async () => {
     setupUnitTestEnv();
     const { buildCheckInValidation } = await import("./bot/bot-attendance-runtime");
 
@@ -111,8 +111,9 @@ describe("whatsapp bot runtime settings integration", () => {
       serviceLatitude: -34.6,
       serviceLongitude: -58.4,
       serviceAllowedRadiusMeters: 0,
-      receivedAt: new Date("2026-07-05T15:01:00.000Z"),
+      receivedAt: new Date("2026-07-05T15:31:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
+      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings: runtimeSettings({ lateGraceMinutes: 0 }),

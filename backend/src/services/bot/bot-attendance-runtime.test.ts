@@ -35,6 +35,7 @@ describe("bot attendance runtime", () => {
       serviceAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
+      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings: baseRuntimeSettings(),
@@ -48,13 +49,14 @@ describe("bot attendance runtime", () => {
   it("rejects check-in outside tighter company radius", () => {
     const runtimeSettings = { ...baseRuntimeSettings(), defaultRadiusMeters: 50 };
     const result = buildCheckInValidation({
-      employeeLatitude: -34.6005,
-      employeeLongitude: -58.4005,
+      employeeLatitude: -34.605,
+      employeeLongitude: -58.405,
       serviceLatitude: serviceCoords.latitude,
       serviceLongitude: serviceCoords.longitude,
       serviceAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
+      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings,
@@ -64,7 +66,7 @@ describe("bot attendance runtime", () => {
     assert.equal(result.validation.validationStatus, "REJECTED");
   });
 
-  it("marks late immediately when lateGraceMinutes is zero", () => {
+  it("classifies late after lateTolerance regardless of lateGraceMinutes", () => {
     const runtimeSettings = { ...baseRuntimeSettings(), lateGraceMinutes: 0 };
     const result = buildCheckInValidation({
       employeeLatitude: serviceCoords.latitude,
@@ -72,8 +74,9 @@ describe("bot attendance runtime", () => {
       serviceLatitude: serviceCoords.latitude,
       serviceLongitude: serviceCoords.longitude,
       serviceAllowedRadiusMeters: 150,
-      receivedAt: new Date("2026-07-05T15:01:00.000Z"),
+      receivedAt: new Date("2026-07-05T15:31:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
+      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings,

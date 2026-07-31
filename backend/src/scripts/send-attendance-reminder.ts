@@ -21,6 +21,7 @@ const printUsage = (): void => {
   npm run reminders:test -- --type=ARRIVAL_REMINDER_15_MIN --operation-id=UUID --employee-id=UUID
   npm run reminders:test -- --type=EXIT_REMINDER_15_MIN --operation-id=UUID --employee-id=UUID
   npm run reminders:test -- --type=NO_CHECKIN_AT_START --operation-id=UUID --employee-id=UUID
+  npm run reminders:test -- --type=ARRIVAL_REMINDER_15_MIN --operation-id=UUID --employee-id=UUID --employee-workday-id=UUID --schedule-version=20260731
 
 Supported types: ${ATTENDANCE_NOTIFICATION_TYPES.join(", ")}`);
 };
@@ -54,10 +55,22 @@ const main = async (): Promise<void> => {
       }
 
       const companyId = await companyContextService.resolveDefaultCompanyId();
+      const employeeWorkdayId = readArg("employee-workday-id");
+      const operationWorkdayId = readArg("operation-workday-id");
+      const scheduleVersionRaw = readArg("schedule-version");
+      const scheduleVersion = scheduleVersionRaw ? Number(scheduleVersionRaw) : undefined;
+      if (scheduleVersionRaw && !Number.isFinite(scheduleVersion)) {
+        console.error(`Invalid schedule-version: ${scheduleVersionRaw}`);
+        process.exit(1);
+      }
+
       const outcome = await attendanceReminderService.sendTestReminder(companyId, {
         notificationType,
         operationId,
         employeeId,
+        employeeWorkdayId,
+        operationWorkdayId,
+        scheduleVersion,
       });
 
       console.info(
@@ -68,6 +81,9 @@ const main = async (): Promise<void> => {
             notificationType,
             operationId,
             employeeId,
+            employeeWorkdayId: employeeWorkdayId ?? null,
+            operationWorkdayId: operationWorkdayId ?? null,
+            scheduleVersion: scheduleVersion ?? null,
           },
           null,
           2,

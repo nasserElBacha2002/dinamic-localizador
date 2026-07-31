@@ -25,9 +25,14 @@ export interface AttendanceReminderCandidate {
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;
+  /** Workday expected start (preferred) or operation scheduled_start for confirmation. */
   scheduledStart: string;
+  /** Workday expected end (preferred) or operation scheduled_end. */
   scheduledEnd: string | null;
   scheduleVersion: number;
   confirmationReminderHoursBefore: number;
   operationTimezone?: string;
+  operationKind?: "ONE_TIME" | "RECURRING" | string;
+  employeeWorkdayId?: string;
+  operationWorkdayId?: string;
 }

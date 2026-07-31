@@ -12,6 +12,9 @@ const testReminderSchema = z.object({
   operationId: z.uuid(),
   employeeId: z.uuid(),
   notificationType: z.enum(ATTENDANCE_NOTIFICATION_TYPES),
+  employeeWorkdayId: z.uuid().optional(),
+  operationWorkdayId: z.uuid().optional(),
+  scheduleVersion: z.number().int().positive().optional(),
 });
 
 export const devReminderRouter = Router();

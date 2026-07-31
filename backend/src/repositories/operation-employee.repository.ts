@@ -416,6 +416,38 @@ export const operationEmployeeRepository = {
     return mapAssignmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Aligns active (non-cancelled) ONE_TIME assignment validity to the operational work date.
+   * Cancelled / historical assignments are left untouched.
+   */
+  async updateActiveValidityForOperationInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationId: string,
+    workDate: string,
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("workDate", sql.Date, workDate)
+      .query(`
+        UPDATE operation_assignments
+        SET valid_from = @workDate,
+            valid_until = @workDate,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND cancelled_at IS NULL
+          AND (
+            valid_from <> @workDate
+            OR valid_until IS NULL
+            OR valid_until <> @workDate
+          )
+      `);
+
+    return result.rowsAffected[0] ?? 0;
+  },
+
   async listOverlappingForOperationInDateRange(
     companyId: string,
     operationId: string,

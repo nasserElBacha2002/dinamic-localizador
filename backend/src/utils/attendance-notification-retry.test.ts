@@ -42,6 +42,22 @@ describe("isNotificationRetryable", () => {
     );
   });
 
+  it("never retries SUPERSEDED notifications", () => {
+    assert.equal(
+      isNotificationRetryable(
+        {
+          status: "SUPERSEDED",
+          attemptCount: 0,
+          lastAttemptAt: null,
+          createdAt: "2026-06-23T12:50:00.000Z",
+        },
+        staleBefore,
+        3,
+      ),
+      false,
+    );
+  });
+
   it("retries FAILED notifications below the max attempt count", () => {
     assert.equal(
       isNotificationRetryable(

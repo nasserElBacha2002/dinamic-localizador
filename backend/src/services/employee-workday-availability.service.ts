@@ -1,5 +1,6 @@
 import { operationRepository } from "../repositories/operation.repository";
 import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
+import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { workdayMaterializationService } from "./workday-materialization.service";
 import type {
   EmployeeWorkdayCheckInCandidate,
@@ -18,6 +19,7 @@ import {
   resolveCheckoutEligibilityEndAt,
 } from "../utils/pending-checkout-eligibility";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
 
 const resolvePendingExpirationHours = (explicit?: number): number => {
   if (explicit != null && Number.isFinite(explicit) && explicit >= 1) {
@@ -198,6 +200,156 @@ export const employeeWorkdayAvailabilityService = {
         : false;
 
     return { candidates, hasJustifiedWorkdayInWindow };
+  },
+
+  /**
+   * Best-effort diagnostics for empty check-in. Prefer passing precomputed
+   * availability context to avoid duplicate queries. Never throw to callers
+   * that wrap this in try/catch for bot telemetry.
+   */
+  async diagnoseCheckInUnavailability(
+    companyId: string,
+    employeeId: string,
+    at: Date,
+    precomputed?: {
+      candidateFrom?: Date;
+      candidateTo?: Date;
+      rawCandidateCount?: number;
+      eligibleCandidateCount?: number;
+      hasJustifiedWorkdayInWindow?: boolean;
+    },
+  ): Promise<{
+    candidateFrom: string;
+    candidateTo: string;
+    rawCandidateCount: number;
+    eligibleCandidateCount: number;
+    hasJustifiedWorkdayInWindow: boolean;
+    reasonCodes: string[];
+    nearbyWorkdayCount: number;
+    assignedOperationCount: number;
+    operationIds: string[];
+    workdayIds: string[];
+    timezone: string;
+  }> {
+    const range = resolveCheckInCandidateRange(at);
+    const candidateFrom = precomputed?.candidateFrom ?? range.candidateFrom;
+    const candidateTo = precomputed?.candidateTo ?? range.candidateTo;
+
+    const [assigned, nearby, settings] = await Promise.all([
+      employeeWorkdayAvailabilityRepository.listAssignedOneTimeDiagnostics(
+        companyId,
+        employeeId,
+        at,
+      ),
+      employeeWorkdayAvailabilityRepository.listNearbyWorkdayDiagnostics(
+        companyId,
+        employeeId,
+        at,
+      ),
+      companySettingsRepository.findByCompanyId(companyId),
+    ]);
+
+    let rawCandidateCount = precomputed?.rawCandidateCount;
+    let eligibleCandidateCount = precomputed?.eligibleCandidateCount;
+    let hasJustifiedWorkdayInWindow = precomputed?.hasJustifiedWorkdayInWindow;
+
+    if (rawCandidateCount == null || eligibleCandidateCount == null) {
+      const rawCandidates = await employeeWorkdayAvailabilityRepository.listCheckInCandidates(
+        companyId,
+        employeeId,
+        { candidateFrom, candidateTo },
+      );
+      rawCandidateCount = rawCandidates.length;
+      eligibleCandidateCount = rawCandidates.filter((candidate) =>
+        isWithinCheckInAvailabilityWindow(candidate, at),
+      ).length;
+    }
+
+    if (hasJustifiedWorkdayInWindow == null) {
+      hasJustifiedWorkdayInWindow =
+        await employeeWorkdayAvailabilityRepository.hasJustifiedWorkdayInRange(
+          companyId,
+          employeeId,
+          { candidateFrom, candidateTo },
+        );
+    }
+
+    const reasonCodes = new Set<string>();
+
+    if (assigned.length === 0) {
+      reasonCodes.add("NO_ACTIVE_ASSIGNMENT");
+    }
+
+    for (const row of assigned) {
+      if (!row.operationWorkdayId) {
+        reasonCodes.add("ASSIGNED_OPERATION_WITHOUT_WORKDAY");
+      } else if (!row.scheduleMatches) {
+        reasonCodes.add("ASSIGNED_OPERATION_SCHEDULE_DRIFT");
+      }
+      if (row.operationWorkdayId && !row.employeeWorkdayId) {
+        reasonCodes.add("EMPLOYEE_WORKDAY_MISSING");
+      }
+      if (row.expectationStatus === "JUSTIFIED") {
+        reasonCodes.add("EXPECTATION_JUSTIFIED");
+      }
+      if (row.operationWorkdayStatus && row.operationWorkdayStatus !== "ACTIVE") {
+        reasonCodes.add("OPERATION_WORKDAY_NOT_ACTIVE");
+      }
+      if (row.operationStatus === "COMPLETED" || row.operationStatus === "CANCELLED") {
+        reasonCodes.add("OPERATION_COMPLETED_OR_CANCELLED");
+      }
+      if (!row.locationActive) {
+        reasonCodes.add("LOCATION_INACTIVE");
+      }
+      if (row.hasAttendance) {
+        reasonCodes.add("PRIOR_ATTENDANCE");
+      }
+    }
+
+    for (const row of nearby) {
+      if (
+        row.scheduleStartMatches &&
+        row.expectationStatus === "EXPECTED" &&
+        row.operationWorkdayStatus === "ACTIVE" &&
+        row.operationStatus !== "COMPLETED" &&
+        row.operationStatus !== "CANCELLED" &&
+        row.locationActive &&
+        !row.hasAttendance &&
+        !isWithinCheckInAvailabilityWindow(
+          {
+            expectedStartAt: row.expectedStartAt,
+            earlyToleranceMinutes: row.earlyToleranceMinutes,
+            lateToleranceMinutes: row.lateToleranceMinutes,
+          },
+          at,
+        )
+      ) {
+        reasonCodes.add("OUTSIDE_CHECKIN_WINDOW");
+      }
+    }
+
+    if (hasJustifiedWorkdayInWindow) {
+      reasonCodes.add("HAS_JUSTIFIED_WORKDAY_IN_WINDOW");
+    }
+    if (reasonCodes.size === 0) {
+      reasonCodes.add("NO_AVAILABLE_EMPLOYEE_WORKDAY");
+    }
+
+    return {
+      candidateFrom: candidateFrom.toISOString(),
+      candidateTo: candidateTo.toISOString(),
+      rawCandidateCount,
+      eligibleCandidateCount,
+      hasJustifiedWorkdayInWindow,
+      reasonCodes: [...reasonCodes].sort(),
+      nearbyWorkdayCount: nearby.length,
+      assignedOperationCount: assigned.length,
+      operationIds: [...new Set(assigned.map((row) => row.operationId))],
+      workdayIds: assigned
+        .map((row) => row.operationWorkdayId)
+        .filter((id): id is string => Boolean(id)),
+      timezone: resolveOperationTimezone(settings?.operationTimezone),
+    };
   },
 
   async revalidateCheckInCandidate(

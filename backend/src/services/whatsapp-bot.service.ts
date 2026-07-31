@@ -666,7 +666,26 @@ export const whatsappBotService = {
     );
 
     if (candidates.length === 0) {
-      console.info("[whatsapp-bot] no available employee workday", { employeeId: input.employeeId });
+      const diagnosis = await employeeWorkdayAvailabilityService.diagnoseCheckInUnavailability(
+        companyId,
+        input.employeeId,
+        now,
+      );
+      console.info("[whatsapp-bot] no available employee workday", {
+        companyId,
+        employeeId: input.employeeId,
+        at: now.toISOString(),
+        candidateFrom: diagnosis.candidateFrom,
+        candidateTo: diagnosis.candidateTo,
+        rawCandidateCount: diagnosis.rawCandidateCount,
+        eligibleCandidateCount: diagnosis.eligibleCandidateCount,
+        hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
+        reasonCodes: diagnosis.reasonCodes,
+        nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
+        operationIds: diagnosis.operationIds,
+        workdayIds: diagnosis.workdayIds,
+        timezone: diagnosis.timezone,
+      });
       return respond(companyId, {
         message: hasJustifiedWorkdayInWindow ? NO_JUSTIFIED_ONLY_MESSAGE : NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,

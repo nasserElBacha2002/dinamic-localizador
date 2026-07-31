@@ -1,5 +1,6 @@
 import { operationRepository } from "../repositories/operation.repository";
 import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
+import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { workdayMaterializationService } from "./workday-materialization.service";
 import type {
   EmployeeWorkdayCheckInCandidate,
@@ -18,6 +19,7 @@ import {
   resolveCheckoutEligibilityEndAt,
 } from "../utils/pending-checkout-eligibility";
 import { DEFAULT_COMPANY_OPERATIONAL_SETTINGS } from "../constants/company-settings";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
 
 const resolvePendingExpirationHours = (explicit?: number): number => {
   if (explicit != null && Number.isFinite(explicit) && explicit >= 1) {
@@ -198,6 +200,112 @@ export const employeeWorkdayAvailabilityService = {
         : false;
 
     return { candidates, hasJustifiedWorkdayInWindow };
+  },
+
+  /**
+   * Builds structured reason codes when check-in has zero eligible candidates.
+   * Uses a bounded nearby-workday query (not a full table scan).
+   */
+  async diagnoseCheckInUnavailability(
+    companyId: string,
+    employeeId: string,
+    at: Date,
+  ): Promise<{
+    candidateFrom: string;
+    candidateTo: string;
+    rawCandidateCount: number;
+    eligibleCandidateCount: number;
+    hasJustifiedWorkdayInWindow: boolean;
+    reasonCodes: string[];
+    nearbyWorkdayCount: number;
+    operationIds: string[];
+    workdayIds: string[];
+    timezone: string;
+  }> {
+    const range = resolveCheckInCandidateRange(at);
+    const [rawCandidates, hasJustifiedWorkdayInWindow, nearby, settings] = await Promise.all([
+      employeeWorkdayAvailabilityRepository.listCheckInCandidates(companyId, employeeId, {
+        candidateFrom: range.candidateFrom,
+        candidateTo: range.candidateTo,
+      }),
+      employeeWorkdayAvailabilityRepository.hasJustifiedWorkdayInRange(companyId, employeeId, range),
+      employeeWorkdayAvailabilityRepository.listNearbyWorkdayDiagnostics(
+        companyId,
+        employeeId,
+        at,
+      ),
+      companySettingsRepository.findByCompanyId(companyId),
+    ]);
+
+    const eligible = rawCandidates.filter((candidate) =>
+      isWithinCheckInAvailabilityWindow(candidate, at),
+    );
+
+    const reasonCodes = new Set<string>();
+    if (nearby.length === 0) {
+      reasonCodes.add("NO_EMPLOYEE_WORKDAY_NEARBY");
+    }
+    for (const row of nearby) {
+      if (!row.scheduleStartMatches) {
+        reasonCodes.add("SCHEDULE_MATERIALIZATION_MISMATCH");
+      }
+      if (row.expectationStatus === "JUSTIFIED") {
+        reasonCodes.add("EXPECTATION_JUSTIFIED");
+      } else if (row.expectationStatus !== "EXPECTED") {
+        reasonCodes.add("EXPECTATION_NOT_ELIGIBLE");
+      }
+      if (row.operationWorkdayStatus !== "ACTIVE") {
+        reasonCodes.add("OPERATION_WORKDAY_NOT_ACTIVE");
+      }
+      if (row.operationStatus === "COMPLETED" || row.operationStatus === "CANCELLED") {
+        reasonCodes.add("OPERATION_COMPLETED_OR_CANCELLED");
+      }
+      if (!row.locationActive) {
+        reasonCodes.add("LOCATION_INACTIVE");
+      }
+      if (row.hasAttendance) {
+        reasonCodes.add("PRIOR_ATTENDANCE");
+      }
+      if (
+        row.scheduleStartMatches &&
+        row.expectationStatus === "EXPECTED" &&
+        row.operationWorkdayStatus === "ACTIVE" &&
+        row.operationStatus !== "COMPLETED" &&
+        row.operationStatus !== "CANCELLED" &&
+        row.locationActive &&
+        !row.hasAttendance &&
+        !isWithinCheckInAvailabilityWindow(
+          {
+            expectedStartAt: row.expectedStartAt,
+            earlyToleranceMinutes: row.earlyToleranceMinutes,
+            lateToleranceMinutes: row.lateToleranceMinutes,
+          },
+          at,
+        )
+      ) {
+        reasonCodes.add("OUTSIDE_CHECKIN_WINDOW");
+      }
+    }
+
+    if (hasJustifiedWorkdayInWindow) {
+      reasonCodes.add("HAS_JUSTIFIED_WORKDAY_IN_WINDOW");
+    }
+    if (reasonCodes.size === 0) {
+      reasonCodes.add("NO_AVAILABLE_EMPLOYEE_WORKDAY");
+    }
+
+    return {
+      candidateFrom: range.candidateFrom.toISOString(),
+      candidateTo: range.candidateTo.toISOString(),
+      rawCandidateCount: rawCandidates.length,
+      eligibleCandidateCount: eligible.length,
+      hasJustifiedWorkdayInWindow,
+      reasonCodes: [...reasonCodes].sort(),
+      nearbyWorkdayCount: nearby.length,
+      operationIds: [...new Set(nearby.map((row) => row.operationId))],
+      workdayIds: nearby.map((row) => row.operationWorkdayId),
+      timezone: resolveOperationTimezone(settings?.operationTimezone),
+    };
   },
 
   async revalidateCheckInCandidate(

@@ -227,6 +227,107 @@ export const employeeWorkdayAvailabilityRepository = {
     return Boolean(result.recordset[0]);
   },
 
+  /**
+   * Lightweight nearby-workday snapshot for empty check-in diagnostics.
+   * Intentionally limited to ±7 days around `at` to avoid heavy scans.
+   */
+  async listNearbyWorkdayDiagnostics(
+    companyId: string,
+    employeeId: string,
+    at: Date,
+  ): Promise<
+    Array<{
+      operationId: string;
+      operationWorkdayId: string;
+      employeeWorkdayId: string;
+      workDate: string;
+      expectedStartAt: string;
+      expectedEndAt: string | null;
+      expectationStatus: string;
+      operationWorkdayStatus: string;
+      operationStatus: string;
+      locationActive: boolean;
+      hasAttendance: boolean;
+      scheduleStartMatches: boolean;
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+    }>
+  > {
+    const pool = getPool();
+    const windowFrom = new Date(at.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const windowTo = new Date(at.getTime() + 7 * 24 * 60 * 60 * 1000);
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("windowFrom", sql.DateTime2, windowFrom)
+      .input("windowTo", sql.DateTime2, windowTo)
+      .query(`
+        SELECT TOP 20
+          i.id AS operation_id,
+          ow.id AS operation_workday_id,
+          ew.id AS employee_workday_id,
+          ow.work_date,
+          ow.expected_start_at,
+          ow.expected_end_at,
+          ew.expectation_status,
+          ow.status AS operation_workday_status,
+          i.status AS operation_status,
+          s.active AS location_active,
+          ow.early_tolerance_minutes,
+          ow.late_tolerance_minutes,
+          CASE WHEN EXISTS (
+            SELECT 1
+            FROM attendance_records ar
+            WHERE ar.employee_workday_id = ew.id
+              AND ar.company_id = ew.company_id
+              AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+          ) THEN 1 ELSE 0 END AS has_attendance,
+          CASE
+            WHEN i.scheduled_start = ow.expected_start_at
+             AND (
+               (i.scheduled_end IS NULL AND ow.expected_end_at IS NULL)
+               OR i.scheduled_end = ow.expected_end_at
+             )
+            THEN 1 ELSE 0
+          END AS schedule_start_matches
+        FROM employee_workdays ew
+        INNER JOIN operation_workdays ow
+          ON ow.id = ew.operation_workday_id
+         AND ow.company_id = ew.company_id
+        INNER JOIN scheduled_operations i
+          ON i.id = ow.operation_id
+         AND i.company_id = ew.company_id
+        INNER JOIN operational_locations s
+          ON s.id = i.service_id
+         AND s.company_id = ew.company_id
+        WHERE ew.company_id = @companyId
+          AND ew.employee_id = @employeeId
+          AND ow.expected_start_at >= @windowFrom
+          AND ow.expected_start_at <= @windowTo
+        ORDER BY ow.expected_start_at ASC
+      `);
+
+    return result.recordset.map((row) => ({
+      operationId: String(row.operation_id),
+      operationWorkdayId: String(row.operation_workday_id),
+      employeeWorkdayId: String(row.employee_workday_id),
+      workDate: String(row.work_date).slice(0, 10),
+      expectedStartAt: toIsoString(row.expected_start_at as Date | string),
+      expectedEndAt: row.expected_end_at
+        ? toIsoString(row.expected_end_at as Date | string)
+        : null,
+      expectationStatus: String(row.expectation_status),
+      operationWorkdayStatus: String(row.operation_workday_status),
+      operationStatus: String(row.operation_status),
+      locationActive: Boolean(row.location_active),
+      hasAttendance: Number(row.has_attendance) === 1,
+      scheduleStartMatches: Number(row.schedule_start_matches) === 1,
+      earlyToleranceMinutes: Number(row.early_tolerance_minutes),
+      lateToleranceMinutes: Number(row.late_tolerance_minutes),
+    }));
+  },
+
   async listCheckoutCandidates(
     companyId: string,
     employeeId: string,

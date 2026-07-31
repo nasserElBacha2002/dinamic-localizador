@@ -52,6 +52,33 @@ const PHONE_FILTER_SQL = `
   AND LTRIM(RTRIM(e.phone_number)) <> ''
 `;
 
+/**
+ * Arrival / no-check-in / exit reminders for ONE_TIME must share the same
+ * materialized workday source of truth used by check-in eligibility.
+ */
+const ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL = `
+  AND ie.cancelled_at IS NULL
+  AND ow.work_date >= ie.valid_from
+  AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
+`;
+
+const ONE_TIME_COHERENT_WORKDAY_JOINS = `
+        INNER JOIN operation_workdays ow
+          ON ow.operation_id = i.id
+         AND ow.company_id = @companyId
+         AND ow.status = 'ACTIVE'
+         AND ow.expected_start_at = i.scheduled_start
+         AND (
+           (ow.expected_end_at IS NULL AND i.scheduled_end IS NULL)
+           OR ow.expected_end_at = i.scheduled_end
+         )
+        INNER JOIN employee_workdays ew
+          ON ew.operation_workday_id = ow.id
+         AND ew.company_id = @companyId
+         AND ew.employee_id = e.id
+         AND ew.expectation_status = 'EXPECTED'
+`;
+
 const buildNotificationEligibilitySql = (): string => `
   AND (
     wan.id IS NULL
@@ -133,21 +160,25 @@ export const attendanceNotificationRepository = {
           s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
-          e.phone_number AS employee_phone_number
+          e.phone_number AS employee_phone_number,
+          ow.schedule_version AS schedule_version
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie ON ie.operation_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.operation_id = i.id
           AND wan.employee_id = e.id
           AND wan.notification_type = 'ARRIVAL_REMINDER_15_MIN'
           AND wan.company_id = @companyId
+          AND wan.schedule_version = ow.schedule_version
         WHERE i.company_id = @companyId
           AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
+          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
           ${PHONE_FILTER_SQL}
           AND i.scheduled_start >= @windowStart
           AND i.scheduled_start <= @windowEnd
@@ -183,28 +214,33 @@ export const attendanceNotificationRepository = {
           s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
-          e.phone_number AS employee_phone_number
+          e.phone_number AS employee_phone_number,
+          ow.schedule_version AS schedule_version
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie ON ie.operation_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
         LEFT JOIN attendance_records ar
-          ON ar.operation_id = i.id
-          AND ar.employee_id = e.id
+          ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
+          AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.operation_id = i.id
           AND wan.employee_id = e.id
           AND wan.notification_type = 'NO_CHECKIN_AT_START'
           AND wan.company_id = @companyId
+          AND wan.schedule_version = ow.schedule_version
         WHERE i.company_id = @companyId
           AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('CANCELLED', 'COMPLETED')
           AND s.active = 1
           AND e.active = 1
+          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
           AND ar.id IS NULL
           AND i.scheduled_start >= @windowStart
           AND i.scheduled_start <= @windowEnd
+          ${PHONE_FILTER_SQL}
           ${buildNotificationEligibilitySql()}
       `);
 
@@ -268,14 +304,15 @@ export const attendanceNotificationRepository = {
           s.locality AS service_locality,
           e.id AS employee_id,
           e.name AS employee_name,
-          e.phone_number AS employee_phone_number
+          e.phone_number AS employee_phone_number,
+          ow.schedule_version AS schedule_version
         FROM scheduled_operations i
         INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN operation_assignments ie ON ie.operation_id = i.id AND ie.company_id = @companyId
         INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+        ${ONE_TIME_COHERENT_WORKDAY_JOINS}
         INNER JOIN attendance_records ar
-          ON ar.operation_id = i.id
-          AND ar.employee_id = e.id
+          ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
           AND ar.checkout_at IS NULL
@@ -284,12 +321,14 @@ export const attendanceNotificationRepository = {
           AND wan.employee_id = e.id
           AND wan.notification_type = 'EXIT_REMINDER_15_MIN'
           AND wan.company_id = @companyId
+          AND wan.schedule_version = ow.schedule_version
         WHERE i.company_id = @companyId
           AND i.operation_kind = N'ONE_TIME'
           AND i.status <> 'CANCELLED'
           AND i.scheduled_end IS NOT NULL
           AND s.active = 1
           AND e.active = 1
+          ${ONE_TIME_MATERIALIZED_ASSIGNMENT_SQL}
           ${PHONE_FILTER_SQL}
           AND i.scheduled_end >= @windowStart
           AND i.scheduled_end <= @windowEnd
@@ -697,6 +736,33 @@ export const attendanceNotificationRepository = {
             sent_at = NULL
         WHERE id = @notificationId AND company_id = @companyId
       `);
+  },
+
+  /**
+   * Invalidates pending reminders after a ONE_TIME schedule change so a new
+   * schedule_version can claim fresh rows. SENT rows are preserved as history.
+   */
+  async failPendingForOperationScheduleChange(
+    companyId: string,
+    operationId: string,
+    transaction: sql.Transaction,
+    errorMessage = "OPERATION_SCHEDULE_CHANGED",
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("errorMessage", sql.NVarChar(1000), errorMessage.slice(0, 1000))
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET status = 'FAILED',
+            error_message = @errorMessage,
+            sent_at = NULL
+        WHERE company_id = @companyId
+          AND operation_id = @operationId
+          AND status IN ('PENDING', 'SENT_RECOVERY_REQUIRED')
+      `);
+
+    return result.rowsAffected[0] ?? 0;
   },
 
   async findConfirmationReminderCandidates(

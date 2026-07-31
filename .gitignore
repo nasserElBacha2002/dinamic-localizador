@@ -58,3 +58,4 @@ secrets/*
 !secrets/gcp-service-account.json.example
 backend/secrets/
 !backend/secrets/.gitkeep
+backend/reports.tar.gz

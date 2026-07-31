@@ -5,6 +5,7 @@ import type {
   EmployeeWorkdayCheckoutCandidate,
 } from "../types/employee-workday-availability";
 import type { OperationKind } from "../constants/operation-kind";
+import { toDateOnlyString } from "../utils/row-mappers";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -21,7 +22,7 @@ const mapCheckInCandidateRow = (row: Record<string, unknown>): EmployeeWorkdayCh
   serviceLongitude: Number(row.service_longitude),
   allowedRadiusMeters: Number(row.allowed_radius_meters),
   operationKind: String(row.operation_kind) as OperationKind,
-  workDate: String(row.work_date).slice(0, 10),
+  workDate: toDateOnlyString(row.work_date as Date | string),
   expectedStartAt: toIsoString(row.expected_start_at as Date | string),
   expectedEndAt: row.expected_end_at
     ? toIsoString(row.expected_end_at as Date | string)
@@ -312,7 +313,7 @@ export const employeeWorkdayAvailabilityRepository = {
       operationId: String(row.operation_id),
       operationWorkdayId: String(row.operation_workday_id),
       employeeWorkdayId: String(row.employee_workday_id),
-      workDate: String(row.work_date).slice(0, 10),
+      workDate: toDateOnlyString(row.work_date as Date | string),
       expectedStartAt: toIsoString(row.expected_start_at as Date | string),
       expectedEndAt: row.expected_end_at
         ? toIsoString(row.expected_end_at as Date | string)
@@ -432,7 +433,7 @@ export const employeeWorkdayAvailabilityRepository = {
       validUntil: row.valid_until ? String(row.valid_until).slice(0, 10) : null,
       locationActive: Boolean(row.location_active),
       operationWorkdayId: row.operation_workday_id ? String(row.operation_workday_id) : null,
-      workDate: row.work_date ? String(row.work_date).slice(0, 10) : null,
+      workDate: row.work_date ? toDateOnlyString(row.work_date as Date | string) : null,
       expectedStartAt: row.expected_start_at
         ? toIsoString(row.expected_start_at as Date | string)
         : null,

@@ -11,6 +11,7 @@ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cle
 import { getPool } from "../database/connection";
 import { resolveWorkDateFromScheduledStart } from "../utils/work-date";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
+import { toDateOnlyString } from "../utils/row-mappers";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
 import { oneTimeOperationScheduleReconciliationService } from "./one-time-operation-schedule-reconciliation.service";
@@ -142,7 +143,10 @@ describeDatabaseIntegration("ONE_TIME schedule reconciliation integration", () =
       `);
     assert.equal(beforeWorkdays.recordset.length, 1);
     const beforeWorkdayId = String(beforeWorkdays.recordset[0].id);
-    assert.equal(String(beforeWorkdays.recordset[0].work_date).slice(0, 10), workDateA);
+    assert.equal(
+      toDateOnlyString(beforeWorkdays.recordset[0].work_date as Date | string),
+      workDateA,
+    );
 
     const { operationService } = await import("./operation.service");
     await operationService.update(companyId, operationId, {
@@ -179,7 +183,10 @@ describeDatabaseIntegration("ONE_TIME schedule reconciliation integration", () =
       `);
     assert.equal(afterWorkdays.recordset.length, 1);
     assert.equal(String(afterWorkdays.recordset[0].id), beforeWorkdayId);
-    assert.equal(String(afterWorkdays.recordset[0].work_date).slice(0, 10), workDateB);
+    assert.equal(
+      toDateOnlyString(afterWorkdays.recordset[0].work_date as Date | string),
+      workDateB,
+    );
     assert.equal(
       new Date(afterWorkdays.recordset[0].expected_start_at).toISOString(),
       dateBStart.toISOString(),
@@ -201,8 +208,8 @@ describeDatabaseIntegration("ONE_TIME schedule reconciliation integration", () =
       `);
     assert.equal(assignments.recordset.length, 2);
     for (const row of assignments.recordset) {
-      assert.equal(String(row.valid_from).slice(0, 10), workDateB);
-      assert.equal(String(row.valid_until).slice(0, 10), workDateB);
+      assert.equal(toDateOnlyString(row.valid_from as Date | string), workDateB);
+      assert.equal(toDateOnlyString(row.valid_until as Date | string), workDateB);
       assert.equal(Number(row.confirmation_schedule_version), 2);
     }
 
@@ -297,6 +304,7 @@ describeDatabaseIntegration("ONE_TIME schedule reconciliation integration", () =
     const workDate = resolveWorkDateFromScheduledStart(start, timezone);
     const movedStart = new Date(Date.now() + 21 * 24 * 60 * 60 * 1000);
     movedStart.setUTCHours(23, 30, 0, 0);
+    const movedEnd = new Date(movedStart.getTime() + 6 * 60 * 60 * 1000);
 
     const operationInsert = await pool
       .request()
@@ -376,6 +384,7 @@ describeDatabaseIntegration("ONE_TIME schedule reconciliation integration", () =
       () =>
         operationService.update(companyId, operationId, {
           scheduledStart: movedStart.toISOString(),
+          scheduledEnd: movedEnd.toISOString(),
         }),
       (error: unknown) =>
         error instanceof AppError && error.code === "OPERATION_SCHEDULE_LOCKED_BY_ATTENDANCE",

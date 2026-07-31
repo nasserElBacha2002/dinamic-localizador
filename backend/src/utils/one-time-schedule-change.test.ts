@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { detectOneTimeScheduleAffectingChanges } from "../utils/one-time-schedule-change";
+import {
+  detectOneTimeScheduleAffectingChanges,
+  resolveNextWorkdayScheduleVersion,
+} from "../utils/one-time-schedule-change";
 
 describe("detectOneTimeScheduleAffectingChanges", () => {
   const base = {
@@ -15,32 +18,45 @@ describe("detectOneTimeScheduleAffectingChanges", () => {
     assert.equal(flags.scheduleAffecting, false);
     assert.equal(flags.timingChanged, false);
     assert.equal(flags.toleranceChanged, false);
+    assert.equal(flags.reminderScheduleChanged, false);
+    assert.equal(flags.confirmationScheduleChanged, false);
   });
 
-  it("detects scheduled start/end changes", () => {
+  it("marks timing change as reminder and confirmation schedule change", () => {
     const flags = detectOneTimeScheduleAffectingChanges(base, {
       scheduledStart: "2026-07-27T23:30:00.000Z",
       scheduledEnd: "2026-07-28T06:00:00.000Z",
     });
     assert.equal(flags.timingChanged, true);
+    assert.equal(flags.workdaySnapshotChanged, true);
+    assert.equal(flags.reminderScheduleChanged, true);
+    assert.equal(flags.confirmationScheduleChanged, true);
     assert.equal(flags.scheduleAffecting, true);
   });
 
-  it("detects tolerance-only changes", () => {
+  it("tolerance-only changes snapshot without bumping reminder schedule", () => {
     const flags = detectOneTimeScheduleAffectingChanges(base, {
       earlyToleranceMinutes: 45,
     });
     assert.equal(flags.toleranceChanged, true);
     assert.equal(flags.timingChanged, false);
+    assert.equal(flags.workdaySnapshotChanged, true);
+    assert.equal(flags.reminderScheduleChanged, false);
+    assert.equal(flags.confirmationScheduleChanged, false);
     assert.equal(flags.scheduleAffecting, true);
   });
 
-  it("treats identical timestamps as no timing change", () => {
+  it("keeps schedule version stable on tolerance-only", () => {
     const flags = detectOneTimeScheduleAffectingChanges(base, {
-      scheduledStart: "2026-07-16T23:30:00.000Z",
-      scheduledEnd: "2026-07-17T06:00:00.000Z",
+      lateToleranceMinutes: 120,
     });
-    assert.equal(flags.timingChanged, false);
-    assert.equal(flags.scheduleAffecting, false);
+    assert.equal(resolveNextWorkdayScheduleVersion(3, flags), 3);
+  });
+
+  it("bumps schedule version only when reminder schedule changes", () => {
+    const flags = detectOneTimeScheduleAffectingChanges(base, {
+      scheduledStart: "2026-07-27T23:30:00.000Z",
+    });
+    assert.equal(resolveNextWorkdayScheduleVersion(3, flags), 4);
   });
 });

@@ -1,18 +1,49 @@
-import { connectDatabase, closeDatabase } from "../src/database/connection";
-import { oneTimeOperationScheduleReconciliationService } from "../src/services/one-time-operation-schedule-reconciliation.service";
-import { getPool } from "../src/database/connection";
 import sql from "mssql";
+import { connectDatabase, closeDatabase, getPool } from "../src/database/connection";
+import { oneTimeScheduleConsistencyInspector } from "../src/services/one-time-schedule-consistency.inspector";
+import { oneTimeScheduleRepairService } from "../src/services/one-time-operation-schedule-reconciliation.service";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-type CliArgs = {
+export type RepairOneTimeScheduleCliArgs = {
   companyId?: string;
   operationIds: string[];
   apply: boolean;
 };
 
-const parseArgs = (argv: string[]): CliArgs => {
+export type RepairOneTimeScheduleSummary = {
+  scanned: number;
+  consistent: number;
+  repairable: number;
+  repaired: number;
+  blocked: number;
+  failed: number;
+  skipped: number;
+};
+
+/**
+ * Exit codes:
+ * - 0: completed without technical failures
+ * - 1: at least one operation failed technically
+ * - 2: apply mode encountered blocked operations (no technical failures)
+ */
+export const resolveRepairCliExitCode = (
+  summary: RepairOneTimeScheduleSummary,
+  apply: boolean,
+): number => {
+  if (summary.failed > 0) {
+    return 1;
+  }
+  if (apply && summary.blocked > 0) {
+    return 2;
+  }
+  return 0;
+};
+
+export const parseRepairOneTimeScheduleCliArgs = (
+  argv: string[],
+): RepairOneTimeScheduleCliArgs => {
   const args = new Map<string, string | boolean>();
   for (let index = 0; index < argv.length; index += 1) {
     const token = argv[index]!;
@@ -61,11 +92,12 @@ const parseArgs = (argv: string[]): CliArgs => {
   };
 };
 
-const listCandidateOperationIds = async (args: CliArgs): Promise<
-  Array<{ companyId: string; operationId: string }>
-> => {
+export const listOneTimeOperationScope = async (
+  args: RepairOneTimeScheduleCliArgs,
+): Promise<Array<{ companyId: string; operationId: string }>> => {
+  const pool = getPool();
+
   if (args.operationIds.length > 0) {
-    const pool = getPool();
     const request = pool.request();
     const placeholders = args.operationIds.map((_, index) => {
       const key = `operationId${index}`;
@@ -81,6 +113,7 @@ const listCandidateOperationIds = async (args: CliArgs): Promise<
       WHERE operation_kind = N'ONE_TIME'
         AND id IN (${placeholders.join(", ")})
         ${args.companyId ? "AND company_id = @companyId" : ""}
+      ORDER BY company_id, id
     `);
     return result.recordset.map((row) => ({
       companyId: String(row.company_id),
@@ -88,42 +121,16 @@ const listCandidateOperationIds = async (args: CliArgs): Promise<
     }));
   }
 
-  const pool = getPool();
   const result = await pool
     .request()
     .input("companyId", sql.UniqueIdentifier, args.companyId!)
     .query(`
-      SELECT so.company_id, so.id AS operation_id
-      FROM scheduled_operations so
-      LEFT JOIN operation_workdays ow
-        ON ow.operation_id = so.id
-       AND ow.company_id = so.company_id
-      LEFT JOIN operation_assignments oa
-        ON oa.operation_id = so.id
-       AND oa.company_id = so.company_id
-       AND oa.cancelled_at IS NULL
-      WHERE so.company_id = @companyId
-        AND so.operation_kind = N'ONE_TIME'
-        AND so.status NOT IN (N'CANCELLED')
-        AND (
-          ow.id IS NULL
-          OR ow.expected_start_at <> so.scheduled_start
-          OR (
-            (ow.expected_end_at IS NULL AND so.scheduled_end IS NOT NULL)
-            OR (ow.expected_end_at IS NOT NULL AND so.scheduled_end IS NULL)
-            OR ow.expected_end_at <> so.scheduled_end
-          )
-          OR (
-            oa.id IS NOT NULL
-            AND (
-              oa.valid_from <> CAST(ow.work_date AS DATE)
-              OR oa.valid_until IS NULL
-              OR oa.valid_until <> CAST(ow.work_date AS DATE)
-            )
-          )
-        )
-      GROUP BY so.company_id, so.id
-      ORDER BY so.id
+      SELECT company_id, id AS operation_id
+      FROM scheduled_operations
+      WHERE company_id = @companyId
+        AND operation_kind = N'ONE_TIME'
+        AND status NOT IN (N'CANCELLED')
+      ORDER BY id
     `);
 
   return result.recordset.map((row) => ({
@@ -132,9 +139,11 @@ const listCandidateOperationIds = async (args: CliArgs): Promise<
   }));
 };
 
-async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
-  console.log(
+export const runRepairOneTimeScheduleDrift = async (
+  args: RepairOneTimeScheduleCliArgs,
+  log: (message: string) => void = console.log,
+): Promise<{ summary: RepairOneTimeScheduleSummary; exitCode: number }> => {
+  log(
     JSON.stringify(
       {
         mode: args.apply ? "APPLY" : "DRY_RUN",
@@ -146,9 +155,7 @@ async function main(): Promise<void> {
     ),
   );
 
-  await connectDatabase();
-
-  const summary = {
+  const summary: RepairOneTimeScheduleSummary = {
     scanned: 0,
     consistent: 0,
     repairable: 0,
@@ -158,35 +165,33 @@ async function main(): Promise<void> {
     skipped: 0,
   };
 
-  try {
-    const candidates = await listCandidateOperationIds(args);
-    summary.scanned = candidates.length;
-    console.log(`\nCandidates: ${candidates.length}`);
+  const candidates = await listOneTimeOperationScope(args);
+  summary.scanned = candidates.length;
+  log(`\nCandidates: ${candidates.length}`);
 
-    for (const candidate of candidates) {
-      try {
-        const outcome =
-          await oneTimeOperationScheduleReconciliationService.repairFromCurrentSchedule(
-            candidate.companyId,
-            candidate.operationId,
-            { apply: args.apply },
-          );
-
-        console.log(
+  for (const candidate of candidates) {
+    try {
+      if (args.apply) {
+        const outcome = await oneTimeScheduleRepairService.repairFromCurrentSchedule(
+          candidate.companyId,
+          candidate.operationId,
+          { apply: true },
+        );
+        log(
           JSON.stringify(
             {
               companyId: candidate.companyId,
               operationId: candidate.operationId,
               status: outcome.status,
               dryRun: outcome.dryRun,
-              detail: outcome.detail,
+              reasonCodes: outcome.report.reasonCodes,
+              blockedReason: outcome.report.blockedReason,
               result: outcome.result ?? null,
             },
             null,
             2,
           ),
         );
-
         if (outcome.status === "consistent") {
           summary.consistent += 1;
         } else if (outcome.status === "blocked" || outcome.status === "not_one_time") {
@@ -195,35 +200,89 @@ async function main(): Promise<void> {
           summary.skipped += 1;
         } else if (outcome.status === "repairable") {
           summary.repairable += 1;
-          if (args.apply && outcome.result) {
+          if (outcome.result) {
             summary.repaired += 1;
           }
         }
-      } catch (error) {
-        summary.failed += 1;
-        console.error(
+      } else {
+        const report = await oneTimeScheduleConsistencyInspector.inspect(
+          candidate.companyId,
+          candidate.operationId,
+        );
+        if (report.status === "consistent") {
+          summary.consistent += 1;
+          continue;
+        }
+        log(
           JSON.stringify(
             {
               companyId: candidate.companyId,
               operationId: candidate.operationId,
-              status: "failed",
-              error: error instanceof Error ? error.message : String(error),
+              status: report.status,
+              dryRun: true,
+              reasonCodes: report.reasonCodes,
+              blockedReason: report.blockedReason,
+              expected: report.expected,
+              currentWorkdays: report.current.workdays,
+              assignmentDrift: report.current.assignments
+                .filter((row) => !row.cancelledAt)
+                .filter(
+                  (row) =>
+                    !report.expected ||
+                    row.validFrom !== report.expected.workDate ||
+                    row.validUntil !== report.expected.workDate,
+                ),
             },
             null,
             2,
           ),
         );
+        if (report.status === "blocked" || report.status === "not_one_time") {
+          summary.blocked += 1;
+        } else if (report.status === "missing_operation") {
+          summary.skipped += 1;
+        } else if (report.status === "repairable") {
+          summary.repairable += 1;
+        }
       }
+    } catch (error) {
+      summary.failed += 1;
+      log(
+        JSON.stringify(
+          {
+            companyId: candidate.companyId,
+            operationId: candidate.operationId,
+            status: "failed",
+            error: error instanceof Error ? error.message : String(error),
+          },
+          null,
+          2,
+        ),
+      );
     }
+  }
 
-    console.log("\n=== SUMMARY ===");
-    console.log(JSON.stringify(summary, null, 2));
+  log("\n=== SUMMARY ===");
+  log(JSON.stringify(summary, null, 2));
+  const exitCode = resolveRepairCliExitCode(summary, args.apply);
+  log(`exitCode=${exitCode}`);
+  return { summary, exitCode };
+};
+
+async function main(): Promise<void> {
+  const args = parseRepairOneTimeScheduleCliArgs(process.argv.slice(2));
+  await connectDatabase();
+  try {
+    const { exitCode } = await runRepairOneTimeScheduleDrift(args);
+    process.exitCode = exitCode;
   } finally {
     await closeDatabase();
   }
 }
 
-main().catch((error) => {
-  console.error(error instanceof Error ? error.message : error);
-  process.exitCode = 1;
-});
+if (require.main === module) {
+  main().catch((error) => {
+    console.error(error instanceof Error ? error.message : error);
+    process.exitCode = 1;
+  });
+}

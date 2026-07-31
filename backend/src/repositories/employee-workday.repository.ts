@@ -280,6 +280,53 @@ export const employeeWorkdayRepository = {
     return mapEmployeeWorkdayRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Set-based ensure of missing EXPECTED employee_workdays for active assignments
+   * on a canonical ONE_TIME operation_workday. Existing rows are preserved.
+   */
+  async insertMissingForActiveAssignmentsInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      operationWorkdayId: string;
+      workDate: string;
+    },
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, input.operationWorkdayId)
+      .input("workDate", sql.Date, input.workDate)
+      .query(`
+        INSERT INTO employee_workdays (
+          company_id, operation_workday_id, employee_id, operation_assignment_id, expectation_status
+        )
+        OUTPUT INSERTED.id
+        SELECT
+          @companyId,
+          @operationWorkdayId,
+          oa.employee_id,
+          oa.id,
+          N'EXPECTED'
+        FROM operation_assignments oa
+        WHERE oa.company_id = @companyId
+          AND oa.operation_id = @operationId
+          AND oa.cancelled_at IS NULL
+          AND @workDate >= oa.valid_from
+          AND (oa.valid_until IS NULL OR @workDate <= oa.valid_until)
+          AND NOT EXISTS (
+            SELECT 1
+            FROM employee_workdays ew
+            WHERE ew.company_id = @companyId
+              AND ew.operation_workday_id = @operationWorkdayId
+              AND ew.employee_id = oa.employee_id
+          )
+      `);
+
+    return result.recordset.length;
+  },
+
   async findByWorkdayAndEmployeeInTransaction(
     companyId: string,
     transaction: sql.Transaction,

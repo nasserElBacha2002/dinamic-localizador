@@ -4,15 +4,20 @@ import { getPool } from "../database/connection";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
+import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { Operation } from "../types/domain";
 import type { OperationWorkday } from "../types/workday";
-import type { OneTimeScheduleChangeFlags } from "../utils/one-time-schedule-change";
+import type { OneTimeScheduleChangeImpact } from "../utils/one-time-schedule-change";
+import { resolveNextWorkdayScheduleVersion } from "../utils/one-time-schedule-change";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
-import { workdayMaterializationService } from "./workday-materialization.service";
+import {
+  oneTimeScheduleConsistencyInspector,
+  type OneTimeScheduleConsistencyReport,
+} from "./one-time-schedule-consistency.inspector";
 
 export type OneTimeScheduleReconciliationResult = {
   operationWorkdayId: string | null;
@@ -20,6 +25,8 @@ export type OneTimeScheduleReconciliationResult = {
   scheduleVersion: number | null;
   assignmentsUpdated: number;
   confirmationsReset: number;
+  notificationsSuperseded: number;
+  /** @deprecated alias of notificationsSuperseded */
   notificationsInvalidated: number;
   employeeWorkdaysEnsured: number;
   workdayAction: "updated" | "created" | "unchanged" | "none";
@@ -65,27 +72,27 @@ const workdayAlreadyMatches = (
   workday.status === "ACTIVE";
 
 /**
- * Reconciles ONE_TIME derived entities after scheduled_operations was updated
- * inside the caller's transaction. Prefer in-place operation_workday updates so
- * employee_workdays keep their operation_workday_id.
+ * Mutating command: reconciles ONE_TIME derived entities inside the caller's
+ * transaction. Lock order: scheduled_operations (caller) → operation_workdays →
+ * operation_assignments → employee_workdays → notifications → audit (caller).
  *
- * Historical attendance policy: reject timing/work-date changes when the
- * materialised workday already has attendance_records.
+ * Reminder schedule_version bumps only when impact.reminderScheduleChanged.
  */
-export const oneTimeOperationScheduleReconciliationService = {
+export const oneTimeScheduleReconciliationCommand = {
   async reconcileInTransaction(
     companyId: string,
     transaction: sql.Transaction,
     operation: Operation,
-    flags: OneTimeScheduleChangeFlags,
+    impact: OneTimeScheduleChangeImpact,
   ): Promise<OneTimeScheduleReconciliationResult> {
-    if (!flags.scheduleAffecting) {
+    if (!impact.scheduleAffecting) {
       return {
         operationWorkdayId: null,
         workDate: null,
         scheduleVersion: null,
         assignmentsUpdated: 0,
         confirmationsReset: 0,
+        notificationsSuperseded: 0,
         notificationsInvalidated: 0,
         employeeWorkdaysEnsured: 0,
         workdayAction: "none",
@@ -139,7 +146,11 @@ export const oneTimeOperationScheduleReconciliationService = {
         workdayAction = "unchanged";
         scheduleVersion = workday.scheduleVersion;
       } else {
-        const nextVersion = workday.scheduleVersion + 1;
+        const expectedScheduleVersion = workday.scheduleVersion;
+        const nextScheduleVersion = resolveNextWorkdayScheduleVersion(
+          expectedScheduleVersion,
+          impact,
+        );
         const updated = await operationWorkdayRepository.updateWorkDateAndSnapshotInTransaction(
           companyId,
           transaction,
@@ -150,7 +161,8 @@ export const oneTimeOperationScheduleReconciliationService = {
             expectedEndAt: resolved.expectedEndAt,
             earlyToleranceMinutes: resolved.earlyToleranceMinutes,
             lateToleranceMinutes: resolved.lateToleranceMinutes,
-            scheduleVersion: nextVersion,
+            expectedScheduleVersion,
+            nextScheduleVersion,
             scheduleTimezoneSnapshot: timezone,
             status: "ACTIVE",
           },
@@ -190,10 +202,10 @@ export const oneTimeOperationScheduleReconciliationService = {
 
     let assignmentsUpdated = 0;
     let confirmationsReset = 0;
-    let notificationsInvalidated = 0;
+    let notificationsSuperseded = 0;
     let employeeWorkdaysEnsured = 0;
 
-    if (flags.timingChanged || workdayAction === "created" || workdayAction === "updated") {
+    if (impact.timingChanged || workdayAction === "created" || workdayAction === "updated") {
       assignmentsUpdated =
         await operationEmployeeRepository.updateActiveValidityForOperationInTransaction(
           companyId,
@@ -203,15 +215,18 @@ export const oneTimeOperationScheduleReconciliationService = {
         );
     }
 
-    if (flags.timingChanged) {
+    if (impact.confirmationScheduleChanged) {
       confirmationsReset =
         await employeeAssignmentQueryRepository.resetConfirmationsForOperationScheduleChange(
           companyId,
           operation.id,
           transaction,
         );
-      notificationsInvalidated =
-        await attendanceNotificationRepository.failPendingForOperationScheduleChange(
+    }
+
+    if (impact.reminderScheduleChanged) {
+      notificationsSuperseded =
+        await attendanceNotificationRepository.supersedePendingForOperationScheduleChange(
           companyId,
           operation.id,
           transaction,
@@ -219,25 +234,16 @@ export const oneTimeOperationScheduleReconciliationService = {
     }
 
     if (workday) {
-      const assignments = await operationEmployeeRepository.listByOperationInTransaction(
-        companyId,
-        operation.id,
-        transaction,
-      );
-      for (const assignment of assignments) {
-        const ensured =
-          await workdayMaterializationService.ensureEmployeeWorkdayForAssignmentInTransaction(
-            companyId,
-            transaction,
-            operation.id,
-            assignment.employeeId,
-            assignment.id,
-            resolved.workDate,
-          );
-        if (ensured) {
-          employeeWorkdaysEnsured += 1;
-        }
-      }
+      employeeWorkdaysEnsured =
+        await employeeWorkdayRepository.insertMissingForActiveAssignmentsInTransaction(
+          companyId,
+          transaction,
+          {
+            operationId: operation.id,
+            operationWorkdayId: workday.id,
+            workDate: resolved.workDate,
+          },
+        );
     }
 
     console.info("[operation] one-time schedule reconciled", {
@@ -249,10 +255,12 @@ export const oneTimeOperationScheduleReconciliationService = {
       scheduleVersion,
       assignmentsUpdated,
       confirmationsReset,
-      notificationsInvalidated,
+      notificationsSuperseded,
       employeeWorkdaysEnsured,
-      timingChanged: flags.timingChanged,
-      toleranceChanged: flags.toleranceChanged,
+      timingChanged: impact.timingChanged,
+      toleranceChanged: impact.toleranceChanged,
+      reminderScheduleChanged: impact.reminderScheduleChanged,
+      confirmationScheduleChanged: impact.confirmationScheduleChanged,
     });
 
     return {
@@ -261,144 +269,55 @@ export const oneTimeOperationScheduleReconciliationService = {
       scheduleVersion,
       assignmentsUpdated,
       confirmationsReset,
-      notificationsInvalidated,
+      notificationsSuperseded,
+      notificationsInvalidated: notificationsSuperseded,
       employeeWorkdaysEnsured,
       workdayAction,
     };
   },
+};
 
-  /**
-   * Repair path: treat current scheduled_operations as source of truth and
-   * reconcile derived entities. Used by the dry-run/apply CLI (not on app boot).
-   */
+/** @deprecated Prefer oneTimeScheduleReconciliationCommand */
+export const oneTimeOperationScheduleReconciliationService = {
+  reconcileInTransaction:
+    oneTimeScheduleReconciliationCommand.reconcileInTransaction.bind(
+      oneTimeScheduleReconciliationCommand,
+    ),
+
   async repairFromCurrentSchedule(
     companyId: string,
     operationId: string,
     options?: { apply?: boolean },
   ): Promise<{
     dryRun: boolean;
-    status: "consistent" | "repairable" | "blocked" | "missing_operation" | "not_one_time";
-    detail: Record<string, unknown>;
+    status: OneTimeScheduleConsistencyReport["status"];
+    report: OneTimeScheduleConsistencyReport;
     result?: OneTimeScheduleReconciliationResult;
   }> {
-    const operation = await operationRepository.findById(companyId, operationId);
+    return oneTimeScheduleRepairService.repairFromCurrentSchedule(companyId, operationId, options);
+  },
+};
 
-    if (!operation) {
-      return {
-        dryRun: !options?.apply,
-        status: "missing_operation",
-        detail: { companyId, operationId },
-      };
+export const oneTimeScheduleRepairService = {
+  async repairFromCurrentSchedule(
+    companyId: string,
+    operationId: string,
+    options?: { apply?: boolean },
+  ): Promise<{
+    dryRun: boolean;
+    status: OneTimeScheduleConsistencyReport["status"];
+    report: OneTimeScheduleConsistencyReport;
+    result?: OneTimeScheduleReconciliationResult;
+  }> {
+    const report = await oneTimeScheduleConsistencyInspector.inspect(companyId, operationId);
+    const dryRun = !options?.apply;
+
+    if (report.status !== "repairable") {
+      return { dryRun, status: report.status, report };
     }
 
-    if ((operation.operationKind ?? "ONE_TIME") !== "ONE_TIME") {
-      return {
-        dryRun: !options?.apply,
-        status: "not_one_time",
-        detail: { companyId, operationId, operationKind: operation.operationKind },
-      };
-    }
-
-    const settings = await companySettingsRepository.findByCompanyId(companyId);
-    const timezone = resolveOperationTimezone(settings?.operationTimezone);
-    const resolved = operationWorkdayResolver.resolveOneTime(operation, timezone);
-    const workdays = await operationWorkdayRepository.listByOperationId(companyId, operationId);
-
-    if (workdays.length > 1) {
-      return {
-        dryRun: !options?.apply,
-        status: "blocked",
-        detail: {
-          reason: "ONE_TIME_OPERATION_MULTIPLE_WORKDAYS",
-          workdayCount: workdays.length,
-          workdayIds: workdays.map((row) => row.id),
-        },
-      };
-    }
-
-    const workday = workdays[0] ?? null;
-    const assignments = await operationEmployeeRepository.listByOperation(companyId, operationId);
-    const activeAssignments = assignments.filter((row) => !row.cancelledAt);
-    const assignmentDrift = activeAssignments.filter(
-      (row) => row.validFrom !== resolved.workDate || row.validUntil !== resolved.workDate,
-    );
-
-    // Lazy materialization is valid when there are no active assignments yet.
-    const workdayDrift =
-      (workday == null && activeAssignments.length > 0) ||
-      (workday != null &&
-        (workday.workDate !== resolved.workDate ||
-          !sameInstant(workday.expectedStartAt, resolved.expectedStartAt) ||
-          !sameInstant(workday.expectedEndAt, resolved.expectedEndAt) ||
-          workday.earlyToleranceMinutes !== resolved.earlyToleranceMinutes ||
-          workday.lateToleranceMinutes !== resolved.lateToleranceMinutes));
-
-    if (!workdayDrift && assignmentDrift.length === 0) {
-      return {
-        dryRun: !options?.apply,
-        status: "consistent",
-        detail: {
-          companyId,
-          operationId,
-          workDate: resolved.workDate,
-          operationWorkdayId: workday?.id ?? null,
-        },
-      };
-    }
-
-    if (workday) {
-      const hasAttendance = await operationWorkdayRepository.hasAttendanceForWorkday(
-        companyId,
-        workday.id,
-      );
-      const wouldChangeTimingOrDate =
-        workday.workDate !== resolved.workDate ||
-        !sameInstant(workday.expectedStartAt, resolved.expectedStartAt) ||
-        !sameInstant(workday.expectedEndAt, resolved.expectedEndAt);
-      if (hasAttendance && wouldChangeTimingOrDate) {
-        return {
-          dryRun: !options?.apply,
-          status: "blocked",
-          detail: {
-            reason: "OPERATION_SCHEDULE_LOCKED_BY_ATTENDANCE",
-            operationWorkdayId: workday.id,
-            scheduledStart: operation.scheduledStart,
-            workdayExpectedStartAt: workday.expectedStartAt,
-            workDate: workday.workDate,
-            resolvedWorkDate: resolved.workDate,
-            assignmentDriftCount: assignmentDrift.length,
-          },
-        };
-      }
-    }
-
-    const detail = {
-      companyId,
-      operationId,
-      scheduledStart: operation.scheduledStart,
-      scheduledEnd: operation.scheduledEnd,
-      resolvedWorkDate: resolved.workDate,
-      resolvedExpectedStartAt: resolved.expectedStartAt.toISOString(),
-      resolvedExpectedEndAt: resolved.expectedEndAt?.toISOString() ?? null,
-      currentWorkday: workday
-        ? {
-            id: workday.id,
-            workDate: workday.workDate,
-            expectedStartAt: workday.expectedStartAt,
-            expectedEndAt: workday.expectedEndAt,
-            scheduleVersion: workday.scheduleVersion,
-          }
-        : null,
-      assignmentDrift: assignmentDrift.map((row) => ({
-        assignmentId: row.id,
-        employeeId: row.employeeId,
-        validFrom: row.validFrom,
-        validUntil: row.validUntil,
-      })),
-    };
-
-    if (!options?.apply) {
-      return { dryRun: true, status: "repairable", detail };
+    if (dryRun) {
+      return { dryRun: true, status: "repairable", report };
     }
 
     const pool = getPool();
@@ -414,13 +333,21 @@ export const oneTimeOperationScheduleReconciliationService = {
         throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
 
-      const result = await this.reconcileInTransaction(companyId, transaction, locked, {
-        timingChanged: true,
-        toleranceChanged: true,
-        scheduleAffecting: true,
-      });
+      const result = await oneTimeScheduleReconciliationCommand.reconcileInTransaction(
+        companyId,
+        transaction,
+        locked,
+        {
+          timingChanged: true,
+          toleranceChanged: true,
+          workdaySnapshotChanged: true,
+          confirmationScheduleChanged: true,
+          reminderScheduleChanged: true,
+          scheduleAffecting: true,
+        },
+      );
       await transaction.commit();
-      return { dryRun: false, status: "repairable", detail, result };
+      return { dryRun: false, status: "repairable", report, result };
     } catch (error) {
       await transaction.rollback();
       throw error;

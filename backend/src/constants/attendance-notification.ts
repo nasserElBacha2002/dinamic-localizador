@@ -12,6 +12,7 @@ export const ATTENDANCE_NOTIFICATION_STATUSES = [
   "SENT",
   "FAILED",
   "SENT_RECOVERY_REQUIRED",
+  "SUPERSEDED",
 ] as const;
 
 export type AttendanceNotificationStatus = (typeof ATTENDANCE_NOTIFICATION_STATUSES)[number];

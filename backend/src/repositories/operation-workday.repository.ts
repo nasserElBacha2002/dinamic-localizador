@@ -318,7 +318,10 @@ export const operationWorkdayRepository = {
       expectedEndAt: Date | null;
       earlyToleranceMinutes: number;
       lateToleranceMinutes: number;
-      scheduleVersion: number;
+      /** Exact current version for optimistic CAS (with pessimistic op lock). */
+      expectedScheduleVersion: number;
+      /** Next version; equals expected when reminder schedule did not change. */
+      nextScheduleVersion: number;
       scheduleTimezoneSnapshot: string;
       status?: OperationWorkday["status"];
     },
@@ -331,7 +334,8 @@ export const operationWorkdayRepository = {
       .input("expectedEndAt", sql.DateTime2, input.expectedEndAt)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
-      .input("scheduleVersion", sql.Int, input.scheduleVersion)
+      .input("expectedScheduleVersion", sql.Int, input.expectedScheduleVersion)
+      .input("nextScheduleVersion", sql.Int, input.nextScheduleVersion)
       .input("scheduleTimezoneSnapshot", sql.NVarChar(80), input.scheduleTimezoneSnapshot)
       .input("status", sql.NVarChar(20), input.status ?? "ACTIVE")
       .query(`
@@ -341,7 +345,7 @@ export const operationWorkdayRepository = {
             expected_end_at = @expectedEndAt,
             early_tolerance_minutes = @earlyToleranceMinutes,
             late_tolerance_minutes = @lateToleranceMinutes,
-            schedule_version = @scheduleVersion,
+            schedule_version = @nextScheduleVersion,
             schedule_timezone_snapshot = @scheduleTimezoneSnapshot,
             status = @status,
             cancellation_reason = CASE WHEN @status = 'ACTIVE' THEN NULL ELSE cancellation_reason END,
@@ -349,7 +353,7 @@ export const operationWorkdayRepository = {
         OUTPUT INSERTED.*
         WHERE company_id = @companyId
           AND id = @operationWorkdayId
-          AND schedule_version <= @scheduleVersion
+          AND schedule_version = @expectedScheduleVersion
       `);
 
     if (!result.recordset[0]) {

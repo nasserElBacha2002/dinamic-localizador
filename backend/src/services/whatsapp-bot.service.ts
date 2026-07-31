@@ -666,26 +666,40 @@ export const whatsappBotService = {
     );
 
     if (candidates.length === 0) {
-      const diagnosis = await employeeWorkdayAvailabilityService.diagnoseCheckInUnavailability(
-        companyId,
-        input.employeeId,
-        now,
-      );
-      console.info("[whatsapp-bot] no available employee workday", {
-        companyId,
-        employeeId: input.employeeId,
-        at: now.toISOString(),
-        candidateFrom: diagnosis.candidateFrom,
-        candidateTo: diagnosis.candidateTo,
-        rawCandidateCount: diagnosis.rawCandidateCount,
-        eligibleCandidateCount: diagnosis.eligibleCandidateCount,
-        hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
-        reasonCodes: diagnosis.reasonCodes,
-        nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
-        operationIds: diagnosis.operationIds,
-        workdayIds: diagnosis.workdayIds,
-        timezone: diagnosis.timezone,
-      });
+      try {
+        const diagnosis = await employeeWorkdayAvailabilityService.diagnoseCheckInUnavailability(
+          companyId,
+          input.employeeId,
+          now,
+          {
+            hasJustifiedWorkdayInWindow,
+            eligibleCandidateCount: 0,
+          },
+        );
+        console.info("[whatsapp-bot] no available employee workday", {
+          companyId,
+          employeeId: input.employeeId,
+          at: now.toISOString(),
+          candidateFrom: diagnosis.candidateFrom,
+          candidateTo: diagnosis.candidateTo,
+          rawCandidateCount: diagnosis.rawCandidateCount,
+          eligibleCandidateCount: diagnosis.eligibleCandidateCount,
+          hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
+          reasonCodes: diagnosis.reasonCodes,
+          nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
+          assignedOperationCount: diagnosis.assignedOperationCount,
+          operationIds: diagnosis.operationIds,
+          workdayIds: diagnosis.workdayIds,
+          timezone: diagnosis.timezone,
+        });
+      } catch (error) {
+        console.warn("[whatsapp-bot] CHECKIN_UNAVAILABILITY_DIAGNOSIS_FAILED", {
+          companyId,
+          employeeId: input.employeeId,
+          at: now.toISOString(),
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
       return respond(companyId, {
         message: hasJustifiedWorkdayInWindow ? NO_JUSTIFIED_ONLY_MESSAGE : NO_OPERATION_MESSAGE,
         employeeId: input.employeeId,

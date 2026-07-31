@@ -403,6 +403,31 @@ export const operationService = {
             lockedFlags,
           );
 
+        await auditService.log(
+          companyId,
+          {
+            entityType: "operation",
+            entityId: id,
+            action: "update",
+            previousData: locked as unknown as Record<string, unknown>,
+            newData: {
+              ...(updated as unknown as Record<string, unknown>),
+              scheduleReconciliation: {
+                workdayAction: reconcileResult.workdayAction,
+                workDate: reconcileResult.workDate,
+                scheduleVersion: reconcileResult.scheduleVersion,
+                assignmentsUpdated: reconcileResult.assignmentsUpdated,
+                confirmationsReset: reconcileResult.confirmationsReset,
+                notificationsSuperseded: reconcileResult.notificationsSuperseded,
+                employeeWorkdaysEnsured: reconcileResult.employeeWorkdaysEnsured,
+                impact: lockedFlags,
+              },
+            },
+            reason: "Actualización vía API",
+          },
+          transaction,
+        );
+
         await transaction.commit();
       } catch (error) {
         await transaction.rollback();
@@ -413,6 +438,15 @@ export const operationService = {
       if (!updated) {
         throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
+
+      await auditService.log(companyId, {
+        entityType: "operation",
+        entityId: id,
+        action: "update",
+        previousData: current as unknown as Record<string, unknown>,
+        newData: updated as unknown as Record<string, unknown>,
+        reason: "Actualización vía API",
+      });
     }
 
     if (reconcileResult && reconcileResult.confirmationsReset > 0) {
@@ -421,35 +455,12 @@ export const operationService = {
         operationId: id,
         resetAssignments: reconcileResult.confirmationsReset,
         assignmentsUpdated: reconcileResult.assignmentsUpdated,
-        notificationsInvalidated: reconcileResult.notificationsInvalidated,
+        notificationsSuperseded: reconcileResult.notificationsSuperseded,
         workdayAction: reconcileResult.workdayAction,
         workDate: reconcileResult.workDate,
         scheduleVersion: reconcileResult.scheduleVersion,
       });
     }
-
-    await auditService.log(companyId, {
-      entityType: "operation",
-      entityId: id,
-      action: "update",
-      previousData: current as unknown as Record<string, unknown>,
-      newData: {
-        ...(updated as unknown as Record<string, unknown>),
-        ...(reconcileResult
-          ? {
-              scheduleReconciliation: {
-                workdayAction: reconcileResult.workdayAction,
-                workDate: reconcileResult.workDate,
-                scheduleVersion: reconcileResult.scheduleVersion,
-                assignmentsUpdated: reconcileResult.assignmentsUpdated,
-                confirmationsReset: reconcileResult.confirmationsReset,
-                notificationsInvalidated: reconcileResult.notificationsInvalidated,
-              },
-            }
-          : {}),
-      },
-      reason: "Actualización vía API",
-    });
 
     return updated;
   },

@@ -203,13 +203,21 @@ export const employeeWorkdayAvailabilityService = {
   },
 
   /**
-   * Builds structured reason codes when check-in has zero eligible candidates.
-   * Uses a bounded nearby-workday query (not a full table scan).
+   * Best-effort diagnostics for empty check-in. Prefer passing precomputed
+   * availability context to avoid duplicate queries. Never throw to callers
+   * that wrap this in try/catch for bot telemetry.
    */
   async diagnoseCheckInUnavailability(
     companyId: string,
     employeeId: string,
     at: Date,
+    precomputed?: {
+      candidateFrom?: Date;
+      candidateTo?: Date;
+      rawCandidateCount?: number;
+      eligibleCandidateCount?: number;
+      hasJustifiedWorkdayInWindow?: boolean;
+    },
   ): Promise<{
     candidateFrom: string;
     candidateTo: string;
@@ -218,17 +226,21 @@ export const employeeWorkdayAvailabilityService = {
     hasJustifiedWorkdayInWindow: boolean;
     reasonCodes: string[];
     nearbyWorkdayCount: number;
+    assignedOperationCount: number;
     operationIds: string[];
     workdayIds: string[];
     timezone: string;
   }> {
     const range = resolveCheckInCandidateRange(at);
-    const [rawCandidates, hasJustifiedWorkdayInWindow, nearby, settings] = await Promise.all([
-      employeeWorkdayAvailabilityRepository.listCheckInCandidates(companyId, employeeId, {
-        candidateFrom: range.candidateFrom,
-        candidateTo: range.candidateTo,
-      }),
-      employeeWorkdayAvailabilityRepository.hasJustifiedWorkdayInRange(companyId, employeeId, range),
+    const candidateFrom = precomputed?.candidateFrom ?? range.candidateFrom;
+    const candidateTo = precomputed?.candidateTo ?? range.candidateTo;
+
+    const [assigned, nearby, settings] = await Promise.all([
+      employeeWorkdayAvailabilityRepository.listAssignedOneTimeDiagnostics(
+        companyId,
+        employeeId,
+        at,
+      ),
       employeeWorkdayAvailabilityRepository.listNearbyWorkdayDiagnostics(
         companyId,
         employeeId,
@@ -237,24 +249,50 @@ export const employeeWorkdayAvailabilityService = {
       companySettingsRepository.findByCompanyId(companyId),
     ]);
 
-    const eligible = rawCandidates.filter((candidate) =>
-      isWithinCheckInAvailabilityWindow(candidate, at),
-    );
+    let rawCandidateCount = precomputed?.rawCandidateCount;
+    let eligibleCandidateCount = precomputed?.eligibleCandidateCount;
+    let hasJustifiedWorkdayInWindow = precomputed?.hasJustifiedWorkdayInWindow;
+
+    if (rawCandidateCount == null || eligibleCandidateCount == null) {
+      const rawCandidates = await employeeWorkdayAvailabilityRepository.listCheckInCandidates(
+        companyId,
+        employeeId,
+        { candidateFrom, candidateTo },
+      );
+      rawCandidateCount = rawCandidates.length;
+      eligibleCandidateCount = rawCandidates.filter((candidate) =>
+        isWithinCheckInAvailabilityWindow(candidate, at),
+      ).length;
+    }
+
+    if (hasJustifiedWorkdayInWindow == null) {
+      hasJustifiedWorkdayInWindow =
+        await employeeWorkdayAvailabilityRepository.hasJustifiedWorkdayInRange(
+          companyId,
+          employeeId,
+          { candidateFrom, candidateTo },
+        );
+    }
 
     const reasonCodes = new Set<string>();
-    if (nearby.length === 0) {
-      reasonCodes.add("NO_EMPLOYEE_WORKDAY_NEARBY");
+
+    if (assigned.length === 0) {
+      reasonCodes.add("NO_ACTIVE_ASSIGNMENT");
     }
-    for (const row of nearby) {
-      if (!row.scheduleStartMatches) {
-        reasonCodes.add("SCHEDULE_MATERIALIZATION_MISMATCH");
+
+    for (const row of assigned) {
+      if (!row.operationWorkdayId) {
+        reasonCodes.add("ASSIGNED_OPERATION_WITHOUT_WORKDAY");
+      } else if (!row.scheduleMatches) {
+        reasonCodes.add("ASSIGNED_OPERATION_SCHEDULE_DRIFT");
+      }
+      if (row.operationWorkdayId && !row.employeeWorkdayId) {
+        reasonCodes.add("EMPLOYEE_WORKDAY_MISSING");
       }
       if (row.expectationStatus === "JUSTIFIED") {
         reasonCodes.add("EXPECTATION_JUSTIFIED");
-      } else if (row.expectationStatus !== "EXPECTED") {
-        reasonCodes.add("EXPECTATION_NOT_ELIGIBLE");
       }
-      if (row.operationWorkdayStatus !== "ACTIVE") {
+      if (row.operationWorkdayStatus && row.operationWorkdayStatus !== "ACTIVE") {
         reasonCodes.add("OPERATION_WORKDAY_NOT_ACTIVE");
       }
       if (row.operationStatus === "COMPLETED" || row.operationStatus === "CANCELLED") {
@@ -266,6 +304,9 @@ export const employeeWorkdayAvailabilityService = {
       if (row.hasAttendance) {
         reasonCodes.add("PRIOR_ATTENDANCE");
       }
+    }
+
+    for (const row of nearby) {
       if (
         row.scheduleStartMatches &&
         row.expectationStatus === "EXPECTED" &&
@@ -295,15 +336,18 @@ export const employeeWorkdayAvailabilityService = {
     }
 
     return {
-      candidateFrom: range.candidateFrom.toISOString(),
-      candidateTo: range.candidateTo.toISOString(),
-      rawCandidateCount: rawCandidates.length,
-      eligibleCandidateCount: eligible.length,
+      candidateFrom: candidateFrom.toISOString(),
+      candidateTo: candidateTo.toISOString(),
+      rawCandidateCount,
+      eligibleCandidateCount,
       hasJustifiedWorkdayInWindow,
       reasonCodes: [...reasonCodes].sort(),
       nearbyWorkdayCount: nearby.length,
-      operationIds: [...new Set(nearby.map((row) => row.operationId))],
-      workdayIds: nearby.map((row) => row.operationWorkdayId),
+      assignedOperationCount: assigned.length,
+      operationIds: [...new Set(assigned.map((row) => row.operationId))],
+      workdayIds: assigned
+        .map((row) => row.operationWorkdayId)
+        .filter((id): id is string => Boolean(id)),
       timezone: resolveOperationTimezone(settings?.operationTimezone),
     };
   },

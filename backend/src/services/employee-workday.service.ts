@@ -1,9 +1,11 @@
 import { INVALID_SELECTION_MESSAGE } from "./bot/bot-response.builder";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
+import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import type { OperationSelectionOption } from "../types/twilio.types";
 import { getBotNow } from "../utils/bot-runtime-context";
 import { getBotOperationTimezone } from "../utils/bot-runtime-settings-scope";
+import { getDateIsoInTimezone } from "../utils/absence-date";
 import {
   formatAssignmentDateTimeLine,
   formatAssignmentServiceReference,
@@ -16,6 +18,8 @@ import {
   NO_UPCOMING_ASSIGNMENTS_MESSAGE,
   PAST_ASSIGNMENT_MESSAGE,
 } from "../utils/employee-assignment-format";
+import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
+import type { PunctualityStatus } from "../types/domain";
 
 const isFutureAssignment = (assignment: EmployeeAssignedOperation, at: Date): boolean =>
   new Date(assignment.scheduledStart).getTime() > at.getTime();
@@ -31,6 +35,29 @@ const mapToSelectionOptions = (
     scheduledStart: assignment.scheduledStart,
   }));
 
+const mapTodayWorkdayRow = (
+  row: Awaited<
+    ReturnType<typeof employeeWorkdayAvailabilityRepository.listTodayWorkdaysForEmployee>
+  >[number],
+): EmployeeAssignedOperation => ({
+  assignmentId: row.assignmentId,
+  operationId: row.operationId,
+  serviceName: row.serviceName,
+  serviceAddress: row.serviceAddress,
+  serviceLocality: row.serviceLocality,
+  serviceLatitude: row.serviceLatitude,
+  serviceLongitude: row.serviceLongitude,
+  scheduledStart: row.scheduledStart,
+  scheduledEnd: row.scheduledEnd,
+  operationStatus: row.operationStatus,
+  confirmationStatus: row.confirmationStatus as AssignmentConfirmationStatus,
+  attendanceReceivedAt: row.attendanceReceivedAt,
+  attendanceCheckoutAt: row.attendanceCheckoutAt,
+  punctualityStatus: row.punctualityStatus
+    ? (row.punctualityStatus as PunctualityStatus)
+    : null,
+});
+
 export const employeeWorkdayService = {
   async buildTodayWorkdayMessage(
     companyId: string,
@@ -39,12 +66,13 @@ export const employeeWorkdayService = {
   ): Promise<string> {
     const at = getBotNow();
     const timeZone = getBotOperationTimezone();
-    const assignments = await employeeAssignmentQueryRepository.listTodayForEmployee(
+    const workDate = getDateIsoInTimezone(at, timeZone);
+    const workdays = await employeeWorkdayAvailabilityRepository.listTodayWorkdaysForEmployee(
       companyId,
       employeeId,
-      at,
-      timeZone,
+      workDate,
     );
+    const assignments = workdays.map(mapTodayWorkdayRow);
 
     if (assignments.length === 0) {
       return NO_TODAY_ASSIGNMENTS_MESSAGE;

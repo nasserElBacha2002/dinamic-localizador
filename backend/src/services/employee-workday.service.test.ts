@@ -59,12 +59,12 @@ describe("employeeWorkdayService", () => {
 
   it("returns no-assignment message when today has no operations", async () => {
     setupUnitTestEnv();
-    const { employeeAssignmentQueryRepository } = await import(
-      "../repositories/employee-assignment-query.repository"
+    const { employeeWorkdayAvailabilityRepository } = await import(
+      "../repositories/employee-workday-availability.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
-    mock.method(employeeAssignmentQueryRepository, "listTodayForEmployee", async () => []);
+    mock.method(employeeWorkdayAvailabilityRepository, "listTodayWorkdaysForEmployee", async () => []);
 
     const message = await runWithNow("2026-07-08T12:00:00.000Z", () =>
       employeeWorkdayService.buildTodayWorkdayMessage(companyId, employeeId, true),
@@ -75,17 +75,41 @@ describe("employeeWorkdayService", () => {
 
   it("returns numbered today assignments with attendance state", async () => {
     setupUnitTestEnv();
-    const { employeeAssignmentQueryRepository } = await import(
-      "../repositories/employee-assignment-query.repository"
+    const { employeeWorkdayAvailabilityRepository } = await import(
+      "../repositories/employee-workday-availability.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
-    mock.method(employeeAssignmentQueryRepository, "listTodayForEmployee", async () => [
-      assignment(),
-      assignment({
+    const todayRow = {
+      assignmentId: "assignment-1",
+      operationId,
+      serviceName: "Carrefour Palermo",
+      serviceAddress: "Av. Santa Fe 1234",
+      serviceLocality: "Palermo",
+      serviceLatitude: -34.6,
+      serviceLongitude: -58.4,
+      scheduledStart: "2026-07-08T23:30:00.000Z",
+      scheduledEnd: "2026-07-09T06:00:00.000Z",
+      operationStatus: "SCHEDULED",
+      confirmationStatus: "PENDING",
+      attendanceReceivedAt: null,
+      attendanceCheckoutAt: null,
+      punctualityStatus: null,
+      employeeWorkdayId: "ew-1",
+      operationWorkdayId: "ow-1",
+      expectationStatus: "EXPECTED",
+    };
+
+    mock.method(employeeWorkdayAvailabilityRepository, "listTodayWorkdaysForEmployee", async () => [
+      todayRow,
+      {
+        ...todayRow,
+        assignmentId: "assignment-2",
         operationId: "00000000-0000-4000-8000-000000000004",
         serviceName: "Jumbo Caballito",
-      }),
+        employeeWorkdayId: "ew-2",
+        operationWorkdayId: "ow-2",
+      },
     ]);
 
     const message = await runWithNow("2026-07-08T12:00:00.000Z", () =>
@@ -228,8 +252,8 @@ describe("employeeWorkdayService", () => {
 
   it("scopes today workday query to company and employee", async () => {
     setupUnitTestEnv();
-    const { employeeAssignmentQueryRepository } = await import(
-      "../repositories/employee-assignment-query.repository"
+    const { employeeWorkdayAvailabilityRepository } = await import(
+      "../repositories/employee-workday-availability.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
@@ -237,8 +261,8 @@ describe("employeeWorkdayService", () => {
     let queriedEmployeeId: string | null = null;
 
     mock.method(
-      employeeAssignmentQueryRepository,
-      "listTodayForEmployee",
+      employeeWorkdayAvailabilityRepository,
+      "listTodayWorkdaysForEmployee",
       async (resolvedCompanyId: string, resolvedEmployeeId: string) => {
         queriedCompanyId = resolvedCompanyId;
         queriedEmployeeId = resolvedEmployeeId;

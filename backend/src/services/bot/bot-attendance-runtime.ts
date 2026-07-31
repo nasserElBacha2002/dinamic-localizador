@@ -19,6 +19,7 @@ export function buildCheckInValidation(input: {
   serviceAllowedRadiusMeters: number;
   receivedAt: Date;
   scheduledStart: Date;
+  expectedEndAt?: Date | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   runtimeSettings: BotRuntimeSettings;
@@ -48,6 +49,7 @@ export function buildCheckInValidation(input: {
     input.earlyToleranceMinutes,
     input.lateToleranceMinutes,
     input.runtimeSettings.lateGraceMinutes,
+    input.expectedEndAt ?? null,
   );
 
   return {

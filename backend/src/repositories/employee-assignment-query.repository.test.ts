@@ -8,6 +8,11 @@ const repositorySource = readFileSync(
   "utf8",
 );
 
+const availabilityRepositorySource = readFileSync(
+  join(process.cwd(), "src/repositories/employee-workday-availability.repository.ts"),
+  "utf8",
+);
+
 describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
   it("uses a half-open UTC range for scheduled_start", () => {
     assert.match(repositorySource, /getOperationDayUtcBounds\(at, operationTimezone\)/);
@@ -19,7 +24,15 @@ describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
     assert.doesNotMatch(repositorySource, /<= @dayEndUtc/);
   });
 
-  it("keeps bot assignment availability scoped to ONE_TIME operations", () => {
+  it("keeps upcoming/confirm flows scoped to ONE_TIME while today uses workdays", () => {
     assert.match(repositorySource, /i\.operation_kind = N'ONE_TIME'/);
+  });
+});
+
+describe("employeeWorkdayAvailabilityRepository.listTodayWorkdaysForEmployee", () => {
+  it("lists today workdays by work_date for ONE_TIME and RECURRING", () => {
+    assert.match(availabilityRepositorySource, /async listTodayWorkdaysForEmployee/);
+    assert.match(availabilityRepositorySource, /ow\.work_date = @workDate/);
+    assert.match(availabilityRepositorySource, /operation_kind = N'RECURRING'/);
   });
 });

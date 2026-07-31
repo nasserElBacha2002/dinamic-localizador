@@ -19,6 +19,11 @@ const candidate = {
   serviceLocality: null,
   scheduledStart: "2026-06-23T14:00:00.000Z",
   scheduledEnd: "2026-06-23T22:00:00.000Z",
+  scheduleVersion: 1,
+  confirmationReminderHoursBefore: 24,
+  operationKind: "ONE_TIME" as const,
+  employeeWorkdayId: "66666666-6666-6666-6666-666666666666",
+  operationWorkdayId: "77777777-7777-7777-7777-777777777777",
 };
 
 const claimedNotification = {
@@ -53,6 +58,8 @@ describe("attendanceReminderService", () => {
       "../repositories/attendance-notification.repository"
     );
     mock.method(attendanceNotificationRepository, "reconcileSentRecoveryRequired", async () => 0);
+    mock.method(attendanceNotificationRepository, "isArrivalReminderEligible", async () => true);
+    mock.method(attendanceNotificationRepository, "isExitReminderEligible", async () => true);
   });
 
   afterEach(() => {
@@ -339,6 +346,11 @@ describe("attendanceReminderService", () => {
     const sendMock = mock.method(twilioOutboundService, "sendWhatsAppTemplate", async () => ({
       messageSid: "SM_NO_CHECKIN",
     }));
+    const markSupersededMock = mock.method(
+      attendanceNotificationRepository,
+      "markSuperseded",
+      async () => undefined,
+    );
     const markFailedMock = mock.method(
       attendanceNotificationRepository,
       "markFailed",
@@ -351,9 +363,10 @@ describe("attendanceReminderService", () => {
     assert.equal(summary.noCheckInSent, 0);
     assert.equal(summary.noCheckInSkipped, 1);
     assert.equal(sendMock.mock.callCount(), 0);
-    assert.equal(markFailedMock.mock.callCount(), 1);
-    const failedInput = markFailedMock.mock.calls[0]?.arguments[1] as { errorMessage: string };
-    assert.equal(failedInput.errorMessage, NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START);
+    assert.equal(markSupersededMock.mock.callCount(), 1);
+    assert.equal(markFailedMock.mock.callCount(), 0);
+    const supersededInput = markSupersededMock.mock.calls[0]?.arguments[1] as { errorMessage: string };
+    assert.equal(supersededInput.errorMessage, NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START);
   });
 
   it("sends confirmation reminder and creates response session when eligible", async () => {
@@ -444,6 +457,11 @@ describe("attendanceReminderService", () => {
     const sendMock = mock.method(twilioOutboundService, "sendWhatsAppTemplate", async () => ({
       messageSid: "SM_CONFIRMATION",
     }));
+    const markSupersededMock = mock.method(
+      attendanceNotificationRepository,
+      "markSuperseded",
+      async () => undefined,
+    );
     const markFailedMock = mock.method(
       attendanceNotificationRepository,
       "markFailed",
@@ -456,9 +474,10 @@ describe("attendanceReminderService", () => {
     assert.equal(summary.confirmationSent, 0);
     assert.equal(summary.confirmationSkipped, 1);
     assert.equal(sendMock.mock.callCount(), 0);
-    assert.equal(markFailedMock.mock.callCount(), 1);
-    const failedInput = markFailedMock.mock.calls[0]?.arguments[1] as { errorMessage: string };
-    assert.equal(failedInput.errorMessage, NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER);
+    assert.equal(markSupersededMock.mock.callCount(), 1);
+    assert.equal(markFailedMock.mock.callCount(), 0);
+    const supersededInput = markSupersededMock.mock.calls[0]?.arguments[1] as { errorMessage: string };
+    assert.equal(supersededInput.errorMessage, NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER);
   });
 
   it("does not mark confirmation reminder failed when markSent throws after Twilio success", async () => {
@@ -804,5 +823,38 @@ describe("attendanceReminderService", () => {
     assert.equal(summary.arrivalFailed, 1);
     assert.equal(summary.arrivalSent, 1);
     assert.equal(sendMock.mock.callCount(), 1);
+  });
+
+  it("reports ONE_TIME vs RECURRING candidate counts in the run summary", async () => {
+    const { env } = await import("../config/env");
+    configureTwilioEnv(env);
+
+    const { attendanceNotificationRepository } = await import(
+      "../repositories/attendance-notification.repository"
+    );
+    const { attendanceReminderService } = await import("./attendance-reminder.service");
+    const { twilioOutboundService } = await import("./twilio-outbound.service");
+
+    mock.method(attendanceNotificationRepository, "findArrivalReminderCandidates", async () => [
+      candidate,
+      {
+        ...candidate,
+        employeeId: "55555555-5555-5555-5555-555555555555",
+        operationKind: "RECURRING",
+        employeeWorkdayId: "88888888-8888-8888-8888-888888888888",
+      },
+    ]);
+    mock.method(attendanceNotificationRepository, "findExitReminderCandidates", async () => []);
+    mock.method(attendanceNotificationRepository, "findNoCheckInAtStartCandidates", async () => []);
+    mock.method(attendanceNotificationRepository, "findConfirmationReminderCandidates", async () => []);
+    mock.method(attendanceNotificationRepository, "claimNotificationForAttempt", async () => null);
+    mock.method(twilioOutboundService, "sendWhatsAppTemplate", async () => ({
+      messageSid: "SM_UNUSED",
+    }));
+
+    const summary = await attendanceReminderService.runDueReminders(COMPANY_ID);
+
+    assert.equal(summary.arrivalCandidates, 2);
+    assert.deepEqual(summary.arrivalCandidatesByKind, { ONE_TIME: 1, RECURRING: 1, OTHER: 0 });
   });
 });

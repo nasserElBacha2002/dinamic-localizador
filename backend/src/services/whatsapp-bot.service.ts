@@ -686,6 +686,15 @@ export const whatsappBotService = {
           eligibleCandidateCount: diagnosis.eligibleCandidateCount,
           hasJustifiedWorkdayInWindow: diagnosis.hasJustifiedWorkdayInWindow,
           reasonCodes: diagnosis.reasonCodes,
+          candidateRejections: diagnosis.candidateEvaluations
+            .filter((evaluation) => !evaluation.eligible)
+            .map((evaluation) => ({
+              employeeWorkdayId: evaluation.employeeWorkdayId,
+              operationWorkdayId: evaluation.operationWorkdayId,
+              operationId: evaluation.operationId,
+              rejectionReasons: evaluation.rejectionReasons,
+              priorAttendanceId: evaluation.priorAttendanceId,
+            })),
           nearbyWorkdayCount: diagnosis.nearbyWorkdayCount,
           assignedOperationCount: diagnosis.assignedOperationCount,
           operationIds: diagnosis.operationIds,
@@ -924,6 +933,7 @@ export const whatsappBotService = {
       serviceAllowedRadiusMeters: workday.allowedRadiusMeters,
       receivedAt,
       scheduledStart: new Date(workday.expectedStartAt),
+      expectedEndAt: workday.expectedEndAt ? new Date(workday.expectedEndAt) : null,
       earlyToleranceMinutes: workday.earlyToleranceMinutes,
       lateToleranceMinutes: workday.lateToleranceMinutes,
       runtimeSettings,

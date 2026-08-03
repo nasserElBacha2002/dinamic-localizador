@@ -1,5 +1,6 @@
 import { Group, Stack } from "@mantine/core";
 import { useMemo } from "react";
+import { Link } from "react-router";
 import {
   DataTable,
   ErrorState,
@@ -72,6 +73,9 @@ const EXPORT_HEADERS = [
 ];
 
 function formatOperationLabel(row: AttendanceByOperationRow): string {
+  if (row.displayLabel) {
+    return row.displayLabel;
+  }
   if (row.operationKind === "RECURRING") {
     return row.serviceName;
   }
@@ -102,10 +106,11 @@ export function StatisticsOperationTable({
       {
         key: "operationId",
         header: terminology.operation.singular,
+        getValue: (row) => row.displayLabel ?? formatOperationLabel(row),
         render: (row) => (
-          <span style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>
-            {row.operationId.slice(0, 8)}…
-          </span>
+          <Link to={`/operations/${row.operationId}`} style={{ color: "inherit" }}>
+            {row.displayLabel ?? formatOperationLabel(row)}
+          </Link>
         ),
       },
       {

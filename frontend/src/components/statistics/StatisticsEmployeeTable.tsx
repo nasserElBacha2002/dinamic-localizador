@@ -31,6 +31,8 @@ type SortableField =
   | "workedMinutes"
   | "overtimeMinutes"
   | "earlyDepartureWorkdays"
+  | "openAttendanceWorkdays"
+  | "incidentCount"
   | "lastAttendanceDate";
 
 interface StatisticsEmployeeTableProps {
@@ -132,14 +134,32 @@ export function StatisticsEmployeeTable({
       {
         key: "attendanceRate",
         header: "Presentismo",
-        getValue: (row) => formatPercent(row.attendanceRate),
+        getValue: (row) =>
+          row.sampleInsufficient
+            ? `muestra insuficiente (${row.presentWorkdays}/${row.presentWorkdays + row.absentWorkdays})`
+            : `${formatPercent(row.attendanceRate)} (${row.presentWorkdays}/${row.presentWorkdays + row.absentWorkdays})`,
+        align: "right",
+        sortable: true,
+      },
+      {
+        key: "lateWorkdays",
+        header: "Tardanzas",
+        getValue: (row) => row.lateWorkdays,
+        align: "right",
+        sortable: true,
+      },
+      {
+        key: "openAttendanceWorkdays",
+        header: "Sin cierre",
+        getValue: (row) => row.openAttendanceWorkdays ?? 0,
         align: "right",
         sortable: true,
       },
       {
         key: "punctualityRate",
         header: "Puntualidad",
-        getValue: (row) => formatPercent(row.punctualityRate),
+        getValue: (row) =>
+          `${formatPercent(row.punctualityRate)} (${row.onTimeWorkdays}/${row.onTimeWorkdays + row.lateWorkdays})`,
         align: "right",
         sortable: true,
       },
@@ -149,6 +169,11 @@ export function StatisticsEmployeeTable({
         getValue: (row) => formatDurationFromMinutes(row.workedMinutes),
         align: "right",
         sortable: true,
+      },
+      {
+        key: "primaryIncidentLabel",
+        header: "Incidencia principal",
+        getValue: (row) => row.primaryIncidentLabel ?? "—",
       },
       {
         key: "lastAttendanceDate",

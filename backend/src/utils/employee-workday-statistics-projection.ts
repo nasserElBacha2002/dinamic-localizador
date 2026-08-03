@@ -58,9 +58,13 @@ export const EARLY_DEPARTURE_WORKDAY_SQL = `
   END
 `;
 
+/** Open checkout only after the expected end window has passed (not in-progress shifts). */
 export const OPEN_ATTENDANCE_WORKDAY_SQL = `
   CASE
-    WHEN ar.id IS NOT NULL AND ar.checkout_at IS NULL THEN 1
+    WHEN ar.id IS NOT NULL
+     AND ar.checkout_at IS NULL
+     AND @referenceAt > COALESCE(ow.expected_end_at, ow.expected_start_at)
+    THEN 1
     ELSE 0
   END
 `;
@@ -161,6 +165,15 @@ export const buildEmployeeWorkdayStatisticsFilters = (
     sqlFilters.push({
       clause: "ar.punctuality_status = @punctualityStatus",
       apply: (request) => request.input("punctualityStatus", sql.NVarChar, normalized.punctualityStatus),
+    });
+  }
+
+  if (normalized.openAttendance) {
+    sqlFilters.push({
+      clause: `(${OPEN_ATTENDANCE_WORKDAY_SQL}) = 1`,
+      apply: () => {
+        /* uses @referenceAt already bound */
+      },
     });
   }
 

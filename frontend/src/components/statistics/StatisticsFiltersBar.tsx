@@ -30,6 +30,7 @@ interface StatisticsFiltersBarProps {
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
   punctualityStatus: string;
+  incompleteCoverage: boolean;
   activeFilterCount: number;
   onDateRangeChange: (value: DateRangeValue) => void;
   onOperationChange: (value: string[]) => void;
@@ -40,6 +41,7 @@ interface StatisticsFiltersBarProps {
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
   onPunctualityStatusChange: (value: string) => void;
+  onIncompleteCoverageChange: (value: boolean) => void;
   onClearFilters: () => void;
 }
 
@@ -62,6 +64,7 @@ export function StatisticsFiltersBar({
   validationStatus,
   locationStatus,
   punctualityStatus,
+  incompleteCoverage,
   activeFilterCount,
   onDateRangeChange,
   onOperationChange,
@@ -72,6 +75,7 @@ export function StatisticsFiltersBar({
   onValidationStatusChange,
   onLocationStatusChange,
   onPunctualityStatusChange,
+  onIncompleteCoverageChange,
   onClearFilters,
 }: StatisticsFiltersBarProps) {
   const validationOptions = useMemo(
@@ -197,6 +201,17 @@ export function StatisticsFiltersBar({
           value={punctualityStatus}
           onChange={onPunctualityStatusChange}
           data={punctualityOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Cobertura"
+          value={incompleteCoverage ? "true" : ""}
+          onChange={(value) => onIncompleteCoverageChange(value === "true")}
+          data={[
+            { value: "", label: "Todas" },
+            { value: "true", label: "Solo cobertura incompleta consolidada" },
+          ]}
         />
       </FilterBar.Item>
     </FilterBar>

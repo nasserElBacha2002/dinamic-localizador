@@ -10,6 +10,8 @@ export interface PaginationMeta {
   limit: number;
   total: number;
   totalPages: number;
+  truncated?: boolean;
+  exportLimit?: number;
 }
 
 export interface PaginatedResponse<T> {

@@ -127,6 +127,8 @@ export interface AttendanceFilters {
   validationStatus?: ValidationStatus;
   locationStatus?: LocationStatus;
   punctualityStatus?: PunctualityStatus;
+  checkoutStatus?: CheckoutStatus;
+  openAttendance?: boolean;
   dateFrom?: string;
   dateTo?: string;
   includeSimulation?: boolean;

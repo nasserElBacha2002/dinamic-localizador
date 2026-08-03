@@ -79,6 +79,35 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
     });
   }
 
+  if (query.checkoutStatus) {
+    filters.push({
+      clause: "ar.checkout_status = @checkoutStatus",
+      apply: (request) =>
+        request.input("checkoutStatus", sql.NVarChar(40), query.checkoutStatus),
+    });
+  }
+
+  if (query.openAttendance) {
+    // Overdue open check-out only (aligned with statistics is_open_attendance_workday).
+    filters.push({
+      clause: `ar.checkout_at IS NULL
+        AND SYSUTCDATETIME() > COALESCE(
+          (
+            SELECT TOP 1 COALESCE(ow.expected_end_at, ow.expected_start_at)
+            FROM employee_workdays ew
+            INNER JOIN operation_workdays ow
+              ON ow.id = ew.operation_workday_id
+             AND ow.company_id = ew.company_id
+            WHERE ew.id = ar.employee_workday_id
+              AND ew.company_id = ar.company_id
+          ),
+          i.scheduled_end,
+          i.scheduled_start
+        )`,
+      apply: () => undefined,
+    });
+  }
+
   if (query.dateFrom) {
     const dateFrom = query.dateFrom;
     filters.push({

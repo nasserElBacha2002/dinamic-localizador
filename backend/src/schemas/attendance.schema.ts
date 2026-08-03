@@ -43,6 +43,20 @@ export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSc
   validationStatus: validationStatusSchema.optional(),
   locationStatus: locationStatusSchema.optional(),
   punctualityStatus: punctualityStatusSchema.optional(),
+  checkoutStatus: z
+    .enum([
+      "CHECKOUT_VALID",
+      "CHECKOUT_EARLY_WITHIN_TOLERANCE",
+      "CHECKOUT_EARLY_REVIEW",
+      "CHECKOUT_LATE_EXTRA_TIME",
+      "CHECKOUT_LOCATION_REVIEW",
+      "CHECKOUT_REJECTED",
+    ])
+    .optional(),
+  openAttendance: z
+    .enum(["true", "false"])
+    .optional()
+    .transform((value) => value === "true"),
   includeSimulation: z.coerce.boolean().optional(),
   simulationOnly: z.coerce.boolean().optional(),
 }).transform((query) => ({

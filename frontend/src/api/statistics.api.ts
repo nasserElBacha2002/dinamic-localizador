@@ -36,6 +36,17 @@ export async function getAttendanceStatisticsTimeline(
   return data.data;
 }
 
+export async function getAttendanceActionExceptions(
+  filters: StatisticsFilters,
+): Promise<AttendanceStatusDistributionItem[]> {
+  const { data } = await scopedApiClient.get<{ data: AttendanceStatusDistributionItem[] }>(
+    "statistics/attendance/action-exceptions",
+    { params: toParams(filters) },
+  );
+  return data.data;
+}
+
+/** Mutually exclusive workday status distribution (historical contract). */
 export async function getAttendanceStatusDistribution(
   filters: StatisticsFilters,
 ): Promise<AttendanceStatusDistributionItem[]> {

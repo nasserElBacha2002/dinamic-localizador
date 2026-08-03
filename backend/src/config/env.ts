@@ -86,12 +86,12 @@ const envSchema = z
     /**
      * Retention for template variable JSON only (not full message bodies).
      * Renamed semantically; env key kept for compatibility.
+     * Empty string from Compose (`VAR=`) must not coerce to 0.
      */
-    WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS: z.coerce
-      .number()
-      .int()
-      .positive()
-      .optional(),
+    WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS: z.preprocess(
+      (value) => (value === "" || value === undefined || value === null ? undefined : value),
+      z.coerce.number().int().positive().optional(),
+    ),
   })
   .superRefine((data, ctx) => {
     const validateSignature = data.TWILIO_VALIDATE_SIGNATURE ?? data.NODE_ENV === "production";

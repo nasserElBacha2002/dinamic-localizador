@@ -36,6 +36,7 @@ mockApiModule("api/whatsapp-observability.api", {
     data: [],
     meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
   }),
+  getWhatsappConversationProviderEvents: async () => [],
   getWhatsappMessageById: async () => {
     throw new Error("not used");
   },

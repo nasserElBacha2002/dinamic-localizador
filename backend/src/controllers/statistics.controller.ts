@@ -25,6 +25,15 @@ export const statisticsController = {
     res.status(200).json(result);
   },
 
+  async actionExceptions(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await statisticsService.getActionExceptions(
+      companyId,
+      req.validatedQuery as StatisticsFilters,
+    );
+    res.status(200).json(result);
+  },
+
   async byEmployee(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const result = await statisticsService.getByEmployee(companyId, req.validatedQuery as StatisticsTableQuery);

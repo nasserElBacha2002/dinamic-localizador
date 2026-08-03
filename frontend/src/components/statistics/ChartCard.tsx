@@ -20,6 +20,7 @@ interface ChartCardProps {
   dateTo?: string;
   actions?: ReactNode;
   exportsDisabled?: boolean;
+  onChartClick?: (params: { dataIndex?: number; name?: string }) => void;
 }
 
 export function ChartCard({
@@ -37,6 +38,7 @@ export function ChartCard({
   dateTo,
   actions,
   exportsDisabled = false,
+  onChartClick,
 }: ChartCardProps) {
   const exportActions =
     exportHeaders && exportRows && exportBaseName ? (
@@ -71,7 +73,21 @@ export function ChartCard({
           <EmptyState title={emptyMessage} />
         </Box>
       ) : (
-        <ReactECharts option={option} style={{ height, width: "100%" }} notMerge lazyUpdate />
+        <ReactECharts
+          option={option}
+          style={{ height, width: "100%" }}
+          notMerge
+          lazyUpdate
+          onEvents={
+            onChartClick
+              ? {
+                  click: (params: { dataIndex?: number; name?: string }) => {
+                    onChartClick(params);
+                  },
+                }
+              : undefined
+          }
+        />
       )}
     </SectionCard>
   );

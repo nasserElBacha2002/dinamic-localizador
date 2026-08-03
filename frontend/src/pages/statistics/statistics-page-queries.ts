@@ -2,14 +2,15 @@ import type { StatisticsFilters } from "../../types/statistics";
 
 export const CHART_TOP_LIMIT = 10;
 
-export const buildTopEmployeesByAttendanceFilters = (
+export const buildAttentionEmployeesFilters = (
   baseFilters: StatisticsFilters,
 ): StatisticsFilters => ({
   ...baseFilters,
   page: 1,
   limit: CHART_TOP_LIMIT,
-  sortBy: "attendanceRate",
+  sortBy: "incidentCount",
   sortDirection: "desc",
+  rankingMode: "attention_employees",
 });
 
 export const buildTopLateEmployeesFilters = (
@@ -20,26 +21,29 @@ export const buildTopLateEmployeesFilters = (
   limit: CHART_TOP_LIMIT,
   sortBy: "lateWorkdays",
   sortDirection: "desc",
+  rankingMode: "late_employees",
 });
 
-export const buildTopOperationsByAttendanceFilters = (
+export const buildLowCoverageOperationsFilters = (
   baseFilters: StatisticsFilters,
 ): StatisticsFilters => ({
   ...baseFilters,
   page: 1,
   limit: CHART_TOP_LIMIT,
-  sortBy: "attendanceRate",
-  sortDirection: "desc",
+  sortBy: "coverageRate",
+  sortDirection: "asc",
+  rankingMode: "low_coverage_operations",
 });
 
-export const buildTopServicesByAttendanceFilters = (
+export const buildIncidentServicesFilters = (
   baseFilters: StatisticsFilters,
 ): StatisticsFilters => ({
   ...baseFilters,
   page: 1,
   limit: CHART_TOP_LIMIT,
-  sortBy: "attendanceRate",
+  sortBy: "incidentCount",
   sortDirection: "desc",
+  rankingMode: "incident_services",
 });
 
 export const buildEmployeeTableExportFilters = (

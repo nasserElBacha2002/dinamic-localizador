@@ -40,6 +40,7 @@ import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler"
 import { handleWorkdayIntent } from "./workday.handler";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import { isAssignmentSelectionSessionState } from "../../utils/bot-session-states";
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
 
@@ -59,6 +60,8 @@ export const whatsappRouterService = {
         employeeId: null,
         phoneFrom: ctx.phoneTo,
         phoneTo: ctx.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.UNKNOWN_EMPLOYEE,
+        flowType: "EMPLOYEE_RESOLUTION",
       });
     }
 
@@ -71,6 +74,8 @@ export const whatsappRouterService = {
         employeeId: ctx.employeeId,
         phoneFrom: ctx.phoneTo,
         phoneTo: ctx.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+        flowType: "SESSION_RESOLUTION",
       });
     }
 

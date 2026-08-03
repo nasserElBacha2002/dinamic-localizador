@@ -1,3 +1,4 @@
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { employeeWorkdayService } from "../employee-workday.service";
 import { getUpcomingAssignmentsModuleBlockedMessage } from "../whatsapp-module-gate";
 import { logModuleBlocked } from "./module-session-gate";
@@ -17,6 +18,8 @@ export const handleUpcomingAssignmentsIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "UPCOMING_ASSIGNMENTS",
     });
   }
 
@@ -30,5 +33,7 @@ export const handleUpcomingAssignmentsIntent = async (
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,
+    resultCode: WHATSAPP_RESULT_CODES.UPCOMING_ASSIGNMENTS_COMPLETED,
+    flowType: "UPCOMING_ASSIGNMENTS",
   });
 };

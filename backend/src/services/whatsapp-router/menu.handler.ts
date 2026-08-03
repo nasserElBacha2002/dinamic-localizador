@@ -1,3 +1,4 @@
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import {
   buildGreetingMessage,
   buildInvalidMenuSelectionMessage,
@@ -27,6 +28,8 @@ export const handleMenuFallback = async (
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,
+    resultCode: WHATSAPP_RESULT_CODES.MENU_SHOWN,
+    flowType: "MENU",
   });
 };
 
@@ -68,6 +71,8 @@ export const handleNumericMenuSelection = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "MENU",
     });
   }
 

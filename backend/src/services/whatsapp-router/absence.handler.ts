@@ -1,3 +1,4 @@
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { absenceBotService } from "../absence-bot.service";
 import { ACTIVE_ATTENDANCE_FLOW_MESSAGE } from "../bot/bot-response.builder";
 import { isAbsenceSessionState } from "../../utils/bot-session-states";
@@ -13,7 +14,11 @@ export const handleActiveAbsenceSession = async (
   handlers: WhatsAppRouterHandlers,
 ): Promise<string> => {
   const boundRespond = (msg: Parameters<WhatsAppRouterHandlers["respond"]>[1]) =>
-    handlers.respond(ctx.companyId, msg);
+    handlers.respond(ctx.companyId, {
+      ...msg,
+      resultCode: msg.resultCode ?? WHATSAPP_RESULT_CODES.ABSENCE_FLOW,
+      flowType: msg.flowType ?? "ABSENCE",
+    });
 
   return absenceBotService.handleAbsenceSession(ctx.companyId, {
     session,
@@ -41,6 +46,8 @@ export const handleAbsenceIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "ABSENCE",
     });
   }
 
@@ -50,11 +57,17 @@ export const handleAbsenceIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "ABSENCE",
     });
   }
 
   const boundRespond = (msg: Parameters<WhatsAppRouterHandlers["respond"]>[1]) =>
-    handlers.respond(ctx.companyId, msg);
+    handlers.respond(ctx.companyId, {
+      ...msg,
+      resultCode: msg.resultCode ?? WHATSAPP_RESULT_CODES.ABSENCE_FLOW,
+      flowType: msg.flowType ?? "ABSENCE",
+    });
 
   return absenceBotService.startAbsenceFlow(ctx.companyId, {
     employeeId: ctx.employeeId!,

@@ -54,6 +54,8 @@ export const STATISTICS_EMPLOYEE_SORT_FIELDS = [
   "workedMinutes",
   "overtimeMinutes",
   "earlyDepartureWorkdays",
+  "openAttendanceWorkdays",
+  "incidentCount",
   "lastAttendanceDate",
 ] as const;
 
@@ -67,9 +69,11 @@ export const STATISTICS_OPERATION_SORT_FIELDS = [
   "justifiedWorkdays",
   "expectedOpenWorkdays",
   "attendanceRate",
+  "coverageRate",
   "punctualityRate",
   "workedMinutes",
   "overtimeMinutes",
+  "incidentCount",
   "operationalStatus",
 ] as const;
 
@@ -83,9 +87,12 @@ export const STATISTICS_LOCATION_SORT_FIELDS = [
   "justifiedWorkdays",
   "expectedOpenWorkdays",
   "attendanceRate",
+  "coverageRate",
   "punctualityRate",
   "workedMinutes",
   "overtimeMinutes",
+  "incidentCount",
+  "incidentRate",
 ] as const;
 
 export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
@@ -99,6 +106,7 @@ export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
     validationStatus: "",
     locationStatus: "",
     punctualityStatus: "",
+    incompleteCoverage: false,
     ...dateFields,
     empPage: 1,
     empPageSize: 10,
@@ -125,6 +133,7 @@ export const STATISTICS_TABLE_FIELDS = {
   validationStatus: { type: "enum", values: STATISTICS_VALIDATION_STATUS_VALUES },
   locationStatus: { type: "enum", values: STATISTICS_LOCATION_STATUS_VALUES },
   punctualityStatus: { type: "enum", values: STATISTICS_PUNCTUALITY_STATUS_VALUES },
+  incompleteCoverage: { type: "boolean" as const },
   empPage: { type: "number", min: 1, resetPageOnChange: false },
   empPageSize: { type: "number", min: 1, resetPageOnChange: false },
   opPage: { type: "number", min: 1, resetPageOnChange: false },

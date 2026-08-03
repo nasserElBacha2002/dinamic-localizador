@@ -30,13 +30,24 @@ describe("MODULE_ROUTE_ACCESS shared matrix", () => {
     );
     assert.deepEqual(
       [...MODULE_ROUTE_ACCESS.reports.requiredAnyPermission],
-      ["reports:read", "reports:export"],
+      ["reports:read"],
     );
   });
 
   it("accepts alternate valid permissions like attendance:review", () => {
     assert.equal(
       canAccessModuleRoute(modulesFixture(), ["attendance:review"], "attendance"),
+      true,
+    );
+  });
+
+  it("rejects reports:export alone for Estadísticas access", () => {
+    assert.equal(
+      canAccessModuleRoute(modulesFixture(), ["reports:export"], "reports"),
+      false,
+    );
+    assert.equal(
+      canAccessModuleRoute(modulesFixture(), ["reports:read"], "reports"),
       true,
     );
   });

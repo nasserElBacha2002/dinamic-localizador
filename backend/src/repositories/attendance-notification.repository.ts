@@ -793,6 +793,32 @@ export const attendanceNotificationRepository = {
     });
   },
 
+  async linkObservability(
+    companyId: string,
+    input: {
+      notificationId: string;
+      conversationId?: string | null;
+      correlationId?: string | null;
+      outboundMessageId?: string | null;
+    },
+  ): Promise<void> {
+    const pool = getPool();
+    await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
+      .input("conversationId", sql.UniqueIdentifier, input.conversationId ?? null)
+      .input("correlationId", sql.UniqueIdentifier, input.correlationId ?? null)
+      .input("outboundMessageId", sql.UniqueIdentifier, input.outboundMessageId ?? null)
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET conversation_id = COALESCE(@conversationId, conversation_id),
+            correlation_id = COALESCE(@correlationId, correlation_id),
+            outbound_message_id = COALESCE(@outboundMessageId, outbound_message_id)
+        WHERE id = @notificationId AND company_id = @companyId
+      `);
+  },
+
   async markSent(
     companyId: string,
     input: {

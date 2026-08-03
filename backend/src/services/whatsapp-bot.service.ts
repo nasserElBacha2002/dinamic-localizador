@@ -31,7 +31,15 @@ import {
   getRequireCheckoutLocation,
   runWithBotRuntimeSettings,
 } from "../utils/bot-runtime-settings-scope";
+import {
+  getObservabilityFlowResult,
+  getObservabilityTrace,
+  runWithObservabilityTrace,
+  setObservabilityFlowResult,
+} from "../utils/whatsapp-observability-scope";
+import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { companyModuleService } from "./company-module.service";
+import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import {
   buildCheckInValidation,
   buildCheckoutValidation,
@@ -134,7 +142,7 @@ const saveOutboundMessage = async (
     return;
   }
 
-  await whatsappMessageRepository.create({
+  const outbound = await whatsappMessageRepository.create({
     companyId,
     messageSid: null,
     direction: "OUTBOUND",
@@ -148,6 +156,23 @@ const saveOutboundMessage = async (
     status: "SENT",
     rawPayload: null,
   });
+
+  const trace = getObservabilityTrace();
+  if (trace && outbound?.id) {
+    await whatsappFlowTraceService.linkMessageObservability({
+      messageId: outbound.id,
+      conversationId: trace.conversationId,
+      correlationId: trace.correlationId,
+      causationId: trace.executionId,
+      provider: "TWILIO",
+      providerStatus: "sent",
+    });
+    await trace.addStep({
+      stepType: "MESSAGE_BUILD",
+      status: "SUCCESS",
+      output: { outboundMessageId: outbound.id, bodyPreview: input.body.slice(0, 120) },
+    });
+  }
 };
 
 const respond = async (
@@ -157,8 +182,17 @@ const respond = async (
   employeeId: string | null;
   phoneFrom: string;
   phoneTo: string;
+  resultCode?: string;
+  flowType?: string;
 }): Promise<string> => {
   setLastBotResponse(input.message);
+  if (input.resultCode || input.flowType) {
+    setObservabilityFlowResult({
+      resultCode: input.resultCode,
+      flowType: input.flowType,
+      relatedEntities: { employeeId: input.employeeId },
+    });
+  }
 
   await saveOutboundMessage(companyId, {
     employeeId: input.employeeId,
@@ -241,6 +275,7 @@ export const whatsappBotService = {
 
     let webhookEventId: string | null = null;
     let webhookProcessingVersion = 0;
+    let activeTrace: Awaited<ReturnType<typeof whatsappFlowTraceService.startExecution>> = null;
 
     try {
       setLastTwilioPayload(payload as unknown as Record<string, string>);
@@ -305,8 +340,9 @@ export const whatsappBotService = {
       const employeeId = await resolveInboundEmployeeId(companyId, phoneFrom, inbound.employeeId);
       const moduleStates = await companyModuleService.getModuleStates(companyId);
 
+      let inboundMessageId: string | null = null;
       if (!simulationContext) {
-        await whatsappMessageRepository.create({
+        const inboundMessage = await whatsappMessageRepository.create({
           companyId,
           messageSid: payload.MessageSid,
           direction: "INBOUND",
@@ -320,6 +356,7 @@ export const whatsappBotService = {
           status: "RECEIVED",
           rawPayload: payload as unknown as Record<string, string>,
         });
+        inboundMessageId = inboundMessage?.id ?? null;
       } else {
         appendSimulatorMessage({
           id: payload.MessageSid,
@@ -332,63 +369,167 @@ export const whatsappBotService = {
         });
       }
 
-      let response: string;
+      const conversation = !simulationContext
+        ? await whatsappFlowTraceService.resolveOrCreateConversation({
+            phoneNormalized: phoneFrom,
+            companyId,
+            employeeId,
+          })
+        : null;
 
-      if (isLocationMessage(payload)) {
-        response = await this.handleLocationMessage({
-          companyId,
-          payload,
-          phoneFrom,
-          phoneTo: botNumber,
-          employeeId,
-          moduleStates,
+      const trace = !simulationContext
+        ? await whatsappFlowTraceService.startExecution({
+            conversationId: conversation?.id ?? null,
+            sourceMessageId: inboundMessageId,
+            companyId,
+            employeeId,
+            flowType: isLocationMessage(payload) ? "INBOUND_LOCATION" : "INBOUND_TEXT",
+            metadata: {
+              messageSid: payload.MessageSid,
+              resolutionSource: inbound.resolutionSource,
+            },
+          })
+        : null;
+      activeTrace = trace;
+
+      if (trace && inboundMessageId) {
+        await whatsappFlowTraceService.linkMessageObservability({
+          messageId: inboundMessageId,
+          conversationId: conversation?.id ?? null,
+          correlationId: trace.correlationId,
+          provider: "TWILIO",
+          providerMessageSid: payload.MessageSid,
+          providerStatus: "received",
         });
-      } else {
-        response = await this.handleTextMessage({
-          companyId,
-          payload,
-          phoneFrom,
-          phoneTo: botNumber,
-          employeeId,
-          moduleStates,
+        await trace.addStep({
+          stepType: "WEBHOOK_RECEIVED",
+          status: "SUCCESS",
+          output: { messageSid: payload.MessageSid, messageType: getMessageType(payload) },
+        });
+        await trace.addStep({
+          stepType: "COMPANY_RESOLUTION",
+          status: "SUCCESS",
+          output: { companyId, resolutionSource: inbound.resolutionSource },
+        });
+        await trace.addStep({
+          stepType: "EMPLOYEE_RESOLUTION",
+          status: employeeId ? "SUCCESS" : "WARNING",
+          output: { employeeId },
+          reasonCode: employeeId ? null : WHATSAPP_RESULT_CODES.UNKNOWN_EMPLOYEE,
         });
       }
 
-      if (!simulationContext) {
-        await whatsappMessageRepository.updateProcessingStatus(companyId, payload.MessageSid, {
-          processingStatus: "PROCESSED",
-        });
-        if (webhookEventId) {
-          const outboundText = extractMessageFromTwiml(response) || response;
-          await whatsappWebhookEventRepository.markProcessed({
+      const processInbound = async (): Promise<string> => {
+        let response: string;
+
+        if (isLocationMessage(payload)) {
+          response = await this.handleLocationMessage({
             companyId,
-            eventId: webhookEventId,
-            processingVersion: webhookProcessingVersion,
-            responseBody: outboundText,
-            responseType: "TwiML",
-            responseReference: payload.MessageSid,
+            payload,
+            phoneFrom,
+            phoneTo: botNumber,
+            employeeId,
+            moduleStates,
+          });
+        } else {
+          response = await this.handleTextMessage({
+            companyId,
+            payload,
+            phoneFrom,
+            phoneTo: botNumber,
+            employeeId,
+            moduleStates,
           });
         }
-      } else if (response) {
-        const outboundText = extractMessageFromTwiml(response);
-        appendSimulatorMessage({
-          id: `SIM-OUT-${payload.MessageSid}`,
-          direction: "OUTBOUND",
-          messageType: "TEXT",
-          body: outboundText,
-          latitude: null,
-          longitude: null,
-          createdAt: getBotNow().toISOString(),
-        });
-      }
 
-      return response;
+        if (!simulationContext) {
+          await whatsappMessageRepository.updateProcessingStatus(companyId, payload.MessageSid, {
+            processingStatus: "PROCESSED",
+          });
+          if (webhookEventId) {
+            const outboundText = extractMessageFromTwiml(response) || response;
+            await whatsappWebhookEventRepository.markProcessed({
+              companyId,
+              eventId: webhookEventId,
+              processingVersion: webhookProcessingVersion,
+              responseBody: outboundText,
+              responseType: "TwiML",
+              responseReference: payload.MessageSid,
+            });
+          }
+        } else if (response) {
+          const outboundText = extractMessageFromTwiml(response);
+          appendSimulatorMessage({
+            id: `SIM-OUT-${payload.MessageSid}`,
+            direction: "OUTBOUND",
+            messageType: "TEXT",
+            body: outboundText,
+            latitude: null,
+            longitude: null,
+            createdAt: getBotNow().toISOString(),
+          });
+        }
+
+        const runtimeTrace = getObservabilityTrace();
+        if (runtimeTrace) {
+          const intent = getBotRuntimeContext()?.lastDetectedIntent ?? null;
+          if (intent) {
+            await runtimeTrace.addStep({
+              stepType: "INTENT_DETECTION",
+              status: "SUCCESS",
+              output: { intent },
+            });
+          }
+          const flowResult = getObservabilityFlowResult();
+          await runtimeTrace.addStep({
+            stepType: "FLOW_COMPLETED",
+            status: "SUCCESS",
+            output: {
+              resultCode: flowResult?.resultCode ?? WHATSAPP_RESULT_CODES.FLOW_COMPLETED,
+              flowType: flowResult?.flowType ?? null,
+            },
+          });
+          await runtimeTrace.complete({
+            status: "COMPLETED",
+            resultCode: flowResult?.resultCode ?? WHATSAPP_RESULT_CODES.FLOW_COMPLETED,
+            employeeId: flowResult?.relatedEntities?.employeeId ?? employeeId,
+            sessionId: flowResult?.relatedEntities?.sessionId ?? null,
+            attendanceId: flowResult?.relatedEntities?.attendanceId ?? null,
+            operationId: flowResult?.relatedEntities?.operationId ?? null,
+            workdayId: flowResult?.relatedEntities?.workdayId ?? null,
+            sourceMessageId: inboundMessageId,
+          });
+        }
+
+        return response;
+      };
+
+      if (trace) {
+        return runWithObservabilityTrace(trace, processInbound);
+      }
+      return processInbound();
     } catch (error) {
       console.error("[whatsapp-bot] unexpected webhook error", {
         messageSid: payload.MessageSid,
         companyId,
         error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
       });
+
+      const failedTrace = activeTrace ?? getObservabilityTrace();
+      if (failedTrace) {
+        await failedTrace.addStep({
+          stepType: "ERROR",
+          status: "FAILED",
+          errorCode: error instanceof AppError ? error.code : "UNKNOWN_ERROR",
+          errorMessage: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+        });
+        await failedTrace.complete({
+          status: "FAILED",
+          resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+          errorCode: error instanceof AppError ? error.code : "UNKNOWN_ERROR",
+          errorMessage: error instanceof Error ? error.message : "UNKNOWN_ERROR",
+        });
+      }
 
       if (isSimulationActive()) {
         setTechnicalDetail("error", error instanceof Error ? error.message : "UNKNOWN_ERROR");
@@ -481,6 +622,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
+        flowType: "CHECKOUT",
       });
     }
 
@@ -515,6 +658,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.LOCATION_REQUIRED,
+        flowType: "CHECKOUT",
       });
     }
 
@@ -570,6 +715,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+        flowType: "CHECKOUT",
       });
     }
 
@@ -631,6 +778,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+        flowType: "CHECKOUT",
       });
     }
 
@@ -640,6 +789,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+        flowType: "CHECKOUT",
       });
     }
 
@@ -648,6 +799,8 @@ export const whatsappBotService = {
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.LOCATION_REQUIRED,
+      flowType: "CHECKOUT",
     });
   },
 
@@ -701,6 +854,38 @@ export const whatsappBotService = {
           workdayIds: diagnosis.workdayIds,
           timezone: diagnosis.timezone,
         });
+
+        const obsTrace = getObservabilityTrace();
+        if (obsTrace) {
+          await obsTrace.addStep({
+            stepType: "CANDIDATE_LOOKUP",
+            status: "REJECTED",
+            reasonCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
+            output: {
+              reasonCodes: diagnosis.reasonCodes,
+              rawCandidateCount: diagnosis.rawCandidateCount,
+              eligibleCandidateCount: diagnosis.eligibleCandidateCount,
+            },
+          });
+          await obsTrace.addCandidates(
+            diagnosis.candidateEvaluations.map((evaluation) => ({
+              candidateType: "EMPLOYEE_WORKDAY",
+              entityId: evaluation.employeeWorkdayId,
+              companyId,
+              accepted: evaluation.eligible,
+              reasonCode: evaluation.eligible
+                ? null
+                : evaluation.rejectionReasons[0] ?? "REJECTED",
+              reasonDetail: evaluation.rejectionReasons.join(", ") || null,
+              snapshot: {
+                operationWorkdayId: evaluation.operationWorkdayId,
+                operationId: evaluation.operationId,
+                rejectionReasons: evaluation.rejectionReasons,
+                priorAttendanceId: evaluation.priorAttendanceId,
+              },
+            })),
+          );
+        }
       } catch (error) {
         console.warn("[whatsapp-bot] CHECKIN_UNAVAILABILITY_DIAGNOSIS_FAILED", {
           companyId,
@@ -714,6 +899,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
+        flowType: "CHECKIN",
       });
     }
 
@@ -737,6 +924,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.CHECKIN_LOCATION_REQUIRED,
+        flowType: "CHECKIN",
       });
     }
 
@@ -780,6 +969,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+        flowType: "CHECKIN",
       });
     }
 
@@ -825,6 +1016,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+        flowType: "CHECKIN",
       });
     }
 
@@ -834,6 +1027,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+        flowType: "CHECKIN",
       });
     }
 
@@ -842,6 +1037,8 @@ export const whatsappBotService = {
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.CHECKIN_LOCATION_REQUIRED,
+      flowType: "CHECKIN",
     });
   },
 
@@ -1045,6 +1242,11 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode:
+          validation.locationStatus === "OUTSIDE_GEOFENCE"
+            ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
+            : WHATSAPP_RESULT_CODES.CHECKIN_COMPLETED,
+        flowType: "CHECKIN",
       });
     } catch (error) {
       if (error instanceof Error) {
@@ -1082,6 +1284,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+        flowType: "CHECKIN",
       });
     }
   },
@@ -1355,6 +1559,11 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode:
+          validation.checkoutStatus === "CHECKOUT_REJECTED"
+            ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
+            : WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+        flowType: "CHECKOUT",
       });
     } catch (error) {
       await transaction.rollback();
@@ -1377,6 +1586,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+        flowType: "CHECKOUT",
       });
     }
   },
@@ -1542,6 +1753,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+        flowType: "CHECKOUT",
       });
     }
 
@@ -1585,6 +1798,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+        flowType: "CHECKOUT",
       });
     } catch (error) {
       await transaction.rollback();
@@ -1594,6 +1809,8 @@ export const whatsappBotService = {
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+        flowType: "CHECKOUT",
       });
     }
   },

@@ -36,6 +36,21 @@ const exportFlagSchema = z
   .optional()
   .transform((value) => value === "true");
 
+const boolFlagSchema = z
+  .enum(["true", "false"])
+  .optional()
+  .transform((value) => value === "true");
+
+/** Explicit ranking modes apply eligibility in SQL before ORDER BY / pagination. */
+export const STATISTICS_RANKING_MODES = [
+  "attention_employees",
+  "late_employees",
+  "low_coverage_operations",
+  "incident_services",
+] as const;
+
+export type StatisticsRankingMode = (typeof STATISTICS_RANKING_MODES)[number];
+
 const mergeMultiIdFilters = <T extends {
   operationId?: string;
   serviceId?: string;
@@ -68,6 +83,11 @@ const statisticsFiltersObjectSchema = dateRangeSchema.extend({
   validationStatus: validationStatusFilterSchema.optional(),
   locationStatus: locationStatusFilterSchema.optional(),
   punctualityStatus: punctualityStatusFilterSchema.optional(),
+  /** When true, only workdays with open (overdue) check-out. */
+  openAttendance: boolFlagSchema,
+  /** Table/ranking: only consolidated ops with coverage < 100%. */
+  incompleteCoverage: boolFlagSchema,
+  rankingMode: z.enum(STATISTICS_RANKING_MODES).optional(),
   export: exportFlagSchema,
 });
 

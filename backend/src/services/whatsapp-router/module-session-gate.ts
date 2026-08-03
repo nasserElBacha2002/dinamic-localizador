@@ -42,6 +42,8 @@ export const respondIfActiveSessionModuleBlocked = async (
     employeeId,
     phoneFrom: phoneTo,
     phoneTo: phoneFrom,
+    resultCode: "MODULE_DISABLED",
+    flowType: "MODULE_GATING",
   };
   return respond(companyId, input);
 };

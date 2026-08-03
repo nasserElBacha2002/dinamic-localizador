@@ -17,6 +17,10 @@ import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/r
 import { countCandidatesByOperationKind } from "../utils/workday-reminder-eligibility";
 import { botSessionService } from "./bot-session.service";
 import { twilioOutboundService } from "./twilio-outbound.service";
+import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
+import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
+import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
+import { normalizePhoneNumber } from "../utils/phone";
 import type { BotSession } from "../types/twilio.types";
 
 export type ReminderSendOutcome =
@@ -352,8 +356,50 @@ const sendReminderForCandidate = async (
     }
   }
 
+  let activeReminderTrace: Awaited<ReturnType<typeof whatsappFlowTraceService.startExecution>> =
+    null;
+
   try {
     const contentVariables = buildTemplateVariables(candidate, notificationType);
+
+    let phoneNormalized = candidate.employeePhoneNumber;
+    try {
+      phoneNormalized = normalizePhoneNumber(
+        candidate.employeePhoneNumber.replace(/^whatsapp:/i, ""),
+      );
+    } catch {
+      // keep raw phone for send path; observability uses best-effort normalization
+    }
+
+    const conversation = await whatsappFlowTraceService.resolveOrCreateConversation({
+      phoneNormalized,
+      companyId,
+      employeeId: candidate.employeeId,
+    });
+
+    const trace = await whatsappFlowTraceService.startExecution({
+      conversationId: conversation?.id ?? null,
+      notificationId: claimed.id,
+      companyId,
+      employeeId: candidate.employeeId,
+      operationId: candidate.operationId,
+      flowType: `REMINDER_${notificationType}`,
+      metadata: {
+        notificationType,
+        scheduleVersion,
+        contentSid,
+      },
+    });
+    activeReminderTrace = trace;
+
+    if (trace) {
+      await trace.addStep({
+        stepType: "TEMPLATE_RESOLUTION",
+        status: "SUCCESS",
+        output: { contentSid, notificationType },
+      });
+    }
+
     const result = await twilioOutboundService.sendWhatsAppTemplate({
       toPhoneNumber: candidate.employeePhoneNumber,
       contentSid,
@@ -361,6 +407,66 @@ const sendReminderForCandidate = async (
     });
 
     const sentAt = new Date();
+
+    let outboundMessageId: string | null = null;
+    try {
+      const outbound = await whatsappMessageRepository.create({
+        companyId,
+        messageSid: result.messageSid,
+        direction: "OUTBOUND",
+        employeeId: candidate.employeeId,
+        phoneFrom: env.TWILIO_WHATSAPP_NUMBER ?? "whatsapp:+00000000000",
+        phoneTo: candidate.employeePhoneNumber,
+        messageType: "TEXT",
+        body: `[TEMPLATE:${notificationType}]`,
+        latitude: null,
+        longitude: null,
+        status: "SENT",
+        rawPayload: null,
+      });
+      outboundMessageId = outbound.id;
+      if (trace) {
+        await whatsappFlowTraceService.linkMessageObservability({
+          messageId: outbound.id,
+          conversationId: conversation?.id ?? null,
+          correlationId: trace.correlationId,
+          causationId: trace.executionId,
+          provider: "TWILIO",
+          providerMessageSid: result.messageSid,
+          templateSid: contentSid,
+          templateName: notificationType,
+          templateVariables: contentVariables,
+          providerStatus: "sent",
+          notificationId: claimed.id,
+        });
+        await trace.addStep({
+          stepType: "TWILIO_SEND",
+          status: "SUCCESS",
+          output: { messageSid: result.messageSid },
+        });
+        await trace.complete({
+          status: "COMPLETED",
+          resultCode: WHATSAPP_RESULT_CODES.REMINDER_SENT,
+        });
+      }
+      await attendanceNotificationRepository.linkObservability(companyId, {
+        notificationId: claimed.id,
+        conversationId: conversation?.id ?? null,
+        correlationId: trace?.correlationId ?? null,
+        outboundMessageId,
+      });
+    } catch (obsError) {
+      console.warn("[attendance-reminder] observability link failed (non-blocking)", {
+        notificationId: claimed.id,
+        error: obsError instanceof Error ? obsError.message : String(obsError),
+      });
+      if (trace) {
+        await trace.complete({
+          status: "PARTIALLY_RECORDED",
+          resultCode: WHATSAPP_RESULT_CODES.REMINDER_SENT,
+        });
+      }
+    }
 
     try {
       await attendanceNotificationRepository.markSent(companyId, {
@@ -474,6 +580,19 @@ const sendReminderForCandidate = async (
       notificationId: claimed.id,
       errorMessage,
     });
+
+    if (activeReminderTrace) {
+      await activeReminderTrace.addStep({
+        stepType: "TWILIO_SEND",
+        status: "FAILED",
+        errorMessage,
+      });
+      await activeReminderTrace.complete({
+        status: "FAILED",
+        resultCode: WHATSAPP_RESULT_CODES.REMINDER_FAILED,
+        errorMessage,
+      });
+    }
 
     console.error("[attendance-reminder] reminder failed", {
       notificationType,

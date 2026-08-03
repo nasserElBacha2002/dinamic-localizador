@@ -2,6 +2,7 @@ import { terminology } from "../domain/terminology";
 import type { CompanyModule, CompanyModuleKey } from "../types/company-module";
 import type { CompanyPermission } from "../types/permissions";
 import { hasAnyPermission } from "./permissions";
+import { isWhatsappObservabilityUiEnabled } from "./whatsapp-observability-config";
 
 export const CORE_COMPANY_MODULE_KEYS: CompanyModuleKey[] = [
   "attendance",
@@ -97,10 +98,8 @@ export const MODULE_ROUTE_ACCESS = {
   },
   reports: {
     moduleKey: "reports" as const,
-    requiredAnyPermission: [
-      "reports:read",
-      "reports:export",
-    ] as const satisfies readonly CompanyPermission[],
+    /** Reading Estadísticas requires reports:read. Export alone must not grant access. */
+    requiredAnyPermission: ["reports:read"] as const satisfies readonly CompanyPermission[],
   },
 } as const;
 
@@ -205,6 +204,13 @@ export function getAdminNavItems({
 
   if (isPlatformAdmin) {
     items.push({ label: "Empresas de plataforma", path: "/platform/companies", section: "settings" });
+    if (isWhatsappObservabilityUiEnabled()) {
+      items.push({
+        label: "Observabilidad WhatsApp",
+        path: "/platform/observability/whatsapp",
+        section: "settings",
+      });
+    }
   }
 
   return items;

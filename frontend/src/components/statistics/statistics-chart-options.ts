@@ -10,6 +10,7 @@ const CHART_COLORS = {
   pendingReview: "#455a64",
   rejected: "#5d4037",
   primary: "#1565c0",
+  volume: "#90a4ae",
 };
 
 const baseToolbox = {
@@ -33,24 +34,33 @@ const lineToolbox = {
 export function buildTimelineChartOption(
   dates: string[],
   series: {
-    present: number[];
-    absent: number[];
-    justified: number[];
-    expected: number[];
+    attendanceRate: number[];
+    punctualityRate: number[];
+    scheduled: number[];
+    isPartial?: boolean[];
   },
 ): EChartsOption {
   const enableDataZoom = dates.length > 14;
+  const labels = dates.map((date, index) =>
+    series.isPartial?.[index] ? `${date} (parcial)` : date,
+  );
 
   return {
-    color: [
-      CHART_COLORS.present,
-      CHART_COLORS.absent,
-      CHART_COLORS.justified,
-      CHART_COLORS.expected,
-    ],
-    tooltip: { trigger: "axis" },
+    color: [CHART_COLORS.present, CHART_COLORS.late, CHART_COLORS.volume],
+    tooltip: {
+      trigger: "axis",
+      formatter: (params: unknown) => {
+        const items = Array.isArray(params) ? params : [params];
+        return (items as Array<{ seriesName: string; value: number; axisValue: string; marker: string }>)
+          .map((item) => {
+            const suffix = item.seriesName === "Jornadas" ? "" : "%";
+            return `${item.marker} ${item.seriesName}: ${item.value}${suffix}`;
+          })
+          .join("<br/>");
+      },
+    },
     legend: { top: 0 },
-    grid: { left: 48, right: 24, top: 48, bottom: enableDataZoom ? 72 : 32 },
+    grid: { left: 48, right: 48, top: 48, bottom: enableDataZoom ? 72 : 32 },
     toolbox: lineToolbox,
     dataZoom: enableDataZoom
       ? [
@@ -58,41 +68,77 @@ export function buildTimelineChartOption(
           { type: "slider", start: 0, end: 100, bottom: 8 },
         ]
       : undefined,
-    xAxis: { type: "category", data: dates, boundaryGap: false },
-    yAxis: { type: "value", minInterval: 1 },
+    xAxis: { type: "category", data: labels, boundaryGap: false },
+    yAxis: [
+      { type: "value", name: "%", min: 0, max: 100, minInterval: 1 },
+      { type: "value", name: "Vol.", minInterval: 1, splitLine: { show: false } },
+    ],
     series: [
-      { name: "Presentes", type: "line", smooth: true, data: series.present },
-      { name: "Ausentes", type: "line", smooth: true, data: series.absent },
-      { name: "Justificadas", type: "line", smooth: true, data: series.justified },
-      { name: "Pendientes", type: "line", smooth: true, data: series.expected },
+      {
+        name: "Presentismo",
+        type: "line",
+        smooth: true,
+        data: series.attendanceRate,
+        yAxisIndex: 0,
+      },
+      {
+        name: "Puntualidad",
+        type: "line",
+        smooth: true,
+        data: series.punctualityRate,
+        yAxisIndex: 0,
+      },
+      {
+        name: "Jornadas",
+        type: "bar",
+        data: series.scheduled,
+        yAxisIndex: 1,
+        barMaxWidth: 18,
+        itemStyle: { opacity: 0.35 },
+      },
     ],
   };
 }
 
-export function buildStatusDistributionOption(
-  items: Array<{ label: string; count: number }>,
+/** Non-exclusive exception counts — horizontal bars, never a pie/donut. */
+export function buildActionExceptionsOption(
+  items: Array<{ label: string; count: number; rate?: number | null }>,
 ): EChartsOption {
   return {
-    color: [
-      CHART_COLORS.present,
-      CHART_COLORS.absent,
-      CHART_COLORS.justified,
-      CHART_COLORS.expected,
-      CHART_COLORS.late,
-    ],
-    tooltip: { trigger: "item", formatter: "{b}: {c} ({d}%)" },
-    legend: { orient: "vertical", left: "left", top: "middle" },
+    color: [CHART_COLORS.late],
+    tooltip: {
+      trigger: "axis",
+      axisPointer: { type: "shadow" },
+      formatter: (params: unknown) => {
+        const itemsArr = Array.isArray(params) ? params : [params];
+        const first = itemsArr[0] as { name: string; value: number; dataIndex: number };
+        const rate = items[first.dataIndex]?.rate;
+        const rateText = rate == null ? "sin %" : `${rate}%`;
+        return `${first.name}: ${first.value} (${rateText})`;
+      },
+    },
+    grid: { left: 140, right: 40, top: 16, bottom: 24 },
     toolbox: baseToolbox,
+    xAxis: { type: "value", minInterval: 1 },
+    yAxis: {
+      type: "category",
+      data: items.map((item) => item.label),
+      inverse: true,
+      axisLabel: { width: 130, overflow: "truncate" },
+    },
     series: [
       {
-        name: "Estado",
-        type: "pie",
-        radius: ["42%", "68%"],
-        center: ["58%", "50%"],
-        avoidLabelOverlap: true,
-        itemStyle: { borderRadius: 6, borderColor: "#fff", borderWidth: 2 },
-        label: { formatter: "{b}\n{d}%" },
-        data: items.map((item) => ({ name: item.label, value: item.count })),
+        type: "bar",
+        data: items.map((item) => item.count),
+        label: {
+          show: true,
+          position: "right",
+          formatter: (params: unknown) => {
+            const p = params as { dataIndex: number; value: number };
+            const rate = items[p.dataIndex]?.rate;
+            return rate == null ? `${p.value}` : `${p.value} (${rate}%)`;
+          },
+        },
       },
     ],
   };
@@ -116,14 +162,18 @@ export function buildHorizontalBarOption(
         return `${first.name}: ${first.value}${valueSuffix}`;
       },
     },
-    grid: { left: 120, right: 32, top: title ? 40 : 16, bottom: 24 },
+    grid: { left: 140, right: 40, top: title ? 40 : 16, bottom: 24 },
     toolbox: baseToolbox,
-    xAxis: { type: "value", max: valueSuffix === "%" ? 100 : undefined },
+    xAxis: {
+      type: "value",
+      max: valueSuffix === "%" ? 100 : undefined,
+      minInterval: valueSuffix === "" ? 1 : undefined,
+    },
     yAxis: {
       type: "category",
       data: categories,
       inverse: true,
-      axisLabel: { width: 110, overflow: "truncate" },
+      axisLabel: { width: 130, overflow: "truncate" },
     },
     series: [
       {
@@ -150,7 +200,7 @@ export function buildVerticalBarOption(
     xAxis: {
       type: "category",
       data: categories,
-      axisLabel: { rotate: categories.length > 6 ? 35 : 0, overflow: "truncate", width: 80 },
+      axisLabel: { rotate: categories.some((c) => c.length > 12) ? 30 : 0, width: 90, overflow: "truncate" },
     },
     yAxis: { type: "value", minInterval: 1 },
     series: [

@@ -13,17 +13,21 @@ import {
 import { logModuleBlocked } from "./module-session-gate";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../types/twilio.types";
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 
 const respond = (
   ctx: WhatsAppRouterContext,
   handlers: WhatsAppRouterHandlers,
   message: string,
+  resultCode: string = WHATSAPP_RESULT_CODES.CONFIRMATION_FLOW,
 ): Promise<string> =>
   handlers.respond(ctx.companyId, {
     message,
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,
+    resultCode,
+    flowType: "CONFIRMATION",
   });
 
 const completeSelectionSession = async (
@@ -46,7 +50,7 @@ export const handleActiveAssignmentSelectionSession = async (
   const options = resolveOperationOptionsFromSessionContext(botSessionService.parseContext(session.contextJson)) ?? [];
 
   if (!isValidOperationSelection(selection, options.length)) {
-    return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
+    return respond(ctx, handlers, INVALID_SELECTION_MESSAGE, WHATSAPP_RESULT_CODES.INVALID_SELECTION);
   }
 
   const selected = options[selection - 1];
@@ -91,7 +95,7 @@ const handleAssignmentSelectionFlow = async (
   const explicitSelection = parseOptionalAssignmentSelection(ctx.body);
   if (explicitSelection !== null) {
     if (!isValidOperationSelection(explicitSelection, assignments.length)) {
-      return respond(ctx, handlers, INVALID_SELECTION_MESSAGE);
+      return respond(ctx, handlers, INVALID_SELECTION_MESSAGE, WHATSAPP_RESULT_CODES.INVALID_SELECTION);
     }
 
     const selected = assignments[explicitSelection - 1];
@@ -124,7 +128,7 @@ export const handleConfirmAttendanceIntent = async (
   const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
     logModuleBlocked(ctx.companyId, "operations");
-    return respond(ctx, handlers, blockedMessage);
+    return respond(ctx, handlers, blockedMessage, WHATSAPP_RESULT_CODES.MODULE_DISABLED);
   }
 
   const assignments = await employeeWorkdayService.listConfirmableAssignments(
@@ -157,7 +161,7 @@ export const handleUnavailabilityIntent = async (
   const blockedMessage = getAssignmentConfirmationModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
     logModuleBlocked(ctx.companyId, "operations");
-    return respond(ctx, handlers, blockedMessage);
+    return respond(ctx, handlers, blockedMessage, WHATSAPP_RESULT_CODES.MODULE_DISABLED);
   }
 
   const assignments = await employeeWorkdayService.listUnavailabilityAssignments(

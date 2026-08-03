@@ -45,12 +45,24 @@ export const twilioOutboundService = {
     }
 
     const client = getTwilioClient();
-    const message = await client.messages.create({
+    const createParams: {
+      from: string;
+      to: string;
+      contentSid: string;
+      contentVariables: string;
+      statusCallback?: string;
+    } = {
       from: formatWhatsAppAddress(env.TWILIO_WHATSAPP_NUMBER),
       to: formatWhatsAppAddress(input.toPhoneNumber),
       contentSid: input.contentSid,
       contentVariables: JSON.stringify(input.contentVariables),
-    });
+    };
+
+    if (env.WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED && env.TWILIO_STATUS_CALLBACK_URL) {
+      createParams.statusCallback = env.TWILIO_STATUS_CALLBACK_URL;
+    }
+
+    const message = await client.messages.create(createParams);
 
     return {
       messageSid: message.sid,

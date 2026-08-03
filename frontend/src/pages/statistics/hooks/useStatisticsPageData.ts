@@ -3,7 +3,6 @@ import {
   useStatisticsByEmployee,
   useStatisticsByOperation,
   useStatisticsByService,
-  useStatisticsStatusDistribution,
   useStatisticsSummary,
   useStatisticsTimeline,
 } from "../../../hooks/useStatistics";
@@ -48,19 +47,20 @@ import {
 } from "../../../utils/labels";
 import { employeeWorkdayEffectiveStateLabels } from "../../../utils/statistics-display-labels";
 import {
-  buildStatusDistributionOption,
+  buildActionExceptionsOption,
   buildTimelineChartOption,
 } from "../../../components/statistics/statistics-chart-options";
 import {
+  buildAttentionEmployeesFilters,
   buildEmployeeTableExportFilters,
+  buildIncidentServicesFilters,
+  buildLowCoverageOperationsFilters,
   buildOperationTableExportFilters,
   buildServiceTableExportFilters,
-  buildTopEmployeesByAttendanceFilters,
   buildTopLateEmployeesFilters,
-  buildTopOperationsByAttendanceFilters,
-  buildTopServicesByAttendanceFilters,
   buildWorkdayDetailExportFilters,
 } from "../statistics-page-queries";
+import type { StatisticsDeepLinkContext } from "../../../utils/statistics-deep-links";
 
 export type { StatisticsTabKey } from "../statistics-table-state";
 
@@ -177,11 +177,13 @@ export function useStatisticsPageData() {
       validationStatus: (table.state.validationStatus as StatisticsValidationStatus) || undefined,
       locationStatus: table.state.locationStatus || undefined,
       punctualityStatus: table.state.punctualityStatus || undefined,
+      incompleteCoverage: table.state.incompleteCoverage || undefined,
     }),
     [
       isoDateFrom,
       isoDateTo,
       table.state.employeeIds,
+      table.state.incompleteCoverage,
       table.state.operationIds,
       table.state.operationKind,
       table.state.effectiveState,
@@ -225,79 +227,139 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.svcPage, table.state.svcPageSize, table.state.svcSortBy, table.state.svcSortOrder],
   );
 
-  const topEmployeeChartFilters = useMemo(
-    () => buildTopEmployeesByAttendanceFilters(baseFilters),
+  const activeTab = table.state.tab;
+  const isGeneralTab = activeTab === "general";
+  const isEmployeeTab = activeTab === "employee";
+  const isOperationTab = activeTab === "operation";
+  const isLocationTab = activeTab === "location";
+
+  const attentionEmployeesFilters = useMemo(
+    () => buildAttentionEmployeesFilters(baseFilters),
     [baseFilters],
   );
   const topLateEmployeeChartFilters = useMemo(
     () => buildTopLateEmployeesFilters(baseFilters),
     [baseFilters],
   );
-  const topOperationChartFilters = useMemo(
-    () => buildTopOperationsByAttendanceFilters(baseFilters),
+  const lowCoverageOperationsFilters = useMemo(
+    () => buildLowCoverageOperationsFilters(baseFilters),
     [baseFilters],
   );
-  const topServiceChartFilters = useMemo(
-    () => buildTopServicesByAttendanceFilters(baseFilters),
+  const incidentServicesFilters = useMemo(
+    () => buildIncidentServicesFilters(baseFilters),
     [baseFilters],
   );
 
-  const summaryQuery = useStatisticsSummary(baseFilters);
-  const timelineQuery = useStatisticsTimeline(baseFilters);
-  const distributionQuery = useStatisticsStatusDistribution(baseFilters);
-  const employeeQuery = useStatisticsByEmployee(employeeFilters);
-  const operationQuery = useStatisticsByOperation(operationFilters);
-  const serviceQuery = useStatisticsByService(serviceFilters);
-  const topEmployeesByAttendanceQuery = useStatisticsByEmployee(topEmployeeChartFilters);
-  const topLateEmployeesQuery = useStatisticsByEmployee(topLateEmployeeChartFilters);
-  const topOperationsByAttendanceQuery = useStatisticsByOperation(topOperationChartFilters);
-  const topServicesByAttendanceQuery = useStatisticsByService(topServiceChartFilters);
+  const summaryQuery = useStatisticsSummary(baseFilters, { enabled: isGeneralTab });
+  const timelineQuery = useStatisticsTimeline(baseFilters, { enabled: isGeneralTab });
+  const employeeQuery = useStatisticsByEmployee(employeeFilters, { enabled: isEmployeeTab });
+  const operationQuery = useStatisticsByOperation(operationFilters, { enabled: isOperationTab });
+  const serviceQuery = useStatisticsByService(serviceFilters, { enabled: isLocationTab });
+  const attentionEmployeesQuery = useStatisticsByEmployee(attentionEmployeesFilters, {
+    enabled: isGeneralTab,
+  });
+  const topLateEmployeesQuery = useStatisticsByEmployee(topLateEmployeeChartFilters, {
+    enabled: isGeneralTab,
+  });
+  const lowCoverageOperationsQuery = useStatisticsByOperation(lowCoverageOperationsFilters, {
+    enabled: isGeneralTab,
+  });
+  const incidentServicesQuery = useStatisticsByService(incidentServicesFilters, {
+    enabled: isGeneralTab,
+  });
 
-  const topEmployeesByAttendance = topEmployeesByAttendanceQuery.data?.data ?? [];
-  const topLateEmployees = (topLateEmployeesQuery.data?.data ?? []).filter((row) => row.lateWorkdays > 0);
-  const topOperationsByAttendance = topOperationsByAttendanceQuery.data?.data ?? [];
-  const topServicesByAttendance = topServicesByAttendanceQuery.data?.data ?? [];
+  const attentionEmployees = attentionEmployeesQuery.data?.data ?? [];
+  const topLateEmployees = topLateEmployeesQuery.data?.data ?? [];
+  const lowCoverageOperations = lowCoverageOperationsQuery.data?.data ?? [];
+  const incidentServices = incidentServicesQuery.data?.data ?? [];
 
   const timeline = timelineQuery.data ?? [];
   const timelineOption = buildTimelineChartOption(
     timeline.map((point) => point.date),
     {
-      present: timeline.map((point) => point.present),
-      absent: timeline.map((point) => point.absent),
-      justified: timeline.map((point) => point.justified),
-      expected: timeline.map((point) => point.expected),
+      attendanceRate: timeline.map((point) => point.attendanceRate ?? 0),
+      punctualityRate: timeline.map((point) => point.punctualityRate ?? 0),
+      scheduled: timeline.map((point) => point.scheduled),
+      isPartial: timeline.map((point) => Boolean(point.isPartial)),
     },
   );
 
   const timelineExportRows = timeline.map((point) => [
     point.date,
+    point.attendanceRate ?? "",
+    point.punctualityRate ?? "",
+    point.scheduled,
     point.present,
     point.absent,
-    point.justified,
-    point.expected,
-    point.scheduled,
     point.onTime,
     point.late,
+    point.isPartial ? "parcial" : "consolidado",
   ]);
 
-  const distribution = distributionQuery.data ?? [];
-  const distributionOption = buildStatusDistributionOption(distribution);
-
   const summary = summaryQuery.data;
+  const actionExceptions = summary?.actionExceptions ?? [];
+  const actionExceptionsOption = buildActionExceptionsOption(actionExceptions);
+  const linkContext = useMemo<StatisticsDeepLinkContext>(
+    () => ({
+      dateFrom: isoDateFrom,
+      dateTo: isoDateTo,
+      operationIds: table.state.operationIds,
+      serviceIds: table.state.serviceIds,
+      employeeIds: table.state.employeeIds,
+    }),
+    [
+      isoDateFrom,
+      isoDateTo,
+      table.state.employeeIds,
+      table.state.operationIds,
+      table.state.serviceIds,
+    ],
+  );
+
+  const generatedAt = useMemo(() => new Date().toISOString(), [summary?.scheduledWorkdays, isoDateFrom, isoDateTo]);
+
   const summaryExportRows = summary
     ? [
+        ["Rango desde", isoDateFrom ?? ""],
+        ["Rango hasta", isoDateTo ?? ""],
+        ["Generado en (UTC)", generatedAt],
+        ["Zona horaria de la empresa", summary.companyTimeZone ?? ""],
+        ["Fecha local de referencia", summary.companyLocalDate ?? ""],
         ["Jornadas programadas", summary.scheduledWorkdays],
+        ["Jornadas requeridas", summary.attendanceRequiredWorkdays],
         ["Presentes", summary.presentWorkdays],
-        ["Ausentes", summary.absentWorkdays],
+        ["Ausencias no justificadas", summary.absentWorkdays],
         ["Justificadas", summary.justifiedWorkdays],
         ["Pendientes / esperadas", summary.expectedOpenWorkdays],
-        ["Presentismo", formatPercent(summary.attendanceRate)],
-        ["Ausentismo", formatPercent(summary.absenceRate)],
-        ["Puntualidad", formatPercent(summary.punctualityRate)],
-        ["Horas trabajadas", formatDurationFromMinutes(summary.workedMinutes)],
+        ["Canceladas", summary.cancelledWorkdays],
+        [
+          "Presentismo",
+          `${formatPercent(summary.attendanceRate)} (${summary.presentWorkdays}/${summary.presentWorkdays + summary.absentWorkdays})`,
+        ],
+        [
+          "Puntualidad",
+          `${formatPercent(summary.punctualityRate)} (${summary.onTimeWorkdays}/${summary.onTimeWorkdays + summary.lateWorkdays})`,
+        ],
+        [
+          "Cobertura",
+          `${formatPercent(summary.coverageRate)} (${summary.presentWorkdays}/${summary.attendanceRequiredWorkdays})`,
+        ],
+        ["Operaciones con cobertura incompleta", summary.incompleteCoverageOperations],
+        ["Llegadas tarde", summary.lateWorkdays],
+        ["Salidas tempranas", summary.earlyDepartureWorkdays],
+        ["Jornadas sin cierre", summary.openAttendanceWorkdays],
+        ["Fuera de geocerca", summary.outsideGeofenceCount],
+        ["Pendiente de revisión", summary.pendingReviewCount],
+        ["Rechazadas", summary.rejectedCount],
+        [
+          "Horas trabajadas",
+          summary.hoursDataIncomplete
+            ? `${formatDurationFromMinutes(summary.workedMinutes)} (parcial)`
+            : formatDurationFromMinutes(summary.workedMinutes),
+        ],
         ["Horas extra", formatDurationFromMinutes(summary.overtimeMinutes)],
-        ["Asistencias sin cierre", summary.openAttendanceWorkdays],
         [terminology.operation.plural, summary.totalOperations],
+        ["Muestra mínima", summary.minSampleWorkdays ?? 3],
       ]
     : [];
 
@@ -363,7 +425,7 @@ export function useStatisticsPageData() {
       ),
     );
     return response.data.map((row) => [
-      row.operationId,
+      row.displayLabel ?? row.operationId,
       operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
       row.serviceName,
       row.serviceAddress ?? "",
@@ -373,7 +435,7 @@ export function useStatisticsPageData() {
       row.absentWorkdays,
       row.justifiedWorkdays,
       row.expectedOpenWorkdays,
-      formatPercent(row.attendanceRate),
+      formatPercent(row.coverageRate ?? row.attendanceRate),
       formatPercent(row.punctualityRate),
       formatDurationFromMinutes(row.workedMinutes),
       formatDurationFromMinutes(row.overtimeMinutes),
@@ -483,7 +545,7 @@ export function useStatisticsPageData() {
   };
 
   return {
-    activeTab: table.state.tab,
+    activeTab,
     setActiveTab: (tab: StatisticsTabKey) => table.setField("tab", tab, { resetPage: false }),
     defaultDateRange,
     dateRange,
@@ -504,23 +566,25 @@ export function useStatisticsPageData() {
     setLocationStatus: (value: string) => table.setField("locationStatus", value),
     punctualityStatus: table.state.punctualityStatus,
     setPunctualityStatus: (value: string) => table.setField("punctualityStatus", value),
+    incompleteCoverage: table.state.incompleteCoverage,
+    setIncompleteCoverage: (value: boolean) => table.setField("incompleteCoverage", value),
     exportsDisabled,
     isoDateFrom,
     isoDateTo,
+    linkContext,
     resetAllPages,
     resetFilters: table.resetFilters,
     hasActiveFilters: table.hasActiveFilters,
     activeFilterCount: table.activeFilterCount,
     summaryQuery,
     timelineQuery,
-    distributionQuery,
     employeeQuery,
     operationQuery,
     serviceQuery,
-    topEmployeesByAttendanceQuery,
+    attentionEmployeesQuery,
     topLateEmployeesQuery,
-    topOperationsByAttendanceQuery,
-    topServicesByAttendanceQuery,
+    lowCoverageOperationsQuery,
+    incidentServicesQuery,
     employeePagination,
     operationPagination,
     servicePagination,
@@ -540,12 +604,12 @@ export function useStatisticsPageData() {
     timeline,
     timelineOption,
     timelineExportRows,
-    distribution,
-    distributionOption,
-    topEmployeesByAttendance,
+    actionExceptions,
+    actionExceptionsOption,
+    attentionEmployees,
     topLateEmployees,
-    topOperationsByAttendance,
-    topServicesByAttendance,
+    lowCoverageOperations,
+    incidentServices,
     loadWorkdayDetailExportRows,
     loadEmployeeExportRows,
     loadOperationExportRows,

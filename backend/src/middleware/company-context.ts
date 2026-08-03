@@ -105,3 +105,29 @@ export const requireAnyPermission = (...permissions: CompanyPermission[]) => {
     next();
   };
 };
+
+/**
+ * After query validation: when validatedQuery.export === true, require reports:export.
+ * Must run after `validate(..., "query")`.
+ */
+export const requireReportsExportWhenRequested = (
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void => {
+  const validated = req.validatedQuery as { export?: boolean } | undefined;
+  if (!validated?.export) {
+    next();
+    return;
+  }
+  if (!req.permissions?.has("reports:export")) {
+    res.status(403).json({
+      error: {
+        code: "FORBIDDEN",
+        message: "Se requiere permiso de exportación de reportes.",
+      },
+    });
+    return;
+  }
+  next();
+};

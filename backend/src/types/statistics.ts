@@ -1,3 +1,9 @@
+import type { OperationKind } from "../constants/operation-kind";
+import type { CheckoutStatus } from "../constants/checkout-status";
+import type { PunctualityStatus } from "../types/domain";
+import type { PeriodMetricDelta } from "../utils/attendance-statistics-metrics";
+import type { DerivedEmployeeWorkdayState } from "./employee-workday-state";
+
 export interface AttendanceStatisticsSummary {
   scheduledWorkdays: number;
   attendanceRequiredWorkdays: number;
@@ -20,6 +26,33 @@ export interface AttendanceStatisticsSummary {
   rejectedCount: number;
   manuallyAcceptedCount: number;
   totalOperations: number;
+  incompleteCoverageOperations: number;
+  coverageRate: number;
+  /** True when open-attendance workdays make hours totals non-definitive. */
+  hoursDataIncomplete: boolean;
+  /** Workdays with a location status (geofence-evaluable). */
+  locationEvaluableWorkdays: number;
+  /** Workdays with a validation status. */
+  validationEvaluableWorkdays: number;
+  /** Workdays with a completed checkout (early-departure universe). */
+  checkoutEvaluableWorkdays: number;
+}
+
+export interface AttendanceStatisticsPeriodComparison {
+  attendanceRate: PeriodMetricDelta;
+  punctualityRate: PeriodMetricDelta;
+  absenceRate: PeriodMetricDelta;
+  openAttendanceRate: PeriodMetricDelta;
+  outsideGeofenceRate: PeriodMetricDelta;
+}
+
+export interface AttendanceStatisticsSummaryPayload extends AttendanceStatisticsSummary {
+  previousPeriod: AttendanceStatisticsSummary | null;
+  comparison: AttendanceStatisticsPeriodComparison | null;
+  minSampleWorkdays: number;
+  companyTimeZone: string;
+  companyLocalDate: string;
+  actionExceptions: import("../utils/statistics-action-exceptions").StatisticsActionExceptionItem[];
 }
 
 export interface AttendanceTimelinePoint {
@@ -34,12 +67,19 @@ export interface AttendanceTimelinePoint {
   outsideGeofence: number;
   pendingReview: number;
   rejected: number;
+  attendanceRate: number;
+  punctualityRate: number;
+  /** Day still in progress in company reference clock. */
+  isPartial: boolean;
 }
 
 export interface AttendanceStatusDistributionItem {
   status: string;
   label: string;
   count: number;
+  rate?: number | null;
+  denominator?: number;
+  key?: string;
 }
 
 export interface AttendanceByEmployeeRow {
@@ -60,12 +100,18 @@ export interface AttendanceByEmployeeRow {
   earlyDepartureWorkdays: number;
   outsideGeofenceCount: number;
   pendingReviewCount: number;
+  openAttendanceWorkdays: number;
+  incidentCount: number;
+  sampleInsufficient: boolean;
+  primaryIncidentLabel: string | null;
   lastAttendanceDate: string | null;
 }
 
 export interface AttendanceByOperationRow {
   operationId: string;
   operationKind: string;
+  /** Human-readable label: service + date/time (never UUID as primary). */
+  displayLabel: string;
   serviceName: string;
   serviceAddress: string | null;
   scheduledStart: string | null;
@@ -74,12 +120,17 @@ export interface AttendanceByOperationRow {
   absentWorkdays: number;
   justifiedWorkdays: number;
   expectedOpenWorkdays: number;
+  expectedStaffWorkdays: number;
   attendanceRate: number;
+  coverageRate: number;
   onTimeWorkdays: number;
   lateWorkdays: number;
   punctualityRate: number;
   workedMinutes: number;
   overtimeMinutes: number;
+  openAttendanceWorkdays: number;
+  incidentCount: number;
+  sampleInsufficient: boolean;
   operationalStatus: string;
 }
 
@@ -94,6 +145,7 @@ export interface AttendanceByServiceRow {
   justifiedWorkdays: number;
   expectedOpenWorkdays: number;
   attendanceRate: number;
+  coverageRate: number;
   onTimeWorkdays: number;
   lateWorkdays: number;
   punctualityRate: number;
@@ -101,12 +153,11 @@ export interface AttendanceByServiceRow {
   overtimeMinutes: number;
   outsideGeofenceCount: number;
   pendingReviewCount: number;
+  openAttendanceWorkdays: number;
+  incidentCount: number;
+  incidentRate: number;
+  sampleInsufficient: boolean;
 }
-
-import type { OperationKind } from "../constants/operation-kind";
-import type { CheckoutStatus } from "../constants/checkout-status";
-import type { PunctualityStatus } from "../types/domain";
-import type { DerivedEmployeeWorkdayState } from "./employee-workday-state";
 
 export interface AttendanceWorkdayDetailRow {
   workDate: string;

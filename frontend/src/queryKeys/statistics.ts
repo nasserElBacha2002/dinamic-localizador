@@ -11,6 +11,8 @@ export const statisticsKeys = {
     [...statisticsKeys.company(companyId), "timeline", filters] as const,
   statusDistribution: (companyId: string | undefined, filters: unknown) =>
     [...statisticsKeys.company(companyId), "status-distribution", filters] as const,
+  actionExceptions: (companyId: string | undefined, filters: unknown) =>
+    [...statisticsKeys.company(companyId), "action-exceptions", filters] as const,
   byEmployee: (companyId: string | undefined, filters: unknown) =>
     [...statisticsKeys.company(companyId), "by-employee", filters] as const,
   byOperation: (companyId: string | undefined, filters: unknown) =>

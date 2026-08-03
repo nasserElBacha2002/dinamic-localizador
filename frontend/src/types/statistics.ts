@@ -17,6 +17,24 @@ export type StatisticsEffectiveState =
 
 export type StatisticsOperationKind = "ONE_TIME" | "RECURRING" | "";
 
+export interface PeriodMetricDelta {
+  current: number;
+  previous: number;
+  absoluteDelta: number;
+  percentDelta: number | null;
+  currentSample: number;
+  previousSample: number;
+  comparable: boolean;
+}
+
+export interface AttendanceStatisticsPeriodComparison {
+  attendanceRate: PeriodMetricDelta;
+  punctualityRate: PeriodMetricDelta;
+  absenceRate: PeriodMetricDelta;
+  openAttendanceRate: PeriodMetricDelta;
+  outsideGeofenceRate: PeriodMetricDelta;
+}
+
 export interface AttendanceStatisticsSummary {
   scheduledWorkdays: number;
   attendanceRequiredWorkdays: number;
@@ -39,6 +57,18 @@ export interface AttendanceStatisticsSummary {
   rejectedCount: number;
   manuallyAcceptedCount: number;
   totalOperations: number;
+  incompleteCoverageOperations: number;
+  coverageRate: number;
+  hoursDataIncomplete: boolean;
+  locationEvaluableWorkdays?: number;
+  validationEvaluableWorkdays?: number;
+  checkoutEvaluableWorkdays?: number;
+  previousPeriod?: AttendanceStatisticsSummary | null;
+  comparison?: AttendanceStatisticsPeriodComparison | null;
+  minSampleWorkdays?: number;
+  companyTimeZone?: string;
+  companyLocalDate?: string;
+  actionExceptions?: AttendanceStatusDistributionItem[];
 }
 
 export interface AttendanceTimelinePoint {
@@ -53,12 +83,18 @@ export interface AttendanceTimelinePoint {
   outsideGeofence: number;
   pendingReview: number;
   rejected: number;
+  attendanceRate?: number;
+  punctualityRate?: number;
+  isPartial?: boolean;
 }
 
 export interface AttendanceStatusDistributionItem {
   status: string;
   label: string;
   count: number;
+  rate?: number | null;
+  denominator?: number;
+  key?: string;
 }
 
 export interface AttendanceByEmployeeRow {
@@ -79,12 +115,17 @@ export interface AttendanceByEmployeeRow {
   earlyDepartureWorkdays: number;
   outsideGeofenceCount: number;
   pendingReviewCount: number;
+  openAttendanceWorkdays?: number;
+  incidentCount?: number;
+  sampleInsufficient?: boolean;
+  primaryIncidentLabel?: string | null;
   lastAttendanceDate: string | null;
 }
 
 export interface AttendanceByOperationRow {
   operationId: string;
   operationKind: string;
+  displayLabel?: string;
   serviceName: string;
   serviceAddress: string | null;
   scheduledStart: string | null;
@@ -93,12 +134,17 @@ export interface AttendanceByOperationRow {
   absentWorkdays: number;
   justifiedWorkdays: number;
   expectedOpenWorkdays: number;
+  expectedStaffWorkdays?: number;
   attendanceRate: number;
+  coverageRate?: number;
   onTimeWorkdays: number;
   lateWorkdays: number;
   punctualityRate: number;
   workedMinutes: number;
   overtimeMinutes: number;
+  openAttendanceWorkdays?: number;
+  incidentCount?: number;
+  sampleInsufficient?: boolean;
   operationalStatus: string;
 }
 
@@ -113,6 +159,7 @@ export interface AttendanceByServiceRow {
   justifiedWorkdays: number;
   expectedOpenWorkdays: number;
   attendanceRate: number;
+  coverageRate?: number;
   onTimeWorkdays: number;
   lateWorkdays: number;
   punctualityRate: number;
@@ -120,6 +167,10 @@ export interface AttendanceByServiceRow {
   overtimeMinutes: number;
   outsideGeofenceCount: number;
   pendingReviewCount: number;
+  openAttendanceWorkdays?: number;
+  incidentCount?: number;
+  incidentRate?: number;
+  sampleInsufficient?: boolean;
 }
 
 export interface AttendanceWorkdayDetailRow {
@@ -156,6 +207,13 @@ export interface StatisticsFilters {
   validationStatus?: StatisticsValidationStatus;
   locationStatus?: string;
   punctualityStatus?: string;
+  openAttendance?: boolean;
+  incompleteCoverage?: boolean;
+  rankingMode?:
+    | "attention_employees"
+    | "late_employees"
+    | "low_coverage_operations"
+    | "incident_services";
   page?: number;
   limit?: number;
   sortBy?: string;

@@ -30,6 +30,7 @@ import { companyUserRouter } from "./company-user.routes";
 import { importRouter } from "./import.routes";
 import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
+import { whatsappObservabilityRouter } from "./whatsapp-observability.routes";
 import { companyInvitationRouter, publicInvitationRouter } from "./user-invitation.routes";
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
@@ -49,6 +50,11 @@ apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
 apiRouter.use("/platform", authenticate, platformCompanyRouter);
+apiRouter.use(
+  "/platform/observability/whatsapp",
+  authenticate,
+  whatsappObservabilityRouter,
+);
 
 const mountOperationsServiceRoutes = (router: Router) => {
   const moduleGuard = requireCompanyModule(COMPANY_MODULE_KEYS.OPERATIONS);

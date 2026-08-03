@@ -77,6 +77,18 @@ const AttendanceDetailPage = lazyNamed(
   () => import("../pages/attendance/AttendanceDetailPage"),
   "AttendanceDetailPage",
 );
+const WhatsappObservabilityPage = lazyNamed(
+  () => import("../pages/platform/observability/WhatsappObservabilityPage"),
+  "WhatsappObservabilityPage",
+);
+const WhatsappObservabilityErrorsPage = lazyNamed(
+  () => import("../pages/platform/observability/WhatsappObservabilityErrorsPage"),
+  "WhatsappObservabilityErrorsPage",
+);
+const WhatsappConversationDetailPage = lazyNamed(
+  () => import("../pages/platform/observability/WhatsappConversationDetailPage"),
+  "WhatsappConversationDetailPage",
+);
 
 function LazyPage({
   component: Component,
@@ -345,6 +357,36 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard requirePlatformAdmin>
               <PlatformCompaniesPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/platform/observability/whatsapp"
+          element={
+            <FeatureRouteGuard requirePlatformAdmin>
+              <LazyPage component={WhatsappObservabilityPage} message="Cargando observabilidad..." />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/platform/observability/whatsapp/errors"
+          element={
+            <FeatureRouteGuard requirePlatformAdmin>
+              <LazyPage
+                component={WhatsappObservabilityErrorsPage}
+                message="Cargando errores..."
+              />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/platform/observability/whatsapp/:conversationId"
+          element={
+            <FeatureRouteGuard requirePlatformAdmin>
+              <LazyPage
+                component={WhatsappConversationDetailPage}
+                message="Cargando conversación..."
+              />
             </FeatureRouteGuard>
           }
         />

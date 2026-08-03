@@ -2,6 +2,7 @@ import { terminology } from "../domain/terminology";
 import type { CompanyModule, CompanyModuleKey } from "../types/company-module";
 import type { CompanyPermission } from "../types/permissions";
 import { hasAnyPermission } from "./permissions";
+import { isWhatsappObservabilityUiEnabled } from "./whatsapp-observability-config";
 
 export const CORE_COMPANY_MODULE_KEYS: CompanyModuleKey[] = [
   "attendance",
@@ -205,6 +206,13 @@ export function getAdminNavItems({
 
   if (isPlatformAdmin) {
     items.push({ label: "Empresas de plataforma", path: "/platform/companies", section: "settings" });
+    if (isWhatsappObservabilityUiEnabled()) {
+      items.push({
+        label: "Observabilidad WhatsApp",
+        path: "/platform/observability/whatsapp",
+        section: "settings",
+      });
+    }
   }
 
   return items;

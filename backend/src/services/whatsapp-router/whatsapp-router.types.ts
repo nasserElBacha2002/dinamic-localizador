@@ -9,6 +9,8 @@ export interface WhatsAppRouterRespondInput {
   employeeId: string | null;
   phoneFrom: string;
   phoneTo: string;
+  resultCode?: string;
+  flowType?: string;
 }
 
 export interface WhatsAppRouterContext {

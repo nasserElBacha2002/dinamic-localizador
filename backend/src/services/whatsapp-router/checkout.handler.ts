@@ -1,3 +1,4 @@
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import {
   ACTIVE_ATTENDANCE_FLOW_MESSAGE,
   LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE,
@@ -33,6 +34,8 @@ export const handleActiveCheckoutTextSession = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.LOCATION_REQUIRED,
+      flowType: "CHECKOUT",
     });
   }
 
@@ -53,6 +56,8 @@ export const handleCheckoutIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "CHECKOUT",
     });
   }
 
@@ -62,6 +67,8 @@ export const handleCheckoutIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "CHECKOUT",
     });
   }
 
@@ -85,6 +92,8 @@ export const handleCheckoutLocation = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "CHECKOUT",
     });
   }
 

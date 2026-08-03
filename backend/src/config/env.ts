@@ -69,6 +69,29 @@ const envSchema = z
     GCS_UPLOAD_MODE: z.enum(["BACKEND_STREAM"]).default("BACKEND_STREAM"),
     ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
     ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+    WHATSAPP_OBSERVABILITY_ENABLED: z.stringbool().default(true),
+    WHATSAPP_OBSERVABILITY_UI_ENABLED: z.stringbool().default(true),
+    WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: z.stringbool().default(true),
+    TWILIO_STATUS_CALLBACK_URL: z.string().url().optional(),
+    WHATSAPP_OBSERVABILITY_MESSAGE_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+    WHATSAPP_OBSERVABILITY_FLOW_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+    WHATSAPP_OBSERVABILITY_CANDIDATE_RETENTION_DAYS: z.coerce.number().int().positive().default(90),
+    WHATSAPP_OBSERVABILITY_PROVIDER_EVENT_RETENTION_DAYS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(90),
+    WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
+    WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET: z.string().min(16).optional(),
+    /**
+     * Retention for template variable JSON only (not full message bodies).
+     * Renamed semantically; env key kept for compatibility.
+     */
+    WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .optional(),
   })
   .superRefine((data, ctx) => {
     const validateSignature = data.TWILIO_VALIDATE_SIGNATURE ?? data.NODE_ENV === "production";
@@ -95,6 +118,47 @@ const envSchema = z
         message: "TWILIO_WEBHOOK_URL is required when signature validation is enabled",
         path: ["TWILIO_WEBHOOK_URL"],
       });
+    }
+
+    if (
+      data.NODE_ENV === "production" &&
+      data.WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED &&
+      !data.TWILIO_STATUS_CALLBACK_URL
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message:
+          "TWILIO_STATUS_CALLBACK_URL is required in production when WhatsApp status callbacks are enabled",
+        path: ["TWILIO_STATUS_CALLBACK_URL"],
+      });
+    }
+
+    if (data.TWILIO_STATUS_CALLBACK_URL) {
+      if (data.TWILIO_STATUS_CALLBACK_URL.endsWith("/")) {
+        ctx.addIssue({
+          code: "custom",
+          message: "TWILIO_STATUS_CALLBACK_URL must not end with a trailing slash",
+          path: ["TWILIO_STATUS_CALLBACK_URL"],
+        });
+      }
+      if (data.NODE_ENV === "production" && !data.TWILIO_STATUS_CALLBACK_URL.startsWith("https://")) {
+        ctx.addIssue({
+          code: "custom",
+          message: "TWILIO_STATUS_CALLBACK_URL must use HTTPS in production",
+          path: ["TWILIO_STATUS_CALLBACK_URL"],
+        });
+      }
+    }
+
+    if (data.NODE_ENV === "production" && data.WHATSAPP_OBSERVABILITY_ENABLED) {
+      if (!data.WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET) {
+        ctx.addIssue({
+          code: "custom",
+          message:
+            "WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET is required in production when observability is enabled",
+          path: ["WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET"],
+        });
+      }
     }
 
     if (data.TWILIO_WEBHOOK_URL) {
@@ -271,4 +335,11 @@ export const env = {
   ),
   TWILIO_VALIDATE_SIGNATURE:
     parsed.data.TWILIO_VALIDATE_SIGNATURE ?? parsed.data.NODE_ENV === "production",
+  WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET:
+    parsed.data.WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET ??
+    // Non-production fallback keeps local/dev working; production requires explicit secret.
+    `dev-only-${parsed.data.JWT_SECRET.slice(0, 24)}`,
+  WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS:
+    parsed.data.WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS ??
+    parsed.data.WHATSAPP_OBSERVABILITY_MESSAGE_RETENTION_DAYS,
 };

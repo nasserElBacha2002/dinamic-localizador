@@ -1,3 +1,4 @@
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { employeeWorkdayService } from "../employee-workday.service";
 import { getWorkdayModuleBlockedMessage } from "../whatsapp-module-gate";
 import { logModuleBlocked } from "./module-session-gate";
@@ -17,6 +18,8 @@ export const handleWorkdayIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "WORKDAY_QUERY",
     });
   }
 
@@ -31,5 +34,7 @@ export const handleWorkdayIntent = async (
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,
+    resultCode: WHATSAPP_RESULT_CODES.WORKDAY_QUERY_COMPLETED,
+    flowType: "WORKDAY_QUERY",
   });
 };

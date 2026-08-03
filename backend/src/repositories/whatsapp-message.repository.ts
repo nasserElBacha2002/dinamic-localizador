@@ -119,4 +119,121 @@ export const whatsappMessageRepository = {
         WHERE message_sid = @messageSid AND company_id = @companyId
       `);
   },
+
+  async findById(id: string): Promise<WhatsAppMessage | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`SELECT TOP 1 * FROM whatsapp_messages WHERE id = @id`);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapWhatsAppMessageRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async findByProviderMessageSid(providerMessageSid: string): Promise<WhatsAppMessage | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("providerMessageSid", sql.NVarChar(100), providerMessageSid)
+      .query(`
+        SELECT TOP 1 *
+        FROM whatsapp_messages
+        WHERE provider_message_sid = @providerMessageSid
+           OR message_sid = @providerMessageSid
+        ORDER BY created_at DESC
+      `);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapWhatsAppMessageRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async updateObservabilityFields(
+    messageId: string,
+    input: {
+      conversationId?: string | null;
+      correlationId?: string | null;
+      causationId?: string | null;
+      provider?: string | null;
+      providerMessageSid?: string | null;
+      templateSid?: string | null;
+      templateName?: string | null;
+      templateVariablesJson?: string | null;
+      providerStatus?: string | null;
+      notificationId?: string | null;
+    },
+  ): Promise<void> {
+    const pool = getPool();
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, messageId)
+      .input("conversationId", sql.UniqueIdentifier, input.conversationId ?? null)
+      .input("correlationId", sql.UniqueIdentifier, input.correlationId ?? null)
+      .input("causationId", sql.UniqueIdentifier, input.causationId ?? null)
+      .input("provider", sql.NVarChar(20), input.provider ?? null)
+      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid ?? null)
+      .input("templateSid", sql.NVarChar(64), input.templateSid ?? null)
+      .input("templateName", sql.NVarChar(80), input.templateName ?? null)
+      .input("templateVariablesJson", sql.NVarChar(2000), input.templateVariablesJson ?? null)
+      .input("providerStatus", sql.NVarChar(40), input.providerStatus ?? null)
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId ?? null)
+      .query(`
+        UPDATE whatsapp_messages
+        SET conversation_id = COALESCE(@conversationId, conversation_id),
+            correlation_id = COALESCE(@correlationId, correlation_id),
+            causation_id = COALESCE(@causationId, causation_id),
+            provider = COALESCE(@provider, provider),
+            provider_message_sid = COALESCE(@providerMessageSid, provider_message_sid),
+            template_sid = COALESCE(@templateSid, template_sid),
+            template_name = COALESCE(@templateName, template_name),
+            template_variables_json = COALESCE(@templateVariablesJson, template_variables_json),
+            provider_status = COALESCE(@providerStatus, provider_status),
+            notification_id = COALESCE(@notificationId, notification_id),
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+      `);
+  },
+
+  async updateProviderStatus(
+    messageId: string,
+    input: {
+      providerStatus: string;
+      providerErrorCode?: string | null;
+      providerErrorMessage?: string | null;
+      statusTimestamp: Date;
+      statusKey: string;
+    },
+  ): Promise<void> {
+    const pool = getPool();
+    const status = input.statusKey.toLowerCase();
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, messageId)
+      .input("providerStatus", sql.NVarChar(40), input.providerStatus)
+      .input("providerErrorCode", sql.NVarChar(40), input.providerErrorCode ?? null)
+      .input("providerErrorMessage", sql.NVarChar(1000), input.providerErrorMessage ?? null)
+      .input("statusTimestamp", sql.DateTime2, input.statusTimestamp)
+      .input("isSent", sql.Bit, status === "sent" || status === "delivered" || status === "read" ? 1 : 0)
+      .input("isDelivered", sql.Bit, status === "delivered" || status === "read" ? 1 : 0)
+      .input("isRead", sql.Bit, status === "read" ? 1 : 0)
+      .input(
+        "isFailed",
+        sql.Bit,
+        status === "failed" || status === "undelivered" || status === "canceled" ? 1 : 0,
+      )
+      .query(`
+        UPDATE whatsapp_messages
+        SET provider_status = @providerStatus,
+            provider_error_code = COALESCE(@providerErrorCode, provider_error_code),
+            provider_error_message = COALESCE(@providerErrorMessage, provider_error_message),
+            sent_at = CASE WHEN @isSent = 1 THEN COALESCE(sent_at, @statusTimestamp) ELSE sent_at END,
+            delivered_at = CASE WHEN @isDelivered = 1 THEN COALESCE(delivered_at, @statusTimestamp) ELSE delivered_at END,
+            read_at = CASE WHEN @isRead = 1 THEN COALESCE(read_at, @statusTimestamp) ELSE read_at END,
+            failed_at = CASE WHEN @isFailed = 1 THEN COALESCE(failed_at, @statusTimestamp) ELSE failed_at END,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+      `);
+  },
 };

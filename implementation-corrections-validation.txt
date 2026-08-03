@@ -1,0 +1,211 @@
+=== Backend typecheck ===
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+exit=0
+=== Backend focused tests ===
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+TAP version 13
+# ◇ injected env (33) from .env // tip: ⌘ suppress logs { quiet: true }
+# ◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+# [twilio-status-callback] persistence failed { messageSid: 'SM1', error: 'SQL_DOWN' }
+# Subtest: twilio status callback persistence semantics
+    # Subtest: returns 503 when recordProviderStatus throws
+    ok 1 - returns 503 when recordProviderStatus throws
+      ---
+      duration_ms: 583.251292
+      ...
+    # Subtest: returns 204 when persistence succeeds
+    ok 2 - returns 204 when persistence succeeds
+      ---
+      duration_ms: 1.188333
+      ...
+    1..2
+ok 1 - twilio status callback persistence semantics
+  ---
+  duration_ms: 584.944167
+  type: 'suite'
+  ...
+# ◇ injected env (33) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+# ◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+# Subtest: requirePlatformAdmin observability authz
+    # Subtest: returns 401 when auth is missing
+    ok 1 - returns 401 when auth is missing
+      ---
+      duration_ms: 351.198417
+      ...
+    # Subtest: returns 403 for authenticated company admin (non-platform)
+    ok 2 - returns 403 for authenticated company admin (non-platform)
+      ---
+      duration_ms: 3.67275
+      ...
+    # Subtest: calls next for platform admin
+    ok 3 - calls next for platform admin
+      ---
+      duration_ms: 0.982875
+      ...
+    1..3
+ok 2 - requirePlatformAdmin observability authz
+  ---
+  duration_ms: 356.507791
+  type: 'suite'
+  ...
+# ◇ injected env (33) from .env // tip: ⌘ custom filepath { path: '/custom/path/.env' }
+# Subtest: twilio routes signature separation
+    # Subtest: creates distinct validators for inbound and status URLs
+    ok 1 - creates distinct validators for inbound and status URLs
+      ---
+      duration_ms: 0.431875
+      ...
+    1..1
+ok 3 - twilio routes signature separation
+  ---
+  duration_ms: 0.765917
+  type: 'suite'
+  ...
+# ◇ injected env (33) from .env // tip: ⌘ suppress logs { quiet: true }
+# Subtest: whatsapp observability schemas
+    # Subtest: rejects invalid conversation UUID
+    ok 1 - rejects invalid conversation UUID
+      ---
+      duration_ms: 2.792958
+      ...
+    # Subtest: rejects inverted date range
+    ok 2 - rejects inverted date range
+      ---
+      duration_ms: 1.100875
+      ...
+    # Subtest: rejects invalid page and excessive limit
+    ok 3 - rejects invalid page and excessive limit
+      ---
+      duration_ms: 0.414208
+      ...
+    # Subtest: rejects unknown direction
+    ok 4 - rejects unknown direction
+      ---
+      duration_ms: 0.145958
+      ...
+    # Subtest: accepts valid list query defaults
+    ok 5 - accepts valid list query defaults
+      ---
+      duration_ms: 0.056792
+      ...
+    1..5
+ok 4 - whatsapp observability schemas
+  ---
+  duration_ms: 5.023916
+  type: 'suite'
+  ...
+# ◇ injected env (33) from .env // tip: ⌘ suppress logs { quiet: true }
+# ◇ injected env (0) from .env // tip: ◈ encrypted .env [www.dotenvx.com]
+# Subtest: whatsapp observability listMessages PII contract
+    # Subtest: never returns full E.164 phones in listMessages JSON
+    ok 1 - never returns full E.164 phones in listMessages JSON
+      ---
+      duration_ms: 364.1565
+      ...
+    1..1
+ok 5 - whatsapp observability listMessages PII contract
+  ---
+  duration_ms: 364.706833
+  type: 'suite'
+  ...
+# ◇ injected env (33) from .env // tip: ◈ secrets for agents [www.dotenvx.com]
+# Subtest: mapMessageToObservabilityDto
+    # Subtest: masks phones and hides location/payload by default
+    ok 1 - masks phones and hides location/payload by default
+      ---
+      duration_ms: 1.214375
+      ...
+    # Subtest: can reveal phone when explicitly requested
+    ok 2 - can reveal phone when explicitly requested
+      ---
+      duration_ms: 0.179042
+      ...
+    1..2
+ok 6 - mapMessageToObservabilityDto
+  ---
+  duration_ms: 2.285125
+  type: 'suite'
+  ...
+# ◇ injected env (33) from .env // tip: ⌘ enable debugging { debug: true }
+# Subtest: whatsapp observability phone crypto
+    # Subtest: round-trips encrypted phones
+    ok 1 - round-trips encrypted phones
+      ---
+      duration_ms: 0.700333
+      ...
+    # Subtest: supports legacy plaintext values
+    ok 2 - supports legacy plaintext values
+      ---
+      duration_ms: 0.045875
+      ...
+    1..2
+ok 7 - whatsapp observability phone crypto
+  ---
+  duration_ms: 1.294334
+  type: 'suite'
+  ...
+1..7
+# tests 16
+# suites 7
+# pass 16
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 862.428416
+exit=0
+=== Backend SQL integration (observability) ===
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+TAP version 13
+# ◇ injected env (33) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+# ◇ injected env (0) from .env // tip: ⌘ multiple files { path: ['.env.local', '.env'] }
+# ◇ injected env (0) from .env // tip: ⌁ auth for agents [www.vestauth.com]
+# Database connection established.
+# Subtest: whatsapp observability sql concurrency
+    # Subtest: concurrent resolveOrCreateOpen yields a single open conversation
+    ok 1 - concurrent resolveOrCreateOpen yields a single open conversation
+      ---
+      duration_ms: 79.148083
+      ...
+    # Subtest: links orphan provider events when message appears later
+    ok 2 - links orphan provider events when message appears later
+      ---
+      duration_ms: 34.275083
+      ...
+# Database connection closed.
+    1..2
+ok 1 - whatsapp observability sql concurrency
+  ---
+  duration_ms: 182.418708
+  type: 'suite'
+  ...
+1..1
+# tests 2
+# suites 1
+# pass 2
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 465.770291
+exit=0
+=== Migration 077 apply/rollback/reapply ===
+npm warn Unknown env config "devdir". This will stop working in the next major version of npm.
+◇ injected env (33) from .env // tip: ⌘ suppress logs { quiet: true }
+ensure applied
+{"expectPresent":true,"colCount":4,"fkCount":4}
+rollback 077
+{"expectPresent":false,"colCount":0,"fkCount":0}
+reapply 077
+{"expectPresent":true,"colCount":4,"fkCount":4}
+077 apply/rollback/reapply OK
+exit=0
+=== Frontend build ===
+exit=0
+(!) Some chunks are larger than 500 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rollupOptions.output.manualChunks to improve chunking: https://rollupjs.org/configuration-options/#output-manualchunks
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.65s
+=== git diff --check ===
+exit=0

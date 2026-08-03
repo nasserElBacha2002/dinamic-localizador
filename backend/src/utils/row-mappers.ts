@@ -295,6 +295,23 @@ export const mapWhatsAppMessageRow = (row: Record<string, unknown>) => ({
   processingErrorCode: row.processing_error_code ? String(row.processing_error_code) : null,
   processedAt: row.processed_at ? toIsoString(row.processed_at as Date | string) : null,
   createdAt: toIsoString(row.created_at as Date | string),
+  conversationId: row.conversation_id ? String(row.conversation_id) : null,
+  correlationId: row.correlation_id ? String(row.correlation_id) : null,
+  causationId: row.causation_id ? String(row.causation_id) : null,
+  provider: row.provider ? String(row.provider) : null,
+  providerMessageSid: row.provider_message_sid ? String(row.provider_message_sid) : null,
+  templateSid: row.template_sid ? String(row.template_sid) : null,
+  templateName: row.template_name ? String(row.template_name) : null,
+  templateVariablesJson: row.template_variables_json ? String(row.template_variables_json) : null,
+  providerStatus: row.provider_status ? String(row.provider_status) : null,
+  providerErrorCode: row.provider_error_code ? String(row.provider_error_code) : null,
+  providerErrorMessage: row.provider_error_message ? String(row.provider_error_message) : null,
+  sentAt: row.sent_at ? toIsoString(row.sent_at as Date | string) : null,
+  deliveredAt: row.delivered_at ? toIsoString(row.delivered_at as Date | string) : null,
+  readAt: row.read_at ? toIsoString(row.read_at as Date | string) : null,
+  failedAt: row.failed_at ? toIsoString(row.failed_at as Date | string) : null,
+  updatedAt: row.updated_at ? toIsoString(row.updated_at as Date | string) : null,
+  notificationId: row.notification_id ? String(row.notification_id) : null,
 });
 
 export const mapUserRow = (row: Record<string, unknown>): User => ({

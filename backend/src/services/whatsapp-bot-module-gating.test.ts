@@ -189,11 +189,18 @@ describe("whatsapp bot module gating", () => {
 
   it("resolves employee only within the inbound company context", async () => {
     setupUnitTestEnv();
+    const { env } = await import("../config/env");
+    Object.assign(env, { TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000" });
+
     const { whatsappBotService } = await import("./whatsapp-bot.service");
     const { companyModuleService } = await import("./company-module.service");
     const { employeeRepository } = await import("../repositories/employee.repository");
     const { botRuntimeSettingsService } = await import("./bot-runtime-settings.service");
     const { whatsappMessageRepository } = await import("../repositories/whatsapp-message.repository");
+    const { whatsappWebhookEventRepository } = await import(
+      "../repositories/whatsapp-webhook-event.repository"
+    );
+    const { whatsappFlowTraceService } = await import("./whatsapp-flow-trace.service");
 
     const states = enabledStates();
     let findByPhoneCalls = 0;
@@ -211,9 +218,33 @@ describe("whatsapp bot module gating", () => {
       pendingOperationExpirationHours: 12,
       sessionTtlMinutes: 15,
     }));
+    mock.method(whatsappWebhookEventRepository, "claimInboundMessage", async () => ({
+      outcome: "CLAIMED",
+      event: { id: "evt-1", processingVersion: 1, responseBody: null },
+    }));
+    mock.method(whatsappWebhookEventRepository, "markProcessed", async () => undefined);
     mock.method(whatsappMessageRepository, "findByMessageSid", async () => null);
-    mock.method(whatsappMessageRepository, "create", async () => undefined);
+    mock.method(whatsappMessageRepository, "create", async () => ({
+      id: "msg-1",
+      messageSid: "SM-EMPLOYEE-SCOPE",
+      direction: "INBOUND",
+      employeeId,
+      phoneFrom: "+5491111111111",
+      phoneTo: "+10000000000",
+      messageType: "TEXT",
+      body: "hola",
+      latitude: null,
+      longitude: null,
+      status: "RECEIVED",
+      rawPayload: null,
+      processingStatus: "RECEIVED",
+      processingErrorCode: null,
+      processedAt: null,
+      createdAt: "2026-01-01T00:00:00.000Z",
+    }));
     mock.method(whatsappMessageRepository, "updateProcessingStatus", async () => undefined);
+    mock.method(whatsappMessageRepository, "updateObservabilityFields", async () => undefined);
+    mock.method(whatsappFlowTraceService, "isEnabled", () => false);
     mock.method(employeeRepository, "findById", async (resolvedCompanyId: string, resolvedEmployeeId: string) => {
       assert.equal(resolvedCompanyId, companyId);
       assert.equal(resolvedEmployeeId, employeeId);

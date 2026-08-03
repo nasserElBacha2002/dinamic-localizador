@@ -113,6 +113,23 @@ export interface WhatsAppMessage {
   processingErrorCode: string | null;
   processedAt: string | null;
   createdAt: string;
+  conversationId?: string | null;
+  correlationId?: string | null;
+  causationId?: string | null;
+  provider?: string | null;
+  providerMessageSid?: string | null;
+  templateSid?: string | null;
+  templateName?: string | null;
+  templateVariablesJson?: string | null;
+  providerStatus?: string | null;
+  providerErrorCode?: string | null;
+  providerErrorMessage?: string | null;
+  sentAt?: string | null;
+  deliveredAt?: string | null;
+  readAt?: string | null;
+  failedAt?: string | null;
+  updatedAt?: string | null;
+  notificationId?: string | null;
 }
 
 export interface TwilioWebhookPayload {

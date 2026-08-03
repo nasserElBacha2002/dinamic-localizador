@@ -54,7 +54,9 @@ export function ExportActionButtons({
   targets,
 }: ExportActionButtonsProps) {
   const permissionsQuery = useCompanyPermissions();
-  const canExport = hasPermission(permissionsQuery.data?.permissions, "reports:export");
+  const canRead = hasPermission(permissionsQuery.data?.permissions, "reports:read");
+  const canExportPerm = hasPermission(permissionsQuery.data?.permissions, "reports:export");
+  const canExport = canRead && canExportPerm;
   const [isLoading, setIsLoading] = useState(false);
 
   const resolvedTargets: ExportActionTarget[] =

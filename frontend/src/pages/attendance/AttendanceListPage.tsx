@@ -23,6 +23,7 @@ import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
 import type {
   AttendanceRecordWithRelations,
+  CheckoutStatus,
   LocationStatus,
   PunctualityStatus,
   ValidationStatus,
@@ -35,6 +36,7 @@ import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../ut
 import { formatDistanceMeters, getRelatedName } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
+  checkoutStatusLabels,
   locationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
@@ -87,6 +89,8 @@ export function AttendanceListPage() {
     validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
+    checkoutStatus: (table.state.checkoutStatus as CheckoutStatus) || undefined,
+    openAttendance: table.state.openAttendance || undefined,
     dateFrom: dateQuery.from ? dateInputToIsoStart(dateQuery.from) : undefined,
     dateTo: dateQuery.to ? dateInputToIsoEnd(dateQuery.to) : undefined,
     includeSimulation: table.state.recordType === "all" ? true : undefined,
@@ -364,6 +368,34 @@ export function AttendanceListPage() {
             data={[
               { value: "", label: "Todas" },
               ...Object.entries(punctualityStatusLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+        </FilterBar.Item>
+
+        <FilterBar.Item>
+          <FilterSelect
+            label="Salida"
+            value={table.state.checkoutStatus}
+            onChange={(nextValue) => {
+              table.setField("checkoutStatus", nextValue);
+            }}
+            data={[
+              { value: "", label: "Todas" },
+              ...Object.entries(checkoutStatusLabels).map(([value, label]) => ({ value, label })),
+            ]}
+          />
+        </FilterBar.Item>
+
+        <FilterBar.Item>
+          <FilterSelect
+            label="Sin cierre"
+            value={table.state.openAttendance ? "true" : ""}
+            onChange={(nextValue) => {
+              table.setField("openAttendance", nextValue === "true");
+            }}
+            data={[
+              { value: "", label: "Todas" },
+              { value: "true", label: "Solo jornadas sin cierre vencidas" },
             ]}
           />
         </FilterBar.Item>

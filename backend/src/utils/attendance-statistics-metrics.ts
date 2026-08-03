@@ -18,6 +18,70 @@ export const calculatePunctualityRate = (onTimeWorkdays: number, lateWorkdays: n
 export const calculateJustifiedRate = (justifiedWorkdays: number, scheduledWorkdays: number): number =>
   roundRate(justifiedWorkdays, scheduledWorkdays);
 
+/**
+ * Consolidated coverage: present / (present + absent).
+ * EXPECTED (in-progress / future) must not enter the denominator.
+ */
+export const calculateConsolidatedCoverageRate = (
+  presentWorkdays: number,
+  absentWorkdays: number,
+): number => roundRate(presentWorkdays, presentWorkdays + absentWorkdays);
+
+/** @deprecated Prefer calculateConsolidatedCoverageRate for rankings. */
+export const calculateCoverageRate = (
+  presentWorkdays: number,
+  expectedStaffWorkdays: number,
+): number => roundRate(presentWorkdays, expectedStaffWorkdays);
+
+export const hasSufficientSample = (
+  consolidatedWorkdays: number,
+  minSample: number,
+): boolean => consolidatedWorkdays >= minSample;
+
+export interface PeriodMetricDelta {
+  current: number;
+  previous: number;
+  absoluteDelta: number;
+  percentDelta: number | null;
+  currentSample: number;
+  previousSample: number;
+  comparable: boolean;
+}
+
+/** Compare rate metrics (percentages) with sample gates. */
+export const buildRateDelta = (
+  currentRate: number,
+  previousRate: number,
+  currentSample: number,
+  previousSample: number,
+  minSample: number,
+): PeriodMetricDelta => {
+  const comparable = currentSample >= minSample && previousSample >= minSample;
+  return {
+    current: currentRate,
+    previous: previousRate,
+    absoluteDelta: Math.round((currentRate - previousRate) * 10) / 10,
+    percentDelta:
+      comparable && previousRate !== 0
+        ? Math.round(((currentRate - previousRate) / previousRate) * 1000) / 10
+        : null,
+    currentSample,
+    previousSample,
+    comparable,
+  };
+};
+
+/**
+ * @deprecated Prefer buildRateDelta for KPI period comparisons.
+ * Kept for tests that still exercise absolute deltas.
+ */
+export const buildPeriodMetricDelta = buildRateDelta;
+
+export const buildNormalizedIncidentRate = (
+  incidentCount: number,
+  eligibleOpportunities: number,
+): number => roundRate(incidentCount, eligibleOpportunities);
+
 export interface WorkdayStateCounts {
   scheduledWorkdays: number;
   attendanceRequiredWorkdays: number;

@@ -1,7 +1,9 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
-  buildTopEmployeesByAttendanceFilters,
+  buildAttentionEmployeesFilters,
+  buildLowCoverageOperationsFilters,
+  buildIncidentServicesFilters,
   buildTopLateEmployeesFilters,
   buildWorkdayDetailExportFilters,
   CHART_TOP_LIMIT,
@@ -15,18 +17,25 @@ describe("statistics page query builders", () => {
     effectiveState: "ABSENT" as const,
   };
 
-  it("uses server-side top-N chart filters", () => {
-    const topEmployees = buildTopEmployeesByAttendanceFilters(baseFilters);
+  it("uses rankingMode eligibility filters without client minSample", () => {
+    const attention = buildAttentionEmployeesFilters(baseFilters);
+    const coverage = buildLowCoverageOperationsFilters(baseFilters);
+    const incidents = buildIncidentServicesFilters(baseFilters);
     const topLate = buildTopLateEmployeesFilters(baseFilters);
 
-    assert.equal(topEmployees.page, 1);
-    assert.equal(topEmployees.limit, CHART_TOP_LIMIT);
-    assert.equal(topEmployees.sortBy, "attendanceRate");
-    assert.equal(topEmployees.sortDirection, "desc");
+    assert.equal(attention.page, 1);
+    assert.equal(attention.limit, CHART_TOP_LIMIT);
+    assert.equal(attention.sortBy, "incidentCount");
+    assert.equal(attention.rankingMode, "attention_employees");
+    assert.equal(attention.minSampleWorkdays, undefined);
+    assert.equal(coverage.rankingMode, "low_coverage_operations");
+    assert.equal(coverage.sortBy, "coverageRate");
+    assert.equal(coverage.sortDirection, "asc");
+    assert.equal(incidents.rankingMode, "incident_services");
+    assert.equal(incidents.sortBy, "incidentCount");
+    assert.equal(topLate.rankingMode, "late_employees");
     assert.equal(topLate.sortBy, "lateWorkdays");
     assert.equal(topLate.limit, 10);
-    assert.equal(topEmployees.operationKind, "RECURRING");
-    assert.equal(topEmployees.effectiveState, "ABSENT");
   });
 
   it("marks workday detail export as on-demand export request", () => {

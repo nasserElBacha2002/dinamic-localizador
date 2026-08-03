@@ -98,10 +98,8 @@ export const MODULE_ROUTE_ACCESS = {
   },
   reports: {
     moduleKey: "reports" as const,
-    requiredAnyPermission: [
-      "reports:read",
-      "reports:export",
-    ] as const satisfies readonly CompanyPermission[],
+    /** Reading Estadísticas requires reports:read. Export alone must not grant access. */
+    requiredAnyPermission: ["reports:read"] as const satisfies readonly CompanyPermission[],
   },
 } as const;
 

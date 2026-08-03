@@ -1,4 +1,5 @@
-import { Grid, Group, Stack } from "@mantine/core";
+import { Grid, Group, Stack, Text } from "@mantine/core";
+import { useNavigate } from "react-router";
 import { ErrorState } from "../../../design-system";
 import { ChartCard } from "../../../components/statistics/ChartCard";
 import { ExportActionButtons } from "../../../components/statistics/ExportActionButtons";
@@ -10,6 +11,13 @@ import {
 import { formatPercent } from "../../../utils/export";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { operationKindLabels } from "../../../utils/operation-schedule-display";
+import {
+  buildAttendanceExceptionHref,
+  buildEmployeeAttendanceHref,
+  buildOperationDetailHref,
+  buildServiceAttendanceHref,
+  type StatisticsExceptionLinkKey,
+} from "../../../utils/statistics-deep-links";
 import type { StatisticsPageData } from "../hooks/useStatisticsPageData";
 
 type StatisticsGeneralTabProps = Pick<
@@ -21,28 +29,31 @@ type StatisticsGeneralTabProps = Pick<
   | "exportsDisabled"
   | "isoDateFrom"
   | "isoDateTo"
+  | "linkContext"
   | "timelineQuery"
   | "timeline"
   | "timelineOption"
   | "timelineExportRows"
-  | "distributionQuery"
-  | "distribution"
-  | "distributionOption"
-  | "topOperationsByAttendanceQuery"
-  | "topOperationsByAttendance"
-  | "topEmployeesByAttendanceQuery"
-  | "topEmployeesByAttendance"
+  | "actionExceptions"
+  | "actionExceptionsOption"
+  | "lowCoverageOperationsQuery"
+  | "lowCoverageOperations"
+  | "attentionEmployeesQuery"
+  | "attentionEmployees"
   | "topLateEmployeesQuery"
   | "topLateEmployees"
-  | "topServicesByAttendanceQuery"
-  | "topServicesByAttendance"
+  | "incidentServicesQuery"
+  | "incidentServices"
   | "workdayDetailHeaders"
   | "loadWorkdayDetailExportRows"
 >;
 
 function formatOperationChartLabel(
-  row: StatisticsPageData["topOperationsByAttendance"][number],
+  row: StatisticsPageData["lowCoverageOperations"][number],
 ): string {
+  if (row.displayLabel) {
+    return row.displayLabel;
+  }
   const kind =
     operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind;
   return `${row.serviceName} (${kind})`;
@@ -56,24 +67,26 @@ export function StatisticsGeneralTab({
   exportsDisabled,
   isoDateFrom,
   isoDateTo,
+  linkContext,
   timelineQuery,
   timeline,
   timelineOption,
   timelineExportRows,
-  distributionQuery,
-  distribution,
-  distributionOption,
-  topOperationsByAttendanceQuery,
-  topOperationsByAttendance,
-  topEmployeesByAttendanceQuery,
-  topEmployeesByAttendance,
+  actionExceptions,
+  actionExceptionsOption,
+  lowCoverageOperationsQuery,
+  lowCoverageOperations,
+  attentionEmployeesQuery,
+  attentionEmployees,
   topLateEmployeesQuery,
   topLateEmployees,
-  topServicesByAttendanceQuery,
-  topServicesByAttendance,
+  incidentServicesQuery,
+  incidentServices,
   workdayDetailHeaders,
   loadWorkdayDetailExportRows,
 }: StatisticsGeneralTabProps) {
+  const navigate = useNavigate();
+
   return (
     <Stack gap="lg">
       <Group justify="flex-end" gap="sm">
@@ -103,25 +116,32 @@ export function StatisticsGeneralTab({
       {summaryQuery.isError ? (
         <ErrorState message={getApiErrorMessage(summaryQuery.error)} />
       ) : (
-        <StatisticsKpiCards summary={summary} isLoading={summaryQuery.isPending} />
+        <StatisticsKpiCards
+          summary={summary}
+          isLoading={summaryQuery.isPending}
+          linkContext={linkContext}
+        />
       )}
 
       <Grid gap="md">
         <Grid.Col span={{ base: 12, lg: 8 }}>
           <ChartCard
             title="Asistencia en el tiempo"
+            description="Presentismo y puntualidad con volumen de jornadas. El día actual se marca como parcial."
             isLoading={timelineQuery.isPending}
             isEmpty={timeline.length === 0}
+            emptyMessage="Sin jornadas en el período (o solo fechas futuras)."
             option={timelineOption}
             exportHeaders={[
               "Fecha",
+              "Presentismo %",
+              "Puntualidad %",
+              "Jornadas",
               "Presentes",
               "Ausentes",
-              "Justificadas",
-              "Pendientes",
-              "Programadas",
               "Puntuales",
               "Tarde",
+              "Estado día",
             ]}
             exportRows={timelineExportRows}
             exportBaseName="attendance-timeline"
@@ -132,13 +152,29 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, lg: 4 }}>
           <ChartCard
-            title="Distribución por estado"
-            isLoading={distributionQuery.isPending}
-            isEmpty={distribution.length === 0}
-            option={distributionOption}
-            exportHeaders={["Estado", "Cantidad"]}
-            exportRows={distribution.map((item) => [item.label, item.count])}
-            exportBaseName="attendance-status-distribution"
+            title="Excepciones que requieren atención"
+            description="Categorías no excluyentes: una jornada puede aparecer en más de una."
+            isLoading={summaryQuery.isPending}
+            isEmpty={actionExceptions.length === 0}
+            emptyMessage="Sin excepciones en el período."
+            option={actionExceptionsOption}
+            onChartClick={(params) => {
+              const index = typeof params.dataIndex === "number" ? params.dataIndex : -1;
+              const item = actionExceptions[index];
+              const key = (item?.key ?? item?.status) as StatisticsExceptionLinkKey | undefined;
+              if (!key) {
+                return;
+              }
+              navigate(buildAttendanceExceptionHref(key, linkContext));
+            }}
+            exportHeaders={["Excepción", "Cantidad", "Tasa %", "Denominador"]}
+            exportRows={actionExceptions.map((item) => [
+              item.label,
+              item.count,
+              item.rate ?? "—",
+              item.denominator ?? "",
+            ])}
+            exportBaseName="attendance-action-exceptions"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
@@ -146,22 +182,42 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Presentismo por operación (top 10)"
-            isLoading={topOperationsByAttendanceQuery.isPending}
-            isEmpty={topOperationsByAttendance.length === 0}
+            title="Operaciones con menor cobertura"
+            description="Presentes / (presentes + ausentes). Solo operaciones consolidadas con muestra suficiente."
+            isLoading={lowCoverageOperationsQuery.isPending}
+            isEmpty={lowCoverageOperations.length === 0}
+            emptyMessage="Sin operaciones con cobertura incompleta y muestra suficiente."
             option={buildHorizontalBarOption(
               "",
-              topOperationsByAttendance.map((row) => formatOperationChartLabel(row)),
-              topOperationsByAttendance.map((row) => row.attendanceRate),
+              lowCoverageOperations.map((row) => formatOperationChartLabel(row)),
+              lowCoverageOperations.map((row) => row.coverageRate ?? row.attendanceRate),
             )}
-            exportHeaders={["Operación", "Servicio", "Tipo", "Presentismo"]}
-            exportRows={topOperationsByAttendance.map((row) => [
-              row.operationId,
+            onChartClick={(params) => {
+              const index = typeof params.dataIndex === "number" ? params.dataIndex : -1;
+              const row = lowCoverageOperations[index];
+              if (row) {
+                navigate(buildOperationDetailHref(row.operationId));
+              }
+            }}
+            exportHeaders={[
+              "Operación",
+              "Servicio",
+              "Presentes",
+              "Esperados consolidados",
+              "Cobertura",
+              "Ausentes",
+              "Estado",
+            ]}
+            exportRows={lowCoverageOperations.map((row) => [
+              row.displayLabel ?? formatOperationChartLabel(row),
               row.serviceName,
-              operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
-              formatPercent(row.attendanceRate),
+              row.presentWorkdays,
+              row.expectedStaffWorkdays ?? row.presentWorkdays + row.absentWorkdays,
+              formatPercent(row.coverageRate ?? row.attendanceRate),
+              row.absentWorkdays,
+              row.operationalStatus,
             ])}
-            exportBaseName="attendance-by-operation-chart"
+            exportBaseName="attendance-low-coverage-operations"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
@@ -169,20 +225,43 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Top empleados por presentismo"
-            isLoading={topEmployeesByAttendanceQuery.isPending}
-            isEmpty={topEmployeesByAttendance.length === 0}
+            title="Colaboradores que requieren atención"
+            description="Ordenados por incidencias (elegibilidad aplicada en servidor)."
+            isLoading={attentionEmployeesQuery.isPending}
+            isEmpty={attentionEmployees.length === 0}
+            emptyMessage="Sin colaboradores con incidencias en el período."
             option={buildHorizontalBarOption(
               "",
-              topEmployeesByAttendance.map((row) => row.employeeName),
-              topEmployeesByAttendance.map((row) => row.attendanceRate),
+              attentionEmployees.map((row) => row.employeeName),
+              attentionEmployees.map((row) => row.incidentCount ?? 0),
+              "",
             )}
-            exportHeaders={["Empleado", "Presentismo"]}
-            exportRows={topEmployeesByAttendance.map((row) => [
+            onChartClick={(params) => {
+              const index = typeof params.dataIndex === "number" ? params.dataIndex : -1;
+              const row = attentionEmployees[index];
+              if (row) {
+                navigate(buildEmployeeAttendanceHref(row.employeeId, linkContext));
+              }
+            }}
+            exportHeaders={[
+              "Colaborador",
+              "Incidencia principal",
+              "Incidencias",
+              "Jornadas",
+              "Presentismo",
+              "Muestra",
+            ]}
+            exportRows={attentionEmployees.map((row) => [
               row.employeeName,
-              formatPercent(row.attendanceRate),
+              row.primaryIncidentLabel ?? "—",
+              row.incidentCount ?? 0,
+              row.scheduledWorkdays,
+              row.sampleInsufficient
+                ? "muestra insuficiente"
+                : formatPercent(row.attendanceRate),
+              `${row.presentWorkdays + row.absentWorkdays}`,
             ])}
-            exportBaseName="attendance-top-employees"
+            exportBaseName="attendance-attention-employees"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
@@ -198,8 +277,19 @@ export function StatisticsGeneralTab({
               topLateEmployees.map((row) => row.employeeName),
               topLateEmployees.map((row) => row.lateWorkdays),
             )}
-            exportHeaders={["Empleado", "Llegadas tarde"]}
-            exportRows={topLateEmployees.map((row) => [row.employeeName, row.lateWorkdays])}
+            onChartClick={(params) => {
+              const index = typeof params.dataIndex === "number" ? params.dataIndex : -1;
+              const row = topLateEmployees[index];
+              if (row) {
+                navigate(buildEmployeeAttendanceHref(row.employeeId, linkContext));
+              }
+            }}
+            exportHeaders={["Empleado", "Llegadas tarde", "Jornadas"]}
+            exportRows={topLateEmployees.map((row) => [
+              row.employeeName,
+              row.lateWorkdays,
+              row.scheduledWorkdays,
+            ])}
             exportBaseName="attendance-late-employees"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
@@ -208,27 +298,52 @@ export function StatisticsGeneralTab({
         </Grid.Col>
         <Grid.Col span={{ base: 12, md: 6 }}>
           <ChartCard
-            title="Rendimiento por servicio"
-            isLoading={topServicesByAttendanceQuery.isPending}
-            isEmpty={topServicesByAttendance.length === 0}
+            title="Servicios con más incidencias"
+            description="Cantidad de jornadas con incidencias (no un índice compuesto)."
+            isLoading={incidentServicesQuery.isPending}
+            isEmpty={incidentServices.length === 0}
+            emptyMessage="Sin servicios con incidencias y muestra suficiente."
             option={buildVerticalBarOption(
               "",
-              topServicesByAttendance.map((row) => row.serviceName),
-              topServicesByAttendance.map((row) => row.attendanceRate),
-              "%",
+              incidentServices.map((row) => row.serviceName),
+              incidentServices.map((row) => row.incidentCount ?? 0),
             )}
-            exportHeaders={["Servicio", "Presentismo"]}
-            exportRows={topServicesByAttendance.map((row) => [
+            onChartClick={(params) => {
+              const index = typeof params.dataIndex === "number" ? params.dataIndex : -1;
+              const row = incidentServices[index];
+              if (row) {
+                navigate(buildServiceAttendanceHref(row.serviceId, linkContext));
+              }
+            }}
+            exportHeaders={[
+              "Servicio",
+              "Dirección",
+              "Jornadas",
+              "Incidencias",
+              "Tasa incidencias",
+              "Cobertura",
+            ]}
+            exportRows={incidentServices.map((row) => [
               row.serviceName,
-              formatPercent(row.attendanceRate),
+              row.address ?? "",
+              row.scheduledWorkdays,
+              row.incidentCount ?? 0,
+              formatPercent(row.incidentRate ?? 0),
+              formatPercent(row.coverageRate ?? row.attendanceRate),
             ])}
-            exportBaseName="attendance-by-service-chart"
+            exportBaseName="attendance-incident-services"
             dateFrom={isoDateFrom}
             dateTo={isoDateTo}
             exportsDisabled={exportsDisabled}
           />
         </Grid.Col>
       </Grid>
+
+      {summaryQuery.isError ? (
+        <Text size="sm" c="red">
+          No se pudieron cargar las excepciones: {getApiErrorMessage(summaryQuery.error)}
+        </Text>
+      ) : null}
     </Stack>
   );
 }

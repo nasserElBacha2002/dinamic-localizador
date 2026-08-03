@@ -52,10 +52,20 @@ mockApiModule("api/statistics.api", {
       rejectedCount: 0,
       manuallyAcceptedCount: 0,
       totalOperations: 0,
+      incompleteCoverageOperations: 0,
+      coverageRate: 0,
+      hoursDataIncomplete: false,
+      previousPeriod: null,
+      comparison: null,
+      minSampleWorkdays: 3,
     };
   },
   getAttendanceStatisticsTimeline: async (filters: Record<string, unknown>) => {
     timelineCalls.push(filters);
+    return [];
+  },
+  getAttendanceActionExceptions: async (filters: Record<string, unknown>) => {
+    distributionCalls.push(filters);
     return [];
   },
   getAttendanceStatusDistribution: async (filters: Record<string, unknown>) => {
@@ -187,7 +197,7 @@ function assertAllCallsIncludeEmployee(calls: Array<Record<string, unknown>>) {
 }
 
 describe("StatisticsPage employee deep-link", () => {
-  it("applies employeeIds to summary, charts, and table queries and opens employee tab", async () => {
+  it("applies employeeIds to employee-tab queries and opens employee tab", async () => {
     const view = renderPage(
       <Routes>
         <Route path="/statistics" element={<StatisticsPage />} />
@@ -196,20 +206,17 @@ describe("StatisticsPage employee deep-link", () => {
     );
 
     await waitFor(() => {
-      assert.ok(summaryCalls.length >= 1);
-      assert.ok(timelineCalls.length >= 1);
-      assert.ok(distributionCalls.length >= 1);
       assert.ok(byEmployeeCalls.length >= 1);
-      assert.ok(byOperationCalls.length >= 1);
-      assert.ok(byServiceCalls.length >= 1);
     });
 
-    assertAllCallsIncludeEmployee(summaryCalls);
-    assertAllCallsIncludeEmployee(timelineCalls);
-    assertAllCallsIncludeEmployee(distributionCalls);
+    // Lazy tabs: employee tab must not preload general charts or other tables.
+    assert.equal(summaryCalls.length, 0);
+    assert.equal(timelineCalls.length, 0);
+    assert.equal(distributionCalls.length, 0);
+    assert.equal(byOperationCalls.length, 0);
+    assert.equal(byServiceCalls.length, 0);
+
     assertAllCallsIncludeEmployee(byEmployeeCalls);
-    assertAllCallsIncludeEmployee(byOperationCalls);
-    assertAllCallsIncludeEmployee(byServiceCalls);
 
     await waitFor(() => {
       assert.ok(view.getByText("Ada Lovelace"));
@@ -230,16 +237,16 @@ describe("StatisticsPage employee deep-link", () => {
       { route: `/statistics?employeeIds=${EMPLOYEE_ID}&tab=employee` },
     );
 
-    await waitFor(() => assert.ok(summaryCalls.length >= 1));
+    await waitFor(() => assert.ok(byEmployeeCalls.length >= 1));
 
     const clearButton = await waitFor(
       () => view.getByRole("button", { name: "Limpiar filtros" }) as HTMLButtonElement,
     );
-    const beforeClear = summaryCalls.length;
+    const beforeClear = byEmployeeCalls.length;
     fireEvent.click(clearButton);
 
     await waitFor(() => {
-      const after = summaryCalls.slice(beforeClear);
+      const after = byEmployeeCalls.slice(beforeClear);
       assert.ok(after.length >= 1);
       assert.ok(after.every((call) => call.employeeIds === undefined));
     });

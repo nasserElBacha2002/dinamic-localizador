@@ -11,6 +11,8 @@ export const ATTENDANCE_TABLE_DEFAULTS = {
   validationStatus: "",
   locationStatus: "",
   punctualityStatus: "",
+  checkoutStatus: "",
+  openAttendance: false,
   recordType: "real" as "real" | "simulation" | "all",
   ...dateRangeToUrlFields(EMPTY_DATE_RANGE_VALUE),
 };
@@ -32,6 +34,19 @@ export const ATTENDANCE_TABLE_FIELDS = {
     type: "enum",
     values: ["", "EARLY", "ON_TIME", "LATE", "OUTSIDE_TIME_WINDOW"],
   },
+  checkoutStatus: {
+    type: "enum",
+    values: [
+      "",
+      "CHECKOUT_VALID",
+      "CHECKOUT_EARLY_WITHIN_TOLERANCE",
+      "CHECKOUT_EARLY_REVIEW",
+      "CHECKOUT_LATE_EXTRA_TIME",
+      "CHECKOUT_LOCATION_REVIEW",
+      "CHECKOUT_REJECTED",
+    ],
+  },
+  openAttendance: { type: "boolean" as const },
 } satisfies TableUrlFieldMap<typeof ATTENDANCE_TABLE_DEFAULTS>;
 
 export const shouldOmitAttendanceTableValue = (

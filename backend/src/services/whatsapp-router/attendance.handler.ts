@@ -1,3 +1,4 @@
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import {
   ACTIVE_ATTENDANCE_FLOW_MESSAGE,
   LOCATION_DURING_SELECTION_MESSAGE,
@@ -32,6 +33,8 @@ export const handleActiveCheckInTextSession = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.LOCATION_REQUIRED,
+      flowType: "CHECKIN",
     });
   }
 
@@ -52,6 +55,8 @@ export const handleArrivalIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.MODULE_DISABLED,
+      flowType: "CHECKIN",
     });
   }
 
@@ -61,6 +66,8 @@ export const handleArrivalIntent = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "CHECKIN",
     });
   }
 
@@ -83,6 +90,8 @@ export const handleCheckInLocation = async (
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+      flowType: "CHECKIN",
     });
   }
 

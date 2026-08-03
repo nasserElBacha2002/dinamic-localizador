@@ -7,7 +7,7 @@ import { createValidateTwilioSignature } from "../middleware/validate-twilio-sig
 
 export const twilioRouter = Router();
 
-const validateTwilioSignature = createValidateTwilioSignature({
+const validateInboundSignature = createValidateTwilioSignature({
   validateSignature: env.TWILIO_VALIDATE_SIGNATURE,
   authToken: env.TWILIO_AUTH_TOKEN,
   webhookUrl: env.TWILIO_WEBHOOK_URL,
@@ -15,8 +15,22 @@ const validateTwilioSignature = createValidateTwilioSignature({
   validateRequestFn: twilio.validateRequest,
 });
 
+const validateStatusSignature = createValidateTwilioSignature({
+  validateSignature: env.TWILIO_VALIDATE_SIGNATURE,
+  authToken: env.TWILIO_AUTH_TOKEN,
+  webhookUrl: env.TWILIO_STATUS_CALLBACK_URL,
+  nodeEnv: env.NODE_ENV,
+  validateRequestFn: twilio.validateRequest,
+});
+
 twilioRouter.post(
   "/whatsapp",
-  validateTwilioSignature,
+  validateInboundSignature,
   asyncHandler(twilioWebhookController.handleWhatsApp),
+);
+
+twilioRouter.post(
+  "/whatsapp/status",
+  validateStatusSignature,
+  asyncHandler(twilioWebhookController.handleWhatsAppStatus),
 );

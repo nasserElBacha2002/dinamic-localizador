@@ -11,6 +11,10 @@ import {
   startRecurringWorkdayMaterializationJob,
   stopRecurringWorkdayMaterializationJob,
 } from "./jobs/recurring-workday-materialization.job";
+import {
+  startWhatsappObservabilityCleanupJob,
+  stopWhatsappObservabilityCleanupJob,
+} from "./jobs/whatsapp-observability-cleanup.job";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
@@ -18,6 +22,7 @@ const startServer = async (): Promise<void> => {
   startRecurringWorkdayMaterializationJob();
   startAbsenceWorkdaySyncJob();
   startAbsenceAttachmentCleanupJob();
+  startWhatsappObservabilityCleanupJob();
 
   app.listen(env.PORT, () => {
     console.log(`API listening on port ${env.PORT}`);
@@ -29,6 +34,7 @@ const shutdown = async (): Promise<void> => {
   stopRecurringWorkdayMaterializationJob();
   stopAbsenceWorkdaySyncJob();
   stopAbsenceAttachmentCleanupJob();
+  stopWhatsappObservabilityCleanupJob();
   await closeDatabase();
   process.exit(0);
 };

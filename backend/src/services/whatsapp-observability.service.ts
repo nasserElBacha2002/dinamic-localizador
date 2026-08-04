@@ -129,6 +129,10 @@ export const whatsappObservabilityService = {
     query: { page?: number; limit?: number; direction?: string },
   ) {
     this.assertUiEnabled();
+    const detail = await whatsappObservabilityRepository.getConversationDetail(conversationId);
+    if (!detail) {
+      throw new AppError(404, "CONVERSATION_NOT_FOUND", "Conversación no encontrada.");
+    }
     const page = clampPage(query.page);
     const limit = clampLimit(query.limit);
     const result = await whatsappObservabilityRepository.listMessages(
@@ -137,13 +141,16 @@ export const whatsappObservabilityService = {
       limit,
       query.direction,
     );
+    const totalPages =
+      result.total === 0 ? 0 : Math.max(1, Math.ceil(result.total / limit));
     return {
       data: result.data.map((message) => mapMessageToObservabilityDto(message)),
       meta: {
         page,
         limit,
         total: result.total,
-        totalPages: Math.max(1, Math.ceil(result.total / limit)),
+        totalPages,
+        hasMore: totalPages > 0 && page < totalPages,
       },
     };
   },

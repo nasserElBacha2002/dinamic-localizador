@@ -59,8 +59,13 @@ export const observabilityListConversationsQuerySchema = z
   });
 
 export const observabilityListMessagesQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
+  page: z.coerce.number().int().min(1, "La página debe ser un entero mayor o igual a 1").default(1),
+  limit: z.coerce
+    .number()
+    .int("El límite debe ser un entero")
+    .min(1, "El límite debe ser al menos 1")
+    .max(100, "El límite máximo por solicitud es 100")
+    .default(50),
   direction: z.enum(["INBOUND", "OUTBOUND"]).optional(),
 });
 

@@ -22,6 +22,16 @@ describe("whatsapp observability schemas", () => {
     assert.equal(result.success, false);
   });
 
+  it("accepts allowed message limits", () => {
+    for (const limit of [1, 50, 100]) {
+      const result = observabilityListMessagesQuerySchema.safeParse({ limit });
+      assert.equal(result.success, true, `limit=${limit}`);
+      if (result.success) {
+        assert.equal(result.data.limit, limit);
+      }
+    }
+  });
+
   it("rejects invalid page and excessive limit", () => {
     assert.equal(
       observabilityListConversationsQuerySchema.safeParse({ page: "NaN" }).success,
@@ -32,7 +42,19 @@ describe("whatsapp observability schemas", () => {
       false,
     );
     assert.equal(
+      observabilityListMessagesQuerySchema.safeParse({ limit: 0 }).success,
+      false,
+    );
+    assert.equal(
+      observabilityListMessagesQuerySchema.safeParse({ limit: 101 }).success,
+      false,
+    );
+    assert.equal(
       observabilityListMessagesQuerySchema.safeParse({ limit: 1000 }).success,
+      false,
+    );
+    assert.equal(
+      observabilityListMessagesQuerySchema.safeParse({ limit: "abc" }).success,
       false,
     );
   });
@@ -50,6 +72,15 @@ describe("whatsapp observability schemas", () => {
     if (result.success) {
       assert.equal(result.data.page, 1);
       assert.equal(result.data.limit, 20);
+    }
+  });
+
+  it("defaults message list page and limit", () => {
+    const result = observabilityListMessagesQuerySchema.safeParse({});
+    assert.equal(result.success, true);
+    if (result.success) {
+      assert.equal(result.data.page, 1);
+      assert.equal(result.data.limit, 50);
     }
   });
 });

@@ -196,12 +196,17 @@ export const whatsappObservabilityRepository = {
         FROM whatsapp_messages
         WHERE conversation_id = @conversationId
           AND (@direction IS NULL OR direction = @direction)
-        ORDER BY created_at ASC
+        ORDER BY created_at DESC, id DESC
         OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
       `);
 
+    // Fetch newest-first for pagination windows; reverse to chronological ASC for UI.
+    const rows = (listResult.recordset as Record<string, unknown>[])
+      .map(mapWhatsAppMessageRow)
+      .reverse();
+
     return {
-      data: (listResult.recordset as Record<string, unknown>[]).map(mapWhatsAppMessageRow),
+      data: rows,
       total,
     };
   },

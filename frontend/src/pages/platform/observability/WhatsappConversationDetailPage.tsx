@@ -15,7 +15,7 @@ import { useAuth } from "../../../hooks/useAuth";
 import {
   useRevealWhatsappPhone,
   useWhatsappConversation,
-  useWhatsappConversationMessages,
+  useWhatsappConversationMessagesInfinite,
   useWhatsappConversationProviderEvents,
   useWhatsappFlowExecution,
 } from "../../../hooks/useWhatsappObservability";
@@ -27,7 +27,7 @@ import type {
   WhatsappProviderEvent,
 } from "../../../types/whatsapp-observability";
 import { formatDateTime } from "../../../utils/dates";
-import { getApiErrorMessage } from "../../../utils/errors";
+import { getApiErrorMessage, parseApiError } from "../../../utils/errors";
 import { isWhatsappObservabilityUiEnabled } from "../../../utils/whatsapp-observability-config";
 import {
   conversationStatusTone,
@@ -37,6 +37,16 @@ import {
   whatsappFlowExecutionStatusLabels,
   whatsappFlowStepStatusLabels,
 } from "./whatsapp-observability-labels";
+
+const CHAT_MESSAGES_ERROR = "No se pudieron cargar los mensajes de la conversación.";
+
+function logChatMessagesError(error: unknown): void {
+  const parsed = parseApiError(error);
+  console.error("[whatsapp-observability] conversation messages failed", {
+    code: parsed.code,
+    status: parsed.status,
+  });
+}
 
 function ChatBubble({ message }: { message: WhatsappObservabilityMessage }) {
   const isInbound = message.direction === "INBOUND";
@@ -140,6 +150,95 @@ function FlowExecutionPanel({
   );
 }
 
+function ConversationChatPanel({
+  conversationId,
+  enabled,
+}: {
+  conversationId: string | undefined;
+  enabled: boolean;
+}) {
+  const messagesQuery = useWhatsappConversationMessagesInfinite(conversationId, enabled);
+  const messages = messagesQuery.data?.messages ?? [];
+  const hasOlder = messagesQuery.hasNextPage;
+  const total = messagesQuery.data?.total ?? 0;
+  const isInitialPending = messagesQuery.isPending;
+  const isInitialError = messagesQuery.isError && messages.length === 0;
+
+  if (messagesQuery.isError) {
+    logChatMessagesError(messagesQuery.error);
+  }
+
+  if (isInitialPending) {
+    return <LoadingState />;
+  }
+
+  if (isInitialError) {
+    return (
+      <ErrorState
+        title="No se pudieron cargar los mensajes"
+        message={CHAT_MESSAGES_ERROR}
+        action={
+          <Button size="sm" variant="light" onClick={() => void messagesQuery.refetch()}>
+            Reintentar
+          </Button>
+        }
+      />
+    );
+  }
+
+  return (
+    <Stack gap="sm">
+      {hasOlder ? (
+        <Group justify="center">
+          <Button
+            size="xs"
+            variant="default"
+            loading={messagesQuery.isFetchingNextPage}
+            onClick={() => void messagesQuery.fetchNextPage()}
+          >
+            Cargar mensajes anteriores
+          </Button>
+        </Group>
+      ) : null}
+
+      {messagesQuery.isFetchNextPageError ? (
+        <ErrorState
+          title="No se pudo ampliar el historial"
+          message={CHAT_MESSAGES_ERROR}
+          action={
+            <Button size="sm" variant="light" onClick={() => void messagesQuery.fetchNextPage()}>
+              Reintentar
+            </Button>
+          }
+        />
+      ) : null}
+
+      <ScrollArea.Autosize mah={560} type="auto">
+        {messages.length === 0 ? (
+          <Text size="sm" c="dimmed">
+            No hay mensajes registrados para esta conversación.
+          </Text>
+        ) : (
+          messages.map((message) => <ChatBubble key={message.id} message={message} />)
+        )}
+      </ScrollArea.Autosize>
+
+      {messages.length > 0 && total > messages.length ? (
+        <Text size="xs" c="dimmed" ta="center">
+          Mostrando {messages.length} de {total} mensajes
+          {hasOlder ? ". Podés cargar mensajes anteriores." : "."}
+        </Text>
+      ) : null}
+
+      {messages.length > 0 && !hasOlder && total > 0 ? (
+        <Text size="xs" c="dimmed" ta="center">
+          Fin del historial ({total} mensajes).
+        </Text>
+      ) : null}
+    </Stack>
+  );
+}
+
 export function WhatsappConversationDetailPage() {
   const { conversationId } = useParams<{ conversationId: string }>();
   const { user } = useAuth();
@@ -149,11 +248,6 @@ export function WhatsappConversationDetailPage() {
   const [revealedPhone, setRevealedPhone] = useState<string | null>(null);
 
   const conversationQuery = useWhatsappConversation(conversationId, isPlatformAdmin && uiEnabled);
-  const messagesQuery = useWhatsappConversationMessages(
-    conversationId,
-    { page: 1, limit: 200 },
-    isPlatformAdmin && uiEnabled,
-  );
   const providerEventsQuery = useWhatsappConversationProviderEvents(
     conversationId,
     isPlatformAdmin && uiEnabled,
@@ -324,23 +418,10 @@ export function WhatsappConversationDetailPage() {
 
         <Tabs.Panel value="chat" pt="md">
           <SectionCard title="Mensajes" description="Entrantes a la izquierda, salientes a la derecha.">
-            {messagesQuery.isPending ? <LoadingState /> : null}
-            {messagesQuery.isError ? (
-              <ErrorState message={getApiErrorMessage(messagesQuery.error)} />
-            ) : null}
-            {!messagesQuery.isPending && !messagesQuery.isError ? (
-              <ScrollArea.Autosize mah={560} type="auto">
-                {(messagesQuery.data?.data ?? []).length === 0 ? (
-                  <Text size="sm" c="dimmed">
-                    No hay mensajes registrados para esta conversación.
-                  </Text>
-                ) : (
-                  (messagesQuery.data?.data ?? []).map((message) => (
-                    <ChatBubble key={message.id} message={message} />
-                  ))
-                )}
-              </ScrollArea.Autosize>
-            ) : null}
+            <ConversationChatPanel
+              conversationId={conversationId}
+              enabled={isPlatformAdmin && uiEnabled}
+            />
           </SectionCard>
         </Tabs.Panel>
 

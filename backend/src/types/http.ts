@@ -9,6 +9,7 @@ export interface ApiErrorResponse {
   error: {
     code: string;
     message: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -19,6 +20,7 @@ export interface PaginatedResponse<T> {
     limit: number;
     total: number;
     totalPages: number;
+    hasMore?: boolean;
   };
 }
 

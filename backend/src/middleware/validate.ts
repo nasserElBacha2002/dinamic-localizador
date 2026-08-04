@@ -19,8 +19,15 @@ export const validate =
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const message = error.issues.map((issue) => issue.message).join("; ");
-        next(new AppError(400, "VALIDATION_ERROR", message));
+        next(
+          new AppError(400, "VALIDATION_ERROR", "Parámetros de consulta inválidos.", {
+            issues: error.issues.map((issue) => ({
+              path: issue.path,
+              code: issue.code,
+              message: issue.message,
+            })),
+          }),
+        );
         return;
       }
 

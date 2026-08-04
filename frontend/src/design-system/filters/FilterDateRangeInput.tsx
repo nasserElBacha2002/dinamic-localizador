@@ -153,7 +153,7 @@ export function FilterDateRangeInput({
   };
 
   return (
-    <Group gap="xs" align="flex-end" wrap="nowrap">
+    <Stack gap={4} style={{ minWidth: 0, width: "100%" }}>
       <Popover
         opened={opened}
         onChange={(nextOpened) => {
@@ -175,7 +175,7 @@ export function FilterDateRangeInput({
             readOnly
             disabled={disabled}
             onClick={handleOpen}
-            style={{ flex: 1, cursor: disabled ? "not-allowed" : "pointer" }}
+            style={{ width: "100%", cursor: disabled ? "not-allowed" : "pointer" }}
           />
         </Popover.Target>
 
@@ -283,11 +283,12 @@ export function FilterDateRangeInput({
           onClick={handleClear}
           disabled={disabled}
           variant="subtle"
-          size="compact-sm"
+          size="compact-xs"
+          style={{ alignSelf: "flex-start" }}
         >
           Limpiar fecha
         </Button>
       ) : null}
-    </Group>
+    </Stack>
   );
 }

@@ -13,6 +13,15 @@ import type {
   WhatsappProviderEvent,
 } from "../types/whatsapp-observability";
 import { apiClient, buildParams } from "./client";
+import {
+  WHATSAPP_CONVERSATION_MESSAGES_MAX_LIMIT,
+  WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE,
+} from "../pages/platform/observability/whatsapp-observability-messages";
+
+function clampConversationMessagesLimit(limit: number | undefined): number {
+  const resolved = limit ?? WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE;
+  return Math.min(Math.max(Math.trunc(resolved), 1), WHATSAPP_CONVERSATION_MESSAGES_MAX_LIMIT);
+}
 
 export async function getWhatsappConversations(
   filters: WhatsappConversationFilters = {},
@@ -39,10 +48,14 @@ export async function getWhatsappConversationMessages(
   conversationId: string,
   filters: { page?: number; limit?: number; direction?: string } = {},
 ): Promise<PaginatedResponse<WhatsappObservabilityMessage>> {
+  const safeFilters = {
+    ...filters,
+    limit: clampConversationMessagesLimit(filters.limit),
+  };
   const { data } = await apiClient.get<PaginatedResponse<WhatsappObservabilityMessage>>(
     `platform/observability/whatsapp/conversations/${conversationId}/messages`,
     {
-      params: buildParams(filters),
+      params: buildParams(safeFilters),
     },
   );
   return data;

@@ -198,6 +198,7 @@ export function WhatsappObservabilityPage() {
             value={table.searchInput}
             onChange={table.setSearch}
             onSearch={table.commitSearch}
+            label="Búsqueda general"
             placeholder="Buscar por teléfono, empleado o ID…"
             aria-label="Buscar conversaciones"
           />

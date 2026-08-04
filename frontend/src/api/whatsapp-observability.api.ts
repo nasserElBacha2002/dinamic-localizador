@@ -12,6 +12,11 @@ import type {
   WhatsappObservabilityMessage,
   WhatsappProviderEvent,
 } from "../types/whatsapp-observability";
+import {
+  normalizeWhatsappMessagesLimit,
+  type WhatsappConversationMessagesResponse,
+  type WhatsappMessagesCursor,
+} from "./contracts/whatsapp-observability";
 import { apiClient, buildParams } from "./client";
 
 export async function getWhatsappConversations(
@@ -37,14 +42,26 @@ export async function getWhatsappConversationById(
 
 export async function getWhatsappConversationMessages(
   conversationId: string,
-  filters: { page?: number; limit?: number; direction?: string } = {},
-): Promise<PaginatedResponse<WhatsappObservabilityMessage>> {
-  const { data } = await apiClient.get<PaginatedResponse<WhatsappObservabilityMessage>>(
-    `platform/observability/whatsapp/conversations/${conversationId}/messages`,
-    {
-      params: buildParams(filters),
-    },
-  );
+  filters: {
+    limit?: number;
+    beforeCreatedAt?: string;
+    beforeId?: string;
+    direction?: string;
+    cursor?: WhatsappMessagesCursor | null;
+  } = {},
+): Promise<WhatsappConversationMessagesResponse<WhatsappObservabilityMessage>> {
+  const cursor = filters.cursor ?? null;
+  const params = buildParams({
+    limit: normalizeWhatsappMessagesLimit(filters.limit),
+    beforeCreatedAt: filters.beforeCreatedAt ?? cursor?.createdAt,
+    beforeId: filters.beforeId ?? cursor?.id,
+    direction: filters.direction,
+  });
+  const { data } = await apiClient.get<
+    WhatsappConversationMessagesResponse<WhatsappObservabilityMessage>
+  >(`platform/observability/whatsapp/conversations/${conversationId}/messages`, {
+    params,
+  });
   return data;
 }
 

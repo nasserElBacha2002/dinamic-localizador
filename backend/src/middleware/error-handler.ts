@@ -35,11 +35,17 @@ export const errorHandler = (
   }
 
   if (error instanceof ZodError) {
-    const message = error.issues.map((issue) => issue.message).join("; ");
     res.status(400).json({
       error: {
         code: "VALIDATION_ERROR",
-        message,
+        message: "Los datos enviados son inválidos.",
+        details: {
+          issues: error.issues.map((issue) => ({
+            path: issue.path,
+            code: issue.code,
+            message: issue.message,
+          })),
+        },
       },
     });
     return;

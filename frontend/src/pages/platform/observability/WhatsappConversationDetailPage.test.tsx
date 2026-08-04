@@ -12,62 +12,91 @@ installLayoutPolyfills();
 
 const conversationId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
-let lastMessagesRequest: { page?: number; limit?: number } | null = null;
-let messagesPages: Map<number, { id: string; body: string; createdAt: string }[]> = new Map();
-let messagesTotal = 0;
+type Msg = {
+  id: string;
+  body: string;
+  createdAt: string;
+  conversationId: string;
+  messageSid: null;
+  direction: "INBOUND" | "OUTBOUND";
+  employeeId: null;
+  phoneFrom: string;
+  phoneTo: string;
+  messageType: "TEXT";
+  latitude: null;
+  longitude: null;
+  status: null;
+  processingStatus: null;
+  processingErrorCode: null;
+  correlationId: null;
+  causationId: null;
+  provider: null;
+  providerMessageSid: null;
+  templateSid: null;
+  templateName: null;
+  templateVariablesJson: null;
+  providerStatus: null;
+  providerErrorCode: null;
+  providerErrorMessage: null;
+  sentAt: null;
+  deliveredAt: null;
+  readAt: null;
+  failedAt: null;
+  updatedAt: null;
+  notificationId: null;
+};
+
+let lastMessagesRequest: {
+  limit?: number;
+  beforeCreatedAt?: string;
+  beforeId?: string;
+  cursor?: { createdAt: string; id: string } | null;
+} | null = null;
+let allMessagesNewestFirst: Msg[] = [];
 let messagesShouldFail = false;
 
-function resetMessagesFixture(total: number, pageSize = 50) {
-  messagesTotal = total;
+function buildMsg(n: number): Msg {
+  const minutes = n % 60;
+  const hours = Math.floor(n / 60);
+  return {
+    id: `${String(n).padStart(8, "0")}-1111-1111-1111-111111111111`,
+    body: `msg-${n}`,
+    createdAt: `2026-01-01T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00.000Z`,
+    conversationId,
+    messageSid: null,
+    direction: n % 2 === 0 ? "OUTBOUND" : "INBOUND",
+    employeeId: null,
+    phoneFrom: "****1111",
+    phoneTo: "****9999",
+    messageType: "TEXT",
+    latitude: null,
+    longitude: null,
+    status: null,
+    processingStatus: null,
+    processingErrorCode: null,
+    correlationId: null,
+    causationId: null,
+    provider: null,
+    providerMessageSid: null,
+    templateSid: null,
+    templateName: null,
+    templateVariablesJson: null,
+    providerStatus: null,
+    providerErrorCode: null,
+    providerErrorMessage: null,
+    sentAt: null,
+    deliveredAt: null,
+    readAt: null,
+    failedAt: null,
+    updatedAt: null,
+    notificationId: null,
+  };
+}
+
+function resetMessagesFixture(total: number) {
   messagesShouldFail = false;
   lastMessagesRequest = null;
-  messagesPages = new Map();
-  const all = Array.from({ length: total }, (_, i) => {
-    const n = i + 1;
-    const minutes = n % 60;
-    const hours = Math.floor(n / 60);
-    return {
-      id: `${String(n).padStart(8, "0")}-1111-1111-1111-111111111111`,
-      body: `msg-${n}`,
-      createdAt: `2026-01-01T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00.000Z`,
-      conversationId,
-      messageSid: null,
-      direction: n % 2 === 0 ? ("OUTBOUND" as const) : ("INBOUND" as const),
-      employeeId: null,
-      phoneFrom: "****1111",
-      phoneTo: "****9999",
-      messageType: "TEXT" as const,
-      latitude: null,
-      longitude: null,
-      status: null,
-      processingStatus: null,
-      processingErrorCode: null,
-      correlationId: null,
-      causationId: null,
-      provider: null,
-      providerMessageSid: null,
-      templateSid: null,
-      templateName: null,
-      templateVariablesJson: null,
-      providerStatus: null,
-      providerErrorCode: null,
-      providerErrorMessage: null,
-      sentAt: null,
-      deliveredAt: null,
-      readAt: null,
-      failedAt: null,
-      updatedAt: null,
-      notificationId: null,
-    };
-  });
-  // newest-first pages, returned chrono ASC within page (as backend does)
-  const newestFirst = [...all].reverse();
-  const totalPages = total === 0 ? 0 : Math.ceil(total / pageSize);
-  for (let page = 1; page <= Math.max(totalPages, 1); page += 1) {
-    const offset = (page - 1) * pageSize;
-    const windowNewestFirst = newestFirst.slice(offset, offset + pageSize);
-    messagesPages.set(page, [...windowNewestFirst].reverse());
-  }
+  allMessagesNewestFirst = Array.from({ length: total }, (_, i) => buildMsg(total - i));
 }
 
 mockApiModule("api/whatsapp-observability.api", {
@@ -83,7 +112,7 @@ mockApiModule("api/whatsapp-observability.api", {
     status: "ACTIVE",
     lastFlowType: "CHECKIN",
     lastResultCode: "CHECKIN_COMPLETED",
-    messageCount: messagesTotal,
+    messageCount: allMessagesNewestFirst.length,
     errorCount: 0,
     createdAt: "2026-08-01T10:00:00.000Z",
     updatedAt: "2026-08-01T10:05:00.000Z",
@@ -91,25 +120,47 @@ mockApiModule("api/whatsapp-observability.api", {
   }),
   getWhatsappConversationMessages: async (
     _id: string,
-    filters: { page?: number; limit?: number } = {},
+    filters: {
+      limit?: number;
+      beforeCreatedAt?: string;
+      beforeId?: string;
+      cursor?: { createdAt: string; id: string } | null;
+    } = {},
   ) => {
     lastMessagesRequest = { ...filters };
     if (messagesShouldFail) {
       const { ApiError } = await import("../../../utils/errors");
       throw new ApiError("Too big: expected number to be <=100", "VALIDATION_ERROR", 400);
     }
-    const page = filters.page ?? 1;
     const limit = filters.limit ?? 50;
-    const data = messagesPages.get(page) ?? [];
-    const totalPages = messagesTotal === 0 ? 0 : Math.ceil(messagesTotal / limit);
+    const cursor = filters.cursor ?? null;
+    const beforeCreatedAt = filters.beforeCreatedAt ?? cursor?.createdAt;
+    const beforeId = filters.beforeId ?? cursor?.id;
+
+    let filtered = allMessagesNewestFirst;
+    if (beforeCreatedAt && beforeId) {
+      filtered = allMessagesNewestFirst.filter((message) => {
+        if (message.createdAt < beforeCreatedAt) {
+          return true;
+        }
+        if (message.createdAt === beforeCreatedAt) {
+          return message.id < beforeId;
+        }
+        return false;
+      });
+    }
+
+    const windowNewestFirst = filtered.slice(0, limit + 1);
+    const hasMore = windowNewestFirst.length > limit;
+    const pageNewestFirst = hasMore ? windowNewestFirst.slice(0, limit) : windowNewestFirst;
+    const oldest = pageNewestFirst[pageNewestFirst.length - 1];
     return {
-      data,
+      data: [...pageNewestFirst].reverse(),
       meta: {
-        page,
         limit,
-        total: messagesTotal,
-        totalPages,
-        hasMore: totalPages > 0 && page < totalPages,
+        hasMore,
+        nextCursor:
+          hasMore && oldest ? { createdAt: oldest.createdAt, id: oldest.id } : null,
       },
     };
   },
@@ -229,21 +280,21 @@ describe("WhatsappConversationDetailPage chat", () => {
     resetMessagesFixture(3);
     const view = renderDetail();
     await waitFor(() => assert.ok(view.getByText("msg-1")));
-    assert.ok(view.getByText("msg-2"));
-    assert.ok(view.getByText("msg-3"));
     const bodies = view.getAllByText(/msg-\d+/).map((el) => el.textContent);
     assert.deepEqual(bodies, ["msg-1", "msg-2", "msg-3"]);
   });
 
-  it("loads older messages without duplicates", async () => {
+  it("loads older messages via cursor without duplicates", async () => {
     resetMessagesFixture(120);
     const view = renderDetail();
     await waitFor(() => assert.ok(view.getByText("msg-120")));
     assert.ok(view.getByText("msg-71"));
     assert.equal(view.queryByText("msg-1"), null);
+    assert.ok(lastMessagesRequest?.cursor == null);
 
     fireEvent.click(view.getByRole("button", { name: "Cargar mensajes anteriores" }));
     await waitFor(() => assert.ok(view.getByText("msg-21")));
+    assert.ok(lastMessagesRequest?.cursor?.id);
     assert.equal(view.getAllByText("msg-71").length, 1);
 
     fireEvent.click(view.getByRole("button", { name: "Cargar mensajes anteriores" }));

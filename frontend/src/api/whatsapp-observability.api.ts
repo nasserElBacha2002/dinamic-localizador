@@ -12,16 +12,12 @@ import type {
   WhatsappObservabilityMessage,
   WhatsappProviderEvent,
 } from "../types/whatsapp-observability";
-import { apiClient, buildParams } from "./client";
 import {
-  WHATSAPP_CONVERSATION_MESSAGES_MAX_LIMIT,
-  WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE,
-} from "../pages/platform/observability/whatsapp-observability-messages";
-
-function clampConversationMessagesLimit(limit: number | undefined): number {
-  const resolved = limit ?? WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE;
-  return Math.min(Math.max(Math.trunc(resolved), 1), WHATSAPP_CONVERSATION_MESSAGES_MAX_LIMIT);
-}
+  normalizeWhatsappMessagesLimit,
+  type WhatsappConversationMessagesResponse,
+  type WhatsappMessagesCursor,
+} from "./contracts/whatsapp-observability";
+import { apiClient, buildParams } from "./client";
 
 export async function getWhatsappConversations(
   filters: WhatsappConversationFilters = {},
@@ -46,18 +42,26 @@ export async function getWhatsappConversationById(
 
 export async function getWhatsappConversationMessages(
   conversationId: string,
-  filters: { page?: number; limit?: number; direction?: string } = {},
-): Promise<PaginatedResponse<WhatsappObservabilityMessage>> {
-  const safeFilters = {
-    ...filters,
-    limit: clampConversationMessagesLimit(filters.limit),
-  };
-  const { data } = await apiClient.get<PaginatedResponse<WhatsappObservabilityMessage>>(
-    `platform/observability/whatsapp/conversations/${conversationId}/messages`,
-    {
-      params: buildParams(safeFilters),
-    },
-  );
+  filters: {
+    limit?: number;
+    beforeCreatedAt?: string;
+    beforeId?: string;
+    direction?: string;
+    cursor?: WhatsappMessagesCursor | null;
+  } = {},
+): Promise<WhatsappConversationMessagesResponse<WhatsappObservabilityMessage>> {
+  const cursor = filters.cursor ?? null;
+  const params = buildParams({
+    limit: normalizeWhatsappMessagesLimit(filters.limit),
+    beforeCreatedAt: filters.beforeCreatedAt ?? cursor?.createdAt,
+    beforeId: filters.beforeId ?? cursor?.id,
+    direction: filters.direction,
+  });
+  const { data } = await apiClient.get<
+    WhatsappConversationMessagesResponse<WhatsappObservabilityMessage>
+  >(`platform/observability/whatsapp/conversations/${conversationId}/messages`, {
+    params,
+  });
   return data;
 }
 

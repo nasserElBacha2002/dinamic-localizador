@@ -32,29 +32,51 @@ describe("whatsapp observability schemas", () => {
     }
   });
 
-  it("rejects invalid page and excessive limit", () => {
+  it("rejects invalid limits", () => {
+    assert.equal(observabilityListMessagesQuerySchema.safeParse({ limit: -1 }).success, false);
+    assert.equal(observabilityListMessagesQuerySchema.safeParse({ limit: 0 }).success, false);
+    assert.equal(observabilityListMessagesQuerySchema.safeParse({ limit: 101 }).success, false);
+    assert.equal(observabilityListMessagesQuerySchema.safeParse({ limit: 1.5 }).success, false);
+    assert.equal(observabilityListMessagesQuerySchema.safeParse({ limit: "abc" }).success, false);
+  });
+
+  it("accepts a complete cursor", () => {
+    const result = observabilityListMessagesQuerySchema.safeParse({
+      limit: 50,
+      beforeCreatedAt: "2026-01-01T12:00:00.000Z",
+      beforeId: "11111111-1111-4111-8111-111111111111",
+    });
+    assert.equal(result.success, true);
+  });
+
+  it("rejects partial cursor", () => {
     assert.equal(
-      observabilityListConversationsQuerySchema.safeParse({ page: "NaN" }).success,
+      observabilityListMessagesQuerySchema.safeParse({
+        beforeCreatedAt: "2026-01-01T12:00:00.000Z",
+      }).success,
       false,
     );
     assert.equal(
-      observabilityListMessagesQuerySchema.safeParse({ limit: -1 }).success,
+      observabilityListMessagesQuerySchema.safeParse({
+        beforeId: "11111111-1111-4111-8111-111111111111",
+      }).success,
+      false,
+    );
+  });
+
+  it("rejects invalid cursor values", () => {
+    assert.equal(
+      observabilityListMessagesQuerySchema.safeParse({
+        beforeCreatedAt: "not-a-date",
+        beforeId: "11111111-1111-4111-8111-111111111111",
+      }).success,
       false,
     );
     assert.equal(
-      observabilityListMessagesQuerySchema.safeParse({ limit: 0 }).success,
-      false,
-    );
-    assert.equal(
-      observabilityListMessagesQuerySchema.safeParse({ limit: 101 }).success,
-      false,
-    );
-    assert.equal(
-      observabilityListMessagesQuerySchema.safeParse({ limit: 1000 }).success,
-      false,
-    );
-    assert.equal(
-      observabilityListMessagesQuerySchema.safeParse({ limit: "abc" }).success,
+      observabilityListMessagesQuerySchema.safeParse({
+        beforeCreatedAt: "2026-01-01T12:00:00.000Z",
+        beforeId: "not-a-uuid",
+      }).success,
       false,
     );
   });
@@ -66,21 +88,13 @@ describe("whatsapp observability schemas", () => {
     assert.equal(result.success, false);
   });
 
-  it("accepts valid list query defaults", () => {
-    const result = observabilityListConversationsQuerySchema.safeParse({});
-    assert.equal(result.success, true);
-    if (result.success) {
-      assert.equal(result.data.page, 1);
-      assert.equal(result.data.limit, 20);
-    }
-  });
-
-  it("defaults message list page and limit", () => {
+  it("defaults message list limit", () => {
     const result = observabilityListMessagesQuerySchema.safeParse({});
     assert.equal(result.success, true);
     if (result.success) {
-      assert.equal(result.data.page, 1);
       assert.equal(result.data.limit, 50);
+      assert.equal(result.data.beforeCreatedAt, undefined);
+      assert.equal(result.data.beforeId, undefined);
     }
   });
 });

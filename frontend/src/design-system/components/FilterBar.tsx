@@ -45,25 +45,27 @@ export function FilterBar({
   const [opened, { open, close }] = useDisclosure(false);
   const hasActiveFilters = activeFilterCount > 0;
 
-  const clearAndActions = onClearFilters || actions ? (
-    <Group
-      gap="sm"
-      wrap="wrap"
-      justify="flex-end"
-      align="flex-end"
-      style={{ minWidth: 0, width: "100%", height: "100%" }}
-    >
-      {onClearFilters ? (
-        <ClearFiltersButton
-          onClick={onClearFilters}
-          disabled={!hasActiveFilters}
-          label={clearLabel}
-          variant="subtle"
-        />
-      ) : null}
-      {actions}
-    </Group>
-  ) : null;
+  const clearAndActions =
+    onClearFilters || actions ? (
+      <Group
+        gap="sm"
+        wrap="wrap"
+        justify="flex-end"
+        align="center"
+        data-testid="filter-bar-actions"
+        style={{ minWidth: 0, width: "100%" }}
+      >
+        {onClearFilters ? (
+          <ClearFiltersButton
+            onClick={onClearFilters}
+            disabled={!hasActiveFilters}
+            label={clearLabel}
+            variant="subtle"
+          />
+        ) : null}
+        {actions}
+      </Group>
+    ) : null;
 
   if (!isMobile) {
     return (
@@ -71,7 +73,10 @@ export function FilterBar({
         <SimpleGrid cols={{ base: 1, sm: 2, md: 3 }} spacing="md" verticalSpacing="md">
           {search ? <div style={{ minWidth: 0, width: "100%" }}>{search}</div> : null}
           {children}
-          {clearAndActions}
+          {/* Full-width trailing row keeps "Limpiar filtros" right-aligned for any filter count. */}
+          {clearAndActions ? (
+            <div style={{ gridColumn: "1 / -1", minWidth: 0, width: "100%" }}>{clearAndActions}</div>
+          ) : null}
         </SimpleGrid>
       </Paper>
     );
@@ -82,7 +87,7 @@ export function FilterBar({
       <Paper withBorder radius="md" p="md" mb="md">
         <Stack gap="sm">
           {search ? <div style={{ minWidth: 0 }}>{search}</div> : null}
-          <Group gap="sm" wrap="wrap">
+          <Group gap="sm" wrap="wrap" justify="flex-start" align="center">
             <Button variant="default" onClick={open} aria-haspopup="dialog">
               {filtersTitle}
               {activeFilterCount > 0 ? (

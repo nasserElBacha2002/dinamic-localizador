@@ -38,7 +38,7 @@ export const errorHandler = (
     res.status(400).json({
       error: {
         code: "VALIDATION_ERROR",
-        message: "Parámetros de consulta inválidos.",
+        message: "Los datos enviados son inválidos.",
         details: {
           issues: error.issues.map((issue) => ({
             path: issue.path,

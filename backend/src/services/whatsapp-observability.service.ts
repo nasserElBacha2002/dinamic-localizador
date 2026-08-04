@@ -5,6 +5,7 @@ import { whatsappObservabilityRepository } from "../repositories/whatsapp-observ
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { mapMessageToObservabilityDto } from "../utils/whatsapp-observability-message-dto";
 import { whatsappProviderEventRepository } from "../repositories/whatsapp-provider-event.repository";
+import type { ObservabilityListMessagesQuery } from "../schemas/whatsapp-observability.schema";
 
 const clampLimit = (limit: number | undefined): number =>
   Math.min(Math.max(limit ?? 20, 1), 100);
@@ -124,33 +125,24 @@ export const whatsappObservabilityService = {
     return { phoneNormalized: phone };
   },
 
-  async listMessages(
-    conversationId: string,
-    query: { page?: number; limit?: number; direction?: string },
-  ) {
+  async listMessages(conversationId: string, query: ObservabilityListMessagesQuery) {
     this.assertUiEnabled();
     const detail = await whatsappObservabilityRepository.getConversationDetail(conversationId);
     if (!detail) {
       throw new AppError(404, "CONVERSATION_NOT_FOUND", "Conversación no encontrada.");
     }
-    const page = clampPage(query.page);
-    const limit = clampLimit(query.limit);
-    const result = await whatsappObservabilityRepository.listMessages(
-      conversationId,
-      page,
-      limit,
-      query.direction,
-    );
-    const totalPages =
-      result.total === 0 ? 0 : Math.max(1, Math.ceil(result.total / limit));
+    const result = await whatsappObservabilityRepository.listMessages(conversationId, {
+      limit: query.limit,
+      beforeCreatedAt: query.beforeCreatedAt,
+      beforeId: query.beforeId,
+      direction: query.direction,
+    });
     return {
       data: result.data.map((message) => mapMessageToObservabilityDto(message)),
       meta: {
-        page,
-        limit,
-        total: result.total,
-        totalPages,
-        hasMore: totalPages > 0 && page < totalPages,
+        limit: query.limit,
+        hasMore: result.hasMore,
+        nextCursor: result.nextCursor,
       },
     };
   },

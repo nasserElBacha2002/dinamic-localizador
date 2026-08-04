@@ -32,7 +32,8 @@ describe("whatsapp observability listMessages PII contract", () => {
     );
     mock.method(whatsappObservabilityRepository, "listMessages", async () => ({
       data: [message],
-      total: 1,
+      hasMore: false,
+      nextCursor: null,
     }));
     mock.method(whatsappObservabilityRepository, "getConversationDetail", async () => ({
       id: "22222222-2222-2222-2222-222222222222",
@@ -45,7 +46,7 @@ describe("whatsapp observability listMessages PII contract", () => {
 
     const result = await whatsappObservabilityService.listMessages(
       "22222222-2222-2222-2222-222222222222",
-      { page: 1, limit: 20 },
+      { limit: 20 },
     );
 
     const json = JSON.stringify(result);

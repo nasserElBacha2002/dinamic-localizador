@@ -159,55 +159,88 @@ export const whatsappObservabilityRepository = {
 
   async listMessages(
     conversationId: string,
-    page: number,
-    limit: number,
-    direction?: string,
-  ): Promise<{ data: WhatsAppMessage[]; total: number }> {
+    query: {
+      limit: number;
+      beforeCreatedAt?: string;
+      beforeId?: string;
+      direction?: string;
+    },
+  ): Promise<{
+    data: WhatsAppMessage[];
+    hasMore: boolean;
+    nextCursor: { createdAt: string; id: string } | null;
+  }> {
     const pool = getPool();
-    const offset = (page - 1) * limit;
+    const fetchLimit = query.limit + 1;
     const request = pool
       .request()
       .input("conversationId", sql.UniqueIdentifier, conversationId)
-      .input("offset", sql.Int, offset)
-      .input("limit", sql.Int, limit);
+      .input("limit", sql.Int, fetchLimit)
+      .input("direction", sql.NVarChar(20), query.direction ?? null)
+      .input("beforeCreatedAt", sql.DateTime2, query.beforeCreatedAt ?? null)
+      .input("beforeId", sql.UniqueIdentifier, query.beforeId ?? null);
 
-    let directionClause = "";
-    if (direction) {
-      request.input("direction", sql.NVarChar(20), direction);
-      directionClause = "AND direction = @direction";
-    }
-
-    const countResult = await request.query(`
-      SELECT COUNT(1) AS total
+    const listResult = await request.query(`
+      SELECT TOP (@limit)
+        id,
+        message_sid,
+        direction,
+        employee_id,
+        phone_from,
+        phone_to,
+        message_type,
+        body,
+        latitude,
+        longitude,
+        status,
+        processing_status,
+        processing_error_code,
+        processed_at,
+        created_at,
+        conversation_id,
+        correlation_id,
+        causation_id,
+        provider,
+        provider_message_sid,
+        template_sid,
+        template_name,
+        template_variables_json,
+        provider_status,
+        provider_error_code,
+        provider_error_message,
+        sent_at,
+        delivered_at,
+        read_at,
+        failed_at,
+        updated_at,
+        notification_id
       FROM whatsapp_messages
       WHERE conversation_id = @conversationId
-      ${directionClause}
+        AND (@direction IS NULL OR direction = @direction)
+        AND (
+          @beforeCreatedAt IS NULL
+          OR created_at < @beforeCreatedAt
+          OR (created_at = @beforeCreatedAt AND id < @beforeId)
+        )
+      ORDER BY created_at DESC, id DESC
     `);
-    const total = Number((countResult.recordset[0] as { total: number }).total ?? 0);
 
-    const listResult = await pool
-      .request()
-      .input("conversationId", sql.UniqueIdentifier, conversationId)
-      .input("offset", sql.Int, offset)
-      .input("limit", sql.Int, limit)
-      .input("direction", sql.NVarChar(20), direction ?? null)
-      .query(`
-        SELECT *
-        FROM whatsapp_messages
-        WHERE conversation_id = @conversationId
-          AND (@direction IS NULL OR direction = @direction)
-        ORDER BY created_at DESC, id DESC
-        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
-      `);
+    const newestFirst = (listResult.recordset as Record<string, unknown>[]).map(
+      mapWhatsAppMessageRow,
+    );
+    const hasMore = newestFirst.length > query.limit;
+    const pageNewestFirst = hasMore ? newestFirst.slice(0, query.limit) : newestFirst;
+    const oldestInPage = pageNewestFirst[pageNewestFirst.length - 1];
+    const nextCursor =
+      hasMore && oldestInPage
+        ? { createdAt: oldestInPage.createdAt, id: oldestInPage.id }
+        : null;
 
-    // Fetch newest-first for pagination windows; reverse to chronological ASC for UI.
-    const rows = (listResult.recordset as Record<string, unknown>[])
-      .map(mapWhatsAppMessageRow)
-      .reverse();
-
+    // Chronological ASC within the loaded window for chat UI.
     return {
-      data: rows,
-      total,
+      data: [...pageNewestFirst].reverse(),
+      hasMore,
+      nextCursor,
     };
   },
 

@@ -1,5 +1,5 @@
 import { Box, Button, Code, Group, Paper, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router";
 import {
   DataTable,
@@ -160,13 +160,15 @@ function ConversationChatPanel({
   const messagesQuery = useWhatsappConversationMessagesInfinite(conversationId, enabled);
   const messages = messagesQuery.data?.messages ?? [];
   const hasOlder = messagesQuery.hasNextPage;
-  const total = messagesQuery.data?.total ?? 0;
+  const loadedCount = messagesQuery.data?.loadedCount ?? messages.length;
   const isInitialPending = messagesQuery.isPending;
   const isInitialError = messagesQuery.isError && messages.length === 0;
 
-  if (messagesQuery.isError) {
-    logChatMessagesError(messagesQuery.error);
-  }
+  useEffect(() => {
+    if (messagesQuery.isError) {
+      logChatMessagesError(messagesQuery.error);
+    }
+  }, [messagesQuery.isError, messagesQuery.error]);
 
   if (isInitialPending) {
     return <LoadingState />;
@@ -223,16 +225,15 @@ function ConversationChatPanel({
         )}
       </ScrollArea.Autosize>
 
-      {messages.length > 0 && total > messages.length ? (
+      {messages.length > 0 && hasOlder ? (
         <Text size="xs" c="dimmed" ta="center">
-          Mostrando {messages.length} de {total} mensajes
-          {hasOlder ? ". Podés cargar mensajes anteriores." : "."}
+          Mostrando {loadedCount} mensajes cargados. Podés cargar mensajes anteriores.
         </Text>
       ) : null}
 
-      {messages.length > 0 && !hasOlder && total > 0 ? (
+      {messages.length > 0 && !hasOlder ? (
         <Text size="xs" c="dimmed" ta="center">
-          Fin del historial ({total} mensajes).
+          Fin del historial ({loadedCount} mensajes cargados).
         </Text>
       ) : null}
     </Stack>

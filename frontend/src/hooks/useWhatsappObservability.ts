@@ -1,4 +1,8 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  WHATSAPP_MESSAGES_DEFAULT_LIMIT,
+  type WhatsappMessagesCursor,
+} from "../api/contracts/whatsapp-observability";
 import { getActiveCompanyId } from "../api/company-path";
 import {
   getWhatsappConversationById,
@@ -18,21 +22,12 @@ import type {
   WhatsappObservabilityMessage,
 } from "../types/whatsapp-observability";
 import { useAuth } from "./useAuth";
-import {
-  WHATSAPP_CONVERSATION_MESSAGES_MAX_LIMIT,
-  WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE,
-} from "../pages/platform/observability/whatsapp-observability-messages";
 
 const BASE_KEY = "whatsapp-observability";
 
 function usePlatformObservabilityEnabled(enabled = true) {
   const { user } = useAuth();
   return enabled && Boolean(user?.isPlatformAdmin);
-}
-
-function clampMessagesLimit(limit: number | undefined): number {
-  const resolved = limit ?? WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE;
-  return Math.min(Math.max(resolved, 1), WHATSAPP_CONVERSATION_MESSAGES_MAX_LIMIT);
 }
 
 export function useWhatsappConversations(
@@ -60,55 +55,31 @@ export function useWhatsappConversation(conversationId: string | undefined, enab
   });
 }
 
-export function useWhatsappConversationMessages(
-  conversationId: string | undefined,
-  filters: { page?: number; limit?: number; direction?: string } = {},
-  enabled = true,
-) {
-  const canFetch = usePlatformObservabilityEnabled(enabled && Boolean(conversationId));
-  const companyId = getActiveCompanyId();
-  const safeFilters = {
-    ...filters,
-    limit: clampMessagesLimit(filters.limit),
-  };
-
-  return useQuery({
-    queryKey: [BASE_KEY, "conversation-messages", companyId, conversationId, safeFilters],
-    queryFn: () => getWhatsappConversationMessages(conversationId!, safeFilters),
-    enabled: canFetch,
-  });
-}
-
 /**
- * Loads newest message window first (page 1 = most recent), then older pages via fetchNextPage.
+ * Loads newest message window first, then older windows via cursor (`nextCursor`).
  * Pages are merged oldest→newest without duplicates.
  */
 export function useWhatsappConversationMessagesInfinite(
   conversationId: string | undefined,
   enabled = true,
-  limit: number = WHATSAPP_CONVERSATION_MESSAGES_PAGE_SIZE,
+  limit: number = WHATSAPP_MESSAGES_DEFAULT_LIMIT,
 ) {
   const canFetch = usePlatformObservabilityEnabled(enabled && Boolean(conversationId));
   const companyId = getActiveCompanyId();
-  const safeLimit = clampMessagesLimit(limit);
 
   return useInfiniteQuery({
-    queryKey: [BASE_KEY, "conversation-messages-infinite", companyId, conversationId, safeLimit],
+    queryKey: [BASE_KEY, "conversation-messages-infinite", companyId, conversationId, limit],
     queryFn: ({ pageParam }) =>
       getWhatsappConversationMessages(conversationId!, {
-        page: pageParam,
-        limit: safeLimit,
+        limit,
+        cursor: pageParam,
       }),
-    initialPageParam: 1,
+    initialPageParam: null as WhatsappMessagesCursor | null,
     getNextPageParam: (lastPage) => {
-      const { page, totalPages, hasMore } = lastPage.meta;
-      if (hasMore === false) {
+      if (!lastPage.meta.hasMore || !lastPage.meta.nextCursor) {
         return undefined;
       }
-      if (totalPages <= 0 || page >= totalPages) {
-        return undefined;
-      }
-      return page + 1;
+      return lastPage.meta.nextCursor;
     },
     enabled: canFetch,
     select: (data) => {
@@ -121,17 +92,10 @@ export function useWhatsappConversationMessagesInfinite(
       }
       const messages = Array.from(byId.values());
       const firstMeta = data.pages[0]?.meta;
-      const lastMeta = data.pages[data.pages.length - 1]?.meta;
       return {
         messages,
         meta: firstMeta,
-        hasOlder: Boolean(
-          lastMeta &&
-            lastMeta.totalPages > 0 &&
-            (lastMeta.hasMore ?? lastMeta.page < lastMeta.totalPages),
-        ),
         loadedCount: messages.length,
-        total: firstMeta?.total ?? 0,
       };
     },
   });

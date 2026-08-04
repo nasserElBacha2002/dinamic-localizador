@@ -2,6 +2,7 @@ export interface ApiErrorBody {
   error: {
     code: string;
     message: string;
+    details?: Record<string, unknown>;
   };
 }
 
@@ -10,6 +11,7 @@ export interface PaginationMeta {
   limit: number;
   total: number;
   totalPages: number;
+  hasMore?: boolean;
   truncated?: boolean;
   exportLimit?: number;
 }

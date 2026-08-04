@@ -4,6 +4,24 @@ import { AppError } from "../errors/app-error";
 
 type RequestPart = "body" | "query" | "params";
 
+export function getValidationMessage(part: RequestPart): string {
+  switch (part) {
+    case "query":
+      return "Parámetros de consulta inválidos.";
+    case "params":
+      return "Parámetros de ruta inválidos.";
+    case "body":
+      return "Los datos enviados son inválidos.";
+  }
+}
+
+const mapZodIssues = (error: ZodError) =>
+  error.issues.map((issue) => ({
+    path: issue.path,
+    code: issue.code,
+    message: issue.message,
+  }));
+
 export const validate =
   <T>(schema: ZodType<T>, part: RequestPart = "body") =>
   (req: Request, _res: Response, next: NextFunction): void => {
@@ -19,8 +37,11 @@ export const validate =
       next();
     } catch (error) {
       if (error instanceof ZodError) {
-        const message = error.issues.map((issue) => issue.message).join("; ");
-        next(new AppError(400, "VALIDATION_ERROR", message));
+        next(
+          new AppError(400, "VALIDATION_ERROR", getValidationMessage(part), {
+            issues: mapZodIssues(error),
+          }),
+        );
         return;
       }
 

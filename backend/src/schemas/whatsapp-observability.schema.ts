@@ -58,11 +58,31 @@ export const observabilityListConversationsQuerySchema = z
     }
   });
 
-export const observabilityListMessagesQuerySchema = z.object({
-  page: z.coerce.number().int().min(1).default(1),
-  limit: z.coerce.number().int().min(1).max(100).default(50),
-  direction: z.enum(["INBOUND", "OUTBOUND"]).optional(),
-});
+export const observabilityListMessagesQuerySchema = z
+  .object({
+    limit: z.coerce
+      .number()
+      .int("El límite debe ser un entero")
+      .min(1, "El límite debe ser al menos 1")
+      .max(100, "El límite máximo por solicitud es 100")
+      .default(50),
+    beforeCreatedAt: z.string().datetime({ offset: true }).optional(),
+    beforeId: uuid.optional(),
+    direction: z.enum(["INBOUND", "OUTBOUND"]).optional(),
+  })
+  .superRefine((data, ctx) => {
+    const hasCreatedAt = data.beforeCreatedAt !== undefined;
+    const hasId = data.beforeId !== undefined;
+    if (hasCreatedAt !== hasId) {
+      ctx.addIssue({
+        code: "custom",
+        message: "beforeCreatedAt y beforeId deben enviarse juntos.",
+        path: hasCreatedAt ? ["beforeId"] : ["beforeCreatedAt"],
+      });
+    }
+  });
+
+export type ObservabilityListMessagesQuery = z.infer<typeof observabilityListMessagesQuerySchema>;
 
 export const observabilityListErrorsQuerySchema = z
   .object({

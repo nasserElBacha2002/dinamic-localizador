@@ -92,7 +92,7 @@ describe("FilterBar responsive", () => {
     );
 
     assert.ok(view.getByLabelText("Buscar"));
-    const filtersButton = view.getByRole("button", { name: /Filtros/i });
+    const filtersButton = view.getByRole("button", { name: "Filtros" });
     assert.ok(filtersButton);
 
     fireEvent.click(filtersButton);
@@ -100,5 +100,35 @@ describe("FilterBar responsive", () => {
       assert.ok(within(document.body).getByRole("dialog"));
     });
     assert.ok(within(document.body).getByLabelText("Estado"));
+  });
+
+  it("places clear actions on a full-width trailing row for any filter count", () => {
+    mockViewport("desktop");
+    for (const count of [1, 2, 3, 4, 6, 7]) {
+      cleanup();
+      const view = render(
+        <MantineProvider>
+          <FilterBar
+            search={<input aria-label="Buscar" />}
+            activeFilterCount={1}
+            onClearFilters={() => undefined}
+          >
+            {Array.from({ length: count }, (_, index) => (
+              <FilterBar.Item key={index}>
+                <label>
+                  F{index}
+                  <input aria-label={`F${index}`} defaultValue="" />
+                </label>
+              </FilterBar.Item>
+            ))}
+          </FilterBar>
+        </MantineProvider>,
+      );
+      const actions = view.getByTestId("filter-bar-actions");
+      assert.ok(view.getByRole("button", { name: "Limpiar filtros" }));
+      assert.ok(view.getByLabelText("Buscar"));
+      assert.equal(actions.style.width, "100%");
+      assert.equal((actions.parentElement as HTMLElement).style.gridColumn, "1 / -1");
+    }
   });
 });

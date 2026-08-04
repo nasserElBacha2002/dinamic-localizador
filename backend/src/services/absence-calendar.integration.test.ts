@@ -12,13 +12,31 @@ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-f
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { AppError } from "../errors/app-error";
+import { getTodayAbsenceDateIso } from "../utils/absence-date";
+import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 import { absenceCalendarService } from "./absence-calendar.service";
 import { absenceRequestService } from "./absence-request.service";
+
+const COMPANY_TZ = "America/Argentina/Buenos_Aires";
 
 const uniqueCompanyName = (): string =>
   `Absence Cal ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
 const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}`;
+
+/** Next Monday at least `minDaysAhead` days from company today (UTC weekday of ISO date). */
+const futureMondayIso = (minDaysAhead = 14): string => {
+  let iso = addDaysToDateIso(getTodayAbsenceDateIso(COMPANY_TZ), minDaysAhead);
+  for (let i = 0; i < 7; i += 1) {
+    const [year, month, day] = iso.split("-").map(Number);
+    const dow = new Date(Date.UTC(year!, month! - 1, day!)).getUTCDay();
+    if (dow === 1) {
+      return iso;
+    }
+    iso = addDaysToDateIso(iso, 1);
+  }
+  return iso;
+};
 
 describeDatabaseIntegration("absence calendar phase 2 integration", () => {
   const createdCompanyIds: string[] = [];
@@ -97,24 +115,28 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
       categoryId: null,
     });
 
+    const previewStart = futureMondayIso(14);
+    const previewEnd = addDaysToDateIso(previewStart, 2);
     const preview = await absenceCalendarService.preview(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-08-03",
-      endDate: "2026-08-05",
+      startDate: previewStart,
+      endDate: previewEnd,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
     });
     assert.equal(preview.totalDays, 3);
     assert.equal(preview.countingMode, "CALENDAR_DAYS");
 
+    const createStart = addDaysToDateIso(previewStart, 7);
+    const createEnd = addDaysToDateIso(createStart, 2);
     const created = await absenceRequestService.createFromAdmin(
       companyId,
       {
         employeeId: employee.id,
         absenceTypeId: vacation.id,
-        startDate: "2026-08-10",
-        endDate: "2026-08-12",
+        startDate: createStart,
+        endDate: createEnd,
         startPeriod: "FULL_DAY",
         endPeriod: "FULL_DAY",
         reason: "Viaje de prueba calendario",
@@ -235,9 +257,13 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
         WHERE company_id = @companyId AND id = @typeId
       `);
 
+    const monday = futureMondayIso(14);
+    const wednesday = addDaysToDateIso(monday, 2);
+    const friday = addDaysToDateIso(monday, 4);
+
     await absenceCalendarService.createDate(companyId, {
       calendarId: calendar.id,
-      date: "2026-08-05",
+      date: wednesday,
       name: "Feriado prueba",
       dateType: "HOLIDAY",
       isWorkingDay: false,
@@ -254,8 +280,8 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
     const preview = await absenceCalendarService.preview(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-08-03",
-      endDate: "2026-08-07",
+      startDate: monday,
+      endDate: friday,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
     });
@@ -357,9 +383,13 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
     assert.equal(updatedType.dayCountingMode, "BUSINESS_DAYS");
     assert.equal(updatedType.calendarId, calendar.id);
 
+    const monday = futureMondayIso(21);
+    const wednesday = addDaysToDateIso(monday, 2);
+    const friday = addDaysToDateIso(monday, 4);
+
     await absenceCalendarService.createDate(companyId, {
       calendarId: calendar.id,
-      date: "2026-08-05",
+      date: wednesday,
       name: "Feriado policy",
       dateType: "HOLIDAY",
       isWorkingDay: false,
@@ -378,8 +408,8 @@ describeDatabaseIntegration("absence calendar phase 2 integration", () => {
       {
         employeeId: employee.id,
         absenceTypeId: vacation.id,
-        startDate: "2026-08-03",
-        endDate: "2026-08-07",
+        startDate: monday,
+        endDate: friday,
         startPeriod: "FULL_DAY",
         endPeriod: "FULL_DAY",
         reason: "Prueba business days policy",

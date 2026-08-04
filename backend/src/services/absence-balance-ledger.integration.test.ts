@@ -12,13 +12,21 @@ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-f
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { AppError } from "../errors/app-error";
+import { getTodayAbsenceDateIso } from "../utils/absence-date";
+import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 import { absenceBalanceLedgerService } from "./absence-balance-ledger.service";
 import { absenceRequestService } from "./absence-request.service";
 import { absenceReviewService } from "./absence-review.service";
 
+const COMPANY_TZ = "America/Argentina/Buenos_Aires";
+
 const uniqueCompanyName = (): string =>
   `Balance Ledger ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}`;
+
+/** Calendar date at least `minDaysAhead` from company "today" (avoids ABSENCE_START_IN_PAST). */
+const futureAbsenceDateIso = (minDaysAhead = 14): string =>
+  addDaysToDateIso(getTodayAbsenceDateIso(COMPANY_TZ), minDaysAhead);
 
 describeDatabaseIntegration("absence balance ledger phase 3", () => {
   const createdCompanyIds: string[] = [];
@@ -100,13 +108,15 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
         ) VALUES (@companyId, @employeeId, @typeId, 2026, 10, NULL, 10, 0, 0, 10, 1);
       `);
 
+    const startDate = futureAbsenceDateIso(14);
+    const endDate = addDaysToDateIso(startDate, 2);
     const created = await absenceRequestService.createFromAdmin(
       companyId,
       {
         employeeId: employee.id,
         absenceTypeId: vacation.id,
-        startDate: "2026-08-03",
-        endDate: "2026-08-05",
+        startDate,
+        endDate,
         startPeriod: "FULL_DAY",
         endPeriod: "FULL_DAY",
         reason: "Ledger reserve test",

@@ -6,6 +6,7 @@ import {
   getAbsenceModuleBlockedMessage,
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
+  getPayrollReceiptsModuleBlockedMessage,
   isModuleEnabledInStates,
 } from "./whatsapp-module-gate";
 
@@ -14,6 +15,7 @@ const allEnabled = () =>
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
     [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
+    [COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, true],
   ]);
 
 describe("whatsappModuleGate", () => {
@@ -23,6 +25,7 @@ describe("whatsappModuleGate", () => {
     assert.equal(getAttendanceModuleBlockedMessage(states), null);
     assert.equal(getCheckInModuleBlockedMessage(states), null);
     assert.equal(getAbsenceModuleBlockedMessage(states), null);
+    assert.equal(getPayrollReceiptsModuleBlockedMessage(states), null);
   });
 
   it("blocks attendance when attendance module is disabled", () => {
@@ -46,5 +49,12 @@ describe("whatsappModuleGate", () => {
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
 
     assert.equal(getAbsenceModuleBlockedMessage(states), MODULE_DISABLED_MESSAGE);
+  });
+
+  it("blocks payroll receipt flow when payroll_receipts module is disabled", () => {
+    const states = allEnabled();
+    states.set(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, false);
+
+    assert.equal(getPayrollReceiptsModuleBlockedMessage(states), MODULE_DISABLED_MESSAGE);
   });
 });

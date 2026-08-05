@@ -30,6 +30,9 @@ export function BotQuickActions({
       <Button size="compact-xs" variant="default" disabled={isBusy} onClick={() => void onSendText("Menú")}>
         Enviar &quot;Menú&quot;
       </Button>
+      <Button size="compact-xs" variant="default" disabled={isBusy} onClick={() => void onSendText("Mi recibo")}>
+        Enviar &quot;Mi recibo&quot;
+      </Button>
       <Button
         size="compact-xs"
         variant="default"

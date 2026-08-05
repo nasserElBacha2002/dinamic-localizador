@@ -39,6 +39,8 @@ export const deleteCompanyOperationalDataSetBased = async (
 
     DELETE FROM attendance_records WHERE company_id = @companyId;
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
+      DELETE FROM whatsapp_payroll_receipt_notifications WHERE company_id = @companyId;
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
 
@@ -66,6 +68,11 @@ export const deleteCompanyOperationalDataSetBased = async (
 
     DELETE FROM absence_requests WHERE company_id = @companyId;
     DELETE FROM employee_absence_balances WHERE company_id = @companyId;
+
+    IF OBJECT_ID(N'dbo.payroll_receipts', N'U') IS NOT NULL
+      DELETE FROM payroll_receipts WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.payroll_receipt_batches', N'U') IS NOT NULL
+      DELETE FROM payroll_receipt_batches WHERE company_id = @companyId;
 
     -- Provider events are keyed by message_id / SID, not company_id.
     IF OBJECT_ID(N'dbo.whatsapp_provider_events', N'U') IS NOT NULL
@@ -296,6 +303,29 @@ export const deleteEmployeeCascade = async (
 
       DELETE FROM absence_requests
       WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.payroll_receipts', N'U') IS NOT NULL
+      BEGIN
+        INSERT INTO company_pending_storage_deletions (company_id, storage_object_key)
+        SELECT DISTINCT r.company_id, r.storage_object_key
+        FROM payroll_receipts r
+        WHERE r.company_id = @companyId
+          AND r.employee_id = @employeeId
+          AND r.storage_object_key IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM company_pending_storage_deletions p
+            WHERE p.company_id = r.company_id
+              AND p.storage_object_key = r.storage_object_key
+          );
+
+        IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
+          DELETE FROM whatsapp_payroll_receipt_notifications
+          WHERE company_id = @companyId AND employee_id = @employeeId;
+
+        DELETE FROM payroll_receipts
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+      END;
 
       DELETE FROM attendance_records
       WHERE company_id = @companyId AND employee_id = @employeeId;

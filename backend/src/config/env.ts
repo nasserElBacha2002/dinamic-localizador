@@ -29,6 +29,7 @@ const envSchema = z
     TWILIO_EXIT_REMINDER_CONTENT_SID: z.string().optional(),
     TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID: z.string().optional(),
     TWILIO_TEMPLATE_NO_CHECKIN_SID: z.string().optional(),
+    TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID: z.string().optional(),
     ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
     RECURRING_WORKDAY_HORIZON_DAYS: z.coerce.number().int().positive().default(60),
     RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED: z.stringbool().default(true),
@@ -73,6 +74,15 @@ const envSchema = z
     API_SERVICE_NAME: z.string().min(1).default("dinamic-attendance-api"),
     ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
     ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+    /** Google Cloud Storage prefix for payroll receipts (same bucket as absences). */
+    PAYROLL_RECEIPTS_STORAGE_PREFIX: z.string().min(1).default("payroll-receipts"),
+    PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH: z.coerce.number().int().positive().default(50),
+    PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(true),
+    PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+    PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
     COMPANY_DELETION_JOB_ENABLED: z.stringbool().default(true),

@@ -125,3 +125,17 @@ export const ABSENCES_API_EXPORTS = [
   "downloadAbsenceAttachmentContent",
   "getAbsenceAttachmentStorageHealth",
 ] as const;
+
+export const PAYROLL_RECEIPTS_API_EXPORTS = [
+  "createPayrollReceiptBatch",
+  "getPayrollReceiptBatches",
+  "getPayrollReceiptBatch",
+  "uploadPayrollReceiptToBatch",
+  "getPayrollReceipts",
+  "getPayrollReceiptById",
+  "getPayrollReceiptContentUrl",
+  "downloadPayrollReceiptContent",
+  "replacePayrollReceipt",
+  "deletePayrollReceipt",
+  "reconcilePayrollReceiptAssociation",
+] as const;

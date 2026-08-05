@@ -67,3 +67,13 @@ export function getAssignmentConfirmationModuleBlockedMessage(
 ): string | null {
   return getUpcomingAssignmentsModuleBlockedMessage(moduleStates);
 }
+
+export function getPayrollReceiptsModuleBlockedMessage(
+  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+): string | null {
+  if (!isModuleEnabledInStates(moduleStates, COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS)) {
+    return MODULE_DISABLED_MESSAGE;
+  }
+
+  return null;
+}

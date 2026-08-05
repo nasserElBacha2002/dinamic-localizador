@@ -5,12 +5,14 @@ import {
   isAssignmentSelectionSessionState,
   isCheckInSessionState,
   isCheckoutSessionState,
+  isPayrollReceiptSessionState,
 } from "../../utils/bot-session-states";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
+  getPayrollReceiptsModuleBlockedMessage,
 } from "../whatsapp-module-gate";
 import {
   buildAvailableMenuOptions,
@@ -116,6 +118,10 @@ export function getModuleBlockedMessageForSessionState(
 
   if (isAssignmentSelectionSessionState(state)) {
     return getAssignmentConfirmationModuleBlockedMessage(moduleStates);
+  }
+
+  if (isPayrollReceiptSessionState(state)) {
+    return getPayrollReceiptsModuleBlockedMessage(moduleStates);
   }
 
   return null;

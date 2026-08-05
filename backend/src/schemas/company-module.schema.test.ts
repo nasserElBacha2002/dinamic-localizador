@@ -36,7 +36,8 @@ describe("updateCompanyModulesSchema", () => {
   });
 
   it("covers all allowed module keys", () => {
-    assert.equal(ALL_COMPANY_MODULE_KEYS.length, 5);
+    assert.ok(ALL_COMPANY_MODULE_KEYS.includes("payroll_receipts"));
+    assert.equal(ALL_COMPANY_MODULE_KEYS.length, 6);
     for (const moduleKey of ALL_COMPANY_MODULE_KEYS) {
       const parsed = updateCompanyModulesSchema.parse({
         modules: [{ moduleKey, isEnabled: true }],

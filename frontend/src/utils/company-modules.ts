@@ -14,6 +14,7 @@ export const COMPANY_MODULE_LABELS: Record<CompanyModuleKey, string> = {
   attendance: terminology.attendance.plural,
   operations: terminology.operation.plural,
   absences: terminology.absence.plural,
+  payroll_receipts: "Recibos de sueldo",
   reports: "Reportes",
   bot_simulator: "Simulador de Bot",
 };
@@ -22,6 +23,7 @@ export const COMPANY_MODULE_DESCRIPTIONS: Record<CompanyModuleKey, string> = {
   attendance: "Permite registrar y revisar asistencias.",
   operations: `Habilita ${terminology.service.plural.toLowerCase()}, ${terminology.operation.plural.toLowerCase()} y asignaciones.`,
   absences: "Permite gestionar tipos y solicitudes de ausencia.",
+  payroll_receipts: "Permite cargar y consultar recibos de sueldo por período.",
   reports: "Habilita estadísticas y reportes.",
   bot_simulator: "Permite probar flujos conversacionales del bot.",
 };
@@ -94,6 +96,15 @@ export const MODULE_ROUTE_ACCESS = {
     requiredAnyPermission: [
       "absences:read",
       "absences:review",
+    ] as const satisfies readonly CompanyPermission[],
+  },
+  payroll_receipts: {
+    moduleKey: "payroll_receipts" as const,
+    requiredAnyPermission: [
+      "payroll_receipts:read",
+      "payroll_receipts:upload",
+      "payroll_receipts:manage",
+      "payroll_receipts:download",
     ] as const satisfies readonly CompanyPermission[],
   },
   reports: {
@@ -173,6 +184,14 @@ export function getAdminNavItems({
 
     if (canAccessModuleRoute(modules, permissions, "absences")) {
       items.push({ label: terminology.absence.plural, path: "/absences", section: "operation" });
+    }
+
+    if (canAccessModuleRoute(modules, permissions, "payroll_receipts")) {
+      items.push({
+        label: "Recibos de sueldo",
+        path: "/payroll-receipts",
+        section: "operation",
+      });
     }
 
     if (canAccessModuleRoute(modules, permissions, "reports")) {

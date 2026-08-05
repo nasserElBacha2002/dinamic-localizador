@@ -30,6 +30,7 @@ import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
+import { PayrollReceiptsListPage } from "../pages/payroll-receipts/PayrollReceiptsListPage";
 import { MODULE_ROUTE_ACCESS } from "../utils/company-modules";
 import {
   employeeAccess,
@@ -73,6 +74,10 @@ const OperationEditPage = lazyNamed(
 const AbsenceDetailPage = lazyNamed(
   () => import("../pages/absences/AbsenceDetailPage"),
   "AbsenceDetailPage",
+);
+const PayrollReceiptDetailPage = lazyNamed(
+  () => import("../pages/payroll-receipts/PayrollReceiptDetailPage"),
+  "PayrollReceiptDetailPage",
 );
 const AttendanceDetailPage = lazyNamed(
   () => import("../pages/attendance/AttendanceDetailPage"),
@@ -323,6 +328,22 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.absences}>
               <LazyPage component={AbsenceDetailPage} message="Cargando ausencia..." />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/payroll-receipts"
+          element={
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.payroll_receipts}>
+              <PayrollReceiptsListPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/payroll-receipts/:id"
+          element={
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.payroll_receipts}>
+              <LazyPage component={PayrollReceiptDetailPage} message="Cargando recibo..." />
             </FeatureRouteGuard>
           }
         />

@@ -17,6 +17,7 @@ const allEnabled = () =>
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
     [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
+    [COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, true],
   ]);
 
 describe("buildGreetingMessage", () => {
@@ -29,6 +30,7 @@ describe("buildGreetingMessage", () => {
     assert.match(message, /Ver próximos turnos — escribí "Mis turnos" o "Agenda"/);
     assert.match(message, /Confirmar asistencia — escribí "Confirmo asistencia"/);
     assert.match(message, /Avisar no disponibilidad — escribí "No puedo asistir"/);
+    assert.match(message, /Consultar recibo de sueldo — escribí "Mi recibo"/);
     assert.match(message, /Ayuda/);
     assert.match(message, /Cancelar/);
     assert.match(message, /número de la opción/);
@@ -94,6 +96,7 @@ describe("buildGreetingMessage", () => {
     states.set(COMPANY_MODULE_KEYS.ATTENDANCE, false);
     states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
     states.set(COMPANY_MODULE_KEYS.ABSENCES, false);
+    states.set(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, false);
     const message = buildGreetingMessage(states);
     assert.equal(message, NO_WHATSAPP_OPTIONS_MESSAGE);
     assert.doesNotMatch(message, new RegExp(MODULE_DISABLED_MESSAGE));

@@ -5,6 +5,7 @@ import {
 import {
   buildEmployeeAbsencesPath,
   buildEmployeeAttendancePath,
+  buildEmployeePayrollReceiptsPath,
   buildEmployeeStatisticsPath,
 } from "./employee-module-links";
 import type { CompanyModule } from "../types/company-module";
@@ -28,6 +29,11 @@ export function listEmployeeModuleQuickLinkCandidates(
       accessKey: "absences",
       label: "Ver ausencias",
       to: buildEmployeeAbsencesPath(employeeId),
+    },
+    {
+      accessKey: "payroll_receipts",
+      label: "Ver recibos de sueldo",
+      to: buildEmployeePayrollReceiptsPath(employeeId),
     },
     {
       accessKey: "reports",

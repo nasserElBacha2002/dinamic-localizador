@@ -28,6 +28,7 @@ describe("bot session expiration helpers", () => {
       "WAITING_CONFIRM_ATTENDANCE_SELECTION",
       "WAITING_UNAVAILABILITY_SELECTION",
       "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
+      "WAITING_PAYROLL_RECEIPT_PERIOD",
     ]);
   });
 

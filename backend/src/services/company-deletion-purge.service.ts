@@ -274,20 +274,38 @@ export const companyDeletionPurgeService = {
     const hasTable = await pool.request().query(`
       SELECT CASE WHEN OBJECT_ID(N'dbo.absence_request_attachments', N'U') IS NULL THEN 0 ELSE 1 END AS present
     `);
-    if (!Number(hasTable.recordset[0]?.present)) {
+    if (Number(hasTable.recordset[0]?.present)) {
+      await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
+        INSERT INTO company_pending_storage_deletions (company_id, storage_object_key)
+        SELECT DISTINCT a.company_id, a.object_key
+        FROM absence_request_attachments a
+        WHERE a.company_id = @companyId
+          AND a.object_key IS NOT NULL
+          AND NOT EXISTS (
+            SELECT 1
+            FROM company_pending_storage_deletions p
+            WHERE p.company_id = a.company_id AND p.storage_object_key = a.object_key
+          )
+      `);
+    }
+
+    const hasPayroll = await pool.request().query(`
+      SELECT CASE WHEN OBJECT_ID(N'dbo.payroll_receipts', N'U') IS NULL THEN 0 ELSE 1 END AS present
+    `);
+    if (!Number(hasPayroll.recordset[0]?.present)) {
       return;
     }
 
     await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
       INSERT INTO company_pending_storage_deletions (company_id, storage_object_key)
-      SELECT DISTINCT a.company_id, a.object_key
-      FROM absence_request_attachments a
-      WHERE a.company_id = @companyId
-        AND a.object_key IS NOT NULL
+      SELECT DISTINCT r.company_id, r.storage_object_key
+      FROM payroll_receipts r
+      WHERE r.company_id = @companyId
+        AND r.storage_object_key IS NOT NULL
         AND NOT EXISTS (
           SELECT 1
           FROM company_pending_storage_deletions p
-          WHERE p.company_id = a.company_id AND p.storage_object_key = a.object_key
+          WHERE p.company_id = r.company_id AND p.storage_object_key = r.storage_object_key
         )
     `);
   },

@@ -44,6 +44,7 @@ const MODULE_OPTIONS: CompanyModuleKey[] = [
   "attendance",
   "operations",
   "absences",
+  "payroll_receipts",
   "reports",
   "bot_simulator",
 ];

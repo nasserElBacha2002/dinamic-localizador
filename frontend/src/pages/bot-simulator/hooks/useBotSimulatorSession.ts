@@ -191,6 +191,7 @@ export function useBotSimulatorSession() {
       ["reviewMargin", "Margen de revisión (m)"],
       ["expectedResult", "Resultado esperado"],
       ["generatedBotResponse", "Respuesta del bot"],
+      ["payrollReceiptDelivery", "Entrega de recibo"],
       ["error", "Error"],
     ];
 

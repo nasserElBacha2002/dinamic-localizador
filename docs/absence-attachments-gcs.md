@@ -86,7 +86,7 @@ GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-service-account.json
 # GOOGLE_APPLICATION_CREDENTIALS=../secrets/gcp-service-account.json
 ```
 
-3. `docker-compose.yml` monta `./secrets:/app/secrets:ro` en el backend.
+3. `docker-compose.yml` y `docker-compose.prod.yml` montan `./secrets:/app/secrets:ro` en el backend.
 
 Solo se versionan `secrets/README.md` y `secrets/gcp-service-account.json.example`. El `.gitignore` excluye el JSON real y cualquier `*service-account*.json`.
 

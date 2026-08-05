@@ -11,7 +11,6 @@ import {
   StatusBadge,
 } from "../design-system";
 import { useCompanyPermissions } from "../hooks/useCompanyUsers";
-import { useApiHealth, useDatabaseHealth } from "../hooks/useHealth";
 import { useOperations } from "../hooks/useOperations";
 import type { OperationWithService } from "../types/operation";
 import { terminology } from "../domain/terminology";
@@ -19,9 +18,9 @@ import { hasAnyPermission } from "../utils/permissions";
 import { formatDateTime } from "../utils/dates";
 import { operationStatusLabels } from "../utils/labels";
 
-type HealthStatus = "loading" | "ok" | "error";
+type SummaryStatus = "loading" | "ok" | "error";
 
-function healthStatusLabel(status: HealthStatus): string {
+function summaryStatusLabel(status: SummaryStatus): string {
   if (status === "loading") {
     return "Consultando";
   }
@@ -33,7 +32,7 @@ function healthStatusLabel(status: HealthStatus): string {
   return "Con error";
 }
 
-function healthStatusTone(status: HealthStatus): "success" | "warning" | "danger" {
+function summaryStatusTone(status: SummaryStatus): "success" | "warning" | "danger" {
   if (status === "ok") {
     return "success";
   }
@@ -43,23 +42,6 @@ function healthStatusTone(status: HealthStatus): "success" | "warning" | "danger
   }
 
   return "danger";
-}
-
-interface HealthMetricCardProps {
-  title: string;
-  status: HealthStatus;
-  details: string;
-}
-
-function HealthMetricCard({ title, status, details }: HealthMetricCardProps) {
-  return (
-    <MetricCard
-      title={title}
-      value={<StatusBadge label={healthStatusLabel(status)} tone={healthStatusTone(status)} />}
-      description={details}
-      loading={status === "loading"}
-    />
-  );
 }
 
 function UpcomingOperationCard({ operation }: { operation: OperationWithService }) {
@@ -110,10 +92,7 @@ function UpcomingOperationCard({ operation }: { operation: OperationWithService 
 }
 
 export function HomePage() {
-  const apiHealth = useApiHealth();
-  const databaseHealth = useDatabaseHealth();
   const permissionsQuery = useCompanyPermissions();
-  const healthReady = databaseHealth.data?.database === "connected";
 
   const canReadOperations = hasAnyPermission(permissionsQuery.data?.permissions, [
     "operations:read",
@@ -122,22 +101,10 @@ export function HomePage() {
 
   const upcomingOperationsQuery = useOperations(
     { status: "SCHEDULED", page: 1, limit: 5 },
-    healthReady && canReadOperations,
+    canReadOperations,
   );
 
-  const apiStatus: HealthStatus = apiHealth.isLoading
-    ? "loading"
-    : apiHealth.isError
-      ? "error"
-      : "ok";
-
-  const databaseStatus: HealthStatus = databaseHealth.isLoading
-    ? "loading"
-    : databaseHealth.data?.database === "connected"
-      ? "ok"
-      : "error";
-
-  const upcomingSummaryStatus: HealthStatus = upcomingOperationsQuery.isLoading
+  const upcomingSummaryStatus: SummaryStatus = upcomingOperationsQuery.isLoading
     ? "loading"
     : upcomingOperationsQuery.isError
       ? "error"
@@ -150,39 +117,25 @@ export function HomePage() {
         description={`Panel administrativo para planificar ${terminology.operation.plural.toLowerCase()}, asignar ${terminology.worker.plural.toLowerCase()} y revisar asistencias.`}
       />
 
-      <SimpleGrid cols={{ base: 1, md: 2, lg: canReadOperations ? 3 : 2 }} spacing="md" mb="xl">
-        <HealthMetricCard
-          title="Backend"
-          status={apiStatus}
-          details={
-            apiHealth.data
-              ? `Servicio ${apiHealth.data.service} operativo`
-              : apiHealth.isError
-                ? "No se pudo contactar al backend"
-                : "Verificando..."
-          }
-        />
-        <HealthMetricCard
-          title="Base de datos"
-          status={databaseStatus}
-          details={
-            databaseHealth.data?.database === "connected"
-              ? "Conexión establecida"
-              : databaseHealth.data?.message ?? "Verificando conexión..."
-          }
-        />
-        {canReadOperations ? (
-          <HealthMetricCard
+      {canReadOperations ? (
+        <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md" mb="xl">
+          <MetricCard
             title={`Próximas ${terminology.operation.plural.toLowerCase()}`}
-            status={upcomingSummaryStatus}
-            details={
+            value={
+              <StatusBadge
+                label={summaryStatusLabel(upcomingSummaryStatus)}
+                tone={summaryStatusTone(upcomingSummaryStatus)}
+              />
+            }
+            description={
               upcomingOperationsQuery.data
                 ? `${upcomingOperationsQuery.data.meta.total} ${terminology.operation.plural.toLowerCase()} programadas`
                 : "No disponible"
             }
+            loading={upcomingSummaryStatus === "loading"}
           />
-        ) : null}
-      </SimpleGrid>
+        </SimpleGrid>
+      ) : null}
 
       {canReadOperations ? (
         <SectionCard
@@ -214,8 +167,8 @@ export function HomePage() {
       ) : (
         <SectionCard title="Estado operativo" description="Resumen del entorno de la plataforma.">
           <Text size="sm" c="dimmed">
-            Conectá la base de datos y revisá el estado del backend para habilitar más información
-            operativa en el panel.
+            Seleccioná una empresa y revisá los módulos habilitados para ver información operativa
+            en el panel.
           </Text>
         </SectionCard>
       )}

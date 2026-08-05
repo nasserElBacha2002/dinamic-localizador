@@ -1,18 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import { getApiHealth, getDatabaseHealth } from "../api/health.api";
+import { getApiHealth } from "../api/health.api";
 
+/** Public process liveness only. Prefer platform server status for Super Admin diagnostics. */
 export function useApiHealth() {
   return useQuery({
-    queryKey: ["api-health"],
+    queryKey: ["health", "api"],
     queryFn: getApiHealth,
-    refetchInterval: 15000,
-  });
-}
-
-export function useDatabaseHealth() {
-  return useQuery({
-    queryKey: ["database-health"],
-    queryFn: getDatabaseHealth,
-    refetchInterval: 15000,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
 }

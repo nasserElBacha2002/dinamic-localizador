@@ -9,6 +9,7 @@ import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
 import { AcceptInvitationPage } from "../pages/invitations/AcceptInvitationPage";
 import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";
+import { ServerStatusPage } from "../pages/platform/ServerStatusPage";
 import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
@@ -357,6 +358,14 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard requirePlatformAdmin>
               <PlatformCompaniesPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/platform/servers"
+          element={
+            <FeatureRouteGuard requirePlatformAdmin>
+              <ServerStatusPage />
             </FeatureRouteGuard>
           }
         />

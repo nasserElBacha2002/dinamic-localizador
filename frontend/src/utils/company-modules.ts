@@ -204,6 +204,7 @@ export function getAdminNavItems({
 
   if (isPlatformAdmin) {
     items.push({ label: "Empresas de plataforma", path: "/platform/companies", section: "settings" });
+    items.push({ label: "Estado de servidores", path: "/platform/servers", section: "settings" });
     if (isWhatsappObservabilityUiEnabled()) {
       items.push({
         label: "Observabilidad WhatsApp",

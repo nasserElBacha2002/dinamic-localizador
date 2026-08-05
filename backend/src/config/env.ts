@@ -67,6 +67,10 @@ const envSchema = z
     GCS_MAX_FILES_PER_REQUEST: z.coerce.number().int().positive().default(5),
     GCS_MAX_TOTAL_SIZE_BYTES: z.coerce.number().int().positive().default(15_728_640),
     GCS_UPLOAD_MODE: z.enum(["BACKEND_STREAM"]).default("BACKEND_STREAM"),
+    /** When true, missing/unavailable GCS makes platform diagnostics overall status non-ok. */
+    GCS_REQUIRED: z.stringbool().default(false),
+    PLATFORM_SERVER_STATUS_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
+    API_SERVICE_NAME: z.string().min(1).default("dinamic-attendance-api"),
     ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
     ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
     WHATSAPP_OBSERVABILITY_ENABLED: z.stringbool().default(true),

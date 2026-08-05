@@ -8,7 +8,7 @@ import { companyLocationTypesService } from "./company-location-types.service";
 import { companyWorkScheduleService } from "./company-work-schedule.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
-import { absenceAttachmentService } from "./absence-attachment.service";
+import { getAttachmentStorageHealth } from "./attachment-storage";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
 import type { UpdateCompanyAbsenceSettingsInput } from "../schemas/company-absence-settings.schema";
 import type {
@@ -97,7 +97,7 @@ export const companyService = {
     await this.getCompanyOrThrow(companyId);
 
     if (input.absenceAttachmentsEnabled === true) {
-      const health = await absenceAttachmentService.getStorageHealth();
+      const health = await getAttachmentStorageHealth();
       if (!health.configured || !health.available) {
         throw new AppError(
           503,

@@ -4,6 +4,7 @@ import {
   buildEmployeeAbsencesPath,
   buildEmployeeAttendancePath,
   buildEmployeeModulePath,
+  buildEmployeePayrollReceiptsPath,
   buildEmployeeStatisticsPath,
 } from "./employee-module-links";
 import { parseTableUrlState } from "./table-url-state";
@@ -12,6 +13,10 @@ import {
   ABSENCES_TABLE_DEFAULTS,
   ABSENCES_TABLE_FIELDS,
 } from "../pages/absences/absences-list-table-state";
+import {
+  PAYROLL_RECEIPTS_TABLE_DEFAULTS,
+  PAYROLL_RECEIPTS_TABLE_FIELDS,
+} from "../pages/payroll-receipts/payroll-receipts-list-table-state";
 import {
   buildStatisticsTableDefaults,
   STATISTICS_TABLE_FIELDS,
@@ -31,6 +36,11 @@ describe("employee-module-links", () => {
     assert.equal(path, `/absences?employeeIds=${EMPLOYEE_ID}&status=all`);
   });
 
+  it("builds payroll receipts URL with employeeIds", () => {
+    const path = buildEmployeePayrollReceiptsPath(EMPLOYEE_ID);
+    assert.equal(path, `/payroll-receipts?employeeIds=${EMPLOYEE_ID}`);
+  });
+
   it("builds statistics URL with employeeIds and employee tab", () => {
     const path = buildEmployeeStatisticsPath(EMPLOYEE_ID);
     assert.equal(path, `/statistics?employeeIds=${EMPLOYEE_ID}&tab=employee`);
@@ -39,6 +49,7 @@ describe("employee-module-links", () => {
   it("omits employeeIds when id is empty", () => {
     assert.equal(buildEmployeeModulePath("attendance", "  "), "/attendance");
     assert.equal(buildEmployeeAbsencesPath(""), "/absences");
+    assert.equal(buildEmployeePayrollReceiptsPath(""), "/payroll-receipts");
   });
 });
 
@@ -60,6 +71,15 @@ describe("employee deep-link URL contracts", () => {
     });
     assert.deepEqual(state.employeeIds, [EMPLOYEE_ID]);
     assert.equal(state.status, "all");
+  });
+
+  it("Payroll receipts list hydrates employeeIds from the deep-link", () => {
+    const state = parseTableUrlState({
+      defaults: PAYROLL_RECEIPTS_TABLE_DEFAULTS,
+      fields: PAYROLL_RECEIPTS_TABLE_FIELDS,
+      searchParams: new URLSearchParams(`employeeIds=${EMPLOYEE_ID}`),
+    });
+    assert.deepEqual(state.employeeIds, [EMPLOYEE_ID]);
   });
 
   it("Statistics hydrates employeeIds and tab=employee from the deep-link", () => {

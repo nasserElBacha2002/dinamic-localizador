@@ -43,6 +43,7 @@ export function ActionMenu({
     <Group
       gap="xs"
       wrap="nowrap"
+      justify="flex-end"
       onClick={(event) => stopIfNeeded(event, stopPropagation)}
       onKeyDown={(event) => {
         if (stopPropagation) {

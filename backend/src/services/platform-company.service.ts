@@ -52,7 +52,7 @@ function mapCompanyCreateDuplicateError(error: unknown): never {
 
 export const platformCompanyService = {
   async listCompanies() {
-    return companyRepository.listActiveWithOwner();
+    return companyRepository.listForPlatformAdmin();
   },
 
   async createCompany(input: CreatePlatformCompanyInput, actorUserId: string) {

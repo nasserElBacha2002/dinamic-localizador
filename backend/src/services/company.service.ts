@@ -8,7 +8,7 @@ import { companyLocationTypesService } from "./company-location-types.service";
 import { companyWorkScheduleService } from "./company-work-schedule.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
-import { absenceAttachmentService } from "./absence-attachment.service";
+import { getAttachmentStorageHealth } from "./attachment-storage";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
 import type { UpdateCompanyAbsenceSettingsInput } from "../schemas/company-absence-settings.schema";
 import type {
@@ -21,6 +21,7 @@ import type {
   CompanySettings,
   CompanySettingsDto,
 } from "../types/company";
+import { isCompanyOperationallyActive } from "../types/company";
 
 const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => ({
   companyId: settings.companyId,
@@ -97,7 +98,7 @@ export const companyService = {
     await this.getCompanyOrThrow(companyId);
 
     if (input.absenceAttachmentsEnabled === true) {
-      const health = await absenceAttachmentService.getStorageHealth();
+      const health = await getAttachmentStorageHealth();
       if (!health.configured || !health.available) {
         throw new AppError(
           503,
@@ -196,7 +197,7 @@ export const companyService = {
 
   async getCompanyOrThrow(companyId: string): Promise<Company> {
     const company = await companyRepository.findById(companyId);
-    if (!company || company.status !== "ACTIVE") {
+    if (!company || !isCompanyOperationallyActive(company.status)) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa no encontrada.");
     }
     return company;

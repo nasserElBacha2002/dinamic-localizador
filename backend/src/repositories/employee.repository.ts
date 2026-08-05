@@ -222,6 +222,30 @@ export const employeeRepository = {
     return mapEmployeeRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Match employees by company + normalized document_number (digits only).
+   * Prefer active; caller handles ambiguous multiple actives.
+   */
+  async findByNormalizedDocument(
+    companyId: string,
+    normalizedDocument: string,
+    transaction?: sql.Transaction,
+  ): Promise<Employee[]> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("normalizedDocument", sql.NVarChar(20), normalizedDocument)
+      .query(`
+        ${buildEmployeeSelectWithoutLastWorked()}
+        WHERE e.company_id = @companyId
+          AND e.document_number IS NOT NULL
+          AND REPLACE(REPLACE(REPLACE(e.document_number, N'-', N''), N'.', N''), N' ', N'') = @normalizedDocument
+        ORDER BY e.active DESC, e.created_at ASC
+      `);
+
+    return result.recordset.map((row) => mapEmployeeRow(row as Record<string, unknown>));
+  },
+
   async listByIds(
     companyId: string,
     ids: string[],

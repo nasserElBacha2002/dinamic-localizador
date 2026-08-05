@@ -17,6 +17,7 @@ const allEnabledModules: CompanyModule[] = [
   "attendance",
   "operations",
   "absences",
+  "payroll_receipts",
   "reports",
   "bot_simulator",
 ].map((moduleKey) => ({
@@ -64,6 +65,35 @@ describe("company modules frontend module", () => {
       items.some((item) => item.path === "/absences"),
       false,
     );
+  });
+
+  it("hides Recibos de sueldo when payroll_receipts module is disabled", () => {
+    const modules = allEnabledModules.map((module) =>
+      module.moduleKey === "payroll_receipts" ? { ...module, isEnabled: false } : module,
+    );
+    const items = getAdminNavItems({
+      modules,
+      permissions: ["payroll_receipts:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      items.some((item) => item.path === "/payroll-receipts"),
+      false,
+    );
+  });
+
+  it("shows Recibos de sueldo when module and permission are present", () => {
+    const items = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["payroll_receipts:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    const item = items.find((entry) => entry.path === "/payroll-receipts");
+    assert.ok(item);
+    assert.equal(item?.label, "Recibos de sueldo");
+    assert.equal(item?.section, "operation");
   });
 
   it("hides Estadísticas when reports module is disabled", () => {
@@ -118,6 +148,36 @@ describe("company modules frontend module", () => {
     assert.ok(labels.includes(terminology.service.plural));
     assert.ok(labels.includes(terminology.operation.plural));
     assert.ok(labels.includes(terminology.attendance.plural));
+    assert.ok(labels.includes("Estado de servidores"));
+    assert.ok(items.some((item) => item.path === "/platform/servers"));
+  });
+
+  it("shows Estado de servidores only for platform Super Admin", () => {
+    const asSuperAdmin = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:settings:update"],
+      isPlatformAdmin: true,
+      modulesLoading: false,
+    });
+    assert.equal(
+      asSuperAdmin.some((item) => item.path === "/platform/servers"),
+      true,
+    );
+
+    const asCompanyAdmin = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:settings:update", "users:manage"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      asCompanyAdmin.some((item) => item.path === "/platform/servers"),
+      false,
+    );
+    assert.equal(
+      asCompanyAdmin.some((item) => item.label === "Estado de servidores"),
+      false,
+    );
   });
 
   it("exposes generic module labels while keeping operations key", () => {

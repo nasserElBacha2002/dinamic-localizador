@@ -24,12 +24,14 @@ import {
   absenceCalculateRouter,
 } from "./absence-calendar.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
+import { payrollReceiptBatchRouter, payrollReceiptRouter } from "./payroll-receipt.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
 import { companyUserRouter } from "./company-user.routes";
 import { importRouter } from "./import.routes";
 import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
+import { platformServerStatusRouter } from "./platform-server-status.routes";
 import { whatsappObservabilityRouter } from "./whatsapp-observability.routes";
 import { companyInvitationRouter, publicInvitationRouter } from "./user-invitation.routes";
 import { authenticate } from "../middleware/authenticate";
@@ -50,6 +52,7 @@ apiRouter.use("/webhooks/twilio", twilioRouter);
 
 apiRouter.use("/companies", authenticate, companyRouter);
 apiRouter.use("/platform", authenticate, platformCompanyRouter);
+apiRouter.use("/platform/servers", authenticate, platformServerStatusRouter);
 apiRouter.use(
   "/platform/observability/whatsapp",
   authenticate,
@@ -157,6 +160,16 @@ companyScopedOperationalRouter.use(
   absenceCalendarRouter,
 );
 companyScopedOperationalRouter.use(
+  "/payroll-receipt-batches",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptBatchRouter,
+);
+companyScopedOperationalRouter.use(
+  "/payroll-receipts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptRouter,
+);
+companyScopedOperationalRouter.use(
   "/dev/attendance-reminders",
   requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
   devReminderRouter,
@@ -240,6 +253,16 @@ operationalRouter.use(
   "/absence-calendars",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceCalendarRouter,
+);
+operationalRouter.use(
+  "/payroll-receipt-batches",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptBatchRouter,
+);
+operationalRouter.use(
+  "/payroll-receipts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptRouter,
 );
 operationalRouter.use(
   "/dev/attendance-reminders",

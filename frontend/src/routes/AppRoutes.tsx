@@ -9,6 +9,7 @@ import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
 import { AcceptInvitationPage } from "../pages/invitations/AcceptInvitationPage";
 import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";
+import { ServerStatusPage } from "../pages/platform/ServerStatusPage";
 import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
@@ -29,6 +30,7 @@ import { OperationCreatePage } from "../pages/operations/OperationCreatePage";
 import { AttendanceListPage } from "../pages/attendance/AttendanceListPage";
 import { AttendanceCreatePage } from "../pages/attendance/AttendanceCreatePage";
 import { AbsencesListPage } from "../pages/absences/AbsencesListPage";
+import { PayrollReceiptsListPage } from "../pages/payroll-receipts/PayrollReceiptsListPage";
 import { MODULE_ROUTE_ACCESS } from "../utils/company-modules";
 import {
   employeeAccess,
@@ -72,6 +74,10 @@ const OperationEditPage = lazyNamed(
 const AbsenceDetailPage = lazyNamed(
   () => import("../pages/absences/AbsenceDetailPage"),
   "AbsenceDetailPage",
+);
+const PayrollReceiptDetailPage = lazyNamed(
+  () => import("../pages/payroll-receipts/PayrollReceiptDetailPage"),
+  "PayrollReceiptDetailPage",
 );
 const AttendanceDetailPage = lazyNamed(
   () => import("../pages/attendance/AttendanceDetailPage"),
@@ -326,6 +332,22 @@ export function AppRoutes() {
           }
         />
         <Route
+          path="/payroll-receipts"
+          element={
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.payroll_receipts}>
+              <PayrollReceiptsListPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/payroll-receipts/:id"
+          element={
+            <FeatureRouteGuard {...MODULE_ROUTE_ACCESS.payroll_receipts}>
+              <LazyPage component={PayrollReceiptDetailPage} message="Cargando recibo..." />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
           path="/bot-simulator"
           element={
             <FeatureRouteGuard
@@ -357,6 +379,14 @@ export function AppRoutes() {
           element={
             <FeatureRouteGuard requirePlatformAdmin>
               <PlatformCompaniesPage />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/platform/servers"
+          element={
+            <FeatureRouteGuard requirePlatformAdmin>
+              <ServerStatusPage />
             </FeatureRouteGuard>
           }
         />

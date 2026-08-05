@@ -2,6 +2,7 @@ import { Button, Stack, Text, Title } from "@mantine/core";
 import type { PropsWithChildren } from "react";
 import { Link as RouterLink } from "react-router";
 import { LoadingState, SectionCard } from "../../design-system";
+import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import type { CompanyModuleKey } from "../../types/company-module";
@@ -55,18 +56,29 @@ export function FeatureRouteGuard({
   requirePlatformAdmin = false,
   children,
 }: FeatureRouteGuardProps) {
-  const modulesQuery = useCompanyModules();
-  const permissionsQuery = useCompanyPermissions();
+  const { user, isLoading: authLoading } = useAuth();
+  const needsModules = Boolean(moduleKey || anyModuleOf);
+  const needsCompanyPermissions = Boolean(requiredAnyPermission?.length);
+  const modulesQuery = useCompanyModules(needsModules);
+  const permissionsQuery = useCompanyPermissions(needsCompanyPermissions);
 
-  if (modulesQuery.isPending || permissionsQuery.isPending) {
+  if (requirePlatformAdmin) {
+    if (authLoading) {
+      return <LoadingState message="Cargando acceso..." />;
+    }
+    if (!user?.isPlatformAdmin) {
+      return <NoPermissionState />;
+    }
+  }
+
+  const waitingPermissions = needsCompanyPermissions && permissionsQuery.isLoading;
+  const waitingModules = needsModules && modulesQuery.isLoading;
+
+  if (waitingPermissions || waitingModules) {
     return <LoadingState message="Cargando acceso..." />;
   }
 
-  if (requirePlatformAdmin && !permissionsQuery.data?.isPlatformAdmin) {
-    return <NoPermissionState />;
-  }
-
-  if (moduleKey || anyModuleOf) {
+  if (needsModules) {
     if (modulesQuery.isError || !modulesQuery.data) {
       return <DisabledModuleState />;
     }

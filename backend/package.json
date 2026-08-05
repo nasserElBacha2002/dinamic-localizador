@@ -32,7 +32,7 @@
     "seed:integration-ci": "tsx src/scripts/seed-integration-ci.ts",
     "cleanup:integration-junk": "tsx src/scripts/cleanup-integration-junk.ts",
     "gcs:pilot:absence-attachments": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/gcs-absence-attachments-pilot.ts",
-    "test": "tsx --import ./src/test-helpers/preload-test-env.ts --test src/**/*.test.ts",
+    "test": "node ./scripts/run-unit-tests.mjs",
     "test:integration": "EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit src/**/*.integration.test.ts"
   },
   "dependencies": {

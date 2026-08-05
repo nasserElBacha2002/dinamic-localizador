@@ -23,8 +23,10 @@ import { absenceOperationalConflictService, __setResolveConflictFailurePointForT
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { absenceOperationalReconciliationService } from "./absence-operational-reconciliation.service";
 import { operationAssignmentService } from "./operation-assignment.service";
+import { operationWorkDateService } from "./operation-work-date.service";
 import { AppError } from "../errors/app-error";
 import { buildAttendanceDuringAbsenceConflictKey } from "../types/absence-operational-impact";
+import { getDateIsoInTimezone } from "../utils/absence-date";
 
 const uniquePhone = (n: number): string =>
   `+54911${Date.now().toString().slice(-7)}${n}`;
@@ -101,21 +103,26 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       .input("serviceId", sql.UniqueIdentifier, serviceId)
       .input("scheduledStart", sql.DateTime2, start)
       .query(`
-        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER, work_date date);
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO scheduled_operations (
           company_id, service_id, scheduled_start, early_tolerance_minutes,
           late_tolerance_minutes, status, operation_kind
         )
-        OUTPUT INSERTED.id, CAST(INSERTED.scheduled_start AS date) INTO @inserted (id, work_date)
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME');
-        SELECT id, CONVERT(varchar(10), work_date, 23) AS work_date FROM @inserted;
+        SELECT id FROM @inserted;
       `);
     const operationId = String(op.recordset[0].id);
     fixtures.trackOperation(companyId, operationId);
+    // Canonical work date in company TZ (SQL CAST AS date can differ from UTC overnight).
+    const workDate = await operationWorkDateService.resolveOperationWorkDate(
+      companyId,
+      operationId,
+    );
     return {
       operationId,
       serviceId,
-      workDate: String(op.recordset[0].work_date),
+      workDate,
     };
   };
 
@@ -154,8 +161,12 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
     const absenceTypeId = String(type.recordset[0]?.id ?? "");
     assert.ok(absenceTypeId, "company must have an absence type");
 
-    const startDate = new Date().toISOString().slice(0, 10);
-    const endDate = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const companyTz = "America/Argentina/Buenos_Aires";
+    const startDate = getDateIsoInTimezone(new Date(), companyTz);
+    const endDate = getDateIsoInTimezone(
+      new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+      companyTz,
+    );
 
     const created = await absenceRequestRepository.create(companyId, {
       employeeId,

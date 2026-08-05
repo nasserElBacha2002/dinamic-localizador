@@ -78,6 +78,14 @@ export const ATTENDANCE_API_EXPORTS = [
   "exportAttendanceCsv",
 ] as const;
 
+export const PLATFORM_COMPANIES_API_EXPORTS = [
+  "getPlatformCompanies",
+  "createPlatformCompany",
+  "deactivatePlatformCompany",
+  "reactivatePlatformCompany",
+  "getPlatformCompanyDeletionStatus",
+] as const;
+
 export const EMPLOYEES_API_EXPORTS = [
   "getEmployees",
   "getEmployeeById",
@@ -116,4 +124,18 @@ export const ABSENCES_API_EXPORTS = [
   "getAbsenceAttachmentContentUrl",
   "downloadAbsenceAttachmentContent",
   "getAbsenceAttachmentStorageHealth",
+] as const;
+
+export const PAYROLL_RECEIPTS_API_EXPORTS = [
+  "createPayrollReceiptBatch",
+  "getPayrollReceiptBatches",
+  "getPayrollReceiptBatch",
+  "uploadPayrollReceiptToBatch",
+  "getPayrollReceipts",
+  "getPayrollReceiptById",
+  "getPayrollReceiptContentUrl",
+  "downloadPayrollReceiptContent",
+  "replacePayrollReceipt",
+  "deletePayrollReceipt",
+  "reconcilePayrollReceiptAssociation",
 ] as const;

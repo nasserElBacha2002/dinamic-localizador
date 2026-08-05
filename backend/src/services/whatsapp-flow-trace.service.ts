@@ -419,20 +419,30 @@ export const whatsappFlowTraceService = {
       return;
     }
     const pool = getPool();
-    await pool
-      .request()
-      .input("notificationId", sql.UniqueIdentifier, message.notificationId)
-      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
-      .input("providerErrorCode", sql.NVarChar(40), input.errorCode ?? null)
-      .input("providerErrorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
-      .query(`
-        UPDATE whatsapp_attendance_notifications
-        SET provider_status = @providerStatus,
-            provider_error_code = COALESCE(@providerErrorCode, provider_error_code),
-            provider_error_message = COALESCE(@providerErrorMessage, provider_error_message),
-            provider_updated_at = SYSUTCDATETIME()
-        WHERE id = @notificationId
-      `);
+    const req = () =>
+      pool
+        .request()
+        .input("notificationId", sql.UniqueIdentifier, message.notificationId)
+        .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
+        .input("providerErrorCode", sql.NVarChar(40), input.errorCode ?? null)
+        .input("providerErrorMessage", sql.NVarChar(1000), input.errorMessage ?? null);
+
+    await req().query(`
+      UPDATE whatsapp_attendance_notifications
+      SET provider_status = @providerStatus,
+          provider_error_code = COALESCE(@providerErrorCode, provider_error_code),
+          provider_error_message = COALESCE(@providerErrorMessage, provider_error_message),
+          provider_updated_at = SYSUTCDATETIME()
+      WHERE id = @notificationId
+    `);
+
+    // Payroll outbox: project provider delivery status only — never promote to DELIVERED here.
+    await req().query(`
+      UPDATE whatsapp_payroll_receipt_notifications
+      SET provider_status = @providerStatus,
+          updated_at = SYSUTCDATETIME()
+      WHERE id = @notificationId
+    `);
   },
 
   async recordProviderStatus(input: {

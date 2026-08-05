@@ -45,11 +45,12 @@ export const whatsappMessageRepository = {
     longitude: number | null;
     status?: string | null;
     rawPayload?: Record<string, string> | null;
+    notificationId?: string | null;
   }): Promise<WhatsAppMessage> {
     const pool = getPool();
 
     try {
-      const result = await pool
+      const request = pool
         .request()
         .input("companyId", sql.UniqueIdentifier, input.companyId)
         .input("messageSid", sql.NVarChar(100), input.messageSid)
@@ -67,15 +68,17 @@ export const whatsappMessageRepository = {
           sql.NVarChar(sql.MAX),
           input.rawPayload ? sanitizePayload(input.rawPayload) : null,
         )
-        .query(`
+        .input("notificationId", sql.UniqueIdentifier, input.notificationId ?? null);
+
+      const result = await request.query(`
           INSERT INTO whatsapp_messages (
             company_id, message_sid, direction, employee_id, phone_from, phone_to,
-            message_type, body, latitude, longitude, status, raw_payload
+            message_type, body, latitude, longitude, status, raw_payload, notification_id
           )
           OUTPUT INSERTED.*
           VALUES (
             @companyId, @messageSid, @direction, @employeeId, @phoneFrom, @phoneTo,
-            @messageType, @body, @latitude, @longitude, @status, @rawPayload
+            @messageType, @body, @latitude, @longitude, @status, @rawPayload, @notificationId
           )
         `);
 

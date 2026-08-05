@@ -114,6 +114,22 @@ describe("scopedApiPath", () => {
       scopedApiPath("absence-calendars/default"),
       `companies/${ACTIVE_COMPANY_ID}/absence-calendars/default`,
     );
+    assert.equal(
+      scopedApiPath("payroll-receipts"),
+      `companies/${ACTIVE_COMPANY_ID}/payroll-receipts`,
+    );
+    assert.equal(
+      scopedApiPath("payroll-receipt-batches"),
+      `companies/${ACTIVE_COMPANY_ID}/payroll-receipt-batches`,
+    );
+    assert.equal(
+      scopedApiPath("payroll-receipts/receipt-id/content"),
+      `companies/${ACTIVE_COMPANY_ID}/payroll-receipts/receipt-id/content`,
+    );
+    assert.equal(
+      scopedApiPath("payroll-receipt-batches/batch-id/receipts"),
+      `companies/${ACTIVE_COMPANY_ID}/payroll-receipt-batches/batch-id/receipts`,
+    );
   });
 
   it("leaves global paths unchanged", () => {

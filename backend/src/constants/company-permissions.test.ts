@@ -49,4 +49,21 @@ describe("company permissions", () => {
   it("grants SUPERVISOR bot simulator access", () => {
     assert.ok(roleHasPermission("SUPERVISOR", "bot_simulator:use"));
   });
+
+  it("scopes payroll receipts: HR full, SUPERVISOR/READ_ONLY/OPERATOR none", () => {
+    for (const permission of [
+      "payroll_receipts:read",
+      "payroll_receipts:upload",
+      "payroll_receipts:manage",
+      "payroll_receipts:delete",
+      "payroll_receipts:download",
+    ] as const) {
+      assert.ok(roleHasPermission("OWNER", permission));
+      assert.ok(roleHasPermission("ADMIN", permission));
+      assert.ok(roleHasPermission("HR", permission));
+      assert.ok(!roleHasPermission("SUPERVISOR", permission));
+      assert.ok(!roleHasPermission("READ_ONLY", permission));
+      assert.ok(!roleHasPermission("OPERATOR", permission));
+    }
+  });
 });

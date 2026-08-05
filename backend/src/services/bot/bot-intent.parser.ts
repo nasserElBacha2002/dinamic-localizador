@@ -5,6 +5,7 @@ import {
   isUpcomingAssignmentsIntent,
   isWorkdayQueryIntent,
 } from "../../utils/assignment-intent";
+import { isPayrollReceiptIntent } from "../../utils/payroll-receipt-intent";
 import {
   isCheckInIntent,
   isCheckoutIntent,
@@ -24,6 +25,7 @@ export type BotIntent =
   | "upcoming_assignments"
   | "confirm_attendance"
   | "report_unavailability"
+  | "payroll_receipt"
   | "location"
   | "operation_selection"
   | "cancel"
@@ -72,6 +74,10 @@ export const parseBotIntent = (input: {
 
   if (isAbsenceIntent(body)) {
     return "absence";
+  }
+
+  if (isPayrollReceiptIntent(body)) {
+    return "payroll_receipt";
   }
 
   if (isWorkdayQueryIntent(body)) {

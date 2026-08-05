@@ -17,6 +17,7 @@ import { handleArrivalIntent } from "./attendance.handler";
 import { handleCheckoutIntent } from "./checkout.handler";
 import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler";
 import { handleWorkdayIntent } from "./workday.handler";
+import { handlePayrollReceiptIntent } from "./payroll-receipt.handler";
 
 export const handleMenuFallback = async (
   ctx: WhatsAppRouterContext,
@@ -53,6 +54,8 @@ const routeMenuOptionByKey = async (
       return handleConfirmAttendanceIntent(ctx, handlers);
     case "report_unavailability":
       return handleUnavailabilityIntent(ctx, handlers);
+    case "payroll_receipt":
+      return handlePayrollReceiptIntent(ctx, handlers);
   }
 };
 

@@ -1,13 +1,46 @@
+export type PlatformCompanyStatus =
+  | "ACTIVE"
+  | "INACTIVE"
+  | "SUSPENDED"
+  | "PENDING_DELETION"
+  | "DELETING"
+  | "DELETED"
+  | "DELETION_FAILED";
+
 export interface PlatformCompany {
   id: string;
   name: string;
   defaultTimezone: string;
-  status: string;
+  status: PlatformCompanyStatus | string;
   createdAt: string;
   updatedAt: string;
+  deactivatedAt?: string | null;
+  deactivationReason?: string | null;
+  scheduledDeletionAt?: string | null;
+  deletionStartedAt?: string | null;
+  deletionAttempts?: number;
+  deletionLastError?: string | null;
   ownerName: string | null;
   ownerEmail: string | null;
   ownerStatus: "ACTIVE" | "INVITED" | "NONE";
+}
+
+export interface PlatformCompanyLifecycle {
+  companyId: string;
+  name: string;
+  status: string;
+  deactivatedAt: string | null;
+  deactivatedByUserId: string | null;
+  deactivationReason: string | null;
+  scheduledDeletionAt: string | null;
+  reactivatedAt: string | null;
+  reactivatedByUserId: string | null;
+  deletionStartedAt: string | null;
+  deletedAt: string | null;
+  deletionAttempts: number;
+  deletionLastError: string | null;
+  gracePeriodDays: number;
+  daysRemaining: number | null;
 }
 
 export interface CreatePlatformCompanyInput {
@@ -28,7 +61,7 @@ export interface CreatePlatformCompanyInput {
     geofenceReviewMarginMeters?: number | null;
   };
   modules?: Array<
-    "attendance" | "operations" | "absences" | "reports" | "bot_simulator"
+    "attendance" | "operations" | "absences" | "payroll_receipts" | "reports" | "bot_simulator"
   >;
   owner: {
     name: string;

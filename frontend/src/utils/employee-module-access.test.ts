@@ -10,7 +10,7 @@ import { filterEmployeeModuleQuickLinks } from "./employee-module-quick-links";
 const EMPLOYEE_ID = "11111111-1111-4111-8111-111111111111";
 
 const modulesFixture = (): CompanyModule[] =>
-  (["attendance", "absences", "reports"] as const).map((moduleKey) => ({
+  (["attendance", "absences", "payroll_receipts", "reports"] as const).map((moduleKey) => ({
     companyId: "co-1",
     moduleKey,
     isEnabled: true,
@@ -27,6 +27,15 @@ describe("MODULE_ROUTE_ACCESS shared matrix", () => {
     assert.deepEqual(
       [...MODULE_ROUTE_ACCESS.absences.requiredAnyPermission],
       ["absences:read", "absences:review"],
+    );
+    assert.deepEqual(
+      [...MODULE_ROUTE_ACCESS.payroll_receipts.requiredAnyPermission],
+      [
+        "payroll_receipts:read",
+        "payroll_receipts:upload",
+        "payroll_receipts:manage",
+        "payroll_receipts:download",
+      ],
     );
     assert.deepEqual(
       [...MODULE_ROUTE_ACCESS.reports.requiredAnyPermission],
@@ -69,11 +78,12 @@ describe("filterEmployeeModuleQuickLinks", () => {
     const links = filterEmployeeModuleQuickLinks(EMPLOYEE_ID, modules, [
       "attendance:read",
       "absences:read",
+      "payroll_receipts:read",
       "reports:read",
     ]);
     assert.deepEqual(
       links.map((link) => link.accessKey),
-      ["attendance", "reports"],
+      ["attendance", "payroll_receipts", "reports"],
     );
   });
 
@@ -84,22 +94,40 @@ describe("filterEmployeeModuleQuickLinks", () => {
     const links = filterEmployeeModuleQuickLinks(EMPLOYEE_ID, modules, [
       "attendance:read",
       "absences:read",
+      "payroll_receipts:read",
       "reports:read",
     ]);
     assert.deepEqual(
       links.map((link) => link.accessKey),
-      ["attendance", "absences"],
+      ["attendance", "absences", "payroll_receipts"],
     );
   });
 
   it("hides attendance when permission is missing", () => {
     const links = filterEmployeeModuleQuickLinks(EMPLOYEE_ID, modulesFixture(), [
       "absences:read",
+      "payroll_receipts:read",
       "reports:read",
     ]);
     assert.deepEqual(
       links.map((link) => link.accessKey),
-      ["absences", "reports"],
+      ["absences", "payroll_receipts", "reports"],
+    );
+  });
+
+  it("hides payroll receipts when module is disabled", () => {
+    const modules = modulesFixture().map((module) =>
+      module.moduleKey === "payroll_receipts" ? { ...module, isEnabled: false } : module,
+    );
+    const links = filterEmployeeModuleQuickLinks(EMPLOYEE_ID, modules, [
+      "attendance:read",
+      "absences:read",
+      "payroll_receipts:read",
+      "reports:read",
+    ]);
+    assert.deepEqual(
+      links.map((link) => link.accessKey),
+      ["attendance", "absences", "reports"],
     );
   });
 

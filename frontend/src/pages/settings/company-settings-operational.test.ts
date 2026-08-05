@@ -235,6 +235,8 @@ describe("Company modules permissions", () => {
     const navFile = readFileSync(join(process.cwd(), "src/utils/company-modules.ts"), "utf8");
     assert.match(navFile, /if \(isPlatformAdmin\)/);
     assert.match(navFile, /Empresas de plataforma/);
+    assert.match(navFile, /Estado de servidores/);
+    assert.match(navFile, /\/platform\/servers/);
     assert.doesNotMatch(navFile, /Módulos habilitados/);
   });
 });

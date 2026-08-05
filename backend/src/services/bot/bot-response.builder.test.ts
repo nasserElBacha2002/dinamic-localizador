@@ -41,7 +41,7 @@ describe("bot response builders", () => {
     assert.equal(buildNoOperationMessage(), NO_OPERATION_MESSAGE);
     assert.equal(
       NO_OPERATION_MESSAGE,
-      "No encontramos un trabajo asignado para vos en la fecha y horario actuales. Verificá con administración.",
+      "No tenés una jornada disponible para registrar llegada en este momento.",
     );
   });
 

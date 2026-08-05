@@ -29,6 +29,7 @@ const envSchema = z
     TWILIO_EXIT_REMINDER_CONTENT_SID: z.string().optional(),
     TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID: z.string().optional(),
     TWILIO_TEMPLATE_NO_CHECKIN_SID: z.string().optional(),
+    TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID: z.string().optional(),
     ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
     RECURRING_WORKDAY_HORIZON_DAYS: z.coerce.number().int().positive().default(60),
     RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED: z.stringbool().default(true),
@@ -67,8 +68,41 @@ const envSchema = z
     GCS_MAX_FILES_PER_REQUEST: z.coerce.number().int().positive().default(5),
     GCS_MAX_TOTAL_SIZE_BYTES: z.coerce.number().int().positive().default(15_728_640),
     GCS_UPLOAD_MODE: z.enum(["BACKEND_STREAM"]).default("BACKEND_STREAM"),
+    /** When true, missing/unavailable GCS makes platform diagnostics overall status non-ok. */
+    GCS_REQUIRED: z.stringbool().default(false),
+    PLATFORM_SERVER_STATUS_CHECK_TIMEOUT_MS: z.coerce.number().int().positive().default(3000),
+    API_SERVICE_NAME: z.string().min(1).default("dinamic-attendance-api"),
     ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
     ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+    /** Google Cloud Storage prefix for payroll receipts (same bucket as absences). */
+    PAYROLL_RECEIPTS_STORAGE_PREFIX: z.string().min(1).default("payroll-receipts"),
+    PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH: z.coerce.number().int().positive().default(50),
+    PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(true),
+    PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+    PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
+    /** Grace days between company deactivation and scheduled hard delete. */
+    COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
+    COMPANY_DELETION_JOB_ENABLED: z.stringbool().default(true),
+    /** Interval for the company deletion worker (ms). Default: 1 hour. */
+    COMPANY_DELETION_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+    /** Lease duration for a deletion claim (ms). Default: 30 minutes. */
+    COMPANY_DELETION_LEASE_MS: z.coerce.number().int().positive().default(1_800_000),
+    /** Max deletion attempts before requiring manual intervention (still DELETION_FAILED). */
+    COMPANY_DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+    /** Base backoff for deletion retries (ms). */
+    COMPANY_DELETION_RETRY_BASE_MS: z.coerce.number().int().positive().default(60_000),
+    /**
+     * Comma-separated company UUIDs that cannot be deactivated/deleted (preferred).
+     * Empty = no ID-based protection (names may still apply as legacy fallback).
+     */
+    COMPANY_PROTECTED_IDS: z.string().default(""),
+    /**
+     * @deprecated Prefer COMPANY_PROTECTED_IDS. Comma-separated names (mutable).
+     */
+    COMPANY_PROTECTED_NAMES: z.string().default("Dinamic Systems"),
     WHATSAPP_OBSERVABILITY_ENABLED: z.stringbool().default(true),
     WHATSAPP_OBSERVABILITY_UI_ENABLED: z.stringbool().default(true),
     WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: z.stringbool().default(true),

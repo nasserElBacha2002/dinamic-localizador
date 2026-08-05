@@ -11,12 +11,13 @@ export type BotSessionState =
   | "WAITING_CONFIRM_ATTENDANCE_SELECTION"
   | "WAITING_UNAVAILABILITY_SELECTION"
   | "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE"
+  | "WAITING_PAYROLL_RECEIPT_PERIOD"
   | "COMPLETED"
   | "CANCELLED"
   | "EXPIRED";
 
 export type WhatsAppMessageDirection = "INBOUND" | "OUTBOUND";
-export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN";
+export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN" | "DOCUMENT";
 
 export interface BotSession {
   id: string;
@@ -92,6 +93,7 @@ export interface BotSessionContext {
       inputHash: string;
     };
   };
+  payrollReceiptQuery?: { year: number; month: number };
 }
 
 export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED" | "DUPLICATE";

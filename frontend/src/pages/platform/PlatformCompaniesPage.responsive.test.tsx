@@ -2,7 +2,7 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule } from "../../test/mock-api-module";
+import { mockApiModule, PLATFORM_COMPANIES_API_EXPORTS } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import { mockViewport } from "../../test/mock-match-media";
@@ -10,22 +10,23 @@ import { mockViewport } from "../../test/mock-match-media";
 setRuntimeCompanyId("co-1");
 installLayoutPolyfills();
 
-mockApiModule("api/platform-companies.api", {
-  getPlatformCompanies: async () => [
-    {
-      id: "co-1",
-      name: "Dinamic Demo",
-      status: "ACTIVE",
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      ownerName: "Ada",
-      ownerEmail: "ada@example.com",
-      ownerStatus: "ACTIVE",
-    },
-  ],
-  createPlatformCompany: async () => {
-    throw new Error("not used");
+mockApiModule(
+  "api/platform-companies.api",
+  {
+    getPlatformCompanies: async () => [
+      {
+        id: "co-1",
+        name: "Dinamic Demo",
+        status: "ACTIVE",
+        defaultTimezone: "America/Argentina/Buenos_Aires",
+        ownerName: "Ada",
+        ownerEmail: "ada@example.com",
+        ownerStatus: "ACTIVE",
+      },
+    ],
   },
-});
+  PLATFORM_COMPANIES_API_EXPORTS,
+);
 
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({

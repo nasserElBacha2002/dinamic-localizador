@@ -2,6 +2,7 @@ export type CompanyModuleKey =
   | "attendance"
   | "operations"
   | "absences"
+  | "payroll_receipts"
   | "reports"
   | "bot_simulator";
 

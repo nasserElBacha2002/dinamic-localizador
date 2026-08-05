@@ -27,6 +27,17 @@ export type {
   SortDirection,
 } from "./data-table-types";
 
+/**
+ * Keep Acciones compact and right-aligned. Without this, leftover table width
+ * stretches the actions column: header text sticks right while ActionMenu's
+ * flex Group leaves the button near the left of the wide cell.
+ */
+const ROW_ACTIONS_COLUMN_STYLE = {
+  textAlign: "right" as const,
+  width: "1%",
+  whiteSpace: "nowrap" as const,
+};
+
 function handleRowKeyDown<T>(
   event: KeyboardEvent<HTMLElement>,
   row: T,
@@ -196,7 +207,7 @@ export function DataTable<T>(props: DataTableProps<T>) {
                   );
                 })}
                 {rowActions ? (
-                  <Table.Th style={{ textAlign: "right" }}>{rowActionsHeader}</Table.Th>
+                  <Table.Th style={ROW_ACTIONS_COLUMN_STYLE}>{rowActionsHeader}</Table.Th>
                 ) : null}
               </Table.Tr>
             </Table.Thead>
@@ -227,11 +238,14 @@ export function DataTable<T>(props: DataTableProps<T>) {
                     ))}
                     {rowActions ? (
                       <Table.Td
-                        align="right"
+                        style={ROW_ACTIONS_COLUMN_STYLE}
+                        data-testid="data-table-row-actions"
                         onClick={(event) => event.stopPropagation()}
                         onKeyDown={(event) => event.stopPropagation()}
                       >
-                        {rowActions(row)}
+                        <Group justify="flex-end" wrap="nowrap" gap="xs">
+                          {rowActions(row)}
+                        </Group>
                       </Table.Td>
                     ) : null}
                   </Table.Tr>

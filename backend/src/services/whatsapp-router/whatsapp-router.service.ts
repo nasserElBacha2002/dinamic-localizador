@@ -38,8 +38,15 @@ import { handleMenuFallback, handleNumericMenuSelection } from "./menu.handler";
 import { respondIfActiveSessionModuleBlocked } from "./module-session-gate";
 import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler";
 import { handleWorkdayIntent } from "./workday.handler";
+import {
+  handleActivePayrollReceiptSession,
+  handlePayrollReceiptIntent,
+} from "./payroll-receipt.handler";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
-import { isAssignmentSelectionSessionState } from "../../utils/bot-session-states";
+import {
+  isAssignmentSelectionSessionState,
+  isPayrollReceiptSessionState,
+} from "../../utils/bot-session-states";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
@@ -130,6 +137,17 @@ export const whatsappRouterService = {
         return confirmationResponse;
       }
 
+      if (isPayrollReceiptSessionState(ctx.session.state)) {
+        const payrollResponse = await handleActivePayrollReceiptSession(
+          ctx,
+          ctx.session,
+          handlers,
+        );
+        if (payrollResponse) {
+          return payrollResponse;
+        }
+      }
+
       if (isAbsenceFlowSession(ctx.session)) {
         return handleActiveAbsenceSession(ctx, ctx.session, handlers);
       }
@@ -163,6 +181,10 @@ export const whatsappRouterService = {
 
     if (intent === "absence") {
       return handleAbsenceIntent(ctx, handlers, ctx.session);
+    }
+
+    if (intent === "payroll_receipt") {
+      return handlePayrollReceiptIntent(ctx, handlers);
     }
 
     if (intent === "workday") {

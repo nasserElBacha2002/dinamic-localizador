@@ -29,4 +29,21 @@ export const payrollReceiptMetrics = {
   downloadFailed: (labels?: MetricLabels) => emit("payroll_receipt_download_failed", labels),
   deleteFailed: (labels?: MetricLabels) => emit("payroll_receipt_gcs_delete_failed", labels),
   batchCreated: (labels?: MetricLabels) => emit("payroll_receipt_batch_created", labels),
+  notificationCreated: (labels?: MetricLabels) =>
+    emit("payroll_receipt_notification_created", labels),
+  notificationClaimed: (labels?: MetricLabels) =>
+    emit("payroll_receipt_notification_claimed", labels),
+  notificationSent: (labels?: MetricLabels) => emit("payroll_receipt_notification_sent", labels),
+  notificationFailed: (labels?: MetricLabels) =>
+    emit("payroll_receipt_notification_failed", labels),
+  notificationRetried: (labels?: MetricLabels) =>
+    emit("payroll_receipt_notification_retried", labels),
+  notificationCancelled: (labels?: MetricLabels) =>
+    emit("payroll_receipt_notification_cancelled", labels),
+  queryReceived: (labels?: MetricLabels) => emit("payroll_receipt_query_received", labels),
+  queryInvalidPeriod: (labels?: MetricLabels) =>
+    emit("payroll_receipt_query_invalid_period", labels),
+  queryNotFound: (labels?: MetricLabels) => emit("payroll_receipt_query_not_found", labels),
+  queryDelivered: (labels?: MetricLabels) => emit("payroll_receipt_query_delivered", labels),
+  queryFailed: (labels?: MetricLabels) => emit("payroll_receipt_query_failed", labels),
 };

@@ -27,6 +27,12 @@ describe("parseBotIntent", () => {
     assert.equal(parseBotIntent({ body: "agenda" }), "upcoming_assignments");
   });
 
+  it("detects payroll receipt intents", () => {
+    assert.equal(parseBotIntent({ body: "Mi recibo" }), "payroll_receipt");
+    assert.equal(parseBotIntent({ body: "recibo de sueldo" }), "payroll_receipt");
+    assert.equal(parseBotIntent({ body: "Consultar recibo" }), "payroll_receipt");
+  });
+
   it("detects assignment confirmation and unavailability intents", () => {
     assert.equal(parseBotIntent({ body: "confirmo asistencia" }), "confirm_attendance");
     assert.equal(parseBotIntent({ body: "confirmar 1" }), "confirm_attendance");

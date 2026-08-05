@@ -39,6 +39,8 @@ export const deleteCompanyOperationalDataSetBased = async (
 
     DELETE FROM attendance_records WHERE company_id = @companyId;
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
+      DELETE FROM whatsapp_payroll_receipt_notifications WHERE company_id = @companyId;
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
 
@@ -316,6 +318,10 @@ export const deleteEmployeeCascade = async (
             WHERE p.company_id = r.company_id
               AND p.storage_object_key = r.storage_object_key
           );
+
+        IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
+          DELETE FROM whatsapp_payroll_receipt_notifications
+          WHERE company_id = @companyId AND employee_id = @employeeId;
 
         DELETE FROM payroll_receipts
         WHERE company_id = @companyId AND employee_id = @employeeId;

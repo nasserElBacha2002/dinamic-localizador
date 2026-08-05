@@ -4,6 +4,7 @@ import {
   getAssignmentConfirmationModuleBlockedMessage,
   getAttendanceModuleBlockedMessage,
   getCheckInModuleBlockedMessage,
+  getPayrollReceiptsModuleBlockedMessage,
   getUpcomingAssignmentsModuleBlockedMessage,
   getWorkdayModuleBlockedMessage,
 } from "../whatsapp-module-gate";
@@ -16,7 +17,8 @@ export type BotMenuOptionKey =
   | "workday"
   | "upcoming_assignments"
   | "confirm_attendance"
-  | "report_unavailability";
+  | "report_unavailability"
+  | "payroll_receipt";
 
 export interface BotMenuOption {
   key: BotMenuOptionKey;
@@ -53,6 +55,10 @@ const MENU_OPTION_DEFINITIONS: Record<BotMenuOptionKey, Omit<BotMenuOption, "key
     label: "Avisar no disponibilidad",
     hint: 'escribí "No puedo asistir"',
   },
+  payroll_receipt: {
+    label: "Consultar recibo de sueldo",
+    hint: 'escribí "Mi recibo"',
+  },
 };
 
 export const buildAvailableMenuOptions = (
@@ -83,6 +89,10 @@ export const buildAvailableMenuOptions = (
   if (!getAssignmentConfirmationModuleBlockedMessage(moduleStates)) {
     options.push({ key: "confirm_attendance", ...MENU_OPTION_DEFINITIONS.confirm_attendance });
     options.push({ key: "report_unavailability", ...MENU_OPTION_DEFINITIONS.report_unavailability });
+  }
+
+  if (!getPayrollReceiptsModuleBlockedMessage(moduleStates)) {
+    options.push({ key: "payroll_receipt", ...MENU_OPTION_DEFINITIONS.payroll_receipt });
   }
 
   return options;

@@ -19,6 +19,10 @@ import {
   startCompanyDeletionJob,
   stopCompanyDeletionJob,
 } from "./jobs/company-deletion.job";
+import {
+  startPayrollReceiptNotificationJob,
+  stopPayrollReceiptNotificationJob,
+} from "./jobs/payroll-receipt-notification.job";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
@@ -28,6 +32,7 @@ const startServer = async (): Promise<void> => {
   startAbsenceAttachmentCleanupJob();
   startWhatsappObservabilityCleanupJob();
   startCompanyDeletionJob();
+  startPayrollReceiptNotificationJob();
 
   app.listen(env.PORT, () => {
     console.log(`API listening on port ${env.PORT}`);
@@ -41,6 +46,7 @@ const shutdown = async (): Promise<void> => {
   stopAbsenceAttachmentCleanupJob();
   stopWhatsappObservabilityCleanupJob();
   stopCompanyDeletionJob();
+  stopPayrollReceiptNotificationJob();
   await closeDatabase();
   process.exit(0);
 };

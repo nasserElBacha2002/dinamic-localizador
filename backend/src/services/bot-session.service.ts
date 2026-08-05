@@ -628,6 +628,37 @@ export const botSessionService = {
     return session;
   },
 
+  async createPayrollReceiptPeriodSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+    },
+  ): Promise<BotSession> {
+    const session = await runInTransaction(async (transaction) => {
+      await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+      return botSessionRepository.create(
+        {
+          companyId,
+          employeeId: input.employeeId,
+          operationId: null,
+          phoneNumber: input.phoneNumber,
+          state: "WAITING_PAYROLL_RECEIPT_PERIOD",
+          contextJson: null,
+          expiresAt: buildExpiresAt(),
+        },
+        transaction,
+      );
+    });
+
+    console.info("[bot-session] payroll receipt period session created", {
+      sessionId: session.id,
+      employeeId: input.employeeId,
+    });
+
+    return session;
+  },
+
   async updateAbsenceSession(
     companyId: string,
     sessionId: string,

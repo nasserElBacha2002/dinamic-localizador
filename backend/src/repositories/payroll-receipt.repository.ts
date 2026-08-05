@@ -16,6 +16,7 @@ import type {
 import { normalizeEmployeeDocument } from "../utils/payroll-receipts/extract-document-from-filename";
 import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
 import { pendingStorageDeletionRepository } from "./pending-storage-deletion.repository";
+import { payrollReceiptNotificationRepository } from "./payroll-receipt-notification.repository";
 
 const toIso = (value: Date | string | null | undefined): string | null => {
   if (value == null) {
@@ -401,49 +402,96 @@ export const payrollReceiptRepository = {
     return mapPayrollReceiptRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async finalizeUpload(input: FinalizePayrollReceiptUploadInput): Promise<PayrollReceipt | null> {
-    const result = await getPool()
-      .request()
-      .input("companyId", sql.UniqueIdentifier, input.companyId)
-      .input("receiptId", sql.UniqueIdentifier, input.receiptId)
-      .input("status", sql.NVarChar(40), input.status)
-      .input("employeeId", sql.UniqueIdentifier, input.employeeId ?? null)
-      .input("storageBucket", sql.NVarChar(200), input.storageBucket ?? null)
-      .input("storageObjectKey", sql.NVarChar(500), input.storageObjectKey ?? null)
-      .input(
-        "objectGeneration",
-        sql.BigInt,
-        input.objectGeneration != null ? Number(input.objectGeneration) : null,
-      )
-      .input("mimeType", sql.NVarChar(120), input.mimeType ?? null)
-      .input("fileSize", sql.BigInt, input.fileSize ?? null)
-      .input("checksumSha256", sql.Char(64), input.checksumSha256 ?? null)
-      .input("errorCode", sql.NVarChar(80), input.errorCode ?? null)
-      .input("errorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
-      .input("detectedDocument", sql.NVarChar(20), input.detectedDocument ?? null)
-      .input("normalizedDocument", sql.NVarChar(20), input.normalizedDocument ?? null)
-      .query(`
-        UPDATE payroll_receipts
-        SET status = @status,
-            employee_id = COALESCE(@employeeId, employee_id),
-            storage_bucket = COALESCE(@storageBucket, storage_bucket),
-            storage_object_key = COALESCE(@storageObjectKey, storage_object_key),
-            object_generation = COALESCE(@objectGeneration, object_generation),
-            mime_type = COALESCE(@mimeType, mime_type),
-            file_size = COALESCE(@fileSize, file_size),
-            checksum_sha256 = COALESCE(@checksumSha256, checksum_sha256),
-            error_code = @errorCode,
-            error_message = @errorMessage,
-            detected_document = COALESCE(@detectedDocument, detected_document),
-            normalized_document = COALESCE(@normalizedDocument, normalized_document),
-            updated_at = SYSUTCDATETIME()
-        OUTPUT INSERTED.*
-        WHERE id = @receiptId AND company_id = @companyId
-      `);
-    if (!result.recordset[0]) {
-      return null;
+  async finalizeUpload(
+    input: FinalizePayrollReceiptUploadInput,
+    transaction?: sql.Transaction,
+  ): Promise<PayrollReceipt | null> {
+    const runUpdate = async (tx?: sql.Transaction): Promise<PayrollReceipt | null> => {
+      const request = tx ? new sql.Request(tx) : getPool().request();
+      const result = await request
+        .input("companyId", sql.UniqueIdentifier, input.companyId)
+        .input("receiptId", sql.UniqueIdentifier, input.receiptId)
+        .input("status", sql.NVarChar(40), input.status)
+        .input("employeeId", sql.UniqueIdentifier, input.employeeId ?? null)
+        .input("storageBucket", sql.NVarChar(200), input.storageBucket ?? null)
+        .input("storageObjectKey", sql.NVarChar(500), input.storageObjectKey ?? null)
+        .input(
+          "objectGeneration",
+          sql.BigInt,
+          input.objectGeneration != null ? Number(input.objectGeneration) : null,
+        )
+        .input("mimeType", sql.NVarChar(120), input.mimeType ?? null)
+        .input("fileSize", sql.BigInt, input.fileSize ?? null)
+        .input("checksumSha256", sql.Char(64), input.checksumSha256 ?? null)
+        .input("errorCode", sql.NVarChar(80), input.errorCode ?? null)
+        .input("errorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
+        .input("detectedDocument", sql.NVarChar(20), input.detectedDocument ?? null)
+        .input("normalizedDocument", sql.NVarChar(20), input.normalizedDocument ?? null)
+        .query(`
+          UPDATE payroll_receipts
+          SET status = @status,
+              employee_id = COALESCE(@employeeId, employee_id),
+              storage_bucket = COALESCE(@storageBucket, storage_bucket),
+              storage_object_key = COALESCE(@storageObjectKey, storage_object_key),
+              object_generation = COALESCE(@objectGeneration, object_generation),
+              mime_type = COALESCE(@mimeType, mime_type),
+              file_size = COALESCE(@fileSize, file_size),
+              checksum_sha256 = COALESCE(@checksumSha256, checksum_sha256),
+              error_code = @errorCode,
+              error_message = @errorMessage,
+              detected_document = COALESCE(@detectedDocument, detected_document),
+              normalized_document = COALESCE(@normalizedDocument, normalized_document),
+              updated_at = SYSUTCDATETIME()
+          OUTPUT INSERTED.*
+          WHERE id = @receiptId AND company_id = @companyId
+        `);
+      if (!result.recordset[0]) {
+        return null;
+      }
+      return mapPayrollReceiptRow(result.recordset[0] as Record<string, unknown>);
+    };
+
+    // ASSOCIATED: enqueue WhatsApp notification in the same SQL transaction (no Twilio here).
+    if (input.status === "ASSOCIATED" && !transaction) {
+      const pool = getPool();
+      const tx = new sql.Transaction(pool);
+      await tx.begin();
+      try {
+        const finalized = await runUpdate(tx);
+        if (finalized?.employeeId) {
+          await payrollReceiptNotificationRepository.enqueueAvailable(
+            input.companyId,
+            finalized.id,
+            finalized.employeeId,
+            tx,
+          );
+        }
+        await tx.commit();
+        return finalized;
+      } catch (error) {
+        try {
+          await tx.rollback();
+        } catch {
+          /* ignore */
+        }
+        throw error;
+      }
     }
-    return mapPayrollReceiptRow(result.recordset[0] as Record<string, unknown>);
+
+    const finalized = await runUpdate(transaction);
+    if (
+      input.status === "ASSOCIATED" &&
+      finalized?.employeeId &&
+      transaction
+    ) {
+      await payrollReceiptNotificationRepository.enqueueAvailable(
+        input.companyId,
+        finalized.id,
+        finalized.employeeId,
+        transaction,
+      );
+    }
+    return finalized;
   },
 
   /**
@@ -481,6 +529,11 @@ export const payrollReceiptRepository = {
         return null;
       }
       const deleted = mapPayrollReceiptRow(result.recordset[0] as Record<string, unknown>);
+      await payrollReceiptNotificationRepository.cancelPendingForReceipt(
+        input.companyId,
+        deleted.id,
+        transaction,
+      );
       if (deleted.storageObjectKey) {
         await pendingStorageDeletionRepository.enqueueKeys(
           input.companyId,
@@ -589,6 +642,18 @@ export const payrollReceiptRepository = {
           transaction,
         );
       }
+
+      await payrollReceiptNotificationRepository.cancelPendingForReceipt(
+        input.companyId,
+        input.oldReceiptId,
+        transaction,
+      );
+      await payrollReceiptNotificationRepository.enqueueAvailable(
+        input.companyId,
+        input.newReceiptId,
+        input.employeeId,
+        transaction,
+      );
 
       await transaction.commit();
       return mapPayrollReceiptRow(newResult.recordset[0] as Record<string, unknown>);

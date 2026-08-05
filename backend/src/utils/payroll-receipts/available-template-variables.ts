@@ -1,18 +1,16 @@
 import { formatPayrollReceiptPeriod } from "./period-format";
 
 export type PayrollReceiptAvailableTemplateInput = {
-  employeeName: string;
   year: number;
   month: number;
 };
 
 /**
- * Twilio content variables for PAYROLL_RECEIPT_AVAILABLE template.
- * {"1": employeeName, "2": "MM/YY"}
+ * Twilio Content variables for aviso_recibo (single body variable).
+ * Contract: { "1": "MM/YY" } — never employee name.
  */
 export const buildPayrollReceiptAvailableTemplateVariables = (
   input: PayrollReceiptAvailableTemplateInput,
 ): Record<string, string> => ({
-  "1": input.employeeName.trim(),
-  "2": formatPayrollReceiptPeriod(input.year, input.month),
+  "1": formatPayrollReceiptPeriod(input.year, input.month),
 });

@@ -67,6 +67,9 @@ describe("payrollReceiptWhatsappDeliveryService simulation", () => {
       payrollReceiptWhatsappDeliveryService.deliverReceipt({
         toPhoneNumber: "+5491100000000",
         receipt: baseReceipt,
+        companyId: "company-1",
+        employeeId: "employee-1",
+        payrollReceiptId: baseReceipt.id,
       }),
     );
 

@@ -169,34 +169,45 @@ export const handleActivePayrollReceiptSession = async (
   const delivery = await payrollReceiptWhatsappDeliveryService.deliverReceipt({
     toPhoneNumber: ctx.phoneFrom,
     receipt,
+    companyId: ctx.companyId,
+    employeeId: ctx.employeeId,
+    inboundMessageSid: ctx.payload.MessageSid ?? null,
+    payrollReceiptId: receipt.id,
   });
+
+  if (delivery.kind === "unavailable_temporary") {
+    await botSessionService.updatePayrollReceiptSessionContext(ctx.companyId, session.id, {
+      year: parsed.year,
+      month: parsed.month,
+    });
+    payrollReceiptMetrics.queryFailed({ status: delivery.kind });
+    return handlers.respond(ctx.companyId, {
+      message: delivery.message,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERY_UNAVAILABLE,
+      flowType: "PAYROLL_RECEIPT_QUERY",
+    });
+  }
 
   await botSessionService.completeSession(ctx.companyId, session.id);
 
-  const periodLabel = formatPayrollReceiptPeriod(parsed.year, parsed.month);
-  // Prefer delivery.message so dry-run can explain that the PDF is not attached.
-  const responseMessage =
-    delivery.kind === "delivered"
-      ? `Te enviamos tu recibo de sueldo correspondiente a ${periodLabel}.`
-      : delivery.message;
-
-  if (delivery.kind === "delivered" || delivery.kind === "text_only") {
+  if (delivery.kind === "send_accepted" || delivery.kind === "text_only") {
     payrollReceiptMetrics.queryDelivered({ status: delivery.kind });
   } else {
     payrollReceiptMetrics.queryFailed({ status: delivery.kind });
   }
 
   return handlers.respond(ctx.companyId, {
-    message: responseMessage,
+    message: delivery.message,
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,
     resultCode:
-      delivery.kind === "delivered"
-        ? WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERED
-        : delivery.kind === "text_only"
-          ? WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERED
-          : WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERY_UNAVAILABLE,
+      delivery.kind === "send_accepted" || delivery.kind === "text_only"
+        ? WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_SEND_ACCEPTED
+        : WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERY_UNAVAILABLE,
     flowType: "PAYROLL_RECEIPT_QUERY",
   });
 };

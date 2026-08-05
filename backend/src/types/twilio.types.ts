@@ -17,7 +17,7 @@ export type BotSessionState =
   | "EXPIRED";
 
 export type WhatsAppMessageDirection = "INBOUND" | "OUTBOUND";
-export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN";
+export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN" | "DOCUMENT";
 
 export interface BotSession {
   id: string;
@@ -93,6 +93,7 @@ export interface BotSessionContext {
       inputHash: string;
     };
   };
+  payrollReceiptQuery?: { year: number; month: number };
 }
 
 export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED" | "DUPLICATE";

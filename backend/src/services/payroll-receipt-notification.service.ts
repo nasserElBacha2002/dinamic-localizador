@@ -9,34 +9,33 @@ import { whatsappMessageRepository } from "../repositories/whatsapp-message.repo
 import type { PayrollReceiptNotification } from "../types/payroll-receipt-notification";
 import { buildPayrollReceiptAvailableTemplateVariables } from "../utils/payroll-receipts/available-template-variables";
 import { payrollReceiptMetrics } from "../utils/payroll-receipts/metrics";
+import {
+  classifyTwilioOutboundError,
+  isAmbiguousTwilioSendFailure,
+} from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
 
-const isRetryableTwilioError = (error: unknown): boolean => {
-  if (!(error instanceof Error)) {
-    return true;
-  }
-  const message = error.message.toUpperCase();
-  if (
-    message.includes("NOT_CONFIGURED") ||
-    message.includes("CONTENT_SID") ||
-    message.includes("INVALID") ||
-    message.includes("21211") || // Invalid 'To' phone
-    message.includes("21610") // Unsubscribed
-  ) {
-    return false;
-  }
-  return true;
-};
+/**
+ * At-least-once Twilio send is possible only via manual reconcile after
+ * RECONCILIATION_REQUIRED — never an automatic second Twilio call for the same
+ * notification after SEND_STARTED with an ambiguous or accepted attempt.
+ */
 
-const computeNextAttemptAt = (attemptCount: number): Date => {
+const computeNextAttemptAt = (attemptCount: number, retryAfterMs?: number): Date => {
+  if (retryAfterMs !== undefined && retryAfterMs > 0) {
+    return new Date(Date.now() + retryAfterMs);
+  }
   const baseMs = env.PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS;
   const delayMs = baseMs * Math.pow(2, Math.max(0, attemptCount - 1));
   return new Date(Date.now() + delayMs);
 };
 
-const processClaimedNotification = async (
+const isReceiptSendable = async (
   notification: PayrollReceiptNotification,
-): Promise<"sent" | "cancelled" | "failed" | "recovery"> => {
+): Promise<
+  | { ok: true; receipt: NonNullable<Awaited<ReturnType<typeof payrollReceiptRepository.findById>>>; employee: NonNullable<Awaited<ReturnType<typeof employeeRepository.findById>>> }
+  | { ok: false; reason: "OBSOLETE" | "MODULE_DISABLED" | "EMPLOYEE_UNAVAILABLE" }
+> => {
   const receipt = await payrollReceiptRepository.findById(
     notification.companyId,
     notification.payrollReceiptId,
@@ -49,41 +48,61 @@ const processClaimedNotification = async (
     !receipt.storageObjectKey ||
     !receipt.employeeId
   ) {
-    await payrollReceiptNotificationRepository.markCancelled({
-      companyId: notification.companyId,
-      notificationId: notification.id,
-      errorCode: "OBSOLETE",
-      errorMessage: "Receipt is no longer ASSOCIATED or missing storage",
-    });
-    payrollReceiptMetrics.notificationCancelled({ status: "OBSOLETE" });
-    return "cancelled";
+    return { ok: false, reason: "OBSOLETE" };
   }
 
   const moduleStates = await companyModuleService.getModuleStates(notification.companyId);
   if (moduleStates.get(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS) !== true) {
-    await payrollReceiptNotificationRepository.markCancelled({
-      companyId: notification.companyId,
-      notificationId: notification.id,
-      errorCode: "MODULE_DISABLED",
-      errorMessage: "payroll_receipts module disabled",
-    });
-    payrollReceiptMetrics.notificationCancelled({ status: "MODULE_DISABLED" });
-    return "cancelled";
+    return { ok: false, reason: "MODULE_DISABLED" };
   }
 
   const employee = await employeeRepository.findById(
     notification.companyId,
     receipt.employeeId,
   );
-  // Inactive employees may still receive historical receipt notices if phone is valid.
   if (!employee || !employee.phoneNumber?.trim()) {
+    return { ok: false, reason: "EMPLOYEE_UNAVAILABLE" };
+  }
+
+  return { ok: true, receipt, employee };
+};
+
+const cancelReasons: Record<
+  "OBSOLETE" | "MODULE_DISABLED" | "EMPLOYEE_UNAVAILABLE",
+  string
+> = {
+  OBSOLETE: "Receipt is no longer ASSOCIATED or missing storage",
+  MODULE_DISABLED: "payroll_receipts module disabled",
+  EMPLOYEE_UNAVAILABLE: "Employee missing or phone empty",
+};
+
+const processClaimedNotification = async (
+  notification: PayrollReceiptNotification,
+  workerId: string,
+): Promise<"sent" | "cancelled" | "failed" | "recovery" | "reconciliation"> => {
+  if (await payrollReceiptNotificationRepository.isCancelRequested(
+    notification.companyId,
+    notification.id,
+  )) {
     await payrollReceiptNotificationRepository.markCancelled({
       companyId: notification.companyId,
       notificationId: notification.id,
-      errorCode: "EMPLOYEE_UNAVAILABLE",
-      errorMessage: "Employee missing or phone empty",
+      errorCode: "CANCELLED",
+      errorMessage: "Cancel requested before send",
     });
-    payrollReceiptMetrics.notificationCancelled({ status: "EMPLOYEE_UNAVAILABLE" });
+    payrollReceiptMetrics.notificationCancelled({ status: "CANCEL_REQUESTED" });
+    return "cancelled";
+  }
+
+  const validation = await isReceiptSendable(notification);
+  if (!validation.ok) {
+    await payrollReceiptNotificationRepository.markCancelled({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      errorCode: validation.reason,
+      errorMessage: cancelReasons[validation.reason],
+    });
+    payrollReceiptMetrics.notificationCancelled({ status: validation.reason });
     return "cancelled";
   }
 
@@ -101,8 +120,83 @@ const processClaimedNotification = async (
     return "failed";
   }
 
+  const attempt = await payrollReceiptNotificationRepository.beginSendAttempt({
+    companyId: notification.companyId,
+    notificationId: notification.id,
+    leaseOwner: workerId,
+    attemptNumber: notification.attemptCount,
+  });
+
+  if (!attempt) {
+    if (
+      await payrollReceiptNotificationRepository.isCancelRequested(
+        notification.companyId,
+        notification.id,
+      )
+    ) {
+      await payrollReceiptNotificationRepository.markCancelled({
+        companyId: notification.companyId,
+        notificationId: notification.id,
+        errorCode: "CANCELLED",
+        errorMessage: "Cancel requested before Twilio send",
+      });
+      payrollReceiptMetrics.notificationCancelled({ status: "CANCEL_REQUESTED" });
+      return "cancelled";
+    }
+    await payrollReceiptNotificationRepository.markFailed({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      errorCode: "BEGIN_SEND_CAS_FAILED",
+      errorMessage: "Could not transition to SEND_STARTED",
+      nextAttemptAt: null,
+    });
+    payrollReceiptMetrics.notificationFailed({ errorCode: "BEGIN_SEND_CAS_FAILED" });
+    return "failed";
+  }
+
+  // Revalidate cancel + receipt immediately before Twilio (no automatic resend after this).
+  if (
+    await payrollReceiptNotificationRepository.isCancelRequested(
+      notification.companyId,
+      notification.id,
+    )
+  ) {
+    await payrollReceiptNotificationRepository.markSendAttemptFailed({
+      companyId: notification.companyId,
+      attemptId: attempt.id,
+      errorCode: "CANCELLED",
+      errorMessage: "Cancel requested immediately before Twilio",
+    });
+    await payrollReceiptNotificationRepository.markCancelled({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      errorCode: "CANCELLED",
+      errorMessage: "Cancel requested immediately before Twilio",
+    });
+    payrollReceiptMetrics.notificationCancelled({ status: "CANCEL_REQUESTED" });
+    return "cancelled";
+  }
+
+  const revalidation = await isReceiptSendable(notification);
+  if (!revalidation.ok) {
+    await payrollReceiptNotificationRepository.markSendAttemptFailed({
+      companyId: notification.companyId,
+      attemptId: attempt.id,
+      errorCode: revalidation.reason,
+      errorMessage: cancelReasons[revalidation.reason],
+    });
+    await payrollReceiptNotificationRepository.markCancelled({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      errorCode: revalidation.reason,
+      errorMessage: cancelReasons[revalidation.reason],
+    });
+    payrollReceiptMetrics.notificationCancelled({ status: revalidation.reason });
+    return "cancelled";
+  }
+
+  const { receipt, employee } = revalidation;
   const contentVariables = buildPayrollReceiptAvailableTemplateVariables({
-    employeeName: employee.name,
     year: receipt.year,
     month: receipt.month,
   });
@@ -126,8 +220,9 @@ const processClaimedNotification = async (
         body: `[TEMPLATE:PAYROLL_RECEIPT_AVAILABLE]`,
         latitude: null,
         longitude: null,
-        status: "SENT",
+        status: "SEND_ACCEPTED",
         rawPayload: null,
+        notificationId: notification.id,
       });
     } catch (obsError) {
       console.warn("[payroll-receipt-notification] outbound message persist failed (non-blocking)", {
@@ -136,17 +231,23 @@ const processClaimedNotification = async (
       });
     }
 
+    await payrollReceiptNotificationRepository.markSendAttemptAccepted({
+      companyId: notification.companyId,
+      attemptId: attempt.id,
+      providerMessageSid: result.messageSid,
+    });
+
     try {
-      await payrollReceiptNotificationRepository.markSent({
+      await payrollReceiptNotificationRepository.markSendAccepted({
         companyId: notification.companyId,
         notificationId: notification.id,
         providerMessageSid: result.messageSid,
       });
-      payrollReceiptMetrics.notificationSent({ status: "SENT" });
+      payrollReceiptMetrics.notificationSent({ status: "SEND_ACCEPTED" });
       return "sent";
-    } catch (markSentError) {
+    } catch (markError) {
       const errorMessage =
-        markSentError instanceof Error ? markSentError.message : "Unknown markSent error";
+        markError instanceof Error ? markError.message : "Unknown markSendAccepted error";
       try {
         await payrollReceiptNotificationRepository.markSentRecoveryRequired({
           companyId: notification.companyId,
@@ -154,10 +255,10 @@ const processClaimedNotification = async (
           providerMessageSid: result.messageSid,
           errorMessage,
         });
-        payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SENT_FAILED" });
+        payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SEND_ACCEPTED_FAILED" });
         return "recovery";
       } catch {
-        console.error("[payroll-receipt-notification] markSent recovery failed", {
+        console.error("[payroll-receipt-notification] markSendAccepted recovery failed", {
           notificationId: notification.id,
           error: errorMessage,
         });
@@ -167,23 +268,49 @@ const processClaimedNotification = async (
     }
   } catch (sendError) {
     const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
+    const classification = classifyTwilioOutboundError(sendError);
     const maxAttempts =
       env.PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS ??
       PAYROLL_RECEIPT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS;
-    const retryable = isRetryableTwilioError(sendError);
-    const exhausted = notification.attemptCount >= maxAttempts;
 
-    if (!retryable || exhausted) {
+    if (isAmbiguousTwilioSendFailure(classification)) {
+      await payrollReceiptNotificationRepository.markSendAttemptAmbiguous({
+        companyId: notification.companyId,
+        attemptId: attempt.id,
+        errorCode: classification.normalizedCode,
+        errorMessage,
+      });
+      await payrollReceiptNotificationRepository.markReconciliationRequired({
+        companyId: notification.companyId,
+        notificationId: notification.id,
+        errorCode: classification.normalizedCode,
+        errorMessage,
+      });
+      payrollReceiptMetrics.notificationFailed({ errorCode: "RECONCILIATION_REQUIRED" });
+      return "reconciliation";
+    }
+
+    const exhausted = notification.attemptCount >= maxAttempts;
+    const retryable = classification.retryable && !exhausted;
+
+    await payrollReceiptNotificationRepository.markSendAttemptFailed({
+      companyId: notification.companyId,
+      attemptId: attempt.id,
+      errorCode: classification.normalizedCode,
+      errorMessage,
+    });
+
+    if (!retryable) {
       await payrollReceiptNotificationRepository.markFailed({
         companyId: notification.companyId,
         notificationId: notification.id,
-        errorCode: retryable ? "SEND_EXHAUSTED" : "SEND_PERMANENT",
+        errorCode: exhausted ? "SEND_EXHAUSTED" : classification.normalizedCode,
         errorMessage,
         nextAttemptAt: null,
         permanent: true,
       });
       payrollReceiptMetrics.notificationFailed({
-        errorCode: retryable ? "SEND_EXHAUSTED" : "SEND_PERMANENT",
+        errorCode: exhausted ? "SEND_EXHAUSTED" : "SEND_PERMANENT",
       });
       return "failed";
     }
@@ -191,24 +318,29 @@ const processClaimedNotification = async (
     await payrollReceiptNotificationRepository.markFailed({
       companyId: notification.companyId,
       notificationId: notification.id,
-      errorCode: "SEND_RETRYABLE",
+      errorCode: classification.normalizedCode,
       errorMessage,
-      nextAttemptAt: computeNextAttemptAt(notification.attemptCount),
+      nextAttemptAt: computeNextAttemptAt(
+        notification.attemptCount,
+        classification.retryAfterMs,
+      ),
     });
-    payrollReceiptMetrics.notificationRetried({ errorCode: "SEND_RETRYABLE" });
+    payrollReceiptMetrics.notificationRetried({ errorCode: classification.normalizedCode });
     return "failed";
   }
 };
 
 export const payrollReceiptNotificationService = {
-  async processPendingBatch(limit = 25): Promise<{
+  async processPendingBatch(limit = 5): Promise<{
     processed: number;
     sent: number;
     cancelled: number;
     failed: number;
     recovery: number;
+    reconciliation: number;
   }> {
     const maxAttempts = env.PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS;
+    await payrollReceiptNotificationRepository.reconcileTerminalStates();
     await payrollReceiptNotificationRepository.recoverExpiredLeases(50, maxAttempts);
 
     const leaseSeconds = Math.max(
@@ -216,44 +348,51 @@ export const payrollReceiptNotificationService = {
       Math.floor(env.PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS / 1000),
     );
     const workerId = `payroll-receipt-notif-${process.pid}`;
-    const claimed = await payrollReceiptNotificationRepository.claimNextBatch(
-      workerId,
-      limit,
-      leaseSeconds,
-      maxAttempts,
-    );
-
-    if (claimed.length > 0) {
-      payrollReceiptMetrics.notificationClaimed({
-        status: "PROCESSING",
-        operation: String(claimed.length),
-      });
-    }
 
     let sent = 0;
     let cancelled = 0;
     let failed = 0;
     let recovery = 0;
+    let reconciliation = 0;
+    let processed = 0;
 
-    for (const notification of claimed) {
-      const outcome = await processClaimedNotification(notification);
+    for (let i = 0; i < limit; i += 1) {
+      const notification = await payrollReceiptNotificationRepository.claimNextOne(
+        workerId,
+        leaseSeconds,
+        maxAttempts,
+      );
+      if (!notification) {
+        break;
+      }
+
+      payrollReceiptMetrics.notificationClaimed({
+        status: "PROCESSING",
+        operation: "1",
+      });
+
+      processed += 1;
+      const outcome = await processClaimedNotification(notification, workerId);
       if (outcome === "sent") {
         sent += 1;
       } else if (outcome === "cancelled") {
         cancelled += 1;
       } else if (outcome === "recovery") {
         recovery += 1;
+      } else if (outcome === "reconciliation") {
+        reconciliation += 1;
       } else {
         failed += 1;
       }
     }
 
     return {
-      processed: claimed.length,
+      processed,
       sent,
       cancelled,
       failed,
       recovery,
+      reconciliation,
     };
   },
 };

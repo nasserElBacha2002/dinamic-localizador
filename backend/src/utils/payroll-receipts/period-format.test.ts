@@ -92,14 +92,13 @@ describe("parsePayrollReceiptPeriodMessage", () => {
 });
 
 describe("buildPayrollReceiptAvailableTemplateVariables", () => {
-  it("builds Twilio content variables 1 and 2", () => {
+  it("builds Twilio content variable 1 as MM/YY only", () => {
     assert.deepEqual(
       buildPayrollReceiptAvailableTemplateVariables({
-        employeeName: " Ana Pérez ",
         year: 2026,
         month: 7,
       }),
-      { "1": "Ana Pérez", "2": "07/26" },
+      { "1": "07/26" },
     );
   });
 });

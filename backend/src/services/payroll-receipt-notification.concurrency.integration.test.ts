@@ -4,10 +4,10 @@
  *
  * Requires:
  * - TEST_COMPANY_ID + TEST_EMPLOYEE_ID (same company), or helpers will resolve Dinamic company
- * - Migration 083 applied (whatsapp_payroll_receipt_notifications)
+ * - Migrations 083 + 084 applied
  */
 import assert from "node:assert/strict";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
@@ -19,6 +19,14 @@ import { payrollReceiptNotificationRepository } from "../repositories/payroll-re
 
 const companyId = process.env.TEST_COMPANY_ID;
 const employeeId = process.env.TEST_EMPLOYEE_ID;
+
+/** Deterministic unique year/month from receipt id (avoids UX collision + flaky Math.random). */
+const periodFromReceiptId = (receiptId: string): { year: number; month: number } => {
+  const hash = createHash("sha256").update(receiptId).digest();
+  const year = 2100 + (hash[0]! % 80); // 2100–2179
+  const month = 1 + (hash[1]! % 12);
+  return { year, month };
+};
 
 describeDatabaseIntegration("payroll receipt notification sql concurrency", () => {
   const receiptIds: string[] = [];
@@ -39,6 +47,11 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
         .input("id", sql.UniqueIdentifier, receiptId)
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
+          DELETE FROM whatsapp_payroll_receipt_notification_send_attempts
+          WHERE notification_id IN (
+            SELECT id FROM whatsapp_payroll_receipt_notifications
+            WHERE payroll_receipt_id = @id AND company_id = @companyId
+          );
           DELETE FROM whatsapp_payroll_receipt_notifications
           WHERE payroll_receipt_id = @id AND company_id = @companyId;
           DELETE FROM payroll_receipts WHERE id = @id AND company_id = @companyId;
@@ -59,9 +72,7 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
     const pool = getPool();
     const batchId = randomUUID();
     const receiptId = randomUUID();
-    // Unique period per insert to avoid UX_payroll_receipts_active_period collisions.
-    const year = 2090 + Math.floor(Math.random() * 9);
-    const month = 1 + Math.floor(Math.random() * 12);
+    const { year, month } = periodFromReceiptId(receiptId);
     batchIds.push(batchId);
     receiptIds.push(receiptId);
 
@@ -133,16 +144,17 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
     await payrollReceiptNotificationRepository.enqueueAvailable(companyId!, receiptB, employeeId!);
 
     const [first, second] = await Promise.all([
-      payrollReceiptNotificationRepository.claimNextBatch(`w1-${randomUUID()}`, 1, 60),
-      payrollReceiptNotificationRepository.claimNextBatch(`w2-${randomUUID()}`, 1, 60),
+      payrollReceiptNotificationRepository.claimNextOne(`w1-${randomUUID()}`, 60),
+      payrollReceiptNotificationRepository.claimNextOne(`w2-${randomUUID()}`, 60),
     ]);
 
-    assert.ok(first.length + second.length >= 1);
-    if (first[0] && second[0]) {
-      assert.notEqual(first[0].id, second[0].id);
+    assert.ok(Boolean(first) || Boolean(second));
+    if (first && second) {
+      assert.notEqual(first.id, second.id);
     }
 
-    for (const row of [...first, ...second]) {
+    for (const row of [first, second]) {
+      if (!row) continue;
       await payrollReceiptNotificationRepository.markCancelled({
         companyId: companyId!,
         notificationId: row.id,
@@ -152,11 +164,10 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
     }
   });
 
-  it("expired lease allows recovery claim by another worker", async () => {
+  it("expired lease recovery does not bump attempt_count", async () => {
     const { getPool } = await import("../database/connection");
     const pool = getPool();
 
-    // Cancel leftover PENDING/FAILED from earlier cases so claim order is deterministic.
     await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -169,7 +180,7 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
             last_error_code = N'TEST_CLEANUP',
             updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
-          AND status IN (N'PENDING', N'FAILED', N'PROCESSING')
+          AND status IN (N'PENDING', N'FAILED', N'PROCESSING', N'SEND_STARTED')
       `);
 
     const receiptId = await insertAssociatedReceipt();
@@ -196,20 +207,82 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
     const recovered = await payrollReceiptNotificationRepository.recoverExpiredLeases(50, 5);
     assert.ok(recovered >= 1);
 
-    const claimed = await payrollReceiptNotificationRepository.claimNextBatch(
+    const after = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, notification.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT attempt_count, status
+        FROM whatsapp_payroll_receipt_notifications
+        WHERE id = @id AND company_id = @companyId
+      `);
+    assert.equal(Number(after.recordset[0].attempt_count), 1);
+    assert.equal(String(after.recordset[0].status), "PENDING");
+
+    const claimed = await payrollReceiptNotificationRepository.claimNextOne(
       `recover-${randomUUID()}`,
-      5,
       60,
     );
-    assert.ok(claimed.some((row) => row.id === notification.id));
+    assert.ok(claimed);
+    assert.equal(claimed!.id, notification.id);
+    assert.equal(claimed!.attemptCount, 2);
 
-    for (const row of claimed) {
-      await payrollReceiptNotificationRepository.markCancelled({
-        companyId: companyId!,
-        notificationId: row.id,
-        errorCode: "TEST_CLEANUP",
-        errorMessage: "concurrency test cleanup",
-      });
-    }
+    await payrollReceiptNotificationRepository.markCancelled({
+      companyId: companyId!,
+      notificationId: claimed!.id,
+      errorCode: "TEST_CLEANUP",
+      errorMessage: "concurrency test cleanup",
+    });
+  });
+
+  it("cancel during PROCESSING sets cancel_requested_at without immediate CANCELLED", async () => {
+    const { getPool } = await import("../database/connection");
+    const pool = getPool();
+
+    const receiptId = await insertAssociatedReceipt();
+    const notification = await payrollReceiptNotificationRepository.enqueueAvailable(
+      companyId!,
+      receiptId,
+      employeeId!,
+    );
+
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, notification.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        UPDATE whatsapp_payroll_receipt_notifications
+        SET status = N'PROCESSING',
+            lease_owner = N'worker',
+            lease_expires_at = DATEADD(SECOND, 60, SYSUTCDATETIME()),
+            attempt_count = 1,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id AND company_id = @companyId
+      `);
+
+    const affected = await payrollReceiptNotificationRepository.requestCancelForReceipt(
+      companyId!,
+      receiptId,
+    );
+    assert.ok(affected >= 1);
+
+    const row = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, notification.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT status, cancel_requested_at
+        FROM whatsapp_payroll_receipt_notifications
+        WHERE id = @id AND company_id = @companyId
+      `);
+    assert.equal(String(row.recordset[0].status), "PROCESSING");
+    assert.ok(row.recordset[0].cancel_requested_at);
+
+    await payrollReceiptNotificationRepository.markCancelled({
+      companyId: companyId!,
+      notificationId: notification.id,
+      errorCode: "TEST_CLEANUP",
+      errorMessage: "concurrency test cleanup",
+    });
   });
 });

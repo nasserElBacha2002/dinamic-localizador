@@ -659,6 +659,20 @@ export const botSessionService = {
     return session;
   },
 
+  async updatePayrollReceiptSessionContext(
+    companyId: string,
+    sessionId: string,
+    payrollReceiptQuery: { year: number; month: number },
+  ): Promise<BotSession | null> {
+    return botSessionRepository.updateSession(companyId, sessionId, {
+      state: "WAITING_PAYROLL_RECEIPT_PERIOD",
+      contextJson: JSON.stringify({
+        payrollReceiptQuery,
+      } satisfies BotSessionContext),
+      expiresAt: buildExpiresAt(),
+    });
+  },
+
   async updateAbsenceSession(
     companyId: string,
     sessionId: string,

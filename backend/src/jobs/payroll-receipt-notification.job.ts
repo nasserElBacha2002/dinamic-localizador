@@ -17,7 +17,7 @@ const runJobSafely = async (): Promise<void> => {
 
   isRunning = true;
   try {
-    const result = await payrollReceiptNotificationService.processPendingBatch(25);
+    const result = await payrollReceiptNotificationService.processPendingBatch(5);
     if (result.processed > 0) {
       console.info("[payroll-receipt-notification-job] tick complete", result);
     }

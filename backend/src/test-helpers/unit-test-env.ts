@@ -18,6 +18,9 @@ export const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   TWILIO_TEMPLATE_NO_CHECKIN_SID: "HX_UNIT_TEST_NO_CHECKIN",
   TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID: "HX_UNIT_TEST_PAYROLL_RECEIPT",
   PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: "false",
+  GCS_PROJECT_ID: "unit-test-gcs-project",
+  GCS_BUCKET_NAME: "unit-test-gcs-bucket",
+  GCS_REQUIRED: "false",
 };
 
 export const setupUnitTestEnv = (): void => {

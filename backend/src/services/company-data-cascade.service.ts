@@ -67,10 +67,19 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM absence_requests WHERE company_id = @companyId;
     DELETE FROM employee_absence_balances WHERE company_id = @companyId;
 
+    -- Provider events are keyed by message_id / SID, not company_id.
+    IF OBJECT_ID(N'dbo.whatsapp_provider_events', N'U') IS NOT NULL
+      DELETE FROM whatsapp_provider_events
+      WHERE message_id IN (SELECT id FROM whatsapp_messages WHERE company_id = @companyId)
+         OR provider_message_sid IN (
+           SELECT provider_message_sid
+           FROM whatsapp_messages
+           WHERE company_id = @companyId
+             AND provider_message_sid IS NOT NULL
+         );
+
     DELETE FROM whatsapp_messages WHERE company_id = @companyId;
 
-    IF OBJECT_ID(N'dbo.whatsapp_provider_events', N'U') IS NOT NULL
-      DELETE FROM whatsapp_provider_events WHERE company_id = @companyId;
     IF OBJECT_ID(N'dbo.whatsapp_flow_execution_steps', N'U') IS NOT NULL
       DELETE FROM whatsapp_flow_execution_steps
       WHERE flow_execution_id IN (

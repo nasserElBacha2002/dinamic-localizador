@@ -1,6 +1,6 @@
 import { Alert, Button, Group, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import {
   DataTable,
   ErrorState,
@@ -110,19 +110,22 @@ export function PlatformCompaniesPage() {
     }
   };
 
-  const handleReactivate = async (company: PlatformCompany) => {
-    setActionError(null);
-    try {
-      await reactivateMutation.mutateAsync(company.id);
-      await refreshCompanies();
-      notifications.show({
-        color: "green",
-        message: "Empresa reactivada. La eliminación programada fue cancelada.",
-      });
-    } catch (error) {
-      setActionError(getApiErrorMessage(error));
-    }
-  };
+  const handleReactivate = useCallback(
+    async (company: PlatformCompany) => {
+      setActionError(null);
+      try {
+        await reactivateMutation.mutateAsync(company.id);
+        await refreshCompanies();
+        notifications.show({
+          color: "green",
+          message: "Empresa reactivada. La eliminación programada fue cancelada.",
+        });
+      } catch (error) {
+        setActionError(getApiErrorMessage(error));
+      }
+    },
+    [reactivateMutation, refreshCompanies],
+  );
 
   const columns = useMemo<DataTableColumn<PlatformCompany>[]>(
     () => [
@@ -231,7 +234,7 @@ export function PlatformCompaniesPage() {
       },
       { key: "defaultTimezone", header: "Zona horaria", getValue: (row) => row.defaultTimezone },
     ],
-    [reactivateMutation.isPending],
+    [handleReactivate, reactivateMutation.isPending],
   );
 
   const mobileCard = useMemo<DataTableMobileCardConfig<PlatformCompany>>(
@@ -329,6 +332,7 @@ export function PlatformCompaniesPage() {
       />
 
       <DeactivatePlatformCompanyDialog
+        key={deactivateTarget?.id ?? "deactivate-company"}
         open={Boolean(deactivateTarget)}
         company={deactivateTarget}
         gracePeriodDays={DEFAULT_GRACE_DAYS}

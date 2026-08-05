@@ -1,5 +1,5 @@
 import { Alert, Button, Group, Stack, Text, TextInput, Textarea } from "@mantine/core";
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { ResponsiveModal } from "../../design-system";
 import type { PlatformCompany } from "../../types/platform-company";
 
@@ -33,13 +33,6 @@ export function DeactivatePlatformCompanyDialog({
   const [reason, setReason] = useState("");
   const [confirmName, setConfirmName] = useState("");
 
-  useEffect(() => {
-    if (!open) {
-      setReason("");
-      setConfirmName("");
-    }
-  }, [open]);
-
   const estimatedDeletion = useMemo(
     () => formatScheduledDeletion(gracePeriodDays),
     [gracePeriodDays],
@@ -49,10 +42,19 @@ export function DeactivatePlatformCompanyDialog({
     Boolean(company) && confirmName.trim() === (company?.name ?? "").trim();
   const canSubmit = nameMatches && reason.trim().length >= 5 && !loading;
 
+  const handleClose = () => {
+    if (loading) {
+      return;
+    }
+    setReason("");
+    setConfirmName("");
+    onClose();
+  };
+
   return (
     <ResponsiveModal
       opened={open}
-      onClose={loading ? () => undefined : onClose}
+      onClose={handleClose}
       title="Desactivar empresa"
       size="md"
       bodyMode="normal"
@@ -60,7 +62,7 @@ export function DeactivatePlatformCompanyDialog({
       closeOnEscape={!loading}
       footer={
         <Group justify="flex-end" gap="sm" wrap="wrap">
-          <Button variant="default" onClick={onClose} disabled={loading}>
+          <Button variant="default" onClick={handleClose} disabled={loading}>
             Cancelar
           </Button>
           <Button

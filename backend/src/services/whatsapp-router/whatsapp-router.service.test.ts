@@ -26,6 +26,8 @@ import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-r
 const companyId = "00000000-0000-4000-8000-000000000001";
 const employeeId = "00000000-0000-4000-8000-000000000002";
 const operationId = "00000000-0000-4000-8000-000000000003";
+const employeeWorkdayId = "00000000-0000-4000-8000-000000000004";
+const attendanceRecordId = "00000000-0000-4000-8000-000000000005";
 
 const enabledStates = () =>
   new Map([
@@ -45,6 +47,11 @@ const buildSession = (
   employeeId,
   operationId:
     state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION" ? operationId : null,
+  employeeWorkdayId:
+    state === "WAITING_LOCATION" || state === "WAITING_CHECKOUT_LOCATION"
+      ? employeeWorkdayId
+      : null,
+  attendanceRecordId: state === "WAITING_CHECKOUT_LOCATION" ? attendanceRecordId : null,
   phoneNumber: "+5491111111111",
   state,
   contextJson:
@@ -54,6 +61,8 @@ const buildSession = (
   expiresAt: "2099-01-01T00:00:00.000Z",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
+  sessionVersion: 0,
+  lastMessageSid: null,
   ...overrides,
 });
 
@@ -1627,12 +1636,12 @@ describe("whatsappRouterService numeric menu selection", () => {
     );
 
     assert.match(response, /no vas a poder asistir/);
-    assert.match(response, /servicio asignado/);
+    assert.match(response, /trabajo asignado/);
     assert.doesNotMatch(response, /inventario/i);
     assert.equal(calls.startCheckIn, 0);
   });
 
-  it("uses servicio terminology when assignment is no longer available", async () => {
+  it("uses jornada terminology when assignment is no longer available", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
@@ -1662,7 +1671,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       handlers,
     );
 
-    assert.match(response, /servicio/);
+    assert.match(response, /jornada/);
     assert.doesNotMatch(response, /inventario/i);
   });
 

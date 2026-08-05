@@ -98,10 +98,6 @@ describe("payrollReceiptNotificationService", () => {
   });
 
   it("ambiguous Twilio failure after beginSendAttempt → reconciliation; claim again does not call Twilio", async () => {
-    const { env } = await import("../config/env");
-    const previousContentSid = env.TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID;
-    env.TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID = "HX_TEST_PAYROLL_RECEIPT";
-
     const { payrollReceiptNotificationRepository } = await import(
       "../repositories/payroll-receipt-notification.repository"
     );
@@ -113,7 +109,6 @@ describe("payrollReceiptNotificationService", () => {
       "./payroll-receipt-notification.service"
     );
 
-    try {
     mock.method(payrollReceiptNotificationRepository, "reconcileTerminalStates", async () => 0);
     mock.method(payrollReceiptNotificationRepository, "recoverExpiredLeases", async () => 0);
 
@@ -183,8 +178,5 @@ describe("payrollReceiptNotificationService", () => {
     const second = await payrollReceiptNotificationService.processPendingBatch(1);
     assert.equal(second.processed, 0);
     assert.equal(twilioCalls, 1);
-    } finally {
-      env.TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID = previousContentSid;
-    }
   });
 });

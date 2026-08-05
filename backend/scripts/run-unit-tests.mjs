@@ -1,10 +1,13 @@
 #!/usr/bin/env node
 /**
- * Run backend unit tests only (excludes *.integration.test.ts).
- * Portable across macOS/Linux npm script shells (avoids find `!` / ARG quirks).
+ * Run backend unit tests (excludes integration suites).
+ *
+ * Important: do not rely on shell recursive globs for test discovery.
+ * macOS npm/sh expands star-star like star (shallow), while Linux CI dash
+ * passes the glob literally to tsx (recursive) — causing local/CI mismatch.
  */
-import { readdirSync, statSync } from "node:fs";
-import { join } from "node:path";
+import { readdirSync, statSync, existsSync } from "node:fs";
+import { join, relative } from "node:path";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 
@@ -19,7 +22,9 @@ const collectUnitTests = (dir, acc = []) => {
       continue;
     }
     if (name.endsWith(".integration.test.ts")) continue;
-    if (name.endsWith(".test.ts")) acc.push(path);
+    if (name.endsWith(".test.ts")) {
+      acc.push(relative(backendRoot, path));
+    }
   }
   return acc;
 };
@@ -30,11 +35,17 @@ if (files.length === 0) {
   process.exit(1);
 }
 
+const tsxBin = join(backendRoot, "node_modules", ".bin", "tsx");
+if (!existsSync(tsxBin)) {
+  console.error(`tsx binary not found at ${tsxBin}. Run npm ci in backend/.`);
+  process.exit(1);
+}
+
+console.log(`[run-unit-tests] running ${files.length} unit test files`);
+
 const result = spawnSync(
-  process.execPath,
+  tsxBin,
   [
-    "--import",
-    "tsx",
     "--import",
     "./src/test-helpers/preload-test-env.ts",
     "--test",
@@ -46,7 +57,13 @@ const result = spawnSync(
     cwd: backendRoot,
     stdio: "inherit",
     env: process.env,
+    shell: process.platform === "win32",
   },
 );
+
+if (result.error) {
+  console.error(result.error);
+  process.exit(1);
+}
 
 process.exit(result.status === null ? 1 : result.status);

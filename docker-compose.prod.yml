@@ -78,7 +78,9 @@ services:
       BOT_ON_TIME_GRACE_MINUTES: ${BOT_ON_TIME_GRACE_MINUTES:?BOT_ON_TIME_GRACE_MINUTES is required}
     ports: !override
       - "127.0.0.1:${BACKEND_HOST_PORT}:${BACKEND_INTERNAL_PORT}"
-    volumes: !override []
+    # Keep only the GCP credentials mount (do not bind-mount source code in prod).
+    volumes: !override
+      - ./secrets:/app/secrets:ro
     healthcheck:
       test:
         [

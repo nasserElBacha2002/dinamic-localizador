@@ -21,6 +21,7 @@ import { absenceOperationalConflictService } from "./absence-operational-conflic
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { operationAssignmentService } from "./operation-assignment.service";
+import { operationWorkDateService } from "./operation-work-date.service";
 
 const uniquePhone = (n: number): string =>
   `+54911${Date.now().toString().slice(-7)}${n}`;
@@ -87,7 +88,6 @@ describeDatabaseIntegration("phase5 pilot operational reconciliation", () => {
     assert.ok(serviceId);
 
     const start = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
-    const workDate = start.toISOString().slice(0, 10);
     const op = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -105,6 +105,11 @@ describeDatabaseIntegration("phase5 pilot operational reconciliation", () => {
       `);
     const operationId = String(op.recordset[0].id);
     fixtures.trackOperation(companyId, operationId);
+    // Must match assignEmployee / operationWorkDateService (company TZ), not UTC ISO date.
+    const workDate = await operationWorkDateService.resolveOperationWorkDate(
+      companyId,
+      operationId,
+    );
     report.push(`BEFORE operationId=${operationId} workDate=${workDate}`);
 
     const assignment = await operationAssignmentService.assignEmployee(

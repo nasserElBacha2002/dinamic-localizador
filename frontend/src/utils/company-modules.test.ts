@@ -118,6 +118,36 @@ describe("company modules frontend module", () => {
     assert.ok(labels.includes(terminology.service.plural));
     assert.ok(labels.includes(terminology.operation.plural));
     assert.ok(labels.includes(terminology.attendance.plural));
+    assert.ok(labels.includes("Estado de servidores"));
+    assert.ok(items.some((item) => item.path === "/platform/servers"));
+  });
+
+  it("shows Estado de servidores only for platform Super Admin", () => {
+    const asSuperAdmin = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:settings:update"],
+      isPlatformAdmin: true,
+      modulesLoading: false,
+    });
+    assert.equal(
+      asSuperAdmin.some((item) => item.path === "/platform/servers"),
+      true,
+    );
+
+    const asCompanyAdmin = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:settings:update", "users:manage"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      asCompanyAdmin.some((item) => item.path === "/platform/servers"),
+      false,
+    );
+    assert.equal(
+      asCompanyAdmin.some((item) => item.label === "Estado de servidores"),
+      false,
+    );
   });
 
   it("exposes generic module labels while keeping operations key", () => {

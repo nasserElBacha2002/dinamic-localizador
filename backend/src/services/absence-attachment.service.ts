@@ -8,11 +8,7 @@ import { attachmentDeletionService } from "./attachment-deletion.service";
 import { attachmentDownloadService } from "./attachment-download.service";
 import { attachmentPolicyService } from "./attachment-policy.service";
 import { attachmentUploadService } from "./attachment-upload.service";
-import {
-  getAttachmentStorage,
-  getGcsUnavailableReason,
-  isGcsConfigured,
-} from "./attachment-storage";
+import { getAttachmentStorageHealth } from "./attachment-storage";
 
 /**
  * Facade over attachment use-case services (policy / upload / download / deletion / cleanup).
@@ -32,25 +28,12 @@ export const absenceAttachmentService = {
     available: boolean;
     message?: string;
   }> {
-    const reason = getGcsUnavailableReason();
-    if (reason) {
-      return { configured: false, available: false, message: reason };
-    }
-    try {
-      const storage = getAttachmentStorage();
-      const probe = (await storage.checkAccess?.()) ?? { ok: true };
-      return {
-        configured: true,
-        available: probe.ok,
-        message: probe.message,
-      };
-    } catch (error) {
-      return {
-        configured: true,
-        available: false,
-        message: error instanceof Error ? error.message : String(error),
-      };
-    }
+    const health = await getAttachmentStorageHealth();
+    return {
+      configured: health.configured,
+      available: health.available,
+      message: health.message ?? undefined,
+    };
   },
 
   async list(
@@ -78,7 +61,4 @@ export const absenceAttachmentService = {
   softDelete: attachmentDeletionService.softDelete.bind(attachmentDeletionService),
   processCleanupBatch:
     attachmentCleanupService.processCleanupBatch.bind(attachmentCleanupService),
-
-  /** @deprecated Prefer isGcsConfigured from attachment-storage */
-  isGcsConfigured,
 };

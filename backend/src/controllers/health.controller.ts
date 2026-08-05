@@ -1,96 +1,52 @@
 import type { Request, Response } from "express";
-import { getPool } from "../database/connection";
-import { absenceAttachmentService } from "../services/absence-attachment.service";
-import { isGcsConfigured } from "../services/attachment-storage";
+import { dbProbe } from "../database/db-probe";
 
-interface HealthResponse {
+/**
+ * Public health policy:
+ * - /health          → liveness (process up). No dependency details.
+ * - /health/ready    → readiness (SQL reachable). Opaque status only.
+ * - /health/database → alias of readiness for legacy deploy probes.
+ *
+ * Detailed SQL/GCS diagnostics live under /platform/servers/status (Super Admin only).
+ */
+
+interface LivenessResponse {
   status: "ok";
-  service: string;
   timestamp: string;
-}
-
-interface DatabaseHealthResponse {
-  status: "ok" | "error";
-  database: "connected" | "disconnected";
-  message?: string;
 }
 
 interface ReadinessResponse {
-  status: "ok" | "degraded" | "error";
-  database: "connected" | "disconnected";
-  gcs: {
-    configured: boolean;
-    available: boolean;
-    message?: string | null;
-  };
+  status: "ok" | "error";
   timestamp: string;
 }
 
-export const getApiHealth = (_req: Request, res: Response<HealthResponse>): void => {
+export const getApiHealth = (_req: Request, res: Response<LivenessResponse>): void => {
   res.status(200).json({
     status: "ok",
-    service: "dinamic-attendance-api",
     timestamp: new Date().toISOString(),
   });
 };
 
-export const getDatabaseHealth = async (
-  _req: Request,
-  res: Response<DatabaseHealthResponse>,
-): Promise<void> => {
+const probeDatabaseReady = async (): Promise<boolean> => {
   try {
-    const pool = getPool();
-    await pool.request().query("SELECT 1 AS ok");
-
-    res.status(200).json({
-      status: "ok",
-      database: "connected",
-    });
+    await dbProbe.ping();
+    return true;
   } catch {
-    res.status(503).json({
-      status: "error",
-      database: "disconnected",
-      message: "No se pudo conectar con la base de datos",
-    });
+    return false;
   }
 };
 
-/** Readiness: DB required; GCS reported when configured (attachments depend on it). */
 export const getReadiness = async (
   _req: Request,
   res: Response<ReadinessResponse>,
 ): Promise<void> => {
-  let database: "connected" | "disconnected" = "disconnected";
-  try {
-    const pool = getPool();
-    await pool.request().query("SELECT 1 AS ok");
-    database = "connected";
-  } catch {
-    database = "disconnected";
-  }
-
-  const gcsHealth = await absenceAttachmentService.getStorageHealth();
-  const gcs = {
-    configured: isGcsConfigured() || gcsHealth.configured,
-    available: gcsHealth.available,
-    message: gcsHealth.message ?? null,
-  };
-
-  if (database === "disconnected") {
-    res.status(503).json({
-      status: "error",
-      database,
-      gcs,
-      timestamp: new Date().toISOString(),
-    });
-    return;
-  }
-
-  const status = gcs.configured && !gcs.available ? "degraded" : "ok";
-  res.status(200).json({
-    status,
-    database,
-    gcs,
+  const ready = await probeDatabaseReady();
+  const payload: ReadinessResponse = {
+    status: ready ? "ok" : "error",
     timestamp: new Date().toISOString(),
-  });
+  };
+  res.status(ready ? 200 : 503).json(payload);
 };
+
+/** @deprecated Prefer /health/ready. Kept as opaque readiness alias for deploy scripts. */
+export const getDatabaseHealth = getReadiness;

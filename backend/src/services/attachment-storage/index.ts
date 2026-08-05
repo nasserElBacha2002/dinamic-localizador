@@ -12,3 +12,7 @@ export {
   type AttachmentStorageHealth,
   type StorageComponentStatus,
 } from "./storage-health";
+export {
+  StorageObjectNotFoundError,
+  isStorageObjectNotFoundError,
+} from "./storage-errors";

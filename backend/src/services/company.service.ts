@@ -21,6 +21,7 @@ import type {
   CompanySettings,
   CompanySettingsDto,
 } from "../types/company";
+import { isCompanyOperationallyActive } from "../types/company";
 
 const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => ({
   companyId: settings.companyId,
@@ -196,7 +197,7 @@ export const companyService = {
 
   async getCompanyOrThrow(companyId: string): Promise<Company> {
     const company = await companyRepository.findById(companyId);
-    if (!company || company.status !== "ACTIVE") {
+    if (!company || !isCompanyOperationallyActive(company.status)) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa no encontrada.");
     }
     return company;

@@ -73,6 +73,26 @@ const envSchema = z
     API_SERVICE_NAME: z.string().min(1).default("dinamic-attendance-api"),
     ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
     ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+    /** Grace days between company deactivation and scheduled hard delete. */
+    COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
+    COMPANY_DELETION_JOB_ENABLED: z.stringbool().default(true),
+    /** Interval for the company deletion worker (ms). Default: 1 hour. */
+    COMPANY_DELETION_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+    /** Lease duration for a deletion claim (ms). Default: 30 minutes. */
+    COMPANY_DELETION_LEASE_MS: z.coerce.number().int().positive().default(1_800_000),
+    /** Max deletion attempts before requiring manual intervention (still DELETION_FAILED). */
+    COMPANY_DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+    /** Base backoff for deletion retries (ms). */
+    COMPANY_DELETION_RETRY_BASE_MS: z.coerce.number().int().positive().default(60_000),
+    /**
+     * Comma-separated company UUIDs that cannot be deactivated/deleted (preferred).
+     * Empty = no ID-based protection (names may still apply as legacy fallback).
+     */
+    COMPANY_PROTECTED_IDS: z.string().default(""),
+    /**
+     * @deprecated Prefer COMPANY_PROTECTED_IDS. Comma-separated names (mutable).
+     */
+    COMPANY_PROTECTED_NAMES: z.string().default("Dinamic Systems"),
     WHATSAPP_OBSERVABILITY_ENABLED: z.stringbool().default(true),
     WHATSAPP_OBSERVABILITY_UI_ENABLED: z.stringbool().default(true),
     WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: z.stringbool().default(true),

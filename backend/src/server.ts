@@ -15,6 +15,10 @@ import {
   startWhatsappObservabilityCleanupJob,
   stopWhatsappObservabilityCleanupJob,
 } from "./jobs/whatsapp-observability-cleanup.job";
+import {
+  startCompanyDeletionJob,
+  stopCompanyDeletionJob,
+} from "./jobs/company-deletion.job";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
@@ -23,6 +27,7 @@ const startServer = async (): Promise<void> => {
   startAbsenceWorkdaySyncJob();
   startAbsenceAttachmentCleanupJob();
   startWhatsappObservabilityCleanupJob();
+  startCompanyDeletionJob();
 
   app.listen(env.PORT, () => {
     console.log(`API listening on port ${env.PORT}`);
@@ -35,6 +40,7 @@ const shutdown = async (): Promise<void> => {
   stopAbsenceWorkdaySyncJob();
   stopAbsenceAttachmentCleanupJob();
   stopWhatsappObservabilityCleanupJob();
+  stopCompanyDeletionJob();
   await closeDatabase();
   process.exit(0);
 };

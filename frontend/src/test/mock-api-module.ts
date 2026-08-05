@@ -78,6 +78,14 @@ export const ATTENDANCE_API_EXPORTS = [
   "exportAttendanceCsv",
 ] as const;
 
+export const PLATFORM_COMPANIES_API_EXPORTS = [
+  "getPlatformCompanies",
+  "createPlatformCompany",
+  "deactivatePlatformCompany",
+  "reactivatePlatformCompany",
+  "getPlatformCompanyDeletionStatus",
+] as const;
+
 export const EMPLOYEES_API_EXPORTS = [
   "getEmployees",
   "getEmployeeById",

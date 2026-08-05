@@ -73,6 +73,9 @@ const envSchema = z
     API_SERVICE_NAME: z.string().min(1).default("dinamic-attendance-api"),
     ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
     ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+    /** Google Cloud Storage prefix for payroll receipts (same bucket as absences). */
+    PAYROLL_RECEIPTS_STORAGE_PREFIX: z.string().min(1).default("payroll-receipts"),
+    PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH: z.coerce.number().int().positive().default(50),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
     COMPANY_DELETION_JOB_ENABLED: z.stringbool().default(true),

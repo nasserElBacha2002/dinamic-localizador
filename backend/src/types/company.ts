@@ -159,6 +159,11 @@ export type CompanyPermission =
   | "absences:read"
   | "absences:review"
   | "absences:balance:update"
+  | "payroll_receipts:read"
+  | "payroll_receipts:upload"
+  | "payroll_receipts:manage"
+  | "payroll_receipts:delete"
+  | "payroll_receipts:download"
   | "reports:read"
   | "reports:export"
   | "bot_simulator:use";

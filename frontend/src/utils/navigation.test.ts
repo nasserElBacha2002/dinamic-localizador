@@ -8,6 +8,7 @@ const allEnabledModules: CompanyModule[] = [
   "attendance",
   "operations",
   "absences",
+  "payroll_receipts",
   "reports",
   "bot_simulator",
 ].map((moduleKey) => ({
@@ -22,7 +23,7 @@ describe("navigation grouping", () => {
   it("groups nav items into sections and hides empty sections", () => {
     const items = getAdminNavItems({
       modules: allEnabledModules,
-      permissions: ["attendance:read", "operations:read"],
+      permissions: ["attendance:read", "operations:read", "payroll_receipts:read"],
       isPlatformAdmin: false,
       modulesLoading: false,
     });
@@ -35,6 +36,7 @@ describe("navigation grouping", () => {
     assert.equal(sections[0]?.items[0]?.path, "/");
     assert.ok(sections[1]?.items.some((item) => item.path === "/operations"));
     assert.ok(sections[1]?.items.some((item) => item.path === "/attendance"));
+    assert.ok(sections[1]?.items.some((item) => item.path === "/payroll-receipts"));
   });
 
   it("shows Importación for any import-related manage permission", () => {

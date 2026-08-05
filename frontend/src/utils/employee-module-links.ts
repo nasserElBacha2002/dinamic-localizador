@@ -3,9 +3,14 @@ import { serializeIdList } from "./multi-value-filter";
 /** List routes that accept an employee filter via `employeeIds`. */
 export const EMPLOYEE_ATTENDANCE_LIST_PATH = "/attendance";
 export const EMPLOYEE_ABSENCES_LIST_PATH = "/absences";
+export const EMPLOYEE_PAYROLL_RECEIPTS_LIST_PATH = "/payroll-receipts";
 export const EMPLOYEE_STATISTICS_PATH = "/statistics";
 
-export type EmployeeModuleLinkTarget = "attendance" | "absences" | "statistics";
+export type EmployeeModuleLinkTarget =
+  | "attendance"
+  | "absences"
+  | "payroll_receipts"
+  | "statistics";
 
 /**
  * Build a deep-link into a list/report module with the employee pre-selected.
@@ -23,6 +28,8 @@ export function buildEmployeeModulePath(
         return EMPLOYEE_ATTENDANCE_LIST_PATH;
       case "absences":
         return EMPLOYEE_ABSENCES_LIST_PATH;
+      case "payroll_receipts":
+        return EMPLOYEE_PAYROLL_RECEIPTS_LIST_PATH;
       case "statistics":
         return EMPLOYEE_STATISTICS_PATH;
     }
@@ -38,6 +45,8 @@ export function buildEmployeeModulePath(
       // List default is PENDING; show all statuses when jumping from the employee profile.
       params.set("status", "all");
       return `${EMPLOYEE_ABSENCES_LIST_PATH}?${params.toString()}`;
+    case "payroll_receipts":
+      return `${EMPLOYEE_PAYROLL_RECEIPTS_LIST_PATH}?${params.toString()}`;
     case "statistics":
       params.set("tab", "employee");
       return `${EMPLOYEE_STATISTICS_PATH}?${params.toString()}`;
@@ -50,6 +59,10 @@ export function buildEmployeeAttendancePath(employeeId: string): string {
 
 export function buildEmployeeAbsencesPath(employeeId: string): string {
   return buildEmployeeModulePath("absences", employeeId);
+}
+
+export function buildEmployeePayrollReceiptsPath(employeeId: string): string {
+  return buildEmployeeModulePath("payroll_receipts", employeeId);
 }
 
 export function buildEmployeeStatisticsPath(employeeId: string): string {

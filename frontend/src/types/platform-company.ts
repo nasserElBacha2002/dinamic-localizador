@@ -61,7 +61,7 @@ export interface CreatePlatformCompanyInput {
     geofenceReviewMarginMeters?: number | null;
   };
   modules?: Array<
-    "attendance" | "operations" | "absences" | "reports" | "bot_simulator"
+    "attendance" | "operations" | "absences" | "payroll_receipts" | "reports" | "bot_simulator"
   >;
   owner: {
     name: string;

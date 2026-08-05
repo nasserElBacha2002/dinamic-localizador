@@ -24,6 +24,7 @@ import {
   absenceCalculateRouter,
 } from "./absence-calendar.routes";
 import { botSimulatorRouter } from "./bot-simulator.routes";
+import { payrollReceiptBatchRouter, payrollReceiptRouter } from "./payroll-receipt.routes";
 import { devReminderRouter } from "./dev-reminder.routes";
 import { companyRouter } from "./company.routes";
 import { companyUserRouter } from "./company-user.routes";
@@ -159,6 +160,16 @@ companyScopedOperationalRouter.use(
   absenceCalendarRouter,
 );
 companyScopedOperationalRouter.use(
+  "/payroll-receipt-batches",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptBatchRouter,
+);
+companyScopedOperationalRouter.use(
+  "/payroll-receipts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptRouter,
+);
+companyScopedOperationalRouter.use(
   "/dev/attendance-reminders",
   requireCompanyModule(COMPANY_MODULE_KEYS.ATTENDANCE),
   devReminderRouter,
@@ -242,6 +253,16 @@ operationalRouter.use(
   "/absence-calendars",
   requireCompanyModule(COMPANY_MODULE_KEYS.ABSENCES),
   absenceCalendarRouter,
+);
+operationalRouter.use(
+  "/payroll-receipt-batches",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptBatchRouter,
+);
+operationalRouter.use(
+  "/payroll-receipts",
+  requireCompanyModule(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS),
+  payrollReceiptRouter,
 );
 operationalRouter.use(
   "/dev/attendance-reminders",

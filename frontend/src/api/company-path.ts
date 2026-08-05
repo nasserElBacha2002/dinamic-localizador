@@ -23,6 +23,8 @@ export const OPERATIONAL_API_PREFIXES = [
   "absence-types",
   "absence-requests",
   "absence-calendars",
+  "payroll-receipt-batches",
+  "payroll-receipts",
   "bot-simulator",
   "users",
   "settings",

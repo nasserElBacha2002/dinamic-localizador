@@ -17,6 +17,7 @@ const allEnabledModules: CompanyModule[] = [
   "attendance",
   "operations",
   "absences",
+  "payroll_receipts",
   "reports",
   "bot_simulator",
 ].map((moduleKey) => ({
@@ -64,6 +65,35 @@ describe("company modules frontend module", () => {
       items.some((item) => item.path === "/absences"),
       false,
     );
+  });
+
+  it("hides Recibos de sueldo when payroll_receipts module is disabled", () => {
+    const modules = allEnabledModules.map((module) =>
+      module.moduleKey === "payroll_receipts" ? { ...module, isEnabled: false } : module,
+    );
+    const items = getAdminNavItems({
+      modules,
+      permissions: ["payroll_receipts:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      items.some((item) => item.path === "/payroll-receipts"),
+      false,
+    );
+  });
+
+  it("shows Recibos de sueldo when module and permission are present", () => {
+    const items = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["payroll_receipts:read"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    const item = items.find((entry) => entry.path === "/payroll-receipts");
+    assert.ok(item);
+    assert.equal(item?.label, "Recibos de sueldo");
+    assert.equal(item?.section, "operation");
   });
 
   it("hides Estadísticas when reports module is disabled", () => {

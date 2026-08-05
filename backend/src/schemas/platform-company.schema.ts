@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
-import { COMPANY_STATUSES } from "../types/company";
+import { COMPANY_CREATE_STATUSES } from "../types/company";
 import { isValidHHmm } from "../utils/sql-time";
 
 const optionalHHmmField = () =>
@@ -34,7 +34,7 @@ export const createPlatformCompanySchema = z.object({
     .trim()
     .min(1)
     .default("America/Argentina/Buenos_Aires"),
-  status: z.enum(COMPANY_STATUSES).optional().default("ACTIVE"),
+    status: z.enum(COMPANY_CREATE_STATUSES).optional().default("ACTIVE"),
   settings: companySettingsInputSchema.optional(),
   modules: z
     .array(z.enum(ALL_COMPANY_MODULE_KEYS))

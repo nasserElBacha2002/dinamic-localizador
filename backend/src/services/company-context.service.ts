@@ -3,6 +3,7 @@ import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import type { Company, UserCompanyMembership } from "../types/company";
+import { isCompanyOperationallyActive } from "../types/company";
 import { buildPlatformAdminMembership } from "../utils/platform-admin-membership";
 
 export interface BotDefaultCompanyOptions {
@@ -122,7 +123,7 @@ export const companyContextService = {
     }
 
     const company = await companyRepository.findById(membership.companyId);
-    if (!company || company.status !== "ACTIVE") {
+    if (!company || !isCompanyOperationallyActive(company.status)) {
       throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa no encontrada.");
     }
 
@@ -138,7 +139,7 @@ export const companyContextService = {
 
     if (companyId) {
       const company = await companyRepository.findById(companyId);
-      if (!company || company.status !== "ACTIVE") {
+      if (!company || !isCompanyOperationallyActive(company.status)) {
         throw new AppError(404, "COMPANY_NOT_FOUND", "Empresa no encontrada.");
       }
 

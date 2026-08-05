@@ -1,5 +1,30 @@
-export const COMPANY_STATUSES = ["ACTIVE", "INACTIVE", "SUSPENDED"] as const;
+export const COMPANY_STATUSES = [
+  "ACTIVE",
+  "INACTIVE",
+  "SUSPENDED",
+  "PENDING_DELETION",
+  "DELETING",
+  "DELETED",
+  "DELETION_FAILED",
+] as const;
 export type CompanyStatus = (typeof COMPANY_STATUSES)[number];
+
+/** Statuses allowed when creating a company via platform API. */
+export const COMPANY_CREATE_STATUSES = ["ACTIVE", "INACTIVE", "SUSPENDED"] as const;
+export type CompanyCreateStatus = (typeof COMPANY_CREATE_STATUSES)[number];
+
+/** Statuses that block operational access for the tenant. */
+export const COMPANY_OPERATIONAL_BLOCKED_STATUSES: readonly CompanyStatus[] = [
+  "INACTIVE",
+  "SUSPENDED",
+  "PENDING_DELETION",
+  "DELETING",
+  "DELETED",
+  "DELETION_FAILED",
+];
+
+export const isCompanyOperationallyActive = (status: CompanyStatus): boolean =>
+  status === "ACTIVE";
 
 export const COMPANY_MEMBERSHIP_STATUSES = ["ACTIVE", "INACTIVE"] as const;
 export type CompanyMembershipStatus = (typeof COMPANY_MEMBERSHIP_STATUSES)[number];
@@ -22,6 +47,18 @@ export interface Company {
   country: string | null;
   defaultTimezone: string;
   status: CompanyStatus;
+  deactivatedAt: string | null;
+  deactivatedByUserId: string | null;
+  deactivationReason: string | null;
+  scheduledDeletionAt: string | null;
+  reactivatedAt: string | null;
+  reactivatedByUserId: string | null;
+  deletionStartedAt: string | null;
+  deletedAt: string | null;
+  deletionAttempts: number;
+  deletionLastError: string | null;
+  deletionPurgeStage: string | null;
+  deletionNextAttemptAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

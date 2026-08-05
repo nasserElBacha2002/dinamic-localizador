@@ -40,7 +40,7 @@ GCS_PROJECT_ID=tu-proyecto
 GCS_BUCKET_NAME=tu-bucket-privado
 ```
 
-6. `docker-compose.yml` monta `./secrets:/app/secrets:ro` en el servicio `backend`.
+6. `docker-compose.yml` y `docker-compose.prod.yml` montan `./secrets:/app/secrets:ro` en el servicio `backend` (solo lectura). En prod no se monta el código fuente; solo esta carpeta de credenciales.
 
 **Nunca subas** `gcp-service-account.json` a GitHub. Solo se trackean `README.md` y `gcp-service-account.json.example`.
 

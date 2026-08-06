@@ -1,5 +1,6 @@
 import { Group, Stack } from "@mantine/core";
 import { useMemo } from "react";
+import { EntityLink } from "../entity-link";
 import {
   DataTable,
   ErrorState,
@@ -95,6 +96,13 @@ export function StatisticsEmployeeTable({
         key: "employeeName",
         header: "Empleado",
         getValue: (row) => row.employeeName,
+        render: (row) => (
+          <EntityLink
+            entityType="employee"
+            entityId={row.employeeId}
+            label={row.employeeName}
+          />
+        ),
         sortable: true,
       },
       {
@@ -187,7 +195,13 @@ export function StatisticsEmployeeTable({
 
   const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceByEmployeeRow>>(
     () => ({
-      title: (row) => row.employeeName,
+      title: (row) => (
+        <EntityLink
+          entityType="employee"
+          entityId={row.employeeId}
+          label={row.employeeName}
+        />
+      ),
       subtitle: (row) => row.phoneNumber,
       fields: [
         {

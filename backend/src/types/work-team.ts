@@ -82,6 +82,7 @@ export interface WorkTeamUsageRecord {
   batchId: string;
   operationId: string;
   operationName: string | null;
+  serviceId: string | null;
   serviceName: string | null;
   operationKind: string;
   operationStatus: string;

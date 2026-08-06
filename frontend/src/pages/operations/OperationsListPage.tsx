@@ -1,6 +1,7 @@
 import { Button } from "@mantine/core";
 import { useCallback, useMemo, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { EntityLink } from "../../components/entity-link";
 import { ServiceLookupAutocomplete } from "../../components/lookups/ServiceLookupAutocomplete";
 import {
   ActionMenu,
@@ -138,7 +139,14 @@ export function OperationsListPage() {
         getValue: (row) => getOperationDisplayName(row),
         render: (row) => {
           const name = getOperationDisplayName(row);
-          return <EntityIdentity name={name} entityType="operation" />;
+          return (
+            <EntityLink
+              entityType="service"
+              entityId={row.serviceId || row.service?.id}
+              label={<EntityIdentity name={name} entityType="service" />}
+              stopPropagation
+            />
+          );
         },
       },
       {
@@ -187,7 +195,14 @@ export function OperationsListPage() {
     () => ({
       title: (row) => {
         const name = getOperationDisplayName(row);
-        return <EntityIdentity name={name} entityType="operation" />;
+        return (
+          <EntityLink
+            entityType="service"
+            entityId={row.serviceId || row.service?.id}
+            label={<EntityIdentity name={name} entityType="service" />}
+            stopPropagation
+          />
+        );
       },
       subtitle: (row) => getOperationServiceAddress(row),
       status: (row) => (

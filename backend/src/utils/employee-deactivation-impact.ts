@@ -20,6 +20,7 @@ export interface DeactivationAssignmentSnapshot {
   operationStatus: OperationStatus;
   operationNotes: string | null;
   locationName: string;
+  workTeamId: string | null;
   workTeamName: string | null;
   scheduledStart: string | null;
   scheduledEnd: string | null;
@@ -41,6 +42,7 @@ export interface DeactivationImpactRow {
   endTime: string | null;
   status: OperationStatus;
   locationName: string;
+  workTeamId: string | null;
   workTeamName: string | null;
 }
 
@@ -292,6 +294,7 @@ export const buildDeactivationReleasePlan = (input: {
         endTime: formatClockInTimezone(workday.expectedEndAt, input.timezone),
         status: assignment.operationStatus,
         locationName: assignment.locationName,
+        workTeamId: assignment.workTeamId,
         workTeamName: assignment.workTeamName,
       });
     }
@@ -314,6 +317,7 @@ export const buildDeactivationReleasePlan = (input: {
         endTime: formatClockInTimezone(assignment.scheduledEnd, input.timezone),
         status: assignment.operationStatus,
         locationName: assignment.locationName,
+        workTeamId: assignment.workTeamId,
         workTeamName: assignment.workTeamName,
       });
     }

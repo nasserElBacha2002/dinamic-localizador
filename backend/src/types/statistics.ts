@@ -112,6 +112,7 @@ export interface AttendanceByOperationRow {
   operationKind: string;
   /** Human-readable label: service + date/time (never UUID as primary). */
   displayLabel: string;
+  serviceId: string | null;
   serviceName: string;
   serviceAddress: string | null;
   scheduledStart: string | null;

@@ -67,6 +67,7 @@ export const employeeDeactivationRepository = {
           oa.valid_until,
           oa.cancelled_at,
           ol.name AS location_name,
+          oa.source_work_team_id AS work_team_id,
           COALESCE(bt.work_team_name_snapshot, wt.name) AS work_team_name
         FROM operation_assignments oa
         INNER JOIN scheduled_operations o
@@ -135,6 +136,7 @@ export const employeeDeactivationRepository = {
       operationStatus: String(row.operation_status) as OperationStatus,
       operationNotes: row.operation_notes ? String(row.operation_notes) : null,
       locationName: String(row.location_name ?? ""),
+      workTeamId: row.work_team_id ? String(row.work_team_id) : null,
       workTeamName: row.work_team_name ? String(row.work_team_name) : null,
       scheduledStart: row.scheduled_start
         ? new Date(row.scheduled_start as Date | string).toISOString()

@@ -1,4 +1,5 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
+import { EntityLink } from "../entity-link";
 import {
   DataTable,
   FormErrorAlert,
@@ -59,7 +60,17 @@ export function EmployeeDeactivationDialog({
   const assignments = impact?.affectedAssignments ?? [];
 
   const columns: DataTableColumn<ImpactAssignment>[] = [
-    { key: "operationName", header: "Operación", getValue: (row) => row.operationName },
+    {
+      key: "operationName",
+      header: "Operación",
+      render: (row) => (
+        <EntityLink
+          entityType="operation"
+          entityId={row.operationId}
+          label={row.operationName}
+        />
+      ),
+    },
     { key: "date", header: "Fecha", getValue: (row) => formatDate(row.date) },
     {
       key: "status",
@@ -85,11 +96,23 @@ export function EmployeeDeactivationDialog({
       header: "Horario",
       getValue: (row) => formatSchedule(row.startTime, row.endTime),
     },
-    { key: "workTeamName", header: "Grupo", getValue: (row) => row.workTeamName ?? "—" },
+    { key: "workTeamName", header: "Grupo", render: (row) => (
+      <EntityLink
+        entityType="workTeam"
+        entityId={row.workTeamId}
+        label={row.workTeamName ?? "—"}
+      />
+    ) },
   ];
 
   const mobileCard: DataTableMobileCardConfig<ImpactAssignment> = {
-    title: (row) => row.operationName,
+    title: (row) => (
+      <EntityLink
+        entityType="operation"
+        entityId={row.operationId}
+        label={row.operationName}
+      />
+    ),
     status: (row) => (
       <StatusBadge
         label={
@@ -127,7 +150,13 @@ export function EmployeeDeactivationDialog({
       {
         key: "workTeamName",
         label: "Grupo",
-        render: (row) => row.workTeamName ?? "—",
+        render: (row) => (
+          <EntityLink
+            entityType="workTeam"
+            entityId={row.workTeamId}
+            label={row.workTeamName ?? "—"}
+          />
+        ),
         visibility: "expanded",
       },
     ],
@@ -184,7 +213,17 @@ export function EmployeeDeactivationDialog({
         {impact && impact.activeWorkTeamMemberships.length > 0 ? (
           <Text size="sm" c="dimmed">
             También se quitará al {worker} de{" "}
-            {impact.activeWorkTeamMemberships.map((team) => team.workTeamName).join(", ")}.
+            {impact.activeWorkTeamMemberships.map((team, index) => (
+              <span key={team.workTeamId}>
+                {index > 0 ? ", " : null}
+                <EntityLink
+                  entityType="workTeam"
+                  entityId={team.workTeamId}
+                  label={team.workTeamName}
+                />
+              </span>
+            ))}
+            .
           </Text>
         ) : null}
 

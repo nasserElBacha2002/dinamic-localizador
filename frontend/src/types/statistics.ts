@@ -126,6 +126,7 @@ export interface AttendanceByOperationRow {
   operationId: string;
   operationKind: string;
   displayLabel?: string;
+  serviceId?: string | null;
   serviceName: string;
   serviceAddress: string | null;
   scheduledStart: string | null;

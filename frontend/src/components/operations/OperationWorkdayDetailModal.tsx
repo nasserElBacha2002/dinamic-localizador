@@ -1,4 +1,5 @@
 import { Group, Stack, Text } from "@mantine/core";
+import { EntityLink } from "../entity-link";
 import { ErrorState, LoadingState, ResponsiveModal, StatusBadge } from "../../design-system";
 import { useOperationWorkdayDetail } from "../../hooks/useOperations";
 import type { OperationWorkdaySummary } from "../../types/operation-workday";
@@ -102,7 +103,11 @@ export function OperationWorkdayDetailModal({
                     style={{ borderBottom: "1px solid var(--mantine-color-gray-2)" }}
                   >
                     <Text size="sm" fw={500} style={{ minWidth: 0 }}>
-                      {employee.employeeName}
+                      <EntityLink
+                        entityType="employee"
+                        entityId={employee.employeeId}
+                        label={employee.employeeName}
+                      />
                     </Text>
                     <WorkdayEmployeeExpectationPanel employee={employee} />
                   </Group>

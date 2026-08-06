@@ -1,13 +1,14 @@
 import { Alert, Button, Group, Stack, Text, Textarea } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { Link as RouterLink, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useQueryClient } from "@tanstack/react-query";
 import { absenceKeys } from "../../api/absence-query-keys";
 import { AbsenceAttachmentsSection } from "../../components/absences/AbsenceAttachmentsSection";
 import { AbsenceOperationalImpactSection } from "../../components/absences/AbsenceOperationalImpactSection";
 import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
 import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
+import { EntityLink } from "../../components/entity-link";
 import { buildAbsenceApprovalSuccessMessage } from "../../components/operations/operation-workday-display";
 import {
   DataTable,
@@ -54,7 +55,24 @@ import {
 } from "./absence-review-permissions";
 
 const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
-  { key: "service", header: "Servicio", getValue: (row) => row.serviceName },
+  {
+    key: "service",
+    header: "Servicio",
+    render: (row) => (
+      <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
+    ),
+  },
+  {
+    key: "operation",
+    header: "Operación",
+    render: (row) => (
+      <EntityLink
+        entityType="operation"
+        entityId={row.operationId}
+        label={formatDateTime(row.scheduledStart)}
+      />
+    ),
+  },
   { key: "start", header: "Inicio", getValue: (row) => formatDateTime(row.scheduledStart) },
   {
     key: "end",
@@ -67,20 +85,12 @@ const affectedOperationColumns: DataTableColumn<AffectedOperationWarning>[] = [
     getValue: (row) =>
       operationStatusLabels[row.status as keyof typeof operationStatusLabels] ?? row.status,
   },
-  {
-    key: "action",
-    header: "Acción",
-    align: "right",
-    render: (row) => (
-      <Button component={RouterLink} to={`/operations/${row.operationId}`} size="compact-xs" variant="light">
-        Ver operación
-      </Button>
-    ),
-  },
 ];
 
 const affectedOperationMobileCard: DataTableMobileCardConfig<AffectedOperationWarning> = {
-  title: (row) => row.serviceName,
+  title: (row) => (
+    <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
+  ),
   status: (row) => (
     <StatusBadge
       label={
@@ -91,6 +101,18 @@ const affectedOperationMobileCard: DataTableMobileCardConfig<AffectedOperationWa
     />
   ),
   fields: [
+    {
+      key: "operation",
+      label: "Operación",
+      render: (row) => (
+        <EntityLink
+          entityType="operation"
+          entityId={row.operationId}
+          label={formatDateTime(row.scheduledStart)}
+        />
+      ),
+      visibility: "always",
+    },
     {
       key: "start",
       label: "Inicio",
@@ -284,7 +306,16 @@ export function AbsenceDetailPage() {
       <SectionCard title="Datos generales">
         <DetailFieldGrid
           fields={[
-            { label: "Empleado", value: `${detail.employee.name} (${detail.employee.phoneNumber})` },
+            {
+              label: "Empleado",
+              value: (
+                <EntityLink
+                  entityType="employee"
+                  entityId={detail.employee?.id ?? detail.employeeId}
+                  label={`${detail.employee.name} (${detail.employee.phoneNumber})`}
+                />
+              ),
+            },
             {
               label: "Tipo",
               value:

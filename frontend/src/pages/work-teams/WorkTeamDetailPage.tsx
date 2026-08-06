@@ -1,6 +1,7 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
-import { Link, useParams } from "react-router";
+import { useParams } from "react-router";
+import { EntityLink } from "../../components/entity-link";
 import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
   ConfirmDialog,
@@ -60,7 +61,24 @@ export function WorkTeamDetailPage() {
     {
       key: "serviceName",
       header: "Servicio",
-      getValue: (row) => row.serviceName ?? "—",
+      render: (row) => (
+        <EntityLink
+          entityType="service"
+          entityId={row.serviceId}
+          label={row.serviceName ?? "—"}
+        />
+      ),
+    },
+    {
+      key: "operation",
+      header: "Operación",
+      render: (row) => (
+        <EntityLink
+          entityType="operation"
+          entityId={row.operationId}
+          label={row.operationName ?? formatDateTime(row.requestedAt)}
+        />
+      ),
     },
     {
       key: "operationKind",
@@ -82,15 +100,6 @@ export function WorkTeamDetailPage() {
       key: "skippedCount",
       header: "Omitidos",
       getValue: (row) => String(row.skippedCount),
-    },
-    {
-      key: "operationId",
-      header: "Operación",
-      render: (row) => (
-        <Button component={Link} to={`/operations/${row.operationId}`} variant="subtle" size="compact-sm">
-          Ver operación
-        </Button>
-      ),
     },
   ];
 
@@ -177,7 +186,11 @@ export function WorkTeamDetailPage() {
               <Group key={employee.id} justify="space-between" role="listitem">
                 <div>
                   <Text size="sm" fw={500}>
-                    {employee.name}
+                    <EntityLink
+                      entityType="employee"
+                      entityId={employee.id}
+                      label={employee.name}
+                    />
                   </Text>
                   <Text size="xs" c="dimmed">
                     {employee.phoneNumber}
@@ -204,11 +217,29 @@ export function WorkTeamDetailPage() {
           emptyDescription="Este grupo aún no fue utilizado en asignaciones."
           mobileView="cards"
           mobileCard={{
-            title: (row) => row.serviceName ?? "Operación",
+            title: (row) => (
+              <EntityLink
+                entityType="service"
+                entityId={row.serviceId}
+                label={row.serviceName ?? "—"}
+              />
+            ),
             subtitle: (row) =>
               operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ??
               row.operationKind,
             fields: [
+              {
+                key: "operation",
+                label: "Operación",
+                render: (row) => (
+                  <EntityLink
+                    entityType="operation"
+                    entityId={row.operationId}
+                    label={row.operationName ?? formatDateTime(row.requestedAt)}
+                  />
+                ),
+                visibility: "always",
+              },
               {
                 key: "requestedAt",
                 label: "Fecha",
@@ -228,16 +259,6 @@ export function WorkTeamDetailPage() {
                 visibility: "expanded",
               },
             ],
-            actions: (row) => (
-              <Button
-                component={Link}
-                to={`/operations/${row.operationId}`}
-                variant="light"
-                size="compact-sm"
-              >
-                Ver operación
-              </Button>
-            ),
           }}
           aria-label="Historial de uso del grupo"
         />

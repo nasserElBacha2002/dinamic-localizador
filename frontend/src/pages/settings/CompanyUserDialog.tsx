@@ -3,18 +3,11 @@ import { useMemo, useState } from "react";
 import { ResponsiveModal } from "../../design-system";
 import type { CompanyRole, CompanyUser } from "../../types/company-user";
 import type { CreateCompanyInvitationInput } from "../../types/user-invitation";
+import { COMPANY_ROLES } from "../../utils/company-role-hierarchy";
 import { companyRoleLabels } from "../../utils/labels";
 
-const COMPANY_ROLES: CompanyRole[] = [
-  "OWNER",
-  "ADMIN",
-  "HR",
-  "SUPERVISOR",
-  "OPERATOR",
-  "READ_ONLY",
-];
-
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 
 interface CompanyUserDialogProps {
   open: boolean;
@@ -22,6 +15,8 @@ interface CompanyUserDialogProps {
   initialUser?: CompanyUser | null;
   loading?: boolean;
   errorMessage?: string | null;
+  /** Roles the actor may assign (strictly below actor rank). */
+  assignableRoles?: CompanyRole[];
   onClose: () => void;
   onSubmit: (
     input:
@@ -35,6 +30,7 @@ interface CompanyUserDialogFormProps {
   initialUser?: CompanyUser | null;
   loading: boolean;
   errorMessage?: string | null;
+  assignableRoles: CompanyRole[];
   onClose: () => void;
   onSubmit: CompanyUserDialogProps["onSubmit"];
 }
@@ -44,18 +40,25 @@ function CompanyUserDialogForm({
   initialUser,
   loading,
   errorMessage,
+  assignableRoles,
   onClose,
   onSubmit,
 }: CompanyUserDialogFormProps) {
+  const defaultRole = assignableRoles[0] ?? "READ_ONLY";
   const [name, setName] = useState(() =>
     mode === "edit" && initialUser ? initialUser.name : "",
   );
   const [email, setEmail] = useState(() =>
     mode === "edit" && initialUser ? initialUser.email : "",
   );
-  const [role, setRole] = useState<CompanyRole>(() =>
-    mode === "edit" && initialUser ? initialUser.companyRole : "ADMIN",
-  );
+  const [role, setRole] = useState<CompanyRole>(() => {
+    if (mode === "edit" && initialUser) {
+      return assignableRoles.includes(initialUser.companyRole)
+        ? initialUser.companyRole
+        : defaultRole;
+    }
+    return assignableRoles.includes("ADMIN") ? "ADMIN" : defaultRole;
+  });
   const [status, setStatus] = useState<CompanyUser["membershipStatus"]>(() =>
     mode === "edit" && initialUser ? initialUser.membershipStatus : "ACTIVE",
   );
@@ -64,11 +67,12 @@ function CompanyUserDialogForm({
   );
 
   const roleOptions = useMemo(
-    () => COMPANY_ROLES.map((companyRole) => ({
-      value: companyRole,
-      label: companyRoleLabels[companyRole],
-    })),
-    [],
+    () =>
+      assignableRoles.map((companyRole) => ({
+        value: companyRole,
+        label: companyRoleLabels[companyRole],
+      })),
+    [assignableRoles],
   );
 
   const validationErrors = useMemo(() => {
@@ -191,6 +195,7 @@ export function CompanyUserDialog({
   initialUser,
   loading = false,
   errorMessage,
+  assignableRoles = [...COMPANY_ROLES],
   onClose,
   onSubmit,
 }: CompanyUserDialogProps) {
@@ -217,6 +222,7 @@ export function CompanyUserDialog({
           initialUser={initialUser}
           loading={loading}
           errorMessage={errorMessage}
+          assignableRoles={assignableRoles}
           onClose={onClose}
           onSubmit={onSubmit}
         />

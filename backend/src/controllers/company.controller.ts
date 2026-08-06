@@ -1,6 +1,7 @@
 import type { Request, Response } from "express";
 import { companyModuleService } from "../services/company-module.service";
 import { companyService } from "../services/company.service";
+import { companyUserService } from "../services/company-user.service";
 import { platformAdminService } from "../services/platform-admin.service";
 import { userRepository } from "../repositories/user.repository";
 import { requireRequestCompanyId } from "../utils/request-company";
@@ -108,6 +109,10 @@ export const companyController = {
 
   async getMembership(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
+    const capabilities = companyUserService.resolveRoleCapabilities(
+      req.companyRole,
+      Boolean(req.isPlatformAdmin),
+    );
     res.status(200).json({
       data: {
         companyId,
@@ -115,6 +120,8 @@ export const companyController = {
         role: req.companyRole,
         isPlatformAdmin: Boolean(req.isPlatformAdmin),
         permissions: Array.from(req.permissions ?? []),
+        assignableRoles: capabilities.assignableRoles,
+        invitableRoles: capabilities.invitableRoles,
       },
     });
   },

@@ -149,11 +149,17 @@ describeDatabaseIntegration("GET /api/companies/:companyId/me integration", () =
       role: string;
       isPlatformAdmin: boolean;
       permissions: string[];
+      assignableRoles: string[];
+      invitableRoles: string[];
     };
     assert.equal(data.companyId, dinamicCompanyId);
     assert.equal(data.role, "OWNER");
     assert.equal(data.isPlatformAdmin, false);
     assert.ok(data.permissions.includes("users:manage"));
+    assert.ok(Array.isArray(data.assignableRoles));
+    assert.equal(data.assignableRoles.includes("OWNER"), false);
+    assert.ok(Array.isArray(data.invitableRoles));
+    assert.equal(data.invitableRoles.includes("OWNER"), true);
   });
 
   it("returns READ_ONLY permissions without users:manage", async () => {

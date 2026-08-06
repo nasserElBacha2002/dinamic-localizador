@@ -1,11 +1,27 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
+import { AppError } from "../errors/app-error";
 import type {
   CompanyMembershipStatus,
   CompanyMembershipSummary,
   CompanyRole,
   UserCompanyMembership,
 } from "../types/company";
+
+const wouldRemoveActiveOwner = (
+  existing: UserCompanyMembership,
+  patch: {
+    role?: CompanyRole;
+    status?: CompanyMembershipStatus;
+  },
+): boolean => {
+  if (existing.role !== "OWNER" || existing.status !== "ACTIVE") {
+    return false;
+  }
+  const deactivating = patch.status === "INACTIVE";
+  const demoting = patch.role !== undefined && patch.role !== "OWNER";
+  return deactivating || demoting;
+};
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -290,10 +306,10 @@ export const userCompanyMembershipRepository = {
   async findCompanyUserRow(
     companyId: string,
     userId: string,
+    transaction?: sql.Transaction,
   ): Promise<Record<string, unknown> | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("userId", sql.UniqueIdentifier, userId)
       .query(`
@@ -324,12 +340,12 @@ export const userCompanyMembershipRepository = {
     return result.recordset[0] as Record<string, unknown>;
   },
 
-  async countActiveOwners(companyId: string): Promise<number> {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`
+  async countActiveOwners(
+    companyId: string,
+    transaction?: sql.Transaction,
+  ): Promise<number> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request.input("companyId", sql.UniqueIdentifier, companyId).query(`
         SELECT COUNT(*) AS total
         FROM user_company_memberships
         WHERE company_id = @companyId
@@ -338,6 +354,98 @@ export const userCompanyMembershipRepository = {
       `);
 
     return Number(result.recordset[0].total);
+  },
+
+  /**
+   * Serializes last-OWNER protection and membership writes in one transaction.
+   * Locks active OWNER rows for the company, then the target membership.
+   */
+  async applyMembershipUpdateWithGuards(
+    companyId: string,
+    userId: string,
+    patch: {
+      role?: CompanyRole;
+      status?: CompanyMembershipStatus;
+      isDefault?: boolean;
+    },
+    validateLockedMembership: (existing: UserCompanyMembership) => void,
+  ): Promise<{
+    previous: UserCompanyMembership;
+    updated: UserCompanyMembership;
+    row: Record<string, unknown>;
+  }> {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    try {
+      // Serialize concurrent OWNER demotions/deactivations for this company.
+      await new sql.Request(transaction)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .query(`
+          SELECT id
+          FROM user_company_memberships WITH (UPDLOCK, HOLDLOCK)
+          WHERE company_id = @companyId
+            AND role = 'OWNER'
+            AND status = 'ACTIVE'
+        `);
+
+      const existingResult = await new sql.Request(transaction)
+        .input("userId", sql.UniqueIdentifier, userId)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .query(`
+          SELECT m.*
+          FROM user_company_memberships m WITH (UPDLOCK, HOLDLOCK)
+          WHERE m.user_id = @userId
+            AND m.company_id = @companyId
+        `);
+
+      if (!existingResult.recordset[0]) {
+        throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
+      }
+
+      const existing = mapMembershipRow(existingResult.recordset[0] as Record<string, unknown>);
+      validateLockedMembership(existing);
+
+      if (wouldRemoveActiveOwner(existing, patch)) {
+        const ownerCount = await this.countActiveOwners(companyId, transaction);
+        if (ownerCount <= 1) {
+          throw new AppError(
+            409,
+            "LAST_OWNER_PROTECTED",
+            "No se puede quitar o degradar al último dueño activo de la empresa.",
+          );
+        }
+      }
+
+      const updated = await this.updateMembership(companyId, userId, patch, transaction);
+      if (!updated) {
+        throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
+      }
+
+      if (patch.isDefault) {
+        await this.clearDefaultForUser(userId, companyId, transaction);
+      }
+
+      const row = await this.findCompanyUserRow(companyId, userId, transaction);
+      if (!row) {
+        throw new AppError(
+          500,
+          "COMPANY_USER_LOAD_FAILED",
+          "No se pudo cargar el usuario actualizado.",
+        );
+      }
+
+      await transaction.commit();
+      return { previous: existing, updated, row };
+    } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // Transaction may already be aborted.
+      }
+      throw error;
+    }
   },
 
   async userHasDefaultMembership(

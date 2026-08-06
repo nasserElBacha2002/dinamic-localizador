@@ -14,6 +14,10 @@ export interface CompanyMembershipContext {
   role: CompanyRole;
   isPlatformAdmin: boolean;
   permissions: string[];
+  /** Roles the actor may assign on membership update (backend authority). */
+  assignableRoles?: CompanyRole[];
+  /** Roles the actor may assign when inviting (backend authority). */
+  invitableRoles?: CompanyRole[];
 }
 
 export interface CompanyUser {

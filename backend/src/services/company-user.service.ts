@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import { AppError } from "../errors/app-error";
+import { listAssignableCompanyRoles, listInvitableCompanyRoles } from "../constants/company-role-hierarchy";
 import { companyRepository } from "../repositories/company.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { userRepository } from "../repositories/user.repository";
@@ -11,11 +13,12 @@ import type { CompanyRole } from "../types/company";
 import type { CompanyUserDto } from "../types/company-user";
 import { buildPaginationMeta } from "../utils/pagination";
 import { logAuditSafe } from "../utils/audit-post-commit";
+import { normalizeEmail } from "../utils/password";
 import { auditService } from "./audit.service";
 import {
-  assertActorCanManageTargetMembership,
-  assertCanAssignCompanyRole,
-  assertSelfEditNotAllowed,
+  assertCanAssignRoleOnInvitation,
+  assertMembershipMutationAllowed,
+  assertSelfAdministrativeMutationAllowed,
 } from "./company-user.guards";
 import { userInvitationService } from "./user-invitation.service";
 
@@ -73,39 +76,6 @@ const assertTargetUserManageable = async (
   }
 };
 
-const assertLastOwnerProtected = async (
-  companyId: string,
-  targetUserId: string,
-  nextRole: CompanyRole | undefined,
-  isDeactivating: boolean,
-  _requesterIsPlatformAdmin: boolean,
-): Promise<void> => {
-  const membership = await userCompanyMembershipRepository.findMembership(targetUserId, companyId);
-  if (!membership || membership.status !== "ACTIVE" || membership.role !== "OWNER") {
-    return;
-  }
-
-  const demotingOwner = isDeactivating || (nextRole !== undefined && nextRole !== "OWNER");
-  if (!demotingOwner) {
-    return;
-  }
-
-  const ownerCount = await userCompanyMembershipRepository.countActiveOwners(companyId);
-  if (ownerCount <= 1) {
-    throw new AppError(
-      409,
-      "LAST_OWNER_PROTECTED",
-      "No se puede quitar o degradar al último dueño activo de la empresa.",
-    );
-  }
-};
-
-const loadCompanyUserRow = async (
-  companyId: string,
-  userId: string,
-): Promise<Record<string, unknown> | null> =>
-  userCompanyMembershipRepository.findCompanyUserRow(companyId, userId);
-
 const sanitizeMembershipAuditSnapshot = (input: {
   role?: CompanyRole;
   status?: string;
@@ -118,10 +88,14 @@ const sanitizeMembershipAuditSnapshot = (input: {
   return snapshot;
 };
 
+const invitationEntityIdFromEmail = (email: string): string =>
+  createHash("sha256").update(normalizeEmail(email)).digest("hex").slice(0, 32);
+
 const logCompanyUserAudit = async (input: {
   companyId: string;
   actorUserId: string;
-  targetUserId: string;
+  entityType: "company_user_membership" | "user_invitation";
+  entityId: string;
   action: string;
   result: "ALLOWED" | "DENIED";
   reason?: string | null;
@@ -129,11 +103,12 @@ const logCompanyUserAudit = async (input: {
   previousData?: Record<string, unknown> | null;
   newData?: Record<string, unknown> | null;
   correlationId?: string | null;
+  targetUserId?: string;
 }): Promise<void> => {
   await logAuditSafe("company-user-management", async () => {
     await auditService.log(input.companyId, {
-      entityType: "company_user_membership",
-      entityId: input.targetUserId,
+      entityType: input.entityType,
+      entityId: input.entityId,
       action: input.action,
       userId: input.actorUserId,
       reason: input.reason ?? null,
@@ -143,7 +118,7 @@ const logCompanyUserAudit = async (input: {
         result: input.result,
         modificationType: input.modificationType,
         actorUserId: input.actorUserId,
-        targetUserId: input.targetUserId,
+        ...(input.targetUserId ? { targetUserId: input.targetUserId } : {}),
         companyId: input.companyId,
         ...(input.correlationId ? { correlationId: input.correlationId } : {}),
       },
@@ -159,6 +134,13 @@ const resolveModificationType = (input: UpdateCompanyUserInput): string => {
   return parts.length > 0 ? parts.join(",") : "membership_update";
 };
 
+/**
+ * Administrative self-edit inventory (company users domain):
+ * - PATCH /companies/:id/users/:userId
+ * - PATCH /companies/:id/users/:userId/deactivate
+ * There is no HTTP admin path to mutate global user name/role/password;
+ * password updates are auth/script-only and are not administrative membership edits.
+ */
 export const companyUserService = {
   async list(
     companyId: string,
@@ -180,7 +162,7 @@ export const companyUserService = {
     requesterIsPlatformAdmin: boolean,
   ): Promise<CompanyUserDto> {
     await assertActiveCompany(companyId);
-    const row = await loadCompanyUserRow(companyId, userId);
+    const row = await userCompanyMembershipRepository.findCompanyUserRow(companyId, userId);
     if (!row) {
       throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
     }
@@ -198,13 +180,14 @@ export const companyUserService = {
     await assertActiveCompany(companyId);
 
     try {
-      assertCanAssignCompanyRole(requesterCompanyRole, input.role, requesterIsPlatformAdmin);
+      assertCanAssignRoleOnInvitation(requesterCompanyRole, input.role, requesterIsPlatformAdmin);
     } catch (error) {
       if (error instanceof AppError && error.statusCode === 403) {
         await logCompanyUserAudit({
           companyId,
           actorUserId: requesterUserId,
-          targetUserId: input.email,
+          entityType: "user_invitation",
+          entityId: invitationEntityIdFromEmail(input.email),
           action: "company_user_invite_denied",
           result: "DENIED",
           reason: error.code,
@@ -215,7 +198,9 @@ export const companyUserService = {
       throw error;
     }
 
-    const canAssignOwner = requesterIsPlatformAdmin || requesterCompanyRole === "OWNER";
+    // OWNER (and platform admin) may invite another OWNER; mirrors invitation policy.
+    const canAssignOwner =
+      requesterIsPlatformAdmin || requesterCompanyRole === "OWNER";
     const result = await userInvitationService.issueInvitation({
       companyId,
       email: input.email,
@@ -229,14 +214,14 @@ export const companyUserService = {
     await logCompanyUserAudit({
       companyId,
       actorUserId: requesterUserId,
-      targetUserId: result.invitation.id,
+      entityType: "user_invitation",
+      entityId: result.invitation.id,
       action: "company_user_invite_allowed",
       result: "ALLOWED",
       modificationType: "invite_role",
       newData: {
         invitationId: result.invitation.id,
         invitedRole: input.role,
-        email: result.invitation.emailNormalized,
       },
     });
 
@@ -263,26 +248,34 @@ export const companyUserService = {
   ): Promise<CompanyUserDto> {
     const modificationType = resolveModificationType(input);
 
-    // 1) Absolute self-edit ban — before permissions/hierarchy/scope/fields.
+    // Phase 1: absolute self-edit ban (identity only — before writes).
     try {
-      assertSelfEditNotAllowed(userId, requesterUserId);
+      assertSelfAdministrativeMutationAllowed(userId, requesterUserId);
     } catch (error) {
       if (error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED") {
-        await logCompanyUserAudit({
-          companyId,
-          actorUserId: requesterUserId,
-          targetUserId: userId,
-          action: "company_user_self_edit_denied",
-          result: "DENIED",
-          reason: "SELF_EDIT_NOT_ALLOWED",
-          modificationType,
-          previousData: null,
-          newData: {
-            ...sanitizeMembershipAuditSnapshot(input),
-            actorIsPlatformAdmin: requesterIsPlatformAdmin,
-          },
-          correlationId,
-        });
+        // Defer persistent audit until company scope is valid.
+        try {
+          await assertActiveCompany(companyId);
+          await logCompanyUserAudit({
+            companyId,
+            actorUserId: requesterUserId,
+            entityType: "company_user_membership",
+            entityId: userId,
+            targetUserId: userId,
+            action: "company_user_self_edit_denied",
+            result: "DENIED",
+            reason: "SELF_EDIT_NOT_ALLOWED",
+            modificationType,
+            previousData: null,
+            newData: {
+              ...sanitizeMembershipAuditSnapshot(input),
+              actorIsPlatformAdmin: requesterIsPlatformAdmin,
+            },
+            correlationId,
+          });
+        } catch {
+          // Company invalid / audit failure must not change the self-edit denial.
+        }
       }
       throw error;
     }
@@ -290,44 +283,36 @@ export const companyUserService = {
     await assertActiveCompany(companyId);
     await assertTargetUserManageable(userId, requesterIsPlatformAdmin);
 
-    const existing = await userCompanyMembershipRepository.findMembership(userId, companyId);
-    if (!existing) {
-      throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
-    }
-
-    const previousSnapshot = sanitizeMembershipAuditSnapshot({
-      role: existing.role,
-      status: existing.status,
-      isDefault: existing.isDefault,
-    });
+    let previousSnapshot: Record<string, unknown> = {};
+    let row: Record<string, unknown>;
 
     try {
-      // 2–5) Hierarchy + assignable role (permission/scope already enforced by middleware).
-      assertActorCanManageTargetMembership(
-        requesterCompanyRole,
-        existing.role,
-        requesterIsPlatformAdmin,
-      );
-      if (input.role !== undefined && input.role !== existing.role) {
-        assertCanAssignCompanyRole(
-          requesterCompanyRole,
-          input.role,
-          requesterIsPlatformAdmin,
-        );
-      }
-
-      await assertLastOwnerProtected(
+      const result = await userCompanyMembershipRepository.applyMembershipUpdateWithGuards(
         companyId,
         userId,
-        input.role,
-        input.status === "INACTIVE",
-        requesterIsPlatformAdmin,
+        input,
+        (existing) => {
+          previousSnapshot = sanitizeMembershipAuditSnapshot({
+            role: existing.role,
+            status: existing.status,
+            isDefault: existing.isDefault,
+          });
+          assertMembershipMutationAllowed({
+            requesterCompanyRole,
+            requesterIsPlatformAdmin,
+            existing,
+            update: input,
+          });
+        },
       );
+      row = result.row;
     } catch (error) {
       if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
         await logCompanyUserAudit({
           companyId,
           actorUserId: requesterUserId,
+          entityType: "company_user_membership",
+          entityId: userId,
           targetUserId: userId,
           action: "company_user_update_denied",
           result: "DENIED",
@@ -341,25 +326,13 @@ export const companyUserService = {
       throw error;
     }
 
-    const updated = await userCompanyMembershipRepository.updateMembership(companyId, userId, input);
-    if (!updated) {
-      throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
-    }
-
-    if (input.isDefault) {
-      await userCompanyMembershipRepository.clearDefaultForUser(userId, companyId);
-    }
-
-    const row = await loadCompanyUserRow(companyId, userId);
-    if (!row) {
-      throw new AppError(500, "COMPANY_USER_LOAD_FAILED", "No se pudo cargar el usuario actualizado.");
-    }
-
     const dto = mapCompanyUserDto(row, requesterIsPlatformAdmin);
 
     await logCompanyUserAudit({
       companyId,
       actorUserId: requesterUserId,
+      entityType: "company_user_membership",
+      entityId: userId,
       targetUserId: userId,
       action: "company_user_update_allowed",
       result: "ALLOWED",
@@ -393,5 +366,22 @@ export const companyUserService = {
       requesterCompanyRole,
       correlationId,
     );
+  },
+
+  /** Capabilities for UI — backend remains authority on enforcement. */
+  resolveRoleCapabilities(
+    requesterCompanyRole: CompanyRole | undefined,
+    requesterIsPlatformAdmin: boolean,
+  ): { assignableRoles: CompanyRole[]; invitableRoles: CompanyRole[] } {
+    return {
+      assignableRoles: listAssignableCompanyRoles(
+        requesterCompanyRole,
+        requesterIsPlatformAdmin,
+      ),
+      invitableRoles: listInvitableCompanyRoles(
+        requesterCompanyRole,
+        requesterIsPlatformAdmin,
+      ),
+    };
   },
 };

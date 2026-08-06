@@ -2,7 +2,7 @@ import type { CompanyRole } from "../types/company";
 import { COMPANY_ROLES } from "../types/company";
 
 /**
- * Single source of truth for company role hierarchy.
+ * Backend authority for company role hierarchy.
  * Higher number = higher privilege. Comparison must use ranks, not role names.
  */
 export const COMPANY_ROLE_RANK: Record<CompanyRole, number> = {
@@ -23,8 +23,8 @@ export const isStrictlySuperiorRole = (
 ): boolean => getCompanyRoleRank(actorRole) > getCompanyRoleRank(targetRole);
 
 /**
- * Actor may assign a role only when that role is strictly below the actor's rank.
- * Platform admins may assign any company role.
+ * Membership update policy: actor may assign a role only when that role is
+ * strictly below the actor's rank. Platform admins may assign any company role.
  */
 export const canAssignCompanyRole = (
   actorRole: CompanyRole | undefined,
@@ -40,8 +40,39 @@ export const canAssignCompanyRole = (
   return getCompanyRoleRank(actorRole) > getCompanyRoleRank(roleToAssign);
 };
 
+/**
+ * Invitation policy (distinct from membership updates):
+ * - platform admin: any role
+ * - OWNER: any role including OWNER (multi-owner self-management)
+ * - other roles: strictly inferior ranks only
+ */
+export const canAssignRoleOnInvitation = (
+  actorRole: CompanyRole | undefined,
+  roleToAssign: CompanyRole,
+  actorIsPlatformAdmin: boolean,
+): boolean => {
+  if (actorIsPlatformAdmin) {
+    return true;
+  }
+  if (!actorRole) {
+    return false;
+  }
+  if (actorRole === "OWNER") {
+    return true;
+  }
+  return getCompanyRoleRank(actorRole) > getCompanyRoleRank(roleToAssign);
+};
+
 export const listAssignableCompanyRoles = (
   actorRole: CompanyRole | undefined,
   actorIsPlatformAdmin: boolean,
 ): CompanyRole[] =>
   COMPANY_ROLES.filter((role) => canAssignCompanyRole(actorRole, role, actorIsPlatformAdmin));
+
+export const listInvitableCompanyRoles = (
+  actorRole: CompanyRole | undefined,
+  actorIsPlatformAdmin: boolean,
+): CompanyRole[] =>
+  COMPANY_ROLES.filter((role) =>
+    canAssignRoleOnInvitation(actorRole, role, actorIsPlatformAdmin),
+  );

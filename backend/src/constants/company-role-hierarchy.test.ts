@@ -3,8 +3,10 @@ import { describe, it } from "node:test";
 import {
   COMPANY_ROLE_RANK,
   canAssignCompanyRole,
+  canAssignRoleOnInvitation,
   isStrictlySuperiorRole,
   listAssignableCompanyRoles,
+  listInvitableCompanyRoles,
 } from "./company-role-hierarchy";
 
 describe("company-role-hierarchy", () => {
@@ -23,13 +25,21 @@ describe("company-role-hierarchy", () => {
     assert.equal(isStrictlySuperiorRole("ADMIN", "ADMIN"), false);
   });
 
-  it("allows assigning only strictly lower roles", () => {
+  it("allows assigning only strictly lower roles on membership update", () => {
     assert.equal(canAssignCompanyRole("OWNER", "ADMIN", false), true);
     assert.equal(canAssignCompanyRole("OWNER", "OWNER", false), false);
     assert.equal(canAssignCompanyRole("ADMIN", "HR", false), true);
     assert.equal(canAssignCompanyRole("ADMIN", "OWNER", false), false);
     assert.equal(canAssignCompanyRole(undefined, "READ_ONLY", false), false);
     assert.equal(canAssignCompanyRole("ADMIN", "OWNER", true), true);
+  });
+
+  it("allows OWNER to invite another OWNER while still blocking ADMIN", () => {
+    assert.equal(canAssignRoleOnInvitation("OWNER", "OWNER", false), true);
+    assert.equal(canAssignRoleOnInvitation("OWNER", "ADMIN", false), true);
+    assert.equal(canAssignRoleOnInvitation("ADMIN", "ADMIN", false), false);
+    assert.equal(canAssignRoleOnInvitation("ADMIN", "HR", false), true);
+    assert.equal(canAssignRoleOnInvitation("ADMIN", "OWNER", true), true);
   });
 
   it("lists assignable roles below the actor", () => {
@@ -41,6 +51,23 @@ describe("company-role-hierarchy", () => {
       "READ_ONLY",
     ]);
     assert.deepEqual(listAssignableCompanyRoles("ADMIN", false), [
+      "HR",
+      "SUPERVISOR",
+      "OPERATOR",
+      "READ_ONLY",
+    ]);
+  });
+
+  it("lists invitable roles including OWNER for owners", () => {
+    assert.deepEqual(listInvitableCompanyRoles("OWNER", false), [
+      "OWNER",
+      "ADMIN",
+      "HR",
+      "SUPERVISOR",
+      "OPERATOR",
+      "READ_ONLY",
+    ]);
+    assert.deepEqual(listInvitableCompanyRoles("ADMIN", false), [
       "HR",
       "SUPERVISOR",
       "OPERATOR",

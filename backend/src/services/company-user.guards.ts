@@ -1,6 +1,7 @@
 import { AppError } from "../errors/app-error";
 import {
   canAssignCompanyRole,
+  canAssignRoleOnInvitation,
   isStrictlySuperiorRole,
 } from "../constants/company-role-hierarchy";
 import type { CompanyMembershipStatus, CompanyRole, UserCompanyMembership } from "../types/company";
@@ -16,10 +17,10 @@ export const ROLE_NOT_ASSIGNABLE_HIERARCHY_MESSAGE =
   "No podés asignar un rol igual o superior al tuyo.";
 
 /**
- * Absolute self-edit ban: no role, platform-admin, or permission exception.
- * Must run before hierarchy, scope, and field validation.
+ * Phase 1 — absolute self-edit ban for administrative mutations.
+ * No role, platform-admin, or permission exception.
  */
-export const assertSelfEditNotAllowed = (
+export const assertSelfAdministrativeMutationAllowed = (
   targetUserId: string,
   requesterUserId: string,
 ): void => {
@@ -27,6 +28,9 @@ export const assertSelfEditNotAllowed = (
     throw new AppError(403, "SELF_EDIT_NOT_ALLOWED", SELF_EDIT_NOT_ALLOWED_MESSAGE);
   }
 };
+
+/** @deprecated Alias — prefer assertSelfAdministrativeMutationAllowed */
+export const assertSelfEditNotAllowed = assertSelfAdministrativeMutationAllowed;
 
 /**
  * Actor must be strictly superior to the target membership role.
@@ -64,19 +68,31 @@ export const assertCanAssignCompanyRole = (
   }
 };
 
+export const assertCanAssignRoleOnInvitation = (
+  actorRole: CompanyRole | undefined,
+  roleToAssign: CompanyRole,
+  actorIsPlatformAdmin: boolean,
+): void => {
+  if (!canAssignRoleOnInvitation(actorRole, roleToAssign, actorIsPlatformAdmin)) {
+    throw new AppError(
+      403,
+      "INSUFFICIENT_ROLE_HIERARCHY",
+      ROLE_NOT_ASSIGNABLE_HIERARCHY_MESSAGE,
+    );
+  }
+};
+
 /**
- * Full authorization for membership updates (self + hierarchy + assigned role).
+ * Phase 2 — membership mutation authorization (hierarchy + assigned role).
  * Does not replace permission middleware (`users:manage`) or company scope.
+ * Self-edit must already have been rejected (phase 1).
  */
-export const assertCompanyUserModificationAllowed = (input: {
-  targetUserId: string;
-  requesterUserId: string;
+export const assertMembershipMutationAllowed = (input: {
   requesterCompanyRole: CompanyRole | undefined;
   requesterIsPlatformAdmin: boolean;
   existing: Pick<UserCompanyMembership, "role" | "status">;
   update: UpdateCompanyUserInput;
 }): void => {
-  assertSelfEditNotAllowed(input.targetUserId, input.requesterUserId);
   assertActorCanManageTargetMembership(
     input.requesterCompanyRole,
     input.existing.role,
@@ -92,17 +108,25 @@ export const assertCompanyUserModificationAllowed = (input: {
   }
 };
 
-/** @deprecated Prefer assertSelfEditNotAllowed / assertCompanyUserModificationAllowed */
-export const assertSelfMembershipChangeNotAllowed = (
-  targetUserId: string,
-  requesterUserId: string,
-  requesterIsPlatformAdmin: boolean,
-  _input: UpdateCompanyUserInput,
-  _existing: Pick<UserCompanyMembership, "role" | "status">,
-): void => {
-  // Platform-admin self-edit exception removed: stage forbids all self-edits.
-  void requesterIsPlatformAdmin;
-  assertSelfEditNotAllowed(targetUserId, requesterUserId);
+/**
+ * Full authorization for membership updates (self + hierarchy + assigned role).
+ * Prefer calling phase 1 then phase 2 separately when audit/company checks interleave.
+ */
+export const assertCompanyUserModificationAllowed = (input: {
+  targetUserId: string;
+  requesterUserId: string;
+  requesterCompanyRole: CompanyRole | undefined;
+  requesterIsPlatformAdmin: boolean;
+  existing: Pick<UserCompanyMembership, "role" | "status">;
+  update: UpdateCompanyUserInput;
+}): void => {
+  assertSelfAdministrativeMutationAllowed(input.targetUserId, input.requesterUserId);
+  assertMembershipMutationAllowed({
+    requesterCompanyRole: input.requesterCompanyRole,
+    requesterIsPlatformAdmin: input.requesterIsPlatformAdmin,
+    existing: input.existing,
+    update: input.update,
+  });
 };
 
 export const isLastOwnerDemotion = (

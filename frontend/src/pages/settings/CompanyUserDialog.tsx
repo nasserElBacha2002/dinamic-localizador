@@ -3,18 +3,11 @@ import { useMemo, useState } from "react";
 import { ResponsiveModal } from "../../design-system";
 import type { CompanyRole, CompanyUser } from "../../types/company-user";
 import type { CreateCompanyInvitationInput } from "../../types/user-invitation";
+import { COMPANY_ROLES } from "../../utils/company-role-hierarchy";
 import { companyRoleLabels } from "../../utils/labels";
 
-const COMPANY_ROLES: CompanyRole[] = [
-  "OWNER",
-  "ADMIN",
-  "HR",
-  "SUPERVISOR",
-  "OPERATOR",
-  "READ_ONLY",
-];
-
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 
 interface CompanyUserDialogProps {
   open: boolean;
@@ -202,7 +195,7 @@ export function CompanyUserDialog({
   initialUser,
   loading = false,
   errorMessage,
-  assignableRoles = COMPANY_ROLES,
+  assignableRoles = [...COMPANY_ROLES],
   onClose,
   onSubmit,
 }: CompanyUserDialogProps) {

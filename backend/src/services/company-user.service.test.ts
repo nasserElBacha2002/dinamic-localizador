@@ -3,6 +3,31 @@ import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../errors/app-error";
 import { roleHasPermission } from "../constants/company-permissions";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import type { UserCompanyMembership } from "../types/company";
+
+const activeCompany = {
+  id: "company-1",
+  name: "Co",
+  legalName: null,
+  taxId: null,
+  country: null,
+  defaultTimezone: "America/Argentina/Buenos_Aires",
+  status: "ACTIVE" as const,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+};
+
+const membership = (
+  overrides: Partial<UserCompanyMembership> & Pick<UserCompanyMembership, "userId" | "role">,
+): UserCompanyMembership => ({
+  id: "membership-1",
+  companyId: "company-1",
+  status: "ACTIVE",
+  isDefault: false,
+  createdAt: new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+  ...overrides,
+});
 
 describe("company user service rules", () => {
   afterEach(() => {
@@ -22,45 +47,41 @@ describe("company user service rules", () => {
     const { companyRepository } = await import("../repositories/company.repository");
     const { companyUserService } = await import("./company-user.service");
     const { userInvitationService } = await import("./user-invitation.service");
+    const { auditService } = await import("./audit.service");
 
-    mock.method(companyRepository, "findById", async () => ({
-      id: "company-1",
-      name: "Co",
-      legalName: null,
-      taxId: null,
-      country: null,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
-    mock.method(userInvitationService, "issueInvitation", async () => ({
-      invitation: {
-        id: "inv-1",
-        companyId: "company-1",
-        emailNormalized: "new@example.com",
-        inviteeName: "New User",
-        role: "ADMIN",
-        invitedByUserId: "actor-1",
-        targetUserId: null,
-        tokenHash: "a".repeat(64),
-        tokenVersion: 1,
-        status: "PENDING",
-        origin: "MANUAL",
-        expiresAt: new Date().toISOString(),
-        acceptedAt: null,
-        revokedAt: null,
-        lastEmailSentAt: new Date().toISOString(),
-        lastEmailError: null,
-        lastEmailErrorCode: null,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      },
-      emailSent: true,
-      publicErrorCode: null,
-      reusedPending: false,
-      message: "Invitación enviada por correo.",
-    }));
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(auditService, "log", async () => undefined);
+    mock.method(userInvitationService, "issueInvitation", async (input) => {
+      assert.equal(input.canAssignOwner, true);
+      assert.equal(input.role, "ADMIN");
+      return {
+        invitation: {
+          id: "inv-1",
+          companyId: "company-1",
+          emailNormalized: "new@example.com",
+          inviteeName: "New User",
+          role: "ADMIN",
+          invitedByUserId: "actor-1",
+          targetUserId: null,
+          tokenHash: "a".repeat(64),
+          tokenVersion: 1,
+          status: "PENDING",
+          origin: "MANUAL",
+          expiresAt: new Date().toISOString(),
+          acceptedAt: null,
+          revokedAt: null,
+          lastEmailSentAt: new Date().toISOString(),
+          lastEmailError: null,
+          lastEmailErrorCode: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        emailSent: true,
+        publicErrorCode: null,
+        reusedPending: false,
+        message: "Invitación enviada por correo.",
+      };
+    });
 
     const result = await companyUserService.create(
       "company-1",
@@ -77,23 +98,89 @@ describe("company user service rules", () => {
     assert.equal(JSON.stringify(result).includes("password"), false);
   });
 
+  it("OWNER can invite another OWNER", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { companyUserService } = await import("./company-user.service");
+    const { userInvitationService } = await import("./user-invitation.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(auditService, "log", async () => undefined);
+    let issuedRole: string | null = null;
+    mock.method(userInvitationService, "issueInvitation", async (input) => {
+      issuedRole = input.role;
+      assert.equal(input.canAssignOwner, true);
+      return {
+        invitation: {
+          id: "inv-owner",
+          companyId: "company-1",
+          emailNormalized: "owner2@example.com",
+          inviteeName: "Owner Two",
+          role: "OWNER",
+          invitedByUserId: "actor-1",
+          targetUserId: null,
+          tokenHash: "b".repeat(64),
+          tokenVersion: 1,
+          status: "PENDING",
+          origin: "MANUAL",
+          expiresAt: new Date().toISOString(),
+          acceptedAt: null,
+          revokedAt: null,
+          lastEmailSentAt: new Date().toISOString(),
+          lastEmailError: null,
+          lastEmailErrorCode: null,
+          createdAt: new Date().toISOString(),
+          updatedAt: new Date().toISOString(),
+        },
+        emailSent: true,
+        publicErrorCode: null,
+        reusedPending: false,
+        message: "Invitación enviada por correo.",
+      };
+    });
+
+    const result = await companyUserService.create(
+      "company-1",
+      { name: "Owner Two", email: "owner2@example.com", role: "OWNER" },
+      "actor-1",
+      false,
+      "OWNER",
+    );
+    assert.equal(issuedRole, "OWNER");
+    assert.equal(result.data.invitationId, "inv-owner");
+  });
+
+  it("ADMIN cannot invite ADMIN", async () => {
+    setupUnitTestEnv();
+    const { companyRepository } = await import("../repositories/company.repository");
+    const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
+
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(auditService, "log", async () => undefined);
+
+    await assert.rejects(
+      () =>
+        companyUserService.create(
+          "company-1",
+          { name: "Peer", email: "peer@example.com", role: "ADMIN" },
+          "actor-1",
+          false,
+          "ADMIN",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "INSUFFICIENT_ROLE_HIERARCHY",
+    );
+  });
+
   it("create propagates membership-already-exists from invitation service", async () => {
     setupUnitTestEnv();
     const { companyRepository } = await import("../repositories/company.repository");
     const { companyUserService } = await import("./company-user.service");
     const { userInvitationService } = await import("./user-invitation.service");
 
-    mock.method(companyRepository, "findById", async () => ({
-      id: "company-1",
-      name: "Co",
-      legalName: null,
-      taxId: null,
-      country: null,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(userInvitationService, "issueInvitation", async () => {
       throw new AppError(
         409,
@@ -124,18 +211,9 @@ describe("company user service rules", () => {
       "../repositories/user-company-membership.repository"
     );
     const { companyUserService } = await import("./company-user.service");
+    const { auditService } = await import("./audit.service");
 
-    mock.method(companyRepository, "findById", async () => ({
-      id: "company-1",
-      name: "Co",
-      legalName: null,
-      taxId: null,
-      country: null,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(userRepository, "findById", async () => ({
       id: "owner-1",
       name: "Owner",
@@ -148,18 +226,18 @@ describe("company user service rules", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
-    mock.method(userCompanyMembershipRepository, "findMembership", async () => ({
-      id: "membership-1",
-      userId: "owner-1",
-      companyId: "company-1",
-      role: "OWNER",
-      status: "ACTIVE",
-      isDefault: true,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
-    mock.method(userCompanyMembershipRepository, "countActiveOwners", async () => 1);
-    const { auditService } = await import("./audit.service");
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyMembershipUpdateWithGuards",
+      async (_companyId, _userId, _patch, validate) => {
+        validate(membership({ userId: "owner-1", role: "OWNER", isDefault: true }));
+        throw new AppError(
+          409,
+          "LAST_OWNER_PROTECTED",
+          "No se puede quitar o degradar al último dueño activo de la empresa.",
+        );
+      },
+    );
     mock.method(auditService, "log", async () => undefined);
 
     await assert.rejects(
@@ -187,17 +265,7 @@ describe("company user service rules", () => {
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("./audit.service");
 
-    mock.method(companyRepository, "findById", async () => ({
-      id: "company-1",
-      name: "Co",
-      legalName: null,
-      taxId: null,
-      country: null,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(userRepository, "findById", async () => ({
       id: "peer-1",
       name: "Peer",
@@ -210,16 +278,14 @@ describe("company user service rules", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
-    mock.method(userCompanyMembershipRepository, "findMembership", async () => ({
-      id: "membership-1",
-      userId: "peer-1",
-      companyId: "company-1",
-      role: "OWNER",
-      status: "ACTIVE",
-      isDefault: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyMembershipUpdateWithGuards",
+      async (_companyId, _userId, _patch, validate) => {
+        validate(membership({ userId: "peer-1", role: "OWNER" }));
+        throw new Error("should not continue after hierarchy denial");
+      },
+    );
     mock.method(auditService, "log", async () => undefined);
 
     await assert.rejects(
@@ -247,17 +313,7 @@ describe("company user service rules", () => {
     const { companyUserService } = await import("./company-user.service");
     const { auditService } = await import("./audit.service");
 
-    mock.method(companyRepository, "findById", async () => ({
-      id: "company-1",
-      name: "Co",
-      legalName: null,
-      taxId: null,
-      country: null,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(userRepository, "findById", async () => ({
       id: "admin-1",
       name: "Admin",
@@ -270,41 +326,33 @@ describe("company user service rules", () => {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
-    mock.method(userCompanyMembershipRepository, "findMembership", async () => ({
-      id: "membership-1",
-      userId: "admin-1",
-      companyId: "company-1",
-      role: "ADMIN",
-      status: "ACTIVE",
-      isDefault: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
-    mock.method(userCompanyMembershipRepository, "updateMembership", async () => ({
-      id: "membership-1",
-      userId: "admin-1",
-      companyId: "company-1",
-      role: "HR",
-      status: "ACTIVE",
-      isDefault: false,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
-    mock.method(userCompanyMembershipRepository, "findCompanyUserRow", async () => ({
-      user_id: "admin-1",
-      name: "Admin",
-      email: "admin@example.com",
-      global_role: "ADMIN",
-      is_platform_admin: false,
-      membership_id: "membership-1",
-      company_id: "company-1",
-      company_role: "HR",
-      membership_status: "ACTIVE",
-      is_default: false,
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      last_login_at: null,
-    }));
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyMembershipUpdateWithGuards",
+      async (_companyId, _userId, patch, validate) => {
+        const existing = membership({ userId: "admin-1", role: "ADMIN" });
+        validate(existing);
+        return {
+          previous: existing,
+          updated: { ...existing, role: patch.role ?? existing.role },
+          row: {
+            user_id: "admin-1",
+            name: "Admin",
+            email: "admin@example.com",
+            global_role: "ADMIN",
+            is_platform_admin: false,
+            membership_id: "membership-1",
+            company_id: "company-1",
+            company_role: "HR",
+            membership_status: "ACTIVE",
+            is_default: false,
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+            last_login_at: null,
+          },
+        };
+      },
+    );
     mock.method(auditService, "log", async () => undefined);
 
     const updated = await companyUserService.update(
@@ -318,27 +366,13 @@ describe("company user service rules", () => {
     assert.equal(updated.companyRole, "HR");
   });
 
-
   it("blocks regular user from modifying platform superadmin", async () => {
     setupUnitTestEnv();
     const { companyRepository } = await import("../repositories/company.repository");
     const { userRepository } = await import("../repositories/user.repository");
-    const { userCompanyMembershipRepository } = await import(
-      "../repositories/user-company-membership.repository"
-    );
     const { companyUserService } = await import("./company-user.service");
 
-    mock.method(companyRepository, "findById", async () => ({
-      id: "company-1",
-      name: "Co",
-      legalName: null,
-      taxId: null,
-      country: null,
-      defaultTimezone: "America/Argentina/Buenos_Aires",
-      status: "ACTIVE",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
+    mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(userRepository, "findById", async () => ({
       id: "platform-1",
       name: "Platform Admin",
@@ -348,16 +382,6 @@ describe("company user service rules", () => {
       isPlatformAdmin: true,
       active: true,
       lastLoginAt: null,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    }));
-    mock.method(userCompanyMembershipRepository, "findMembership", async () => ({
-      id: "membership-1",
-      userId: "platform-1",
-      companyId: "company-1",
-      role: "OWNER",
-      status: "ACTIVE",
-      isDefault: false,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     }));
@@ -379,6 +403,7 @@ describe("company user service rules", () => {
   it("blocks platform admin self-update before any membership write", async () => {
     setupUnitTestEnv();
     const { companyUserService } = await import("./company-user.service");
+    const { companyRepository } = await import("../repositories/company.repository");
     const { userCompanyMembershipRepository } = await import(
       "../repositories/user-company-membership.repository"
     );
@@ -386,13 +411,15 @@ describe("company user service rules", () => {
 
     let updateCalls = 0;
     let auditAction: string | null = null;
-    mock.method(userCompanyMembershipRepository, "updateMembership", async () => {
-      updateCalls += 1;
-      throw new Error("should not write");
-    });
-    mock.method(userCompanyMembershipRepository, "findMembership", async () => {
-      throw new Error("should not load membership before self-check");
-    });
+    mock.method(companyRepository, "findById", async () => activeCompany);
+    mock.method(
+      userCompanyMembershipRepository,
+      "applyMembershipUpdateWithGuards",
+      async () => {
+        updateCalls += 1;
+        throw new Error("should not write");
+      },
+    );
     mock.method(auditService, "log", async (_companyId, input) => {
       auditAction = input.action;
     });
@@ -419,7 +446,9 @@ describe("company user service rules", () => {
   it("blocks platform admin self-deactivate", async () => {
     setupUnitTestEnv();
     const { companyUserService } = await import("./company-user.service");
+    const { companyRepository } = await import("../repositories/company.repository");
     const { auditService } = await import("./audit.service");
+    mock.method(companyRepository, "findById", async () => activeCompany);
     mock.method(auditService, "log", async () => undefined);
 
     await assert.rejects(

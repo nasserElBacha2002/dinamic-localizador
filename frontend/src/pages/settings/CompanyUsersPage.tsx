@@ -31,16 +31,16 @@ import {
   useUpdateCompanyUser,
 } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
-import type { CompanyRole, CompanyUser } from "../../types/company-user";
+import type { CompanyUser } from "../../types/company-user";
 import type {
   CreateCompanyInvitationInput,
   UserInvitationSummary,
 } from "../../types/user-invitation";
 import {
   getCompanyUserEditBlockReason,
+  getEditBlockMessage,
   listAssignableCompanyRoles,
-  USER_EDIT_HIERARCHY_BLOCKED_MESSAGE,
-  USER_SELF_EDIT_BLOCKED_MESSAGE,
+  listInvitableCompanyRoles,
 } from "../../utils/company-role-hierarchy";
 import { formatDate } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -50,15 +50,6 @@ import {
   COMPANY_USERS_TABLE_FIELDS,
 } from "./company-users-table-state";
 import { CompanyUserDialog } from "./CompanyUserDialog";
-
-const ALL_COMPANY_ROLES: CompanyRole[] = [
-  "OWNER",
-  "ADMIN",
-  "HR",
-  "SUPERVISOR",
-  "OPERATOR",
-  "READ_ONLY",
-];
 
 export function CompanyUsersPage() {
   const { user: authUser } = useAuth();
@@ -78,10 +69,21 @@ export function CompanyUsersPage() {
   const actorIsPlatformAdmin =
     Boolean(authUser?.isPlatformAdmin) || Boolean(permissionsQuery.data?.isPlatformAdmin);
 
-  const assignableRoles = useMemo(
-    () => listAssignableCompanyRoles(actorRole, actorIsPlatformAdmin, ALL_COMPANY_ROLES),
-    [actorIsPlatformAdmin, actorRole],
-  );
+  const assignableRoles = useMemo(() => {
+    if (permissionsQuery.data?.assignableRoles?.length) {
+      return permissionsQuery.data.assignableRoles;
+    }
+    return listAssignableCompanyRoles(actorRole, actorIsPlatformAdmin);
+  }, [actorIsPlatformAdmin, actorRole, permissionsQuery.data]);
+
+  const invitableRoles = useMemo(() => {
+    if (permissionsQuery.data?.invitableRoles?.length) {
+      return permissionsQuery.data.invitableRoles;
+    }
+    return listInvitableCompanyRoles(actorRole, actorIsPlatformAdmin);
+  }, [actorIsPlatformAdmin, actorRole, permissionsQuery.data]);
+
+  const dialogRoles = dialogMode === "create" ? invitableRoles : assignableRoles;
 
   const canEditUser = useCallback(
     (target: CompanyUser) =>
@@ -104,10 +106,7 @@ export function CompanyUsersPage() {
         targetUserId: target.userId,
         targetRole: target.companyRole,
       });
-      if (reason === "self") {
-        return USER_SELF_EDIT_BLOCKED_MESSAGE;
-      }
-      return USER_EDIT_HIERARCHY_BLOCKED_MESSAGE;
+      return reason ? getEditBlockMessage(reason) : null;
     },
     [actorIsPlatformAdmin, actorRole, authUser?.id],
   );
@@ -162,7 +161,7 @@ export function CompanyUsersPage() {
     if (!canEditUser(user)) {
       notifications.show({
         color: "yellow",
-        message: editBlockMessageFor(user),
+        message: editBlockMessageFor(user) ?? "No podés editar este usuario.",
       });
       return;
     }
@@ -440,7 +439,7 @@ export function CompanyUsersPage() {
         mobileCard={mobileCard}
         rowActions={(user) => {
           const allowed = canEditUser(user);
-          const blockedMessage = editBlockMessageFor(user);
+          const blockedMessage = editBlockMessageFor(user) ?? "No podés editar este usuario.";
           const items: ActionMenuItem[] = [];
           if (user.membershipStatus === "ACTIVE") {
             items.push({
@@ -505,7 +504,7 @@ export function CompanyUsersPage() {
         initialUser={selectedUser}
         loading={createMutation.isPending || updateMutation.isPending}
         errorMessage={dialogError}
-        assignableRoles={assignableRoles}
+        assignableRoles={dialogRoles}
         onClose={() => setDialogOpen(false)}
         onSubmit={handleDialogSubmit}
       />

@@ -3,20 +3,20 @@ import { describe, it } from "node:test";
 import { AppError } from "../errors/app-error";
 import {
   assertCompanyUserModificationAllowed,
-  assertSelfEditNotAllowed,
-  assertSelfMembershipChangeNotAllowed,
+  assertMembershipMutationAllowed,
+  assertSelfAdministrativeMutationAllowed,
   isLastOwnerDemotion,
 } from "./company-user.guards";
 
 describe("company user guards", () => {
   it("blocks any self edit", () => {
     assert.throws(
-      () => assertSelfEditNotAllowed("user-1", "user-1"),
+      () => assertSelfAdministrativeMutationAllowed("user-1", "user-1"),
       (error: unknown) => error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED",
     );
   });
 
-  it("blocks self role change", () => {
+  it("blocks self role change via composed guard", () => {
     assert.throws(
       () =>
         assertCompanyUserModificationAllowed({
@@ -71,12 +71,10 @@ describe("company user guards", () => {
     }
   });
 
-  it("blocks peer-rank edits", () => {
+  it("blocks peer-rank edits via membership phase", () => {
     assert.throws(
       () =>
-        assertCompanyUserModificationAllowed({
-          targetUserId: "target-1",
-          requesterUserId: "actor-1",
+        assertMembershipMutationAllowed({
           requesterCompanyRole: "ADMIN",
           requesterIsPlatformAdmin: false,
           existing: { role: "ADMIN", status: "ACTIVE" },
@@ -90,9 +88,7 @@ describe("company user guards", () => {
   it("blocks editing a superior rank", () => {
     assert.throws(
       () =>
-        assertCompanyUserModificationAllowed({
-          targetUserId: "target-1",
-          requesterUserId: "actor-1",
+        assertMembershipMutationAllowed({
           requesterCompanyRole: "ADMIN",
           requesterIsPlatformAdmin: false,
           existing: { role: "OWNER", status: "ACTIVE" },
@@ -106,9 +102,7 @@ describe("company user guards", () => {
   it("blocks promoting target to actor rank or above", () => {
     assert.throws(
       () =>
-        assertCompanyUserModificationAllowed({
-          targetUserId: "target-1",
-          requesterUserId: "actor-1",
+        assertMembershipMutationAllowed({
           requesterCompanyRole: "OWNER",
           requesterIsPlatformAdmin: false,
           existing: { role: "ADMIN", status: "ACTIVE" },
@@ -121,9 +115,7 @@ describe("company user guards", () => {
 
   it("allows superior actor to edit inferior target", () => {
     assert.doesNotThrow(() =>
-      assertCompanyUserModificationAllowed({
-        targetUserId: "target-1",
-        requesterUserId: "actor-1",
+      assertMembershipMutationAllowed({
         requesterCompanyRole: "OWNER",
         requesterIsPlatformAdmin: false,
         existing: { role: "ADMIN", status: "ACTIVE" },
@@ -134,28 +126,12 @@ describe("company user guards", () => {
 
   it("allows platform admin to edit any non-self membership", () => {
     assert.doesNotThrow(() =>
-      assertCompanyUserModificationAllowed({
-        targetUserId: "target-1",
-        requesterUserId: "actor-1",
+      assertMembershipMutationAllowed({
         requesterCompanyRole: "OWNER",
         requesterIsPlatformAdmin: true,
         existing: { role: "OWNER", status: "ACTIVE" },
         update: { role: "ADMIN" },
       }),
-    );
-  });
-
-  it("legacy self helper maps to SELF_EDIT_NOT_ALLOWED", () => {
-    assert.throws(
-      () =>
-        assertSelfMembershipChangeNotAllowed(
-          "user-1",
-          "user-1",
-          false,
-          { role: "READ_ONLY" },
-          { role: "OWNER", status: "ACTIVE" },
-        ),
-      (error: unknown) => error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED",
     );
   });
 

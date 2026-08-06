@@ -1,6 +1,7 @@
 import { Box, Button, Code, Group, Paper, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
 import { Link as RouterLink, useParams } from "react-router";
+import { EntityLink } from "../../../components/entity-link";
 import {
   DataTable,
   DetailFieldGrid,
@@ -399,7 +400,16 @@ export function WhatsappConversationDetailPage() {
             { label: "Mensajes", value: String(conversation.messageCount) },
             { label: "Errores", value: String(conversation.errorCount) },
             { label: "Empresa", value: conversation.companyId ?? "—" },
-            { label: "Empleado", value: conversation.employeeId ?? "—" },
+            {
+              label: "Empleado",
+              value: (
+                <EntityLink
+                  entityType="employee"
+                  entityId={conversation.employeeId}
+                  label={conversation.employeeId ?? "—"}
+                />
+              ),
+            },
             {
               label: "Último resultado",
               value: conversation.lastResultCode ?? "—",
@@ -519,7 +529,13 @@ export function WhatsappConversationDetailPage() {
                 { label: "Conversation ID", value: conversation.id },
                 { label: "Phone hash", value: conversation.phoneHash },
                 { label: "Company ID", value: conversation.companyId ?? "—" },
-                { label: "Employee ID", value: conversation.employeeId ?? "—" },
+                { label: "Employee ID", value: (
+                  <EntityLink
+                    entityType="employee"
+                    entityId={conversation.employeeId}
+                    label={conversation.employeeId ?? "—"}
+                  />
+                ) },
                 {
                   label: "Flow execution activa",
                   value: activeFlowId ?? "—",

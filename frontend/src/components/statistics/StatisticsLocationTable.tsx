@@ -1,5 +1,6 @@
 import { Group, Stack } from "@mantine/core";
 import { useMemo } from "react";
+import { EntityLink } from "../entity-link";
 import {
   DataTable,
   ErrorState,
@@ -88,6 +89,13 @@ export function StatisticsLocationTable({
         key: "serviceName",
         header: terminology.service.singular,
         getValue: (row) => row.serviceName,
+        render: (row) => (
+          <EntityLink
+            entityType="service"
+            entityId={row.serviceId}
+            label={row.serviceName}
+          />
+        ),
         sortable: true,
       },
       {
@@ -151,7 +159,13 @@ export function StatisticsLocationTable({
 
   const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceByServiceRow>>(
     () => ({
-      title: (row) => row.serviceName,
+      title: (row) => (
+        <EntityLink
+          entityType="service"
+          entityId={row.serviceId}
+          label={row.serviceName}
+        />
+      ),
       subtitle: (row) => row.address ?? "—",
       fields: [
         {

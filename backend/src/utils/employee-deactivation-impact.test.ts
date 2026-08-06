@@ -18,6 +18,7 @@ const baseAssignment = (
   operationStatus: "SCHEDULED",
   operationNotes: null,
   locationName: "Sucursal Palermo",
+  workTeamId: null,
   workTeamName: null,
   scheduledStart: "2026-08-01T12:00:00.000Z",
   scheduledEnd: "2026-08-01T18:00:00.000Z",

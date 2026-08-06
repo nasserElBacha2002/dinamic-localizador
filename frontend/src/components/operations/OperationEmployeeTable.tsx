@@ -1,6 +1,7 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { useLocation, useNavigate } from "react-router";
+import { EntityLink } from "../entity-link";
 import {
   ActionMenu,
   DataTable,
@@ -36,19 +37,20 @@ import {
 function buildEmployeeSecondaryLine(
   row: OperationAttendanceSummaryEmployee,
   assignment?: OperationEmployeeAssignment,
-): string {
+): { typeAndPhone: string; workTeamId: string | null; workTeamName: string | null } {
   const parts: string[] = [];
   if (row.employee?.employeeType) {
     parts.push(employeeTypeLabels[row.employee.employeeType]);
-  }
-  if (assignment?.assignmentOrigin === "WORK_TEAM" && assignment.sourceWorkTeamName) {
-    parts.push(assignment.sourceWorkTeamName);
   }
   const phone = safeText(row.employee?.phoneNumber ?? null);
   if (phone !== "—") {
     parts.push(phone);
   }
-  return parts.join(" · ");
+  const workTeamId =
+    assignment?.assignmentOrigin === "WORK_TEAM" ? (assignment.sourceWorkTeamId ?? null) : null;
+  const workTeamName =
+    assignment?.assignmentOrigin === "WORK_TEAM" ? (assignment.sourceWorkTeamName ?? null) : null;
+  return { typeAndPhone: parts.join(" · "), workTeamId, workTeamName };
 }
 
 export interface OperationEmployeeTableProps {
@@ -111,11 +113,25 @@ export function OperationEmployeeTable({
           return (
             <Stack gap={2}>
               <Text size="sm" fw={500}>
-                {getRelatedName(row.employee)}
+                <EntityLink
+                  entityType="employee"
+                  entityId={row.employee?.id}
+                  label={getRelatedName(row.employee)}
+                />
               </Text>
-              {secondary ? (
+              {secondary.workTeamName ? (
                 <Text size="xs" c="dimmed">
-                  {secondary}
+                  Grupo:{" "}
+                  <EntityLink
+                    entityType="workTeam"
+                    entityId={secondary.workTeamId}
+                    label={secondary.workTeamName}
+                  />
+                </Text>
+              ) : null}
+              {secondary.typeAndPhone ? (
+                <Text size="xs" c="dimmed">
+                  {secondary.typeAndPhone}
                 </Text>
               ) : null}
               {row.absenceBadges && row.absenceBadges.length > 0 ? (
@@ -180,7 +196,13 @@ export function OperationEmployeeTable({
 
   const mobileCard = useMemo<DataTableMobileCardConfig<OperationAttendanceSummaryEmployee>>(
     () => ({
-      title: (row) => getRelatedName(row.employee),
+      title: (row) => (
+        <EntityLink
+          entityType="employee"
+          entityId={row.employee?.id}
+          label={getRelatedName(row.employee)}
+        />
+      ),
       status: (row) => (
         <StatusBadge
           label={operationalAttendanceStatusTableLabels[row.operationalStatus]}
@@ -209,8 +231,24 @@ export function OperationEmployeeTable({
         {
           key: "team",
           label: "Equipo / tipo",
-          render: (row) =>
-            buildEmployeeSecondaryLine(row, assignmentById?.get(row.assignmentId)) || "—",
+          render: (row) => {
+            const secondary = buildEmployeeSecondaryLine(row, assignmentById?.get(row.assignmentId));
+            if (!secondary.workTeamName && !secondary.typeAndPhone) {
+              return "—";
+            }
+            return (
+              <Stack gap={2}>
+                {secondary.workTeamName ? (
+                  <EntityLink
+                    entityType="workTeam"
+                    entityId={secondary.workTeamId}
+                    label={secondary.workTeamName}
+                  />
+                ) : null}
+                {secondary.typeAndPhone ? <span>{secondary.typeAndPhone}</span> : null}
+              </Stack>
+            );
+          },
           visibility: "expanded",
         },
       ],

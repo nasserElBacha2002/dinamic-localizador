@@ -17,6 +17,7 @@ mockApiModule(
       data: [
         {
           id: "op-1",
+          serviceId: "svc-1",
           status: "SCHEDULED",
           operationKind: "ONE_TIME",
           scheduledStart: "2026-07-25T12:00:00.000Z",
@@ -44,7 +45,7 @@ mockApiModule("api/company-users.api", {
     companyName: "Empresa Test",
     role: "ADMIN",
     isPlatformAdmin: false,
-    permissions: ["operations:manage", "operations:read"],
+    permissions: ["operations:manage", "operations:read", "services:read"],
   }),
   getCompanyUsers: async () => ({ data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } }),
   getCompanyUserById: async () => {
@@ -60,6 +61,35 @@ mockApiModule("api/company-users.api", {
     throw new Error("not used");
   },
   getActiveCompanyMembershipPath: () => null,
+});
+
+mockApiModule("api/company-modules.api", {
+  getCompanyModules: async () => [
+    {
+      companyId: "co-1",
+      moduleKey: "operations",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      companyId: "co-1",
+      moduleKey: "attendance",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      companyId: "co-1",
+      moduleKey: "absences",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  updateCompanyModules: async () => {
+    throw new Error("not used");
+  },
 });
 
 import assert from "node:assert/strict";
@@ -93,8 +123,12 @@ describe("OperationsListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Centro")));
     assert.ok(view.getByRole("table"));
-    assert.equal(view.container.querySelector("[data-entity-avatar='operation']")?.textContent, "S");
+    assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
     assert.match(view.container.textContent ?? "", /15 min/);
+    const serviceLink = await waitFor(() =>
+      view.getByRole("link", { name: /Sucursal Centro/i }),
+    );
+    assert.equal(serviceLink.getAttribute("href"), "/services/svc-1");
   });
 
   it("shows mobile cards, filters drawer, actions and navigates to detail", async () => {
@@ -109,7 +143,7 @@ describe("OperationsListPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Sucursal Centro")));
     assert.equal(view.queryByRole("table"), null);
-    assert.equal(view.container.querySelector("[data-entity-avatar='operation']")?.textContent, "S");
+    assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
 
     fireEvent.click(view.getByRole("button", { name: /^Filtros/ }));
     await waitFor(() => {

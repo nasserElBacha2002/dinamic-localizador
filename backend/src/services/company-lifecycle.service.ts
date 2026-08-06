@@ -117,15 +117,12 @@ const revokeCompanyAccessInTransaction = async (
   transaction: sql.Transaction,
   companyId: string,
 ): Promise<void> => {
+  // bot_simulation_sessions has no `state` column (admin sim history only).
+  // Live access is revoked via bot_sessions + pending invitations.
   await new sql.Request(transaction)
     .input("companyId", sql.UniqueIdentifier, companyId)
     .query(`
       UPDATE bot_sessions
-      SET state = N'EXPIRED', updated_at = SYSUTCDATETIME()
-      WHERE company_id = @companyId
-        AND state IN ${ACTIVE_BOT_SESSION_STATES_SQL};
-
-      UPDATE bot_simulation_sessions
       SET state = N'EXPIRED', updated_at = SYSUTCDATETIME()
       WHERE company_id = @companyId
         AND state IN ${ACTIVE_BOT_SESSION_STATES_SQL};

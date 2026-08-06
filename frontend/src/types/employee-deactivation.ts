@@ -13,6 +13,7 @@ export interface DeactivationImpactAssignment {
   endTime: string | null;
   status: OperationStatus;
   locationName: string;
+  workTeamId: string | null;
   workTeamName: string | null;
 }
 

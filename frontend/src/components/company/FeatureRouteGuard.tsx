@@ -1,14 +1,17 @@
 import { Button, Stack, Text, Title } from "@mantine/core";
 import type { PropsWithChildren } from "react";
 import { Link as RouterLink } from "react-router";
+import {
+  evaluateEntityLinkAccess,
+  type EntityLinkAccessContext,
+} from "../entity-link/evaluate-entity-link-access";
 import { LoadingState, SectionCard } from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import type { CompanyModuleKey } from "../../types/company-module";
 import type { CompanyPermission } from "../../types/permissions";
-import { isAnyModuleEnabled, isModuleEnabled } from "../../utils/company-modules";
-import { hasAnyPermission } from "../../utils/permissions";
+import { useEntityLinkAccessContext } from "../entity-link/entity-link-access-context";
 
 interface FeatureRouteGuardProps extends PropsWithChildren {
   moduleKey?: CompanyModuleKey;
@@ -56,47 +59,41 @@ export function FeatureRouteGuard({
   requirePlatformAdmin = false,
   children,
 }: FeatureRouteGuardProps) {
+  const shared = useEntityLinkAccessContext();
   const { user, isLoading: authLoading } = useAuth();
   const needsModules = Boolean(moduleKey || anyModuleOf);
   const needsCompanyPermissions = Boolean(requiredAnyPermission?.length);
-  const modulesQuery = useCompanyModules(needsModules);
-  const permissionsQuery = useCompanyPermissions(needsCompanyPermissions);
+  const modulesQuery = useCompanyModules(!shared && needsModules);
+  const permissionsQuery = useCompanyPermissions(!shared && needsCompanyPermissions);
 
-  if (requirePlatformAdmin) {
-    if (authLoading) {
-      return <LoadingState message="Cargando acceso..." />;
-    }
-    if (!user?.isPlatformAdmin) {
-      return <NoPermissionState />;
-    }
-  }
+  const context: EntityLinkAccessContext = shared ?? {
+    authLoading,
+    isPlatformAdmin: user?.isPlatformAdmin,
+    modulesLoading: modulesQuery.isLoading,
+    modulesError: modulesQuery.isError,
+    modules: modulesQuery.data,
+    permissionsLoading: permissionsQuery.isLoading,
+    permissions: permissionsQuery.data?.permissions,
+  };
 
-  const waitingPermissions = needsCompanyPermissions && permissionsQuery.isLoading;
-  const waitingModules = needsModules && modulesQuery.isLoading;
+  const decision = evaluateEntityLinkAccess(
+    {
+      moduleKey,
+      anyModuleOf,
+      requiredAnyPermission,
+      requirePlatformAdmin,
+    },
+    context,
+  );
 
-  if (waitingPermissions || waitingModules) {
+  if (decision.status === "loading") {
     return <LoadingState message="Cargando acceso..." />;
   }
 
-  if (needsModules) {
-    if (modulesQuery.isError || !modulesQuery.data) {
+  if (decision.status === "denied") {
+    if (decision.reason === "module" || decision.reason === "modules_unavailable") {
       return <DisabledModuleState />;
     }
-
-    const moduleEnabled = moduleKey
-      ? isModuleEnabled(modulesQuery.data, moduleKey)
-      : isAnyModuleEnabled(modulesQuery.data, anyModuleOf ?? []);
-
-    if (!moduleEnabled) {
-      return <DisabledModuleState />;
-    }
-  }
-
-  if (
-    requiredAnyPermission &&
-    requiredAnyPermission.length > 0 &&
-    !hasAnyPermission(permissionsQuery.data?.permissions, requiredAnyPermission)
-  ) {
     return <NoPermissionState />;
   }
 

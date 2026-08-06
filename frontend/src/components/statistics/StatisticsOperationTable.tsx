@@ -1,6 +1,6 @@
 import { Group, Stack } from "@mantine/core";
 import { useMemo } from "react";
-import { Link } from "react-router";
+import { EntityLink } from "../entity-link";
 import {
   DataTable,
   ErrorState,
@@ -108,9 +108,11 @@ export function StatisticsOperationTable({
         header: terminology.operation.singular,
         getValue: (row) => row.displayLabel ?? formatOperationLabel(row),
         render: (row) => (
-          <Link to={`/operations/${row.operationId}`} style={{ color: "inherit" }}>
-            {row.displayLabel ?? formatOperationLabel(row)}
-          </Link>
+          <EntityLink
+            entityType="operation"
+            entityId={row.operationId}
+            label={row.displayLabel ?? formatOperationLabel(row)}
+          />
         ),
       },
       {
@@ -125,6 +127,9 @@ export function StatisticsOperationTable({
         header: terminology.service.singular,
         getValue: (row) => row.serviceName,
         sortable: true,
+        render: (row) => (
+          <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
+        ),
       },
       {
         key: "scheduledStart",
@@ -186,8 +191,16 @@ export function StatisticsOperationTable({
 
   const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceByOperationRow>>(
     () => ({
-      title: (row) => formatOperationLabel(row),
-      subtitle: (row) => row.serviceName,
+      title: (row) => (
+        <EntityLink
+          entityType="operation"
+          entityId={row.operationId}
+          label={formatOperationLabel(row)}
+        />
+      ),
+      subtitle: (row) => (
+        <EntityLink entityType="service" entityId={row.serviceId} label={row.serviceName} />
+      ),
       status: (row) => (
         <StatusBadge
           label={

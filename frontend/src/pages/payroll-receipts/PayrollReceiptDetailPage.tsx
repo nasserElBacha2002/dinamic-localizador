@@ -1,7 +1,8 @@
 import { Alert, Button, FileButton, Group, Progress, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useState } from "react";
-import { Link as RouterLink, useNavigate, useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
+import { EntityLink } from "../../components/entity-link";
 import {
   ConfirmDialog,
   DetailFieldGrid,
@@ -248,7 +249,15 @@ export function PayrollReceiptDetailPage() {
             },
             {
               label: terminology.worker.singular,
-              value: safeText(receipt.employeeName ?? null),
+              value: receipt.employeeId ? (
+                <EntityLink
+                  entityType="employee"
+                  entityId={receipt.employeeId}
+                  label={safeText(receipt.employeeName ?? null)}
+                />
+              ) : (
+                safeText(receipt.employeeName ?? null)
+              ),
             },
             {
               label: "CUIL",
@@ -278,18 +287,6 @@ export function PayrollReceiptDetailPage() {
           ]}
         />
       </SectionCard>
-
-      {receipt.employeeId ? (
-        <Group>
-          <Button
-            component={RouterLink}
-            to={`/employees/${receipt.employeeId}`}
-            variant="light"
-          >
-            Ver {terminology.worker.singular.toLowerCase()}
-          </Button>
-        </Group>
-      ) : null}
 
       <ConfirmDialog
         open={deleteOpen}

@@ -1,5 +1,6 @@
 import { Button, Group, Select, Stack, Switch, Text, TextInput } from "@mantine/core";
 import { useMemo, useState } from "react";
+import { RoleSelectWithPermissions } from "../../components/company/RolePermissionsAction";
 import { ResponsiveModal } from "../../design-system";
 import type { CompanyRole, CompanyUser } from "../../types/company-user";
 import type { CreateCompanyInvitationInput } from "../../types/user-invitation";
@@ -141,12 +142,14 @@ function CompanyUserDialogForm({
         </>
       )}
 
-      <Select
-        label="Rol en la empresa"
-        data={roleOptions}
-        value={role}
-        onChange={(value) => setRole((value ?? "ADMIN") as CompanyRole)}
-      />
+      <RoleSelectWithPermissions role={role}>
+        <Select
+          label="Rol en la empresa"
+          data={roleOptions}
+          value={role}
+          onChange={(value) => setRole((value ?? "ADMIN") as CompanyRole)}
+        />
+      </RoleSelectWithPermissions>
 
       {mode === "edit" ? (
         <>

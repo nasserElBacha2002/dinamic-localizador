@@ -1,4 +1,8 @@
 import type { Request, Response } from "express";
+import {
+  buildRoleCapabilities,
+  isCompanyRole,
+} from "../constants/company-permission-catalog";
 import { companyModuleService } from "../services/company-module.service";
 import { companyService } from "../services/company.service";
 import { companyUserService } from "../services/company-user.service";
@@ -124,6 +128,22 @@ export const companyController = {
         invitableRoles: capabilities.invitableRoles,
       },
     });
+  },
+
+  async getRoleCapabilities(req: Request, res: Response) {
+    requireRequestCompanyId(req);
+    const roleParam = String(req.params.role ?? "").trim().toUpperCase();
+    if (!isCompanyRole(roleParam)) {
+      res.status(404).json({
+        error: {
+          code: "ROLE_NOT_FOUND",
+          message: "No se encontró el rol solicitado.",
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({ data: buildRoleCapabilities(roleParam) });
   },
 
   async listModules(req: Request, res: Response) {

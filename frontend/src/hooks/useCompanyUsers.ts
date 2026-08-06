@@ -6,8 +6,10 @@ import {
   getCompanyUsers,
   updateCompanyUser,
 } from "../api/company-users.api";
+import { getRoleCapabilities } from "../api/role-capabilities.api";
 import { getActiveCompanyId } from "../api/company-path";
 import type {
+  CompanyRole,
   CompanyUserFilters,
   CreateCompanyUserInput,
   UpdateCompanyUserInput,
@@ -22,6 +24,17 @@ export function useCompanyPermissions(extraEnabled = true) {
     queryFn: () => getCompanyMembership(companyId!),
     enabled: enabled && Boolean(companyId),
     staleTime: 60_000,
+  });
+}
+
+export function useRoleCapabilities(role: CompanyRole | null | undefined, opened: boolean) {
+  const { companyId, enabled } = useOperationalQueryEnabled(opened && Boolean(role));
+
+  return useQuery({
+    queryKey: ["company-role-capabilities", companyId, role],
+    queryFn: () => getRoleCapabilities(companyId!, role!),
+    enabled: enabled && Boolean(companyId) && Boolean(role) && opened,
+    staleTime: 5 * 60_000,
   });
 }
 

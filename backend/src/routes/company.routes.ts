@@ -6,6 +6,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { validate } from "../middleware/validate";
 import {
   companyIdParamSchema,
+  companyRoleCapabilitiesParamSchema,
   updateCompanySettingsSchema,
   weeklySchedulePayloadSchema,
 } from "../schemas/company.schema";
@@ -27,6 +28,14 @@ companyRouter.get(
   validate(companyIdParamSchema, "params"),
   resolveCompanyContext,
   asyncHandler(companyController.getMembership),
+);
+
+companyRouter.get(
+  "/:companyId/roles/:role/capabilities",
+  validate(companyRoleCapabilitiesParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("users:manage"),
+  asyncHandler(companyController.getRoleCapabilities),
 );
 
 companyRouter.get(

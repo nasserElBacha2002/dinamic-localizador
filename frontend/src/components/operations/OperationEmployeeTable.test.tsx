@@ -3,11 +3,10 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 setupDomEnvironment();
 
 import assert from "node:assert/strict";
-import { MantineProvider } from "@mantine/core";
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
-import { afterEach, describe, it } from "node:test";
+import { cleanup, fireEvent, within } from "@testing-library/react";
+import { afterEach, before, describe, it } from "node:test";
 import React from "react";
-import { MemoryRouter, Route, Routes } from "react-router";
+import { Route, Routes } from "react-router";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import type { OperationAttendanceSummaryEmployee } from "../../types/operation-attendance-summary";
 import type { OperationEmployeeAssignment } from "../../types/operation";
@@ -15,6 +14,13 @@ import { OperationEmployeeTable } from "./OperationEmployeeTable";
 import { canReviewOperationalAttendance } from "./operation-workforce-attendance";
 
 installLayoutPolyfills();
+
+let renderPage: typeof import("../../test/render-page").renderPage;
+let clearActiveTestQueryClients: typeof import("../../test/render-page").clearActiveTestQueryClients;
+
+before(async () => {
+  ({ renderPage, clearActiveTestQueryClients } = await import("../../test/render-page"));
+});
 
 function buildAssignment(
   overrides: Partial<OperationEmployeeAssignment> = {},
@@ -104,38 +110,36 @@ interface RenderOptions {
 }
 
 function renderTable(rows: OperationAttendanceSummaryEmployee[], options: RenderOptions = {}) {
-  return render(
-    <MemoryRouter initialEntries={["/operations/operation-1"]}>
-      <Routes>
-        <Route
-          path="/operations/:id"
-          element={
-            <MantineProvider>
-              <OperationEmployeeTable
-                operationId="operation-1"
-                rows={rows}
-                canAssign={options.canAssign ?? false}
-                canReviewAttendance={canReviewOperationalAttendance}
-                assignmentById={options.assignmentById}
-                operationWorkDate={options.operationWorkDate}
-                onReviewApprove={options.onReviewApprove ?? (() => {})}
-                onReviewReject={() => {}}
-                onCancelAssignment={options.onCancelAssignment ?? (() => {})}
-                onEndAssignment={() => {}}
-                emptyTitle="Sin filas"
-                emptyDescription="Sin datos"
-              />
-            </MantineProvider>
-          }
-        />
-        <Route path="/attendance/:attendanceId" element={<span>Attendance detail</span>} />
-      </Routes>
-    </MemoryRouter>,
+  return renderPage(
+    <Routes>
+      <Route
+        path="/operations/:id"
+        element={
+          <OperationEmployeeTable
+            operationId="operation-1"
+            rows={rows}
+            canAssign={options.canAssign ?? false}
+            canReviewAttendance={canReviewOperationalAttendance}
+            assignmentById={options.assignmentById}
+            operationWorkDate={options.operationWorkDate}
+            onReviewApprove={options.onReviewApprove ?? (() => {})}
+            onReviewReject={() => {}}
+            onCancelAssignment={options.onCancelAssignment ?? (() => {})}
+            onEndAssignment={() => {}}
+            emptyTitle="Sin filas"
+            emptyDescription="Sin datos"
+          />
+        }
+      />
+      <Route path="/attendance/:attendanceId" element={<span>Attendance detail</span>} />
+    </Routes>,
+    { route: "/operations/operation-1", initialEntries: ["/operations/operation-1"] },
   );
 }
 
 afterEach(() => {
   cleanup();
+  clearActiveTestQueryClients();
 });
 
 describe("OperationEmployeeTable", () => {

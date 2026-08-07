@@ -1,6 +1,20 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 
+/**
+ * Test-only seam: runs immediately before the audit_logs INSERT so integration tests
+ * can force a failure inside an open business transaction. Production never sets this.
+ */
+type AuditBeforeInsertHook = () => Promise<void>;
+
+let auditBeforeInsertHookForTests: AuditBeforeInsertHook | undefined;
+
+export const setAuditBeforeInsertHookForTests = (
+  hook: AuditBeforeInsertHook | undefined,
+): void => {
+  auditBeforeInsertHookForTests = hook;
+};
+
 export const auditRepository = {
   async log(
     input: {
@@ -15,6 +29,10 @@ export const auditRepository = {
     },
     transaction?: sql.Transaction,
   ): Promise<void> {
+    if (auditBeforeInsertHookForTests) {
+      await auditBeforeInsertHookForTests();
+    }
+
     const request = transaction ? new sql.Request(transaction) : getPool().request();
     await request
       .input("companyId", sql.UniqueIdentifier, input.companyId)

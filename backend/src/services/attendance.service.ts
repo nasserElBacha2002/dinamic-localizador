@@ -18,6 +18,8 @@ import { workdayMaterializationService } from "./workday-materialization.service
 import { buildCsv } from "../utils/csv";
 import { buildPaginationMeta } from "../utils/pagination";
 import { isActiveAttendanceDuplicateKeyError } from "../utils/attendance-duplicate-errors";
+import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../utils/sql-server-errors";
+import { rollbackTransactionSafely } from "../utils/sql-transaction";
 
 const formatLocalDateTime = (value: string | Date | null | undefined): string => {
   if (!value) {
@@ -240,6 +242,10 @@ export const attendanceService = {
         transaction,
       );
 
+      if (!updated) {
+        throw new AppError(409, "ATTENDANCE_ALREADY_REVIEWED", "La asistencia ya fue revisada");
+      }
+
       await attendanceReviewRepository.create(
         companyId,
         {
@@ -253,29 +259,53 @@ export const attendanceService = {
         transaction,
       );
 
-      await transaction.commit();
+      // CRITICAL_AUDIT: same TX as business mutation + attendance_reviews history.
+      await auditService.log(
+        companyId,
+        {
+          entityType: "attendance",
+          entityId: attendanceId,
+          action: "review",
+          previousData: {
+            validationStatus: record.validationStatus,
+            reviewReason: record.reviewReason,
+          },
+          newData: {
+            validationStatus: newValidationStatus,
+            reviewReason: input.reason,
+            decision: input.decision,
+          },
+          reason: input.reason,
+          userId,
+        },
+        transaction,
+      );
 
-      await auditService.log(companyId, {
-        entityType: "attendance",
-        entityId: attendanceId,
-        action: "review",
-        previousData: {
-          validationStatus: record.validationStatus,
-          reviewReason: record.reviewReason,
-        },
-        newData: {
-          validationStatus: newValidationStatus,
-          reviewReason: input.reason,
-          decision: input.decision,
-        },
-        reason: input.reason,
-        userId,
-      });
+      await transaction.commit();
 
       return this.getById(companyId, updated.id);
     } catch (error) {
-      await transaction.rollback();
-      throw error;
+      if (
+        isDuplicateKeyError(error) &&
+        (getDuplicateKeyConstraint(error)?.includes("attendance_reviews") ||
+          getDuplicateKeyConstraint(error) === "UQ_attendance_reviews_company_attendance")
+      ) {
+        const alreadyReviewed = new AppError(
+          409,
+          "ATTENDANCE_ALREADY_REVIEWED",
+          "La asistencia ya fue revisada",
+        );
+        return rollbackTransactionSafely(
+          transaction,
+          { operation: "attendance.review", companyId, entityId: attendanceId },
+          alreadyReviewed,
+        );
+      }
+      return rollbackTransactionSafely(
+        transaction,
+        { operation: "attendance.review", companyId, entityId: attendanceId },
+        error,
+      );
     }
   },
 

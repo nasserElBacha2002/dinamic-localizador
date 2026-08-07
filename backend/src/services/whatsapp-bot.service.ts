@@ -31,6 +31,7 @@ import {
   getRequireCheckoutLocation,
   runWithBotRuntimeSettings,
 } from "../utils/bot-runtime-settings-scope";
+import { runCheckoutWithoutLocationBeforeCommitHookForTests } from "../utils/checkout-transaction-hooks";
 import {
   getObservabilityFlowResult,
   getObservabilityTrace,
@@ -1788,8 +1789,14 @@ export const whatsappBotService = {
         });
       }
 
+      if (input.sessionId) {
+        await botSessionService.completeSession(companyId, input.sessionId, transaction);
+      }
+
+      // Test seam: optional injected failure after both writes, before commit (H4 atomicity).
+      await runCheckoutWithoutLocationBeforeCommitHookForTests();
+
       await transaction.commit();
-      await completeSessionIfNeeded();
 
       const responseMessage = buildCheckoutRegisteredMessage(checkoutMessageInput);
 

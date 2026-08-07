@@ -50,6 +50,15 @@ const transition = async (input: {
       throw new AppError(400, "ABSENCE_COMMENT_REQUIRED", "El comentario es obligatorio");
     }
 
+    if (action === "APPROVE") {
+      await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
+        input.companyId,
+        input.requestId,
+        existing.absenceTypeId,
+        transaction,
+      );
+    }
+
     if (rule.affectsBalance) {
       await absenceBalanceService.ensureSufficientBalanceForApproval(
         input.companyId,
@@ -164,11 +173,6 @@ export const absenceReviewService = {
     if (!existing) {
       throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
     }
-    await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
-      companyId,
-      requestId,
-      existing.absenceTypeId,
-    );
 
     return absenceWorkdaySyncService.runAfterAbsenceMutation(
       companyId,

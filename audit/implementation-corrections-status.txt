@@ -1,7 +1,14 @@
- A audit/database-integrity-phase2-corrections.md
- M audit/database-integrity-phase2-implementation.md
+ M .env.example
+ A audit/database-integrity-phase3-4-corrections.md
+ M audit/database-integrity-phase3-4-implementation.md
  M audit/implementation-corrections-validation.txt
- M backend/src/repositories/audit.repository.ts
- M backend/src/services/database-integrity-phase2.integration.test.ts
- M backend/src/utils/audit-sanitize.test.ts
- M backend/src/utils/audit-sanitize.ts
+ M backend/.env.example
+ M backend/src/config/env-migrations.ts
+ M backend/src/config/migration-db-credentials.test.ts
+ M backend/src/config/migration-db-credentials.ts
+ M backend/src/database/phase3-4-db-security.integration.test.ts
+ M database/migrations/089_phase3_4_db_security_roles.sql
+ A database/migrations/090_phase3_4_revoke_schema_execute.sql
+ A database/migrations/rollback/090_phase3_4_revoke_schema_execute_rollback.sql
+ M docker-compose.prod.yml
+ M docker-compose.yml

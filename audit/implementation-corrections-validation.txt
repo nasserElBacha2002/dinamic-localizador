@@ -1,35 +1,50 @@
-# Phase 2 corrections — validation evidence
-Date: 2026-08-07
+# Phase 3 & 4 corrections — validation log
+# Generated: 2026-08-07
+# No secrets included.
 
-## npm run build (backend)
-exit code: 0
+## Commands
+
+### backend build
+command: cd backend && npm run build
+exit_code: 0
 result: pass
 
-## eslint (touched files)
-files:
-  - src/utils/audit-sanitize.ts
-  - src/utils/audit-sanitize.test.ts
-  - src/repositories/audit.repository.ts
-  - src/services/database-integrity-phase2.integration.test.ts
-exit code: 0
+### eslint (touched Phase 3–4 TS)
+command: npx eslint src/config/migration-db-credentials.ts src/config/migration-db-credentials.test.ts src/config/env-migrations.ts src/database/phase3-4-db-security.integration.test.ts
+exit_code: 0
 result: pass
 
-## npm test (unit)
-exit code: 0
-result: pass (includes sanitizeAuditPayload 3/3)
+### unit — credential resolver
+command: npx tsx --test src/config/migration-db-credentials.test.ts
+exit_code: 0
+result: pass
+notes: 6/6
 
-## Phase 2 SQL Server integration
-command:
-  EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit \
-    src/services/database-integrity-phase2.integration.test.ts
-exit code: 0
-tests: 12
-pass: 12
-fail: 0
-skipped: 0
-coverage:
-  - attendance success / audit fail / concurrent
-  - membership success / audit fail / last-owner
-  - invitation accept success / audit fail
-  - already-member accept success / audit fail
-  - decline success / audit fail
+### unit — full suite
+command: node ./scripts/run-unit-tests.mjs
+exit_code: 0
+result: pass
+notes: tests 1228 fail 0
+
+### integration — phase3-4 effective permissions
+command: RUN_DB_INTEGRATION_TESTS=true … phase3-4-db-security.integration.test.ts
+exit_code: 0
+result: pass
+notes: 7 pass, 1 skip (optional real-login ops smoke)
+
+### docker compose prod overlay
+command: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
+exit_code: 0
+result: pass
+notes: warnings for unset optional env in bare shell; "no port specified" from empty frontend host port override (pre-existing)
+
+## Summary
+
+| Check | Result |
+|-------|--------|
+| Runtime no schema EXECUTE | pass |
+| Future proc denied under runtime | pass |
+| Migration DDL/DML/system_migrations | pass |
+| Credential XOR rejected | pass |
+| 089 rollback/forward + drift | pass |
+| Real login cutover smoke | skip (ops) |

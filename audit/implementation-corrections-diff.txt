@@ -1,413 +1,788 @@
-diff --git a/audit/database-integrity-phase2-corrections.md b/audit/database-integrity-phase2-corrections.md
+diff --git a/.env.example b/.env.example
+index e24ca7d..fcf7b14 100644
+--- a/.env.example
++++ b/.env.example
+@@ -27,41 +27,42 @@ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+ 
+ VITE_API_URL=http://localhost:3000/api
+ VITE_GOOGLE_MAPS_API_KEY=
+ VITE_GOOGLE_MAPS_MAP_ID=
+ 
+ # Producción (deploy via GHCR): imagen pre-construida en GitHub Actions.
+ # Ejemplo: FRONTEND_IMAGE=ghcr.io/<owner>/<repo>/frontend:develop-latest
+ # FRONTEND_IMAGE=
+ 
+ DB_HOST=sqlserver
+ DB_PORT=1433
+ DB_PORT_EXTERNAL=14330
+ DB_NAME=dinamic_attendance
+ # Runtime identity (backend). Local Docker defaults to sa; production should use a
+ # dedicated login mapped to database role dinamic_app_runtime (see Phase 3–4 audit).
+ DB_USER=sa
+ # Contraseña SA de SQL Server para Docker Compose (sqlserver healthcheck / db-init).
+ # Also used as shared app password until runtime/migration identities are split.
+ DB_PASSWORD=
+ # Optional dedicated migration identity (migrations service / npm run migrate).
+-# When unset, migrations reuse DB_USER/DB_PASSWORD (backwards compatible).
++# Both unset → shared DB_USER/DB_PASSWORD. Both set → dedicated. Partial pair → error.
++# To reuse the same secret deliberately, set DB_MIGRATION_PASSWORD explicitly (do not omit).
+ # DB_MIGRATION_USER=
+ # DB_MIGRATION_PASSWORD=
+ DB_ENCRYPT=false
+ DB_TRUST_SERVER_CERTIFICATE=true
+ 
+ JWT_SECRET=
+ JWT_EXPIRES_IN=8h
+ 
+ INVITATION_TTL_HOURS=72
+ # EMAIL_TRANSPORT=smtp|console|disabled
+ # console only in development/test (never counts as delivered).
+ # production: use smtp (requires SMTP_*) or explicit disabled.
+ # EMAIL_TRANSPORT=console
+ # SMTP_HOST=
+ # SMTP_PORT=587
+ # SMTP_SECURE=false
+ # SMTP_USER=
+ # SMTP_PASSWORD=
+ # SMTP_FROM=
+ # SMTP_CONNECTION_TIMEOUT_MS=10000
+diff --git a/audit/database-integrity-phase3-4-corrections.md b/audit/database-integrity-phase3-4-corrections.md
 new file mode 100644
-index 0000000..51c1435
+index 0000000..3e2c6e5
 --- /dev/null
-+++ b/audit/database-integrity-phase2-corrections.md
-@@ -0,0 +1,110 @@
-+# Database Integrity Phase 2 — Corrections
++++ b/audit/database-integrity-phase3-4-corrections.md
+@@ -0,0 +1,104 @@
++# Database Integrity Phases 3 & 4 — Corrections
 +
-+## Executive Summary
++## Status
 +
-+Estado: **COMPLETE**
++**COMPLETE_WITH_ISSUES** (unchanged overall)
 +
-+Closed review gaps with real SQL Server evidence for invitation accept/decline atomicity, hardened the audit sanitizer (exact normalized families, no `tokenCount` false positive), and ensured the global audit test hook resets via `try/finally`.
++| Layer | Status |
++|-------|--------|
++| Least-privilege **foundation** (roles + effective tests) | **FOUNDATION_COMPLETE** |
++| Production cutover off `sa` | **PRODUCTION_CUTOVER_PENDING** (ops) |
 +
-+---
-+
-+## Findings corrected
-+
-+| # | Finding | Action |
-+|---|---------|--------|
-+| 1 | Invitation accept rollback untested | Added success + audit-fail tests (new user) |
-+| 2 | Already-member accept branch untested | Added success + audit-fail tests |
-+| 3 | Decline rollback untested | Added success + audit-fail tests |
-+| 4 | “Covered by pattern” in report | Replaced with concrete pass evidence |
-+| 5 | Sanitizer exact regex / false positives | Normalized exact family set + safe-field tests |
-+| 6 | Hook not reset on assert failure | All hook uses wrapped in `try/finally` |
-+| 7 | Hook couldn’t target CRITICAL action only | Hook now receives insert input (filter by `action`) |
++Architecture decisions preserved: no business SPs, purge KEEP_APP, repair KEEP_SCRIPT, EXECUTE-only REJECTED, admin maintenance role DEFERRED.
 +
 +---
 +
-+## Invitation atomicity evidence
++## Review items
 +
-+| Case | Result |
-+|------|--------|
-+| accept normal → ACCEPTED + membership ACTIVE + `invitation_accepted` | pass |
-+| accept normal audit failure → PENDING, no user, no membership, audit=0 | pass |
-+| already-member accept success → ACCEPTED + audit | pass |
-+| already-member audit failure → PENDING, membership unchanged, audit=0 | pass |
-+| decline success → DECLINED + `invitation_declined` | pass |
-+| decline audit failure → PENDING, audit=0 | pass |
-+
-+Note: `invitation_accept_started` remains BEST_EFFORT (outside TX). Failure injection filters on `invitation_accepted` / `invitation_declined` only.
-+
-+---
-+
-+## Attendance evidence
-+
-+| Case | Result |
-+|------|--------|
-+| success → business + history + audit | pass |
-+| audit failure → all rollback | pass |
-+| concurrent → exactly one success audit | pass |
++| # | Feedback | Action | Verified |
++|---|----------|--------|----------|
++| 1 | Remove runtime `EXECUTE ON SCHEMA::dbo` | Removed in `089`; `090` revokes if prior draft applied | Integration: schema EXECUTE false; future proc DENIED |
++| 2 | Migration schema EXECUTE | Removed; object EXECUTE only on `fn_resolve_operation_timezone_for_sql` | Integration grant + migration DDL suite |
++| 3 | Credential pair required | `resolveMigrationDbCredentials` errors on XOR / blank password | 6 unit tests |
++| 4 | Compose dual resolution | Pass-through `DB_MIGRATION_*`; Node is sole resolver | Compose files |
++| 5 | Effective permission tests without external login | `CREATE USER WITHOUT LOGIN` + `EXECUTE AS USER` | 7 integration pass, 1 ops skip |
++| 6 | 089 ownership / drift | Strict SCHEMA_DRIFT if roles pre-exist | Drift + rollback/forward tests |
++| 7 | Reports | This file + updated implementation md | — |
 +
 +---
 +
-+## Membership evidence
-+
-+| Case | Result |
-+|------|--------|
-+| role success → mutation + audit (actor/target) | pass |
-+| audit failure → mutation rollback | pass |
-+| last OWNER reject → no success audit | pass |
-+
-+---
-+
-+## Sanitization policy
-+
-+- **Primary rule:** CRITICAL callers send minimal allowlisted diffs.
-+- **Secondary defense:** `sanitizeAuditPayload` exact-matches normalized keys (`lowercase`, strip `_`/`-`) against a small family set.
-+- Does **not** redact `tokenCount`, `status`, `role`.
-+- Covers variants such as `clientSecret`, `providerApiKey`, `twilioAuthToken`, `signedUrl`, nested objects/arrays.
-+
-+---
-+
-+## Audit-flow classification matrix
-+
-+| Flow | Mutation | Actor | History/SoT | Audit | Classification | Reason |
-+|------|----------|-------|-------------|-------|----------------|--------|
-+| Attendance review | update record + insert review | reviewer user | `attendance_reviews` | `audit_logs` in-TX | CRITICAL_AUDIT | Admin decision must not lose trail |
-+| Membership role/status | update membership | admin actor | memberships | `audit_logs` in-TX | CRITICAL_AUDIT | Privilege change |
-+| Invitation accept (new/existing) | accept + membership | invitee | invitation + membership | `audit_logs` in-TX | CRITICAL_AUDIT | Access grant |
-+| Invitation accept already ACTIVE | mark accepted | invitee | invitation | `audit_logs` in-TX | CRITICAL_AUDIT | Distinct branch |
-+| Invitation decline | mark declined | invitee | invitation | `audit_logs` in-TX | CRITICAL_AUDIT | Access denial decision |
-+| Invitation accept_started / denials | none / reject | various | n/a | `logAuditSafe` | BEST_EFFORT_BY_DESIGN | No successful mutation to couple |
-+| Company lifecycle | status transitions | admin/job | `company_lifecycle_events` | optional best-effort index | ALREADY_SAFE | Domain event in-TX |
-+| Absence approve/reject/cancel | request + ledger/sync | admin | request + ledger | `audit_logs` in-TX | ALREADY_SAFE | Already transactional |
-+| Payroll upload/delete | receipt rows + GCS | admin | receipt rows | post-write | BEST_EFFORT_BY_DESIGN | No distributed TX |
-+| Work teams admin | team/members | admin | tables | mostly post-write | FOLLOW_UP_P2 | Not Phase 2 P1 |
-+| Operation admin | operations/assignments | admin | tables | mixed | FOLLOW_UP_P2 | Not Phase 2 P1 |
-+| Imports | bulk writes | admin | import jobs | best-effort | FOLLOW_UP_P3 | High volume / batch |
-+| Permissions | seed/static | n/a | seed | none | NO_AUDIT_REQUIRED | Not mutable via product API |
-+
-+---
-+
-+## Tests
-+
-+Suite: `database-integrity-phase2.integration.test.ts` + `audit-sanitize.test.ts`
++## Runtime role exact permissions
 +
 +```text
-+integration: 12 pass / 0 fail
-+sanitize unit: 3 pass / 0 fail
++GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO dinamic_app_runtime;
++```
++
++EXECUTE: **none** (no project runtime procedures; `sp_getapplock` remains public/system).
++
++---
++
++## Removed broad EXECUTE
++
++- Runtime: no schema EXECUTE → future `dbo.*` admin procs stay denied by default.
++- Migrations: no schema EXECUTE → only proven UDF object grant.
++
++Correction path for DBs that applied the earlier 089 draft: migration **`090_phase3_4_revoke_schema_execute.sql`**.
++
++---
++
++## Migration role exact permissions
++
++```text
++CREATE TABLE / VIEW / PROCEDURE / FUNCTION / TYPE
++ALTER, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo
++EXECUTE ON OBJECT::dbo.fn_resolve_operation_timezone_for_sql  (if present)
 +```
 +
 +---
 +
-+## Validation
++## Credential pair semantics
 +
-+See `audit/implementation-corrections-validation.txt`.
++| Config | Result |
++|--------|--------|
++| both unset / whitespace | shared `DB_USER` + `DB_PASSWORD` |
++| both set (non-blank) | dedicated migration identity |
++| user only / password only / whitespace password with user | `MigrationCredentialConfigError` (no password in message) |
++
++Single source of truth: `migration-db-credentials.ts` (Zod does not duplicate pair logic).
 +
 +---
 +
-+## Remaining issues
++## Role effective-permission test matrix
 +
-+- Work teams / operations / imports admin audits remain FOLLOW_UP (not this correction).
-+- Company cascade cleanup warnings in tests are unrelated to audit atomicity.
-+- Do not start Phase 3 until this package is accepted.
-diff --git a/audit/database-integrity-phase2-implementation.md b/audit/database-integrity-phase2-implementation.md
-index 26217fa..4982352 100644
---- a/audit/database-integrity-phase2-implementation.md
-+++ b/audit/database-integrity-phase2-implementation.md
-@@ -97,68 +97,78 @@ Last-OWNER guards unchanged (no new trigger).
- 
- ## 9. Company lifecycle review
- 
- **ALREADY_SAFE:** `company_lifecycle_events` written in the business TX.  
- `audit_logs` via `logAuditSafe` after commit = **BEST_EFFORT_BY_DESIGN** (duplicate global index; domain SoT is lifecycle events).
- 
- ---
- 
- ## 10. Absence/payroll review
- 
- | Flow | Result |
- |------|--------|
- | Absence approve/reject/cancel | **ALREADY_SAFE** (audit already in-TX) |
- | Absence create/ledger paths | **ALREADY_SAFE** / domain ledger |
- | Payroll upload/delete/download | **BEST_EFFORT_BY_DESIGN** (spans GCS; not one DB TX) |
- 
- ---
- 
- ## 11. Privacy / redaction
- 
--`sanitizeAuditPayload` redacts keys matching credential patterns (`password`, `token`, `accessToken`, `refreshToken`, `signedUrl`, etc.) recursively. Membership/attendance callers already send minimal diffs.
-+**Primary:** CRITICAL callers send minimal allowlisted diffs (actor/target/changed fields only).
++| Principal | Operation | Expected |
++|-----------|-----------|----------|
++| runtime test user | SELECT/INSERT/UPDATE/DELETE on probe table | PASS |
++| runtime | CREATE / ALTER / DROP | DENIED + metadata unchanged |
++| runtime | `EXEC dbo.phase34_admin_probe` | DENIED |
++| migrations test user | CREATE/ALTER/INDEX/INSERT/UPDATE/DROP probe | PASS |
++| migrations | INSERT/SELECT/DELETE probe row in `system_migrations` | PASS (cleaned) |
++| — | 089 forward → rollback → forward | PASS |
++| — | preexisting role → SCHEMA_DRIFT | PASS |
++| real login smoke | optional `RUN_DB_PRIVILEGE_TESTS` | SKIP until ops |
 +
-+**Secondary defense:** `sanitizeAuditPayload` exact-matches normalized keys (`lowercase`, strip `_`/`-`) against a small credential family set (`password`, `token`, `clientSecret`, `twilioAuthToken`, `signedUrl`, …). Safe fields such as `role`, `status`, `tokenCount` are preserved.
++---
 +
-+Membership/attendance/invitation callers already send minimal diffs.
++## 089 schema drift behavior
++
++If `dinamic_app_runtime` or `dinamic_app_migrations` already exists when 089 runs → **THROW 50089 SCHEMA_DRIFT** before creating the other role or granting permissions.
++
++---
++
++## Production cutover status
++
++Still pending. Smoke checklist for ops:
++
++1. Runtime login: health, login, employee read, safe business write  
++2. Migration login: `migrate:status`, apply next controlled migration  
++3. Then remove `sa` from backend + migrations env (keep `sa` for SQL container bootstrap/healthcheck if required)
++
++---
++
++## Remaining operational P1
++
++Application still defaults to shared `sa` until cutover. Foundation roles and tests are complete; do **not** claim least privilege active in production.
+diff --git a/audit/database-integrity-phase3-4-implementation.md b/audit/database-integrity-phase3-4-implementation.md
+index 6f159a0..15eb647 100644
+--- a/audit/database-integrity-phase3-4-implementation.md
++++ b/audit/database-integrity-phase3-4-implementation.md
+@@ -1,51 +1,104 @@
+ # Database Integrity Phases 3 & 4
+ 
+ ## Administrative Atomicity and DB Security Hardening
+ 
+ ### 1. Executive Summary
+ 
+ Estado: **COMPLETE_WITH_ISSUES**
+ 
++| Layer | Status |
++|-------|--------|
++| Least-privilege **foundation** (roles + effective-permission tests) | **FOUNDATION_COMPLETE** |
++| Production identity cutover off `sa` | **PRODUCTION_CUTOVER_PENDING** |
++
+ Phases 3 and 4 were driven by repository evidence, not by a mandate to create stored procedures or force EXECUTE-only.
+ 
+ | Area | Decision |
+ |------|----------|
+ | Business workflows (attendance, absences, payroll, WhatsApp, invites) | **KEEP_APPLICATION_TRANSACTION** — no SPs |
+ | Company purge (DB stages) | **KEEP_APP_TRANSACTION** — already staged TX + GCS outbox; SP would not remove runtime DELETE need |
+ | Repair / reconcile / backfill CLIs | **KEEP_SCRIPT** — recurring ops scripts stay TypeScript; SP alone does not reduce privilege until admin identity exists |
+ | Full EXECUTE-only runtime | **REJECTED** — raw SQL across repositories; rewrite cost ≫ benefit |
+-| Least-privilege roles | **IMPLEMENTED** (additive): `dinamic_app_runtime`, `dinamic_app_migrations` via migration `089` |
+-| Credential split plumbing | **IMPLEMENTED** (backwards compatible): optional `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` |
+-| Cutover off `sa` | **DOCUMENTED runbook** — not auto-revoked (safe rollout); residual **P1** until ops completes cutover |
++| Least-privilege roles | **IMPLEMENTED**: `dinamic_app_runtime`, `dinamic_app_migrations` via `089` (+ `090` revoke schema EXECUTE if prior draft) |
++| Runtime EXECUTE | **none** (no `EXECUTE ON SCHEMA::dbo`) |
++| Migration EXECUTE | **object-only**: `dbo.fn_resolve_operation_timezone_for_sql` |
++| Credential split | **pair required**: both `DB_MIGRATION_*` set, or both unset; XOR → config error |
++| Cutover off `sa` | **Runbook only** — residual operational **P1** until ops maps dedicated logins |
++
++**COMPLETE_WITH_ISSUES** because default compose still documents/uses shared `sa` until operators complete cutover. Foundation permissions are proven with `CREATE USER WITHOUT LOGIN` + `EXECUTE AS USER` (not only skipped login tests).
++
++See also: `audit/database-integrity-phase3-4-corrections.md`.
++
++---
++
++### 1b. Runtime role exact permissions
++
++```text
++SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo
++EXECUTE: none
++DDL: none
++```
++
++### 1c. Removed broad EXECUTE
++
++Prior draft granted `EXECUTE ON SCHEMA::dbo` to runtime (and migrations). That would auto-entitle future admin procedures. Removed in corrected `089`; `090` revokes schema EXECUTE on already-applied DBs.
++
++### 1d. Migration role exact permissions
++
++```text
++CREATE TABLE, VIEW, PROCEDURE, FUNCTION, TYPE
++ALTER, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo
++EXECUTE ON OBJECT::dbo.fn_resolve_operation_timezone_for_sql (if present)
++```
++
++### 1e. Credential pair semantics
++
++Shared mode: both migration vars unset/whitespace → `DB_USER`/`DB_PASSWORD`.  
++Dedicated mode: both set → migration identity.  
++Partial pair → `MigrationCredentialConfigError` (never reuse runtime password silently).
++
++Compose passes `DB_MIGRATION_*` through; **Node (`env-migrations` / resolver) is the only resolver**.
++
++### 1f. Role effective-permission test matrix
++
++See corrections report § matrix. CI suite: `phase3-4-db-security.integration.test.ts` (WITHOUT LOGIN). Optional ops smoke: `RUN_DB_PRIVILEGE_TESTS`.
++
++### 1g. 089 forward/rollback/forward + schema drift
++
++- Forward creates roles only when absent; preexisting → `THROW 50089 SCHEMA_DRIFT`.
++- Rollback drops members then roles.
++- Integration covers forward → rollback → forward and drift without partial grants.
++
++### 1h. Production cutover status
+ 
+-**COMPLETE_WITH_ISSUES** because default local/prod compose still documents/uses shared `sa` until operators create dedicated logins and map them to the new roles. Roles and env plumbing are ready; live privilege reduction is a deployment step, not a silent REVOKE.
++**FOUNDATION_COMPLETE** / **PRODUCTION_CUTOVER_PENDING**. Do not claim least privilege active in production until backend + migrations stop using `sa`.
  
  ---
  
- ## 12. Transaction boundaries
+ ### 2. Current DB identities
  
- Write order for critical paths: **domain rows → audit_logs → COMMIT**.
+ | Identity | Source | Purpose |
+ |----------|--------|---------|
+ | SQL Server `sa` | `MSSQL_SA_PASSWORD=${DB_PASSWORD}` in Compose; healthcheck/`db-init` use `sa` | Instance bootstrap |
+ | Application / migrations (shared) | `DB_USER` / `DB_PASSWORD` (examples default `sa`) | Backend pool + migration runner historically share one login |
+-| Optional migration override | `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` (new) | Migrations container / `npm run migrate` when set; falls back to `DB_*` |
++| Optional migration pair | `DB_MIGRATION_USER` + `DB_MIGRATION_PASSWORD` (both or neither) | Dedicated migration runner identity |
  
- System actor: `userId: null` where jobs already do so (unchanged).
+ No LOGIN/USER/PASSWORD is created in versioned migrations (by design).
  
- Polymorphic `entity_type` + `entity_id`: **NO_CHANGE** (no composite FK).
- 
- Retention: **NO_RETENTION_POLICY**.
- 
- Permissions/`role_permissions`: **NO_CHANGE** (not mutable via product API).
- 
- ---
- 
- ## 13. Failure/rollback tests
- 
- | Test | Result |
- |------|--------|
- | Review success → review + audit | pass |
- | Review + forced audit failure → all rolled back | pass |
- | Concurrent review → exactly 1 audit | pass |
- | Membership success → role + audit (actor/target) | pass |
- | Membership + audit failure → role unchanged, no audit | pass |
- | Last OWNER reject → no success audit | pass |
-+| Invitation accept success → ACCEPTED + membership + audit | pass |
-+| Invitation accept audit failure → PENDING, no user/membership, no audit | pass |
-+| Already-member accept success → audit | pass |
-+| Already-member accept audit failure → PENDING, membership unchanged | pass |
-+| Invitation decline success → DECLINED + audit | pass |
-+| Invitation decline audit failure → PENDING, no audit | pass |
- | Sanitization unit tests | pass |
+ Secrets: not printed; `.env` remains gitignored; examples use empty placeholders.
  
  ---
  
- ## 14. Database integration tests
+ ### 3. Current privilege model
  
- File: `backend/src/services/database-integrity-phase2.integration.test.ts`  
- Command: `RUN_DB_INTEGRATION_TESTS=true` … (see validation artifact).
+ | Finding | Evidence | Severity |
+ |---------|----------|----------|
+ | Runtime + migrations share one SQL login | `env.ts`, `env-migrations.ts` (pre-change), Compose both pass `DB_USER` | P1 / P2 |
+ | Default identity is `sa` | `.env.example`, Compose healthcheck | P1 |
+ | No database roles for app before 089 | Grep: no prior `CREATE ROLE` / `GRANT` in migrations | P2 |
+ | No project `CREATE PROCEDURE` | Migrations inventory | — |
+ | Prod SQL not published | `docker-compose.prod.yml` `ports: !override []` | Positive |
+ | Dev SQL published | `1435:1433` on host | P2 (local only) |
+ | Encrypt defaults off | `DB_ENCRYPT=false`, `DB_TRUST_SERVER_CERTIFICATE=true` | P2 for remote; acceptable on private Docker network if documented |
+ 
+ ---
+@@ -103,57 +156,60 @@ Secrets: not printed; `.env` remains gitignored; examples use empty placeholders
+ 
+ **None.**
+ 
+ Rationale: no candidate met `SP_STRONG_CANDIDATE` with demonstrated atomicity/security gain over existing application transactions.
  
  ---
  
- ## 15. Performance/index review
+ ### 8. SP atomicity/concurrency tests
  
- Existing `IX_audit_logs_company_created_at` kept. No speculative new indexes.
+ **N/A** — no SPs implemented.
  
- ---
- 
- ## 16. Intentionally unchanged flows
- 
- | Flow | Status |
-@@ -176,39 +186,39 @@ Existing `IX_audit_logs_company_created_at` kept. No speculative new indexes.
- ## 17. Validation
- 
- See `audit/database-integrity-phase2-validation.txt`.
+ Phase 0A / purge lease / applock tests from prior phases remain the concurrency story for admin lifecycle.
  
  ---
  
- ## 18. Remaining issues
+ ### 9. Runtime permission model
  
- - Broader admin surfaces (work teams, imports) still largely best-effort; not P1 for Phase 2.
- - Full-repo eslint still has pre-existing unrelated errors.
- - Cleanup cascade warnings on company delete in tests are unrelated to audit atomicity.
+ | Capability | Decision |
+ |------------|----------|
+ | SELECT / INSERT / UPDATE / DELETE on `SCHEMA::dbo` | Required (repos + purge) |
+-| EXECUTE on `SCHEMA::dbo` | Granted for UDFs / future selective SPs |
+-| CREATE / ALTER / DROP (DDL) | **Not** granted to `dinamic_app_runtime` |
++| EXECUTE on `SCHEMA::dbo` | **Revoked / never granted** (corrections) |
++| EXECUTE on specific objects | **None** for runtime (no app UDF/proc calls) |
++| CREATE / ALTER / DROP (DDL) | **Not** granted |
+ | `db_owner` / `sysadmin` / `CONTROL` | Must not be used by runtime after cutover |
+ | Full EXECUTE-only | **REJECTED** |
  
- ---
- 
- ## Mandatory flow table
- 
- | Flow | Antes | Después | Audit crítico | Test rollback |
- |------|-------|---------|---------------|---------------|
- | Attendance review | COMMIT then audit | business + reviews + audit same TX | Yes | Yes |
- | Membership role/status | TX commit then `logAuditSafe` | audit in `beforeCommit` | Yes | Yes |
--| Invitation accept/decline | COMMIT then `logAuditSafe` | audit before COMMIT | Yes | Covered by pattern; membership/review carry injection evidence |
-+| Invitation accept/decline | COMMIT then `logAuditSafe` | audit before COMMIT | Yes | accept normal → pass; accept audit fail → pass; already-member success/fail → pass; decline success/fail → pass |
- | Company deactivate | lifecycle in-TX; audit best-effort | unchanged | Domain event critical | Existing lifecycle coverage |
- | Absence review | already in-TX | unchanged | Yes | Existing |
- | Payroll upload | post-write audit | unchanged BEST_EFFORT | No (GCS) | n/a |
+ Role: `dinamic_app_runtime` (migration `089`).
  
  ---
  
- ## Final matrix
+ ### 10. Migration permission model
  
- | Flow | Business TX | Audit mechanism | Atomic | Source of truth | Resultado |
- |------|-------------|-----------------|--------|-----------------|-----------|
- | Attendance review | Yes | audit_logs in-TX | Yes | attendance_reviews + audit_logs | FIXED |
- | Membership update success | Yes | audit_logs in-TX | Yes | memberships + audit_logs | FIXED |
- | Membership denial | No mutation | logAuditSafe | n/a | audit_logs best-effort | BEST_EFFORT_BY_DESIGN |
- | Invitation accept/decline | Yes | audit_logs in-TX | Yes | membership/invitation + audit | FIXED |
- | Company lifecycle | Yes | company_lifecycle_events | Yes | lifecycle events | ALREADY_SAFE |
- | Absence review | Yes | audit_logs in-TX | Yes | request + ledger/events | ALREADY_SAFE |
- | Payroll | Partial | audit_logs | No | receipt rows | BEST_EFFORT_BY_DESIGN |
- | Permissions | n/a | n/a | n/a | seed | NO_AUDIT_REQUIRED |
+ | Capability | Decision |
+ |------------|----------|
+ | CREATE TABLE/VIEW/PROCEDURE/FUNCTION/TYPE | Granted to `dinamic_app_migrations` |
+-| ALTER / REFERENCES / DML / EXECUTE on `SCHEMA::dbo` | Granted (backfills + FK work) |
++| ALTER / REFERENCES / DML on `SCHEMA::dbo` | Granted (backfills + FK work) |
++| EXECUTE on `SCHEMA::dbo` | **Not** granted |
++| EXECUTE on `dbo.fn_resolve_operation_timezone_for_sql` | Granted when object exists |
+ | `db_owner` / `sysadmin` | Not used by role definition |
+-| Identity | Prefer dedicated login via `DB_MIGRATION_*`; fallback `DB_*` |
++| Identity | Dedicated login via paired `DB_MIGRATION_*`; else shared `DB_*` |
+ 
+ Preserve Phase 1: one transaction per migration file + `system_migrations` registration.
+ 
+ ---
+ 
+ ### 11. Admin maintenance permission model
+ 
+ | Decision | Detail |
+ |----------|--------|
+ | `dinamic_app_admin_maintenance` | **DEFERRED** — no admin SPs yet; empty EXECUTE-only role adds no value |
+ | Current repair CLIs | Continue under migration or ops identity with DML; document risk |
+ | Future | If a recurring DB-only reconcile becomes EXEC-worthy, add SP + EXECUTE grant to admin role, then revoke ad hoc DML from operators |
+ 
+ ---
+ 
+ ### 12. Credential/deployment strategy
+ 
+ **Rollout (never REVOKE first):**
+ 
+ 1. Apply migration `089` (creates roles + GRANTs).
+@@ -272,44 +328,44 @@ Expected commands:
+ - Integration: `phase3-4-db-security.integration.test.ts` when SQL available
+ 
+ ---
+ 
+ ## Obligatory SP decision table
+ 
+ | Candidate | Decision | Why | Atomicity gain | Security gain | Tests |
+ |-----------|----------|-----|----------------|---------------|-------|
+ | Attendance / WhatsApp / payroll / invites / absences | KEEP_APP_TRANSACTION | Domain orchestration | None (already TX) | None | Prior phase suites |
+ | Company purge DB stages | KEEP_APP_TRANSACTION | Staged TX + GCS | None material | None without EXECUTE-only | Existing purge/lease |
+ | usp_company_purge_database_stage | NO_CHANGE | Cost > benefit | Low | Low | N/A |
+ | Repair/reconcile/backfill CLIs | KEEP_SCRIPT | Ops TS; not DB-only contracts | N/A | Low today | Existing script tests |
+ | Full EXECUTE-only | REJECTED | Rewrite all repos | N/A | Theoretical only | N/A |
+ 
+ ---
+ 
+ ## Obligatory permissions table
+ 
+ | Identity | SELECT | INSERT | UPDATE | DELETE | EXECUTE | DDL | Decision |
+ |----------|--------|--------|--------|--------|---------|-----|----------|
+-| Runtime (`dinamic_app_runtime`) | dbo schema | dbo | dbo | dbo | dbo schema | No | Role defined; map login in ops |
+-| Migrations (`dinamic_app_migrations`) | dbo | dbo | dbo | dbo | dbo | CREATE* + ALTER schema | Role defined; map login in ops |
++| Runtime (`dinamic_app_runtime`) | dbo schema | dbo | dbo | dbo | **none** | No | Proven via EXECUTE AS tests |
++| Migrations (`dinamic_app_migrations`) | dbo | dbo | dbo | dbo | **object:** `fn_resolve_operation_timezone_for_sql` | CREATE* + ALTER schema | Proven via EXECUTE AS tests |
+ | Admin maintenance | — | — | — | — | Future SPs only | No | DEFERRED |
+-| `sa` (bootstrap) | All | All | All | All | All | All | Break-glass only after cutover |
++| `sa` (bootstrap) | All | All | All | All | All | All | Break-glass / container bootstrap until cutover |
+ 
+ ---
+ 
+ ## Code / config delivered this phase
+ 
+ - `database/migrations/089_phase3_4_db_security_roles.sql`
+ - `database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql`
+ - `backend/src/config/migration-db-credentials.ts` (+ unit tests)
+ - `backend/src/config/env-migrations.ts` (optional dedicated migration identity)
+ - `backend/src/database/phase3-4-db-security.integration.test.ts`
+ - Compose / `.env.example` documentation for `DB_MIGRATION_*`
+ 
+ ---
+ 
+ ## Priorities summary
+ 
+ | ID | Finding | Action |
+ |----|---------|--------|
+ | P1 | Shared `sa` for app | Runbook cutover; roles ready |
+ | P2 | Runtime/migration same identity | Optional `DB_MIGRATION_*` + Compose wiring |
 diff --git a/audit/implementation-corrections-validation.txt b/audit/implementation-corrections-validation.txt
-index 7b489a4..86a7e1e 100644
+index 86a7e1e..d63aa5f 100644
 --- a/audit/implementation-corrections-validation.txt
 +++ b/audit/implementation-corrections-validation.txt
-@@ -1,54 +1,35 @@
--# Phase 1 corrections — validation evidence
-+# Phase 2 corrections — validation evidence
- Date: 2026-08-07
+@@ -1,35 +1,50 @@
+-# Phase 2 corrections — validation evidence
+-Date: 2026-08-07
++# Phase 3 & 4 corrections — validation log
++# Generated: 2026-08-07
++# No secrets included.
  
--## Commands
--
--### npm run build (backend)
+-## npm run build (backend)
 -exit code: 0
--result: pass (tsc)
--
--### npx eslint (changed Phase 1 correction files only)
-+## npm run build (backend)
- exit code: 0
- result: pass
--files:
--  - src/database/run-migrations.ts
--  - src/database/run-migrations.test.ts
--  - src/database/phase1-migration-safety.integration.test.ts
--  - src/services/database-integrity-phase1.integration.test.ts
--  - src/test-helpers/composite-fk-metadata.ts
--
--### npm run lint (full backend)
--exit code: 0 (tool reported) / 63 pre-existing errors in unrelated files
--result: pre-existing failures unrelated to Phase 1 corrections (not introduced here)
- 
--### npm run migrate
--exit code: 0
--result: Migration applied: 088_phase1_work_team_members_contract.sql
--
--### npm run migrate:status
-+## eslint (touched files)
-+files:
-+  - src/utils/audit-sanitize.ts
-+  - src/utils/audit-sanitize.test.ts
-+  - src/repositories/audit.repository.ts
-+  - src/services/database-integrity-phase2.integration.test.ts
- exit code: 0
--result: 087 and 088 both applied
-+result: pass
- 
--### npm test (unit)
-+## npm test (unit)
- exit code: 0
--result: tests 1224 / pass 1224 / fail 0
-+result: pass (includes sanitizeAuditPayload 3/3)
- 
--### Phase 1 + migration-safety integration
-+## Phase 2 SQL Server integration
- command:
-   EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit \
--    src/database/phase1-migration-safety.integration.test.ts \
--    src/database/run-migrations.test.ts \
--    src/services/database-integrity-phase1.integration.test.ts
-+    src/services/database-integrity-phase2.integration.test.ts
- exit code: 0
--result: tests 23 / pass 23 / fail 0
--  - failure injection (CREATE + THROW): pass
--  - failure injection (DROP FK + THROW): pass
--  - 088 forward/rollback/forward: pass
--  - 087 forward/rollback/forward: pass
--  - cross-tenant matrix + FK metadata: pass
--
--## Decisions (short)
--1. Runner: one TDS Transaction per migration file
--2. work_team_members: 087 expand + 088 contract (rolling deploy)
--3. 087 edited locally; 088 additive
--4. work-team remove/exists: NO_CHANGE
-+tests: 12
-+pass: 12
-+fail: 0
-+skipped: 0
-+coverage:
-+  - attendance success / audit fail / concurrent
-+  - membership success / audit fail / last-owner
-+  - invitation accept success / audit fail
-+  - already-member accept success / audit fail
-+  - decline success / audit fail
-diff --git a/backend/src/repositories/audit.repository.ts b/backend/src/repositories/audit.repository.ts
-index 939706b..21a6932 100644
---- a/backend/src/repositories/audit.repository.ts
-+++ b/backend/src/repositories/audit.repository.ts
-@@ -1,53 +1,54 @@
- import sql from "mssql";
- import { getPool } from "../database/connection";
- 
-+export type AuditLogInsertInput = {
-+  companyId: string;
-+  entityType: string;
-+  entityId: string;
-+  action: string;
-+  previousData?: string | null;
-+  newData?: string | null;
-+  reason?: string | null;
-+  userId?: string | null;
-+};
++## Commands
 +
- /**
-  * Test-only seam: runs immediately before the audit_logs INSERT so integration tests
-  * can force a failure inside an open business transaction. Production never sets this.
-+ * Hook receives the insert input so callers can filter by action (e.g. skip best-effort
-+ * `invitation_accept_started` while failing only `invitation_accepted`).
-  */
--type AuditBeforeInsertHook = () => Promise<void>;
-+type AuditBeforeInsertHook = (input: AuditLogInsertInput) => Promise<void>;
++### backend build
++command: cd backend && npm run build
++exit_code: 0
++result: pass
++
++### eslint (touched Phase 3–4 TS)
++command: npx eslint src/config/migration-db-credentials.ts src/config/migration-db-credentials.test.ts src/config/env-migrations.ts src/database/phase3-4-db-security.integration.test.ts
++exit_code: 0
++result: pass
++
++### unit — credential resolver
++command: npx tsx --test src/config/migration-db-credentials.test.ts
++exit_code: 0
+ result: pass
++notes: 6/6
  
- let auditBeforeInsertHookForTests: AuditBeforeInsertHook | undefined;
+-## eslint (touched files)
+-files:
+-  - src/utils/audit-sanitize.ts
+-  - src/utils/audit-sanitize.test.ts
+-  - src/repositories/audit.repository.ts
+-  - src/services/database-integrity-phase2.integration.test.ts
+-exit code: 0
++### unit — full suite
++command: node ./scripts/run-unit-tests.mjs
++exit_code: 0
+ result: pass
++notes: tests 1228 fail 0
++
++### integration — phase3-4 effective permissions
++command: RUN_DB_INTEGRATION_TESTS=true … phase3-4-db-security.integration.test.ts
++exit_code: 0
++result: pass
++notes: 7 pass, 1 skip (optional real-login ops smoke)
++
++### docker compose prod overlay
++command: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
++exit_code: 0
++result: pass
++notes: warnings for unset optional env in bare shell; "no port specified" from empty frontend host port override (pre-existing)
++
++## Summary
  
- export const setAuditBeforeInsertHookForTests = (
-   hook: AuditBeforeInsertHook | undefined,
- ): void => {
-   auditBeforeInsertHookForTests = hook;
+-## npm test (unit)
+-exit code: 0
+-result: pass (includes sanitizeAuditPayload 3/3)
+-
+-## Phase 2 SQL Server integration
+-command:
+-  EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit \
+-    src/services/database-integrity-phase2.integration.test.ts
+-exit code: 0
+-tests: 12
+-pass: 12
+-fail: 0
+-skipped: 0
+-coverage:
+-  - attendance success / audit fail / concurrent
+-  - membership success / audit fail / last-owner
+-  - invitation accept success / audit fail
+-  - already-member accept success / audit fail
+-  - decline success / audit fail
++| Check | Result |
++|-------|--------|
++| Runtime no schema EXECUTE | pass |
++| Future proc denied under runtime | pass |
++| Migration DDL/DML/system_migrations | pass |
++| Credential XOR rejected | pass |
++| 089 rollback/forward + drift | pass |
++| Real login cutover smoke | skip (ops) |
+diff --git a/backend/.env.example b/backend/.env.example
+index 72d3d7f..5e0809d 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -1,37 +1,38 @@
+ # Variables para ejecutar el backend fuera de Docker (npm run dev en backend/).
+ # En producción con Docker Compose, usá el `.env` raíz del monorepo.
+ 
+ NODE_ENV=development
+ PORT=3000
+ FRONTEND_URL=http://localhost:5173
+ APP_BASE_URL=http://localhost:3000
+ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+ TZ=America/Argentina/Buenos_Aires
+ 
+ DB_HOST=localhost
+ DB_PORT=14330
+ DB_NAME=dinamic_attendance
+ # Runtime identity. Prefer a login in role dinamic_app_runtime (not sa) in non-local envs.
+ DB_USER=sa
+ DB_PASSWORD=
+-# Optional: dedicated migration identity for `npm run migrate` (falls back to DB_*).
++# Optional dedicated migration identity for `npm run migrate`.
++# Both unset → DB_USER/DB_PASSWORD. Both set → dedicated. Partial pair → config error.
+ # DB_MIGRATION_USER=
+ # DB_MIGRATION_PASSWORD=
+ DB_ENCRYPT=false
+ DB_TRUST_SERVER_CERTIFICATE=true
+ 
+ TWILIO_ACCOUNT_SID=
+ TWILIO_AUTH_TOKEN=
+ TWILIO_WHATSAPP_NUMBER=
+ TWILIO_WEBHOOK_URL=
+ # Debe coincidir exactamente con la URL pública configurada en Twilio (sin slash final).
+ TWILIO_VALIDATE_SIGNATURE=false
+ TWILIO_ARRIVAL_REMINDER_CONTENT_SID=
+ TWILIO_EXIT_REMINDER_CONTENT_SID=
+ TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID=
+ TWILIO_TEMPLATE_NO_CHECKIN_SID=
+ TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID=
+ # Content template variables: single body var {{1}} = MM/YY (e.g. 07/26). Do not include employee name.
+ # Public HTTPS URL for Twilio delivery status callbacks (e.g. https://api.example.com/api/webhooks/twilio/whatsapp/status)
+ TWILIO_STATUS_CALLBACK_URL=
+ ATTENDANCE_REMINDER_JOB_ENABLED=true
+diff --git a/backend/src/config/env-migrations.ts b/backend/src/config/env-migrations.ts
+index 9ab6e3f..94e599e 100644
+--- a/backend/src/config/env-migrations.ts
++++ b/backend/src/config/env-migrations.ts
+@@ -1,50 +1,68 @@
+ import { config } from "dotenv";
+ import { z } from "zod";
+-import { resolveMigrationDbCredentials } from "./migration-db-credentials";
++import {
++  MigrationCredentialConfigError,
++  resolveMigrationDbCredentials,
++} from "./migration-db-credentials";
+ 
+ config();
+ 
+ const migrationEnvSchema = z.object({
+   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+   TZ: z.string().min(1).default("America/Argentina/Buenos_Aires"),
+   DB_HOST: z.string().min(1),
+   DB_PORT: z.coerce.number().int().positive().default(1433),
+   DB_NAME: z.string().min(1),
+   /** Runtime / shared fallback identity (historical DB_USER). */
+   DB_USER: z.string().min(1),
+   DB_PASSWORD: z.string().min(1),
+   /**
+    * Optional dedicated migration identity (Phases 3–4).
+-   * When unset, migrations continue using DB_USER / DB_PASSWORD (backwards compatible).
++   * Must be set as a pair with DB_MIGRATION_PASSWORD, or both omitted (shared mode).
++   * Resolution + pair validation: resolveMigrationDbCredentials (single source of truth).
+    */
+-  DB_MIGRATION_USER: z.string().min(1).optional(),
+-  DB_MIGRATION_PASSWORD: z.string().min(1).optional(),
++  DB_MIGRATION_USER: z.string().optional(),
++  DB_MIGRATION_PASSWORD: z.string().optional(),
+   DB_ENCRYPT: z.stringbool().default(false),
+   DB_TRUST_SERVER_CERTIFICATE: z.stringbool().default(true),
+ });
+ 
+ const parsed = migrationEnvSchema.safeParse(process.env);
+ 
+ if (!parsed.success) {
+   console.error("Invalid migration environment variables:");
+   console.error(parsed.error.format());
+   process.exit(1);
+ }
+ 
+ const raw = parsed.data;
+-const credentials = resolveMigrationDbCredentials(raw);
++
++let credentials: ReturnType<typeof resolveMigrationDbCredentials>;
++try {
++  credentials = resolveMigrationDbCredentials(raw);
++} catch (error) {
++  if (error instanceof MigrationCredentialConfigError) {
++    console.error("Invalid migration environment variables:");
++    console.error(error.message);
++    process.exit(1);
++  }
++  throw error;
++}
+ 
+ export const migrationEnv = {
+   NODE_ENV: raw.NODE_ENV,
+   TZ: raw.TZ,
+   DB_HOST: raw.DB_HOST,
+   DB_PORT: raw.DB_PORT,
+   DB_NAME: raw.DB_NAME,
+   DB_USER: credentials.user,
+   DB_PASSWORD: credentials.password,
+   DB_ENCRYPT: raw.DB_ENCRYPT,
+   DB_TRUST_SERVER_CERTIFICATE: raw.DB_TRUST_SERVER_CERTIFICATE,
+   usesDedicatedMigrationIdentity: credentials.usesDedicatedMigrationIdentity,
  };
  
- export const auditRepository = {
--  async log(
--    input: {
--      companyId: string;
--      entityType: string;
--      entityId: string;
--      action: string;
--      previousData?: string | null;
--      newData?: string | null;
--      reason?: string | null;
--      userId?: string | null;
--    },
--    transaction?: sql.Transaction,
--  ): Promise<void> {
-+  async log(input: AuditLogInsertInput, transaction?: sql.Transaction): Promise<void> {
-     if (auditBeforeInsertHookForTests) {
--      await auditBeforeInsertHookForTests();
-+      await auditBeforeInsertHookForTests(input);
-     }
+-export { resolveMigrationDbCredentials } from "./migration-db-credentials";
++export {
++  MigrationCredentialConfigError,
++  resolveMigrationDbCredentials,
++} from "./migration-db-credentials";
+diff --git a/backend/src/config/migration-db-credentials.test.ts b/backend/src/config/migration-db-credentials.test.ts
+index ecdd27c..0766c5a 100644
+--- a/backend/src/config/migration-db-credentials.test.ts
++++ b/backend/src/config/migration-db-credentials.test.ts
+@@ -1,42 +1,95 @@
+ import assert from "node:assert/strict";
+ import { describe, it } from "node:test";
+-import { resolveMigrationDbCredentials } from "./migration-db-credentials";
++import {
++  MigrationCredentialConfigError,
++  resolveMigrationDbCredentials,
++} from "./migration-db-credentials";
  
-     const request = transaction ? new sql.Request(transaction) : getPool().request();
-     await request
-       .input("companyId", sql.UniqueIdentifier, input.companyId)
-       .input("entityType", sql.NVarChar(50), input.entityType)
-       .input("entityId", sql.UniqueIdentifier, input.entityId)
-       .input("action", sql.NVarChar(50), input.action)
-       .input("previousData", sql.NVarChar(sql.MAX), input.previousData ?? null)
-       .input("newData", sql.NVarChar(sql.MAX), input.newData ?? null)
-       .input("reason", sql.NVarChar(500), input.reason ?? null)
-       .input("userId", sql.UniqueIdentifier, input.userId ?? null)
-       .query(`
-         INSERT INTO audit_logs (
-           company_id, entity_type, entity_id, action, previous_data, new_data, reason, user_id
-         )
-         VALUES (
-           @companyId, @entityType, @entityId, @action, @previousData, @newData, @reason, @userId
-         )
-       `);
-diff --git a/backend/src/services/database-integrity-phase2.integration.test.ts b/backend/src/services/database-integrity-phase2.integration.test.ts
-index 694d229..ee16ef8 100644
---- a/backend/src/services/database-integrity-phase2.integration.test.ts
-+++ b/backend/src/services/database-integrity-phase2.integration.test.ts
-@@ -1,43 +1,47 @@
+ describe("resolveMigrationDbCredentials", () => {
+   it("falls back to DB_USER/DB_PASSWORD when migration identity is unset", () => {
+     const resolved = resolveMigrationDbCredentials({
+       DB_USER: "sa",
+       DB_PASSWORD: "shared-secret",
+     });
+     assert.deepEqual(resolved, {
+       user: "sa",
+       password: "shared-secret",
+       usesDedicatedMigrationIdentity: false,
+     });
+   });
+ 
++  it("treats whitespace-only migration user/password as unset (shared mode)", () => {
++    const resolved = resolveMigrationDbCredentials({
++      DB_USER: "sa",
++      DB_PASSWORD: "shared-secret",
++      DB_MIGRATION_USER: "   ",
++      DB_MIGRATION_PASSWORD: "\t",
++    });
++    assert.deepEqual(resolved, {
++      user: "sa",
++      password: "shared-secret",
++      usesDedicatedMigrationIdentity: false,
++    });
++  });
++
+   it("uses dedicated migration user and password when both are set", () => {
+     const resolved = resolveMigrationDbCredentials({
+       DB_USER: "dinamic_runtime",
+       DB_PASSWORD: "runtime-secret",
+       DB_MIGRATION_USER: "dinamic_migrations",
+       DB_MIGRATION_PASSWORD: "migration-secret",
+     });
+     assert.deepEqual(resolved, {
+       user: "dinamic_migrations",
+       password: "migration-secret",
+       usesDedicatedMigrationIdentity: true,
+     });
+   });
+ 
+-  it("falls back migration password to DB_PASSWORD when only migration user is set", () => {
+-    const resolved = resolveMigrationDbCredentials({
+-      DB_USER: "dinamic_runtime",
+-      DB_PASSWORD: "shared-secret",
+-      DB_MIGRATION_USER: "dinamic_migrations",
+-    });
+-    assert.equal(resolved.user, "dinamic_migrations");
+-    assert.equal(resolved.password, "shared-secret");
+-    assert.equal(resolved.usesDedicatedMigrationIdentity, true);
++  it("rejects migration user only (no silent password reuse)", () => {
++    assert.throws(
++      () =>
++        resolveMigrationDbCredentials({
++          DB_USER: "dinamic_runtime",
++          DB_PASSWORD: "runtime-secret",
++          DB_MIGRATION_USER: "dinamic_migrations",
++        }),
++      (error: unknown) => {
++        assert.ok(error instanceof MigrationCredentialConfigError);
++        assert.match(error.message, /DB_MIGRATION_PASSWORD/);
++        assert.doesNotMatch(error.message, /runtime-secret|migration-secret/);
++        return true;
++      },
++    );
++  });
++
++  it("rejects migration password only", () => {
++    assert.throws(
++      () =>
++        resolveMigrationDbCredentials({
++          DB_USER: "dinamic_runtime",
++          DB_PASSWORD: "runtime-secret",
++          DB_MIGRATION_PASSWORD: "migration-secret",
++        }),
++      (error: unknown) => {
++        assert.ok(error instanceof MigrationCredentialConfigError);
++        assert.match(error.message, /DB_MIGRATION_USER/);
++        assert.doesNotMatch(error.message, /runtime-secret|migration-secret/);
++        return true;
++      },
++    );
++  });
++
++  it("rejects whitespace-only password when migration user is set", () => {
++    assert.throws(
++      () =>
++        resolveMigrationDbCredentials({
++          DB_USER: "dinamic_runtime",
++          DB_PASSWORD: "runtime-secret",
++          DB_MIGRATION_USER: "dinamic_migrations",
++          DB_MIGRATION_PASSWORD: "   ",
++        }),
++      MigrationCredentialConfigError,
++    );
+   });
+ });
+diff --git a/backend/src/config/migration-db-credentials.ts b/backend/src/config/migration-db-credentials.ts
+index cbed581..83854e2 100644
+--- a/backend/src/config/migration-db-credentials.ts
++++ b/backend/src/config/migration-db-credentials.ts
+@@ -1,24 +1,54 @@
  /**
-- * Phase 2 — transactional audit evidence (attendance review + membership).
-+ * Phase 2 — transactional audit evidence (attendance, membership, invitations).
+  * Pure helper for migration SQL identity resolution (Phases 3–4).
+  * Kept free of dotenv / process.exit so unit tests can import safely.
++ *
++ * Modes:
++ * - Shared: both DB_MIGRATION_USER and DB_MIGRATION_PASSWORD unset/whitespace → DB_USER/DB_PASSWORD
++ * - Dedicated: both set (non-whitespace) → migration credentials
++ * - Partial (XOR): configuration error — never silently reuse runtime password
+  */
++export class MigrationCredentialConfigError extends Error {
++  constructor(message: string) {
++    super(message);
++    this.name = "MigrationCredentialConfigError";
++  }
++}
++
++const isPresent = (value: string | undefined): boolean =>
++  value !== undefined && value.trim() !== "";
++
+ export const resolveMigrationDbCredentials = (input: {
+   DB_USER: string;
+   DB_PASSWORD: string;
+   DB_MIGRATION_USER?: string;
+   DB_MIGRATION_PASSWORD?: string;
+ }): { user: string; password: string; usesDedicatedMigrationIdentity: boolean } => {
+-  const dedicatedUser = input.DB_MIGRATION_USER?.trim();
+-  if (!dedicatedUser) {
++  const hasUser = isPresent(input.DB_MIGRATION_USER);
++  const hasPassword = isPresent(input.DB_MIGRATION_PASSWORD);
++
++  if (!hasUser && !hasPassword) {
+     return {
+       user: input.DB_USER,
+       password: input.DB_PASSWORD,
+       usesDedicatedMigrationIdentity: false,
+     };
+   }
+-  return {
+-    user: dedicatedUser,
+-    password: input.DB_MIGRATION_PASSWORD ?? input.DB_PASSWORD,
+-    usesDedicatedMigrationIdentity: true,
+-  };
++
++  if (hasUser && hasPassword) {
++    return {
++      user: input.DB_MIGRATION_USER!.trim(),
++      password: input.DB_MIGRATION_PASSWORD!,
++      usesDedicatedMigrationIdentity: true,
++    };
++  }
++
++  if (hasUser && !hasPassword) {
++    throw new MigrationCredentialConfigError(
++      "DB_MIGRATION_USER is set but DB_MIGRATION_PASSWORD is missing or blank. Set both for dedicated migration identity, or unset both to use DB_USER/DB_PASSWORD.",
++    );
++  }
++
++  throw new MigrationCredentialConfigError(
++    "DB_MIGRATION_PASSWORD is set but DB_MIGRATION_USER is missing or blank. Set both for dedicated migration identity, or unset both to use DB_USER/DB_PASSWORD.",
++  );
+ };
+diff --git a/backend/src/database/phase3-4-db-security.integration.test.ts b/backend/src/database/phase3-4-db-security.integration.test.ts
+index 967a8b6..1c97bf9 100644
+--- a/backend/src/database/phase3-4-db-security.integration.test.ts
++++ b/backend/src/database/phase3-4-db-security.integration.test.ts
+@@ -1,178 +1,498 @@
+ /**
+- * Phases 3 & 4 — security roles foundation + optional privilege denial checks.
++ * Phases 3 & 4 corrections — role semantics via CREATE USER WITHOUT LOGIN + EXECUTE AS.
   * Enable: RUN_DB_INTEGRATION_TESTS=true
-+ * Keep --test-concurrency=1 while using the global audit insert hook.
+- * Optional denial suite: RUN_DB_PRIVILEGE_TESTS=true + DB_PRIVILEGE_TEST_USER/PASSWORD
+- *   (SQL login mapped to dinamic_app_runtime, not sa/db_owner)
++ * Optional real-login smoke: RUN_DB_PRIVILEGE_TESTS=true + DB_PRIVILEGE_TEST_USER/PASSWORD
   */
  import assert from "node:assert/strict";
- import { randomUUID } from "node:crypto";
+ import { readFileSync } from "node:fs";
+ import { join } from "node:path";
  import { after, before, it } from "node:test";
  import sql from "mssql";
  import {
@@ -415,599 +790,813 @@ index 694d229..ee16ef8 100644
    setupDatabaseIntegration,
    teardownDatabaseIntegration,
  } from "../test-helpers/integration-test";
- import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
  import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
- import { getPool } from "../database/connection";
- import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
- import { AppError } from "../errors/app-error";
- import { setAuditBeforeInsertHookForTests } from "../repositories/audit.repository";
-+import { userInvitationRepository } from "../repositories/user-invitation.repository";
- import { userRepository } from "../repositories/user.repository";
- import { attendanceService } from "./attendance.service";
- import { companyUserService } from "./company-user.service";
- import { operationAssignmentService } from "./operation-assignment.service";
-+import { userInvitationService } from "./user-invitation.service";
-+import { generateInvitationToken, hashInvitationToken } from "../utils/invitation-token";
- import { hashPassword, normalizeEmail } from "../utils/password";
+ import { getPool } from "./connection";
+ import { applySqlScriptInTransaction } from "./run-migrations";
  
- const uniqueCompanyName = (): string =>
-   `Phase2Audit ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ const migrationsDir =
+   process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");
  
- const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}`;
++const RUNTIME_TEST_USER = "phase34_runtime_test";
++const MIGRATION_TEST_USER = "phase34_migration_test";
++const PROBE_TABLE = "phase34_perm_probe";
++const MIG_PROBE_TABLE = "phase34_mig_probe";
++const ADMIN_PROBE_PROC = "phase34_admin_probe";
++const FAKE_MIGRATION_NAME = "__phase34_probe_not_a_real_migration__";
++
+ const privilegeTestsEnabled =
+   process.env.RUN_DB_PRIVILEGE_TESTS === "true" &&
+   Boolean(process.env.DB_PRIVILEGE_TEST_USER) &&
+   Boolean(process.env.DB_PRIVILEGE_TEST_PASSWORD);
  
- describeDatabaseIntegration("database integrity phase2 transactional audit", () => {
-   const createdCompanyIds: string[] = [];
-   const fixtures = createIntegrationFixtureTracker();
++const readMigration = (name: string): string =>
++  readFileSync(join(migrationsDir, name), "utf8");
++
++const readRollback = (name: string): string =>
++  readFileSync(join(migrationsDir, "rollback", name), "utf8");
++
+ const roleExists = async (roleName: string): Promise<boolean> => {
+   const result = await getPool()
+     .request()
+     .input("name", sql.NVarChar(256), roleName)
+     .query(`
+       SELECT 1 AS found
+       FROM sys.database_principals
+       WHERE name = @name AND type = 'R'
+     `);
+   return Boolean(result.recordset[0]);
+ };
  
++const userExists = async (userName: string): Promise<boolean> => {
++  const result = await getPool()
++    .request()
++    .input("name", sql.NVarChar(256), userName)
++    .query(`
++      SELECT 1 AS found
++      FROM sys.database_principals
++      WHERE name = @name AND type IN ('S', 'U')
++    `);
++  return Boolean(result.recordset[0]);
++};
++
++const tableExists = async (tableName: string): Promise<boolean> => {
++  const result = await getPool()
++    .request()
++    .input("name", sql.NVarChar(256), `dbo.${tableName}`)
++    .query(`SELECT CASE WHEN OBJECT_ID(@name, 'U') IS NULL THEN 0 ELSE 1 END AS found`);
++  return Boolean(result.recordset[0]?.found);
++};
++
+ const schemaPermissionGranted = async (
+   roleName: string,
+   permissionName: string,
+ ): Promise<boolean> => {
+   const result = await getPool()
+     .request()
+     .input("roleName", sql.NVarChar(256), roleName)
+     .input("permissionName", sql.NVarChar(128), permissionName)
+     .query(`
+       SELECT 1 AS found
+       FROM sys.database_permissions p
+       INNER JOIN sys.database_principals r ON r.principal_id = p.grantee_principal_id
+       INNER JOIN sys.schemas s ON s.schema_id = p.major_id AND p.class_desc = 'SCHEMA'
+       WHERE r.name = @roleName
+         AND s.name = N'dbo'
+         AND p.permission_name = @permissionName
+         AND p.state_desc = 'GRANT'
+     `);
+   return Boolean(result.recordset[0]);
+ };
+ 
+-describeDatabaseIntegration("phase3-4 db security roles", () => {
++const objectExecuteGranted = async (roleName: string, objectName: string): Promise<boolean> => {
++  const result = await getPool()
++    .request()
++    .input("roleName", sql.NVarChar(256), roleName)
++    .input("objectName", sql.NVarChar(256), objectName)
++    .query(`
++      SELECT 1 AS found
++      FROM sys.database_permissions p
++      INNER JOIN sys.database_principals r ON r.principal_id = p.grantee_principal_id
++      INNER JOIN sys.objects o ON o.object_id = p.major_id AND p.class_desc = 'OBJECT_OR_COLUMN'
++      WHERE r.name = @roleName
++        AND o.name = @objectName
++        AND p.permission_name = N'EXECUTE'
++        AND p.state_desc = 'GRANT'
++    `);
++  return Boolean(result.recordset[0]);
++};
++
++const dropUserIfExists = async (userName: string): Promise<void> => {
++  if (!(await userExists(userName))) {
++    return;
++  }
++  await getPool()
++    .request()
++    .input("userName", sql.NVarChar(256), userName)
++    .query(`
++      DECLARE @sql NVARCHAR(500) = N'DROP USER ' + QUOTENAME(@userName);
++      EXEC sys.sp_executesql @sql;
++    `);
++};
++
++const dropRoleMemberIfPresent = async (roleName: string, memberName: string): Promise<void> => {
++  await getPool()
++    .request()
++    .input("roleName", sql.NVarChar(256), roleName)
++    .input("memberName", sql.NVarChar(256), memberName)
++    .query(`
++      IF EXISTS (
++        SELECT 1
++        FROM sys.database_role_members rm
++        INNER JOIN sys.database_principals r ON r.principal_id = rm.role_principal_id
++        INNER JOIN sys.database_principals m ON m.principal_id = rm.member_principal_id
++        WHERE r.name = @roleName AND m.name = @memberName
++      )
++      BEGIN
++        DECLARE @sql NVARCHAR(500) =
++          N'ALTER ROLE ' + QUOTENAME(@roleName) + N' DROP MEMBER ' + QUOTENAME(@memberName);
++        EXEC sys.sp_executesql @sql;
++      END
++    `);
++};
++
++const cleanupFixtures = async (): Promise<void> => {
++  const pool = getPool();
++  await pool.request().query(`
++    IF OBJECT_ID(N'dbo.${ADMIN_PROBE_PROC}', N'P') IS NOT NULL
++      DROP PROCEDURE dbo.${ADMIN_PROBE_PROC};
++    IF OBJECT_ID(N'dbo.${PROBE_TABLE}', N'U') IS NOT NULL
++      DROP TABLE dbo.${PROBE_TABLE};
++    IF OBJECT_ID(N'dbo.${MIG_PROBE_TABLE}', N'U') IS NOT NULL
++      DROP TABLE dbo.${MIG_PROBE_TABLE};
++    DELETE FROM dbo.system_migrations WHERE migration_name = N'${FAKE_MIGRATION_NAME}';
++  `);
++  await dropRoleMemberIfPresent("dinamic_app_runtime", RUNTIME_TEST_USER);
++  await dropRoleMemberIfPresent("dinamic_app_migrations", MIGRATION_TEST_USER);
++  await dropUserIfExists(RUNTIME_TEST_USER);
++  await dropUserIfExists(MIGRATION_TEST_USER);
++};
++
++const resetRolesViaRollbackAnd089 = async (): Promise<void> => {
++  await cleanupFixtures();
++  if ((await roleExists("dinamic_app_runtime")) || (await roleExists("dinamic_app_migrations"))) {
++    await applySqlScriptInTransaction(
++      getPool(),
++      readRollback("089_phase3_4_db_security_roles_rollback.sql"),
++    );
++  }
++  assert.equal(await roleExists("dinamic_app_runtime"), false);
++  assert.equal(await roleExists("dinamic_app_migrations"), false);
++  await applySqlScriptInTransaction(getPool(), readMigration("089_phase3_4_db_security_roles.sql"));
++  await applySqlScriptInTransaction(
++    getPool(),
++    readMigration("090_phase3_4_revoke_schema_execute.sql"),
++  );
++};
++
++const isPermissionError = (error: unknown): boolean => {
++  const message = error instanceof Error ? error.message : String(error);
++  return /permission|denied|not authorized|do not have|cannot|failed/i.test(message);
++};
++
++describeDatabaseIntegration("phase3-4 db security roles (corrections)", () => {
    before(async () => {
      setupUnitTestEnv();
      await setupDatabaseIntegration();
+-    const script = readFileSync(
+-      join(migrationsDir, "089_phase3_4_db_security_roles.sql"),
+-      "utf8",
+-    );
+-    await applySqlScriptInTransaction(getPool(), script);
++    await resetRolesViaRollbackAnd089();
    });
  
    after(async () => {
-     setAuditBeforeInsertHookForTests(undefined);
-     const { deleteCompanyCascade } = await import("../test-helpers/integration-cleanup");
-     for (const companyId of createdCompanyIds) {
-@@ -206,52 +210,53 @@ describeDatabaseIntegration("database integrity phase2 transactional audit", ()
- 
-     const reviews = await pool
-       .request()
-       .input("companyId", sql.UniqueIdentifier, companyId)
-       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
-       .query(`
-         SELECT COUNT(*) AS total FROM attendance_reviews
-         WHERE company_id = @companyId AND attendance_id = @attendanceId
-       `);
-     assert.equal(Number(reviews.recordset[0].total), 1);
-     assert.equal(await countAudit(companyId, attendanceId, "review"), 1);
++    try {
++      await cleanupFixtures();
++    } catch (error) {
++      console.warn("[phase3-4-security] fixture cleanup failed", error);
++    }
+     await teardownDatabaseIntegration();
    });
  
-   it("attendance review rolls back when audit insert fails", async () => {
-     const { companyId, actorUserId } = await seedCompany();
-     const attendanceId = await createPendingReviewAttendance(companyId);
- 
-     setAuditBeforeInsertHookForTests(async () => {
-       throw new Error("injected audit failure for phase2 attendance review");
-     });
--
--    await assert.rejects(
--      () =>
--        attendanceService.review(companyId, attendanceId, actorUserId, {
--          decision: "APPROVE",
--          reason: "should rollback",
--        }),
--      (error: unknown) =>
--        error instanceof Error && error.message.includes("injected audit failure"),
--    );
--
--    setAuditBeforeInsertHookForTests(undefined);
-+    try {
-+      await assert.rejects(
-+        () =>
-+          attendanceService.review(companyId, attendanceId, actorUserId, {
-+            decision: "APPROVE",
-+            reason: "should rollback",
-+          }),
-+        (error: unknown) =>
-+          error instanceof Error && error.message.includes("injected audit failure"),
-+      );
-+    } finally {
-+      setAuditBeforeInsertHookForTests(undefined);
+-  it("creates dinamic_app_runtime and dinamic_app_migrations roles", async () => {
++  it("creates roles without schema-level EXECUTE for runtime", async () => {
+     assert.equal(await roleExists("dinamic_app_runtime"), true);
+     assert.equal(await roleExists("dinamic_app_migrations"), true);
++    for (const permission of ["SELECT", "INSERT", "UPDATE", "DELETE"]) {
++      assert.equal(await schemaPermissionGranted("dinamic_app_runtime", permission), true);
 +    }
- 
-     const pool = getPool();
-     const record = await pool
-       .request()
-       .input("companyId", sql.UniqueIdentifier, companyId)
-       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
-       .query(`
-         SELECT validation_status, reviewed_at
-         FROM attendance_records
-         WHERE id = @attendanceId AND company_id = @companyId
-       `);
-     assert.equal(String(record.recordset[0].validation_status), "PENDING_REVIEW");
-     assert.equal(record.recordset[0].reviewed_at, null);
- 
-     const reviews = await pool
-       .request()
-       .input("companyId", sql.UniqueIdentifier, companyId)
-       .input("attendanceId", sql.UniqueIdentifier, attendanceId)
-       .query(`
-         SELECT COUNT(*) AS total FROM attendance_reviews
-@@ -366,56 +371,57 @@ describeDatabaseIntegration("database integrity phase2 transactional audit", ()
-     const { companyId, actorUserId } = await seedCompany();
-     const passwordHash = await hashPassword("phase2-member-fail");
-     const member = await userRepository.create({
-       name: "Phase2 Member Fail",
-       email: normalizeEmail(`phase2.member.fail.${randomUUID()}@example.com`),
-       passwordHash,
-       role: "ADMIN",
-     });
-     await getPool()
-       .request()
-       .input("userId", sql.UniqueIdentifier, member.id)
-       .input("companyId", sql.UniqueIdentifier, companyId)
-       .query(`
-         INSERT INTO user_company_memberships (user_id, company_id, role, status, is_default)
-         VALUES (@userId, @companyId, N'OPERATOR', N'ACTIVE', 0)
-       `);
- 
-     setAuditBeforeInsertHookForTests(async () => {
-       throw new Error("injected audit failure for phase2 membership");
-     });
--
--    await assert.rejects(
--      () =>
--        companyUserService.update(
--          companyId,
--          member.id,
--          { role: "ADMIN" },
--          actorUserId,
--          true,
--          "OWNER",
--        ),
--      (error: unknown) =>
--        error instanceof Error && error.message.includes("injected audit failure"),
--    );
--
--    setAuditBeforeInsertHookForTests(undefined);
-+    try {
-+      await assert.rejects(
-+        () =>
-+          companyUserService.update(
-+            companyId,
-+            member.id,
-+            { role: "ADMIN" },
-+            actorUserId,
-+            true,
-+            "OWNER",
-+          ),
-+        (error: unknown) =>
-+          error instanceof Error && error.message.includes("injected audit failure"),
-+      );
-+    } finally {
-+      setAuditBeforeInsertHookForTests(undefined);
-+    }
- 
-     const membership = await getPool()
-       .request()
-       .input("userId", sql.UniqueIdentifier, member.id)
-       .input("companyId", sql.UniqueIdentifier, companyId)
-       .query(`
-         SELECT role FROM user_company_memberships
-         WHERE user_id = @userId AND company_id = @companyId
-       `);
-     assert.equal(String(membership.recordset[0].role), "OPERATOR");
-     assert.equal(await countAudit(companyId, member.id, "company_user_update_allowed"), 0);
++    assert.equal(await schemaPermissionGranted("dinamic_app_runtime", "EXECUTE"), false);
++    assert.equal(await schemaPermissionGranted("dinamic_app_migrations", "EXECUTE"), false);
    });
  
-   it("last-owner rejection does not write a success audit", async () => {
-     const { companyId, actorUserId } = await seedCompany();
-     const passwordHash = await hashPassword("phase2-sole-owner");
-     const soleOwner = await userRepository.create({
-       name: "Phase2 Sole Owner",
-       email: normalizeEmail(`phase2.sole.owner.${randomUUID()}@example.com`),
-       passwordHash,
-@@ -440,21 +446,265 @@ describeDatabaseIntegration("database integrity phase2 transactional audit", ()
-           true,
-           "OWNER",
-         ),
-       (error: unknown) =>
-         error instanceof AppError && error.code === "LAST_OWNER_PROTECTED",
-     );
- 
-     assert.equal(await countAudit(companyId, soleOwner.id, "company_user_update_allowed"), 0);
- 
-     const membership = await getPool()
-       .request()
-       .input("userId", sql.UniqueIdentifier, soleOwner.id)
-       .input("companyId", sql.UniqueIdentifier, companyId)
-       .query(`
-         SELECT role, status FROM user_company_memberships
-         WHERE user_id = @userId AND company_id = @companyId
-       `);
-     assert.equal(String(membership.recordset[0].role), "OWNER");
-     assert.equal(String(membership.recordset[0].status), "ACTIVE");
-   });
-+
-+  const createPendingInvitation = async (input: {
-+    companyId: string;
-+    email: string;
-+    role?: string;
-+  }): Promise<{ invitationId: string; rawToken: string }> => {
-+    const rawToken = generateInvitationToken();
-+    const invitation = await userInvitationRepository.create({
-+      companyId: input.companyId,
-+      emailNormalized: normalizeEmail(input.email),
-+      inviteeName: "Phase2 Invitee",
-+      role: input.role ?? "OPERATOR",
-+      invitedByUserId: null,
-+      targetUserId: null,
-+      tokenHash: hashInvitationToken(rawToken),
-+      origin: "MANUAL",
-+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-+    });
-+    return { invitationId: invitation.id, rawToken };
-+  };
-+
-+  const invitationStatus = async (invitationId: string): Promise<string> => {
-+    const result = await getPool()
-+      .request()
-+      .input("id", sql.UniqueIdentifier, invitationId)
-+      .query(`SELECT status FROM user_invitations WHERE id = @id`);
-+    return String(result.recordset[0]?.status ?? "");
-+  };
-+
-+  it("invitation accept (new user) persists membership and invitation_accepted audit", async () => {
-+    const { companyId } = await seedCompany();
-+    const email = normalizeEmail(`phase2.accept.${randomUUID()}@example.com`);
-+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
-+
-+    const result = await userInvitationService.accept({
-+      rawToken,
-+      newUser: {
-+        name: "Phase2 Accept New",
-+        password: "secure-password-1",
-+        passwordConfirmation: "secure-password-1",
-+      },
-+    });
-+
-+    assert.equal(result.invitationAccepted, true);
-+    assert.equal(await invitationStatus(invitationId), "ACCEPTED");
-+
-+    const membership = await getPool()
-+      .request()
-+      .input("userId", sql.UniqueIdentifier, result.data.userId)
-+      .input("companyId", sql.UniqueIdentifier, companyId)
-+      .query(`
-+        SELECT status, role FROM user_company_memberships
-+        WHERE user_id = @userId AND company_id = @companyId
-+      `);
-+    assert.equal(String(membership.recordset[0].status), "ACTIVE");
-+    assert.equal(String(membership.recordset[0].role), "OPERATOR");
-+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 1);
-+  });
-+
-+  it("invitation accept (new user) rolls back when invitation_accepted audit fails", async () => {
-+    const { companyId } = await seedCompany();
-+    const email = normalizeEmail(`phase2.accept.fail.${randomUUID()}@example.com`);
-+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
-+
-+    setAuditBeforeInsertHookForTests(async (input) => {
-+      if (input.action === "invitation_accepted") {
-+        throw new Error("injected audit failure for phase2 invitation accept");
-+      }
-+    });
-+    try {
-+      await assert.rejects(
-+        () =>
-+          userInvitationService.accept({
-+            rawToken,
-+            newUser: {
-+              name: "Phase2 Accept Fail",
-+              password: "secure-password-1",
-+              passwordConfirmation: "secure-password-1",
-+            },
-+          }),
-+        (error: unknown) =>
-+          error instanceof Error &&
-+          error.message.includes("injected audit failure for phase2 invitation accept"),
-+      );
-+    } finally {
-+      setAuditBeforeInsertHookForTests(undefined);
+-  it("grants runtime DML on SCHEMA::dbo", async () => {
+-    for (const permission of ["SELECT", "INSERT", "UPDATE", "DELETE", "EXECUTE"]) {
++  it("grants migrations ALTER/DML and object EXECUTE only on known UDF", async () => {
++    for (const permission of ["ALTER", "SELECT", "INSERT", "UPDATE", "DELETE"]) {
++      assert.equal(await schemaPermissionGranted("dinamic_app_migrations", permission), true);
 +    }
-+
-+    assert.equal(await invitationStatus(invitationId), "PENDING");
-+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 0);
-+
-+    const user = await userRepository.findByEmail(email);
-+    assert.equal(user, null, "new user created in TX must roll back with audit failure");
-+
-+    const membershipCount = await getPool()
-+      .request()
-+      .input("companyId", sql.UniqueIdentifier, companyId)
-+      .input("email", sql.NVarChar(320), email)
-+      .query(`
-+        SELECT COUNT(*) AS total
-+        FROM user_company_memberships m
-+        INNER JOIN users u ON u.id = m.user_id
-+        WHERE m.company_id = @companyId AND u.email = @email
-+      `);
-+    assert.equal(Number(membershipCount.recordset[0].total), 0);
-+  });
-+
-+  it("invitation accept (already ACTIVE member) success writes invitation_accepted audit", async () => {
-+    const { companyId } = await seedCompany();
-+    const passwordHash = await hashPassword("phase2-already-member");
-+    const email = normalizeEmail(`phase2.already.${randomUUID()}@example.com`);
-+    const member = await userRepository.create({
-+      name: "Phase2 Already Member",
-+      email,
-+      passwordHash,
-+      role: "ADMIN",
-+    });
-+    await getPool()
-+      .request()
-+      .input("userId", sql.UniqueIdentifier, member.id)
-+      .input("companyId", sql.UniqueIdentifier, companyId)
-+      .query(`
-+        INSERT INTO user_company_memberships (user_id, company_id, role, status, is_default)
-+        VALUES (@userId, @companyId, N'ADMIN', N'ACTIVE', 0)
-+      `);
-+
-+    const { invitationId, rawToken } = await createPendingInvitation({
-+      companyId,
-+      email,
-+      role: "OPERATOR",
-+    });
-+
-+    const result = await userInvitationService.accept({
-+      rawToken,
-+      authenticatedUserId: member.id,
-+    });
-+
-+    assert.equal(result.data.alreadyMember, true);
-+    assert.equal(await invitationStatus(invitationId), "ACCEPTED");
-+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 1);
-+
-+    const membership = await getPool()
-+      .request()
-+      .input("userId", sql.UniqueIdentifier, member.id)
-+      .input("companyId", sql.UniqueIdentifier, companyId)
-+      .query(`
-+        SELECT role, status FROM user_company_memberships
-+        WHERE user_id = @userId AND company_id = @companyId
-+      `);
-+    assert.equal(String(membership.recordset[0].role), "ADMIN");
-+    assert.equal(String(membership.recordset[0].status), "ACTIVE");
-+  });
-+
-+  it("invitation accept (already ACTIVE member) rolls back invitation when audit fails", async () => {
-+    const { companyId } = await seedCompany();
-+    const passwordHash = await hashPassword("phase2-already-fail");
-+    const email = normalizeEmail(`phase2.already.fail.${randomUUID()}@example.com`);
-+    const member = await userRepository.create({
-+      name: "Phase2 Already Fail",
-+      email,
-+      passwordHash,
-+      role: "ADMIN",
-+    });
-+    await getPool()
-+      .request()
-+      .input("userId", sql.UniqueIdentifier, member.id)
-+      .input("companyId", sql.UniqueIdentifier, companyId)
-+      .query(`
-+        INSERT INTO user_company_memberships (user_id, company_id, role, status, is_default)
-+        VALUES (@userId, @companyId, N'ADMIN', N'ACTIVE', 0)
-+      `);
-+
-+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
-+
-+    setAuditBeforeInsertHookForTests(async (input) => {
-+      if (input.action === "invitation_accepted") {
-+        throw new Error("injected audit failure for phase2 already-member accept");
-+      }
-+    });
-+    try {
-+      await assert.rejects(
-+        () =>
-+          userInvitationService.accept({
-+            rawToken,
-+            authenticatedUserId: member.id,
-+          }),
-+        (error: unknown) =>
-+          error instanceof Error &&
-+          error.message.includes("injected audit failure for phase2 already-member accept"),
-+      );
-+    } finally {
-+      setAuditBeforeInsertHookForTests(undefined);
-+    }
-+
-+    assert.equal(await invitationStatus(invitationId), "PENDING");
-+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 0);
-+
-+    const membership = await getPool()
-+      .request()
-+      .input("userId", sql.UniqueIdentifier, member.id)
-+      .input("companyId", sql.UniqueIdentifier, companyId)
-+      .query(`
-+        SELECT role, status FROM user_company_memberships
-+        WHERE user_id = @userId AND company_id = @companyId
-+      `);
-+    assert.equal(String(membership.recordset[0].role), "ADMIN");
-+    assert.equal(String(membership.recordset[0].status), "ACTIVE");
-+  });
-+
-+  it("invitation decline success persists DECLINED and invitation_declined audit", async () => {
-+    const { companyId } = await seedCompany();
-+    const email = normalizeEmail(`phase2.decline.${randomUUID()}@example.com`);
-+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
-+
-+    const result = await userInvitationService.decline({ rawToken });
-+    assert.equal(result.data.declined, true);
-+    assert.equal(await invitationStatus(invitationId), "DECLINED");
-+    assert.equal(await countAudit(companyId, invitationId, "invitation_declined"), 1);
-+  });
-+
-+  it("invitation decline rolls back when invitation_declined audit fails", async () => {
-+    const { companyId } = await seedCompany();
-+    const email = normalizeEmail(`phase2.decline.fail.${randomUUID()}@example.com`);
-+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
-+
-+    setAuditBeforeInsertHookForTests(async (input) => {
-+      if (input.action === "invitation_declined") {
-+        throw new Error("injected audit failure for phase2 invitation decline");
-+      }
-+    });
-+    try {
-+      await assert.rejects(
-+        () => userInvitationService.decline({ rawToken }),
-+        (error: unknown) =>
-+          error instanceof Error &&
-+          error.message.includes("injected audit failure for phase2 invitation decline"),
-+      );
-+    } finally {
-+      setAuditBeforeInsertHookForTests(undefined);
-+    }
-+
-+    assert.equal(await invitationStatus(invitationId), "PENDING");
-+    assert.equal(await countAudit(companyId, invitationId, "invitation_declined"), 0);
-+  });
- });
-diff --git a/backend/src/utils/audit-sanitize.test.ts b/backend/src/utils/audit-sanitize.test.ts
-index e041804..b9c7d60 100644
---- a/backend/src/utils/audit-sanitize.test.ts
-+++ b/backend/src/utils/audit-sanitize.test.ts
-@@ -1,32 +1,59 @@
- import assert from "node:assert/strict";
- import { describe, it } from "node:test";
--import { sanitizeAuditPayload } from "./audit-sanitize";
-+import {
-+  isSensitiveAuditKey,
-+  normalizeAuditKey,
-+  sanitizeAuditPayload,
-+} from "./audit-sanitize";
- 
- describe("sanitizeAuditPayload", () => {
--  it("redacts known credential keys and keeps safe fields", () => {
-+  it("normalizes keys by lowercasing and stripping _ / -", () => {
-+    assert.equal(normalizeAuditKey("access_Token"), "accesstoken");
-+    assert.equal(normalizeAuditKey("client-Secret"), "clientsecret");
-+    assert.equal(isSensitiveAuditKey("tokenCount"), false);
-+    assert.equal(isSensitiveAuditKey("token"), true);
-+  });
-+
-+  it("redacts nested objects, arrays, and real secret name variants", () => {
-     const sanitized = sanitizeAuditPayload({
-       role: "ADMIN",
-+      status: "ACTIVE",
-+      tokenCount: 3,
-       password: "secret",
--      passwordHash: "hash",
--      token: "abc",
-+      password_hash: "hash",
-       accessToken: "a",
--      refreshToken: "r",
--      nested: { invitationToken: "inv", status: "ACTIVE" },
-+      refresh_token: "r",
-+      clientSecret: "cs",
-+      providerApiKey: "pk",
-+      twilioAuthToken: "tw",
-+      signedUrl: "https://example/signed",
-+      nested: {
-+        invitationToken: "inv",
-+        items: [{ privateKey: "pk", role: "OPERATOR" }],
-+      },
-     });
- 
-     assert.deepEqual(sanitized, {
-       role: "ADMIN",
-+      status: "ACTIVE",
-+      tokenCount: 3,
-       password: "[REDACTED]",
--      passwordHash: "[REDACTED]",
--      token: "[REDACTED]",
-+      password_hash: "[REDACTED]",
-       accessToken: "[REDACTED]",
--      refreshToken: "[REDACTED]",
--      nested: { invitationToken: "[REDACTED]", status: "ACTIVE" },
-+      refresh_token: "[REDACTED]",
-+      clientSecret: "[REDACTED]",
-+      providerApiKey: "[REDACTED]",
-+      twilioAuthToken: "[REDACTED]",
-+      signedUrl: "[REDACTED]",
-+      nested: {
-+        invitationToken: "[REDACTED]",
-+        items: [{ privateKey: "[REDACTED]", role: "OPERATOR" }],
-+      },
-     });
-   });
- 
-   it("returns null for nullish input", () => {
-     assert.equal(sanitizeAuditPayload(null), null);
-     assert.equal(sanitizeAuditPayload(undefined), null);
-   });
- });
-diff --git a/backend/src/utils/audit-sanitize.ts b/backend/src/utils/audit-sanitize.ts
-index 4e4cfba..b47ee8e 100644
---- a/backend/src/utils/audit-sanitize.ts
-+++ b/backend/src/utils/audit-sanitize.ts
-@@ -1,39 +1,71 @@
--const SENSITIVE_KEY_PATTERN =
--  /^(password|passwordhash|password_hash|token|accesstoken|access_token|refreshtoken|refresh_token|invitationtoken|invitation_token|resettoken|reset_token|secret|apikey|api_key|authorization|authheader|signedurl|signed_url|contentsid|content_sid|privatekey|private_key)$/i;
-+const REDACTED = "[REDACTED]";
- 
--const redactValue = (): string => "[REDACTED]";
-+/**
-+ * Normalized exact-match secret key families (defense in depth).
-+ * Critical callers must still send minimal allowlisted diffs; this only strips
-+ * credential-like keys that slip through.
-+ *
-+ * Normalization: lowercase + remove `_` and `-`.
-+ * Exact match only — e.g. `tokenCount` → `tokencount` is NOT redacted.
-+ */
-+const SENSITIVE_KEY_FAMILIES = new Set([
-+  "password",
-+  "passwordhash",
-+  "token",
-+  "accesstoken",
-+  "refreshtoken",
-+  "invitationtoken",
-+  "resettoken",
-+  "secret",
-+  "clientsecret",
-+  "apikey",
-+  "providerapikey",
-+  "authorization",
-+  "authheader",
-+  "authtoken",
-+  "twilioauthtoken",
-+  "signedurl",
-+  "contentsid",
-+  "privatekey",
-+]);
-+
-+export const normalizeAuditKey = (key: string): string =>
-+  key.toLowerCase().replace(/[_-]/g, "");
-+
-+export const isSensitiveAuditKey = (key: string): boolean =>
-+  SENSITIVE_KEY_FAMILIES.has(normalizeAuditKey(key));
- 
- /**
-- * Shallow/recursive redaction of known secret keys before persisting audit JSON.
-- * Does not invent a full PII framework — only strips credential-like fields.
-+ * Recursive redaction of known credential-like keys before persisting audit JSON.
-+ * Secondary defense only — prefer minimal allowlisted payloads at call sites.
-  */
- export const sanitizeAuditPayload = (
-   value: Record<string, unknown> | null | undefined,
- ): Record<string, unknown> | null => {
-   if (value == null) {
-     return null;
-   }
-   return sanitizeUnknown(value) as Record<string, unknown>;
- };
- 
- const sanitizeUnknown = (value: unknown): unknown => {
-   if (value == null) {
-     return value;
-   }
-   if (Array.isArray(value)) {
-     return value.map((item) => sanitizeUnknown(item));
-   }
-   if (typeof value !== "object") {
-     return value;
-   }
- 
-   const output: Record<string, unknown> = {};
-   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
--    if (SENSITIVE_KEY_PATTERN.test(key)) {
--      output[key] = redactValue();
-+    if (isSensitiveAuditKey(key)) {
-+      output[key] = REDACTED;
-       continue;
++    const fnExists = await getPool().request().query(`
++      SELECT CASE WHEN OBJECT_ID(N'dbo.fn_resolve_operation_timezone_for_sql', N'FN') IS NULL
++        THEN 0 ELSE 1 END AS found
++    `);
++    if (fnExists.recordset[0]?.found) {
+       assert.equal(
+-        await schemaPermissionGranted("dinamic_app_runtime", permission),
++        await objectExecuteGranted(
++          "dinamic_app_migrations",
++          "fn_resolve_operation_timezone_for_sql",
++        ),
+         true,
+-        `expected runtime GRANT ${permission} ON SCHEMA::dbo`,
+       );
      }
-     output[key] = sanitizeUnknown(nested);
-   }
-   return output;
- };
+   });
+ 
+-  it("grants migrations ALTER and DML on SCHEMA::dbo", async () => {
+-    for (const permission of ["ALTER", "SELECT", "INSERT", "UPDATE", "DELETE", "EXECUTE"]) {
+-      assert.equal(
+-        await schemaPermissionGranted("dinamic_app_migrations", permission),
+-        true,
+-        `expected migrations GRANT ${permission} ON SCHEMA::dbo`,
++  it("runtime effective permissions: DML ok, DDL denied, future proc denied", async () => {
++    const pool = getPool();
++    await cleanupFixtures();
++
++    await pool.request().query(`
++      CREATE USER ${RUNTIME_TEST_USER} WITHOUT LOGIN;
++      ALTER ROLE dinamic_app_runtime ADD MEMBER ${RUNTIME_TEST_USER};
++
++      CREATE TABLE dbo.${PROBE_TABLE} (
++        id INT NOT NULL PRIMARY KEY,
++        note NVARCHAR(50) NULL
+       );
+-    }
++    `);
++
++    // Positive DML
++    await pool.request().query(`
++      EXECUTE AS USER = N'${RUNTIME_TEST_USER}';
++      INSERT INTO dbo.${PROBE_TABLE} (id, note) VALUES (1, N'a');
++      UPDATE dbo.${PROBE_TABLE} SET note = N'b' WHERE id = 1;
++      SELECT note FROM dbo.${PROBE_TABLE} WHERE id = 1;
++      DELETE FROM dbo.${PROBE_TABLE} WHERE id = 1;
++      REVERT;
++    `);
++
++    const empty = await pool.request().query(`SELECT COUNT(*) AS c FROM dbo.${PROBE_TABLE}`);
++    assert.equal(Number(empty.recordset[0].c), 0);
++
++    // DDL denials — metadata must not change
++    await assert.rejects(
++      () =>
++        pool.request().query(`
++          EXECUTE AS USER = N'${RUNTIME_TEST_USER}';
++          BEGIN TRY
++            CREATE TABLE dbo.phase34_runtime_should_not_exist (id INT NOT NULL);
++            REVERT;
++          END TRY
++          BEGIN CATCH
++            REVERT;
++            THROW;
++          END CATCH
++        `),
++      isPermissionError,
++    );
++    assert.equal(await tableExists("phase34_runtime_should_not_exist"), false);
++
++    const companiesColBefore = await pool.request().query(`
++      SELECT COUNT(*) AS c
++      FROM sys.columns
++      WHERE object_id = OBJECT_ID(N'dbo.companies') AND name = N'phase34_priv_probe'
++    `);
++    await assert.rejects(
++      () =>
++        pool.request().query(`
++          EXECUTE AS USER = N'${RUNTIME_TEST_USER}';
++          BEGIN TRY
++            ALTER TABLE dbo.companies ADD phase34_priv_probe INT NULL;
++            REVERT;
++          END TRY
++          BEGIN CATCH
++            REVERT;
++            THROW;
++          END CATCH
++        `),
++      isPermissionError,
++    );
++    const companiesColAfter = await pool.request().query(`
++      SELECT COUNT(*) AS c
++      FROM sys.columns
++      WHERE object_id = OBJECT_ID(N'dbo.companies') AND name = N'phase34_priv_probe'
++    `);
++    assert.equal(Number(companiesColBefore.recordset[0].c), 0);
++    assert.equal(Number(companiesColAfter.recordset[0].c), 0);
++
++    await assert.rejects(
++      () =>
++        pool.request().query(`
++          EXECUTE AS USER = N'${RUNTIME_TEST_USER}';
++          BEGIN TRY
++            DROP TABLE dbo.${PROBE_TABLE};
++            REVERT;
++          END TRY
++          BEGIN CATCH
++            REVERT;
++            THROW;
++          END CATCH
++        `),
++      isPermissionError,
++    );
++    assert.equal(await tableExists(PROBE_TABLE), true);
++
++    // Future / arbitrary procedure isolation
++    await pool.request().query(`
++      CREATE PROCEDURE dbo.${ADMIN_PROBE_PROC}
++      AS
++      BEGIN
++        SET NOCOUNT ON;
++        SELECT 1 AS ok;
++      END;
++    `);
++
++    await assert.rejects(
++      () =>
++        pool.request().query(`
++          EXECUTE AS USER = N'${RUNTIME_TEST_USER}';
++          BEGIN TRY
++            EXEC dbo.${ADMIN_PROBE_PROC};
++            REVERT;
++          END TRY
++          BEGIN CATCH
++            REVERT;
++            THROW;
++          END CATCH
++        `),
++      isPermissionError,
++    );
++
++    await cleanupFixtures();
++  });
++
++  it("migration effective permissions: DDL, backfill DML, system_migrations access", async () => {
++    const pool = getPool();
++    await cleanupFixtures();
++
++    await pool.request().query(`
++      CREATE USER ${MIGRATION_TEST_USER} WITHOUT LOGIN;
++      ALTER ROLE dinamic_app_migrations ADD MEMBER ${MIGRATION_TEST_USER};
++    `);
++
++    await pool.request().query(`
++      EXECUTE AS USER = N'${MIGRATION_TEST_USER}';
++      BEGIN TRY
++        CREATE TABLE dbo.${MIG_PROBE_TABLE} (
++          id INT NOT NULL PRIMARY KEY,
++          note NVARCHAR(50) NULL
++        );
++        ALTER TABLE dbo.${MIG_PROBE_TABLE} ADD extra_col INT NULL;
++        CREATE INDEX IX_phase34_mig_probe_note ON dbo.${MIG_PROBE_TABLE}(note);
++        INSERT INTO dbo.${MIG_PROBE_TABLE} (id, note, extra_col) VALUES (1, N'backfill', 0);
++        UPDATE dbo.${MIG_PROBE_TABLE} SET extra_col = 1 WHERE id = 1;
++        INSERT INTO dbo.system_migrations (migration_name)
++        VALUES (N'${FAKE_MIGRATION_NAME}');
++        SELECT migration_name FROM dbo.system_migrations WHERE migration_name = N'${FAKE_MIGRATION_NAME}';
++        DELETE FROM dbo.system_migrations WHERE migration_name = N'${FAKE_MIGRATION_NAME}';
++        DROP TABLE dbo.${MIG_PROBE_TABLE};
++        REVERT;
++      END TRY
++      BEGIN CATCH
++        REVERT;
++        THROW;
++      END CATCH
++    `);
++
++    assert.equal(await tableExists(MIG_PROBE_TABLE), false);
++    const leftover = await pool
++      .request()
++      .input("name", sql.NVarChar(256), FAKE_MIGRATION_NAME)
++      .query(`SELECT COUNT(*) AS c FROM dbo.system_migrations WHERE migration_name = @name`);
++    assert.equal(Number(leftover.recordset[0].c), 0);
++
++    await cleanupFixtures();
++  });
++
++  it("089 forward → rollback → forward restores roles and clears members", async () => {
++    const pool = getPool();
++    await cleanupFixtures();
++    assert.equal(await roleExists("dinamic_app_runtime"), true);
++
++    await pool.request().query(`
++      CREATE USER ${RUNTIME_TEST_USER} WITHOUT LOGIN;
++      ALTER ROLE dinamic_app_runtime ADD MEMBER ${RUNTIME_TEST_USER};
++    `);
++
++    await applySqlScriptInTransaction(
++      pool,
++      readRollback("089_phase3_4_db_security_roles_rollback.sql"),
++    );
++    assert.equal(await roleExists("dinamic_app_runtime"), false);
++    assert.equal(await roleExists("dinamic_app_migrations"), false);
++    // WITHOUT LOGIN users may remain after role drop; remove if present
++    await dropUserIfExists(RUNTIME_TEST_USER);
++
++    await applySqlScriptInTransaction(pool, readMigration("089_phase3_4_db_security_roles.sql"));
++    await applySqlScriptInTransaction(
++      pool,
++      readMigration("090_phase3_4_revoke_schema_execute.sql"),
++    );
++    assert.equal(await roleExists("dinamic_app_runtime"), true);
++    assert.equal(await roleExists("dinamic_app_migrations"), true);
++    assert.equal(await schemaPermissionGranted("dinamic_app_runtime", "EXECUTE"), false);
++  });
++
++  it("089 refuses preexisting roles (schema drift) without partial grants", async () => {
++    const pool = getPool();
++    await cleanupFixtures();
++    await applySqlScriptInTransaction(
++      pool,
++      readRollback("089_phase3_4_db_security_roles_rollback.sql"),
++    );
++
++    await pool.request().query(`CREATE ROLE dinamic_app_runtime AUTHORIZATION dbo;`);
++
++    await assert.rejects(
++      () => applySqlScriptInTransaction(pool, readMigration("089_phase3_4_db_security_roles.sql")),
++      (error: unknown) => {
++        const message = error instanceof Error ? error.message : String(error);
++        return /SCHEMA_DRIFT|50089|already exists/i.test(message);
++      },
++    );
++
++    assert.equal(await roleExists("dinamic_app_runtime"), true);
++    assert.equal(await roleExists("dinamic_app_migrations"), false);
++    assert.equal(await schemaPermissionGranted("dinamic_app_runtime", "SELECT"), false);
++
++    await pool.request().query(`DROP ROLE dinamic_app_runtime;`);
++    await applySqlScriptInTransaction(pool, readMigration("089_phase3_4_db_security_roles.sql"));
++    await applySqlScriptInTransaction(
++      pool,
++      readMigration("090_phase3_4_revoke_schema_execute.sql"),
++    );
+   });
+ 
+   it("documents dangerous SQL Server features without mutating configuration", async () => {
+     const configs = await getPool().request().query(`
+       SELECT name, CAST(value_in_use AS INT) AS value_in_use
+       FROM sys.configurations
+       WHERE name IN (
+         N'xp_cmdshell',
+         N'Ole Automation Procedures',
+         N'clr enabled',
+         N'Ad Hoc Distributed Queries'
+       )
+       ORDER BY name
+     `);
+-    const trustworthy = await getPool().request().query(`
+-      SELECT is_trustworthy_on
+-      FROM sys.databases
+-      WHERE name = DB_NAME()
+-    `);
+-
+     assert.ok(configs.recordset.length >= 1);
+-    assert.equal(typeof trustworthy.recordset[0]?.is_trustworthy_on, "boolean");
+-
+-    // Evidence-only: we do not flip instance flags in shared/dev SQL.
+-    for (const row of configs.recordset) {
+-      assert.ok(typeof row.name === "string");
+-      assert.ok(typeof row.value_in_use === "number");
+-    }
+   });
+ 
+   it(
+-    "runtime privilege test user cannot ALTER/DROP tables",
++    "optional real-login smoke (ops cutover)",
+     { skip: !privilegeTestsEnabled },
+     async () => {
+       const user = process.env.DB_PRIVILEGE_TEST_USER!;
+       const password = process.env.DB_PRIVILEGE_TEST_PASSWORD!;
+       const { env } = await import("../config/env");
+ 
+       const pool = await sql.connect({
+         server: env.DB_HOST,
+         port: env.DB_PORT,
+         database: env.DB_NAME,
+         user,
+         password,
+         options: {
+           encrypt: env.DB_ENCRYPT,
+           trustServerCertificate: env.DB_TRUST_SERVER_CERTIFICATE,
+         },
+       });
+ 
+       try {
+         await assert.rejects(
+-          () =>
+-            pool.request().query(`
+-              ALTER TABLE dbo.companies ADD phase34_priv_probe INT NULL;
+-            `),
+-          (error: unknown) => {
+-            const message = error instanceof Error ? error.message : String(error);
+-            return /permission|denied|authorize/i.test(message);
+-          },
++          () => pool.request().query(`ALTER TABLE dbo.companies ADD phase34_login_probe INT NULL;`),
++          isPermissionError,
+         );
+-
+-        await assert.rejects(
+-          () => pool.request().query(`DROP TABLE dbo.companies;`),
+-          (error: unknown) => {
+-            const message = error instanceof Error ? error.message : String(error);
+-            return /permission|denied|authorize/i.test(message);
+-          },
+-        );
+-
+-        // Representative business read must still succeed.
+         const read = await pool.request().query(`SELECT TOP (1) id FROM dbo.companies`);
+         assert.ok(Array.isArray(read.recordset));
+       } finally {
+         await pool.close();
+       }
+     },
+   );
+ });
+diff --git a/database/migrations/089_phase3_4_db_security_roles.sql b/database/migrations/089_phase3_4_db_security_roles.sql
+index ccdce43..465d83a 100644
+--- a/database/migrations/089_phase3_4_db_security_roles.sql
++++ b/database/migrations/089_phase3_4_db_security_roles.sql
+@@ -1,63 +1,78 @@
+ /*
+   Migration: 089_phase3_4_db_security_roles.sql
+   Purpose (Phases 3 & 4 — DB security foundation):
+     Create least-privilege database roles for application runtime and migrations.
+     Does NOT create LOGIN/USER or passwords (those stay in secret manager / ops).
+-    Does NOT revoke sa or change existing memberships (safe additive rollout).
+ 
+   Roles:
+-    - dinamic_app_runtime: DML (+ EXECUTE for UDFs/future SPs) on SCHEMA::dbo — no DDL
+-    - dinamic_app_migrations: DDL CREATE* + ALTER/DML on SCHEMA::dbo for schema evolution
++    - dinamic_app_runtime: SELECT/INSERT/UPDATE/DELETE on SCHEMA::dbo — no DDL, no schema EXECUTE
++    - dinamic_app_migrations: DDL CREATE* + ALTER/DML on SCHEMA::dbo; EXECUTE only on known UDF(s)
+ 
+-  Rollout (see audit/database-integrity-phase3-4-implementation.md):
+-    1) Apply this migration (as current privileged identity)
+-    2) Create SQL logins outside Git; CREATE USER …; ALTER ROLE … ADD MEMBER …
+-    3) Point migrations container at migration login; backend at runtime login
+-    4) Validate; then stop using sa for app/migrations
++  Ownership:
++    Roles must not pre-exist. If they do, THROW SCHEMA_DRIFT (do not adopt foreign roles).
++    Rollback drops these roles; therefore 089 must be the creator.
+ 
+-  Idempotent: CREATE ROLE guarded; GRANT is re-runnable.
++  Rerunnability: via system_migrations (apply once). Re-running this script after success is blocked by preflight.
+   Rollback: database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql
++
++  Note: DBs that already applied an earlier 089 draft granting EXECUTE ON SCHEMA::dbo
++  are corrected by 090_phase3_4_revoke_schema_execute.sql.
+ */
+ 
+ USE dinamic_attendance;
+ GO
+ 
+-IF NOT EXISTS (
++IF EXISTS (
+     SELECT 1
+     FROM sys.database_principals
+     WHERE name = N'dinamic_app_runtime'
+       AND type = 'R'
+ )
+ BEGIN
+-    CREATE ROLE dinamic_app_runtime AUTHORIZATION dbo;
++    THROW 50089, 'SCHEMA_DRIFT: dinamic_app_runtime already exists; refusing to adopt a pre-existing role. Drop it only via 089 rollback if this migration owns it.', 1;
+ END;
+ GO
+ 
+-IF NOT EXISTS (
++IF EXISTS (
+     SELECT 1
+     FROM sys.database_principals
+     WHERE name = N'dinamic_app_migrations'
+       AND type = 'R'
+ )
+ BEGIN
+-    CREATE ROLE dinamic_app_migrations AUTHORIZATION dbo;
++    THROW 50089, 'SCHEMA_DRIFT: dinamic_app_migrations already exists; refusing to adopt a pre-existing role. Drop it only via 089 rollback if this migration owns it.', 1;
+ END;
+ GO
+ 
+-/* Runtime: business DML only. No CREATE/ALTER/DROP membership. */
++CREATE ROLE dinamic_app_runtime AUTHORIZATION dbo;
++GO
++
++CREATE ROLE dinamic_app_migrations AUTHORIZATION dbo;
++GO
++
++/* Runtime: business DML only. No CREATE/ALTER/DROP. No broad EXECUTE (future admin SPs stay denied). */
+ GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO dinamic_app_runtime;
+-GRANT EXECUTE ON SCHEMA::dbo TO dinamic_app_runtime;
+ GO
+ 
+ /*
+-  Migrations: schema evolution + data backfills inside migration files.
+-  Intentionally not db_owner / CONTROL. CREATE* are database-scoped;
+-  ALTER on schema covers ALTER TABLE / CREATE INDEX on dbo objects.
++  Migrations: schema evolution + data backfills.
++  Not db_owner / CONTROL. CREATE* are database-scoped; ALTER on schema covers ALTER TABLE / CREATE INDEX.
++  No GRANT EXECUTE ON SCHEMA::dbo — only object-scoped EXECUTE where proven necessary.
+ */
+ GRANT CREATE TABLE TO dinamic_app_migrations;
+ GRANT CREATE VIEW TO dinamic_app_migrations;
+ GRANT CREATE PROCEDURE TO dinamic_app_migrations;
+ GRANT CREATE FUNCTION TO dinamic_app_migrations;
+ GRANT CREATE TYPE TO dinamic_app_migrations;
+-GRANT ALTER, REFERENCES, SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO dinamic_app_migrations;
++GRANT ALTER, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO dinamic_app_migrations;
++GO
++
++/*
++  Proven executable dependency (migrations 039/040 backfills / AT TIME ZONE helpers).
++  Runtime does not call this UDF from application SQL.
++*/
++IF OBJECT_ID(N'dbo.fn_resolve_operation_timezone_for_sql', N'FN') IS NOT NULL
++BEGIN
++    GRANT EXECUTE ON OBJECT::dbo.fn_resolve_operation_timezone_for_sql TO dinamic_app_migrations;
++END;
+ GO
+diff --git a/database/migrations/090_phase3_4_revoke_schema_execute.sql b/database/migrations/090_phase3_4_revoke_schema_execute.sql
+new file mode 100644
+index 0000000..e5450f2
+--- /dev/null
++++ b/database/migrations/090_phase3_4_revoke_schema_execute.sql
+@@ -0,0 +1,33 @@
++/*
++  Migration: 090_phase3_4_revoke_schema_execute.sql
++  Purpose (Phase 3–4 corrections):
++    Revoke broad EXECUTE ON SCHEMA::dbo from security roles if an earlier 089 draft granted it.
++    Keep object-scoped EXECUTE only for proven migration UDF(s).
++  Idempotent: REVOKE is safe when permission was never granted; object GRANT is re-runnable.
++  Requires roles from 089 (skips quietly if roles absent — e.g. restored DB without 089).
++  Rollback: database/migrations/rollback/090_phase3_4_revoke_schema_execute_rollback.sql
++*/
++
++USE dinamic_attendance;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.database_principals WHERE name = N'dinamic_app_runtime' AND type = 'R'
++)
++BEGIN
++    REVOKE EXECUTE ON SCHEMA::dbo FROM dinamic_app_runtime;
++END;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.database_principals WHERE name = N'dinamic_app_migrations' AND type = 'R'
++)
++BEGIN
++    REVOKE EXECUTE ON SCHEMA::dbo FROM dinamic_app_migrations;
++
++    IF OBJECT_ID(N'dbo.fn_resolve_operation_timezone_for_sql', N'FN') IS NOT NULL
++    BEGIN
++        GRANT EXECUTE ON OBJECT::dbo.fn_resolve_operation_timezone_for_sql TO dinamic_app_migrations;
++    END;
++END;
++GO
+diff --git a/database/migrations/rollback/090_phase3_4_revoke_schema_execute_rollback.sql b/database/migrations/rollback/090_phase3_4_revoke_schema_execute_rollback.sql
+new file mode 100644
+index 0000000..350fc1f
+--- /dev/null
++++ b/database/migrations/rollback/090_phase3_4_revoke_schema_execute_rollback.sql
+@@ -0,0 +1,24 @@
++/*
++  Rollback: 090_phase3_4_revoke_schema_execute_rollback.sql
++  Restores schema-level EXECUTE grants from the pre-correction 089 draft (not recommended).
++  Prefer staying on least-privilege object EXECUTE only.
++*/
++
++USE dinamic_attendance;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.database_principals WHERE name = N'dinamic_app_runtime' AND type = 'R'
++)
++BEGIN
++    GRANT EXECUTE ON SCHEMA::dbo TO dinamic_app_runtime;
++END;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.database_principals WHERE name = N'dinamic_app_migrations' AND type = 'R'
++)
++BEGIN
++    GRANT EXECUTE ON SCHEMA::dbo TO dinamic_app_migrations;
++END;
++GO
+diff --git a/docker-compose.prod.yml b/docker-compose.prod.yml
+index 4e96571..08476cb 100644
+--- a/docker-compose.prod.yml
++++ b/docker-compose.prod.yml
+@@ -9,43 +9,45 @@ services:
+     healthcheck:
+       test:
+         [
+           "CMD-SHELL",
+           "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1",
+         ]
+       interval: 30s
+       timeout: 10s
+       retries: 5
+       start_period: 60s
+ 
+   migrations:
+     build:
+       target: migrations
+     environment:
+       NODE_ENV: ${NODE_ENV:?NODE_ENV is required}
+       TZ: ${TZ:?TZ is required}
+       DB_HOST: ${DB_HOST:?DB_HOST is required}
+       DB_PORT: ${DB_PORT:?DB_PORT is required}
+       DB_NAME: ${DB_NAME:?DB_NAME is required}
+-      # Optional least-privilege split (Phases 3–4). Falls back to shared DB_* when unset.
+-      DB_USER: ${DB_MIGRATION_USER:-${DB_USER:?DB_USER is required}}
+-      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD is required}}
++      # Shared fallback. Optional dedicated pair (both or neither) resolved in env-migrations.ts.
++      DB_USER: ${DB_USER:?DB_USER is required}
++      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
++      DB_MIGRATION_USER: ${DB_MIGRATION_USER:-}
++      DB_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:-}
+       DB_ENCRYPT: ${DB_ENCRYPT:?DB_ENCRYPT is required}
+       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE:?DB_TRUST_SERVER_CERTIFICATE is required}
+ 
+   backend:
+     build:
+       target: production
+     restart: unless-stopped
+     environment:
+       NODE_ENV: ${NODE_ENV:?NODE_ENV is required}
+       PORT: ${BACKEND_INTERNAL_PORT:?BACKEND_INTERNAL_PORT is required}
+       TZ: ${TZ:?TZ is required}
+       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+       DB_HOST: ${DB_HOST:?DB_HOST is required}
+       DB_PORT: ${DB_PORT:?DB_PORT is required}
+       DB_NAME: ${DB_NAME:?DB_NAME is required}
+       DB_USER: ${DB_USER:?DB_USER is required}
+       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+       DB_ENCRYPT: ${DB_ENCRYPT:?DB_ENCRYPT is required}
+diff --git a/docker-compose.yml b/docker-compose.yml
+index 280f31d..ace082b 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -47,43 +47,45 @@ services:
+         -i /init/init.sql
+     restart: "no"
+ 
+   migrations:
+     build:
+       context: ./backend
+       dockerfile: Dockerfile
+       target: migrations
+     container_name: dinamic-attendance-migrations
+     depends_on:
+       sqlserver:
+         condition: service_healthy
+       db-init:
+         condition: service_completed_successfully
+     environment:
+       NODE_ENV: ${NODE_ENV}
+       TZ: ${TZ}
+       DB_HOST: ${DB_HOST}
+       DB_PORT: ${DB_PORT}
+       DB_NAME: ${DB_NAME}
+-      # Prefer dedicated migration identity when set; otherwise shared DB_USER (backwards compatible).
+-      DB_USER: ${DB_MIGRATION_USER:-${DB_USER}}
+-      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:-${DB_PASSWORD}}
++      # Shared fallback identity. Optional dedicated pair resolved only in env-migrations.ts.
++      DB_USER: ${DB_USER}
++      DB_PASSWORD: ${DB_PASSWORD}
++      DB_MIGRATION_USER: ${DB_MIGRATION_USER:-}
++      DB_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:-}
+       DB_ENCRYPT: ${DB_ENCRYPT}
+       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE}
+       MIGRATIONS_DIR: /database/migrations
+     volumes:
+       - ./database:/database:ro
+     command: ["npm", "run", "migrate"]
+     restart: "no"
+ 
+   backend:
+     build:
+       context: ./backend
+       dockerfile: Dockerfile
+       target: production
+     container_name: dinamic-attendance-backend
+     depends_on:
+       sqlserver:
+         condition: service_healthy
+       db-init:
+         condition: service_completed_successfully
+       migrations:

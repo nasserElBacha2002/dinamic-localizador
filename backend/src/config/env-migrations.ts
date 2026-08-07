@@ -1,6 +1,9 @@
 import { config } from "dotenv";
 import { z } from "zod";
-import { resolveMigrationDbCredentials } from "./migration-db-credentials";
+import {
+  MigrationCredentialConfigError,
+  resolveMigrationDbCredentials,
+} from "./migration-db-credentials";
 
 config();
 
@@ -15,10 +18,11 @@ const migrationEnvSchema = z.object({
   DB_PASSWORD: z.string().min(1),
   /**
    * Optional dedicated migration identity (Phases 3–4).
-   * When unset, migrations continue using DB_USER / DB_PASSWORD (backwards compatible).
+   * Must be set as a pair with DB_MIGRATION_PASSWORD, or both omitted (shared mode).
+   * Resolution + pair validation: resolveMigrationDbCredentials (single source of truth).
    */
-  DB_MIGRATION_USER: z.string().min(1).optional(),
-  DB_MIGRATION_PASSWORD: z.string().min(1).optional(),
+  DB_MIGRATION_USER: z.string().optional(),
+  DB_MIGRATION_PASSWORD: z.string().optional(),
   DB_ENCRYPT: z.stringbool().default(false),
   DB_TRUST_SERVER_CERTIFICATE: z.stringbool().default(true),
 });
@@ -32,7 +36,18 @@ if (!parsed.success) {
 }
 
 const raw = parsed.data;
-const credentials = resolveMigrationDbCredentials(raw);
+
+let credentials: ReturnType<typeof resolveMigrationDbCredentials>;
+try {
+  credentials = resolveMigrationDbCredentials(raw);
+} catch (error) {
+  if (error instanceof MigrationCredentialConfigError) {
+    console.error("Invalid migration environment variables:");
+    console.error(error.message);
+    process.exit(1);
+  }
+  throw error;
+}
 
 export const migrationEnv = {
   NODE_ENV: raw.NODE_ENV,
@@ -47,4 +62,7 @@ export const migrationEnv = {
   usesDedicatedMigrationIdentity: credentials.usesDedicatedMigrationIdentity,
 };
 
-export { resolveMigrationDbCredentials } from "./migration-db-credentials";
+export {
+  MigrationCredentialConfigError,
+  resolveMigrationDbCredentials,
+} from "./migration-db-credentials";

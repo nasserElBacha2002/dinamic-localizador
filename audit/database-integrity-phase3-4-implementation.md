@@ -6,6 +6,11 @@
 
 Estado: **COMPLETE_WITH_ISSUES**
 
+| Layer | Status |
+|-------|--------|
+| Least-privilege **foundation** (roles + effective-permission tests) | **FOUNDATION_COMPLETE** |
+| Production identity cutover off `sa` | **PRODUCTION_CUTOVER_PENDING** |
+
 Phases 3 and 4 were driven by repository evidence, not by a mandate to create stored procedures or force EXECUTE-only.
 
 | Area | Decision |
@@ -14,11 +19,59 @@ Phases 3 and 4 were driven by repository evidence, not by a mandate to create st
 | Company purge (DB stages) | **KEEP_APP_TRANSACTION** — already staged TX + GCS outbox; SP would not remove runtime DELETE need |
 | Repair / reconcile / backfill CLIs | **KEEP_SCRIPT** — recurring ops scripts stay TypeScript; SP alone does not reduce privilege until admin identity exists |
 | Full EXECUTE-only runtime | **REJECTED** — raw SQL across repositories; rewrite cost ≫ benefit |
-| Least-privilege roles | **IMPLEMENTED** (additive): `dinamic_app_runtime`, `dinamic_app_migrations` via migration `089` |
-| Credential split plumbing | **IMPLEMENTED** (backwards compatible): optional `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` |
-| Cutover off `sa` | **DOCUMENTED runbook** — not auto-revoked (safe rollout); residual **P1** until ops completes cutover |
+| Least-privilege roles | **IMPLEMENTED**: `dinamic_app_runtime`, `dinamic_app_migrations` via `089` (+ `090` revoke schema EXECUTE if prior draft) |
+| Runtime EXECUTE | **none** (no `EXECUTE ON SCHEMA::dbo`) |
+| Migration EXECUTE | **object-only**: `dbo.fn_resolve_operation_timezone_for_sql` |
+| Credential split | **pair required**: both `DB_MIGRATION_*` set, or both unset; XOR → config error |
+| Cutover off `sa` | **Runbook only** — residual operational **P1** until ops maps dedicated logins |
 
-**COMPLETE_WITH_ISSUES** because default local/prod compose still documents/uses shared `sa` until operators create dedicated logins and map them to the new roles. Roles and env plumbing are ready; live privilege reduction is a deployment step, not a silent REVOKE.
+**COMPLETE_WITH_ISSUES** because default compose still documents/uses shared `sa` until operators complete cutover. Foundation permissions are proven with `CREATE USER WITHOUT LOGIN` + `EXECUTE AS USER` (not only skipped login tests).
+
+See also: `audit/database-integrity-phase3-4-corrections.md`.
+
+---
+
+### 1b. Runtime role exact permissions
+
+```text
+SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo
+EXECUTE: none
+DDL: none
+```
+
+### 1c. Removed broad EXECUTE
+
+Prior draft granted `EXECUTE ON SCHEMA::dbo` to runtime (and migrations). That would auto-entitle future admin procedures. Removed in corrected `089`; `090` revokes schema EXECUTE on already-applied DBs.
+
+### 1d. Migration role exact permissions
+
+```text
+CREATE TABLE, VIEW, PROCEDURE, FUNCTION, TYPE
+ALTER, REFERENCES, SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo
+EXECUTE ON OBJECT::dbo.fn_resolve_operation_timezone_for_sql (if present)
+```
+
+### 1e. Credential pair semantics
+
+Shared mode: both migration vars unset/whitespace → `DB_USER`/`DB_PASSWORD`.  
+Dedicated mode: both set → migration identity.  
+Partial pair → `MigrationCredentialConfigError` (never reuse runtime password silently).
+
+Compose passes `DB_MIGRATION_*` through; **Node (`env-migrations` / resolver) is the only resolver**.
+
+### 1f. Role effective-permission test matrix
+
+See corrections report § matrix. CI suite: `phase3-4-db-security.integration.test.ts` (WITHOUT LOGIN). Optional ops smoke: `RUN_DB_PRIVILEGE_TESTS`.
+
+### 1g. 089 forward/rollback/forward + schema drift
+
+- Forward creates roles only when absent; preexisting → `THROW 50089 SCHEMA_DRIFT`.
+- Rollback drops members then roles.
+- Integration covers forward → rollback → forward and drift without partial grants.
+
+### 1h. Production cutover status
+
+**FOUNDATION_COMPLETE** / **PRODUCTION_CUTOVER_PENDING**. Do not claim least privilege active in production until backend + migrations stop using `sa`.
 
 ---
 
@@ -28,7 +81,7 @@ Phases 3 and 4 were driven by repository evidence, not by a mandate to create st
 |----------|--------|---------|
 | SQL Server `sa` | `MSSQL_SA_PASSWORD=${DB_PASSWORD}` in Compose; healthcheck/`db-init` use `sa` | Instance bootstrap |
 | Application / migrations (shared) | `DB_USER` / `DB_PASSWORD` (examples default `sa`) | Backend pool + migration runner historically share one login |
-| Optional migration override | `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` (new) | Migrations container / `npm run migrate` when set; falls back to `DB_*` |
+| Optional migration pair | `DB_MIGRATION_USER` + `DB_MIGRATION_PASSWORD` (both or neither) | Dedicated migration runner identity |
 
 No LOGIN/USER/PASSWORD is created in versioned migrations (by design).
 
@@ -120,8 +173,9 @@ Phase 0A / purge lease / applock tests from prior phases remain the concurrency 
 | Capability | Decision |
 |------------|----------|
 | SELECT / INSERT / UPDATE / DELETE on `SCHEMA::dbo` | Required (repos + purge) |
-| EXECUTE on `SCHEMA::dbo` | Granted for UDFs / future selective SPs |
-| CREATE / ALTER / DROP (DDL) | **Not** granted to `dinamic_app_runtime` |
+| EXECUTE on `SCHEMA::dbo` | **Revoked / never granted** (corrections) |
+| EXECUTE on specific objects | **None** for runtime (no app UDF/proc calls) |
+| CREATE / ALTER / DROP (DDL) | **Not** granted |
 | `db_owner` / `sysadmin` / `CONTROL` | Must not be used by runtime after cutover |
 | Full EXECUTE-only | **REJECTED** |
 
@@ -134,9 +188,11 @@ Role: `dinamic_app_runtime` (migration `089`).
 | Capability | Decision |
 |------------|----------|
 | CREATE TABLE/VIEW/PROCEDURE/FUNCTION/TYPE | Granted to `dinamic_app_migrations` |
-| ALTER / REFERENCES / DML / EXECUTE on `SCHEMA::dbo` | Granted (backfills + FK work) |
+| ALTER / REFERENCES / DML on `SCHEMA::dbo` | Granted (backfills + FK work) |
+| EXECUTE on `SCHEMA::dbo` | **Not** granted |
+| EXECUTE on `dbo.fn_resolve_operation_timezone_for_sql` | Granted when object exists |
 | `db_owner` / `sysadmin` | Not used by role definition |
-| Identity | Prefer dedicated login via `DB_MIGRATION_*`; fallback `DB_*` |
+| Identity | Dedicated login via paired `DB_MIGRATION_*`; else shared `DB_*` |
 
 Preserve Phase 1: one transaction per migration file + `system_migrations` registration.
 
@@ -289,10 +345,10 @@ Expected commands:
 
 | Identity | SELECT | INSERT | UPDATE | DELETE | EXECUTE | DDL | Decision |
 |----------|--------|--------|--------|--------|---------|-----|----------|
-| Runtime (`dinamic_app_runtime`) | dbo schema | dbo | dbo | dbo | dbo schema | No | Role defined; map login in ops |
-| Migrations (`dinamic_app_migrations`) | dbo | dbo | dbo | dbo | dbo | CREATE* + ALTER schema | Role defined; map login in ops |
+| Runtime (`dinamic_app_runtime`) | dbo schema | dbo | dbo | dbo | **none** | No | Proven via EXECUTE AS tests |
+| Migrations (`dinamic_app_migrations`) | dbo | dbo | dbo | dbo | **object:** `fn_resolve_operation_timezone_for_sql` | CREATE* + ALTER schema | Proven via EXECUTE AS tests |
 | Admin maintenance | — | — | — | — | Future SPs only | No | DEFERRED |
-| `sa` (bootstrap) | All | All | All | All | All | All | Break-glass only after cutover |
+| `sa` (bootstrap) | All | All | All | All | All | All | Break-glass / container bootstrap until cutover |
 
 ---
 

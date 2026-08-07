@@ -1,0 +1,15 @@
+ .env.example                                       |   3 +-
+ audit/database-integrity-phase3-4-corrections.md   | 104 +++++
+ .../database-integrity-phase3-4-implementation.md  |  80 +++-
+ audit/implementation-corrections-validation.txt    |  75 ++--
+ backend/.env.example                               |   3 +-
+ backend/src/config/env-migrations.ts               |  30 +-
+ .../src/config/migration-db-credentials.test.ts    |  73 +++-
+ backend/src/config/migration-db-credentials.ts     |  44 ++-
+ .../phase3-4-db-security.integration.test.ts       | 426 ++++++++++++++++++---
+ .../migrations/089_phase3_4_db_security_roles.sql  |  53 ++-
+ .../090_phase3_4_revoke_schema_execute.sql         |  33 ++
+ ...090_phase3_4_revoke_schema_execute_rollback.sql |  24 ++
+ docker-compose.prod.yml                            |   8 +-
+ docker-compose.yml                                 |   8 +-
+ 14 files changed, 819 insertions(+), 145 deletions(-)

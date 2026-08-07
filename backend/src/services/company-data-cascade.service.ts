@@ -346,7 +346,7 @@ export const deleteEmployeeCascade = async (
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM work_team_members
-      WHERE employee_id = @employeeId;
+      WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM employee_workdays
       WHERE company_id = @companyId AND employee_id = @employeeId;

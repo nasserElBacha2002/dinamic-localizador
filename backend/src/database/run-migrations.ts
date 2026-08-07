@@ -6,17 +6,17 @@ import { migrationEnv as env } from "../config/env-migrations";
 const migrationDir =
   process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");
 
-const splitBatches = (script: string): string[] =>
+export const splitBatches = (script: string): string[] =>
   script
     .split(/\r?\nGO\r?\n/gi)
     .map((part) => part.trim())
     .filter((part) => part.length > 0);
 
 /** Migrations may contain legacy `USE <database>` statements; the pool already targets env.DB_NAME. */
-const stripLegacyDatabaseUse = (batch: string): string =>
+export const stripLegacyDatabaseUse = (batch: string): string =>
   batch
     .split(/\r?\n/)
-    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_\[\]]+\s*;?\s*$/i.test(line.trim()))
+    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_[\]]+\s*;?\s*$/i.test(line.trim()))
     .join("\n")
     .trim();
 
@@ -58,14 +58,56 @@ const getAppliedMigrations = async (pool: sql.ConnectionPool): Promise<Set<strin
   return new Set(result.recordset.map((row) => String(row.migration_name)));
 };
 
-const registerMigration = async (pool: sql.ConnectionPool, migrationName: string): Promise<void> => {
-  await pool
-    .request()
-    .input("migrationName", sql.NVarChar(255), migrationName)
-    .query(`
-      INSERT INTO system_migrations (migration_name)
-      VALUES (@migrationName)
-    `);
+/**
+ * Applies all GO batches of a migration script inside a single SQL Server transaction.
+ * On any batch failure the whole migration rolls back (no partial schema from this script).
+ *
+ * Uses the mssql TDS Transaction API (not T-SQL BEGIN TRAN in a separate batch):
+ * issuing BEGIN TRANSACTION via Request.query() trips error 266 with this driver
+ * ("Transaction count after EXECUTE indicates a mismatching number of BEGIN and COMMIT").
+ *
+ * Evidence: previously each GO batch used pool.request() (autocommit). That left
+ * intermediate DDL committed when a later batch failed while system_migrations was
+ * not yet registered.
+ */
+export const applySqlScriptInTransaction = async (
+  pool: sql.ConnectionPool,
+  script: string,
+  options?: { registerMigrationName?: string },
+): Promise<void> => {
+  const batches = splitBatches(script);
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    await new sql.Request(transaction).query(`SET XACT_ABORT ON;`);
+
+    for (const batch of batches) {
+      const normalizedBatch = stripLegacyDatabaseUse(batch);
+      if (!normalizedBatch) {
+        continue;
+      }
+      await new sql.Request(transaction).query(normalizedBatch);
+    }
+
+    if (options?.registerMigrationName) {
+      await new sql.Request(transaction)
+        .input("migrationName", sql.NVarChar(255), options.registerMigrationName)
+        .query(`
+          INSERT INTO system_migrations (migration_name)
+          VALUES (@migrationName)
+        `);
+    }
+
+    await transaction.commit();
+  } catch (error) {
+    try {
+      await transaction.rollback();
+    } catch {
+      // XACT_ABORT may already have aborted the transaction server-side.
+    }
+    throw error;
+  }
 };
 
 export const runMigrations = async (): Promise<void> => {
@@ -82,17 +124,7 @@ export const runMigrations = async (): Promise<void> => {
       }
 
       const script = readFileSync(join(migrationDir, file), "utf8");
-      const batches = splitBatches(script);
-
-      for (const batch of batches) {
-        const normalizedBatch = stripLegacyDatabaseUse(batch);
-        if (!normalizedBatch) {
-          continue;
-        }
-        await pool.request().query(normalizedBatch);
-      }
-
-      await registerMigration(pool, file);
+      await applySqlScriptInTransaction(pool, script, { registerMigrationName: file });
       console.log(`Migration applied: ${file}`);
     }
 
@@ -123,9 +155,20 @@ export const printMigrationStatus = async (): Promise<void> => {
 
 const isStatusMode = process.argv.includes("--status");
 
-const task = isStatusMode ? printMigrationStatus() : runMigrations();
+const isMainModule = (() => {
+  const entry = process.argv[1];
+  if (!entry) {
+    return false;
+  }
+  // Match when executed as `tsx src/database/run-migrations.ts` (not when imported by tests).
+  return /run-migrations\.(ts|js|mjs|cjs)$/.test(entry.replace(/\\/g, "/"));
+})();
 
-void task.catch((error: unknown) => {
-  console.error(isStatusMode ? "Migration status failed:" : "Migration failed:", error);
-  process.exit(1);
-});
+if (isMainModule) {
+  const task = isStatusMode ? printMigrationStatus() : runMigrations();
+
+  void task.catch((error: unknown) => {
+    console.error(isStatusMode ? "Migration status failed:" : "Migration failed:", error);
+    process.exit(1);
+  });
+}

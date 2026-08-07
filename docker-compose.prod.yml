@@ -26,8 +26,11 @@ services:
       DB_HOST: ${DB_HOST:?DB_HOST is required}
       DB_PORT: ${DB_PORT:?DB_PORT is required}
       DB_NAME: ${DB_NAME:?DB_NAME is required}
+      # Shared fallback. Optional dedicated pair (both or neither) resolved in env-migrations.ts.
       DB_USER: ${DB_USER:?DB_USER is required}
       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      DB_MIGRATION_USER: ${DB_MIGRATION_USER:-}
+      DB_MIGRATION_PASSWORD: ${DB_MIGRATION_PASSWORD:-}
       DB_ENCRYPT: ${DB_ENCRYPT:?DB_ENCRYPT is required}
       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE:?DB_TRUST_SERVER_CERTIFICATE is required}
 

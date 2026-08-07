@@ -785,6 +785,23 @@ export const userInvitationService = {
           invitation.id,
           transaction,
         );
+        if (accepted) {
+          await auditService.log(
+            invitation.companyId,
+            {
+              entityType: "user_invitation",
+              entityId: invitation.id,
+              action: "invitation_accepted",
+              newData: {
+                userId: resolvedUser.id,
+                role: existingMembership.role,
+                alreadyMember: true,
+              },
+              userId: resolvedUser.id,
+            },
+            transaction,
+          );
+        }
         await transaction.commit();
         return {
           data: {
@@ -862,10 +879,10 @@ export const userInvitationService = {
         );
       }
 
-      await transaction.commit();
-
-      await logAuditSafe("user_invitation.accepted", () =>
-        auditService.log(invitation.companyId, {
+      // CRITICAL_AUDIT: membership + invitation acceptance share one TX.
+      await auditService.log(
+        invitation.companyId,
+        {
           entityType: "user_invitation",
           entityId: invitation.id,
           action: "invitation_accepted",
@@ -875,8 +892,11 @@ export const userInvitationService = {
             isNewUser,
           },
           userId: resolvedUser.id,
-        }),
+        },
+        transaction,
       );
+
+      await transaction.commit();
 
       return {
         data: {
@@ -977,10 +997,9 @@ export const userInvitationService = {
         );
       }
 
-      await transaction.commit();
-
-      await logAuditSafe("user_invitation.declined", () =>
-        auditService.log(invitation.companyId, {
+      await auditService.log(
+        invitation.companyId,
+        {
           entityType: "user_invitation",
           entityId: invitation.id,
           action: "invitation_declined",
@@ -989,8 +1008,11 @@ export const userInvitationService = {
             userExists: Boolean(existingUser),
           },
           userId: existingUser?.id ?? input.authenticatedUserId ?? null,
-        }),
+        },
+        transaction,
       );
+
+      await transaction.commit();
 
       return {
         data: {

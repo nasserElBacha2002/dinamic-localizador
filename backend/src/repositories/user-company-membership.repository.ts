@@ -369,6 +369,12 @@ export const userCompanyMembershipRepository = {
       isDefault?: boolean;
     },
     validateLockedMembership: (existing: UserCompanyMembership) => void,
+    beforeCommit?: (input: {
+      transaction: sql.Transaction;
+      previous: UserCompanyMembership;
+      updated: UserCompanyMembership;
+      row: Record<string, unknown>;
+    }) => Promise<void>,
   ): Promise<{
     previous: UserCompanyMembership;
     updated: UserCompanyMembership;
@@ -434,6 +440,10 @@ export const userCompanyMembershipRepository = {
           "COMPANY_USER_LOAD_FAILED",
           "No se pudo cargar el usuario actualizado.",
         );
+      }
+
+      if (beforeCommit) {
+        await beforeCommit({ transaction, previous: existing, updated, row });
       }
 
       await transaction.commit();

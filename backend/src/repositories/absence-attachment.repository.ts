@@ -235,12 +235,13 @@ export const absenceAttachmentRepository = {
     transaction?: sql.Transaction,
   ): Promise<number> {
     const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const lockHint = transaction ? "WITH (UPDLOCK, HOLDLOCK)" : "";
     const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("absenceRequestId", sql.UniqueIdentifier, absenceRequestId)
       .query(`
         SELECT COUNT(1) AS cnt
-        FROM absence_request_attachments
+        FROM absence_request_attachments ${lockHint}
         WHERE company_id = @companyId
           AND absence_request_id = @absenceRequestId
           AND status = N'AVAILABLE'
@@ -552,8 +553,11 @@ export const absenceAttachmentRepository = {
       incrementAttempt?: boolean;
       expectedCurrentStatuses?: AbsenceAttachmentStatus[];
     },
+    transaction?: sql.Transaction,
   ): Promise<AbsenceRequestAttachment | null> {
-    const current = await this.findByIdAny(companyId, attachmentId);
+    const current = transaction
+      ? await this.findByIdAnyForUpdate(companyId, attachmentId, transaction)
+      : await this.findByIdAny(companyId, attachmentId);
     if (!current) {
       return null;
     }
@@ -565,9 +569,8 @@ export const absenceAttachmentRepository = {
     }
     assertAttachmentStatusTransition(current.status, status);
 
-    const pool = getPool();
-    const result = await pool
-      .request()
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, attachmentId)
       .input("status", sql.NVarChar(30), status)
@@ -614,6 +617,28 @@ export const absenceAttachmentRepository = {
     return mapAbsenceAttachmentRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Locks the attachment row for mutation (UPDLOCK, HOLDLOCK) within a transaction.
+   * Compatible with approve's countAvailable UPDLOCK on AVAILABLE rows.
+   */
+  async findByIdAnyForUpdate(
+    companyId: string,
+    attachmentId: string,
+    transaction: sql.Transaction,
+  ): Promise<AbsenceRequestAttachment | null> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, attachmentId)
+      .query(`
+        SELECT TOP 1 *
+        FROM absence_request_attachments WITH (UPDLOCK, HOLDLOCK)
+        WHERE id = @id AND company_id = @companyId
+      `);
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapAbsenceAttachmentRow(result.recordset[0] as Record<string, unknown>);
+  },
   async findByIdempotencyKey(
     companyId: string,
     scope: { requestId?: string | null; draftId?: string | null },

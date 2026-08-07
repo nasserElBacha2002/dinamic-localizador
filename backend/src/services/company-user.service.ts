@@ -304,10 +304,40 @@ export const companyUserService = {
             update: input,
           });
         },
+        async ({ transaction, row: lockedRow }) => {
+          const dtoPreview = mapCompanyUserDto(lockedRow, requesterIsPlatformAdmin);
+          // CRITICAL_AUDIT: privilege change must not commit without audit_logs.
+          await auditService.log(
+            companyId,
+            {
+              entityType: "company_user_membership",
+              entityId: userId,
+              action: "company_user_update_allowed",
+              userId: requesterUserId,
+              reason: null,
+              previousData: previousSnapshot,
+              newData: {
+                ...sanitizeMembershipAuditSnapshot({
+                  role: dtoPreview.companyRole,
+                  status: dtoPreview.membershipStatus,
+                  isDefault: dtoPreview.isDefault,
+                }),
+                result: "ALLOWED",
+                modificationType,
+                actorUserId: requesterUserId,
+                targetUserId: userId,
+                companyId,
+                ...(correlationId ? { correlationId } : {}),
+              },
+            },
+            transaction,
+          );
+        },
       );
       row = result.row;
     } catch (error) {
       if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
+        // BEST_EFFORT: denial attempts have no successful business mutation to couple.
         await logCompanyUserAudit({
           companyId,
           actorUserId: requesterUserId,
@@ -326,27 +356,7 @@ export const companyUserService = {
       throw error;
     }
 
-    const dto = mapCompanyUserDto(row, requesterIsPlatformAdmin);
-
-    await logCompanyUserAudit({
-      companyId,
-      actorUserId: requesterUserId,
-      entityType: "company_user_membership",
-      entityId: userId,
-      targetUserId: userId,
-      action: "company_user_update_allowed",
-      result: "ALLOWED",
-      modificationType,
-      previousData: previousSnapshot,
-      newData: sanitizeMembershipAuditSnapshot({
-        role: dto.companyRole,
-        status: dto.membershipStatus,
-        isDefault: dto.isDefault,
-      }),
-      correlationId,
-    });
-
-    return dto;
+    return mapCompanyUserDto(row, requesterIsPlatformAdmin);
   },
 
   async deactivate(

@@ -1,29 +1,89 @@
+import sql from "mssql";
 import { AppError } from "../errors/app-error";
+import { getPool } from "../database/connection";
 import { absenceAttachmentRepository } from "../repositories/absence-attachment.repository";
 import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import type { AbsenceRequestAttachmentDto } from "../types/absence-attachment";
 import { toAbsenceAttachmentDto } from "../types/absence-attachment";
 import { absenceAttachmentMetrics } from "../utils/absence-attachments/metrics";
+import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import { auditService } from "./audit.service";
 import { assertAttachmentsFeatureEnabled } from "./attachment-policy.service";
 import { getAttachmentStorage } from "./attachment-storage";
 
-const assertRequestEditableForAttachments = async (
-  companyId: string,
-  requestId: string,
-) => {
-  const request = await absenceRequestRepository.findById(companyId, requestId);
-  if (!request) {
-    throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud no encontrada");
-  }
-  if (!["PENDING", "NEEDS_INFO"].includes(request.status)) {
-    throw new AppError(
-      409,
-      "ABSENCE_ATTACHMENT_LOCKED",
-      "No se pueden modificar adjuntos en el estado actual de la solicitud",
+/**
+ * Soft-delete SQL phase: request row lock → attachment UPDLOCK → PENDING_DELETE.
+ * Same lock order as approve (request → AVAILABLE attachments) so H3 races serialize.
+ */
+const markPendingDeleteInTransaction = async (input: {
+  companyId: string;
+  requestId: string;
+  attachmentId: string;
+  deletedByUserId: string | null;
+  reason?: string;
+}) => {
+  const pool = getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+
+  try {
+    const request = await absenceRequestRepository.findByIdForUpdate(
+      input.companyId,
+      input.requestId,
+      transaction,
+    );
+    if (!request) {
+      throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud no encontrada");
+    }
+    if (!["PENDING", "NEEDS_INFO"].includes(request.status)) {
+      throw new AppError(
+        409,
+        "ABSENCE_ATTACHMENT_LOCKED",
+        "No se pueden modificar adjuntos en el estado actual de la solicitud",
+      );
+    }
+
+    const row = await absenceAttachmentRepository.findByIdAnyForUpdate(
+      input.companyId,
+      input.attachmentId,
+      transaction,
+    );
+    if (!row || row.status === "DELETED" || row.absenceRequestId !== input.requestId) {
+      throw new AppError(404, "ATTACHMENT_NOT_FOUND", "Adjunto no encontrado");
+    }
+
+    const pending = await absenceAttachmentRepository.markStatus(
+      input.companyId,
+      input.attachmentId,
+      "PENDING_DELETE",
+      {
+        deletedByUserId: input.deletedByUserId,
+        deletionReason: input.reason ?? "user_delete",
+        expectedCurrentStatuses: [row.status],
+      },
+      transaction,
+    );
+    if (!pending) {
+      throw new AppError(
+        409,
+        "ATTACHMENT_STATUS_CONFLICT",
+        "El adjunto cambió de estado. Reintentá.",
+      );
+    }
+
+    await transaction.commit();
+    return pending;
+  } catch (error) {
+    return rollbackTransactionSafely(
+      transaction,
+      {
+        operation: "attachment-deletion.markPendingDelete",
+        companyId: input.companyId,
+        entityId: input.attachmentId,
+      },
+      error,
     );
   }
-  return request;
 };
 
 export const attachmentDeletionService = {
@@ -35,32 +95,14 @@ export const attachmentDeletionService = {
     reason?: string;
   }): Promise<AbsenceRequestAttachmentDto> {
     await assertAttachmentsFeatureEnabled(input.companyId);
-    await assertRequestEditableForAttachments(input.companyId, input.requestId);
 
-    const row = await absenceAttachmentRepository.findById(
-      input.companyId,
-      input.requestId,
-      input.attachmentId,
-    );
-    if (!row || row.status === "DELETED") {
-      throw new AppError(404, "ATTACHMENT_NOT_FOUND", "Adjunto no encontrado");
-    }
-
-    await absenceAttachmentRepository.markStatus(
-      input.companyId,
-      input.attachmentId,
-      "PENDING_DELETE",
-      {
-        deletedByUserId: input.deletedByUserId,
-        deletionReason: input.reason ?? "user_delete",
-      },
-    );
+    const pending = await markPendingDeleteInTransaction(input);
 
     try {
       const storage = getAttachmentStorage();
       await storage.deleteObject({
-        objectKey: row.objectKey,
-        generation: row.objectGeneration ?? undefined,
+        objectKey: pending.objectKey,
+        generation: pending.objectGeneration ?? undefined,
       });
     } catch (error) {
       absenceAttachmentMetrics.deleteFailed({
@@ -97,7 +139,7 @@ export const attachmentDeletionService = {
         action: "ABSENCE_ATTACHMENT_DELETED",
         entityType: "absence_request_attachment",
         entityId: input.attachmentId,
-        previousData: { status: row.status },
+        previousData: { status: "PENDING_DELETE" },
         newData: { status: "DELETED" },
       });
     } catch (auditError) {
@@ -107,6 +149,38 @@ export const attachmentDeletionService = {
       });
     }
 
+    return toAbsenceAttachmentDto(deleted);
+  },
+
+  /**
+   * SQL-only soft delete for integrity tests (skips GCS). Same locking as softDelete SQL phase,
+   * then marks DELETED in a follow-up so AVAILABLE disappears before approve can commit.
+   */
+  async softDeleteSqlOnlyForTests(input: {
+    companyId: string;
+    requestId: string;
+    attachmentId: string;
+    deletedByUserId: string | null;
+    reason?: string;
+  }): Promise<AbsenceRequestAttachmentDto> {
+    await markPendingDeleteInTransaction(input);
+    const deleted = await absenceAttachmentRepository.markStatus(
+      input.companyId,
+      input.attachmentId,
+      "DELETED",
+      {
+        deletedByUserId: input.deletedByUserId,
+        deletionReason: input.reason ?? "test_delete",
+        expectedCurrentStatuses: ["PENDING_DELETE"],
+      },
+    );
+    if (!deleted) {
+      throw new AppError(
+        502,
+        "ATTACHMENT_DELETE_SQL_FAILED",
+        "No se pudo marcar DELETED tras PENDING_DELETE",
+      );
+    }
     return toAbsenceAttachmentDto(deleted);
   },
 };

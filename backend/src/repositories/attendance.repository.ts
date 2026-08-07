@@ -458,7 +458,7 @@ export const attendanceRepository = {
       reason: string;
     },
     transaction: sql.Transaction,
-  ): Promise<AttendanceRecord> {
+  ): Promise<AttendanceRecord | null> {
     const request = new sql.Request(transaction);
     const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -473,8 +473,15 @@ export const attendanceRepository = {
             reviewed_at = SYSUTCDATETIME(),
             review_reason = @reason
         OUTPUT INSERTED.*
-        WHERE id = @attendanceId AND company_id = @companyId
+        WHERE id = @attendanceId
+          AND company_id = @companyId
+          AND reviewed_at IS NULL
+          AND validation_status IN (N'PENDING_REVIEW', N'REJECTED')
       `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
 
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },

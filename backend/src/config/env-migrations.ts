@@ -1,5 +1,6 @@
 import { config } from "dotenv";
 import { z } from "zod";
+import { resolveMigrationDbCredentials } from "./migration-db-credentials";
 
 config();
 
@@ -9,8 +10,15 @@ const migrationEnvSchema = z.object({
   DB_HOST: z.string().min(1),
   DB_PORT: z.coerce.number().int().positive().default(1433),
   DB_NAME: z.string().min(1),
+  /** Runtime / shared fallback identity (historical DB_USER). */
   DB_USER: z.string().min(1),
   DB_PASSWORD: z.string().min(1),
+  /**
+   * Optional dedicated migration identity (Phases 3–4).
+   * When unset, migrations continue using DB_USER / DB_PASSWORD (backwards compatible).
+   */
+  DB_MIGRATION_USER: z.string().min(1).optional(),
+  DB_MIGRATION_PASSWORD: z.string().min(1).optional(),
   DB_ENCRYPT: z.stringbool().default(false),
   DB_TRUST_SERVER_CERTIFICATE: z.stringbool().default(true),
 });
@@ -23,4 +31,20 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-export const migrationEnv = parsed.data;
+const raw = parsed.data;
+const credentials = resolveMigrationDbCredentials(raw);
+
+export const migrationEnv = {
+  NODE_ENV: raw.NODE_ENV,
+  TZ: raw.TZ,
+  DB_HOST: raw.DB_HOST,
+  DB_PORT: raw.DB_PORT,
+  DB_NAME: raw.DB_NAME,
+  DB_USER: credentials.user,
+  DB_PASSWORD: credentials.password,
+  DB_ENCRYPT: raw.DB_ENCRYPT,
+  DB_TRUST_SERVER_CERTIFICATE: raw.DB_TRUST_SERVER_CERTIFICATE,
+  usesDedicatedMigrationIdentity: credentials.usesDedicatedMigrationIdentity,
+};
+
+export { resolveMigrationDbCredentials } from "./migration-db-credentials";

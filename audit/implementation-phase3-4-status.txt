@@ -1,0 +1,13 @@
+ M .env.example
+ M audit/database-integrity-audit.md
+ A audit/database-integrity-phase3-4-implementation.md
+ A audit/implementation-phase3-4-validation.txt
+ M backend/.env.example
+ M backend/src/config/env-migrations.ts
+ A backend/src/config/migration-db-credentials.test.ts
+ A backend/src/config/migration-db-credentials.ts
+ A backend/src/database/phase3-4-db-security.integration.test.ts
+ A database/migrations/089_phase3_4_db_security_roles.sql
+ A database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql
+ M docker-compose.prod.yml
+ M docker-compose.yml

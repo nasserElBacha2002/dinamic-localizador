@@ -1,54 +1,35 @@
-# Phase 1 corrections — validation evidence
+# Phase 2 corrections — validation evidence
 Date: 2026-08-07
 
-## Commands
-
-### npm run build (backend)
-exit code: 0
-result: pass (tsc)
-
-### npx eslint (changed Phase 1 correction files only)
+## npm run build (backend)
 exit code: 0
 result: pass
+
+## eslint (touched files)
 files:
-  - src/database/run-migrations.ts
-  - src/database/run-migrations.test.ts
-  - src/database/phase1-migration-safety.integration.test.ts
-  - src/services/database-integrity-phase1.integration.test.ts
-  - src/test-helpers/composite-fk-metadata.ts
-
-### npm run lint (full backend)
-exit code: 0 (tool reported) / 63 pre-existing errors in unrelated files
-result: pre-existing failures unrelated to Phase 1 corrections (not introduced here)
-
-### npm run migrate
+  - src/utils/audit-sanitize.ts
+  - src/utils/audit-sanitize.test.ts
+  - src/repositories/audit.repository.ts
+  - src/services/database-integrity-phase2.integration.test.ts
 exit code: 0
-result: Migration applied: 088_phase1_work_team_members_contract.sql
+result: pass
 
-### npm run migrate:status
+## npm test (unit)
 exit code: 0
-result: 087 and 088 both applied
+result: pass (includes sanitizeAuditPayload 3/3)
 
-### npm test (unit)
-exit code: 0
-result: tests 1224 / pass 1224 / fail 0
-
-### Phase 1 + migration-safety integration
+## Phase 2 SQL Server integration
 command:
   EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit \
-    src/database/phase1-migration-safety.integration.test.ts \
-    src/database/run-migrations.test.ts \
-    src/services/database-integrity-phase1.integration.test.ts
+    src/services/database-integrity-phase2.integration.test.ts
 exit code: 0
-result: tests 23 / pass 23 / fail 0
-  - failure injection (CREATE + THROW): pass
-  - failure injection (DROP FK + THROW): pass
-  - 088 forward/rollback/forward: pass
-  - 087 forward/rollback/forward: pass
-  - cross-tenant matrix + FK metadata: pass
-
-## Decisions (short)
-1. Runner: one TDS Transaction per migration file
-2. work_team_members: 087 expand + 088 contract (rolling deploy)
-3. 087 edited locally; 088 additive
-4. work-team remove/exists: NO_CHANGE
+tests: 12
+pass: 12
+fail: 0
+skipped: 0
+coverage:
+  - attendance success / audit fail / concurrent
+  - membership success / audit fail / last-owner
+  - invitation accept success / audit fail
+  - already-member accept success / audit fail
+  - decline success / audit fail

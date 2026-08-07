@@ -1,0 +1,1086 @@
+diff --git a/.env.example b/.env.example
+index e9dc596..e24ca7d 100644
+--- a/.env.example
++++ b/.env.example
+@@ -20,43 +20,50 @@ TZ=America/Argentina/Buenos_Aires
+ BACKEND_INTERNAL_PORT=3000
+ BACKEND_HOST_PORT=3000
+ FRONTEND_HOST_PORT=5173
+ 
+ FRONTEND_URL=http://localhost:5173
+ APP_BASE_URL=http://localhost:3000
+ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+ 
+ VITE_API_URL=http://localhost:3000/api
+ VITE_GOOGLE_MAPS_API_KEY=
+ VITE_GOOGLE_MAPS_MAP_ID=
+ 
+ # Producción (deploy via GHCR): imagen pre-construida en GitHub Actions.
+ # Ejemplo: FRONTEND_IMAGE=ghcr.io/<owner>/<repo>/frontend:develop-latest
+ # FRONTEND_IMAGE=
+ 
+ DB_HOST=sqlserver
+ DB_PORT=1433
+ DB_PORT_EXTERNAL=14330
+ DB_NAME=dinamic_attendance
++# Runtime identity (backend). Local Docker defaults to sa; production should use a
++# dedicated login mapped to database role dinamic_app_runtime (see Phase 3–4 audit).
+ DB_USER=sa
+-# Contraseña SA de SQL Server para Docker Compose (backend, migraciones y healthcheck).
++# Contraseña SA de SQL Server para Docker Compose (sqlserver healthcheck / db-init).
++# Also used as shared app password until runtime/migration identities are split.
+ DB_PASSWORD=
++# Optional dedicated migration identity (migrations service / npm run migrate).
++# When unset, migrations reuse DB_USER/DB_PASSWORD (backwards compatible).
++# DB_MIGRATION_USER=
++# DB_MIGRATION_PASSWORD=
+ DB_ENCRYPT=false
+ DB_TRUST_SERVER_CERTIFICATE=true
+ 
+ JWT_SECRET=
+ JWT_EXPIRES_IN=8h
+ 
+ INVITATION_TTL_HOURS=72
+ # EMAIL_TRANSPORT=smtp|console|disabled
+ # console only in development/test (never counts as delivered).
+ # production: use smtp (requires SMTP_*) or explicit disabled.
+ # EMAIL_TRANSPORT=console
+ # SMTP_HOST=
+ # SMTP_PORT=587
+ # SMTP_SECURE=false
+ # SMTP_USER=
+ # SMTP_PASSWORD=
+ # SMTP_FROM=
+ # SMTP_CONNECTION_TIMEOUT_MS=10000
+ # SMTP_SOCKET_TIMEOUT_MS=20000
+ 
+diff --git a/audit/database-integrity-audit.md b/audit/database-integrity-audit.md
+index 8dd8801..ef3d3f0 100644
+--- a/audit/database-integrity-audit.md
++++ b/audit/database-integrity-audit.md
+@@ -441,46 +441,49 @@ Los más graves son **P1** (pueden corromper datos bajo concurrencia o admin SQL
+ 2. **Absence overlap:** tomar `UPDLOCK` de `employees` (o `sp_getapplock` keyed) dentro de la misma transaction que `assertNoOverlap` + `INSERT` (`H1`).  
+ 3. **Mover attachment assert / checkout session** dentro de la tx existente (`H3`, `H4`).  
+ 4. Corregir comentario o DDL `ON DELETE` en observability (`H5`).  
+ 5. Catch unique en seeds (`H11`); retry webhook claim (`H12`).  
+ 6. Evaluar filtered unique company name / attachment keys (`H6`, `H7`).
+ 
+ ### Fase 1 — Integridad crítica
+ 
+ * Extender composite `(company_id, id)` FKs en tablas multi-tenant aún single-column (`H8`).  
+ * Mantener **único** trigger de categorías; no agregar triggers de overlap/geofence.  
+ * Si producto pasa a multi-ASSOCIATED payroll: migration que dropee `UX_payroll_receipts_active_period` y agregue checksum unique (no documentar como hecho hasta que exista en migraciones versionadas).
+ 
+ ### Fase 2 — Auditoría
+ 
+ * Audit in-transaction en review / membership role changes.  
+ * No audit trigger genérico.  
+ * Opcional: event table estilo lifecycle para membership role changes.
+ 
+ ### Fase 3 — Atomicidad / SP
+ 
+-* **No** portar check-in/payroll/invites a SP.  
+-* Solo considerar SP para **purge/reconcile admin** si ops lo necesita (`H16`).
++* **Hecho (análisis):** no portar check-in/payroll/invites a SP.
++* **Hecho (decisión):** purge/reconcile admin → **KEEP_APP / KEEP_SCRIPT** (sin SP); ver `audit/database-integrity-phase3-4-implementation.md`.
+ 
+ ### Fase 4 — Seguridad DB avanzada
+ 
+-* EXECUTE-only: **diferir** salvo compliance. Beneficio bajo vs reescritura total.
++* Roles `dinamic_app_runtime` / `dinamic_app_migrations` (migration `089`).
++* Credenciales de migración opcionales `DB_MIGRATION_*` (fallback a `DB_*`).
++* EXECUTE-only completo: **REJECTED**.
++* Cutover fuera de `sa`: runbook en el informe Phase 3–4 (residual P1 hasta ops).
+ 
+ ---
+ 
+ ## Matriz resumen (clasificación §14)
+ 
+ | ID | Entidad/flujo | Problema actual | Riesgo | Solución DB recomendada | Tipo | Prioridad |
+ | -- | ------------- | --------------- | ------ | ----------------------- | ---- | --------- |
+ | H1 | Absence overlap | Phantom race | Alto | Employee lock / applock | LOCKING | P1 |
+ | H2 | Attendance review | Double review | Alto | UNIQUE + CAS | CONSTRAINT | P1 |
+ | H3 | Absence approve | Attachment TOCTOU | Medio-alto | Same-tx assert | TRANSACTION | P1 |
+ | H4 | Checkout w/o location | Session not atomic | Medio | Same-tx session complete | TRANSACTION | P1 |
+ | H5 | Observability FK docs | Misleading ON DELETE | Bajo | Fix DDL/docs | CONSTRAINT | P2 |
+ | H6 | Company soft-delete name | Unique policy | Medio | Filtered unique | INDEX | P2 |
+ | H7 | Attachment object_key | Soft-delete reuse | Medio | Filtered unique | INDEX | P2 |
+ | H8 | Tenant FK legacy | Cross-tenant teorético | Medio | Composite FK | CONSTRAINT | P2 |
+ | H9 | Observability nullable company | Orphans | Medio | NOT NULL | CONSTRAINT | P2 |
+ | H10 | Audit post-commit | Lost audit | Medio | In-tx audit | AUDIT | P2 |
+ | H11 | Seed IF NOT EXISTS | Race 500 | Bajo | Catch unique | TRANSACTION | P2 |
+ | H12 | Webhook claim insert | Noisy fail | Bajo | Retry | TRANSACTION | P2 |
+ | H13 | Last owner | App-only | Medio (SQL bypass) | Optional trigger / keep app | NO_CHANGE→TRIGGER? | P2 |
+diff --git a/audit/database-integrity-phase3-4-implementation.md b/audit/database-integrity-phase3-4-implementation.md
+new file mode 100644
+index 0000000..6f159a0
+--- /dev/null
++++ b/audit/database-integrity-phase3-4-implementation.md
+@@ -0,0 +1,318 @@
++# Database Integrity Phases 3 & 4
++
++## Administrative Atomicity and DB Security Hardening
++
++### 1. Executive Summary
++
++Estado: **COMPLETE_WITH_ISSUES**
++
++Phases 3 and 4 were driven by repository evidence, not by a mandate to create stored procedures or force EXECUTE-only.
++
++| Area | Decision |
++|------|----------|
++| Business workflows (attendance, absences, payroll, WhatsApp, invites) | **KEEP_APPLICATION_TRANSACTION** — no SPs |
++| Company purge (DB stages) | **KEEP_APP_TRANSACTION** — already staged TX + GCS outbox; SP would not remove runtime DELETE need |
++| Repair / reconcile / backfill CLIs | **KEEP_SCRIPT** — recurring ops scripts stay TypeScript; SP alone does not reduce privilege until admin identity exists |
++| Full EXECUTE-only runtime | **REJECTED** — raw SQL across repositories; rewrite cost ≫ benefit |
++| Least-privilege roles | **IMPLEMENTED** (additive): `dinamic_app_runtime`, `dinamic_app_migrations` via migration `089` |
++| Credential split plumbing | **IMPLEMENTED** (backwards compatible): optional `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` |
++| Cutover off `sa` | **DOCUMENTED runbook** — not auto-revoked (safe rollout); residual **P1** until ops completes cutover |
++
++**COMPLETE_WITH_ISSUES** because default local/prod compose still documents/uses shared `sa` until operators create dedicated logins and map them to the new roles. Roles and env plumbing are ready; live privilege reduction is a deployment step, not a silent REVOKE.
++
++---
++
++### 2. Current DB identities
++
++| Identity | Source | Purpose |
++|----------|--------|---------|
++| SQL Server `sa` | `MSSQL_SA_PASSWORD=${DB_PASSWORD}` in Compose; healthcheck/`db-init` use `sa` | Instance bootstrap |
++| Application / migrations (shared) | `DB_USER` / `DB_PASSWORD` (examples default `sa`) | Backend pool + migration runner historically share one login |
++| Optional migration override | `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` (new) | Migrations container / `npm run migrate` when set; falls back to `DB_*` |
++
++No LOGIN/USER/PASSWORD is created in versioned migrations (by design).
++
++Secrets: not printed; `.env` remains gitignored; examples use empty placeholders.
++
++---
++
++### 3. Current privilege model
++
++| Finding | Evidence | Severity |
++|---------|----------|----------|
++| Runtime + migrations share one SQL login | `env.ts`, `env-migrations.ts` (pre-change), Compose both pass `DB_USER` | P1 / P2 |
++| Default identity is `sa` | `.env.example`, Compose healthcheck | P1 |
++| No database roles for app before 089 | Grep: no prior `CREATE ROLE` / `GRANT` in migrations | P2 |
++| No project `CREATE PROCEDURE` | Migrations inventory | — |
++| Prod SQL not published | `docker-compose.prod.yml` `ports: !override []` | Positive |
++| Dev SQL published | `1435:1433` on host | P2 (local only) |
++| Encrypt defaults off | `DB_ENCRYPT=false`, `DB_TRUST_SERVER_CERTIFICATE=true` | P2 for remote; acceptable on private Docker network if documented |
++
++---
++
++### 4. Runtime write-path matrix
++
++| Write path | Runtime/Admin | Tables (summary) | Transaction | SQL directo | Candidate SP | Security impact |
++|------------|---------------|------------------|-------------|-------------|--------------|-----------------|
++| HTTP API (CRUD ops, employees, …) | Runtime | Many dbo tables | Per-service TX | Parametrized repo SQL | No | Broad DML needed |
++| Attendance check-in/out | Runtime | attendance, sessions, … | App TX + Phase 0A | Repo SQL | **KEEP_APP** | Domain orchestration |
++| Absence approve/reject | Runtime | absences, balances, … | App TX + H1 | Repo SQL | **KEEP_APP** | Domain |
++| Attachment approve | Runtime | attachments | App TX + H3 | Repo SQL | **KEEP_APP** | Domain |
++| Payroll upload/replace | Runtime | payroll_* | App TX | Repo SQL | **KEEP_APP** | Domain |
++| Invitation accept/role | Runtime | memberships, invites, audit | App TX + Phase 2 | Repo SQL | **KEEP_APP** | Domain |
++| WhatsApp webhook | Runtime | messages, sessions, attendance | App TX + idempotency | Repo SQL | **KEEP_APP** | External I/O |
++| Reminder / materialization jobs | Runtime | notifications, workdays | Job TX | Repo SQL | No | Same DML surface |
++| Company deactivate/reactivate | Runtime | companies, memberships, lifecycle | TX + `sp_getapplock` | Service SQL | No | Already atomic |
++| Company purge STORAGE_* | Runtime job | pending_storage_deletion + GCS | Not DB-global | Service | **No SP** (GCS) | Side effects outside SQL |
++| Company purge OPERATIONAL/IDENTITY | Runtime job | Dozens of tenant tables | Per-stage `sql.Transaction` | Set-based deletes | **KEEP_APP** | Needs DELETE |
++| Migration runner | Migration identity | Schema + `system_migrations` | One TX per file (Phase 1) | DDL scripts | N/A | Needs DDL |
++| reconcile/repair/backfill scripts | Admin/CLI | Targeted tables | Script-defined | TS + SQL | **KEEP_SCRIPT** | Same login as app today |
++| Seeds / admin:create | Admin/CLI | users, services, … | Script | TS | **KEEP_SCRIPT** | Elevated |
++| Manual SQL | Operator | Any | Ad hoc | Direct | N/A | Highest risk if `sa` |
++
++---
++
++### 5. Stored procedure candidates
++
++| Candidate | Classification |
++|-----------|----------------|
++| Attendance / checkout / geofence | KEEP_APPLICATION_TRANSACTION |
++| Absence / payroll / invites / WhatsApp | KEEP_APPLICATION_TRANSACTION |
++| Company purge (full pipeline) | KEEP_APPLICATION_TRANSACTION (staged + GCS) |
++| Company purge DB-only stage only | SP_OPTIONAL → **NO_CHANGE** (app TX already clear; SP does not shrink runtime DML) |
++| Reconcile services / absence ledger | KEEP_SCRIPT |
++| Repair operation-reassignment / location duplicates / schedule drift | KEEP_SCRIPT |
++| Absence balance backfill | KEEP_SCRIPT (already TS + integration tests) |
++| Generic “admin maintenance” wrapper | NO_CHANGE |
++
++---
++
++### 6. Stored procedure decisions
++
++| Candidate | Current flow | Benefit | Cost | Security gain | Decision |
++|-----------|--------------|---------|------|---------------|----------|
++| Check-in / checkout / review | TS TX + constraints + Phase 2 audit | Low | Dual logic | None | **KEEP_APP_TRANSACTION** |
++| Company purge DB stages | Staged TS TX + lease | Marginal atomicity (already TX) | Duplicate cascade SQL; GCS stays out | None until EXECUTE-only admin | **KEEP_APP_TRANSACTION** |
++| usp_company_purge_database_stage | — | Would encapsulate deletes | Large SP, lock/log risk on big tenants | Low while runtime keeps DELETE | **NO_CHANGE** |
++| Repair/reconcile CLIs | One-off / ops TS | Operator EXEC UX | Rewrite + drift | Only with admin role + revoke DML | **KEEP_SCRIPT** / **DEFER** SP |
++| Full EXECUTE-only | Raw SQL repos | Narrow surface | Rewrite entire data layer | High in theory | **REJECTED** |
++
++---
++
++### 7. Implemented SPs
++
++**None.**
++
++Rationale: no candidate met `SP_STRONG_CANDIDATE` with demonstrated atomicity/security gain over existing application transactions.
++
++---
++
++### 8. SP atomicity/concurrency tests
++
++**N/A** — no SPs implemented.
++
++Phase 0A / purge lease / applock tests from prior phases remain the concurrency story for admin lifecycle.
++
++---
++
++### 9. Runtime permission model
++
++| Capability | Decision |
++|------------|----------|
++| SELECT / INSERT / UPDATE / DELETE on `SCHEMA::dbo` | Required (repos + purge) |
++| EXECUTE on `SCHEMA::dbo` | Granted for UDFs / future selective SPs |
++| CREATE / ALTER / DROP (DDL) | **Not** granted to `dinamic_app_runtime` |
++| `db_owner` / `sysadmin` / `CONTROL` | Must not be used by runtime after cutover |
++| Full EXECUTE-only | **REJECTED** |
++
++Role: `dinamic_app_runtime` (migration `089`).
++
++---
++
++### 10. Migration permission model
++
++| Capability | Decision |
++|------------|----------|
++| CREATE TABLE/VIEW/PROCEDURE/FUNCTION/TYPE | Granted to `dinamic_app_migrations` |
++| ALTER / REFERENCES / DML / EXECUTE on `SCHEMA::dbo` | Granted (backfills + FK work) |
++| `db_owner` / `sysadmin` | Not used by role definition |
++| Identity | Prefer dedicated login via `DB_MIGRATION_*`; fallback `DB_*` |
++
++Preserve Phase 1: one transaction per migration file + `system_migrations` registration.
++
++---
++
++### 11. Admin maintenance permission model
++
++| Decision | Detail |
++|----------|--------|
++| `dinamic_app_admin_maintenance` | **DEFERRED** — no admin SPs yet; empty EXECUTE-only role adds no value |
++| Current repair CLIs | Continue under migration or ops identity with DML; document risk |
++| Future | If a recurring DB-only reconcile becomes EXEC-worthy, add SP + EXECUTE grant to admin role, then revoke ad hoc DML from operators |
++
++---
++
++### 12. Credential/deployment strategy
++
++**Rollout (never REVOKE first):**
++
++1. Apply migration `089` (creates roles + GRANTs).
++2. Outside Git: create SQL logins with strong passwords (secret manager).
++3. `CREATE USER … FOR LOGIN …` in `dinamic_attendance`.
++4. `ALTER ROLE dinamic_app_runtime ADD MEMBER <runtime_user>;`
++5. `ALTER ROLE dinamic_app_migrations ADD MEMBER <migration_user>;`
++6. Set `DB_USER`/`DB_PASSWORD` = runtime; `DB_MIGRATION_USER`/`DB_MIGRATION_PASSWORD` = migrations.
++7. Deploy migrations service → backend; validate health + smoke business write.
++8. Disable/stop using `sa` for app and migrations (keep `sa` only for break-glass / SQL container bootstrap).
++
++**Rollback (security):**
++
++- Re-point env to previous login (often `sa`) — restores connectivity.
++- Role DROP only via `089` rollback script if no users depend on roles.
++- Do not “roll back” to insecure as a habit; treat as emergency.
++
++**Credential rotation:** create new login → map role → switch env → validate → disable old login. Never store passwords in SQL migrations.
++
++---
++
++### 13. Network/SQL exposure
++
++| Environment | Exposure | Classification |
++|-------------|----------|----------------|
++| Local Compose | Host `1435:1433` | LOCAL_DEV — acceptable; do not publish unnecessarily on shared networks |
++| Prod overlay | Ports overridden empty | PRIVATE_NETWORK — SQL internal to Compose network |
++| Encryption | Default `DB_ENCRYPT=false` | Fine on single-host Docker network; enable encrypt for remote SQL |
++
++No new ports opened in this phase.
++
++---
++
++### 14. Dangerous SQL Server features
++
++Integration test reads (does not mutate) `xp_cmdshell`, OLE Automation, CLR, Ad Hoc Distributed Queries, and database `TRUSTWORTHY`.
++
++Policy:
++
++- Do not enable `xp_cmdshell` / OLE / HTTP from SQL.
++- No audit triggers (Phase 2 decision stands).
++- No `EXECUTE AS OWNER` introduced.
++
++Instance hardening is ops-owned when the project controls the SQL instance; do not flip flags blindly on shared servers.
++
++---
++
++### 15. Security tests
++
++| Test | Mode | Result expectation |
++|------|------|--------------------|
++| `migration-db-credentials.test.ts` | Unit | Credential resolution fallback / dedicated |
++| `phase3-4-db-security.integration.test.ts` | `RUN_DB_INTEGRATION_TESTS=true` | Roles exist; schema GRANTs present; dangerous feature probe (read-only) |
++| Runtime ALTER/DROP denial | `RUN_DB_PRIVILEGE_TESTS=true` + `DB_PRIVILEGE_TEST_USER`/`PASSWORD` | Optional; skipped until dedicated runtime login exists |
++
++Denial tests are **not** claimed against `sa` (would pass wrongly).
++
++---
++
++### 16. Migration/rollback strategy
++
++| Artifact | Role |
++|----------|------|
++| `089_phase3_4_db_security_roles.sql` | Forward: roles + grants |
++| `rollback/089_phase3_4_db_security_roles_rollback.sql` | Drop members then roles |
++| Runner | Unchanged atomicity (Phase 1) |
++
++Schema rollback ≠ security rollback (see §12).
++
++---
++
++### 17. Performance considerations
++
++Large company purge already **batched by stage** (storage then operational TX then identity TX). A single mega-SP delete would worsen lock escalation and transaction log pressure → supports **NO_CHANGE** for purge SP.
++
++---
++
++### 18. NO_CHANGE decisions
++
++| Topic | Decision |
++|-------|----------|
++| Business → SP | NO_CHANGE / KEEP_APP |
++| Purge → SP | NO_CHANGE |
++| Repair scripts → SP | KEEP_SCRIPT (SP deferred) |
++| EXECUTE-only runtime | REJECTED |
++| Admin EXECUTE role | DEFERRED |
++| SESSION_CONTEXT for audit | Not introduced (pool reuse risk) |
++| DENY statements | Not used |
++| Frontend / admin UI for SPs | Not in scope |
++| Auto-revoke `sa` | Not done (rollout safety) |
++
++---
++
++### 19. Remaining risks
++
++| Risk | Before | After | Residual risk | Follow-up |
++|------|--------|-------|---------------|-----------|
++| Runtime uses `sa` / shared login | Default | Roles + env split ready; cutover optional | **P1** until dedicated logins mapped | Ops runbook §12 |
++| Runtime DML breadth (incl. DELETE) | Full via `sa` | Same DML on role after cutover | Direct SQL still possible with stolen runtime creds | Accept; constraints + audit remain |
++| Admin scripts need broad DML | Yes | Unchanged | Operator mistake | DEFER admin SPs if ops demand |
++| Dev SQL port published | Yes | Unchanged | Local exposure | Keep prod unpublished |
++| `DB_ENCRYPT=false` | Default | Documented | MITM if SQL remote | Enable when SQL is remote |
++| ORDER BY allowlists in repos | Dynamic column names from code maps | Unchanged | Injection if map ever takes raw input | Keep allowlists; no change this phase |
++
++---
++
++### 20. Validation
++
++See `audit/implementation-phase3-4-validation.txt` for command exit codes.
++
++Expected commands:
++
++- `cd backend && npm run build`
++- Unit: `migration-db-credentials` (+ full unit suite if run)
++- `docker compose config` (may warn on unset local env; prod overlay validates port override)
++- Integration: `phase3-4-db-security.integration.test.ts` when SQL available
++
++---
++
++## Obligatory SP decision table
++
++| Candidate | Decision | Why | Atomicity gain | Security gain | Tests |
++|-----------|----------|-----|----------------|---------------|-------|
++| Attendance / WhatsApp / payroll / invites / absences | KEEP_APP_TRANSACTION | Domain orchestration | None (already TX) | None | Prior phase suites |
++| Company purge DB stages | KEEP_APP_TRANSACTION | Staged TX + GCS | None material | None without EXECUTE-only | Existing purge/lease |
++| usp_company_purge_database_stage | NO_CHANGE | Cost > benefit | Low | Low | N/A |
++| Repair/reconcile/backfill CLIs | KEEP_SCRIPT | Ops TS; not DB-only contracts | N/A | Low today | Existing script tests |
++| Full EXECUTE-only | REJECTED | Rewrite all repos | N/A | Theoretical only | N/A |
++
++---
++
++## Obligatory permissions table
++
++| Identity | SELECT | INSERT | UPDATE | DELETE | EXECUTE | DDL | Decision |
++|----------|--------|--------|--------|--------|---------|-----|----------|
++| Runtime (`dinamic_app_runtime`) | dbo schema | dbo | dbo | dbo | dbo schema | No | Role defined; map login in ops |
++| Migrations (`dinamic_app_migrations`) | dbo | dbo | dbo | dbo | dbo | CREATE* + ALTER schema | Role defined; map login in ops |
++| Admin maintenance | — | — | — | — | Future SPs only | No | DEFERRED |
++| `sa` (bootstrap) | All | All | All | All | All | All | Break-glass only after cutover |
++
++---
++
++## Code / config delivered this phase
++
++- `database/migrations/089_phase3_4_db_security_roles.sql`
++- `database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql`
++- `backend/src/config/migration-db-credentials.ts` (+ unit tests)
++- `backend/src/config/env-migrations.ts` (optional dedicated migration identity)
++- `backend/src/database/phase3-4-db-security.integration.test.ts`
++- Compose / `.env.example` documentation for `DB_MIGRATION_*`
++
++---
++
++## Priorities summary
++
++| ID | Finding | Action |
++|----|---------|--------|
++| P1 | Shared `sa` for app | Runbook cutover; roles ready |
++| P2 | Runtime/migration same identity | Optional `DB_MIGRATION_*` + Compose wiring |
++| P2 | Dev SQL published | Document; prod already internal |
++| P3 | Optional admin SPs for repair | DEFER until ops asks |
++| — | EXECUTE-only | REJECTED with evidence |
+diff --git a/audit/implementation-phase3-4-validation.txt b/audit/implementation-phase3-4-validation.txt
+new file mode 100644
+index 0000000..5a441dd
+--- /dev/null
++++ b/audit/implementation-phase3-4-validation.txt
+@@ -0,0 +1,60 @@
++# Phase 3 & 4 validation log
++# Generated: 2026-08-07 (local agent run)
++# No secrets included.
++
++## Commands
++
++### backend build
++command: cd backend && npm run build
++exit_code: 0
++result: pass
++
++### unit tests (full suite via run-unit-tests.mjs)
++command: cd backend && node ./scripts/run-unit-tests.mjs
++exit_code: 0
++result: pass
++notes: tests 1226, fail 0 (includes migration-db-credentials)
++
++### unit tests (focused)
++command: cd backend && npx tsx --test src/config/migration-db-credentials.test.ts src/database/run-migrations.test.ts
++exit_code: 0
++result: pass
++notes: 5/5 pass
++
++### integration — phase3-4 db security
++command: cd backend && EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit src/database/phase3-4-db-security.integration.test.ts
++exit_code: 0
++result: pass
++notes: 4 pass, 1 skip (privilege denial requires RUN_DB_PRIVILEGE_TESTS + dedicated runtime login)
++
++### docker compose config (dev)
++command: docker compose config --quiet
++exit_code: 1
++result: fail (pre-existing / local env)
++notes: missing BACKEND_* / FRONTEND_* host ports in bare env → "no port specified: :<empty>". Not introduced by Phase 3–4 role wiring.
++
++### docker compose prod overlay
++command: docker compose -f docker-compose.yml -f docker-compose.prod.yml config --quiet
++exit_code: 0
++result: pass (with warnings for unset optional Twilio/bot vars in bare shell)
++notes: SQL ports remain overridden empty in prod overlay.
++
++### frontend build
++command: skipped
++result: skip
++notes: no frontend changes in this phase
++
++### lint
++command: skipped (full eslint)
++result: skip
++notes: touched TS files typecheck via tsc build
++
++## Summary
++
++| Area | Result |
++|------|--------|
++| Build | pass |
++| Unit | pass |
++| Integration roles/grants | pass |
++| Privilege denial vs dedicated user | skip (await ops login) |
++| SP tests | N/A (no SPs) |
+diff --git a/backend/.env.example b/backend/.env.example
+index 9904f47..72d3d7f 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -1,35 +1,39 @@
+ # Variables para ejecutar el backend fuera de Docker (npm run dev en backend/).
+ # En producción con Docker Compose, usá el `.env` raíz del monorepo.
+ 
+ NODE_ENV=development
+ PORT=3000
+ FRONTEND_URL=http://localhost:5173
+ APP_BASE_URL=http://localhost:3000
+ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+ TZ=America/Argentina/Buenos_Aires
+ 
+ DB_HOST=localhost
+ DB_PORT=14330
+ DB_NAME=dinamic_attendance
++# Runtime identity. Prefer a login in role dinamic_app_runtime (not sa) in non-local envs.
+ DB_USER=sa
+ DB_PASSWORD=
++# Optional: dedicated migration identity for `npm run migrate` (falls back to DB_*).
++# DB_MIGRATION_USER=
++# DB_MIGRATION_PASSWORD=
+ DB_ENCRYPT=false
+ DB_TRUST_SERVER_CERTIFICATE=true
+ 
+ TWILIO_ACCOUNT_SID=
+ TWILIO_AUTH_TOKEN=
+ TWILIO_WHATSAPP_NUMBER=
+ TWILIO_WEBHOOK_URL=
+ # Debe coincidir exactamente con la URL pública configurada en Twilio (sin slash final).
+ TWILIO_VALIDATE_SIGNATURE=false
+ TWILIO_ARRIVAL_REMINDER_CONTENT_SID=
+ TWILIO_EXIT_REMINDER_CONTENT_SID=
+ TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID=
+ TWILIO_TEMPLATE_NO_CHECKIN_SID=
+ TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID=
+ # Content template variables: single body var {{1}} = MM/YY (e.g. 07/26). Do not include employee name.
+ # Public HTTPS URL for Twilio delivery status callbacks (e.g. https://api.example.com/api/webhooks/twilio/whatsapp/status)
+ TWILIO_STATUS_CALLBACK_URL=
+ ATTENDANCE_REMINDER_JOB_ENABLED=true
+ WHATSAPP_OBSERVABILITY_ENABLED=true
+ WHATSAPP_OBSERVABILITY_UI_ENABLED=true
+diff --git a/backend/src/config/env-migrations.ts b/backend/src/config/env-migrations.ts
+index d302bab..9ab6e3f 100644
+--- a/backend/src/config/env-migrations.ts
++++ b/backend/src/config/env-migrations.ts
+@@ -1,26 +1,50 @@
+ import { config } from "dotenv";
+ import { z } from "zod";
++import { resolveMigrationDbCredentials } from "./migration-db-credentials";
+ 
+ config();
+ 
+ const migrationEnvSchema = z.object({
+   NODE_ENV: z.enum(["development", "test", "production"]).default("development"),
+   TZ: z.string().min(1).default("America/Argentina/Buenos_Aires"),
+   DB_HOST: z.string().min(1),
+   DB_PORT: z.coerce.number().int().positive().default(1433),
+   DB_NAME: z.string().min(1),
++  /** Runtime / shared fallback identity (historical DB_USER). */
+   DB_USER: z.string().min(1),
+   DB_PASSWORD: z.string().min(1),
++  /**
++   * Optional dedicated migration identity (Phases 3–4).
++   * When unset, migrations continue using DB_USER / DB_PASSWORD (backwards compatible).
++   */
++  DB_MIGRATION_USER: z.string().min(1).optional(),
++  DB_MIGRATION_PASSWORD: z.string().min(1).optional(),
+   DB_ENCRYPT: z.stringbool().default(false),
+   DB_TRUST_SERVER_CERTIFICATE: z.stringbool().default(true),
+ });
+ 
+ const parsed = migrationEnvSchema.safeParse(process.env);
+ 
+ if (!parsed.success) {
+   console.error("Invalid migration environment variables:");
+   console.error(parsed.error.format());
+   process.exit(1);
+ }
+ 
+-export const migrationEnv = parsed.data;
++const raw = parsed.data;
++const credentials = resolveMigrationDbCredentials(raw);
++
++export const migrationEnv = {
++  NODE_ENV: raw.NODE_ENV,
++  TZ: raw.TZ,
++  DB_HOST: raw.DB_HOST,
++  DB_PORT: raw.DB_PORT,
++  DB_NAME: raw.DB_NAME,
++  DB_USER: credentials.user,
++  DB_PASSWORD: credentials.password,
++  DB_ENCRYPT: raw.DB_ENCRYPT,
++  DB_TRUST_SERVER_CERTIFICATE: raw.DB_TRUST_SERVER_CERTIFICATE,
++  usesDedicatedMigrationIdentity: credentials.usesDedicatedMigrationIdentity,
++};
++
++export { resolveMigrationDbCredentials } from "./migration-db-credentials";
+diff --git a/backend/src/config/migration-db-credentials.test.ts b/backend/src/config/migration-db-credentials.test.ts
+new file mode 100644
+index 0000000..ecdd27c
+--- /dev/null
++++ b/backend/src/config/migration-db-credentials.test.ts
+@@ -0,0 +1,42 @@
++import assert from "node:assert/strict";
++import { describe, it } from "node:test";
++import { resolveMigrationDbCredentials } from "./migration-db-credentials";
++
++describe("resolveMigrationDbCredentials", () => {
++  it("falls back to DB_USER/DB_PASSWORD when migration identity is unset", () => {
++    const resolved = resolveMigrationDbCredentials({
++      DB_USER: "sa",
++      DB_PASSWORD: "shared-secret",
++    });
++    assert.deepEqual(resolved, {
++      user: "sa",
++      password: "shared-secret",
++      usesDedicatedMigrationIdentity: false,
++    });
++  });
++
++  it("uses dedicated migration user and password when both are set", () => {
++    const resolved = resolveMigrationDbCredentials({
++      DB_USER: "dinamic_runtime",
++      DB_PASSWORD: "runtime-secret",
++      DB_MIGRATION_USER: "dinamic_migrations",
++      DB_MIGRATION_PASSWORD: "migration-secret",
++    });
++    assert.deepEqual(resolved, {
++      user: "dinamic_migrations",
++      password: "migration-secret",
++      usesDedicatedMigrationIdentity: true,
++    });
++  });
++
++  it("falls back migration password to DB_PASSWORD when only migration user is set", () => {
++    const resolved = resolveMigrationDbCredentials({
++      DB_USER: "dinamic_runtime",
++      DB_PASSWORD: "shared-secret",
++      DB_MIGRATION_USER: "dinamic_migrations",
++    });
++    assert.equal(resolved.user, "dinamic_migrations");
++    assert.equal(resolved.password, "shared-secret");
++    assert.equal(resolved.usesDedicatedMigrationIdentity, true);
++  });
++});
+diff --git a/backend/src/config/migration-db-credentials.ts b/backend/src/config/migration-db-credentials.ts
+new file mode 100644
+index 0000000..cbed581
+--- /dev/null
++++ b/backend/src/config/migration-db-credentials.ts
+@@ -0,0 +1,24 @@
++/**
++ * Pure helper for migration SQL identity resolution (Phases 3–4).
++ * Kept free of dotenv / process.exit so unit tests can import safely.
++ */
++export const resolveMigrationDbCredentials = (input: {
++  DB_USER: string;
++  DB_PASSWORD: string;
++  DB_MIGRATION_USER?: string;
++  DB_MIGRATION_PASSWORD?: string;
++}): { user: string; password: string; usesDedicatedMigrationIdentity: boolean } => {
++  const dedicatedUser = input.DB_MIGRATION_USER?.trim();
++  if (!dedicatedUser) {
++    return {
++      user: input.DB_USER,
++      password: input.DB_PASSWORD,
++      usesDedicatedMigrationIdentity: false,
++    };
++  }
++  return {
++    user: dedicatedUser,
++    password: input.DB_MIGRATION_PASSWORD ?? input.DB_PASSWORD,
++    usesDedicatedMigrationIdentity: true,
++  };
++};
+diff --git a/backend/src/database/phase3-4-db-security.integration.test.ts b/backend/src/database/phase3-4-db-security.integration.test.ts
+new file mode 100644
+index 0000000..967a8b6
+--- /dev/null
++++ b/backend/src/database/phase3-4-db-security.integration.test.ts
+@@ -0,0 +1,178 @@
++/**
++ * Phases 3 & 4 — security roles foundation + optional privilege denial checks.
++ * Enable: RUN_DB_INTEGRATION_TESTS=true
++ * Optional denial suite: RUN_DB_PRIVILEGE_TESTS=true + DB_PRIVILEGE_TEST_USER/PASSWORD
++ *   (SQL login mapped to dinamic_app_runtime, not sa/db_owner)
++ */
++import assert from "node:assert/strict";
++import { readFileSync } from "node:fs";
++import { join } from "node:path";
++import { after, before, it } from "node:test";
++import sql from "mssql";
++import {
++  describeDatabaseIntegration,
++  setupDatabaseIntegration,
++  teardownDatabaseIntegration,
++} from "../test-helpers/integration-test";
++import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
++import { getPool } from "./connection";
++import { applySqlScriptInTransaction } from "./run-migrations";
++
++const migrationsDir =
++  process.env.MIGRATIONS_DIR?.trim() || join(process.cwd(), "..", "database", "migrations");
++
++const privilegeTestsEnabled =
++  process.env.RUN_DB_PRIVILEGE_TESTS === "true" &&
++  Boolean(process.env.DB_PRIVILEGE_TEST_USER) &&
++  Boolean(process.env.DB_PRIVILEGE_TEST_PASSWORD);
++
++const roleExists = async (roleName: string): Promise<boolean> => {
++  const result = await getPool()
++    .request()
++    .input("name", sql.NVarChar(256), roleName)
++    .query(`
++      SELECT 1 AS found
++      FROM sys.database_principals
++      WHERE name = @name AND type = 'R'
++    `);
++  return Boolean(result.recordset[0]);
++};
++
++const schemaPermissionGranted = async (
++  roleName: string,
++  permissionName: string,
++): Promise<boolean> => {
++  const result = await getPool()
++    .request()
++    .input("roleName", sql.NVarChar(256), roleName)
++    .input("permissionName", sql.NVarChar(128), permissionName)
++    .query(`
++      SELECT 1 AS found
++      FROM sys.database_permissions p
++      INNER JOIN sys.database_principals r ON r.principal_id = p.grantee_principal_id
++      INNER JOIN sys.schemas s ON s.schema_id = p.major_id AND p.class_desc = 'SCHEMA'
++      WHERE r.name = @roleName
++        AND s.name = N'dbo'
++        AND p.permission_name = @permissionName
++        AND p.state_desc = 'GRANT'
++    `);
++  return Boolean(result.recordset[0]);
++};
++
++describeDatabaseIntegration("phase3-4 db security roles", () => {
++  before(async () => {
++    setupUnitTestEnv();
++    await setupDatabaseIntegration();
++    const script = readFileSync(
++      join(migrationsDir, "089_phase3_4_db_security_roles.sql"),
++      "utf8",
++    );
++    await applySqlScriptInTransaction(getPool(), script);
++  });
++
++  after(async () => {
++    await teardownDatabaseIntegration();
++  });
++
++  it("creates dinamic_app_runtime and dinamic_app_migrations roles", async () => {
++    assert.equal(await roleExists("dinamic_app_runtime"), true);
++    assert.equal(await roleExists("dinamic_app_migrations"), true);
++  });
++
++  it("grants runtime DML on SCHEMA::dbo", async () => {
++    for (const permission of ["SELECT", "INSERT", "UPDATE", "DELETE", "EXECUTE"]) {
++      assert.equal(
++        await schemaPermissionGranted("dinamic_app_runtime", permission),
++        true,
++        `expected runtime GRANT ${permission} ON SCHEMA::dbo`,
++      );
++    }
++  });
++
++  it("grants migrations ALTER and DML on SCHEMA::dbo", async () => {
++    for (const permission of ["ALTER", "SELECT", "INSERT", "UPDATE", "DELETE", "EXECUTE"]) {
++      assert.equal(
++        await schemaPermissionGranted("dinamic_app_migrations", permission),
++        true,
++        `expected migrations GRANT ${permission} ON SCHEMA::dbo`,
++      );
++    }
++  });
++
++  it("documents dangerous SQL Server features without mutating configuration", async () => {
++    const configs = await getPool().request().query(`
++      SELECT name, CAST(value_in_use AS INT) AS value_in_use
++      FROM sys.configurations
++      WHERE name IN (
++        N'xp_cmdshell',
++        N'Ole Automation Procedures',
++        N'clr enabled',
++        N'Ad Hoc Distributed Queries'
++      )
++      ORDER BY name
++    `);
++    const trustworthy = await getPool().request().query(`
++      SELECT is_trustworthy_on
++      FROM sys.databases
++      WHERE name = DB_NAME()
++    `);
++
++    assert.ok(configs.recordset.length >= 1);
++    assert.equal(typeof trustworthy.recordset[0]?.is_trustworthy_on, "boolean");
++
++    // Evidence-only: we do not flip instance flags in shared/dev SQL.
++    for (const row of configs.recordset) {
++      assert.ok(typeof row.name === "string");
++      assert.ok(typeof row.value_in_use === "number");
++    }
++  });
++
++  it(
++    "runtime privilege test user cannot ALTER/DROP tables",
++    { skip: !privilegeTestsEnabled },
++    async () => {
++      const user = process.env.DB_PRIVILEGE_TEST_USER!;
++      const password = process.env.DB_PRIVILEGE_TEST_PASSWORD!;
++      const { env } = await import("../config/env");
++
++      const pool = await sql.connect({
++        server: env.DB_HOST,
++        port: env.DB_PORT,
++        database: env.DB_NAME,
++        user,
++        password,
++        options: {
++          encrypt: env.DB_ENCRYPT,
++          trustServerCertificate: env.DB_TRUST_SERVER_CERTIFICATE,
++        },
++      });
++
++      try {
++        await assert.rejects(
++          () =>
++            pool.request().query(`
++              ALTER TABLE dbo.companies ADD phase34_priv_probe INT NULL;
++            `),
++          (error: unknown) => {
++            const message = error instanceof Error ? error.message : String(error);
++            return /permission|denied|authorize/i.test(message);
++          },
++        );
++
++        await assert.rejects(
++          () => pool.request().query(`DROP TABLE dbo.companies;`),
++          (error: unknown) => {
++            const message = error instanceof Error ? error.message : String(error);
++            return /permission|denied|authorize/i.test(message);
++          },
++        );
++
++        // Representative business read must still succeed.
++        const read = await pool.request().query(`SELECT TOP (1) id FROM dbo.companies`);
++        assert.ok(Array.isArray(read.recordset));
++      } finally {
++        await pool.close();
++      }
++    },
++  );
++});
+diff --git a/database/migrations/089_phase3_4_db_security_roles.sql b/database/migrations/089_phase3_4_db_security_roles.sql
+new file mode 100644
+index 0000000..ccdce43
+--- /dev/null
++++ b/database/migrations/089_phase3_4_db_security_roles.sql
+@@ -0,0 +1,63 @@
++/*
++  Migration: 089_phase3_4_db_security_roles.sql
++  Purpose (Phases 3 & 4 — DB security foundation):
++    Create least-privilege database roles for application runtime and migrations.
++    Does NOT create LOGIN/USER or passwords (those stay in secret manager / ops).
++    Does NOT revoke sa or change existing memberships (safe additive rollout).
++
++  Roles:
++    - dinamic_app_runtime: DML (+ EXECUTE for UDFs/future SPs) on SCHEMA::dbo — no DDL
++    - dinamic_app_migrations: DDL CREATE* + ALTER/DML on SCHEMA::dbo for schema evolution
++
++  Rollout (see audit/database-integrity-phase3-4-implementation.md):
++    1) Apply this migration (as current privileged identity)
++    2) Create SQL logins outside Git; CREATE USER …; ALTER ROLE … ADD MEMBER …
++    3) Point migrations container at migration login; backend at runtime login
++    4) Validate; then stop using sa for app/migrations
++
++  Idempotent: CREATE ROLE guarded; GRANT is re-runnable.
++  Rollback: database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql
++*/
++
++USE dinamic_attendance;
++GO
++
++IF NOT EXISTS (
++    SELECT 1
++    FROM sys.database_principals
++    WHERE name = N'dinamic_app_runtime'
++      AND type = 'R'
++)
++BEGIN
++    CREATE ROLE dinamic_app_runtime AUTHORIZATION dbo;
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1
++    FROM sys.database_principals
++    WHERE name = N'dinamic_app_migrations'
++      AND type = 'R'
++)
++BEGIN
++    CREATE ROLE dinamic_app_migrations AUTHORIZATION dbo;
++END;
++GO
++
++/* Runtime: business DML only. No CREATE/ALTER/DROP membership. */
++GRANT SELECT, INSERT, UPDATE, DELETE ON SCHEMA::dbo TO dinamic_app_runtime;
++GRANT EXECUTE ON SCHEMA::dbo TO dinamic_app_runtime;
++GO
++
++/*
++  Migrations: schema evolution + data backfills inside migration files.
++  Intentionally not db_owner / CONTROL. CREATE* are database-scoped;
++  ALTER on schema covers ALTER TABLE / CREATE INDEX on dbo objects.
++*/
++GRANT CREATE TABLE TO dinamic_app_migrations;
++GRANT CREATE VIEW TO dinamic_app_migrations;
++GRANT CREATE PROCEDURE TO dinamic_app_migrations;
++GRANT CREATE FUNCTION TO dinamic_app_migrations;
++GRANT CREATE TYPE TO dinamic_app_migrations;
++GRANT ALTER, REFERENCES, SELECT, INSERT, UPDATE, DELETE, EXECUTE ON SCHEMA::dbo TO dinamic_app_migrations;
++GO
+diff --git a/database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql b/database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql
+new file mode 100644
+index 0000000..f27c710
+--- /dev/null
++++ b/database/migrations/rollback/089_phase3_4_db_security_roles_rollback.sql
+@@ -0,0 +1,46 @@
++/*
++  Rollback: 089_phase3_4_db_security_roles_rollback.sql
++  Removes Phase 3/4 security roles after clearing memberships.
++  Does not drop SQL logins (server-level; managed outside migrations).
++  Warning: only run if no production users depend on these roles.
++*/
++
++USE dinamic_attendance;
++GO
++
++DECLARE @sql NVARCHAR(MAX);
++
++-- Drop role members first (SQL Server requires empty roles).
++WHILE EXISTS (
++    SELECT 1
++    FROM sys.database_role_members rm
++    INNER JOIN sys.database_principals r ON r.principal_id = rm.role_principal_id
++    WHERE r.name IN (N'dinamic_app_runtime', N'dinamic_app_migrations')
++)
++BEGIN
++    SELECT TOP (1)
++        @sql = N'ALTER ROLE ' + QUOTENAME(r.name) + N' DROP MEMBER ' + QUOTENAME(m.name) + N';'
++    FROM sys.database_role_members rm
++    INNER JOIN sys.database_principals r ON r.principal_id = rm.role_principal_id
++    INNER JOIN sys.database_principals m ON m.principal_id = rm.member_principal_id
++    WHERE r.name IN (N'dinamic_app_runtime', N'dinamic_app_migrations');
++
++    EXEC sys.sp_executesql @sql;
++END;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.database_principals WHERE name = N'dinamic_app_runtime' AND type = 'R'
++)
++BEGIN
++    DROP ROLE dinamic_app_runtime;
++END;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.database_principals WHERE name = N'dinamic_app_migrations' AND type = 'R'
++)
++BEGIN
++    DROP ROLE dinamic_app_migrations;
++END;
++GO
+diff --git a/docker-compose.prod.yml b/docker-compose.prod.yml
+index a87e492..4e96571 100644
+--- a/docker-compose.prod.yml
++++ b/docker-compose.prod.yml
+@@ -9,42 +9,43 @@ services:
+     healthcheck:
+       test:
+         [
+           "CMD-SHELL",
+           "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$${MSSQL_SA_PASSWORD}\" -C -Q \"SELECT 1\" || exit 1",
+         ]
+       interval: 30s
+       timeout: 10s
+       retries: 5
+       start_period: 60s
+ 
+   migrations:
+     build:
+       target: migrations
+     environment:
+       NODE_ENV: ${NODE_ENV:?NODE_ENV is required}
+       TZ: ${TZ:?TZ is required}
+       DB_HOST: ${DB_HOST:?DB_HOST is required}
+       DB_PORT: ${DB_PORT:?DB_PORT is required}
+       DB_NAME: ${DB_NAME:?DB_NAME is required}
+-      DB_USER: ${DB_USER:?DB_USER is required}
+-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
++      # Optional least-privilege split (Phases 3–4). Falls back to shared DB_* when unset.
++      DB_USER: ${DB_MIGRATION_USER:-${DB_USER:?DB_USER is required}}
++      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD is required}}
+       DB_ENCRYPT: ${DB_ENCRYPT:?DB_ENCRYPT is required}
+       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE:?DB_TRUST_SERVER_CERTIFICATE is required}
+ 
+   backend:
+     build:
+       target: production
+     restart: unless-stopped
+     environment:
+       NODE_ENV: ${NODE_ENV:?NODE_ENV is required}
+       PORT: ${BACKEND_INTERNAL_PORT:?BACKEND_INTERNAL_PORT is required}
+       TZ: ${TZ:?TZ is required}
+       FRONTEND_URL: ${FRONTEND_URL:?FRONTEND_URL is required}
+       APP_BASE_URL: ${APP_BASE_URL:?APP_BASE_URL is required}
+       CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:?CORS_ALLOWED_ORIGINS is required}
+       DB_HOST: ${DB_HOST:?DB_HOST is required}
+       DB_PORT: ${DB_PORT:?DB_PORT is required}
+       DB_NAME: ${DB_NAME:?DB_NAME is required}
+       DB_USER: ${DB_USER:?DB_USER is required}
+       DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+       DB_ENCRYPT: ${DB_ENCRYPT:?DB_ENCRYPT is required}
+diff --git a/docker-compose.yml b/docker-compose.yml
+index ca2be9f..280f31d 100644
+--- a/docker-compose.yml
++++ b/docker-compose.yml
+@@ -47,42 +47,43 @@ services:
+         -i /init/init.sql
+     restart: "no"
+ 
+   migrations:
+     build:
+       context: ./backend
+       dockerfile: Dockerfile
+       target: migrations
+     container_name: dinamic-attendance-migrations
+     depends_on:
+       sqlserver:
+         condition: service_healthy
+       db-init:
+         condition: service_completed_successfully
+     environment:
+       NODE_ENV: ${NODE_ENV}
+       TZ: ${TZ}
+       DB_HOST: ${DB_HOST}
+       DB_PORT: ${DB_PORT}
+       DB_NAME: ${DB_NAME}
+-      DB_USER: ${DB_USER}
+-      DB_PASSWORD: ${DB_PASSWORD}
++      # Prefer dedicated migration identity when set; otherwise shared DB_USER (backwards compatible).
++      DB_USER: ${DB_MIGRATION_USER:-${DB_USER}}
++      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:-${DB_PASSWORD}}
+       DB_ENCRYPT: ${DB_ENCRYPT}
+       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE}
+       MIGRATIONS_DIR: /database/migrations
+     volumes:
+       - ./database:/database:ro
+     command: ["npm", "run", "migrate"]
+     restart: "no"
+ 
+   backend:
+     build:
+       context: ./backend
+       dockerfile: Dockerfile
+       target: production
+     container_name: dinamic-attendance-backend
+     depends_on:
+       sqlserver:
+         condition: service_healthy
+       db-init:
+         condition: service_completed_successfully
+       migrations:

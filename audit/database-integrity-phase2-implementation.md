@@ -114,7 +114,11 @@ Last-OWNER guards unchanged (no new trigger).
 
 ## 11. Privacy / redaction
 
-`sanitizeAuditPayload` redacts keys matching credential patterns (`password`, `token`, `accessToken`, `refreshToken`, `signedUrl`, etc.) recursively. Membership/attendance callers already send minimal diffs.
+**Primary:** CRITICAL callers send minimal allowlisted diffs (actor/target/changed fields only).
+
+**Secondary defense:** `sanitizeAuditPayload` exact-matches normalized keys (`lowercase`, strip `_`/`-`) against a small credential family set (`password`, `token`, `clientSecret`, `twilioAuthToken`, `signedUrl`, …). Safe fields such as `role`, `status`, `tokenCount` are preserved.
+
+Membership/attendance/invitation callers already send minimal diffs.
 
 ---
 
@@ -142,6 +146,12 @@ Permissions/`role_permissions`: **NO_CHANGE** (not mutable via product API).
 | Membership success → role + audit (actor/target) | pass |
 | Membership + audit failure → role unchanged, no audit | pass |
 | Last OWNER reject → no success audit | pass |
+| Invitation accept success → ACCEPTED + membership + audit | pass |
+| Invitation accept audit failure → PENDING, no user/membership, no audit | pass |
+| Already-member accept success → audit | pass |
+| Already-member accept audit failure → PENDING, membership unchanged | pass |
+| Invitation decline success → DECLINED + audit | pass |
+| Invitation decline audit failure → PENDING, no audit | pass |
 | Sanitization unit tests | pass |
 
 ---
@@ -193,7 +203,7 @@ See `audit/database-integrity-phase2-validation.txt`.
 |------|-------|---------|---------------|---------------|
 | Attendance review | COMMIT then audit | business + reviews + audit same TX | Yes | Yes |
 | Membership role/status | TX commit then `logAuditSafe` | audit in `beforeCommit` | Yes | Yes |
-| Invitation accept/decline | COMMIT then `logAuditSafe` | audit before COMMIT | Yes | Covered by pattern; membership/review carry injection evidence |
+| Invitation accept/decline | COMMIT then `logAuditSafe` | audit before COMMIT | Yes | accept normal → pass; accept audit fail → pass; already-member success/fail → pass; decline success/fail → pass |
 | Company deactivate | lifecycle in-TX; audit best-effort | unchanged | Domain event critical | Existing lifecycle coverage |
 | Absence review | already in-TX | unchanged | Yes | Existing |
 | Payroll upload | post-write audit | unchanged BEST_EFFORT | No (GCS) | n/a |

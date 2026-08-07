@@ -1,6 +1,7 @@
 /**
- * Phase 2 — transactional audit evidence (attendance review + membership).
+ * Phase 2 — transactional audit evidence (attendance, membership, invitations).
  * Enable: RUN_DB_INTEGRATION_TESTS=true
+ * Keep --test-concurrency=1 while using the global audit insert hook.
  */
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
@@ -17,10 +18,13 @@ import { getPool } from "../database/connection";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { AppError } from "../errors/app-error";
 import { setAuditBeforeInsertHookForTests } from "../repositories/audit.repository";
+import { userInvitationRepository } from "../repositories/user-invitation.repository";
 import { userRepository } from "../repositories/user.repository";
 import { attendanceService } from "./attendance.service";
 import { companyUserService } from "./company-user.service";
 import { operationAssignmentService } from "./operation-assignment.service";
+import { userInvitationService } from "./user-invitation.service";
+import { generateInvitationToken, hashInvitationToken } from "../utils/invitation-token";
 import { hashPassword, normalizeEmail } from "../utils/password";
 
 const uniqueCompanyName = (): string =>
@@ -223,18 +227,19 @@ describeDatabaseIntegration("database integrity phase2 transactional audit", () 
     setAuditBeforeInsertHookForTests(async () => {
       throw new Error("injected audit failure for phase2 attendance review");
     });
-
-    await assert.rejects(
-      () =>
-        attendanceService.review(companyId, attendanceId, actorUserId, {
-          decision: "APPROVE",
-          reason: "should rollback",
-        }),
-      (error: unknown) =>
-        error instanceof Error && error.message.includes("injected audit failure"),
-    );
-
-    setAuditBeforeInsertHookForTests(undefined);
+    try {
+      await assert.rejects(
+        () =>
+          attendanceService.review(companyId, attendanceId, actorUserId, {
+            decision: "APPROVE",
+            reason: "should rollback",
+          }),
+        (error: unknown) =>
+          error instanceof Error && error.message.includes("injected audit failure"),
+      );
+    } finally {
+      setAuditBeforeInsertHookForTests(undefined);
+    }
 
     const pool = getPool();
     const record = await pool
@@ -383,22 +388,23 @@ describeDatabaseIntegration("database integrity phase2 transactional audit", () 
     setAuditBeforeInsertHookForTests(async () => {
       throw new Error("injected audit failure for phase2 membership");
     });
-
-    await assert.rejects(
-      () =>
-        companyUserService.update(
-          companyId,
-          member.id,
-          { role: "ADMIN" },
-          actorUserId,
-          true,
-          "OWNER",
-        ),
-      (error: unknown) =>
-        error instanceof Error && error.message.includes("injected audit failure"),
-    );
-
-    setAuditBeforeInsertHookForTests(undefined);
+    try {
+      await assert.rejects(
+        () =>
+          companyUserService.update(
+            companyId,
+            member.id,
+            { role: "ADMIN" },
+            actorUserId,
+            true,
+            "OWNER",
+          ),
+        (error: unknown) =>
+          error instanceof Error && error.message.includes("injected audit failure"),
+      );
+    } finally {
+      setAuditBeforeInsertHookForTests(undefined);
+    }
 
     const membership = await getPool()
       .request()
@@ -456,5 +462,249 @@ describeDatabaseIntegration("database integrity phase2 transactional audit", () 
       `);
     assert.equal(String(membership.recordset[0].role), "OWNER");
     assert.equal(String(membership.recordset[0].status), "ACTIVE");
+  });
+
+  const createPendingInvitation = async (input: {
+    companyId: string;
+    email: string;
+    role?: string;
+  }): Promise<{ invitationId: string; rawToken: string }> => {
+    const rawToken = generateInvitationToken();
+    const invitation = await userInvitationRepository.create({
+      companyId: input.companyId,
+      emailNormalized: normalizeEmail(input.email),
+      inviteeName: "Phase2 Invitee",
+      role: input.role ?? "OPERATOR",
+      invitedByUserId: null,
+      targetUserId: null,
+      tokenHash: hashInvitationToken(rawToken),
+      origin: "MANUAL",
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+    });
+    return { invitationId: invitation.id, rawToken };
+  };
+
+  const invitationStatus = async (invitationId: string): Promise<string> => {
+    const result = await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, invitationId)
+      .query(`SELECT status FROM user_invitations WHERE id = @id`);
+    return String(result.recordset[0]?.status ?? "");
+  };
+
+  it("invitation accept (new user) persists membership and invitation_accepted audit", async () => {
+    const { companyId } = await seedCompany();
+    const email = normalizeEmail(`phase2.accept.${randomUUID()}@example.com`);
+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
+
+    const result = await userInvitationService.accept({
+      rawToken,
+      newUser: {
+        name: "Phase2 Accept New",
+        password: "secure-password-1",
+        passwordConfirmation: "secure-password-1",
+      },
+    });
+
+    assert.equal(result.invitationAccepted, true);
+    assert.equal(await invitationStatus(invitationId), "ACCEPTED");
+
+    const membership = await getPool()
+      .request()
+      .input("userId", sql.UniqueIdentifier, result.data.userId)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT status, role FROM user_company_memberships
+        WHERE user_id = @userId AND company_id = @companyId
+      `);
+    assert.equal(String(membership.recordset[0].status), "ACTIVE");
+    assert.equal(String(membership.recordset[0].role), "OPERATOR");
+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 1);
+  });
+
+  it("invitation accept (new user) rolls back when invitation_accepted audit fails", async () => {
+    const { companyId } = await seedCompany();
+    const email = normalizeEmail(`phase2.accept.fail.${randomUUID()}@example.com`);
+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
+
+    setAuditBeforeInsertHookForTests(async (input) => {
+      if (input.action === "invitation_accepted") {
+        throw new Error("injected audit failure for phase2 invitation accept");
+      }
+    });
+    try {
+      await assert.rejects(
+        () =>
+          userInvitationService.accept({
+            rawToken,
+            newUser: {
+              name: "Phase2 Accept Fail",
+              password: "secure-password-1",
+              passwordConfirmation: "secure-password-1",
+            },
+          }),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes("injected audit failure for phase2 invitation accept"),
+      );
+    } finally {
+      setAuditBeforeInsertHookForTests(undefined);
+    }
+
+    assert.equal(await invitationStatus(invitationId), "PENDING");
+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 0);
+
+    const user = await userRepository.findByEmail(email);
+    assert.equal(user, null, "new user created in TX must roll back with audit failure");
+
+    const membershipCount = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("email", sql.NVarChar(320), email)
+      .query(`
+        SELECT COUNT(*) AS total
+        FROM user_company_memberships m
+        INNER JOIN users u ON u.id = m.user_id
+        WHERE m.company_id = @companyId AND u.email = @email
+      `);
+    assert.equal(Number(membershipCount.recordset[0].total), 0);
+  });
+
+  it("invitation accept (already ACTIVE member) success writes invitation_accepted audit", async () => {
+    const { companyId } = await seedCompany();
+    const passwordHash = await hashPassword("phase2-already-member");
+    const email = normalizeEmail(`phase2.already.${randomUUID()}@example.com`);
+    const member = await userRepository.create({
+      name: "Phase2 Already Member",
+      email,
+      passwordHash,
+      role: "ADMIN",
+    });
+    await getPool()
+      .request()
+      .input("userId", sql.UniqueIdentifier, member.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        INSERT INTO user_company_memberships (user_id, company_id, role, status, is_default)
+        VALUES (@userId, @companyId, N'ADMIN', N'ACTIVE', 0)
+      `);
+
+    const { invitationId, rawToken } = await createPendingInvitation({
+      companyId,
+      email,
+      role: "OPERATOR",
+    });
+
+    const result = await userInvitationService.accept({
+      rawToken,
+      authenticatedUserId: member.id,
+    });
+
+    assert.equal(result.data.alreadyMember, true);
+    assert.equal(await invitationStatus(invitationId), "ACCEPTED");
+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 1);
+
+    const membership = await getPool()
+      .request()
+      .input("userId", sql.UniqueIdentifier, member.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT role, status FROM user_company_memberships
+        WHERE user_id = @userId AND company_id = @companyId
+      `);
+    assert.equal(String(membership.recordset[0].role), "ADMIN");
+    assert.equal(String(membership.recordset[0].status), "ACTIVE");
+  });
+
+  it("invitation accept (already ACTIVE member) rolls back invitation when audit fails", async () => {
+    const { companyId } = await seedCompany();
+    const passwordHash = await hashPassword("phase2-already-fail");
+    const email = normalizeEmail(`phase2.already.fail.${randomUUID()}@example.com`);
+    const member = await userRepository.create({
+      name: "Phase2 Already Fail",
+      email,
+      passwordHash,
+      role: "ADMIN",
+    });
+    await getPool()
+      .request()
+      .input("userId", sql.UniqueIdentifier, member.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        INSERT INTO user_company_memberships (user_id, company_id, role, status, is_default)
+        VALUES (@userId, @companyId, N'ADMIN', N'ACTIVE', 0)
+      `);
+
+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
+
+    setAuditBeforeInsertHookForTests(async (input) => {
+      if (input.action === "invitation_accepted") {
+        throw new Error("injected audit failure for phase2 already-member accept");
+      }
+    });
+    try {
+      await assert.rejects(
+        () =>
+          userInvitationService.accept({
+            rawToken,
+            authenticatedUserId: member.id,
+          }),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes("injected audit failure for phase2 already-member accept"),
+      );
+    } finally {
+      setAuditBeforeInsertHookForTests(undefined);
+    }
+
+    assert.equal(await invitationStatus(invitationId), "PENDING");
+    assert.equal(await countAudit(companyId, invitationId, "invitation_accepted"), 0);
+
+    const membership = await getPool()
+      .request()
+      .input("userId", sql.UniqueIdentifier, member.id)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT role, status FROM user_company_memberships
+        WHERE user_id = @userId AND company_id = @companyId
+      `);
+    assert.equal(String(membership.recordset[0].role), "ADMIN");
+    assert.equal(String(membership.recordset[0].status), "ACTIVE");
+  });
+
+  it("invitation decline success persists DECLINED and invitation_declined audit", async () => {
+    const { companyId } = await seedCompany();
+    const email = normalizeEmail(`phase2.decline.${randomUUID()}@example.com`);
+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
+
+    const result = await userInvitationService.decline({ rawToken });
+    assert.equal(result.data.declined, true);
+    assert.equal(await invitationStatus(invitationId), "DECLINED");
+    assert.equal(await countAudit(companyId, invitationId, "invitation_declined"), 1);
+  });
+
+  it("invitation decline rolls back when invitation_declined audit fails", async () => {
+    const { companyId } = await seedCompany();
+    const email = normalizeEmail(`phase2.decline.fail.${randomUUID()}@example.com`);
+    const { invitationId, rawToken } = await createPendingInvitation({ companyId, email });
+
+    setAuditBeforeInsertHookForTests(async (input) => {
+      if (input.action === "invitation_declined") {
+        throw new Error("injected audit failure for phase2 invitation decline");
+      }
+    });
+    try {
+      await assert.rejects(
+        () => userInvitationService.decline({ rawToken }),
+        (error: unknown) =>
+          error instanceof Error &&
+          error.message.includes("injected audit failure for phase2 invitation decline"),
+      );
+    } finally {
+      setAuditBeforeInsertHookForTests(undefined);
+    }
+
+    assert.equal(await invitationStatus(invitationId), "PENDING");
+    assert.equal(await countAudit(companyId, invitationId, "invitation_declined"), 0);
   });
 });

@@ -1,27 +1,54 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { sanitizeAuditPayload } from "./audit-sanitize";
+import {
+  isSensitiveAuditKey,
+  normalizeAuditKey,
+  sanitizeAuditPayload,
+} from "./audit-sanitize";
 
 describe("sanitizeAuditPayload", () => {
-  it("redacts known credential keys and keeps safe fields", () => {
+  it("normalizes keys by lowercasing and stripping _ / -", () => {
+    assert.equal(normalizeAuditKey("access_Token"), "accesstoken");
+    assert.equal(normalizeAuditKey("client-Secret"), "clientsecret");
+    assert.equal(isSensitiveAuditKey("tokenCount"), false);
+    assert.equal(isSensitiveAuditKey("token"), true);
+  });
+
+  it("redacts nested objects, arrays, and real secret name variants", () => {
     const sanitized = sanitizeAuditPayload({
       role: "ADMIN",
+      status: "ACTIVE",
+      tokenCount: 3,
       password: "secret",
-      passwordHash: "hash",
-      token: "abc",
+      password_hash: "hash",
       accessToken: "a",
-      refreshToken: "r",
-      nested: { invitationToken: "inv", status: "ACTIVE" },
+      refresh_token: "r",
+      clientSecret: "cs",
+      providerApiKey: "pk",
+      twilioAuthToken: "tw",
+      signedUrl: "https://example/signed",
+      nested: {
+        invitationToken: "inv",
+        items: [{ privateKey: "pk", role: "OPERATOR" }],
+      },
     });
 
     assert.deepEqual(sanitized, {
       role: "ADMIN",
+      status: "ACTIVE",
+      tokenCount: 3,
       password: "[REDACTED]",
-      passwordHash: "[REDACTED]",
-      token: "[REDACTED]",
+      password_hash: "[REDACTED]",
       accessToken: "[REDACTED]",
-      refreshToken: "[REDACTED]",
-      nested: { invitationToken: "[REDACTED]", status: "ACTIVE" },
+      refresh_token: "[REDACTED]",
+      clientSecret: "[REDACTED]",
+      providerApiKey: "[REDACTED]",
+      twilioAuthToken: "[REDACTED]",
+      signedUrl: "[REDACTED]",
+      nested: {
+        invitationToken: "[REDACTED]",
+        items: [{ privateKey: "[REDACTED]", role: "OPERATOR" }],
+      },
     });
   });
 

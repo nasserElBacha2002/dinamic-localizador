@@ -458,12 +458,15 @@ Los más graves son **P1** (pueden corromper datos bajo concurrencia o admin SQL
 
 ### Fase 3 — Atomicidad / SP
 
-* **No** portar check-in/payroll/invites a SP.  
-* Solo considerar SP para **purge/reconcile admin** si ops lo necesita (`H16`).
+* **Hecho (análisis):** no portar check-in/payroll/invites a SP.
+* **Hecho (decisión):** purge/reconcile admin → **KEEP_APP / KEEP_SCRIPT** (sin SP); ver `audit/database-integrity-phase3-4-implementation.md`.
 
 ### Fase 4 — Seguridad DB avanzada
 
-* EXECUTE-only: **diferir** salvo compliance. Beneficio bajo vs reescritura total.
+* Roles `dinamic_app_runtime` / `dinamic_app_migrations` (migration `089`).
+* Credenciales de migración opcionales `DB_MIGRATION_*` (fallback a `DB_*`).
+* EXECUTE-only completo: **REJECTED**.
+* Cutover fuera de `sa`: runbook en el informe Phase 3–4 (residual P1 hasta ops).
 
 ---
 

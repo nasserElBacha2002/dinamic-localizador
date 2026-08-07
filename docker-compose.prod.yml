@@ -26,8 +26,9 @@ services:
       DB_HOST: ${DB_HOST:?DB_HOST is required}
       DB_PORT: ${DB_PORT:?DB_PORT is required}
       DB_NAME: ${DB_NAME:?DB_NAME is required}
-      DB_USER: ${DB_USER:?DB_USER is required}
-      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required}
+      # Optional least-privilege split (Phases 3–4). Falls back to shared DB_* when unset.
+      DB_USER: ${DB_MIGRATION_USER:-${DB_USER:?DB_USER is required}}
+      DB_PASSWORD: ${DB_MIGRATION_PASSWORD:-${DB_PASSWORD:?DB_PASSWORD is required}}
       DB_ENCRYPT: ${DB_ENCRYPT:?DB_ENCRYPT is required}
       DB_TRUST_SERVER_CERTIFICATE: ${DB_TRUST_SERVER_CERTIFICATE:?DB_TRUST_SERVER_CERTIFICATE is required}
 

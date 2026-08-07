@@ -1,11 +1,43 @@
-const SENSITIVE_KEY_PATTERN =
-  /^(password|passwordhash|password_hash|token|accesstoken|access_token|refreshtoken|refresh_token|invitationtoken|invitation_token|resettoken|reset_token|secret|apikey|api_key|authorization|authheader|signedurl|signed_url|contentsid|content_sid|privatekey|private_key)$/i;
-
-const redactValue = (): string => "[REDACTED]";
+const REDACTED = "[REDACTED]";
 
 /**
- * Shallow/recursive redaction of known secret keys before persisting audit JSON.
- * Does not invent a full PII framework — only strips credential-like fields.
+ * Normalized exact-match secret key families (defense in depth).
+ * Critical callers must still send minimal allowlisted diffs; this only strips
+ * credential-like keys that slip through.
+ *
+ * Normalization: lowercase + remove `_` and `-`.
+ * Exact match only — e.g. `tokenCount` → `tokencount` is NOT redacted.
+ */
+const SENSITIVE_KEY_FAMILIES = new Set([
+  "password",
+  "passwordhash",
+  "token",
+  "accesstoken",
+  "refreshtoken",
+  "invitationtoken",
+  "resettoken",
+  "secret",
+  "clientsecret",
+  "apikey",
+  "providerapikey",
+  "authorization",
+  "authheader",
+  "authtoken",
+  "twilioauthtoken",
+  "signedurl",
+  "contentsid",
+  "privatekey",
+]);
+
+export const normalizeAuditKey = (key: string): string =>
+  key.toLowerCase().replace(/[_-]/g, "");
+
+export const isSensitiveAuditKey = (key: string): boolean =>
+  SENSITIVE_KEY_FAMILIES.has(normalizeAuditKey(key));
+
+/**
+ * Recursive redaction of known credential-like keys before persisting audit JSON.
+ * Secondary defense only — prefer minimal allowlisted payloads at call sites.
  */
 export const sanitizeAuditPayload = (
   value: Record<string, unknown> | null | undefined,
@@ -29,8 +61,8 @@ const sanitizeUnknown = (value: unknown): unknown => {
 
   const output: Record<string, unknown> = {};
   for (const [key, nested] of Object.entries(value as Record<string, unknown>)) {
-    if (SENSITIVE_KEY_PATTERN.test(key)) {
-      output[key] = redactValue();
+    if (isSensitiveAuditKey(key)) {
+      output[key] = REDACTED;
       continue;
     }
     output[key] = sanitizeUnknown(nested);

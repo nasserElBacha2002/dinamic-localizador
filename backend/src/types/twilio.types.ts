@@ -93,7 +93,11 @@ export interface BotSessionContext {
       inputHash: string;
     };
   };
-  payrollReceiptQuery?: { year: number; month: number };
+  payrollReceiptQuery?: {
+    year: number;
+    month: number;
+    introSent?: boolean;
+  };
 }
 
 export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED" | "DUPLICATE";

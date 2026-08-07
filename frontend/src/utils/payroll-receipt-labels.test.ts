@@ -79,5 +79,6 @@ describe("summarizePayrollUploadOutcomes", () => {
     const summary = summarizePayrollUploadOutcomes(["ASSOCIATED", "DUPLICATE"]);
     const alert = payrollUploadCompletionMessage(summary);
     assert.equal(alert.color, "yellow");
+    assert.match(alert.message, /archivo/i);
   });
 });

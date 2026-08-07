@@ -7,7 +7,6 @@ import { payrollReceiptRepository } from "../repositories/payroll-receipt.reposi
 import { pendingStorageDeletionRepository } from "../repositories/pending-storage-deletion.repository";
 import type {
   PayrollReceipt,
-  PayrollReceiptBatch,
   PayrollReceiptBatchDto,
   PayrollReceiptDto,
   PayrollReceiptStatus,
@@ -391,51 +390,8 @@ export const payrollReceiptService = {
 
     const employeeId = employeeMatch.employeeId;
 
-    if (!input.replaceReceiptId) {
-      const existingAssociated = await payrollReceiptRepository.findActiveAssociated(
-        input.companyId,
-        employeeId,
-        batch.year,
-        batch.month,
-      );
-      if (existingAssociated) {
-        destroyQuietly(input.body);
-        const row = await recordTerminalWithoutUpload({
-          companyId: input.companyId,
-          batchId: input.batchId,
-          year: batch.year,
-          month: batch.month,
-          originalFilename: sanitizedName,
-          status: "DUPLICATE",
-          errorCode: "DUPLICATE",
-          errorMessage: "Ya existe un recibo asociado para este colaborador y período",
-          detectedDocument: detectedRaw,
-          normalizedDocument,
-          employeeId,
-          uploadedByUserId: input.uploadedByUserId,
-          idempotencyKey: input.idempotencyKey,
-        });
-        payrollReceiptMetrics.duplicate({
-          operation: "upload",
-          status: "DUPLICATE",
-          documentMasked,
-          year: batch.year,
-          month: batch.month,
-        });
-        await auditService.log(input.companyId, {
-          userId: input.uploadedByUserId,
-          action: "PAYROLL_RECEIPT_DUPLICATE",
-          entityType: "payroll_receipt",
-          entityId: row.id,
-          newData: {
-            status: "DUPLICATE",
-            existingReceiptId: existingAssociated.id,
-            documentMasked,
-          },
-        });
-        return toPayrollReceiptDto(row);
-      }
-    }
+    // Period collisions are allowed (multiple ASSOCIATED). Identical file bytes for the
+    // same employee+period are rejected after checksum is known (see finalize path).
 
     try {
       assertPayrollReceiptPdfMetadata({
@@ -527,6 +483,52 @@ export const payrollReceiptService = {
 
       let finalized: PayrollReceipt | null;
       try {
+        // Checksum dedupe for same employee+period (distinct files remain ASSOCIATED).
+        // Skip when replacing: the replaced row is soft-deleted in the same transaction.
+        if (!input.replaceReceiptId) {
+          const sameChecksum = await payrollReceiptRepository.findActiveAssociatedByChecksum(
+            input.companyId,
+            employeeId,
+            batch.year,
+            batch.month,
+            transform.checksumSha256,
+          );
+          if (sameChecksum) {
+            await compensateDeleteObject(objectKey);
+            const dupRow = await payrollReceiptRepository.finalizeUpload({
+              companyId: input.companyId,
+              receiptId,
+              status: "DUPLICATE",
+              employeeId,
+              errorCode: "DUPLICATE",
+              errorMessage:
+                "Ya existe un recibo idéntico (mismo archivo) para este colaborador y período",
+              checksumSha256: transform.checksumSha256,
+            });
+            await payrollReceiptRepository.refreshBatchStatus(input.companyId, input.batchId);
+            payrollReceiptMetrics.duplicate({
+              operation: "upload",
+              status: "DUPLICATE",
+              documentMasked,
+              year: batch.year,
+              month: batch.month,
+            });
+            await auditService.log(input.companyId, {
+              userId: input.uploadedByUserId,
+              action: "PAYROLL_RECEIPT_DUPLICATE",
+              entityType: "payroll_receipt",
+              entityId: receiptId,
+              newData: {
+                status: "DUPLICATE",
+                existingReceiptId: sameChecksum.id,
+                documentMasked,
+                reason: "checksum",
+              },
+            });
+            return toPayrollReceiptDto(dupRow ?? pending);
+          }
+        }
+
         if (input.replaceReceiptId) {
           // Atomic: associate NEW + mark OLD REPLACED + enqueue OLD key.
           // Never mark/delete old before new is ASSOCIATED in the same commit.
@@ -572,7 +574,9 @@ export const payrollReceiptService = {
             status: "DUPLICATE",
             employeeId,
             errorCode: "DUPLICATE",
-            errorMessage: "Conflicto de unicidad al asociar el recibo",
+            errorMessage:
+              "Ya existe un recibo idéntico (mismo archivo) para este colaborador y período",
+            checksumSha256: transform.checksumSha256,
           });
           await payrollReceiptRepository.refreshBatchStatus(input.companyId, input.batchId);
           await auditService.log(input.companyId, {
@@ -580,7 +584,7 @@ export const payrollReceiptService = {
             action: "PAYROLL_RECEIPT_DUPLICATE",
             entityType: "payroll_receipt",
             entityId: receiptId,
-            newData: { status: "DUPLICATE", documentMasked },
+            newData: { status: "DUPLICATE", documentMasked, reason: "checksum_race" },
           });
           return toPayrollReceiptDto(dupRow ?? pending);
         }
@@ -849,12 +853,15 @@ export const payrollReceiptService = {
       return toPayrollReceiptDto(updated ?? existing);
     }
 
-    const dup = await payrollReceiptRepository.findActiveAssociated(
-      input.companyId,
-      employeeMatch.employeeId,
-      existing.year,
-      existing.month,
-    );
+    const dup = existing.checksumSha256
+      ? await payrollReceiptRepository.findActiveAssociatedByChecksum(
+          input.companyId,
+          employeeMatch.employeeId,
+          existing.year,
+          existing.month,
+          existing.checksumSha256,
+        )
+      : null;
     if (dup && dup.id !== existing.id) {
       const updated = await payrollReceiptRepository.finalizeUpload({
         companyId: input.companyId,
@@ -864,7 +871,8 @@ export const payrollReceiptService = {
         detectedDocument: extraction.detectedRaw,
         normalizedDocument: extraction.normalizedDocument,
         errorCode: "DUPLICATE",
-        errorMessage: "Ya existe un recibo asociado para este período",
+        errorMessage:
+          "Ya existe un recibo idéntico (mismo archivo) para este colaborador y período",
       });
       await payrollReceiptRepository.refreshBatchStatus(input.companyId, existing.batchId);
       return toPayrollReceiptDto(updated ?? existing);

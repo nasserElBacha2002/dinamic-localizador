@@ -6,6 +6,7 @@ import { setAttachmentStorageForTests } from "./attachment-storage";
 import { InMemoryAttachmentStorage } from "./attachment-storage/in-memory-attachment-storage";
 import { employeeRepository } from "../repositories/employee.repository";
 import { payrollReceiptRepository } from "../repositories/payroll-receipt.repository";
+import { pendingStorageDeletionRepository } from "../repositories/pending-storage-deletion.repository";
 import type { PayrollReceipt, PayrollReceiptBatch } from "../types/payroll-receipt";
 import type { Employee } from "../types/domain";
 import { payrollReceiptService } from "./payroll-receipt.service";
@@ -78,6 +79,7 @@ describe("payrollReceiptService", () => {
 
     restores.push(
       stub(auditService, "log", async () => undefined),
+      stub(pendingStorageDeletionRepository, "enqueueKeys", async () => undefined),
       stub(payrollReceiptRepository, "createBatch", async (input) => {
         batchState = {
           ...baseBatch(),
@@ -94,7 +96,8 @@ describe("payrollReceiptService", () => {
         companyId === COMPANY_ID && batchId === batchState.id ? batchState : null,
       ),
       stub(payrollReceiptRepository, "findByIdempotencyKey", async () => null),
-      stub(payrollReceiptRepository, "findActiveAssociated", async () => null),
+      stub(payrollReceiptRepository, "findActiveAssociatedByChecksum", async () => null),
+      stub(payrollReceiptRepository, "listActiveAssociated", async () => []),
       stub(payrollReceiptRepository, "tryReserveBatchSlot", async () => {
         if (!reserveSucceeds) {
           return false;
@@ -233,10 +236,37 @@ describe("payrollReceiptService", () => {
     assert.equal(data.normalizedDocument, VALID_CUIL);
   });
 
-  it("marks DUPLICATE without uploading when an associated receipt exists", async () => {
+  it("associates a second distinct PDF for the same employee and period", async () => {
+    const first = await payrollReceiptService.uploadReceipt({
+      companyId: COMPANY_ID,
+      batchId: BATCH_ID,
+      body: Readable.from(pdfBuffer),
+      originalFileName: `recibo_${VALID_CUIL}.pdf`,
+      declaredContentType: "application/pdf",
+      uploadedByUserId: USER_ID,
+      idempotencyKey: "idempotency-key-first",
+    });
+    assert.equal(first.status, "ASSOCIATED");
+
+    const otherPdf = Buffer.from(
+      "%PDF-1.4\n%âãÏÓ\n2 0 obj\n<< /Title (other) >>\nendobj\ntrailer\n<<>>\n%%EOF\n",
+    );
+    const second = await payrollReceiptService.uploadReceipt({
+      companyId: COMPANY_ID,
+      batchId: BATCH_ID,
+      body: Readable.from(otherPdf),
+      originalFileName: `ajuste_${VALID_CUIL}.pdf`,
+      declaredContentType: "application/pdf",
+      uploadedByUserId: USER_ID,
+      idempotencyKey: "idempotency-key-second",
+    });
+    assert.equal(second.status, "ASSOCIATED");
+    assert.notEqual(first.id, second.id);
+  });
+
+  it("marks DUPLICATE without keeping a second ASSOCIATED when checksum matches", async () => {
     restores.push(
-      stub(payrollReceiptRepository, "findActiveAssociated", async () => ({
-        ...store.values().next().value,
+      stub(payrollReceiptRepository, "findActiveAssociatedByChecksum", async () => ({
         id: OLD_RECEIPT_ID,
         companyId: COMPANY_ID,
         batchId: BATCH_ID,
@@ -263,6 +293,7 @@ describe("payrollReceiptService", () => {
         updatedAt: new Date().toISOString(),
         deletedAt: null,
         deletedByUserId: null,
+        employeeName: "Juan",
       })),
     );
 
@@ -388,6 +419,123 @@ describe("payrollReceiptService", () => {
     assert.equal(finalizeReplaceCalls, 1);
     assert.equal(markReplacedCalls, 0);
     assert.equal(store.get(OLD_RECEIPT_ID)?.status, "REPLACED");
+  });
+
+  it("replace among siblings only soft-replaces the target receipt", async () => {
+    const siblingA = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+    const siblingC = "cccccccc-cccc-4ccc-8ccc-cccccccccccc";
+    for (const [id, name] of [
+      [siblingA, "a"],
+      [OLD_RECEIPT_ID, "b"],
+      [siblingC, "c"],
+    ] as const) {
+      store.set(id, {
+        id,
+        companyId: COMPANY_ID,
+        batchId: BATCH_ID,
+        employeeId: EMPLOYEE_ID,
+        year: 2024,
+        month: 3,
+        originalFilename: `${name}_${VALID_CUIL}.pdf`,
+        storageProvider: "GOOGLE_CLOUD_STORAGE",
+        storageBucket: "test-bucket",
+        storageObjectKey: `${name}-key`,
+        objectGeneration: "1",
+        detectedDocument: VALID_CUIL,
+        normalizedDocument: VALID_CUIL,
+        status: "ASSOCIATED",
+        errorCode: null,
+        errorMessage: null,
+        mimeType: "application/pdf",
+        fileSize: 10,
+        checksumSha256: name.repeat(64).slice(0, 64),
+        idempotencyKey: null,
+        uploadedByUserId: USER_ID,
+        replacedReceiptId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+        deletedByUserId: null,
+      });
+    }
+
+    const data = await payrollReceiptService.replaceReceipt({
+      companyId: COMPANY_ID,
+      receiptId: OLD_RECEIPT_ID,
+      body: Readable.from(pdfBuffer),
+      originalFileName: `recibo_${VALID_CUIL}.pdf`,
+      declaredContentType: "application/pdf",
+      uploadedByUserId: USER_ID,
+      idempotencyKey: "idempotency-key-replace-siblings",
+    });
+
+    assert.equal(data.status, "ASSOCIATED");
+    assert.equal(store.get(OLD_RECEIPT_ID)?.status, "REPLACED");
+    assert.equal(store.get(siblingA)?.status, "ASSOCIATED");
+    assert.equal(store.get(siblingC)?.status, "ASSOCIATED");
+  });
+
+  it("softDelete only removes the targeted receipt id", async () => {
+    const a = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaa1";
+    const b = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbb1";
+    const c = "cccccccc-cccc-4ccc-8ccc-ccccccccccc1";
+    for (const id of [a, b, c]) {
+      store.set(id, {
+        id,
+        companyId: COMPANY_ID,
+        batchId: BATCH_ID,
+        employeeId: EMPLOYEE_ID,
+        year: 2024,
+        month: 3,
+        originalFilename: `${id}.pdf`,
+        storageProvider: "GOOGLE_CLOUD_STORAGE",
+        storageBucket: "test-bucket",
+        storageObjectKey: `${id}-key`,
+        objectGeneration: "1",
+        detectedDocument: VALID_CUIL,
+        normalizedDocument: VALID_CUIL,
+        status: "ASSOCIATED",
+        errorCode: null,
+        errorMessage: null,
+        mimeType: "application/pdf",
+        fileSize: 10,
+        checksumSha256: id.replace(/-/g, "").padEnd(64, "0").slice(0, 64),
+        idempotencyKey: null,
+        uploadedByUserId: USER_ID,
+        replacedReceiptId: null,
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        deletedAt: null,
+        deletedByUserId: null,
+      });
+    }
+
+    restores.push(
+      stub(payrollReceiptRepository, "softDelete", async (input) => {
+        const row = store.get(input.receiptId);
+        if (!row) {
+          return null;
+        }
+        const updated = {
+          ...row,
+          status: "DELETED" as const,
+          deletedAt: new Date().toISOString(),
+          deletedByUserId: input.deletedByUserId,
+        };
+        store.set(input.receiptId, updated);
+        return updated;
+      }),
+    );
+
+    await payrollReceiptService.softDelete({
+      companyId: COMPANY_ID,
+      receiptId: b,
+      deletedByUserId: USER_ID,
+    });
+
+    assert.equal(store.get(a)?.status, "ASSOCIATED");
+    assert.equal(store.get(b)?.status, "DELETED");
+    assert.equal(store.get(c)?.status, "ASSOCIATED");
   });
 
   it("reconcileAssociation asks for re-upload when CUIL/employee would succeed without file", async () => {

@@ -662,7 +662,7 @@ export const botSessionService = {
   async updatePayrollReceiptSessionContext(
     companyId: string,
     sessionId: string,
-    payrollReceiptQuery: { year: number; month: number },
+    payrollReceiptQuery: { year: number; month: number; introSent?: boolean },
   ): Promise<BotSession | null> {
     return botSessionRepository.updateSession(companyId, sessionId, {
       state: "WAITING_PAYROLL_RECEIPT_PERIOD",

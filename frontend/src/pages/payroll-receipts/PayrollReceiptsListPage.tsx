@@ -206,7 +206,7 @@ export function PayrollReceiptsListPage() {
         description="Consultá y cargá recibos de sueldo por período y colaborador."
         action={
           canUpload ? (
-            <Button onClick={() => setUploadOpen(true)}>Subir recibos</Button>
+            <Button onClick={() => setUploadOpen(true)}>Agregar recibos</Button>
           ) : null
         }
       />

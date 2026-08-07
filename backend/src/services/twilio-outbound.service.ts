@@ -110,4 +110,32 @@ export const twilioOutboundService = {
       messageSid: message.sid,
     };
   },
+
+  async sendWhatsAppText(input: {
+    toPhoneNumber: string;
+    body: string;
+  }): Promise<{ messageSid: string }> {
+    if (!env.TWILIO_WHATSAPP_NUMBER) {
+      throw new Error("TWILIO_WHATSAPP_NUMBER_NOT_CONFIGURED");
+    }
+
+    const client = getTwilioClient();
+    const createParams: {
+      from: string;
+      to: string;
+      body: string;
+      statusCallback?: string;
+    } = {
+      from: formatWhatsAppAddress(env.TWILIO_WHATSAPP_NUMBER),
+      to: formatWhatsAppAddress(input.toPhoneNumber),
+      body: input.body,
+    };
+
+    if (env.WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED && env.TWILIO_STATUS_CALLBACK_URL) {
+      createParams.statusCallback = env.TWILIO_STATUS_CALLBACK_URL;
+    }
+
+    const message = await client.messages.create(createParams);
+    return { messageSid: message.sid };
+  },
 };

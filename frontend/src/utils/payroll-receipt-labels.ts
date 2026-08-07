@@ -13,7 +13,7 @@ export const payrollReceiptStatusLabels: Record<PayrollReceiptStatus, string> = 
   AMBIGUOUS_DOCUMENT: "CUIL ambiguo",
   EMPLOYEE_NOT_FOUND: "Colaborador no encontrado",
   EMPLOYEE_DOCUMENT_AMBIGUOUS: "CUIL de colaborador ambiguo",
-  DUPLICATE: "Duplicado",
+  DUPLICATE: "Archivo duplicado",
   UPLOAD_FAILED: "Error de carga",
   FAILED: "Fallido",
   REPLACED: "Reemplazado",
@@ -165,11 +165,11 @@ export function payrollUploadCompletionMessage(summary: UploadBatchSummary): {
   if (summary.associated === 0 && rejected + summary.duplicates === summary.total) {
     return {
       color: "red",
-      message: `Ningún recibo fue asociado (${summary.duplicates} duplicado${summary.duplicates === 1 ? "" : "s"}, ${rejected} fallido${rejected === 1 ? "" : "s"}). Revisá el detalle.`,
+      message: `Ningún recibo fue asociado (${summary.duplicates} archivo${summary.duplicates === 1 ? "" : "s"} idéntico${summary.duplicates === 1 ? "" : "s"} ya existente${summary.duplicates === 1 ? "" : "s"}, ${rejected} fallido${rejected === 1 ? "" : "s"}). Revisá el detalle.`,
     };
   }
   return {
     color: "yellow",
-    message: `Carga completada con observaciones: ${summary.associated} asociado${summary.associated === 1 ? "" : "s"}, ${summary.duplicates} duplicado${summary.duplicates === 1 ? "" : "s"}, ${rejected} fallido${rejected === 1 ? "" : "s"}.`,
+    message: `Carga completada con observaciones: ${summary.associated} asociado${summary.associated === 1 ? "" : "s"}, ${summary.duplicates} archivo${summary.duplicates === 1 ? "" : "s"} idéntico${summary.duplicates === 1 ? "" : "s"}, ${rejected} fallido${rejected === 1 ? "" : "s"}.`,
   };
 }

@@ -52,7 +52,7 @@ const baseDefaults: OperationFormValues = {
  */
 function EditDateHarness() {
   const [, setTick] = useState(0);
-  const onDirtyChange = React.useCallback((_dirty: boolean) => {
+  const onDirtyChange = React.useCallback(() => {
     setTick((value) => value + 1);
   }, []);
 

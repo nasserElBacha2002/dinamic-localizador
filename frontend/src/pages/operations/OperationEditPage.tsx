@@ -1,5 +1,5 @@
 import { Button, Group } from "@mantine/core";
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router";
 import { OperationForm } from "../../components/operations/OperationForm";
 import { EntityEditPageLayout } from "../../components/navigation/EntityEditPageLayout";
@@ -41,6 +41,12 @@ export function OperationEditPage() {
   const [resetConfirmOpen, setResetConfirmOpen] = useState(false);
   const submitInFlight = useRef(false);
 
+  const operation = operationQuery.data;
+  const defaultValues = useMemo(
+    () => (operation ? buildOperationEditDefaultValues(operation) : null),
+    [operation],
+  );
+
   if (!id) {
     return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
   }
@@ -49,7 +55,7 @@ export function OperationEditPage() {
     return <LoadingState message="Cargando operación..." />;
   }
 
-  if (operationQuery.isError || !operationQuery.data) {
+  if (operationQuery.isError || !operation || !defaultValues) {
     return (
       <ErrorState
         message={getApiErrorMessage(
@@ -60,7 +66,6 @@ export function OperationEditPage() {
     );
   }
 
-  const operation = operationQuery.data;
   const displayName = getOperationDisplayName(operation);
   const canEdit = canManage && isOperationEditable(operation.status);
 
@@ -136,7 +141,7 @@ export function OperationEditPage() {
         currentOperationKind={operation.operationKind ?? "ONE_TIME"}
         companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
         companyWorkScheduleLoading={companyWorkScheduleQuery.isPending}
-        defaultValues={buildOperationEditDefaultValues(operation)}
+        defaultValues={defaultValues}
         submitLabel="Guardar cambios"
         cancelTo={getEntityDetailPath("operations", id)}
         onCancel={handleCancel}

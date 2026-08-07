@@ -129,6 +129,10 @@ export function OperationDetailPage() {
     () => (operation ? resolveOperationReferenceDate(operation) : ""),
     [operation],
   );
+  const editDefaultValues = useMemo(
+    () => (operation ? buildOperationEditDefaultValues(operation) : null),
+    [operation],
+  );
 
   if (!id) {
     return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
@@ -372,7 +376,7 @@ export function OperationDetailPage() {
             </SectionCard>
           </Box>
 
-          {editing && canEdit ? (
+          {editing && canEdit && editDefaultValues ? (
             <Box className={layoutClasses.editSection}>
               <SectionCard title={`Editar ${terminology.operation.singular.toLowerCase()}`}>
                 <OperationForm
@@ -380,7 +384,7 @@ export function OperationDetailPage() {
                   currentStatus={operation.status}
                   currentOperationKind={operation.operationKind ?? "ONE_TIME"}
                   companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
-                  defaultValues={buildOperationEditDefaultValues(operation)}
+                  defaultValues={editDefaultValues}
                   submitLabel="Guardar cambios"
                   cancelTo={`/operations/${operation.id}`}
                   loading={updateMutation.isPending}

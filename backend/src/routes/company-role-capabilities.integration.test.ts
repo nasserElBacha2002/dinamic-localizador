@@ -229,7 +229,8 @@ describeDatabaseIntegration("GET /companies/:companyId/roles/:role/capabilities"
     const response = await apiRequest(baseUrl, pathFor(dinamicCompanyId, "ADMIN"), { token });
     assert.equal(response.status, 403);
     const error = response.body.error as { code?: string };
-    assert.equal(error.code, "NO_COMPANY_MEMBERSHIP");
+    // Scoped company routes use COMPANY_ACCESS_DENIED (same as GET /me).
+    assert.equal(error.code, "COMPANY_ACCESS_DENIED");
   });
 
   it("rejects inactive membership", async () => {

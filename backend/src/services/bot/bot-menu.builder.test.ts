@@ -23,8 +23,8 @@ const allEnabled = () =>
 describe("buildGreetingMessage", () => {
   it("shows command hints when modules are enabled", () => {
     const message = buildGreetingMessage(allEnabled());
-    assert.match(message, /Marcar llegada — escribí "Llegué"/);
-    assert.match(message, /Marcar salida — escribí "Me voy"/);
+    assert.match(message, /Marcar llegada — compartí tu ubicación \(o escribí "Llegué"\)/);
+    assert.match(message, /Marcar salida — compartí tu ubicación \(o escribí "Me voy"\)/);
     assert.match(message, /Pedir ausencia o vacaciones — escribí "Pedir ausencia"/);
     assert.match(message, /Consultar jornada de hoy — escribí "Mi jornada" o "Hoy"/);
     assert.match(message, /Ver próximos turnos — escribí "Mis turnos" o "Agenda"/);
@@ -107,7 +107,7 @@ describe("buildHelpMessage", () => {
   it("includes help intro and dynamic menu", () => {
     const message = buildHelpMessage(allEnabled());
     assert.match(message, /Te puedo ayudar con las opciones habilitadas/);
-    assert.match(message, /Marcar llegada — escribí "Llegué"/);
+    assert.match(message, /Marcar llegada — compartí tu ubicación \(o escribí "Llegué"\)/);
     assert.match(message, /Cancelar/);
     assert.match(message, /contactá a administración/i);
   });

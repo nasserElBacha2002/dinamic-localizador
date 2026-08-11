@@ -22,7 +22,13 @@ export type CreateAttendanceForEmployeeWorkdayInput = {
   employeeId: string;
   employeeWorkdayId: string;
   sessionId: string;
+  /** Business event time of the LOCATION WhatsApp message (stored on the attendance row). */
   receivedAt: Date;
+  /**
+   * Instant used to gate "still eligible now" (availability window).
+   * Defaults to receivedAt. When LOCATION precedes selection, pass now while keeping receivedAt as the original LOCATION time.
+   */
+  eligibilityAt?: Date;
   latitude: number;
   longitude: number;
   distanceMeters: number;
@@ -168,10 +174,8 @@ export const employeeWorkdayAttendanceCommand = {
         input.employeeWorkdayId,
         { simulationSessionId },
       );
-      if (
-        !candidate ||
-        !isWithinCheckInAvailabilityWindow(candidate, input.receivedAt)
-      ) {
+      const gateAt = input.eligibilityAt ?? input.receivedAt;
+      if (!candidate || !isWithinCheckInAvailabilityWindow(candidate, gateAt)) {
         await transaction.rollback();
         throw new Error("EMPLOYEE_WORKDAY_NOT_AVAILABLE");
       }

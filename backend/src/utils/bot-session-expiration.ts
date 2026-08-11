@@ -4,7 +4,7 @@ import { ACTIVE_BOT_SESSION_STATES } from "./bot-session-states";
 export const ACTIVE_SESSION_STATES = ACTIVE_BOT_SESSION_STATES satisfies readonly BotSessionState[];
 
 export const EXPIRED_SESSION_USER_MESSAGE =
-  'La solicitud anterior venció.\nEscribí "Llegué" para registrar llegada o "Me voy" para registrar salida.';
+  "La solicitud anterior venció.\nCompartí tu ubicación para registrar llegada o salida. También podés escribir \"Llegué\" o \"Me voy\".";
 
 export const buildSessionExpiresAt = (ttlMinutes: number, now = new Date()): Date =>
   new Date(now.getTime() + ttlMinutes * 60_000);

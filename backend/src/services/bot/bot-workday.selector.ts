@@ -72,7 +72,27 @@ export const mapCheckoutCandidatesToSessionOptions = (
 ): WorkdaySelectionOption[] =>
   employeeWorkdayAvailabilityService.mapCheckoutCandidatesToSelectionOptions(candidates);
 
+export const mapMixedAttendanceActionToSessionOptions = (
+  checkInCandidates: EmployeeWorkdayCheckInCandidate[],
+  checkoutCandidates: EmployeeWorkdayCheckoutCandidate[],
+): WorkdaySelectionOption[] =>
+  employeeWorkdayAvailabilityService.mapMixedAttendanceActionOptions(
+    checkInCandidates,
+    checkoutCandidates,
+  );
+
 export const resolveWorkdayOptionFromSession = (
   options: WorkdaySelectionOption[],
   selection: number,
 ): WorkdaySelectionOption | null => options[selection - 1] ?? null;
+
+/** Parse PendingBotLocation.receivedAt into a Date for attendance event time. */
+export const resolvePendingLocationEventAt = (
+  pendingLocation: { receivedAt: string } | null | undefined,
+): Date | undefined => {
+  if (!pendingLocation?.receivedAt) {
+    return undefined;
+  }
+  const parsed = new Date(pendingLocation.receivedAt);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+};

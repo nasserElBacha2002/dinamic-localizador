@@ -1,0 +1,19 @@
+ audit/implementation-validation.md                 |  75 +++++++
+ backend/src/services/bot-session.service.ts        |  14 +-
+ .../bot/attendance-location-intent.test.ts         | 130 ++++++++++++
+ .../src/services/bot/attendance-location-intent.ts |  59 ++++++
+ backend/src/services/bot/bot-menu-options.ts       |   4 +-
+ backend/src/services/bot/bot-menu.builder.test.ts  |   6 +-
+ .../src/services/bot/bot-response.builder.test.ts  |   4 +-
+ backend/src/services/bot/bot-response.builder.ts   |  24 ++-
+ backend/src/services/whatsapp-bot.service.ts       | 226 +++++++++++++++++++++
+ .../attendance-confirmation-response.handler.ts    |   2 +-
+ .../whatsapp-router.service.test.ts                |  37 +++-
+ .../whatsapp-router/whatsapp-router.service.ts     |  35 +++-
+ .../whatsapp-router/whatsapp-router.types.ts       |  11 +
+ .../services/whatsapp-webhook.integration.test.ts  | 154 +++++++++++++-
+ backend/src/types/twilio.types.ts                  |  13 ++
+ backend/src/utils/bot-session-expiration.test.ts   |   2 +-
+ backend/src/utils/bot-session-expiration.ts        |   2 +-
+ backend/src/utils/intent.ts                        |   3 +-
+ 18 files changed, 763 insertions(+), 38 deletions(-)

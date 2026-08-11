@@ -93,6 +93,7 @@ type HandlerCalls = {
   handleCheckoutOperationSelection: number;
   processLocationCheckIn: number;
   processLocationCheckout: number;
+  processDirectLocationAttendance: number;
 };
 
 const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: HandlerCalls } => {
@@ -104,6 +105,7 @@ const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: Handle
     handleCheckoutOperationSelection: 0,
     processLocationCheckIn: 0,
     processLocationCheckout: 0,
+    processDirectLocationAttendance: 0,
   };
 
   const handlers: WhatsAppRouterHandlers = {
@@ -134,6 +136,10 @@ const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: Handle
     processLocationCheckout: async () => {
       calls.processLocationCheckout += 1;
       return "<Response><Message>CHECKOUT_LOCATION_OK</Message></Response>";
+    },
+    processDirectLocationAttendance: async () => {
+      calls.processDirectLocationAttendance += 1;
+      return "<Response><Message>DIRECT_LOCATION_OK</Message></Response>";
     },
   };
 
@@ -332,7 +338,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
         handlers,
       );
 
-      assert.match(response, /Marcar llegada — escribí "Llegué"/);
+      assert.match(response, /Marcar llegada — compartí tu ubicación/);
       assert.equal(calls.startCheckIn, 0);
       assert.equal(calls.startCheckout, 0);
     });
@@ -350,7 +356,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
       );
 
       assert.match(response, /Te puedo ayudar con las opciones habilitadas/);
-      assert.match(response, /Marcar llegada — escribí "Llegué"/);
+      assert.match(response, /Marcar llegada — compartí tu ubicación/);
       assert.equal(calls.startCheckIn, 0);
       assert.equal(calls.startCheckout, 0);
     });
@@ -497,7 +503,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
       handlers,
     );
 
-    assert.match(response, /Marcar llegada — escribí "Llegué"/);
+    assert.match(response, /Marcar llegada — compartí tu ubicación/);
   });
 
   it("routes active check-in operation selection to attendance handler", async () => {
@@ -637,6 +643,31 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.match(response, new RegExp(UNKNOWN_EMPLOYEE_MESSAGE));
     assert.equal(calls.processLocationCheckIn, 0);
     assert.equal(calls.processLocationCheckout, 0);
+  });
+
+  it("routes LOCATION without session to direct location attendance", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-DIRECT",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /DIRECT_LOCATION_OK/);
+    assert.equal(calls.processDirectLocationAttendance, 1);
+    assert.equal(calls.processLocationCheckIn, 0);
   });
 
   it("routes WAITING_LOCATION to check-in location handler", async () => {

@@ -35,6 +35,8 @@ export type WorkdaySelectionOption = {
   operationWorkdayId: string;
   operationId: string;
   attendanceRecordId?: string;
+  /** Present on mixed llegada/salida action lists (location-first). */
+  attendanceAction?: "CHECK_IN" | "CHECK_OUT";
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;

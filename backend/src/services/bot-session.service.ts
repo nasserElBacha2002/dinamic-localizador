@@ -195,10 +195,15 @@ export const botSessionService = {
     employeeId: string;
     phoneNumber: string;
     options: WorkdaySessionSelectionOption[];
+    pendingLocation?: BotSessionContext["pendingLocation"];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
         await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        const context: BotSessionContext = {
+          workdayOptions: input.options,
+          ...(input.pendingLocation ? { pendingLocation: input.pendingLocation } : {}),
+        };
         return botSessionRepository.create(
           {
             companyId,
@@ -208,7 +213,7 @@ export const botSessionService = {
             attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_OPERATION_SELECTION",
-            contextJson: JSON.stringify({ workdayOptions: input.options } satisfies BotSessionContext),
+            contextJson: JSON.stringify(context),
             expiresAt: buildExpiresAt(),
           },
           transaction,
@@ -352,10 +357,15 @@ export const botSessionService = {
     employeeId: string;
     phoneNumber: string;
     options: WorkdaySessionSelectionOption[];
+    pendingLocation?: BotSessionContext["pendingLocation"];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
         await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        const context: BotSessionContext = {
+          workdayOptions: input.options,
+          ...(input.pendingLocation ? { pendingLocation: input.pendingLocation } : {}),
+        };
         return botSessionRepository.create(
           {
             companyId,
@@ -365,7 +375,7 @@ export const botSessionService = {
             attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_OPERATION_SELECTION",
-            contextJson: JSON.stringify({ workdayOptions: input.options } satisfies BotSessionContext),
+            contextJson: JSON.stringify(context),
             expiresAt: buildExpiresAt(),
           },
           transaction,
@@ -412,7 +422,11 @@ export const botSessionService = {
         return { kind: "expired" };
       }
 
-      if (valid.state !== "WAITING_CHECKOUT_OPERATION_SELECTION") {
+      // Mixed location-first selection uses WAITING_OPERATION_SELECTION with attendanceAction tags.
+      if (
+        valid.state !== "WAITING_CHECKOUT_OPERATION_SELECTION" &&
+        valid.state !== "WAITING_OPERATION_SELECTION"
+      ) {
         return { kind: "invalid" };
       }
 

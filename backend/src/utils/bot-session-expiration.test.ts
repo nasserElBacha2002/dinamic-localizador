@@ -74,7 +74,7 @@ describe("bot session expiration helpers", () => {
 
   it("uses the expected user-facing expiration message", () => {
     assert.match(EXPIRED_SESSION_USER_MESSAGE, /La solicitud anterior venció/);
-    assert.match(EXPIRED_SESSION_USER_MESSAGE, /Llegué/);
+    assert.match(EXPIRED_SESSION_USER_MESSAGE, /ubicaci[oó]n/i);
   });
 });
 

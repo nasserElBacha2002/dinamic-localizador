@@ -41,7 +41,7 @@ describe("bot response builders", () => {
     assert.equal(buildNoOperationMessage(), NO_OPERATION_MESSAGE);
     assert.equal(
       NO_OPERATION_MESSAGE,
-      "No tenés una jornada disponible para registrar llegada en este momento.",
+      "No tenés una jornada disponible para registrar llegada o salida en este momento.",
     );
   });
 
@@ -62,7 +62,7 @@ describe("bot response builders", () => {
     });
     assert.match(message, /registrada correctamente/i);
     assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
-    assert.match(message, /Me voy/);
+    assert.match(message, /compartí nuevamente tu ubicación/i);
   });
 
   it("builds outside radius response", () => {

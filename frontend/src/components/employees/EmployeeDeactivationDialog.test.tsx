@@ -12,9 +12,8 @@ Object.defineProperty(HTMLElement.prototype, "hasPointerCapture", {
 });
 
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
-import { cleanup, fireEvent, render, within } from "@testing-library/react";
-import { MantineProvider } from "@mantine/core";
+import { afterEach, before, describe, it } from "node:test";
+import { cleanup, fireEvent, within } from "@testing-library/react";
 import React from "react";
 import { mockViewport } from "../../test/mock-match-media";
 import { EmployeeDeactivationDialog } from "./EmployeeDeactivationDialog";
@@ -40,6 +39,7 @@ const impactFixture = (): EmployeeDeactivationImpact => ({
       endTime: "14:00",
       status: "SCHEDULED",
       locationName: "Sucursal Palermo",
+      workTeamId: "66666666-6666-6666-6666-666666666666",
       workTeamName: "Equipo Norte",
     },
   ],
@@ -51,14 +51,22 @@ const impactFixture = (): EmployeeDeactivationImpact => ({
   ],
 });
 
+let renderPage: typeof import("../../test/render-page").renderPage;
+let clearActiveTestQueryClients: typeof import("../../test/render-page").clearActiveTestQueryClients;
+
+before(async () => {
+  ({ renderPage, clearActiveTestQueryClients } = await import("../../test/render-page"));
+});
+
 const renderDialog = (ui: React.ReactElement) => {
-  const view = render(<MantineProvider>{ui}</MantineProvider>);
+  const view = renderPage(ui, { route: "/employees/1" });
   return { ...view, queries: within(view.container) };
 };
 
 describe("employee deactivation UI", () => {
   afterEach(() => {
     cleanup();
+    clearActiveTestQueryClients();
   });
 
   it("builds a summary that distinguishes workdays and assignments", () => {
@@ -91,7 +99,7 @@ describe("employee deactivation UI", () => {
     assert.ok(queries.getByText("Desactivar colaborador"));
     assert.ok(queries.getByText("Inventario Palermo"));
     assert.ok(queries.getByText("Sucursal Palermo"));
-    assert.ok(queries.getByText("Equipo Norte"));
+    assert.ok(queries.getAllByText("Equipo Norte").length >= 1);
     assert.ok(queries.getByText(/Se quitarán 2 jornadas futuras correspondientes a 1 asignación/));
     assert.ok(queries.getByRole("table"));
 

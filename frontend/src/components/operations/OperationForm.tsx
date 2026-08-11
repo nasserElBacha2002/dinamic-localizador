@@ -176,9 +176,14 @@ export function OperationForm({
     await onSubmit(payload);
   });
 
+  // Parents often pass a fresh defaultValues object each render (e.g. buildOperationEditDefaultValues).
+  // Reset only when the server-backed values actually change — otherwise edits (dates, etc.) snap back.
+  const defaultValuesSnapshot = JSON.stringify(defaultValues);
   useEffect(() => {
     reset(defaultValues);
-  }, [defaultValues, reset]);
+    // defaultValues is read from the render that produced defaultValuesSnapshot.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- identity alone must not reset the form
+  }, [defaultValuesSnapshot, reset]);
 
   const statusOptions = useMemo(
     () =>
@@ -288,7 +293,10 @@ export function OperationForm({
                   label="Desde"
                   required
                   value={field.value}
-                  onChange={field.onChange}
+                  onChange={(event) => field.onChange(event.currentTarget.value)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
                   error={fieldState.error?.message}
                   disabled={serviceFieldDisabled}
                 />
@@ -301,9 +309,13 @@ export function OperationForm({
                 <TextInput
                   type="date"
                   label="Hasta"
-                  description="Sin fecha de finalización"
+                  description="Vacío = sin fecha de finalización"
+                  inputWrapperOrder={["label", "input", "description", "error"]}
                   value={field.value ?? ""}
-                  onChange={field.onChange}
+                  onChange={(event) => field.onChange(event.currentTarget.value)}
+                  onBlur={field.onBlur}
+                  name={field.name}
+                  ref={field.ref}
                   error={fieldState.error?.message}
                   disabled={serviceFieldDisabled}
                 />

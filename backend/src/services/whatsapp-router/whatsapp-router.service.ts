@@ -226,12 +226,35 @@ export const whatsappRouterService = {
     }
 
     if (!ctx.session) {
-      return handlers.respond(companyId, {
-        message: ctx.recentlyExpired ? EXPIRED_SESSION_MESSAGE : LOCATION_WITHOUT_SESSION_MESSAGE,
-        employeeId: ctx.employeeId,
-        phoneFrom: ctx.phoneTo,
-        phoneTo: ctx.phoneFrom,
-      });
+      try {
+        return await handlers.processDirectLocationAttendance({
+          companyId,
+          employeeId: ctx.employeeId,
+          latitude: Number(ctx.payload.Latitude),
+          longitude: Number(ctx.payload.Longitude),
+          messageSid: ctx.payload.MessageSid,
+          phoneFrom: ctx.phoneFrom,
+          phoneTo: ctx.phoneTo,
+          moduleStates: ctx.moduleStates,
+        });
+      } catch (error) {
+        if (error instanceof InvalidCoordinatesError) {
+          return handlers.respond(companyId, {
+            message: INVALID_COORDINATES_MESSAGE,
+            employeeId: ctx.employeeId,
+            phoneFrom: ctx.phoneTo,
+            phoneTo: ctx.phoneFrom,
+          });
+        }
+
+        console.error("[whatsapp-bot] unexpected direct location processing error", error);
+        return handlers.respond(companyId, {
+          message: GENERIC_ERROR_MESSAGE,
+          employeeId: ctx.employeeId,
+          phoneFrom: ctx.phoneTo,
+          phoneTo: ctx.phoneFrom,
+        });
+      }
     }
 
     const blockedResponse = await respondIfActiveSessionModuleBlocked(

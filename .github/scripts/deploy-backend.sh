@@ -53,6 +53,11 @@ if ! compose build migrations; then
   exit 1
 fi
 
+# NOTE (Phase 1 tenant isolation): deploy migrates while the previous backend
+# container is still running, then rebuilds/restarts backend. Do not ship
+# work_team_members NOT NULL contract (088) in the same release as expand (087)
+# unless every live writer already sends company_id. See
+# audit/database-integrity-phase1-corrections.md.
 log_section "Running migrations against existing SQL Server (--no-deps; sqlserver/db-init will NOT be recreated)"
 if ! compose run --rm --no-deps migrations; then
   echo "ERROR: migrations failed" >&2

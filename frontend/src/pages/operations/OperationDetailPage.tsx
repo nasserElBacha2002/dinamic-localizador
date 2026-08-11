@@ -1,7 +1,7 @@
-import { Anchor, Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { Link as RouterLink, useParams } from "react-router";
+import { useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -19,6 +19,7 @@ import {
   type ActionMenuItem,
   type StatusBadgeTone,
 } from "../../design-system";
+import { EntityLink } from "../../components/entity-link";
 import { OperationTeamSection } from "../../components/operations/OperationTeamSection";
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
@@ -128,6 +129,10 @@ export function OperationDetailPage() {
     () => (operation ? resolveOperationReferenceDate(operation) : ""),
     [operation],
   );
+  const editDefaultValues = useMemo(
+    () => (operation ? buildOperationEditDefaultValues(operation) : null),
+    [operation],
+  );
 
   if (!id) {
     return <ErrorState message={`${terminology.operation.singular} no encontrada.`} />;
@@ -154,14 +159,13 @@ export function OperationDetailPage() {
   const canReactivate = canManage && isOperationReactivatable(operation.status);
   const serviceDisplayName = getOperationDisplayName(operation);
   const serviceDetailId = operation.serviceId || operation.service?.id;
-  const serviceFieldValue =
-    serviceDetailId && operation.service?.name?.trim() ? (
-      <Anchor component={RouterLink} to={`/services/${serviceDetailId}`} size="sm">
-        {serviceDisplayName}
-      </Anchor>
-    ) : (
-      serviceDisplayName
-    );
+  const serviceFieldValue = (
+    <EntityLink
+      entityType="service"
+      entityId={serviceDetailId}
+      label={serviceDisplayName}
+    />
+  );
 
   const geofenceSummary = operation.service?.allowedRadiusMeters
     ? `${operation.service.allowedRadiusMeters} m · tolerancias ${operation.earlyToleranceMinutes}/${operation.lateToleranceMinutes} min`
@@ -293,7 +297,7 @@ export function OperationDetailPage() {
           />
           <MetricCard
             title={terminology.service.singular}
-            value={serviceDisplayName}
+            value={serviceFieldValue}
             description={operation.service?.address ?? "Sin dirección"}
           />
           <MetricCard
@@ -372,7 +376,7 @@ export function OperationDetailPage() {
             </SectionCard>
           </Box>
 
-          {editing && canEdit ? (
+          {editing && canEdit && editDefaultValues ? (
             <Box className={layoutClasses.editSection}>
               <SectionCard title={`Editar ${terminology.operation.singular.toLowerCase()}`}>
                 <OperationForm
@@ -380,7 +384,7 @@ export function OperationDetailPage() {
                   currentStatus={operation.status}
                   currentOperationKind={operation.operationKind ?? "ONE_TIME"}
                   companyWorkSchedule={companyWorkScheduleQuery.data ?? null}
-                  defaultValues={buildOperationEditDefaultValues(operation)}
+                  defaultValues={editDefaultValues}
                   submitLabel="Guardar cambios"
                   cancelTo={`/operations/${operation.id}`}
                   loading={updateMutation.isPending}

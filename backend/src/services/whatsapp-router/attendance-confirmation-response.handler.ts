@@ -90,7 +90,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
             "",
             `Te esperamos en ${formatAssignmentServiceReference(assignment)} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
             "",
-            'Cuando llegues, recordá enviar "Llegué" y compartir tu ubicación.',
+            "Cuando llegues, compartí tu ubicación para registrar la asistencia.",
           ].join("\n"),
         );
       }

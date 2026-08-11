@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Button } from "@mantine/core";
 import { useLocation, useNavigate } from "react-router";
 import { normalizeAbsencesListSearch } from "../../api/absence-query-keys";
+import { EntityLink } from "../../components/entity-link";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
@@ -126,7 +127,14 @@ export function AbsencesListPage() {
       {
         key: "employee",
         header: terminology.worker.singular,
-        getValue: (row) => getRelatedName(row.employee),
+        render: (row) => (
+          <EntityLink
+            entityType="employee"
+            entityId={row.employee?.id ?? row.employeeId}
+            label={getRelatedName(row.employee)}
+            stopPropagation
+          />
+        ),
       },
       {
         key: "type",
@@ -162,7 +170,14 @@ export function AbsencesListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<AbsenceRequestListItem>>(
     () => ({
-      title: (row) => getRelatedName(row.employee),
+      title: (row) => (
+        <EntityLink
+          entityType="employee"
+          entityId={row.employee?.id ?? row.employeeId}
+          label={getRelatedName(row.employee)}
+            stopPropagation
+          />
+      ),
       status: (row) => (
         <StatusBadge label={absenceStatusLabels[row.status]} tone="neutral" variant="light" />
       ),

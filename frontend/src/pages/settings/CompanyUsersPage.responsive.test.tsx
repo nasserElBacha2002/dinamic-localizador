@@ -14,9 +14,11 @@ mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({
     companyId: "co-1",
     companyName: "Empresa Test",
-    role: "ADMIN",
+    role: "OWNER",
     isPlatformAdmin: false,
     permissions: ["users:manage"],
+    assignableRoles: ["ADMIN", "HR", "SUPERVISOR", "OPERATOR", "READ_ONLY"],
+    invitableRoles: ["OWNER", "ADMIN", "HR", "SUPERVISOR", "OPERATOR", "READ_ONLY"],
   }),
   getCompanyUsers: async () => ({
     data: [
@@ -24,14 +26,32 @@ mockApiModule("api/company-users.api", {
         userId: "u-1",
         name: "Ada Lovelace",
         email: "ada@example.com",
+        globalRole: "ADMIN",
         companyRole: "ADMIN",
         membershipStatus: "ACTIVE",
         isDefault: true,
+        membershipId: "m-1",
+        companyId: "co-1",
         updatedAt: "2026-07-01T00:00:00.000Z",
         createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
+      },
+      {
+        userId: "owner-self",
+        name: "Yo Owner",
+        email: "owner@example.com",
+        globalRole: "ADMIN",
+        companyRole: "OWNER",
+        membershipStatus: "ACTIVE",
+        isDefault: false,
+        membershipId: "m-2",
+        companyId: "co-1",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastLoginAt: null,
       },
     ],
-    meta: { page: 1, pageSize: 10, totalItems: 1, totalPages: 1 },
+    meta: { page: 1, pageSize: 10, totalItems: 2, totalPages: 1 },
   }),
   getCompanyUserById: async () => {
     throw new Error("not used");
@@ -103,6 +123,41 @@ describe("CompanyUsersPage responsive (real page)", () => {
 
     await waitFor(() => assert.ok(view.getByText("Ada Lovelace")));
     assert.ok(view.getByRole("table"));
+  });
+
+  it("disables self-edit and keeps inferior editable", async () => {
+    mockViewport("desktop");
+    const view = renderPage(
+      <Routes>
+        <Route path="/settings/users" element={<CompanyUsersPage />} />
+      </Routes>,
+      {
+        route: "/settings/users",
+        auth: {
+          user: {
+            id: "owner-self",
+            email: "owner@example.com",
+            name: "Yo Owner",
+            role: "ADMIN",
+            isPlatformAdmin: false,
+          },
+        },
+      },
+    );
+
+    await waitFor(() => assert.ok(view.getByText("Yo Owner")));
+    const selfRow = view.getByText("Yo Owner").closest("tr");
+    const adaRow = view.getByText("Ada Lovelace").closest("tr");
+    assert.ok(selfRow);
+    assert.ok(adaRow);
+    assert.equal(
+      within(selfRow).getByRole("button", { name: "Editar" }).hasAttribute("disabled"),
+      true,
+    );
+    assert.equal(
+      within(adaRow).getByRole("button", { name: "Editar" }).hasAttribute("disabled"),
+      false,
+    );
   });
 
   it("shows mobile cards and filter drawer", async () => {

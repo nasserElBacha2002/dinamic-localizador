@@ -186,7 +186,7 @@ export const payrollReceiptRepository = {
     companyId: string,
     query: ListPayrollReceiptBatchesQuery,
   ): Promise<{ items: PayrollReceiptBatch[]; total: number }> {
-    const { page, limit, offset } = getPagination(query.page, query.limit);
+    const { limit, offset } = getPagination(query.page, query.limit);
     const request = getPool().request();
     request.input("companyId", sql.UniqueIdentifier, companyId);
     request.input("offset", sql.Int, offset);
@@ -331,12 +331,12 @@ export const payrollReceiptRepository = {
     return mapPayrollReceiptRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async findActiveAssociated(
+  async listActiveAssociated(
     companyId: string,
     employeeId: string,
     year: number,
     month: number,
-  ): Promise<PayrollReceipt | null> {
+  ): Promise<PayrollReceipt[]> {
     const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
@@ -344,7 +344,7 @@ export const payrollReceiptRepository = {
       .input("year", sql.Int, year)
       .input("month", sql.Int, month)
       .query(`
-        SELECT TOP 1 r.*, e.name AS employee_name
+        SELECT r.*, e.name AS employee_name
         FROM payroll_receipts r
         LEFT JOIN employees e ON e.id = r.employee_id AND e.company_id = r.company_id
         WHERE r.company_id = @companyId
@@ -353,6 +353,37 @@ export const payrollReceiptRepository = {
           AND r.month = @month
           AND r.status = N'ASSOCIATED'
           AND r.deleted_at IS NULL
+        ORDER BY r.created_at ASC, r.id ASC
+      `);
+    return (result.recordset as Record<string, unknown>[]).map(mapPayrollReceiptRow);
+  },
+
+  async findActiveAssociatedByChecksum(
+    companyId: string,
+    employeeId: string,
+    year: number,
+    month: number,
+    checksumSha256: string,
+  ): Promise<PayrollReceipt | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("year", sql.Int, year)
+      .input("month", sql.Int, month)
+      .input("checksumSha256", sql.Char(64), checksumSha256)
+      .query(`
+        SELECT TOP 1 r.*, e.name AS employee_name
+        FROM payroll_receipts r
+        LEFT JOIN employees e ON e.id = r.employee_id AND e.company_id = r.company_id
+        WHERE r.company_id = @companyId
+          AND r.employee_id = @employeeId
+          AND r.year = @year
+          AND r.month = @month
+          AND r.checksum_sha256 = @checksumSha256
+          AND r.status = N'ASSOCIATED'
+          AND r.deleted_at IS NULL
+        ORDER BY r.created_at ASC, r.id ASC
       `);
     if (!result.recordset[0]) {
       return null;
@@ -585,6 +616,24 @@ export const payrollReceiptRepository = {
       }
       const oldReceipt = mapPayrollReceiptRow(oldRow);
 
+      // Soft-replace old first so checksum unique index releases before associating new
+      // (same-file replace / concurrent siblings). Still one transaction — rollback restores old.
+      await new sql.Request(transaction)
+        .input("companyId", sql.UniqueIdentifier, input.companyId)
+        .input("oldReceiptId", sql.UniqueIdentifier, input.oldReceiptId)
+        .input("deletedByUserId", sql.UniqueIdentifier, input.deletedByUserId)
+        .query(`
+          UPDATE payroll_receipts
+          SET status = N'REPLACED',
+              deleted_at = SYSUTCDATETIME(),
+              deleted_by_user_id = @deletedByUserId,
+              updated_at = SYSUTCDATETIME()
+          WHERE id = @oldReceiptId
+            AND company_id = @companyId
+            AND status = N'ASSOCIATED'
+            AND deleted_at IS NULL
+        `);
+
       const newResult = await new sql.Request(transaction)
         .input("companyId", sql.UniqueIdentifier, input.companyId)
         .input("receiptId", sql.UniqueIdentifier, input.newReceiptId)
@@ -618,22 +667,6 @@ export const payrollReceiptRepository = {
       if (!newResult.recordset[0]) {
         throw new AppError(404, "PAYROLL_RECEIPT_NOT_FOUND", "Recibo nuevo no encontrado");
       }
-
-      await new sql.Request(transaction)
-        .input("companyId", sql.UniqueIdentifier, input.companyId)
-        .input("oldReceiptId", sql.UniqueIdentifier, input.oldReceiptId)
-        .input("deletedByUserId", sql.UniqueIdentifier, input.deletedByUserId)
-        .query(`
-          UPDATE payroll_receipts
-          SET status = N'REPLACED',
-              deleted_at = SYSUTCDATETIME(),
-              deleted_by_user_id = @deletedByUserId,
-              updated_at = SYSUTCDATETIME()
-          WHERE id = @oldReceiptId
-            AND company_id = @companyId
-            AND status = N'ASSOCIATED'
-            AND deleted_at IS NULL
-        `);
 
       if (oldReceipt.storageObjectKey) {
         await pendingStorageDeletionRepository.enqueueKeys(
@@ -705,7 +738,7 @@ export const payrollReceiptRepository = {
     companyId: string,
     query: ListPayrollReceiptsQuery,
   ): Promise<{ items: PayrollReceipt[]; total: number }> {
-    const { page, limit, offset } = getPagination(query.page, query.limit);
+    const { limit, offset } = getPagination(query.page, query.limit);
     const filters: string[] = ["r.company_id = @companyId", "r.deleted_at IS NULL"];
     const employeeIdsFilter = createUuidInFilter({
       column: "r.employee_id",

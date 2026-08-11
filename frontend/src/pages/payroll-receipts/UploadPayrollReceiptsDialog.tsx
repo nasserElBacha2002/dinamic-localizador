@@ -281,7 +281,7 @@ export function UploadPayrollReceiptsDialog({ opened, onClose }: UploadPayrollRe
     <ResponsiveModal
       opened={opened}
       onClose={handleClose}
-      title="Subir recibos de sueldo"
+      title="Agregar recibos de sueldo"
       size="xl"
       closeOnClickOutside={!busy && !hasUnresolvedIssues}
       closeOnEscape={!busy}
@@ -304,6 +304,11 @@ export function UploadPayrollReceiptsDialog({ opened, onClose }: UploadPayrollRe
             disabled={busy || allDone}
           />
         </Group>
+
+        <Text size="sm" c="dimmed">
+          Podés agregar varios PDFs para el mismo período. Un archivo idéntico ya cargado se
+          marca como duplicado; para sustituir uno existente usá Reemplazar en el detalle.
+        </Text>
 
         <Group gap="sm" align="center">
           <FileButton onChange={addFiles} accept={ACCEPTED_TYPES} multiple disabled={busy || allDone}>
@@ -357,8 +362,9 @@ export function UploadPayrollReceiptsDialog({ opened, onClose }: UploadPayrollRe
           <Stack gap="sm">
             <Alert color={completionAlert.color}>{completionAlert.message}</Alert>
             <Text size="sm" c="dimmed">
-              Asociados: {uploadSummary.associated} · Duplicados: {uploadSummary.duplicates} ·
-              Fallidos: {uploadSummary.failed + uploadSummary.networkErrors}
+              Asociados: {uploadSummary.associated} · Archivos idénticos:{" "}
+              {uploadSummary.duplicates} · Fallidos:{" "}
+              {uploadSummary.failed + uploadSummary.networkErrors}
             </Text>
             <DataTable
               rows={resultRows}
@@ -376,7 +382,7 @@ export function UploadPayrollReceiptsDialog({ opened, onClose }: UploadPayrollRe
           </Button>
           {!allDone ? (
             <Button onClick={() => void handleUpload()} loading={busy} disabled={files.length === 0}>
-              Subir
+              Agregar
             </Button>
           ) : null}
         </Group>

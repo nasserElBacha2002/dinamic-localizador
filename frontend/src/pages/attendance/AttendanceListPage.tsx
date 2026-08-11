@@ -1,6 +1,7 @@
 import { Button, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { EntityLink } from "../../components/entity-link";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import { OperationMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import { ServiceMultiSelect } from "../../components/lookups/EntityMultiSelects";
@@ -122,17 +123,38 @@ export function AttendanceListPage() {
       {
         key: "employee",
         header: terminology.worker.singular,
-        getValue: (row) => getRelatedName(row.employee),
+        render: (row) => (
+          <EntityLink
+            entityType="employee"
+            entityId={row.employee?.id ?? row.employeeId}
+            label={getRelatedName(row.employee)}
+            stopPropagation
+          />
+        ),
       },
       {
         key: "service",
         header: terminology.service.singular,
-        getValue: (row) => getRelatedName(row.service),
+        render: (row) => (
+          <EntityLink
+            entityType="service"
+            entityId={row.service?.id}
+            label={getRelatedName(row.service)}
+            stopPropagation
+          />
+        ),
       },
       {
         key: "operation",
         header: terminology.operation.singular,
-        getValue: (row) => formatDateTime(row.operation?.scheduledStart),
+        render: (row) => (
+          <EntityLink
+            entityType="operation"
+            entityId={row.operationId}
+            label={formatDateTime(row.operation?.scheduledStart)}
+            stopPropagation
+          />
+        ),
       },
       { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
       { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
@@ -178,7 +200,14 @@ export function AttendanceListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceRecordWithRelations>>(
     () => ({
-      title: (row) => getRelatedName(row.employee),
+      title: (row) => (
+        <EntityLink
+          entityType="employee"
+          entityId={row.employee?.id ?? row.employeeId}
+          label={getRelatedName(row.employee)}
+            stopPropagation
+          />
+      ),
       status: (row) => (
         <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
       ),
@@ -186,7 +215,14 @@ export function AttendanceListPage() {
         {
           key: "service",
           label: terminology.service.singular,
-          getValue: (row) => getRelatedName(row.service),
+          render: (row) => (
+            <EntityLink
+              entityType="service"
+              entityId={row.service?.id}
+              label={getRelatedName(row.service)}
+            stopPropagation
+          />
+          ),
           visibility: "always",
         },
         {
@@ -204,7 +240,14 @@ export function AttendanceListPage() {
         {
           key: "operation",
           label: terminology.operation.singular,
-          getValue: (row) => formatDateTime(row.operation?.scheduledStart),
+          render: (row) => (
+            <EntityLink
+              entityType="operation"
+              entityId={row.operationId}
+              label={formatDateTime(row.operation?.scheduledStart)}
+            stopPropagation
+          />
+          ),
           visibility: "expanded",
         },
         {

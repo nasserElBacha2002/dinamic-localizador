@@ -18,6 +18,10 @@ import type {
 import type { AbsenceDayPeriod, AbsenceRequestDetail } from "../types/absence";
 import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import {
+  absenceEmployeeLockResource,
+  acquireTransactionAppLock,
+} from "../utils/sql-app-lock";
+import {
   compareAbsenceDates,
   getTodayAbsenceDateIso,
   parseAbsenceDateInput,
@@ -205,6 +209,15 @@ const createRequest = async (
   let autoApproved = false;
 
   try {
+    await acquireTransactionAppLock(transaction, {
+      resource: absenceEmployeeLockResource(companyId, input.employeeId),
+      timeoutError: new AppError(
+        409,
+        "ABSENCE_LOCK_TIMEOUT",
+        "No se pudo adquirir el bloqueo de ausencias. Reintentá.",
+      ),
+    });
+
     await assertNoOverlap(
       companyId,
       input.employeeId,
@@ -625,6 +638,14 @@ export const absenceRequestService = {
       }
 
       const payload = await resolveEditablePayload(companyId, existing, input, timezone);
+      await acquireTransactionAppLock(transaction, {
+        resource: absenceEmployeeLockResource(companyId, existing.employeeId),
+        timeoutError: new AppError(
+          409,
+          "ABSENCE_LOCK_TIMEOUT",
+          "No se pudo adquirir el bloqueo de ausencias. Reintentá.",
+        ),
+      });
       await assertNoOverlap(
         companyId,
         existing.employeeId,
@@ -749,13 +770,25 @@ export const absenceRequestService = {
         throw new AppError(404, "ABSENCE_REQUEST_NOT_FOUND", "Solicitud de ausencia no encontrada");
       }
 
+      const resubmitRule = assertAbsenceTransition("RESUBMIT", existing.status);
+
+      // Lock order (existing-request mutations): request row → employee applock → overlap check.
+      // Matches updateNeedsInfo so create/resubmit/update share absence:{company}:{employee}.
+      await acquireTransactionAppLock(transaction, {
+        resource: absenceEmployeeLockResource(companyId, existing.employeeId),
+        timeoutError: new AppError(
+          409,
+          "ABSENCE_LOCK_TIMEOUT",
+          "No se pudo adquirir el bloqueo de ausencias. Reintentá.",
+        ),
+      });
+
       await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
         companyId,
         requestId,
         existing.absenceTypeId,
+        transaction,
       );
-
-      const resubmitRule = assertAbsenceTransition("RESUBMIT", existing.status);
 
       const absenceType = await validateAbsenceType(companyId, existing.absenceTypeId);
       validateDates({

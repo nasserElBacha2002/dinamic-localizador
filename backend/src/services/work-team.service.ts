@@ -91,6 +91,7 @@ export const workTeamService = {
 
       for (const employeeId of employeeIds) {
         await workTeamMemberRepository.addMemberInTransaction(transaction, {
+          companyId,
           workTeamId: team.id,
           employeeId,
           createdBy: userId,
@@ -298,6 +299,7 @@ export const workTeamService = {
           );
         }
         await workTeamMemberRepository.addMemberInTransaction(transaction, {
+          companyId,
           workTeamId,
           employeeId,
           createdBy: userId,
@@ -338,6 +340,7 @@ export const workTeamService = {
     try {
       await workTeamMemberRepository.replaceMembersInTransaction(
         transaction,
+        companyId,
         workTeamId,
         input.employeeIds,
         userId,

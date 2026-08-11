@@ -48,6 +48,7 @@ export interface WhatsAppRouterHandlers {
     employeeId: string;
     phoneFrom: string;
     phoneTo: string;
+    messageSid?: string;
   }) => Promise<string>;
   handleCheckoutOperationSelection: (input: {
     companyId: string;
@@ -69,6 +70,8 @@ export interface WhatsAppRouterHandlers {
     messageSid: string;
     phoneFrom: string;
     phoneTo: string;
+    /** Instant of the LOCATION WhatsApp event (defaults to now). */
+    eventAt?: Date;
   }) => Promise<string>;
   processLocationCheckout: (input: {
     companyId: string;
@@ -82,5 +85,18 @@ export interface WhatsAppRouterHandlers {
     messageSid: string;
     phoneFrom: string;
     phoneTo: string;
+    /** Instant of the LOCATION WhatsApp event (defaults to now). */
+    eventAt?: Date;
+  }) => Promise<string>;
+  /** LOCATION without an active session — infer check-in vs check-out. */
+  processDirectLocationAttendance: (input: {
+    companyId: string;
+    employeeId: string;
+    latitude: number;
+    longitude: number;
+    messageSid: string;
+    phoneFrom: string;
+    phoneTo: string;
+    moduleStates: ReadonlyMap<CompanyModuleKey, boolean>;
   }) => Promise<string>;
 }

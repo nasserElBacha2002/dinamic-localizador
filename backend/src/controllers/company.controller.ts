@@ -1,6 +1,11 @@
 import type { Request, Response } from "express";
+import {
+  buildRoleCapabilities,
+  isCompanyRole,
+} from "../constants/company-permission-catalog";
 import { companyModuleService } from "../services/company-module.service";
 import { companyService } from "../services/company.service";
+import { companyUserService } from "../services/company-user.service";
 import { platformAdminService } from "../services/platform-admin.service";
 import { userRepository } from "../repositories/user.repository";
 import { requireRequestCompanyId } from "../utils/request-company";
@@ -108,6 +113,10 @@ export const companyController = {
 
   async getMembership(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
+    const capabilities = companyUserService.resolveRoleCapabilities(
+      req.companyRole,
+      Boolean(req.isPlatformAdmin),
+    );
     res.status(200).json({
       data: {
         companyId,
@@ -115,8 +124,26 @@ export const companyController = {
         role: req.companyRole,
         isPlatformAdmin: Boolean(req.isPlatformAdmin),
         permissions: Array.from(req.permissions ?? []),
+        assignableRoles: capabilities.assignableRoles,
+        invitableRoles: capabilities.invitableRoles,
       },
     });
+  },
+
+  async getRoleCapabilities(req: Request, res: Response) {
+    requireRequestCompanyId(req);
+    const roleParam = String(req.params.role ?? "").trim().toUpperCase();
+    if (!isCompanyRole(roleParam)) {
+      res.status(404).json({
+        error: {
+          code: "ROLE_NOT_FOUND",
+          message: "No se encontró el rol solicitado.",
+        },
+      });
+      return;
+    }
+
+    res.status(200).json({ data: buildRoleCapabilities(roleParam) });
   },
 
   async listModules(req: Request, res: Response) {

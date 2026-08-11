@@ -1,7 +1,7 @@
 import type { CompanyPermission } from "../types/permissions";
 
 export function hasAnyPermission(
-  permissions: string[] | undefined,
+  permissions: readonly string[] | undefined,
   required: readonly CompanyPermission[],
 ): boolean {
   if (!permissions || required.length === 0) {

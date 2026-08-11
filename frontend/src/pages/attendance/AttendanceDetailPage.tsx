@@ -2,6 +2,7 @@ import { Accordion, Button, Group, Stack, Text } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
 import { useParams } from "react-router";
+import { EntityLink } from "../../components/entity-link";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { ReviewAttendanceDialog } from "../../components/attendance/ReviewAttendanceDialog";
 import {
@@ -164,12 +165,33 @@ export function AttendanceDetailPage() {
           fields={[
             {
               label: terminology.worker.singular,
-              value: `${record.employee.name} (${record.employee.phoneNumber})`,
+              value: (
+                <EntityLink
+                  entityType="employee"
+                  entityId={record.employee.id ?? record.employeeId}
+                  label={`${record.employee.name} (${record.employee.phoneNumber})`}
+                />
+              ),
             },
-            { label: terminology.service.singular, value: record.service.name },
+            {
+              label: terminology.service.singular,
+              value: (
+                <EntityLink
+                  entityType="service"
+                  entityId={record.service.id}
+                  label={record.service.name}
+                />
+              ),
+            },
             {
               label: `${terminology.operation.singular} programada`,
-              value: formatDateTime(record.operation.scheduledStart),
+              value: (
+                <EntityLink
+                  entityType="operation"
+                  entityId={record.operationId ?? record.operation.id}
+                  label={formatDateTime(record.operation.scheduledStart)}
+                />
+              ),
             },
             { label: "Llegada", value: formatDateTime(record.receivedAt) },
             { label: "Salida", value: formatDateTime(record.checkoutAt) },

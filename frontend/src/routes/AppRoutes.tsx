@@ -3,6 +3,7 @@ import { Navigate, Outlet, Route, Routes } from "react-router";
 import { ProtectedRoute } from "../components/auth/ProtectedRoute";
 import { CompanyGate } from "../components/company/CompanyGate";
 import { FeatureRouteGuard } from "../components/company/FeatureRouteGuard";
+import { EntityLinkAccessProvider } from "../components/entity-link/EntityLinkAccessProvider";
 import { AppLayout } from "../design-system";
 import { LoadingState } from "../design-system";
 import { HomePage } from "../pages/HomePage";
@@ -114,9 +115,11 @@ function ProtectedLayout() {
   return (
     <ProtectedRoute>
       <CompanyGate>
-        <AppLayout>
-          <Outlet />
-        </AppLayout>
+        <EntityLinkAccessProvider>
+          <AppLayout>
+            <Outlet />
+          </AppLayout>
+        </EntityLinkAccessProvider>
       </CompanyGate>
     </ProtectedRoute>
   );

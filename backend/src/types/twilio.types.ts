@@ -50,6 +50,8 @@ export interface WorkdaySessionSelectionOption {
   operationWorkdayId: string;
   operationId: string;
   attendanceRecordId?: string;
+  /** Mixed llegada/salida selection (location-first). */
+  attendanceAction?: "CHECK_IN" | "CHECK_OUT";
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;
@@ -59,11 +61,24 @@ export interface WorkdaySessionSelectionOption {
   checkInAt?: string;
 }
 
+/** Location captured before workday disambiguation (location-first attendance). */
+export interface PendingBotLocation {
+  latitude: number;
+  longitude: number;
+  messageSid: string;
+  receivedAt: string;
+}
+
 export interface BotSessionContext {
   workdayOptions?: WorkdaySessionSelectionOption[];
   operationOptions?: OperationSelectionOption[];
   /** @deprecated Read compat — see legacy-operation-session-context.ts */
   inventoryOptions?: OperationSelectionOption[];
+  /**
+   * When the employee shared LOCATION before selecting among multiple jornadas,
+   * reuse these coordinates after selection instead of asking again.
+   */
+  pendingLocation?: PendingBotLocation;
   flow?: "ABSENCE_REQUEST";
   attendanceConfirmation?: {
     operationId: string;
@@ -93,7 +108,11 @@ export interface BotSessionContext {
       inputHash: string;
     };
   };
-  payrollReceiptQuery?: { year: number; month: number };
+  payrollReceiptQuery?: {
+    year: number;
+    month: number;
+    introSent?: boolean;
+  };
 }
 
 export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED" | "DUPLICATE";

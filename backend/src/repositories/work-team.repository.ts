@@ -450,18 +450,20 @@ export const workTeamMemberRepository = {
   async addMemberInTransaction(
     transaction: sql.Transaction,
     input: {
+      companyId: string;
       workTeamId: string;
       employeeId: string;
       createdBy: string | null;
     },
   ): Promise<void> {
     await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("workTeamId", sql.UniqueIdentifier, input.workTeamId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("createdBy", sql.UniqueIdentifier, input.createdBy)
       .query(`
-        INSERT INTO work_team_members (work_team_id, employee_id, created_by)
-        VALUES (@workTeamId, @employeeId, @createdBy)
+        INSERT INTO work_team_members (company_id, work_team_id, employee_id, created_by)
+        VALUES (@companyId, @workTeamId, @employeeId, @createdBy)
       `);
   },
 
@@ -483,6 +485,7 @@ export const workTeamMemberRepository = {
 
   async replaceMembersInTransaction(
     transaction: sql.Transaction,
+    companyId: string,
     workTeamId: string,
     employeeIds: string[],
     createdBy: string | null,
@@ -493,6 +496,7 @@ export const workTeamMemberRepository = {
 
     for (const employeeId of employeeIds) {
       await workTeamMemberRepository.addMemberInTransaction(transaction, {
+        companyId,
         workTeamId,
         employeeId,
         createdBy,

@@ -29,11 +29,11 @@ export interface BotMenuOption {
 const MENU_OPTION_DEFINITIONS: Record<BotMenuOptionKey, Omit<BotMenuOption, "key">> = {
   check_in: {
     label: "Marcar llegada",
-    hint: 'escribí "Llegué"',
+    hint: 'compartí tu ubicación (o escribí "Llegué")',
   },
   checkout: {
     label: "Marcar salida",
-    hint: 'escribí "Me voy"',
+    hint: 'compartí tu ubicación (o escribí "Me voy")',
   },
   absence: {
     label: "Pedir ausencia o vacaciones",

@@ -19,6 +19,11 @@ export const companyIdParamSchema = z.object({
   companyId: z.string().uuid("ID de empresa inválido"),
 });
 
+export const companyRoleCapabilitiesParamSchema = z.object({
+  companyId: z.string().uuid("ID de empresa inválido"),
+  role: z.string().trim().min(1, "El rol es obligatorio."),
+});
+
 export const updateCompanySettingsSchema = z
   .object({
     operationTimezone: z

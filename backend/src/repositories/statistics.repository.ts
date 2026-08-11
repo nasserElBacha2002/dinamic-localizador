@@ -552,6 +552,7 @@ export const statisticsRepository = {
         SELECT
           operation_id,
           operation_kind,
+          service_id,
           service_name,
           service_address,
           MIN(operation_scheduled_start) AS operation_scheduled_start,
@@ -603,7 +604,7 @@ export const statisticsRepository = {
             ) / 10.0
           END AS punctuality_rate
         FROM employee_workday_statistics
-        GROUP BY operation_id, operation_kind, service_name, service_address
+        GROUP BY operation_id, operation_kind, service_id, service_name, service_address
         ${having}
       )
     `;
@@ -641,6 +642,7 @@ export const statisticsRepository = {
         operationId: String(record.operation_id),
         operationKind,
         displayLabel: buildOperationDisplayLabel(serviceName, scheduledStart),
+        serviceId: record.service_id ? String(record.service_id) : null,
         serviceName,
         serviceAddress: record.service_address ? String(record.service_address) : null,
         scheduledStart,

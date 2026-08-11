@@ -1,0 +1,35 @@
+# Database Integrity Phase 2 — validation evidence
+Date: 2026-08-07
+
+## npm run build (backend)
+exit code: 0
+result: pass
+
+## eslint (Phase 2 touched files)
+exit code: 0
+result: pass
+
+## npm test (unit)
+exit code: 0
+result: pass (includes audit-sanitize.test.ts)
+note: full suite previously 1224+ tests; sanitize tests added
+
+## Phase 2 SQL Server integration
+command:
+  EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true npx tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit \
+    src/services/database-integrity-phase2.integration.test.ts
+exit code: 0
+result: tests 6 / pass 6 / fail 0
+  - attendance review success
+  - attendance review audit failure rollback
+  - concurrent review no false audit
+  - membership role success
+  - membership audit failure rollback
+  - last-owner no success audit
+
+## Decisions
+1. CRITICAL audit in same TX as business mutation
+2. Specialized histories not duplicated as SoT
+3. No triggers / no business SPs / no event sourcing
+4. Sanitization centralized in auditService
+5. Denial / lifecycle secondary index / payroll remain BEST_EFFORT by design

@@ -1,6 +1,7 @@
 import { Card, SimpleGrid, Stack, Text } from "@mantine/core";
 import type { KeyboardEvent } from "react";
 import { useNavigate } from "react-router";
+import { EntityLink } from "../components/entity-link";
 import {
   EmptyState,
   ErrorState,
@@ -77,7 +78,14 @@ function UpcomingOperationCard({ operation }: { operation: OperationWithService 
       style={{ cursor: "pointer" }}
     >
       <Stack gap={4}>
-        <Text fw={600}>{operation.service.name}</Text>
+        <Text fw={600}>
+          <EntityLink
+            entityType="service"
+            entityId={operation.serviceId ?? operation.service?.id}
+            label={operation.service.name}
+            stopPropagation
+          />
+        </Text>
         <Text size="sm" c="dimmed">
           {operation.service.address ?? "—"} · {scheduleText}
         </Text>

@@ -1,16 +1,14 @@
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { botSessionService } from "../bot-session.service";
 import { getPayrollReceiptsModuleBlockedMessage } from "../whatsapp-module-gate";
-import { payrollReceiptRepository } from "../../repositories/payroll-receipt.repository";
-import { payrollReceiptWhatsappDeliveryService } from "../payroll-receipt-whatsapp-delivery.service";
+import { payrollReceiptPeriodQueryService } from "../payroll-receipt-period-query.service";
 import { isGlobalCancelCommand } from "../../utils/intent";
 import { parsePayrollReceiptPeriodMessage } from "../../utils/payroll-receipts/period-parser";
-import { formatPayrollReceiptPeriod } from "../../utils/payroll-receipts/period-format";
 import { payrollReceiptMetrics } from "../../utils/payroll-receipts/metrics";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import { isPayrollReceiptSessionState } from "../../utils/bot-session-states";
 import { logModuleBlocked } from "./module-session-gate";
-import type { BotSession } from "../../types/twilio.types";
+import type { BotSession, BotSessionContext } from "../../types/twilio.types";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 
 const ASK_PERIOD_MESSAGE =
@@ -19,11 +17,19 @@ const ASK_PERIOD_MESSAGE =
 const INVALID_PERIOD_MESSAGE =
   "El período no es válido. Indicá mes y año en formato MM/YY, por ejemplo 07/26.";
 
-const NOT_FOUND_MESSAGE = (year: number, month: number): string =>
-  `No encontramos un recibo disponible para el período ${formatPayrollReceiptPeriod(year, month)}.`;
-
 const SAFE_ERROR_MESSAGE =
   "No pudimos consultar tu recibo en este momento. Intentá nuevamente más tarde.";
+
+const parseSessionContext = (session: BotSession): BotSessionContext => {
+  if (!session.contextJson) {
+    return {};
+  }
+  try {
+    return JSON.parse(session.contextJson) as BotSessionContext;
+  } catch {
+    return {};
+  }
+};
 
 export const handlePayrollReceiptIntent = async (
   ctx: WhatsAppRouterContext,
@@ -143,21 +149,29 @@ export const handleActivePayrollReceiptSession = async (
     });
   }
 
-  const receipt = await payrollReceiptRepository.findActiveAssociated(
-    ctx.companyId,
-    ctx.employeeId,
-    parsed.year,
-    parsed.month,
-  );
+  const priorContext = parseSessionContext(session).payrollReceiptQuery;
+  const samePeriodRetry =
+    priorContext?.year === parsed.year && priorContext?.month === parsed.month;
 
-  if (!receipt) {
+  const result = await payrollReceiptPeriodQueryService.deliverForPeriod({
+    companyId: ctx.companyId,
+    employeeId: ctx.employeeId,
+    botSessionId: session.id,
+    toPhoneNumber: ctx.phoneFrom,
+    year: parsed.year,
+    month: parsed.month,
+    inboundMessageSid: ctx.payload.MessageSid ?? null,
+    introAlreadySent: Boolean(samePeriodRetry && priorContext?.introSent),
+  });
+
+  if (result.kind === "not_found") {
     payrollReceiptMetrics.queryNotFound({
       year: parsed.year,
       month: parsed.month,
     });
     await botSessionService.completeSession(ctx.companyId, session.id);
     return handlers.respond(ctx.companyId, {
-      message: NOT_FOUND_MESSAGE(parsed.year, parsed.month),
+      message: result.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
@@ -166,23 +180,32 @@ export const handleActivePayrollReceiptSession = async (
     });
   }
 
-  const delivery = await payrollReceiptWhatsappDeliveryService.deliverReceipt({
-    toPhoneNumber: ctx.phoneFrom,
-    receipt,
-    companyId: ctx.companyId,
-    employeeId: ctx.employeeId,
-    inboundMessageSid: ctx.payload.MessageSid ?? null,
-    payrollReceiptId: receipt.id,
-  });
-
-  if (delivery.kind === "unavailable_temporary") {
+  if (result.kind === "partial_temporary" || result.kind === "partial_failed") {
     await botSessionService.updatePayrollReceiptSessionContext(ctx.companyId, session.id, {
       year: parsed.year,
       month: parsed.month,
+      introSent: result.introSent,
     });
-    payrollReceiptMetrics.queryFailed({ status: delivery.kind });
+    payrollReceiptMetrics.queryFailed({ status: result.kind });
     return handlers.respond(ctx.companyId, {
-      message: delivery.message,
+      message: result.message,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERY_UNAVAILABLE,
+      flowType: "PAYROLL_RECEIPT_QUERY",
+    });
+  }
+
+  if (result.kind === "failed") {
+    await botSessionService.updatePayrollReceiptSessionContext(ctx.companyId, session.id, {
+      year: parsed.year,
+      month: parsed.month,
+      introSent: result.introSent,
+    });
+    payrollReceiptMetrics.queryFailed({ status: "failed" });
+    return handlers.respond(ctx.companyId, {
+      message: result.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
@@ -192,22 +215,14 @@ export const handleActivePayrollReceiptSession = async (
   }
 
   await botSessionService.completeSession(ctx.companyId, session.id);
-
-  if (delivery.kind === "send_accepted" || delivery.kind === "text_only") {
-    payrollReceiptMetrics.queryDelivered({ status: delivery.kind });
-  } else {
-    payrollReceiptMetrics.queryFailed({ status: delivery.kind });
-  }
+  payrollReceiptMetrics.queryDelivered({ status: "multi_or_single" });
 
   return handlers.respond(ctx.companyId, {
-    message: delivery.message,
+    message: result.message,
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,
-    resultCode:
-      delivery.kind === "send_accepted" || delivery.kind === "text_only"
-        ? WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_SEND_ACCEPTED
-        : WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_DELIVERY_UNAVAILABLE,
+    resultCode: WHATSAPP_RESULT_CODES.PAYROLL_RECEIPT_SEND_ACCEPTED,
     flowType: "PAYROLL_RECEIPT_QUERY",
   });
 };

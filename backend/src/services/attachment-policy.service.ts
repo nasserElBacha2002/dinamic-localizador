@@ -82,8 +82,12 @@ export const attachmentPolicyService = {
     companyId: string,
     requestId: string,
     absenceTypeId: string,
+    transaction?: import("mssql").Transaction,
   ): Promise<void> {
-    const request = await absenceRequestRepository.findById(companyId, requestId);
+    // Prefer request row already locked in the caller's transaction when provided.
+    const request = transaction
+      ? await absenceRequestRepository.findByIdForUpdate(companyId, requestId, transaction)
+      : await absenceRequestRepository.findById(companyId, requestId);
     const absenceType = await absenceTypeRepository.findById(companyId, absenceTypeId);
     if (!absenceType) {
       throw new AppError(404, "ABSENCE_TYPE_NOT_FOUND", "Tipo de ausencia no encontrado");
@@ -96,7 +100,11 @@ export const attachmentPolicyService = {
     if (policy !== "REQUIRED") {
       return;
     }
-    const count = await absenceAttachmentRepository.countAvailable(companyId, requestId);
+    const count = await absenceAttachmentRepository.countAvailable(
+      companyId,
+      requestId,
+      transaction,
+    );
     if (!isAttachmentPolicySatisfied(policy, count)) {
       throw new AppError(
         409,

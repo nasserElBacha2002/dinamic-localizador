@@ -1,4 +1,4 @@
-import { Button, Group, Paper, Select, Stack, Text, Title } from "@mantine/core";
+import { Button, Group, Paper, Select, Stack, Text, Title, Tooltip } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useCallback, useMemo, useState } from "react";
 import {
@@ -17,6 +17,7 @@ import {
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../design-system";
+import { useAuth } from "../../hooks/useAuth";
 import {
   useCompanyInvitations,
   useCreateCompanyInvitation,
@@ -35,6 +36,12 @@ import type {
   CreateCompanyInvitationInput,
   UserInvitationSummary,
 } from "../../types/user-invitation";
+import {
+  getCompanyUserEditBlockReason,
+  getEditBlockMessage,
+  listAssignableCompanyRoles,
+  listInvitableCompanyRoles,
+} from "../../utils/company-role-hierarchy";
 import { formatDate } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
 import { companyRoleLabels, membershipStatusLabels } from "../../utils/labels";
@@ -45,6 +52,7 @@ import {
 import { CompanyUserDialog } from "./CompanyUserDialog";
 
 export function CompanyUsersPage() {
+  const { user: authUser } = useAuth();
   const table = useTableUrlState({
     defaults: COMPANY_USERS_TABLE_DEFAULTS,
     fields: COMPANY_USERS_TABLE_FIELDS,
@@ -57,6 +65,51 @@ export function CompanyUsersPage() {
 
   const permissionsQuery = useCompanyPermissions();
   const canManageUsers = permissionsQuery.data?.permissions.includes("users:manage") ?? false;
+  const actorRole = permissionsQuery.data?.role;
+  const actorIsPlatformAdmin =
+    Boolean(authUser?.isPlatformAdmin) || Boolean(permissionsQuery.data?.isPlatformAdmin);
+
+  const assignableRoles = useMemo(() => {
+    if (permissionsQuery.data?.assignableRoles?.length) {
+      return permissionsQuery.data.assignableRoles;
+    }
+    return listAssignableCompanyRoles(actorRole, actorIsPlatformAdmin);
+  }, [actorIsPlatformAdmin, actorRole, permissionsQuery.data]);
+
+  const invitableRoles = useMemo(() => {
+    if (permissionsQuery.data?.invitableRoles?.length) {
+      return permissionsQuery.data.invitableRoles;
+    }
+    return listInvitableCompanyRoles(actorRole, actorIsPlatformAdmin);
+  }, [actorIsPlatformAdmin, actorRole, permissionsQuery.data]);
+
+  const dialogRoles = dialogMode === "create" ? invitableRoles : assignableRoles;
+
+  const canEditUser = useCallback(
+    (target: CompanyUser) =>
+      getCompanyUserEditBlockReason({
+        actorUserId: authUser?.id,
+        actorRole,
+        actorIsPlatformAdmin,
+        targetUserId: target.userId,
+        targetRole: target.companyRole,
+      }) === null,
+    [actorIsPlatformAdmin, actorRole, authUser?.id],
+  );
+
+  const editBlockMessageFor = useCallback(
+    (target: CompanyUser) => {
+      const reason = getCompanyUserEditBlockReason({
+        actorUserId: authUser?.id,
+        actorRole,
+        actorIsPlatformAdmin,
+        targetUserId: target.userId,
+        targetRole: target.companyRole,
+      });
+      return reason ? getEditBlockMessage(reason) : null;
+    },
+    [actorIsPlatformAdmin, actorRole, authUser?.id],
+  );
 
   const filters = useMemo(
     () => ({
@@ -105,6 +158,13 @@ export function CompanyUsersPage() {
   };
 
   const openEditDialog = (user: CompanyUser) => {
+    if (!canEditUser(user)) {
+      notifications.show({
+        color: "yellow",
+        message: editBlockMessageFor(user) ?? "No podés editar este usuario.",
+      });
+      return;
+    }
     setDialogMode("edit");
     setSelectedUser(user);
     setDialogError(null);
@@ -378,29 +438,49 @@ export function CompanyUsersPage() {
         mobileView="cards"
         mobileCard={mobileCard}
         rowActions={(user) => {
-          const items: ActionMenuItem[] = [
-            {
-              key: "edit",
-              label: "Editar",
-              onClick: () => openEditDialog(user),
-            },
-          ];
+          const allowed = canEditUser(user);
+          const blockedMessage = editBlockMessageFor(user) ?? "No podés editar este usuario.";
+          const items: ActionMenuItem[] = [];
           if (user.membershipStatus === "ACTIVE") {
             items.push({
               key: "deactivate",
               label: "Desactivar",
               destructive: true,
-              onClick: () => setDeactivateTarget(user),
+              disabled: !allowed,
+              onClick: () => {
+                if (!allowed) {
+                  notifications.show({
+                    color: "yellow",
+                    message: blockedMessage,
+                  });
+                  return;
+                }
+                setDeactivateTarget(user);
+              },
             });
           }
+          const editButton = (
+            <Button
+              size="compact-sm"
+              variant="light"
+              disabled={!allowed}
+              onClick={() => openEditDialog(user)}
+            >
+              Editar
+            </Button>
+          );
           return (
             <ActionMenu
               primary={
-                <Button size="compact-sm" variant="light" onClick={() => openEditDialog(user)}>
-                  Editar
-                </Button>
+                allowed ? (
+                  editButton
+                ) : (
+                  <Tooltip label={blockedMessage} multiline maw={280}>
+                    <span>{editButton}</span>
+                  </Tooltip>
+                )
               }
-              items={items.filter((item) => item.key !== "edit")}
+              items={items}
               menuLabel={`Más acciones de ${user.name}`}
             />
           );
@@ -424,6 +504,7 @@ export function CompanyUsersPage() {
         initialUser={selectedUser}
         loading={createMutation.isPending || updateMutation.isPending}
         errorMessage={dialogError}
+        assignableRoles={dialogRoles}
         onClose={() => setDialogOpen(false)}
         onSubmit={handleDialogSubmit}
       />

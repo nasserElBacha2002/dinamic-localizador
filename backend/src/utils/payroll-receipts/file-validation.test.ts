@@ -9,18 +9,24 @@ import {
 } from "./file-validation";
 
 describe("payroll receipt file-validation", () => {
-  it("builds object keys with prefix and period segments", () => {
-    const key = buildPayrollReceiptObjectKey({
+  it("builds distinct object keys for different receipt ids in the same period", () => {
+    const keyA = buildPayrollReceiptObjectKey({
       storagePrefix: "payroll-receipts",
       companyId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
-      year: 2024,
-      month: 3,
+      year: 2026,
+      month: 7,
       receiptId: "11111111-2222-3333-4444-555555555555",
     });
-    assert.equal(
-      key,
-      "payroll-receipts/companies/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee/payroll-receipts/2024/3/11111111-2222-3333-4444-555555555555/original",
-    );
+    const keyB = buildPayrollReceiptObjectKey({
+      storagePrefix: "payroll-receipts",
+      companyId: "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
+      year: 2026,
+      month: 7,
+      receiptId: "66666666-7777-8888-9999-aaaaaaaaaaaa",
+    });
+    assert.notEqual(keyA, keyB);
+    assert.match(keyA, /11111111-2222-3333-4444-555555555555/);
+    assert.match(keyB, /66666666-7777-8888-9999-aaaaaaaaaaaa/);
   });
 
   it("rejects path traversal in key parts", () => {

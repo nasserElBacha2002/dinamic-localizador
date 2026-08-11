@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Button, TextInput } from "@mantine/core";
 import { useLocation, useNavigate } from "react-router";
+import { EntityLink } from "../../components/entity-link";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import {
   DataTable,
@@ -106,7 +107,17 @@ export function PayrollReceiptsListPage() {
       {
         key: "employee",
         header: terminology.worker.singular,
-        getValue: (row) => safeText(row.employeeName ?? null),
+        render: (row) =>
+          row.employeeId ? (
+            <EntityLink
+              entityType="employee"
+              entityId={row.employeeId}
+              label={safeText(row.employeeName ?? null)}
+            stopPropagation
+          />
+          ) : (
+            safeText(row.employeeName ?? null)
+          ),
       },
       {
         key: "document",
@@ -140,7 +151,17 @@ export function PayrollReceiptsListPage() {
 
   const mobileCard = useMemo<DataTableMobileCardConfig<PayrollReceiptListItem>>(
     () => ({
-      title: (row) => safeText(row.employeeName ?? row.originalFilename),
+      title: (row) =>
+        row.employeeId ? (
+          <EntityLink
+            entityType="employee"
+            entityId={row.employeeId}
+            label={safeText(row.employeeName ?? row.originalFilename)}
+            stopPropagation
+          />
+        ) : (
+          safeText(row.employeeName ?? row.originalFilename)
+        ),
       status: (row) => (
         <StatusBadge
           label={payrollReceiptStatusLabels[row.status]}
@@ -185,7 +206,7 @@ export function PayrollReceiptsListPage() {
         description="Consultá y cargá recibos de sueldo por período y colaborador."
         action={
           canUpload ? (
-            <Button onClick={() => setUploadOpen(true)}>Subir recibos</Button>
+            <Button onClick={() => setUploadOpen(true)}>Agregar recibos</Button>
           ) : null
         }
       />

@@ -16,7 +16,6 @@ import {
   COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
   DUPLICATE_MESSAGE_SID_RESPONSE,
   GLOBAL_CANCEL_MESSAGE,
-  LOCATION_WITHOUT_SESSION_MESSAGE,
   MODULE_DISABLED_MESSAGE,
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "./bot/bot-response.builder";
@@ -433,7 +432,7 @@ describe("whatsapp webhook dynamic menu", () => {
       const message = await runSimulatedWebhook({
         payload: webhookPayload({ Body: command }),
       });
-      assert.match(message, /Marcar llegada — escribí "Llegué"/);
+      assert.match(message, /Marcar llegada — compartí tu ubicación/);
     });
   }
 
@@ -478,7 +477,7 @@ describe("whatsapp webhook global commands", () => {
         payload: webhookPayload({ Body: command }),
       });
       assert.match(message, /Te puedo ayudar con las opciones habilitadas/);
-      assert.match(message, /Marcar llegada — escribí "Llegué"/);
+      assert.match(message, /Marcar llegada — compartí tu ubicación/);
     });
   }
 
@@ -618,15 +617,160 @@ describe("whatsapp webhook check-in regression", () => {
     assert.match(message, new RegExp(EXPIRED_SESSION_USER_MESSAGE));
   });
 
-  it("returns location-without-session message for unsolicited location", async () => {
+  it("registers check-in from LOCATION without prior Llegué when one workday is available", async () => {
     const message = await runSimulatedWebhook({
       payload: webhookPayload({
         Body: "",
         Latitude: "-34.6",
         Longitude: "-58.4",
       }),
+      setup: async () => {
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
+        const { botSessionService } = await import("./bot-session.service");
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [checkInWorkdayCandidate(operationA, employeeWorkdayA)],
+          hasJustifiedWorkdayInWindow: false,
+        }));
+        mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
+        mock.method(botSessionService, "createWaitingLocationSession", async () =>
+          buildSession(companyA, "WAITING_LOCATION"),
+        );
+        mock.method(botSessionService, "completeSession", async () => undefined);
+        mock.method(
+          employeeWorkdayAvailabilityService,
+          "revalidateCheckInCandidate",
+          async () => checkInWorkdayCandidate(operationA, employeeWorkdayA),
+        );
+      },
     });
-    assert.match(message, new RegExp(LOCATION_WITHOUT_SESSION_MESSAGE));
+    assert.match(message, /llegada fue registrada/i);
+    assert.match(message, /compartí nuevamente tu ubicación/i);
+  });
+
+  it("registers checkout from LOCATION when open check-in exists", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({
+        Body: "",
+        Latitude: "-34.6",
+        Longitude: "-58.4",
+      }),
+      simulation: {
+        virtualAttendanceRecords: [
+          {
+            id: attendanceA,
+            operationId: operationA,
+            employeeId: employeeA,
+            employeeWorkdayId: employeeWorkdayA,
+            receivedAt: "2026-07-05T15:00:00.000Z",
+            validationStatus: "VALID",
+            locationStatus: "WITHIN_RADIUS",
+            punctualityStatus: "ON_TIME",
+            distanceMeters: 20,
+            checkoutAt: null,
+            checkoutStatus: null,
+          },
+        ],
+      },
+      setup: async () => {
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
+        const { botSessionService } = await import("./bot-session.service");
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [],
+          hasJustifiedWorkdayInWindow: false,
+        }));
+        mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => [
+          checkoutWorkdayCandidate(operationA, employeeWorkdayA, attendanceA),
+        ]);
+        mock.method(botSessionService, "createWaitingCheckoutLocationSession", async () =>
+          buildSession(companyA, "WAITING_CHECKOUT_LOCATION"),
+        );
+        mock.method(botSessionService, "completeSession", async () => undefined);
+        mock.method(
+          employeeWorkdayAvailabilityService,
+          "revalidateCheckoutCandidate",
+          async () => ({
+            kind: "eligible" as const,
+            candidate: checkoutWorkdayCandidate(operationA, employeeWorkdayA, attendanceA),
+          }),
+        );
+      },
+    });
+    assert.match(message, /salida/i);
+  });
+
+  it("asks for selection when LOCATION matches multiple check-in workdays", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({
+        Body: "",
+        Latitude: "-34.6",
+        Longitude: "-58.4",
+      }),
+      setup: async () => {
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
+        const { botSessionService } = await import("./bot-session.service");
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [
+            checkInWorkdayCandidate(operationA, employeeWorkdayA, "Servicio A"),
+            checkInWorkdayCandidate(operationB, employeeWorkdayB, "Servicio B"),
+          ],
+          hasJustifiedWorkdayInWindow: false,
+        }));
+        mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
+        mock.method(botSessionService, "createOperationSelectionSession", async () => undefined);
+      },
+    });
+    assert.match(message, /seleccioná|Respondé con el número/i);
+  });
+
+  it("does not auto-register when LOCATION is mixed check-in and checkout ambiguous", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({
+        Body: "",
+        Latitude: "-34.6",
+        Longitude: "-58.4",
+      }),
+      setup: async () => {
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [checkInWorkdayCandidate(operationB, employeeWorkdayB)],
+          hasJustifiedWorkdayInWindow: false,
+        }));
+        mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => [
+          checkoutWorkdayCandidate(operationA, employeeWorkdayA, attendanceA),
+        ]);
+      },
+    });
+    assert.match(message, /Me voy/);
+    assert.match(message, /Llegué/);
+  });
+
+  it("returns no-operation message for LOCATION without available jornadas", async () => {
+    const message = await runSimulatedWebhook({
+      payload: webhookPayload({
+        Body: "",
+        Latitude: "-34.6",
+        Longitude: "-58.4",
+      }),
+      setup: async () => {
+        const { employeeWorkdayAvailabilityService } = await import(
+          "./employee-workday-availability.service"
+        );
+        mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+          candidates: [],
+          hasJustifiedWorkdayInWindow: false,
+        }));
+        mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
+      },
+    });
+    assert.match(message, /No tenés una jornada disponible/i);
   });
 });
 

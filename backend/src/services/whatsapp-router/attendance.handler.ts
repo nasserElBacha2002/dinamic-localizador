@@ -24,6 +24,7 @@ export const handleActiveCheckInTextSession = async (
       employeeId: ctx.employeeId!,
       phoneFrom: ctx.phoneFrom,
       phoneTo: ctx.phoneTo,
+      messageSid: ctx.payload.MessageSid,
     });
   }
 

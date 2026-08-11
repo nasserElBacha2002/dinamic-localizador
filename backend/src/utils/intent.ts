@@ -19,7 +19,8 @@ export const normalizeIntentText = (text: string): string =>
     .replace(/\s+/g, " ")
     .trim();
 
-// Exit template copy asks users to reply "Me voy"; keep aligned with approved Twilio content.
+// Exit Twilio Content templates may still mention "Me voy" until ops updates approved copy.
+// In-app bot copy prefers location-first attendance (share location without a prior command).
 const CHECKOUT_INTENTS = [
   "me voy",
   "termine",

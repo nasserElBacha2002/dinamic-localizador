@@ -12,7 +12,6 @@ import {
   formatBotOperationSelectionLines,
   formatBotWorkdaySelectionLines,
 } from "../../utils/employee-assignment-format";
-import { formatServiceReferenceFromFields } from "../../utils/format-service-reference";
 import { checkoutStatusLabel } from "../../utils/checkout-validation";
 
 export const GLOBAL_CANCEL_MESSAGE =
@@ -31,13 +30,13 @@ export const COMPANY_CONTEXT_UNAVAILABLE_MESSAGE =
   "No se pudo determinar la empresa para procesar tu mensaje. Contactá a administración.";
 
 export const GREETING_MESSAGE =
-  'Hola. Para registrar tu llegada escribí "Llegué". Para registrar tu salida escribí "Me voy". Para pedir una ausencia escribí "Quiero pedir vacaciones" o "Pedir ausencia".';
+  'Hola. Para registrar tu llegada o tu salida, compartí tu ubicación actual. También podés escribir "Llegué" o "Me voy". Para pedir una ausencia escribí "Quiero pedir vacaciones" o "Pedir ausencia".';
 
 export const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
   'Ya tenés un flujo de llegada o salida en curso. Completalo o escribí "Cancelar" antes de solicitar una ausencia.';
 
 export const NO_CHECK_IN_FOR_CHECKOUT_MESSAGE =
-  "No encontré una llegada registrada para este trabajo. Primero tenés que haber marcado 'Llegué'.";
+  "No encontré una llegada registrada para este trabajo. Primero tenés que registrar tu llegada compartiendo tu ubicación.";
 
 export const NO_CHECKOUT_OPERATION_MESSAGE =
   "No encontramos un trabajo con llegada registrada pendiente de salida. Verificá con administración.";
@@ -46,7 +45,7 @@ export const PENDING_CHECKOUT_EXPIRED_MESSAGE =
   "Ya no hay una salida pendiente disponible para esta operación.";
 
 export const LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE =
-  'Para registrar tu salida, primero escribí "Me voy".';
+  "Para registrar tu salida, compartí tu ubicación actual cuando tengas una llegada pendiente.";
 
 export const WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE =
   "Todavía necesitamos tu ubicación actual para registrar la salida. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
@@ -57,34 +56,66 @@ export const LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE =
 export const DUPLICATE_CHECKOUT_MESSAGE = "Tu salida ya había sido registrada anteriormente.";
 
 export const CHECKOUT_REMINDER =
-  "Cuando finalices el trabajo, enviá 'Me voy' para registrar tu salida.";
+  "Cuando finalices el trabajo, compartí nuevamente tu ubicación para registrar tu salida.";
 
 export const NO_OPERATION_MESSAGE =
-  "No tenés una jornada disponible para registrar llegada en este momento.";
+  "No tenés una jornada disponible para registrar llegada o salida en este momento.";
 
 export const NO_JUSTIFIED_ONLY_MESSAGE =
-  "Tenés una ausencia aprobada para este período. Si ya estás en el lugar de trabajo, escribí \"Llegué\" y compartí tu ubicación: registramos tu llegada y queda marcada para revisión.";
+  "Tenés una ausencia aprobada para este período. Si ya estás en el lugar de trabajo, compartí tu ubicación: registramos tu llegada y queda marcada para revisión.";
 
 export const ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE =
   "Tenés una ausencia aprobada para este período. Registramos tu llegada y quedó marcada para revisión.";
 
 export const WORKDAY_NO_LONGER_AVAILABLE_MESSAGE =
-  "La jornada seleccionada ya no está disponible para registrar llegada. Volvé a escribir \"Llegué\".";
+  "La jornada seleccionada ya no está disponible para registrar llegada. Volvé a compartir tu ubicación.";
 
 export const LOCATION_WITHOUT_SESSION_MESSAGE =
-  'Para registrar tu llegada, primero escribí "Llegué".';
+  "No pudimos registrar asistencia con esa ubicación. Compartí tu ubicación nuevamente o escribí \"Llegué\" / \"Me voy\".";
+
+/** @deprecated Prefer buildMixedAttendanceActionPrompt — kept for callers that only need a short hint. */
+export const ATTENDANCE_LOCATION_MIXED_AMBIGUOUS_MESSAGE =
+  "Encontré más de una acción posible (llegada y salida). Respondé con el número correspondiente.";
+
+export const buildMixedAttendanceActionPrompt = (input: {
+  checkInCandidates: EmployeeWorkdayCheckInCandidate[];
+  checkoutCandidates: EmployeeWorkdayCheckoutCandidate[];
+}): string => {
+  const timeZone = getBotOperationTimezone();
+  const lines: string[] = [];
+  let index = 1;
+
+  for (const workday of input.checkoutCandidates) {
+    const [title, ...rest] = formatBotWorkdaySelectionLines(
+      index,
+      workday,
+      timeZone,
+      workday.checkInAt,
+    );
+    lines.push(title.replace(/^\d+\./, `${index}. Registrar salida —`), ...rest);
+    index += 1;
+  }
+
+  for (const workday of input.checkInCandidates) {
+    const [title, ...rest] = formatBotWorkdaySelectionLines(index, workday, timeZone);
+    lines.push(title.replace(/^\d+\./, `${index}. Registrar llegada —`), ...rest);
+    index += 1;
+  }
+
+  return `Encontré más de una acción posible:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente.`;
+};
 
 export const WAITING_LOCATION_TEXT_MESSAGE =
   "Todavía necesitamos tu ubicación actual. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
 
 export const LOCATION_DURING_SELECTION_MESSAGE =
-  "Primero seleccioná el trabajo respondiendo con el número correspondiente.";
+  "Primero seleccioná el trabajo respondiendo con el número correspondiente. Si ya compartiste tu ubicación, la usamos al elegir.";
 
 export const INVALID_SELECTION_MESSAGE =
   "La opción ingresada no es válida. Respondé con uno de los números disponibles.";
 
 export const UNPARSEABLE_MESSAGE =
-  'No pudimos interpretar el mensaje. Para registrar tu llegada escribí "Llegué".';
+  'No pudimos interpretar el mensaje. Compartí tu ubicación para fichar, o escribí "Llegué" / "Me voy".';
 
 export const DUPLICATE_ATTENDANCE_MESSAGE = "Ya registraste tu llegada para este trabajo.";
 

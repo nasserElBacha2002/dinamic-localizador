@@ -119,6 +119,7 @@ const sortCheckoutCandidates = (
 
 const mapCheckInToSelectionOption = (
   candidate: EmployeeWorkdayCheckInCandidate,
+  attendanceAction?: "CHECK_IN" | "CHECK_OUT",
 ): WorkdaySelectionOption => ({
   employeeWorkdayId: candidate.employeeWorkdayId,
   operationWorkdayId: candidate.operationWorkdayId,
@@ -129,12 +130,14 @@ const mapCheckInToSelectionOption = (
   expectedStartAt: candidate.expectedStartAt,
   expectedEndAt: candidate.expectedEndAt,
   workDate: candidate.workDate,
+  ...(attendanceAction ? { attendanceAction } : {}),
 });
 
 const mapCheckoutToSelectionOption = (
   candidate: EmployeeWorkdayCheckoutCandidate,
+  attendanceAction?: "CHECK_IN" | "CHECK_OUT",
 ): WorkdaySelectionOption => ({
-  ...mapCheckInToSelectionOption(candidate),
+  ...mapCheckInToSelectionOption(candidate, attendanceAction),
   attendanceRecordId: candidate.attendanceRecordId,
   checkInAt: candidate.checkInAt,
 });
@@ -542,13 +545,28 @@ export const employeeWorkdayAvailabilityService = {
   mapCheckInCandidatesToSelectionOptions(
     candidates: EmployeeWorkdayCheckInCandidate[],
   ): WorkdaySelectionOption[] {
-    return candidates.map(mapCheckInToSelectionOption);
+    return candidates.map((candidate) => mapCheckInToSelectionOption(candidate));
   },
 
   mapCheckoutCandidatesToSelectionOptions(
     candidates: EmployeeWorkdayCheckoutCandidate[],
   ): WorkdaySelectionOption[] {
-    return candidates.map(mapCheckoutToSelectionOption);
+    return candidates.map((candidate) => mapCheckoutToSelectionOption(candidate));
+  },
+
+  /** Checkout options first, then check-in — matches mixed LOCATION action prompt order. */
+  mapMixedAttendanceActionOptions(
+    checkInCandidates: EmployeeWorkdayCheckInCandidate[],
+    checkoutCandidates: EmployeeWorkdayCheckoutCandidate[],
+  ): WorkdaySelectionOption[] {
+    return [
+      ...checkoutCandidates.map((candidate) =>
+        mapCheckoutToSelectionOption(candidate, "CHECK_OUT"),
+      ),
+      ...checkInCandidates.map((candidate) =>
+        mapCheckInToSelectionOption(candidate, "CHECK_IN"),
+      ),
+    ];
   },
 };
 

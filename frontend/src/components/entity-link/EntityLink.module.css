@@ -1,5 +1,4 @@
 .entityLink {
-  color: var(--mantine-color-blue-7);
   text-decoration: none;
   font-weight: inherit;
   display: inline-flex;
@@ -33,10 +32,10 @@
 
 @media (prefers-color-scheme: dark) {
   .entityLink {
-    color: var(--mantine-color-blue-4);
+    color: black;
   }
 }
 
 :global([data-mantine-color-scheme="dark"]) .entityLink {
-  color: var(--mantine-color-blue-4);
+  color: black;
 }

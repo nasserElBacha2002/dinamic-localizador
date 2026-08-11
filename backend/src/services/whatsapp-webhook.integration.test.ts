@@ -739,6 +739,7 @@ describe("whatsapp webhook check-in regression", () => {
         const { employeeWorkdayAvailabilityService } = await import(
           "./employee-workday-availability.service"
         );
+        const { botSessionService } = await import("./bot-session.service");
         mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
           candidates: [checkInWorkdayCandidate(operationB, employeeWorkdayB)],
           hasJustifiedWorkdayInWindow: false,
@@ -746,10 +747,15 @@ describe("whatsapp webhook check-in regression", () => {
         mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => [
           checkoutWorkdayCandidate(operationA, employeeWorkdayA, attendanceA),
         ]);
+        mock.method(botSessionService, "createOperationSelectionSession", async () => undefined);
       },
     });
-    assert.match(message, /Me voy/);
-    assert.match(message, /Llegué/);
+    assert.match(message, /Encontré más de una acción posible/i);
+    assert.match(message, /Registrar salida/i);
+    assert.match(message, /Registrar llegada/i);
+    assert.match(message, /Respondé con el número/i);
+    assert.doesNotMatch(message, /llegada fue registrada/i);
+    assert.doesNotMatch(message, /salida fue registrada/i);
   });
 
   it("returns no-operation message for LOCATION without available jornadas", async () => {

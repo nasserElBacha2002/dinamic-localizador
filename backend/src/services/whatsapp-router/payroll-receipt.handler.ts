@@ -217,8 +217,9 @@ export const handleActivePayrollReceiptSession = async (
   await botSessionService.completeSession(ctx.companyId, session.id);
   payrollReceiptMetrics.queryDelivered({ status: "multi_or_single" });
 
+  // Documents already sent via Twilio REST. Empty TwiML — no confirmation text.
   return handlers.respond(ctx.companyId, {
-    message: result.message,
+    message: "",
     employeeId: ctx.employeeId,
     phoneFrom: ctx.phoneTo,
     phoneTo: ctx.phoneFrom,

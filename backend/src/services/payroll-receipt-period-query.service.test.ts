@@ -138,6 +138,7 @@ describe("payrollReceiptPeriodQueryService", () => {
       assert.equal(result.kind, "completed");
       assert.equal(result.deliveredCount, 1);
       assert.equal(result.totalCount, 1);
+      assert.equal(result.message, "");
     });
   });
 
@@ -194,6 +195,7 @@ describe("payrollReceiptPeriodQueryService", () => {
       assert.equal(result.kind, "completed");
       assert.equal(result.deliveredCount, 3);
       assert.equal(result.totalCount, 3);
+      assert.equal(result.message, "");
       assert.deepEqual(sendOrder, [a.id, b.id, c.id]);
     });
   });

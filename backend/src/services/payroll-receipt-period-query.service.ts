@@ -2,11 +2,6 @@ import { formatPayrollReceiptPeriod } from "../utils/payroll-receipts/period-for
 import { payrollReceiptRepository } from "../repositories/payroll-receipt.repository";
 import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
-import { twilioOutboundService } from "./twilio-outbound.service";
-import {
-  isSimulationActive,
-  recordSimulationArtifact,
-} from "../utils/bot-runtime-context";
 
 export type PayrollReceiptPeriodQueryResult =
   | {
@@ -41,17 +36,6 @@ export type PayrollReceiptPeriodQueryResult =
 const notFoundMessage = (year: number, month: number): string =>
   `No encontramos recibos de sueldo para el período ${formatPayrollReceiptPeriod(year, month)}.`;
 
-const multiIntroMessage = (count: number, year: number, month: number): string =>
-  `Encontramos ${count} recibos de sueldo correspondientes a ${formatPayrollReceiptPeriod(year, month)}. Te los envío a continuación.`;
-
-const completedMessage = (deliveredCount: number, year: number, month: number): string => {
-  const period = formatPayrollReceiptPeriod(year, month);
-  if (deliveredCount <= 1) {
-    return `Acá tenés tu recibo de sueldo del período ${period}.`;
-  }
-  return `Te enviamos ${deliveredCount} recibos de sueldo del período ${period}.`;
-};
-
 const partialMessage = (deliveredCount: number, totalCount: number, year: number, month: number): string => {
   const period = formatPayrollReceiptPeriod(year, month);
   return (
@@ -60,43 +44,14 @@ const partialMessage = (deliveredCount: number, totalCount: number, year: number
   );
 };
 
-async function sendIntroIfNeeded(input: {
-  toPhoneNumber: string;
-  year: number;
-  month: number;
-  count: number;
-  introAlreadySent: boolean;
-}): Promise<boolean> {
-  if (input.count <= 1 || input.introAlreadySent) {
-    return input.introAlreadySent;
-  }
-
-  const body = multiIntroMessage(input.count, input.year, input.month);
-
-  if (isSimulationActive()) {
-    recordSimulationArtifact({
-      type: "payroll_receipt_multi_intro",
-      mode: "simulated",
-      year: input.year,
-      month: input.month,
-      count: input.count,
-      body,
-    });
-    return true;
-  }
-
-  await twilioOutboundService.sendWhatsAppText({
-    toPhoneNumber: input.toPhoneNumber,
-    body,
-  });
-  return true;
-}
-
 /**
  * Delivers all ASSOCIATED receipts for a period.
  * Query identity = company + botSession + employee + year + month.
  * ACCEPTED means Twilio accepted outbound create (not a delivery callback).
  * Invariant: kind === "completed" iff deliveredCount === totalCount.
+ *
+ * On full success the PDFs are already sent via the Twilio REST API; the webhook
+ * reply must not send an extra confirmation text.
  */
 export const payrollReceiptPeriodQueryService = {
   async deliverForPeriod(input: {
@@ -107,8 +62,10 @@ export const payrollReceiptPeriodQueryService = {
     year: number;
     month: number;
     inboundMessageSid?: string | null;
+    /** @deprecated Intro text before multi-receipt send was removed; ignored. */
     introAlreadySent?: boolean;
   }): Promise<PayrollReceiptPeriodQueryResult & { introSent: boolean }> {
+    void input.introAlreadySent;
     const receipts = await payrollReceiptRepository.listActiveAssociated(
       input.companyId,
       input.employeeId,
@@ -139,14 +96,6 @@ export const payrollReceiptPeriodQueryService = {
 
     const deliveries = await payrollReceiptQueryDeliveryRepository.listForQuery(queryKey);
     const deliveryByReceiptId = new Map(deliveries.map((d) => [d.payrollReceiptId, d]));
-
-    const introSent = await sendIntroIfNeeded({
-      toPhoneNumber: input.toPhoneNumber,
-      year: input.year,
-      month: input.month,
-      count: receipts.length,
-      introAlreadySent: Boolean(input.introAlreadySent),
-    });
 
     let deliveredCount = deliveries.filter((d) => d.status === "ACCEPTED").length;
     let sawTemporaryFailure = false;
@@ -196,10 +145,11 @@ export const payrollReceiptPeriodQueryService = {
     if (deliveredCount === totalCount) {
       return {
         kind: "completed",
-        message: completedMessage(deliveredCount, input.year, input.month),
+        // No user-visible confirmation: documents already sent outbound.
+        message: "",
         deliveredCount,
         totalCount,
-        introSent,
+        introSent: false,
       };
     }
 
@@ -210,7 +160,7 @@ export const payrollReceiptPeriodQueryService = {
         message: partialMessage(deliveredCount, totalCount, input.year, input.month),
         deliveredCount,
         totalCount,
-        introSent,
+        introSent: false,
       };
     }
 
@@ -220,7 +170,7 @@ export const payrollReceiptPeriodQueryService = {
         message: partialMessage(deliveredCount, totalCount, input.year, input.month),
         deliveredCount,
         totalCount,
-        introSent,
+        introSent: false,
       };
     }
 
@@ -229,7 +179,7 @@ export const payrollReceiptPeriodQueryService = {
       message: partialMessage(deliveredCount, totalCount, input.year, input.month),
       deliveredCount,
       totalCount,
-      introSent,
+      introSent: false,
     };
   },
 };

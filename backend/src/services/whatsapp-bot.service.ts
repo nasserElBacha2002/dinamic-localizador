@@ -117,7 +117,11 @@ const messageForCheckoutRevalidationFailure = (
 
 const buildTwiml = (message: string): string => {
   const response = new twilio.twiml.MessagingResponse();
-  response.message(message);
+  // Empty body → empty <Response/> (no WhatsApp text bubble). Used when media
+  // was already sent out-of-band (e.g. payroll PDF documents).
+  if (message.trim().length > 0) {
+    response.message(message);
+  }
   return response.toString();
 };
 
@@ -144,6 +148,11 @@ const saveOutboundMessage = async (
   phoneTo: string;
   body: string;
 }): Promise<void> => {
+  if (!input.body.trim()) {
+    setLastBotResponse(input.body);
+    return;
+  }
+
   if (isSimulationActive()) {
     setLastBotResponse(input.body);
     return;

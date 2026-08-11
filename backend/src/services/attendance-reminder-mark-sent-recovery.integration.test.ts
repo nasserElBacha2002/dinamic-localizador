@@ -21,7 +21,11 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
 
   after(async () => {
     mock.restoreAll();
-    await fixtures.cleanup();
+    try {
+      await fixtures.cleanup();
+    } catch (error) {
+      console.warn("[attendance-reminder-mark-sent-recovery] fixtures cleanup failed", error);
+    }
     await teardownDatabaseIntegration();
   });
 

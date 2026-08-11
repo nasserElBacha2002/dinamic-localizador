@@ -148,6 +148,25 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
     return assignmentId;
   };
 
+  /** Drain claimable rows so claimNextOne cannot pick leftovers from prior cases. */
+  const cancelClaimableForCompany = async (): Promise<void> => {
+    const { getPool } = await import("../database/connection");
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        UPDATE whatsapp_operation_assignment_notifications
+        SET status = N'CANCELLED',
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            next_attempt_at = NULL,
+            last_error_code = N'TEST_CLEANUP',
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND status IN (N'PENDING', N'FAILED', N'PROCESSING', N'SEND_STARTED')
+      `);
+  };
+
   it("A concurrent enqueue creates exactly one notification", async () => {
     const assignmentId = await insertAssignment();
     const [first, second] = await Promise.all([
@@ -177,9 +196,11 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
         WHERE operation_assignment_id = @assignmentId AND company_id = @companyId
       `);
     assert.equal(Number(count.recordset[0].c), 1);
+    await cancelClaimableForCompany();
   });
 
   it("B two concurrent claims never return the same notification id", async () => {
+    await cancelClaimableForCompany();
     const a1 = await insertAssignment();
     const a2 = await insertAssignment();
     await operationAssignmentNotificationRepository.enqueueAssigned(
@@ -214,9 +235,11 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
         errorMessage: "concurrency test cleanup",
       });
     }
+    await cancelClaimableForCompany();
   });
 
   it("C expired PROCESSING lease recovers to PENDING without bumping attempt_count", async () => {
+    await cancelClaimableForCompany();
     const { getPool } = await import("../database/connection");
     const pool = getPool();
     const assignmentId = await insertAssignment();
@@ -255,9 +278,11 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
       `);
     assert.equal(Number(after.recordset[0].attempt_count), 1);
     assert.equal(String(after.recordset[0].status), "PENDING");
+    await cancelClaimableForCompany();
   });
 
   it("D expired SEND_STARTED lease → RECONCILIATION_REQUIRED", async () => {
+    await cancelClaimableForCompany();
     const { getPool } = await import("../database/connection");
     const pool = getPool();
     const assignmentId = await insertAssignment();
@@ -296,6 +321,7 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
   });
 
   it("E cancel race sets cancel_requested_at while PROCESSING", async () => {
+    await cancelClaimableForCompany();
     const assignmentId = await insertAssignment();
     const notification = await operationAssignmentNotificationRepository.enqueueAssigned(
       companyId,
@@ -319,9 +345,11 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
       notification.id,
     );
     assert.equal(cancelled, true);
+    await cancelClaimableForCompany();
   });
 
   it("F unique send attempt rejects duplicate (notification_id, attempt_number)", async () => {
+    await cancelClaimableForCompany();
     const assignmentId = await insertAssignment();
     const notification = await operationAssignmentNotificationRepository.enqueueAssigned(
       companyId,
@@ -334,6 +362,7 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
       120,
     );
     assert.ok(claimed);
+    assert.equal(claimed!.id, notification.id);
 
     const first = await operationAssignmentNotificationRepository.beginSendAttempt({
       companyId,
@@ -351,9 +380,11 @@ describeDatabaseIntegration("operation assignment notification sql concurrency",
         attemptNumber: claimed!.attemptCount,
       });
     });
+    await cancelClaimableForCompany();
   });
 
   it("G callback correlates by provider_message_sid without whatsapp_messages row", async () => {
+    await cancelClaimableForCompany();
     const { getPool } = await import("../database/connection");
     const pool = getPool();
     const assignmentId = await insertAssignment();

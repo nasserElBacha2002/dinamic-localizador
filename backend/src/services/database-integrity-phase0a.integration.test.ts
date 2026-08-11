@@ -392,7 +392,11 @@ describeDatabaseIntegration("database integrity phase0a H1 H2", () => {
       .input("userId", sql.UniqueIdentifier, reviewerB.id)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
+        UPDATE attendance_records
+        SET reviewed_by = NULL
+        WHERE reviewed_by = @userId;
         DELETE FROM attendance_reviews WHERE reviewed_by = @userId;
+        DELETE FROM audit_logs WHERE user_id = @userId;
         DELETE FROM user_company_memberships WHERE user_id = @userId AND company_id = @companyId;
         DELETE FROM users WHERE id = @userId;
       `);

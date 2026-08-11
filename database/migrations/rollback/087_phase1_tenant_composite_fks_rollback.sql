@@ -1,6 +1,10 @@
 /*
   Rollback for 087_phase1_tenant_composite_fks.sql
   Restores single-column FKs; drops composite uniques added by 087;
+
+  Preconditions when later migrations exist:
+    - Roll back 091 (whatsapp_operation_assignment_notifications) before 087.
+      091 FKs use UQ_operation_assignments_company_id; DROP INDEX fails otherwise.
   drops work_team_members.company_id after restoring legacy member FKs.
   Does not delete or rewrite business data.
 

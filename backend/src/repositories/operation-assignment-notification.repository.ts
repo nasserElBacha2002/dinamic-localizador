@@ -1,29 +1,30 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import {
-  PAYROLL_RECEIPT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
-  PAYROLL_RECEIPT_NOTIFICATION_TYPE,
-  type PayrollReceiptNotificationStatus,
-  type PayrollReceiptNotificationType,
-  type PayrollReceiptSendAttemptStatus,
-} from "../constants/payroll-receipt-notification";
+  OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
+  OPERATION_ASSIGNMENT_NOTIFICATION_TYPE,
+  type OperationAssignmentNotificationStatus,
+  type OperationAssignmentNotificationType,
+  type OperationAssignmentSendAttemptStatus,
+} from "../constants/operation-assignment-notification";
 import type {
-  PayrollReceiptNotification,
-  PayrollReceiptNotificationSendAttempt,
-} from "../types/payroll-receipt-notification";
+  OperationAssignmentNotification,
+  OperationAssignmentNotificationSendAttempt,
+} from "../types/operation-assignment-notification";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
-import { payrollReceiptMetrics } from "../utils/payroll-receipts/metrics";
+import { operationAssignmentNotificationMetrics } from "../utils/operation-assignment-notification/metrics";
 
 const requestFrom = (transaction?: sql.Transaction) =>
   transaction ? new sql.Request(transaction) : getPool().request();
 
-const mapRow = (row: Record<string, unknown>): PayrollReceiptNotification => ({
+const mapRow = (row: Record<string, unknown>): OperationAssignmentNotification => ({
   id: String(row.id),
   companyId: String(row.company_id),
-  payrollReceiptId: String(row.payroll_receipt_id),
+  operationAssignmentId: String(row.operation_assignment_id),
+  operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
-  notificationType: String(row.notification_type) as PayrollReceiptNotificationType,
-  status: String(row.status) as PayrollReceiptNotificationStatus,
+  notificationType: String(row.notification_type) as OperationAssignmentNotificationType,
+  status: String(row.status) as OperationAssignmentNotificationStatus,
   attemptCount: Number(row.attempt_count ?? 0),
   nextAttemptAt: row.next_attempt_at
     ? new Date(row.next_attempt_at as Date | string).toISOString()
@@ -49,12 +50,12 @@ const mapRow = (row: Record<string, unknown>): PayrollReceiptNotification => ({
 
 const mapAttemptRow = (
   row: Record<string, unknown>,
-): PayrollReceiptNotificationSendAttempt => ({
+): OperationAssignmentNotificationSendAttempt => ({
   id: String(row.id),
   companyId: String(row.company_id),
   notificationId: String(row.notification_id),
   attemptNumber: Number(row.attempt_number),
-  status: String(row.status) as PayrollReceiptSendAttemptStatus,
+  status: String(row.status) as OperationAssignmentSendAttemptStatus,
   providerMessageSid: row.provider_message_sid ? String(row.provider_message_sid) : null,
   lastErrorCode: row.last_error_code ? String(row.last_error_code) : null,
   lastErrorMessage: row.last_error_message ? String(row.last_error_message) : null,
@@ -68,19 +69,19 @@ const mapAttemptRow = (
 
 const findExisting = async (
   companyId: string,
-  payrollReceiptId: string,
+  assignmentId: string,
   notificationType: string,
   transaction?: sql.Transaction,
-): Promise<PayrollReceiptNotification | null> => {
+): Promise<OperationAssignmentNotification | null> => {
   const result = await requestFrom(transaction)
     .input("companyId", sql.UniqueIdentifier, companyId)
-    .input("payrollReceiptId", sql.UniqueIdentifier, payrollReceiptId)
+    .input("assignmentId", sql.UniqueIdentifier, assignmentId)
     .input("notificationType", sql.NVarChar(40), notificationType)
     .query(`
       SELECT TOP 1 *
-      FROM whatsapp_payroll_receipt_notifications WITH (UPDLOCK, HOLDLOCK)
+      FROM whatsapp_operation_assignment_notifications WITH (UPDLOCK, HOLDLOCK)
       WHERE company_id = @companyId
-        AND payroll_receipt_id = @payrollReceiptId
+        AND operation_assignment_id = @assignmentId
         AND notification_type = @notificationType
     `);
   if (!result.recordset[0]) {
@@ -89,37 +90,43 @@ const findExisting = async (
   return mapRow(result.recordset[0] as Record<string, unknown>);
 };
 
-export const payrollReceiptNotificationRepository = {
-  async enqueueAvailable(
+export const operationAssignmentNotificationRepository = {
+  /**
+   * Enqueue EVENTUAL_OPERATION_ASSIGNED for a ONE_TIME assignment.
+   * MUST be called within the same transaction as the assignment insert.
+   */
+  async enqueueAssigned(
     companyId: string,
-    receiptId: string,
+    assignmentId: string,
+    operationId: string,
     employeeId: string,
     transaction?: sql.Transaction,
-  ): Promise<PayrollReceiptNotification> {
-    const notificationType = PAYROLL_RECEIPT_NOTIFICATION_TYPE;
+  ): Promise<OperationAssignmentNotification> {
+    const notificationType = OPERATION_ASSIGNMENT_NOTIFICATION_TYPE;
     try {
       const inserted = await requestFrom(transaction)
         .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("payrollReceiptId", sql.UniqueIdentifier, receiptId)
+        .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+        .input("operationId", sql.UniqueIdentifier, operationId)
         .input("employeeId", sql.UniqueIdentifier, employeeId)
         .input("notificationType", sql.NVarChar(40), notificationType)
         .query(`
-          INSERT INTO whatsapp_payroll_receipt_notifications (
-            company_id, payroll_receipt_id, employee_id, notification_type, status
+          INSERT INTO whatsapp_operation_assignment_notifications (
+            company_id, operation_assignment_id, operation_id, employee_id, notification_type, status
           )
           OUTPUT INSERTED.*
           VALUES (
-            @companyId, @payrollReceiptId, @employeeId, @notificationType, N'PENDING'
+            @companyId, @assignmentId, @operationId, @employeeId, @notificationType, N'PENDING'
           )
         `);
       const created = mapRow(inserted.recordset[0] as Record<string, unknown>);
-      payrollReceiptMetrics.notificationCreated({ status: "PENDING" });
+      operationAssignmentNotificationMetrics.notificationCreated({ status: "PENDING" });
       return created;
     } catch (error) {
       if (!isDuplicateKeyError(error)) {
         throw error;
       }
-      const existing = await findExisting(companyId, receiptId, notificationType, transaction);
+      const existing = await findExisting(companyId, assignmentId, notificationType, transaction);
       if (existing) {
         return existing;
       }
@@ -131,16 +138,16 @@ export const payrollReceiptNotificationRepository = {
    * Soft-cancel race: set cancel_requested_at for in-flight rows;
    * CANCELLED immediately for PENDING/FAILED only.
    */
-  async requestCancelForReceipt(
+  async requestCancelForAssignment(
     companyId: string,
-    receiptId: string,
+    assignmentId: string,
     transaction?: sql.Transaction,
   ): Promise<number> {
     const result = await requestFrom(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("payrollReceiptId", sql.UniqueIdentifier, receiptId)
+      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
       .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
+        UPDATE whatsapp_operation_assignment_notifications
         SET cancel_requested_at = COALESCE(cancel_requested_at, SYSUTCDATETIME()),
             status = CASE
               WHEN status IN (N'PENDING', N'FAILED') THEN N'CANCELLED'
@@ -163,24 +170,15 @@ export const payrollReceiptNotificationRepository = {
               ELSE last_error_code
             END,
             last_error_message = CASE
-              WHEN status IN (N'PENDING', N'FAILED') THEN N'Receipt superseded or deleted'
+              WHEN status IN (N'PENDING', N'FAILED') THEN N'Assignment cancelled or removed'
               ELSE last_error_message
             END,
             updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
-          AND payroll_receipt_id = @payrollReceiptId
+          AND operation_assignment_id = @assignmentId
           AND status IN (N'PENDING', N'FAILED', N'PROCESSING', N'SEND_STARTED')
       `);
     return Number(result.rowsAffected[0] ?? 0);
-  },
-
-  /** Alias for replace / soft-delete callers. */
-  async cancelPendingForReceipt(
-    companyId: string,
-    receiptId: string,
-    transaction?: sql.Transaction,
-  ): Promise<number> {
-    return this.requestCancelForReceipt(companyId, receiptId, transaction);
   },
 
   /**
@@ -196,7 +194,7 @@ export const payrollReceiptNotificationRepository = {
         .input("batchSize", sql.Int, batchSize)
         .query(`
           SELECT TOP (@batchSize) id, company_id
-          FROM whatsapp_payroll_receipt_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
+          FROM whatsapp_operation_assignment_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
           WHERE status IN (N'PROCESSING', N'SEND_STARTED')
             AND lease_expires_at IS NOT NULL
             AND lease_expires_at < SYSUTCDATETIME()
@@ -216,7 +214,7 @@ export const payrollReceiptNotificationRepository = {
                   WHEN n.status = N'SEND_STARTED' THEN N'RECONCILIATION_REQUIRED'
                   WHEN EXISTS (
                     SELECT 1
-                    FROM whatsapp_payroll_receipt_notification_send_attempts a
+                    FROM whatsapp_operation_assignment_notification_send_attempts a
                     WHERE a.id = n.active_send_attempt_id
                       AND a.company_id = n.company_id
                       AND a.status IN (N'STARTED', N'AMBIGUOUS')
@@ -230,7 +228,7 @@ export const payrollReceiptNotificationRepository = {
                   WHEN n.status = N'SEND_STARTED'
                     OR EXISTS (
                       SELECT 1
-                      FROM whatsapp_payroll_receipt_notification_send_attempts a
+                      FROM whatsapp_operation_assignment_notification_send_attempts a
                       WHERE a.id = n.active_send_attempt_id
                         AND a.company_id = n.company_id
                         AND a.status IN (N'STARTED', N'AMBIGUOUS')
@@ -240,7 +238,7 @@ export const payrollReceiptNotificationRepository = {
                   ELSE SYSUTCDATETIME()
                 END,
                 updated_at = SYSUTCDATETIME()
-            FROM whatsapp_payroll_receipt_notifications n
+            FROM whatsapp_operation_assignment_notifications n
             WHERE n.id = @id
               AND n.company_id = @companyId
               AND n.status IN (N'PROCESSING', N'SEND_STARTED')
@@ -268,8 +266,8 @@ export const payrollReceiptNotificationRepository = {
   async claimNextOne(
     workerId: string,
     leaseSeconds: number,
-    maxAttempts = PAYROLL_RECEIPT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
-  ): Promise<PayrollReceiptNotification | null> {
+    maxAttempts = OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
+  ): Promise<OperationAssignmentNotification | null> {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -281,7 +279,7 @@ export const payrollReceiptNotificationRepository = {
         .query(`
           ;WITH next_row AS (
             SELECT TOP (1) id, company_id
-            FROM whatsapp_payroll_receipt_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
+            FROM whatsapp_operation_assignment_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
             WHERE attempt_count < @maxAttempts
               AND cancel_requested_at IS NULL
               AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
@@ -306,7 +304,7 @@ export const payrollReceiptNotificationRepository = {
               next_attempt_at = NULL,
               updated_at = SYSUTCDATETIME()
           OUTPUT INSERTED.*
-          FROM whatsapp_payroll_receipt_notifications n
+          FROM whatsapp_operation_assignment_notifications n
           INNER JOIN next_row r ON r.id = n.id AND r.company_id = n.company_id
           WHERE n.status IN (N'PENDING', N'FAILED')
             AND n.cancel_requested_at IS NULL
@@ -332,9 +330,9 @@ export const payrollReceiptNotificationRepository = {
     workerId: string,
     limit: number,
     leaseSeconds: number,
-    maxAttempts = PAYROLL_RECEIPT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
-  ): Promise<PayrollReceiptNotification[]> {
-    const claimed: PayrollReceiptNotification[] = [];
+    maxAttempts = OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
+  ): Promise<OperationAssignmentNotification[]> {
+    const claimed: OperationAssignmentNotification[] = [];
     for (let i = 0; i < limit; i += 1) {
       const row = await this.claimNextOne(workerId, leaseSeconds, maxAttempts);
       if (!row) {
@@ -350,7 +348,7 @@ export const payrollReceiptNotificationRepository = {
     notificationId: string;
     leaseOwner: string;
     attemptNumber: number;
-  }): Promise<PayrollReceiptNotificationSendAttempt | null> {
+  }): Promise<OperationAssignmentNotificationSendAttempt | null> {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -360,7 +358,7 @@ export const payrollReceiptNotificationRepository = {
         .input("notificationId", sql.UniqueIdentifier, input.notificationId)
         .input("attemptNumber", sql.Int, input.attemptNumber)
         .query(`
-          INSERT INTO whatsapp_payroll_receipt_notification_send_attempts (
+          INSERT INTO whatsapp_operation_assignment_notification_send_attempts (
             company_id, notification_id, attempt_number, status
           )
           OUTPUT INSERTED.*
@@ -376,7 +374,7 @@ export const payrollReceiptNotificationRepository = {
         .input("leaseOwner", sql.NVarChar(100), input.leaseOwner)
         .input("attemptId", sql.UniqueIdentifier, attempt.id)
         .query(`
-          UPDATE whatsapp_payroll_receipt_notifications
+          UPDATE whatsapp_operation_assignment_notifications
           SET status = N'SEND_STARTED',
               active_send_attempt_id = @attemptId,
               updated_at = SYSUTCDATETIME()
@@ -415,7 +413,7 @@ export const payrollReceiptNotificationRepository = {
       .input("id", sql.UniqueIdentifier, input.attemptId)
       .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
       .query(`
-        UPDATE whatsapp_payroll_receipt_notification_send_attempts
+        UPDATE whatsapp_operation_assignment_notification_send_attempts
         SET status = N'PROVIDER_ACCEPTED',
             provider_message_sid = @providerMessageSid,
             finished_at = SYSUTCDATETIME(),
@@ -437,7 +435,7 @@ export const payrollReceiptNotificationRepository = {
       .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
       .query(`
-        UPDATE whatsapp_payroll_receipt_notification_send_attempts
+        UPDATE whatsapp_operation_assignment_notification_send_attempts
         SET status = N'PROVIDER_FAILED',
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
@@ -460,7 +458,7 @@ export const payrollReceiptNotificationRepository = {
       .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
       .query(`
-        UPDATE whatsapp_payroll_receipt_notification_send_attempts
+        UPDATE whatsapp_operation_assignment_notification_send_attempts
         SET status = N'AMBIGUOUS',
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
@@ -484,7 +482,7 @@ export const payrollReceiptNotificationRepository = {
       .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
       .input("sentAt", sql.DateTime2, sentAt)
       .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
+        UPDATE whatsapp_operation_assignment_notifications
         SET status = N'SEND_ACCEPTED',
             provider_message_sid = @providerMessageSid,
             sent_at = @sentAt,
@@ -503,16 +501,6 @@ export const payrollReceiptNotificationRepository = {
     }
   },
 
-  /** @deprecated Use markSendAccepted */
-  async markSent(input: {
-    companyId: string;
-    notificationId: string;
-    providerMessageSid: string;
-    sentAt?: Date;
-  }): Promise<void> {
-    return this.markSendAccepted(input);
-  },
-
   async markFailed(input: {
     companyId: string;
     notificationId: string;
@@ -529,7 +517,7 @@ export const payrollReceiptNotificationRepository = {
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
       .input("nextAttemptAt", sql.DateTime2, input.nextAttemptAt)
       .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
+        UPDATE whatsapp_operation_assignment_notifications
         SET status = N'FAILED',
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
@@ -560,7 +548,7 @@ export const payrollReceiptNotificationRepository = {
         (input.errorMessage ?? "Notification cancelled").slice(0, 1000),
       )
       .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
+        UPDATE whatsapp_operation_assignment_notifications
         SET status = N'CANCELLED',
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
@@ -587,7 +575,7 @@ export const payrollReceiptNotificationRepository = {
       .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
       .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
+        UPDATE whatsapp_operation_assignment_notifications
         SET status = N'SENT_RECOVERY_REQUIRED',
             provider_message_sid = @providerMessageSid,
             last_error_code = N'MARK_SEND_ACCEPTED_FAILED',
@@ -625,7 +613,7 @@ export const payrollReceiptNotificationRepository = {
         ),
       )
       .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
+        UPDATE whatsapp_operation_assignment_notifications
         SET status = N'RECONCILIATION_REQUIRED',
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
@@ -646,7 +634,7 @@ export const payrollReceiptNotificationRepository = {
       .input("id", sql.UniqueIdentifier, notificationId)
       .query(`
         SELECT TOP 1 cancel_requested_at
-        FROM whatsapp_payroll_receipt_notifications
+        FROM whatsapp_operation_assignment_notifications
         WHERE id = @id AND company_id = @companyId
       `);
     const row = result.recordset[0] as Record<string, unknown> | undefined;
@@ -667,7 +655,7 @@ export const payrollReceiptNotificationRepository = {
       .query(`
         ;WITH due AS (
           SELECT TOP (@batchSize) id, company_id
-          FROM whatsapp_payroll_receipt_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
+          FROM whatsapp_operation_assignment_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
           WHERE status = N'SENT_RECOVERY_REQUIRED'
             AND provider_message_sid IS NOT NULL
           ORDER BY updated_at ASC
@@ -682,7 +670,7 @@ export const payrollReceiptNotificationRepository = {
             next_attempt_at = NULL,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.id
-        FROM whatsapp_payroll_receipt_notifications n
+        FROM whatsapp_operation_assignment_notifications n
         INNER JOIN due d ON d.id = n.id AND d.company_id = n.company_id
         WHERE n.status = N'SENT_RECOVERY_REQUIRED'
           AND n.provider_message_sid IS NOT NULL
@@ -695,8 +683,8 @@ export const payrollReceiptNotificationRepository = {
       .query(`
         ;WITH due AS (
           SELECT TOP (@batchSize) n.id, n.company_id
-          FROM whatsapp_payroll_receipt_notifications n WITH (UPDLOCK, READPAST, ROWLOCK)
-          INNER JOIN whatsapp_payroll_receipt_notification_send_attempts a
+          FROM whatsapp_operation_assignment_notifications n WITH (UPDLOCK, READPAST, ROWLOCK)
+          INNER JOIN whatsapp_operation_assignment_notification_send_attempts a
             ON a.id = n.active_send_attempt_id
            AND a.company_id = n.company_id
           WHERE n.status = N'RECONCILIATION_REQUIRED'
@@ -717,9 +705,9 @@ export const payrollReceiptNotificationRepository = {
             next_attempt_at = NULL,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.id
-        FROM whatsapp_payroll_receipt_notifications n
+        FROM whatsapp_operation_assignment_notifications n
         INNER JOIN due d ON d.id = n.id AND d.company_id = n.company_id
-        INNER JOIN whatsapp_payroll_receipt_notification_send_attempts a
+        INNER JOIN whatsapp_operation_assignment_notification_send_attempts a
           ON a.id = n.active_send_attempt_id
          AND a.company_id = n.company_id
         WHERE n.status = N'RECONCILIATION_REQUIRED'
@@ -732,14 +720,14 @@ export const payrollReceiptNotificationRepository = {
   async findLatestSendAttempt(
     companyId: string,
     notificationId: string,
-  ): Promise<PayrollReceiptNotificationSendAttempt | null> {
+  ): Promise<OperationAssignmentNotificationSendAttempt | null> {
     const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("notificationId", sql.UniqueIdentifier, notificationId)
       .query(`
         SELECT TOP 1 *
-        FROM whatsapp_payroll_receipt_notification_send_attempts
+        FROM whatsapp_operation_assignment_notification_send_attempts
         WHERE company_id = @companyId
           AND notification_id = @notificationId
         ORDER BY attempt_number DESC

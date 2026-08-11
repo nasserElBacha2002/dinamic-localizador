@@ -2,6 +2,7 @@ import sql from "mssql";
 import { AppError } from "../errors/app-error";
 import type { WorkTeamAssignmentSkipReason } from "../constants/work-team-assignment";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import type { OperationEmployeeAssignment } from "../types/domain";
 import {
@@ -142,6 +143,28 @@ export const operationAssignmentCore = {
         assignment.id,
         input.operationWorkDate,
       );
+    }
+
+    // ONE_TIME: enqueue WhatsApp outbox in the same TX as the assignment insert.
+    // Skip when we already know the period does not cover the operation work date
+    // (worker still revalidates for races / missing workDate at enqueue time).
+    if (input.operationKind === "ONE_TIME") {
+      const coversWorkDate =
+        !input.operationWorkDate ||
+        isAssignmentActiveOnWorkDate({
+          validFrom: assignment.validFrom,
+          validUntil: assignment.validUntil,
+          workDate: input.operationWorkDate,
+        });
+      if (coversWorkDate) {
+        await operationAssignmentNotificationRepository.enqueueAssigned(
+          companyId,
+          assignment.id,
+          input.operationId,
+          input.employeeId,
+          transaction,
+        );
+      }
     }
 
     return { outcome: "added", assignment };

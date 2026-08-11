@@ -60,11 +60,15 @@ describeDatabaseIntegration("phase1 migration runner atomicity and rollback", ()
   });
 
   after(async () => {
-    // Leave shared local DB in post-087+088 shape even if a rollback cycle failed mid-way.
+    // Leave shared DB in post-087+088+091 shape even if a rollback cycle failed mid-way.
     try {
       const pool = getPool();
       await applySqlScriptInTransaction(pool, readMigration("087_phase1_tenant_composite_fks.sql"));
       await applySqlScriptInTransaction(pool, readMigration("088_phase1_work_team_members_contract.sql"));
+      await applySqlScriptInTransaction(
+        pool,
+        readMigration("091_operation_assignment_whatsapp_notifications.sql"),
+      );
     } catch (error) {
       console.warn("[phase1-migration-safety] schema restore failed", error);
     }
@@ -170,6 +174,13 @@ GO
 
     assert.equal(await fkExists("FK_attendance_records_employee_company"), true);
 
+    // 091 FKs reference UQ_operation_assignments_company_id (and related parent UQs).
+    // Roll back 091 before 087 or DROP INDEX on those UQs fails.
+    await applySqlScriptInTransaction(
+      pool,
+      readRollback("091_operation_assignment_whatsapp_notifications_rollback.sql"),
+    );
+
     // Contract first (088), then expand rollback (087).
     await applySqlScriptInTransaction(pool, readRollback("088_phase1_work_team_members_contract_rollback.sql"));
     await applySqlScriptInTransaction(pool, readRollback("087_phase1_tenant_composite_fks_rollback.sql"));
@@ -187,6 +198,12 @@ GO
     await applySqlScriptInTransaction(pool, readMigration("088_phase1_work_team_members_contract.sql"));
     assert.equal(await fkExists("FK_work_team_members_employee_company"), true);
     assert.equal(await columnNullable("dbo.work_team_members", "company_id"), false);
+
+    await applySqlScriptInTransaction(
+      pool,
+      readMigration("091_operation_assignment_whatsapp_notifications.sql"),
+    );
+    assert.equal(await fkExists("FK_woan_assignment_company"), true);
   });
 
   it("documents that runner strips USE and keeps transactional batch count for 087", () => {

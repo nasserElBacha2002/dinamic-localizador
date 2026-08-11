@@ -21,7 +21,11 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
 
   after(async () => {
     mock.restoreAll();
-    await fixtures.cleanup();
+    try {
+      await fixtures.cleanup();
+    } catch (error) {
+      console.warn("[attendance-confirmation-schedule-cycle] fixtures cleanup failed", error);
+    }
     await teardownDatabaseIntegration();
   });
 

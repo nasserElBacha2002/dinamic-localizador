@@ -1,3 +1,4 @@
+import { requireContentSidWhenWorkerEnabled } from "./notification-worker-env-rules";
 import { config } from "dotenv";
 import { z } from "zod";
 import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
@@ -30,6 +31,7 @@ const envSchema = z
     TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID: z.string().optional(),
     TWILIO_TEMPLATE_NO_CHECKIN_SID: z.string().optional(),
     TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID: z.string().optional(),
+    TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID: z.string().optional(),
     ATTENDANCE_REMINDER_JOB_ENABLED: z.stringbool().default(true),
     RECURRING_WORKDAY_HORIZON_DAYS: z.coerce.number().int().positive().default(60),
     RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED: z.stringbool().default(true),
@@ -82,6 +84,20 @@ const envSchema = z
     PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
     PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    /** ONE_TIME assignment WhatsApp outbox worker (default off until Content SID is configured). */
+    OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(false),
+    OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60_000),
+    OPERATION_ASSIGNMENT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    OPERATION_ASSIGNMENT_NOTIFICATION_RETRY_BASE_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(30_000),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
@@ -266,6 +282,38 @@ const envSchema = z
           path: ["TWILIO_TEMPLATE_NO_CHECKIN_SID"],
         });
       }
+    }
+
+    const payrollSidGate = requireContentSidWhenWorkerEnabled(
+      {
+        workerEnabled: data.PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED,
+        contentSid: data.TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID,
+      },
+      "TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID",
+      "PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED",
+    );
+    if (!payrollSidGate.ok) {
+      ctx.addIssue({
+        code: "custom",
+        message: payrollSidGate.message,
+        path: ["TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID"],
+      });
+    }
+
+    const assignmentSidGate = requireContentSidWhenWorkerEnabled(
+      {
+        workerEnabled: data.OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED,
+        contentSid: data.TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID,
+      },
+      "TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID",
+      "OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED",
+    );
+    if (!assignmentSidGate.ok) {
+      ctx.addIssue({
+        code: "custom",
+        message: assignmentSidGate.message,
+        path: ["TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID"],
+      });
     }
 
     const emailTransport =

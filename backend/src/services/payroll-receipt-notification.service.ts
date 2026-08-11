@@ -114,7 +114,6 @@ const processClaimedNotification = async (
       errorCode: "CONFIG",
       errorMessage: "TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID is not configured",
       nextAttemptAt: null,
-      permanent: true,
     });
     payrollReceiptMetrics.notificationFailed({ errorCode: "CONFIG" });
     return "failed";
@@ -201,71 +200,15 @@ const processClaimedNotification = async (
     month: receipt.month,
   });
 
+  // PHASE A — provider send only. classifyTwilioOutboundError applies exclusively here.
+  let messageSid: string;
   try {
     const result = await twilioOutboundService.sendWhatsAppTemplate({
       toPhoneNumber: employee.phoneNumber,
       contentSid,
       contentVariables,
     });
-
-    try {
-      await whatsappMessageRepository.create({
-        companyId: notification.companyId,
-        messageSid: result.messageSid,
-        direction: "OUTBOUND",
-        employeeId: employee.id,
-        phoneFrom: env.TWILIO_WHATSAPP_NUMBER ?? "whatsapp:+00000000000",
-        phoneTo: employee.phoneNumber,
-        messageType: "TEXT",
-        body: `[TEMPLATE:PAYROLL_RECEIPT_AVAILABLE]`,
-        latitude: null,
-        longitude: null,
-        status: "SEND_ACCEPTED",
-        rawPayload: null,
-        notificationId: notification.id,
-      });
-    } catch (obsError) {
-      console.warn("[payroll-receipt-notification] outbound message persist failed (non-blocking)", {
-        notificationId: notification.id,
-        error: obsError instanceof Error ? obsError.message : String(obsError),
-      });
-    }
-
-    await payrollReceiptNotificationRepository.markSendAttemptAccepted({
-      companyId: notification.companyId,
-      attemptId: attempt.id,
-      providerMessageSid: result.messageSid,
-    });
-
-    try {
-      await payrollReceiptNotificationRepository.markSendAccepted({
-        companyId: notification.companyId,
-        notificationId: notification.id,
-        providerMessageSid: result.messageSid,
-      });
-      payrollReceiptMetrics.notificationSent({ status: "SEND_ACCEPTED" });
-      return "sent";
-    } catch (markError) {
-      const errorMessage =
-        markError instanceof Error ? markError.message : "Unknown markSendAccepted error";
-      try {
-        await payrollReceiptNotificationRepository.markSentRecoveryRequired({
-          companyId: notification.companyId,
-          notificationId: notification.id,
-          providerMessageSid: result.messageSid,
-          errorMessage,
-        });
-        payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SEND_ACCEPTED_FAILED" });
-        return "recovery";
-      } catch {
-        console.error("[payroll-receipt-notification] markSendAccepted recovery failed", {
-          notificationId: notification.id,
-          error: errorMessage,
-        });
-        payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SENT_RECOVERY_FAILED" });
-        return "recovery";
-      }
-    }
+    messageSid = result.messageSid;
   } catch (sendError) {
     const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
     const classification = classifyTwilioOutboundError(sendError);
@@ -307,7 +250,6 @@ const processClaimedNotification = async (
         errorCode: exhausted ? "SEND_EXHAUSTED" : classification.normalizedCode,
         errorMessage,
         nextAttemptAt: null,
-        permanent: true,
       });
       payrollReceiptMetrics.notificationFailed({
         errorCode: exhausted ? "SEND_EXHAUSTED" : "SEND_PERMANENT",
@@ -328,6 +270,88 @@ const processClaimedNotification = async (
     payrollReceiptMetrics.notificationRetried({ errorCode: classification.normalizedCode });
     return "failed";
   }
+
+  // PHASE B — provider accepted. Never schedule another Twilio send for this notification.
+  try {
+    await whatsappMessageRepository.create({
+      companyId: notification.companyId,
+      messageSid,
+      direction: "OUTBOUND",
+      employeeId: employee.id,
+      phoneFrom: env.TWILIO_WHATSAPP_NUMBER ?? "whatsapp:+00000000000",
+      phoneTo: employee.phoneNumber,
+      messageType: "TEXT",
+      body: `[TEMPLATE:PAYROLL_RECEIPT_AVAILABLE]`,
+      latitude: null,
+      longitude: null,
+      status: "SEND_ACCEPTED",
+      rawPayload: null,
+      notificationId: notification.id,
+    });
+  } catch (obsError) {
+    console.warn("[payroll-receipt-notification] outbound message persist failed (non-blocking)", {
+      notificationId: notification.id,
+      error: obsError instanceof Error ? obsError.message : String(obsError),
+    });
+  }
+
+  try {
+    await payrollReceiptNotificationRepository.markSendAttemptAccepted({
+      companyId: notification.companyId,
+      attemptId: attempt.id,
+      providerMessageSid: messageSid,
+    });
+  } catch (attemptError) {
+    const errorMessage =
+      attemptError instanceof Error
+        ? attemptError.message
+        : "Unknown markSendAttemptAccepted error";
+    try {
+      await payrollReceiptNotificationRepository.markSentRecoveryRequired({
+        companyId: notification.companyId,
+        notificationId: notification.id,
+        providerMessageSid: messageSid,
+        errorMessage,
+      });
+    } catch {
+      console.error("[payroll-receipt-notification] markSendAttemptAccepted recovery failed", {
+        notificationId: notification.id,
+        error: errorMessage,
+      });
+    }
+    payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SEND_ATTEMPT_ACCEPTED_FAILED" });
+    return "recovery";
+  }
+
+  try {
+    await payrollReceiptNotificationRepository.markSendAccepted({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      providerMessageSid: messageSid,
+    });
+    payrollReceiptMetrics.notificationSent({ status: "SEND_ACCEPTED" });
+    return "sent";
+  } catch (markError) {
+    const errorMessage =
+      markError instanceof Error ? markError.message : "Unknown markSendAccepted error";
+    try {
+      await payrollReceiptNotificationRepository.markSentRecoveryRequired({
+        companyId: notification.companyId,
+        notificationId: notification.id,
+        providerMessageSid: messageSid,
+        errorMessage,
+      });
+      payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SEND_ACCEPTED_FAILED" });
+      return "recovery";
+    } catch {
+      console.error("[payroll-receipt-notification] markSendAccepted recovery failed", {
+        notificationId: notification.id,
+        error: errorMessage,
+      });
+      payrollReceiptMetrics.notificationFailed({ errorCode: "MARK_SENT_RECOVERY_FAILED" });
+      return "recovery";
+    }
+  }
 };
 
 export const payrollReceiptNotificationService = {
@@ -341,7 +365,7 @@ export const payrollReceiptNotificationService = {
   }> {
     const maxAttempts = env.PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS;
     await payrollReceiptNotificationRepository.reconcileTerminalStates();
-    await payrollReceiptNotificationRepository.recoverExpiredLeases(50, maxAttempts);
+    await payrollReceiptNotificationRepository.recoverExpiredLeases(50);
 
     const leaseSeconds = Math.max(
       30,

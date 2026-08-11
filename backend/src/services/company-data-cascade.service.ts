@@ -41,6 +41,11 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;
     IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
       DELETE FROM whatsapp_payroll_receipt_notifications WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
+      DELETE FROM whatsapp_operation_assignment_notification_send_attempts
+      WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
+      DELETE FROM whatsapp_operation_assignment_notifications WHERE company_id = @companyId;
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
 
@@ -87,8 +92,8 @@ export const deleteCompanyOperationalDataSetBased = async (
 
     DELETE FROM whatsapp_messages WHERE company_id = @companyId;
 
-    IF OBJECT_ID(N'dbo.whatsapp_flow_execution_steps', N'U') IS NOT NULL
-      DELETE FROM whatsapp_flow_execution_steps
+    IF OBJECT_ID(N'dbo.whatsapp_flow_steps', N'U') IS NOT NULL
+      DELETE FROM whatsapp_flow_steps
       WHERE flow_execution_id IN (
         SELECT id FROM whatsapp_flow_executions WHERE company_id = @companyId
       );
@@ -182,11 +187,48 @@ export const deleteOperationCascade = async (
   operationId: string,
 ): Promise<void> => {
   const pool = getPool();
-  await pool
-    .request()
-    .input("companyId", sql.UniqueIdentifier, companyId)
-    .input("operationId", sql.UniqueIdentifier, operationId)
-    .query(`
+  const bind = () =>
+    pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId);
+
+  // Separate round-trip: flow executions FK to attendance notifications.
+  await bind().query(`
+    DELETE s
+    FROM whatsapp_flow_steps s
+    INNER JOIN whatsapp_flow_executions e ON e.id = s.flow_execution_id
+    INNER JOIN whatsapp_attendance_notifications n ON n.id = e.notification_id
+    WHERE n.company_id = @companyId
+      AND n.operation_id = @operationId;
+
+    DELETE c
+    FROM whatsapp_flow_candidates c
+    INNER JOIN whatsapp_flow_executions e ON e.id = c.flow_execution_id
+    INNER JOIN whatsapp_attendance_notifications n ON n.id = e.notification_id
+    WHERE n.company_id = @companyId
+      AND n.operation_id = @operationId;
+
+    DELETE e
+    FROM whatsapp_flow_executions e
+    INNER JOIN whatsapp_attendance_notifications n ON n.id = e.notification_id
+    WHERE n.company_id = @companyId
+      AND n.operation_id = @operationId;
+
+    DELETE FROM whatsapp_attendance_notifications
+    WHERE company_id = @companyId AND operation_id = @operationId;
+
+    DELETE a
+    FROM whatsapp_operation_assignment_notification_send_attempts a
+    INNER JOIN whatsapp_operation_assignment_notifications n ON n.id = a.notification_id
+    WHERE n.company_id = @companyId
+      AND n.operation_id = @operationId;
+
+    DELETE FROM whatsapp_operation_assignment_notifications
+    WHERE company_id = @companyId AND operation_id = @operationId;
+  `);
+
+  await bind().query(`
       UPDATE operation_assignments
       SET source_assignment_batch_id = NULL
       WHERE company_id = @companyId AND operation_id = @operationId;
@@ -222,9 +264,6 @@ export const deleteOperationCascade = async (
       WHERE company_id = @companyId AND operation_id = @operationId;
 
       DELETE FROM attendance_records
-      WHERE company_id = @companyId AND operation_id = @operationId;
-
-      DELETE FROM whatsapp_attendance_notifications
       WHERE company_id = @companyId AND operation_id = @operationId;
 
       DELETE FROM bot_sessions
@@ -330,11 +369,66 @@ export const deleteEmployeeCascade = async (
       DELETE FROM attendance_records
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
+      IF OBJECT_ID(N'dbo.whatsapp_flow_steps', N'U') IS NOT NULL
+      BEGIN
+        DELETE FROM whatsapp_flow_steps
+        WHERE flow_execution_id IN (
+          SELECT e.id
+          FROM whatsapp_flow_executions e
+          WHERE e.employee_id = @employeeId
+             OR e.notification_id IN (
+               SELECT id FROM whatsapp_attendance_notifications
+               WHERE company_id = @companyId AND employee_id = @employeeId
+             )
+        );
+      END;
+
+      IF OBJECT_ID(N'dbo.whatsapp_flow_candidates', N'U') IS NOT NULL
+      BEGIN
+        DELETE FROM whatsapp_flow_candidates
+        WHERE flow_execution_id IN (
+          SELECT e.id
+          FROM whatsapp_flow_executions e
+          WHERE e.employee_id = @employeeId
+             OR e.notification_id IN (
+               SELECT id FROM whatsapp_attendance_notifications
+               WHERE company_id = @companyId AND employee_id = @employeeId
+             )
+        );
+      END;
+
+      IF OBJECT_ID(N'dbo.whatsapp_flow_executions', N'U') IS NOT NULL
+      BEGIN
+        DELETE FROM whatsapp_flow_executions
+        WHERE employee_id = @employeeId
+           OR notification_id IN (
+             SELECT id FROM whatsapp_attendance_notifications
+             WHERE company_id = @companyId AND employee_id = @employeeId
+           );
+      END;
+
       DELETE FROM whatsapp_attendance_notifications
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
+      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
+        DELETE FROM whatsapp_operation_assignment_notification_send_attempts
+        WHERE notification_id IN (
+          SELECT id FROM whatsapp_operation_assignment_notifications
+          WHERE company_id = @companyId AND employee_id = @employeeId
+        );
+
+      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
+        DELETE FROM whatsapp_operation_assignment_notifications
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+
       DELETE FROM whatsapp_messages
       WHERE employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.whatsapp_conversations', N'U') IS NOT NULL
+      BEGIN
+        DELETE FROM whatsapp_conversations
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+      END;
 
       DELETE FROM bot_sessions
       WHERE company_id = @companyId AND employee_id = @employeeId;

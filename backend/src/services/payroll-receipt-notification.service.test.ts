@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { COMPANY_MODULE_KEYS } from "../constants/company-modules";
+import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+
+setupUnitTestEnv();
 
 const baseNotification = {
   id: "notif-1",

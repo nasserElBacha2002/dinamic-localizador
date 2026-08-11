@@ -41,6 +41,11 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM whatsapp_attendance_notifications WHERE company_id = @companyId;
     IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_notifications', N'U') IS NOT NULL
       DELETE FROM whatsapp_payroll_receipt_notifications WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
+      DELETE FROM whatsapp_operation_assignment_notification_send_attempts
+      WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
+      DELETE FROM whatsapp_operation_assignment_notifications WHERE company_id = @companyId;
     DELETE FROM bot_sessions WHERE company_id = @companyId;
     DELETE FROM bot_simulation_sessions WHERE company_id = @companyId;
 
@@ -227,6 +232,17 @@ export const deleteOperationCascade = async (
       DELETE FROM whatsapp_attendance_notifications
       WHERE company_id = @companyId AND operation_id = @operationId;
 
+      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
+        DELETE FROM whatsapp_operation_assignment_notification_send_attempts
+        WHERE notification_id IN (
+          SELECT id FROM whatsapp_operation_assignment_notifications
+          WHERE company_id = @companyId AND operation_id = @operationId
+        );
+
+      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
+        DELETE FROM whatsapp_operation_assignment_notifications
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
       DELETE FROM bot_sessions
       WHERE company_id = @companyId AND operation_id = @operationId;
 
@@ -332,6 +348,17 @@ export const deleteEmployeeCascade = async (
 
       DELETE FROM whatsapp_attendance_notifications
       WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notification_send_attempts', N'U') IS NOT NULL
+        DELETE FROM whatsapp_operation_assignment_notification_send_attempts
+        WHERE notification_id IN (
+          SELECT id FROM whatsapp_operation_assignment_notifications
+          WHERE company_id = @companyId AND employee_id = @employeeId
+        );
+
+      IF OBJECT_ID(N'dbo.whatsapp_operation_assignment_notifications', N'U') IS NOT NULL
+        DELETE FROM whatsapp_operation_assignment_notifications
+        WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM whatsapp_messages
       WHERE employee_id = @employeeId;

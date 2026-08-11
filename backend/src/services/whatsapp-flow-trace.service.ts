@@ -404,6 +404,10 @@ export const whatsappFlowTraceService = {
         errorCode: latest.errorCode,
         errorMessage: latest.errorMessage,
       });
+      await this.projectOutboxProviderStatusByMessageSid({
+        providerMessageSid,
+        providerStatus: projected,
+      });
     }
     return linked;
   },
@@ -436,13 +440,52 @@ export const whatsappFlowTraceService = {
       WHERE id = @notificationId
     `);
 
-    // Payroll outbox: project provider delivery status only — never promote to DELIVERED here.
+    // Payroll + assignment outboxes: project provider delivery status only —
+    // never promote to DELIVERED here. Prefer notificationId when known; always
+    // also correlate by provider_message_sid so callbacks work if whatsapp_messages
+    // failed to persist after Twilio accepted the send.
     await req().query(`
       UPDATE whatsapp_payroll_receipt_notifications
       SET provider_status = @providerStatus,
           updated_at = SYSUTCDATETIME()
       WHERE id = @notificationId
     `);
+
+    await req().query(`
+      UPDATE whatsapp_operation_assignment_notifications
+      SET provider_status = @providerStatus,
+          updated_at = SYSUTCDATETIME()
+      WHERE id = @notificationId
+    `);
+  },
+
+  async projectOutboxProviderStatusByMessageSid(input: {
+    providerMessageSid: string;
+    providerStatus: string;
+  }): Promise<void> {
+    const pool = getPool();
+    const projected = input.providerStatus.toLowerCase();
+    await pool
+      .request()
+      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
+      .input("providerStatus", sql.NVarChar(40), projected)
+      .query(`
+        UPDATE whatsapp_payroll_receipt_notifications
+        SET provider_status = @providerStatus,
+            updated_at = SYSUTCDATETIME()
+        WHERE provider_message_sid = @providerMessageSid
+      `);
+
+    await pool
+      .request()
+      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
+      .input("providerStatus", sql.NVarChar(40), projected)
+      .query(`
+        UPDATE whatsapp_operation_assignment_notifications
+        SET provider_status = @providerStatus,
+            updated_at = SYSUTCDATETIME()
+        WHERE provider_message_sid = @providerMessageSid
+      `);
   },
 
   async recordProviderStatus(input: {
@@ -486,6 +529,13 @@ export const whatsappFlowTraceService = {
     if (!insertResult.created) {
       return { created: false, messageId: message?.id ?? null };
     }
+
+    // Durable fallback: outbox rows store provider_message_sid even when
+    // whatsapp_messages.create failed after Twilio accepted the send.
+    await this.projectOutboxProviderStatusByMessageSid({
+      providerMessageSid: input.providerMessageSid,
+      providerStatus: input.providerStatus,
+    });
 
     if (!message) {
       return { created: true, messageId: null };

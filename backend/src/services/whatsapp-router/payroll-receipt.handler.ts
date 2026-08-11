@@ -101,7 +101,7 @@ export const handleActivePayrollReceiptSession = async (
   if (isGlobalCancelCommand(ctx.body)) {
     await botSessionService.cancelSession(ctx.companyId, session.id);
     return handlers.respond(ctx.companyId, {
-      message: "Listo, cancelé la consulta del recibo.",
+      message: "Cancelé la consulta del recibo.",
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,

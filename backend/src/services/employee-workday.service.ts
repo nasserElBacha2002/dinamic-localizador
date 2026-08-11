@@ -172,7 +172,7 @@ export const employeeWorkdayService = {
   buildConfirmedMessage(assignment: EmployeeAssignedOperation): string {
     const timeZone = getBotOperationTimezone();
     return [
-      "Listo, confirmamos tu asistencia para:",
+      "Confirmamos tu asistencia para:",
       "",
       formatAssignmentServiceReference(assignment),
       formatAssignmentDateTimeLine(assignment, timeZone),

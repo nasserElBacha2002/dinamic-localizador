@@ -49,7 +49,7 @@ const completedMessage = (deliveredCount: number, year: number, month: number): 
   if (deliveredCount <= 1) {
     return `Acá tenés tu recibo de sueldo del período ${period}.`;
   }
-  return `Listo. Te enviamos ${deliveredCount} recibos de sueldo del período ${period}.`;
+  return `Te enviamos ${deliveredCount} recibos de sueldo del período ${period}.`;
 };
 
 const partialMessage = (deliveredCount: number, totalCount: number, year: number, month: number): string => {

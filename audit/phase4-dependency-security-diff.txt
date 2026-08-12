@@ -1,0 +1,927 @@
+diff --git a/audit/phase4-dependency-security-validation.md b/audit/phase4-dependency-security-validation.md
+new file mode 100644
+index 0000000..3550d34
+--- /dev/null
++++ b/audit/phase4-dependency-security-validation.md
+@@ -0,0 +1,295 @@
++# Phase 4 — Dependency Security Validation
++
++**Status:** `IMPLEMENTED_AND_VALIDATED`  
++**Date:** 2026-08-12  
++**Scope:** npm advisories, transitive supply chain, safe upgrades, GCS regression, lockfile reproducibility  
++**Out of scope:** SQL layer-boundary cleanup, God Classes, WhatsApp bot decomposition, Node runtime upgrade
++
++---
++
++## Dependency Security summary
++
++```text
++Initial advisories reviewed: 7 (backend 5 moderate + root 2 critical)
++Direct vulnerable dependencies: 1 (@google-cloud/storage, via transitive uuid)
++Transitive vulnerable dependencies: uuid (x2 paths), gaxios, teeny-request, retry-request, shell-quote
++Dependencies upgraded: 2 deliberate (@google-cloud/storage, concurrently) + 1 justified override (uuid)
++Critical remaining: 0
++High remaining: 0
++Moderate remaining: 0
++npm ci: PASS (backend + root)
++Backend build/tests: PASS
++Frontend audit/build/tests: PASS (0 vulns; lock unchanged)
++GCS regression (mocked contract + payroll/attachment unit): PASS
++Payroll/attachments regression: PASS
++Real GCS integration: NOT RUN (no pilot credentials in this session)
++Supply-chain verification: PASS (npm audit signatures)
++Quality gates: NOT lowered
++npm audit fix --force: NOT used
++```
++
++---
++
++## Audit before / after
++
++### Backend
++
++```text
++BEFORE
++critical: 0
++high: 0
++moderate: 5
++low: 0
++
++AFTER
++critical: 0
++high: 0
++moderate: 0
++low: 0
++```
++
++### Frontend
++
++```text
++BEFORE
++critical: 0
++high: 0
++moderate: 0
++low: 0
++
++AFTER
++critical: 0
++high: 0
++moderate: 0
++low: 0
++```
++
++### Root (dev tooling: `concurrently`)
++
++```text
++BEFORE
++critical: 2  (shell-quote <=1.8.3 via concurrently@9.2.1 → shell-quote@1.8.3)
++high: 0
++moderate: 0
++low: 0
++
++AFTER
++critical: 0
++high: 0
++moderate: 0
++low: 0
++```
++
++Evidence snapshots under `/tmp/phase4-deps/` (`backend-audit-before.json`, `backend-audit-after.json`, signatures logs).
++
++---
++
++## Dependency inventory
++
++| Package | Installed before | After | Direct/Transitive | Severity | Used by | Reason |
++| --- | ---: | ---: | --- | --- | --- | --- |
++| `@google-cloud/storage` | 7.21.0 | **7.22.0** | direct | moderate (via tree) | absence attachments, payroll receipts, signed URLs, pilot script | deliberate minor bump; does **not** alone clear uuid |
++| `uuid` | 9.0.1 | **11.1.1** | transitive | moderate GHSA-w5hq-g745-h8pq | `gaxios`, `teeny-request` (multipart boundary / request ids via **v4 only**) | justified `overrides.uuid` |
++| `gaxios` | 6.7.1 | 6.7.1 | transitive | moderate (via uuid) | Google auth / Storage HTTP | parent still pins uuid ^9; fixed via override |
++| `teeny-request` | 9.0.0 | 9.0.0 | transitive | moderate (via uuid) | Storage retries | same |
++| `retry-request` | 7.0.2 | 7.0.2 | transitive | moderate (via teeny-request) | Storage | same |
++| `concurrently` | 9.2.1 | **9.2.4** | direct (root **dev**) | critical (via shell-quote) | `npm run dev` only | deliberate patch bump |
++| `shell-quote` | 1.8.3 | **1.9.0** | transitive (root **dev**) | critical | concurrently | fixed by parent bump |
++
++App code does **not** import the `uuid` package. IDs use `node:crypto.randomUUID()`.
++
++---
++
++## Advisories
++
++### GHSA-w5hq-g745-h8pq / CVE-2026-41907 — `uuid` (< 11.1.1)
++
++| Field | Value |
++| --- | --- |
++| Severity (npm) | moderate (CVSS 7.5 integrity) |
++| Vulnerable APIs | `v3()` / `v5()` / `v6()` when caller-supplied `buf` is too small / offset invalid |
++| Installed before | 9.0.1 (two trees under Storage) |
++| Patched | ≥ 11.1.1 (also 12.0.1 / 13.0.1 / 14.0.0 lines) |
++| Paths | `@google-cloud/storage` → `gaxios` → `uuid`; `@google-cloud/storage` → `teeny-request` → `uuid` |
++| Runtime / dev | **runtime** (backend production image includes Storage) |
++| Project exploitability | **low** — Google clients call `uuid.v4()` only (boundary / ids); vulnerable APIs not on our call path; no user-controlled buf/offset into uuid |
++| Fix | override `uuid` → `^11.1.1` (parents still declare `^9`; npm audit “fix” via Storage **5.18.3** is a **breaking downgrade** — rejected) |
++
++### Root `shell-quote` criticals (via `concurrently`)
++
++| Field | Value |
++| --- | --- |
++| Severity | critical (npm audit before) |
++| Path | `concurrently@9.2.1` → `shell-quote@1.8.3` |
++| Runtime / dev | **dev-only** (`npm run dev` at monorepo root) |
++| Project exploitability | low in production (not shipped in backend/frontend images) |
++| Fix | `concurrently` → `^9.2.4` → `shell-quote@1.9.0` |
++
++---
++
++## Breaking changes
++
++- **None** in application code.
++- `@google-cloud/storage` **7.21.0 → 7.22.0** (same major 7). Engines in package: `node >=18` (was `>=14`). Production Docker: `node:20-alpine` — compatible. No Node upgrade required.
++- `uuid` **9 → 11** via override only: CommonJS `require('uuid').v4` verified working under Node 22 / backend CJS.
++- Rejected: `npm audit fix --force` path that would install Storage **5.18.3** (semver major downgrade).
++
++---
++
++## Code changes
++
++| File | Change |
++| --- | --- |
++| `backend/package.json` | `@google-cloud/storage` `^7.21.0` → `^7.22.0`; `overrides.uuid` `^11.1.1` (kept existing `brace-expansion` override) |
++| `backend/package-lock.json` | Storage 7.22.0 + uuid 11.1.1 resolved/integrity |
++| `package.json` | `concurrently` `^9.2.1` → `^9.2.4` |
++| `package-lock.json` | concurrently 9.2.4 + shell-quote 1.9.0 |
++| `gcs-attachment-storage.test.ts` | **new** mocked SDK contract: upload+generation string, signed download/upload v4, 404/403 mapping, delete/checkAccess |
++
++No GCS credential / TTL / ADC / Workload Identity / architecture changes.
++
++---
++
++## Override justification
++
++```text
++override:
++  package: uuid
++  version: ^11.1.1
++  reason: Parent SDKs (gaxios@6.7.1, teeny-request@9.0.0) still declare uuid ^9; no patched parent release clears GHSA-w5hq-g745-h8pq without forcing Storage 5.x downgrade.
++  upstream issue: GHSA-w5hq-g745-h8pq; npm audit suggests unsafe Storage 5.18.3 downgrade
++  API compatibility: consumers use uuid.v4() only; verified require('uuid').v4 on 11.1.1
++  removal condition: remove when @google-cloud/storage (or gaxios/teeny-request) depends on uuid >=11.1.1 without override
++```
++
++Existing unrelated override retained: `brace-expansion@5.0.9`.
++
++---
++
++## GCS
++
++### Flows tested (mocked / unit)
++
++| Flow | Result |
++| --- | --- |
++| Client construction (`new Storage` / injected mock) | PASS |
++| `putObject` write stream + `getMetadata` generation as **string** | PASS |
++| Signed download URL (`v4` / `read` / TTL) | PASS |
++| Signed upload URL (`v4` / `write` / contentType) | PASS |
++| Error mapping 404 → `GCS_OBJECT_NOT_FOUND`, 403 → `GCS_PERMISSION_DENIED` | PASS |
++| `deleteObject` `ignoreNotFound` + `checkAccess` | PASS |
++| In-memory attachment contract | PASS |
++| `payrollReceiptService` unit (upload/replace/delete with in-memory storage) | PASS |
++| Absence attachment policy unit | PASS |
++
++### Not executed this session
++
++```text
++gcs:pilot:absence-attachments against real GCS
++integration tests requiring live bucket / ADC credentials
++```
++
++Documented: real GCS integration **not** validated here.
++
++### Retry / timeouts / credentials
++
++- No new app-level retries added (avoid stacking with SDK retries).
++- No TTL / signed URL expiration business defaults changed.
++- Credentials still ADC / projectId via existing `Storage({ projectId })` — no hardcoded keys.
++
++---
++
++## Supply chain
++
++| Check | Result |
++| --- | --- |
++| `npm audit signatures` (backend) | **367 packages verified registry signatures**; 67 attestations |
++| `npm audit signatures` (root) | **25 packages verified**; 1 attestation |
++| `npm audit fix --force` | **not used** |
++| Lifecycle scripts on upgraded packages | Storage / gaxios / teeny-request / uuid: **no** `hasInstallScript` |
++| Dependabot / Renovate | **not present** — follow-up optional |
++| SBOM tooling | **not present** — follow-up optional |
++| New direct dependencies | **none** |
++| Lockfile integrity/resolved | preserved (npm install/ci only) |
++
++---
++
++## Residual risk
++
++**None remaining in `npm audit` for backend / frontend / root.**
++
++Historical note (mitigated):
++
++| Advisory | Why it mattered | Mitigation now | Follow-up |
++| --- | --- | --- | --- |
++| GHSA-w5hq-g745-h8pq | Runtime transitive under Storage | uuid override 11.1.1 | Drop override when upstream bumps |
++| shell-quote criticals | Dev-only via concurrently | concurrently 9.2.4 | Consider Dependabot for root + backend |
++
++Outside `npm audit`: typosquatting / compromised maintainer risk remains inherent to npm; no additional tooling added this phase.
++
++---
++
++## Node / Docker / CI
++
++| Item | Evidence |
++| --- | --- |
++| Local Node | v22.14.0 / npm 11.4.2 |
++| Backend Docker | `FROM node:20-alpine` — Storage engines `>=18` OK |
++| Backend image build | `docker build -f backend/Dockerfile --target production` → **PASS** (`dinamic-phase4-backend-deps:test`) |
++| `docker compose config` | fails without filled `.env` ports (pre-existing; unrelated) |
++| `npm ci` clean | backend + root **PASS**; audit still 0 |
++| Frontend lock | unchanged; audit 0 |
++
++---
++
++## Validation commands
++
++| Command | Result |
++| --- | --- |
++| `npm audit --prefix backend` (before) | 5 moderate |
++| `npm audit --prefix backend` (after / after `npm ci`) | 0 |
++| `npm audit --prefix frontend` | 0 |
++| `npm audit` (root after) | 0 |
++| `npm audit signatures` backend/root | PASS |
++| `npm ci` backend + root | PASS |
++| `npm run lint --prefix backend` | PASS |
++| `npm run build --prefix backend` | PASS |
++| `npm test --prefix backend` | PASS (1299 tests) |
++| GCS/payroll/attachment focused unit tests | PASS (22) |
++| `npm run lint --prefix frontend` | PASS (0 errors, 8 pre-existing warnings) |
++| `npm run build --prefix frontend` | PASS |
++| `npm test --prefix frontend` | PASS (676 tests) |
++| Backend Docker production build | PASS |
++| Real GCS pilot | SKIP (no credentials) |
++| Full `test:integration` DB suite | SKIP this phase (no dep logic change; Phase 3 flake separate) |
++
++---
++
++## Acceptance checklist
++
++1. Initial advisories identified — **yes**
++2. Dependency paths known — **yes**
++3. No `npm audit fix --force` — **yes**
++4. Deliberate minimal upgrades — **yes**
++5. No critical/high remaining — **yes**
++6. Correctable moderates fixed — **yes**
++7. Residual moderate justified — **n/a (none)**
++8–12. GCS/signed URL/upload/payroll/attachments contracts — **yes (mocked + unit)**
++13–14. `npm ci` + reproducible lock — **yes**
++15. Prod Node compatible — **yes (20)**
++16–17. Backend/frontend lint/build/tests — **yes**
++18. Phase 2/3 logic untouched by dep upgrade — **yes** (no CAS/SQL/import code in Phase 4 patch)
++19. Audit after documented — **yes**
++20. Quality gates not lowered — **yes**
++21. Override justified — **yes**
++22. No unnecessary new deps — **yes**
++23. No caches committed — **yes**
++
++---
++
++## Follow-ups (optional, not Phase 4 blockers)
++
++- Add Dependabot/Renovate for backend + root.
++- Re-run `gcs:pilot:absence-attachments` in an ADC-enabled environment.
++- Remove `uuid` override when Google SDK parents bump.
++- Optional SBOM generation in CI.
+diff --git a/backend/package-lock.json b/backend/package-lock.json
+index cf627bc..562a979 100644
+--- a/backend/package-lock.json
++++ b/backend/package-lock.json
+@@ -1,31 +1,31 @@
+ {
+   "name": "dinamic-attendance-backend",
+   "version": "0.1.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "dinamic-attendance-backend",
+       "version": "0.1.0",
+       "dependencies": {
+-        "@google-cloud/storage": "^7.21.0",
++        "@google-cloud/storage": "^7.22.0",
+         "bcrypt": "^6.0.0",
+         "busboy": "^1.6.0",
+         "cors": "^2.8.5",
+         "dotenv": "^17.2.3",
+         "express": "^5.1.0",
+         "helmet": "^8.1.0",
+         "jsonwebtoken": "^9.0.3",
+         "luxon": "^3.7.2",
+         "morgan": "^1.10.0",
+         "mssql": "^12.1.0",
+         "multer": "^2.2.0",
+         "nodemailer": "^9.0.3",
+         "twilio": "^6.0.2",
+         "xlsx": "npm:@e965/xlsx@0.20.3",
+         "zod": "^4.1.11"
+       },
+       "devDependencies": {
+         "@eslint/js": "^10.0.1",
+         "@types/bcrypt": "^6.0.0",
+         "@types/busboy": "^1.5.4",
+@@ -872,62 +872,62 @@
+     },
+     "node_modules/@google-cloud/projectify": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/@google-cloud/projectify/-/projectify-4.0.0.tgz",
+       "integrity": "sha512-MmaX6HeSvyPbWGwFq7mXdo0uQZLGBYCwziiLIGq5JVX+/bdI3SAq6bP98trV5eTWfLuvsMcIC1YJOF2vfteLFA==",
+       "license": "Apache-2.0",
+       "engines": {
+         "node": ">=14.0.0"
+       }
+     },
+     "node_modules/@google-cloud/promisify": {
+       "version": "4.0.0",
+       "resolved": "https://registry.npmjs.org/@google-cloud/promisify/-/promisify-4.0.0.tgz",
+       "integrity": "sha512-Orxzlfb9c67A15cq2JQEyVc7wEsmFBmHjZWZYQMUyJ1qivXyMwdyNOs9odi79hze+2zqdTtu1E19IM/FtqZ10g==",
+       "license": "Apache-2.0",
+       "engines": {
+         "node": ">=14"
+       }
+     },
+     "node_modules/@google-cloud/storage": {
+-      "version": "7.21.0",
+-      "resolved": "https://registry.npmjs.org/@google-cloud/storage/-/storage-7.21.0.tgz",
+-      "integrity": "sha512-l+IFTkd+6Y5LoAuXyYCKNAKtw/Ci+rAMqgdTB1jv4iZiLhw0rtq+0qjIRbBizXkNzEFmXiXUW0H7sZQQvk1ffA==",
++      "version": "7.22.0",
++      "resolved": "https://registry.npmjs.org/@google-cloud/storage/-/storage-7.22.0.tgz",
++      "integrity": "sha512-W98gTQOAntEeEQ7/pZxSQXxfUO5CiQcXJRsxBpUa6UU25n8YN/VtogPBi0H+MAmUrn/6bY/sBhFansoWEsr2/g==",
+       "license": "Apache-2.0",
+       "dependencies": {
+         "@google-cloud/paginator": "^5.0.0",
+         "@google-cloud/projectify": "^4.0.0",
+         "@google-cloud/promisify": "<4.1.0",
+         "abort-controller": "^3.0.0",
+         "async-retry": "^1.3.3",
+         "duplexify": "^4.1.3",
+         "fast-xml-parser": "^5.3.4",
+         "gaxios": "^6.0.2",
+         "google-auth-library": "^9.6.3",
+         "html-entities": "^2.5.2",
+         "mime": "^3.0.0",
+         "p-limit": "^3.0.1",
+         "retry-request": "^7.0.0",
+         "teeny-request": "^9.0.0"
+       },
+       "engines": {
+-        "node": ">=14"
++        "node": ">=18"
+       }
+     },
+     "node_modules/@humanfs/core": {
+       "version": "0.19.2",
+       "resolved": "https://registry.npmjs.org/@humanfs/core/-/core-0.19.2.tgz",
+       "integrity": "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA==",
+       "dev": true,
+       "license": "Apache-2.0",
+       "dependencies": {
+         "@humanfs/types": "^0.15.0"
+       },
+       "engines": {
+         "node": ">=18.18.0"
+       }
+     },
+     "node_modules/@humanfs/node": {
+       "version": "0.16.8",
+       "resolved": "https://registry.npmjs.org/@humanfs/node/-/node-0.16.8.tgz",
+       "integrity": "sha512-gE1eQNZ3R++kTzFUpdGlpmy8kDZD/MLyHqDwqjkVQI0JMdI1D51sy1H958PNXYkM2rAac7e5/CnIKZrHtPh3BQ==",
+       "dev": true,
+@@ -4613,51 +4613,50 @@
+         "node": ">= 0.8"
+       }
+     },
+     "node_modules/uri-js": {
+       "version": "4.4.1",
+       "resolved": "https://registry.npmjs.org/uri-js/-/uri-js-4.4.1.tgz",
+       "integrity": "sha512-7rKUyy33Q1yc98pQ1DAmLtwX109F7TIfWlW1Ydo8Wl1ii1SeHieeh0HHfPeL2fMXK6z0s8ecKs9frCuLJvndBg==",
+       "dev": true,
+       "license": "BSD-2-Clause",
+       "dependencies": {
+         "punycode": "^2.1.0"
+       }
+     },
+     "node_modules/util-deprecate": {
+       "version": "1.0.2",
+       "resolved": "https://registry.npmjs.org/util-deprecate/-/util-deprecate-1.0.2.tgz",
+       "integrity": "sha512-EPD5q1uXyFxJpCrLnCc1nHnq3gOa6DZBocAIiI2TaSCA7VCJ1UJDMagCzIkXNsUYfD1daK//LTEQ8xiIbrHtcw==",
+       "license": "MIT"
+     },
+     "node_modules/uuid": {
+-      "version": "9.0.1",
+-      "resolved": "https://registry.npmjs.org/uuid/-/uuid-9.0.1.tgz",
+-      "integrity": "sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==",
+-      "deprecated": "uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).",
++      "version": "11.1.1",
++      "resolved": "https://registry.npmjs.org/uuid/-/uuid-11.1.1.tgz",
++      "integrity": "sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==",
+       "funding": [
+         "https://github.com/sponsors/broofa",
+         "https://github.com/sponsors/ctavan"
+       ],
+       "license": "MIT",
+       "bin": {
+-        "uuid": "dist/bin/uuid"
++        "uuid": "dist/esm/bin/uuid"
+       }
+     },
+     "node_modules/vary": {
+       "version": "1.1.2",
+       "resolved": "https://registry.npmjs.org/vary/-/vary-1.1.2.tgz",
+       "integrity": "sha512-BNGbWLfd0eUPabhkXUVm0j8uuvREyTh5ovRa/dyow/BqAbZJyC+5fU+IzQOzmAKzYqYRAISoRhdQr3eIZ/PXqg==",
+       "license": "MIT",
+       "engines": {
+         "node": ">= 0.8"
+       }
+     },
+     "node_modules/webidl-conversions": {
+       "version": "3.0.1",
+       "resolved": "https://registry.npmjs.org/webidl-conversions/-/webidl-conversions-3.0.1.tgz",
+       "integrity": "sha512-2JAn3z8AR6rjK8Sm8orRC0h/bcl/DqL7tRPdGZ4I1CjdF+EaMLmYxBHyXuKL849eucPFhvBoxMsflfOb8kxaeQ==",
+       "license": "BSD-2-Clause"
+     },
+     "node_modules/whatwg-url": {
+       "version": "5.0.0",
+       "resolved": "https://registry.npmjs.org/whatwg-url/-/whatwg-url-5.0.0.tgz",
+diff --git a/backend/package.json b/backend/package.json
+index a194746..924f614 100644
+--- a/backend/package.json
++++ b/backend/package.json
+@@ -19,60 +19,61 @@
+     "export:services": "tsx src/scripts/export-database-services.ts",
+     "fix:services": "tsx src/scripts/fix-services-from-reconciliation.ts",
+     "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",
+     "backfill:absence-balances": "tsx src/scripts/backfill-employee-absence-balances.ts",
+     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
+     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
+     "audit:statistics-grain": "tsx src/scripts/audit-statistics-grain.ts",
+     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
+     "diagnose:operation-reassignment": "tsx scripts/diagnose-operation-reassignment.ts",
+     "repair:operation-reassignment": "tsx scripts/repair-operation-reassignment.ts",
+     "repair:one-time-schedule-drift": "tsx scripts/repair-one-time-schedule-drift.ts",
+     "diagnose:operational-location-duplicates": "tsx scripts/diagnose-operational-location-duplicates.ts",
+     "repair:operational-location-duplicates": "tsx scripts/repair-operational-location-duplicates.ts",
+     "seed:integration-ci": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/seed-integration-ci.ts",
+     "cleanup:integration-junk": "tsx src/scripts/cleanup-integration-junk.ts",
+     "gcs:pilot:absence-attachments": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/gcs-absence-attachments-pilot.ts",
+     "test": "node ./scripts/run-unit-tests.mjs",
+     "test:integration": "EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit src/**/*.integration.test.ts"
+   },
+   "dependencies": {
+-    "@google-cloud/storage": "^7.21.0",
++    "@google-cloud/storage": "^7.22.0",
+     "bcrypt": "^6.0.0",
+     "busboy": "^1.6.0",
+     "cors": "^2.8.5",
+     "dotenv": "^17.2.3",
+     "express": "^5.1.0",
+     "helmet": "^8.1.0",
+     "jsonwebtoken": "^9.0.3",
+     "luxon": "^3.7.2",
+     "morgan": "^1.10.0",
+     "mssql": "^12.1.0",
+     "multer": "^2.2.0",
+     "nodemailer": "^9.0.3",
+     "twilio": "^6.0.2",
+     "xlsx": "npm:@e965/xlsx@0.20.3",
+     "zod": "^4.1.11"
+   },
+   "devDependencies": {
+     "@eslint/js": "^10.0.1",
+     "@types/bcrypt": "^6.0.0",
+     "@types/busboy": "^1.5.4",
+     "@types/cors": "^2.8.19",
+     "@types/express": "^5.0.3",
+     "@types/jsonwebtoken": "^9.0.10",
+     "@types/luxon": "^3.7.2",
+     "@types/morgan": "^1.9.10",
+     "@types/mssql": "^12.3.0",
+     "@types/multer": "^2.2.0",
+     "@types/node": "^24.6.0",
+     "@types/nodemailer": "^8.0.1",
+     "eslint": "^10.5.0",
+     "globals": "^17.6.0",
+     "tsx": "^4.20.6",
+     "typescript": "^5.9.2",
+     "typescript-eslint": "^8.61.1"
+   },
+   "overrides": {
+-    "brace-expansion": "5.0.9"
++    "brace-expansion": "5.0.9",
++    "uuid": "^11.1.1"
+   }
+ }
+diff --git a/backend/src/services/attachment-storage/gcs-attachment-storage.test.ts b/backend/src/services/attachment-storage/gcs-attachment-storage.test.ts
+new file mode 100644
+index 0000000..df7664c
+--- /dev/null
++++ b/backend/src/services/attachment-storage/gcs-attachment-storage.test.ts
+@@ -0,0 +1,222 @@
++import assert from "node:assert/strict";
++import { Readable } from "node:stream";
++import { describe, it } from "node:test";
++import { AppError } from "../../errors/app-error";
++import { GoogleCloudStorageAttachmentStorage } from "./gcs-attachment-storage";
++
++type MockFile = {
++  createWriteStream: (opts: unknown) => {
++    on: (event: string, cb: (...args: unknown[]) => void) => void;
++    end: (body?: Buffer) => void;
++  };
++  getMetadata: () => Promise<[{ generation: string; size: string; contentType: string; metadata?: Record<string, string> }]>;
++  exists: () => Promise<[boolean]>;
++  createReadStream: () => Readable;
++  delete: (opts?: { ignoreNotFound?: boolean }) => Promise<void>;
++  getSignedUrl: (opts: {
++    version: string;
++    action: string;
++    expires: number;
++    contentType?: string;
++  }) => Promise<[string]>;
++};
++
++/**
++ * Contract smoke for GCS SDK wiring (mocked). Does not hit a real bucket.
++ * Covers signed URL options, generation-as-string, and error mapping used by
++ * payroll receipts / absence attachments.
++ */
++describe("GoogleCloudStorageAttachmentStorage SDK contract (mocked)", () => {
++  const makeStorage = (file: MockFile) => {
++    const bucket = {
++      file: (objectKey: string, opts?: { generation?: string }) => {
++        assert.equal(typeof objectKey, "string");
++        if (opts?.generation) {
++          assert.equal(typeof opts.generation, "string");
++        }
++        return file;
++      },
++      exists: async (): Promise<[boolean]> => [true],
++    };
++    const storage = {
++      bucket: (name: string) => {
++        assert.equal(name, "dinamic-attachments");
++        return bucket;
++      },
++    };
++    return new GoogleCloudStorageAttachmentStorage(
++      {
++        projectId: "test-project",
++        bucketName: "dinamic-attachments",
++        signedUrlExpirationSeconds: 900,
++      },
++      storage as never,
++    );
++  };
++
++  it("uploads buffer and returns generation as string", async () => {
++    let writeOpts: { resumable?: boolean; preconditionOpts?: { ifGenerationMatch?: number } } | undefined;
++    const file: MockFile = {
++      createWriteStream: (opts) => {
++        writeOpts = opts as typeof writeOpts;
++        const handlers: Record<string, Array<(...args: unknown[]) => void>> = {};
++        return {
++          on(event, cb) {
++            handlers[event] = handlers[event] ?? [];
++            handlers[event]!.push(cb);
++          },
++          end() {
++            for (const cb of handlers.finish ?? []) {
++              cb();
++            }
++          },
++        };
++      },
++      getMetadata: async () => [
++        {
++          generation: "1734567890123456",
++          size: "12",
++          contentType: "application/pdf",
++          metadata: { "checksum-sha256": "abc" },
++        },
++      ],
++      exists: async () => [true],
++      createReadStream: () => Readable.from([Buffer.from("x")]),
++      delete: async () => undefined,
++      getSignedUrl: async () => ["https://example.invalid/signed"],
++    };
++
++    const storage = makeStorage(file);
++    const stored = await storage.putObject({
++      objectKey: "payroll-receipts/companies/c/receipts/r.pdf",
++      body: Buffer.from("%PDF-1.4\n"),
++      contentType: "application/pdf",
++      ifGenerationMatch: 0,
++      metadata: { "checksum-sha256": "abc" },
++    });
++
++    assert.equal(writeOpts?.resumable, false);
++    assert.equal(writeOpts?.preconditionOpts?.ifGenerationMatch, 0);
++    assert.equal(stored.generation, "1734567890123456");
++    assert.equal(typeof stored.generation, "string");
++    assert.equal(stored.sizeBytes, 12);
++    assert.equal(stored.bucketName, "dinamic-attachments");
++  });
++
++  it("creates signed download URL with v4 read and caller TTL", async () => {
++    const expiresInSeconds = 600;
++    const before = Date.now();
++    let captured: { version: string; action: string; expires: number } | undefined;
++    const file: MockFile = {
++      createWriteStream: () => {
++        throw new Error("unused");
++      },
++      getMetadata: async () => [{ generation: "1", size: "1", contentType: "application/pdf" }],
++      exists: async () => [true],
++      createReadStream: () => Readable.from([]),
++      delete: async () => undefined,
++      getSignedUrl: async (opts) => {
++        captured = opts;
++        return [
++          `https://storage.googleapis.com/dinamic-attachments/payroll-receipts%2Fr.pdf?expires=${opts.expires}`,
++        ];
++      },
++    };
++
++    const storage = makeStorage(file);
++    const url = await storage.createSignedDownloadUrl({
++      objectKey: "payroll-receipts/r.pdf",
++      expiresInSeconds,
++      generation: "1734567890123456",
++    });
++
++    assert.match(url, /^https:\/\/storage\.googleapis\.com\//);
++    assert.equal(captured?.version, "v4");
++    assert.equal(captured?.action, "read");
++    assert.ok(captured && captured.expires >= before + expiresInSeconds * 1000 - 50);
++    assert.ok(captured && captured.expires <= Date.now() + expiresInSeconds * 1000 + 50);
++  });
++
++  it("creates signed upload URL with contentType", async () => {
++    let captured: { version: string; action: string; contentType?: string } | undefined;
++    const file: MockFile = {
++      createWriteStream: () => {
++        throw new Error("unused");
++      },
++      getMetadata: async () => [{ generation: "1", size: "1", contentType: "application/pdf" }],
++      exists: async () => [true],
++      createReadStream: () => Readable.from([]),
++      delete: async () => undefined,
++      getSignedUrl: async (opts) => {
++        captured = opts;
++        return ["https://storage.googleapis.com/upload-signed"];
++      },
++    };
++
++    const storage = makeStorage(file);
++    const url = await storage.createSignedUploadUrl({
++      objectKey: "absence-attachments/a/original",
++      expiresInSeconds: 300,
++      contentType: "application/pdf",
++    });
++
++    assert.equal(url, "https://storage.googleapis.com/upload-signed");
++    assert.equal(captured?.version, "v4");
++    assert.equal(captured?.action, "write");
++    assert.equal(captured?.contentType, "application/pdf");
++  });
++
++  it("maps 404 and 403 GCS errors to AppError codes", async () => {
++    const notFoundFile: MockFile = {
++      createWriteStream: () => {
++        throw new Error("unused");
++      },
++      getMetadata: async () => {
++        throw Object.assign(new Error("Not Found"), { code: 404 });
++      },
++      exists: async () => [false],
++      createReadStream: () => Readable.from([]),
++      delete: async () => undefined,
++      getSignedUrl: async () => {
++        throw Object.assign(new Error("Forbidden"), { code: 403 });
++      },
++    };
++
++    const storage = makeStorage(notFoundFile);
++    await assert.rejects(
++      () => storage.getObjectMetadata({ objectKey: "missing" }),
++      (error: unknown) => error instanceof AppError && error.code === "GCS_OBJECT_NOT_FOUND",
++    );
++    await assert.rejects(
++      () =>
++        storage.createSignedDownloadUrl({
++          objectKey: "missing",
++          expiresInSeconds: 60,
++        }),
++      (error: unknown) => error instanceof AppError && error.code === "GCS_PERMISSION_DENIED",
++    );
++  });
++
++  it("deletes with ignoreNotFound and checks access", async () => {
++    let deleted = false;
++    const file: MockFile = {
++      createWriteStream: () => {
++        throw new Error("unused");
++      },
++      getMetadata: async () => [{ generation: "1", size: "1", contentType: "application/pdf" }],
++      exists: async () => [true],
++      createReadStream: () => Readable.from([]),
++      delete: async (opts) => {
++        assert.equal(opts?.ignoreNotFound, true);
++        deleted = true;
++      },
++      getSignedUrl: async () => ["https://example.invalid"],
++    };
++
++    const storage = makeStorage(file);
++    await storage.deleteObject({ objectKey: "k", generation: "99" });
++    assert.equal(deleted, true);
++    const access = await storage.checkAccess();
++    assert.equal(access.ok, true);
++  });
++});
+diff --git a/package-lock.json b/package-lock.json
+index d80ac19..83f8e9e 100644
+--- a/package-lock.json
++++ b/package-lock.json
+@@ -1,31 +1,31 @@
+ {
+   "name": "dinamic-attendance",
+   "version": "0.1.0",
+   "lockfileVersion": 3,
+   "requires": true,
+   "packages": {
+     "": {
+       "name": "dinamic-attendance",
+       "version": "0.1.0",
+       "devDependencies": {
+-        "concurrently": "^9.2.1"
++        "concurrently": "^9.2.4"
+       }
+     },
+     "node_modules/ansi-regex": {
+       "version": "5.0.1",
+       "resolved": "https://registry.npmjs.org/ansi-regex/-/ansi-regex-5.0.1.tgz",
+       "integrity": "sha512-quJQXlTSUGL2LH9SUXo8VwsY4soanhgo6LNSm84E1LBcE8s3O0wpdiRzyR9z/ZZJMlMWv37qOOb9pdJlMUEKFQ==",
+       "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=8"
+       }
+     },
+     "node_modules/ansi-styles": {
+       "version": "4.3.0",
+       "resolved": "https://registry.npmjs.org/ansi-styles/-/ansi-styles-4.3.0.tgz",
+       "integrity": "sha512-zbB9rCJAT1rbjiVDb2hqKFHNYLxgtk8NURxZ3IZwD3F6NtxbXZQCnnSi1Lkx+IDohdPlFp222wVALIheZJQSEg==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "color-convert": "^2.0.1"
+@@ -86,49 +86,49 @@
+       "version": "2.0.1",
+       "resolved": "https://registry.npmjs.org/color-convert/-/color-convert-2.0.1.tgz",
+       "integrity": "sha512-RRECPsj7iu/xb5oKYcsFHSppFNnsj/52OVTRKb4zP5onXwVF3zVmmToNcOfGC+CRDpfK/U584fMg38ZHCaElKQ==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "color-name": "~1.1.4"
+       },
+       "engines": {
+         "node": ">=7.0.0"
+       }
+     },
+     "node_modules/color-name": {
+       "version": "1.1.4",
+       "resolved": "https://registry.npmjs.org/color-name/-/color-name-1.1.4.tgz",
+       "integrity": "sha512-dOy+3AuW3a2wNbZHIuMZpTcgjGuLU/uBL/ubcZF9OXbDo8ff4O8yVp5Bf0efS8uEoYo5q4Fx7dY9OgQGXgAsQA==",
+       "dev": true,
+       "license": "MIT"
+     },
+     "node_modules/concurrently": {
+-      "version": "9.2.1",
+-      "resolved": "https://registry.npmjs.org/concurrently/-/concurrently-9.2.1.tgz",
+-      "integrity": "sha512-fsfrO0MxV64Znoy8/l1vVIjjHa29SZyyqPgQBwhiDcaW8wJc2W3XWVOGx4M3oJBnv/zdUZIIp1gDeS98GzP8Ng==",
++      "version": "9.2.4",
++      "resolved": "https://registry.npmjs.org/concurrently/-/concurrently-9.2.4.tgz",
++      "integrity": "sha512-TZ0CEhyzvFjgtAvHTusDMgj7wNdihCh7LLLrzdUOXIhdlnL2JBBGA9eJxR24rtqgmdjh3OA3hrN1rCHj6HM8qA==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "chalk": "4.1.2",
+         "rxjs": "7.8.2",
+-        "shell-quote": "1.8.3",
++        "shell-quote": "1.9.0",
+         "supports-color": "8.1.1",
+         "tree-kill": "1.2.2",
+         "yargs": "17.7.2"
+       },
+       "bin": {
+         "conc": "dist/bin/concurrently.js",
+         "concurrently": "dist/bin/concurrently.js"
+       },
+       "engines": {
+         "node": ">=18"
+       },
+       "funding": {
+         "url": "https://github.com/open-cli-tools/concurrently?sponsor=1"
+       }
+     },
+     "node_modules/emoji-regex": {
+       "version": "8.0.0",
+       "resolved": "https://registry.npmjs.org/emoji-regex/-/emoji-regex-8.0.0.tgz",
+       "integrity": "sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==",
+       "dev": true,
+@@ -178,43 +178,43 @@
+       "version": "2.1.1",
+       "resolved": "https://registry.npmjs.org/require-directory/-/require-directory-2.1.1.tgz",
+       "integrity": "sha512-fGxEI7+wsG9xrvdjsrlmL22OMTTiHRwAMroiEeMgq8gzoLC/PQr7RsRDSTLUg/bZAZtF+TVIkHc6/4RIKrui+Q==",
+       "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">=0.10.0"
+       }
+     },
+     "node_modules/rxjs": {
+       "version": "7.8.2",
+       "resolved": "https://registry.npmjs.org/rxjs/-/rxjs-7.8.2.tgz",
+       "integrity": "sha512-dhKf903U/PQZY6boNNtAGdWbG85WAbjT/1xYoZIC7FAY0yWapOBQVsVrDl58W86//e1VpMNBtRV4MaXfdMySFA==",
+       "dev": true,
+       "license": "Apache-2.0",
+       "dependencies": {
+         "tslib": "^2.1.0"
+       }
+     },
+     "node_modules/shell-quote": {
+-      "version": "1.8.3",
+-      "resolved": "https://registry.npmjs.org/shell-quote/-/shell-quote-1.8.3.tgz",
+-      "integrity": "sha512-ObmnIF4hXNg1BqhnHmgbDETF8dLPCggZWBjkQfhZpbszZnYur5DUljTcCHii5LC3J5E0yeO/1LIMyH+UvHQgyw==",
++      "version": "1.9.0",
++      "resolved": "https://registry.npmjs.org/shell-quote/-/shell-quote-1.9.0.tgz",
++      "integrity": "sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==",
+       "dev": true,
+       "license": "MIT",
+       "engines": {
+         "node": ">= 0.4"
+       },
+       "funding": {
+         "url": "https://github.com/sponsors/ljharb"
+       }
+     },
+     "node_modules/string-width": {
+       "version": "4.2.3",
+       "resolved": "https://registry.npmjs.org/string-width/-/string-width-4.2.3.tgz",
+       "integrity": "sha512-wKyQRQpjJ0sIp62ErSZdGsjMJWsap5oRNihHhu6G7JVO/9jIB6UyevL+tXuOqrng8j/cxKTWyWUwvSTriiZz/g==",
+       "dev": true,
+       "license": "MIT",
+       "dependencies": {
+         "emoji-regex": "^8.0.0",
+         "is-fullwidth-code-point": "^3.0.0",
+         "strip-ansi": "^6.0.1"
+       },
+diff --git a/package.json b/package.json
+index dd9e8a7..92dc366 100644
+--- a/package.json
++++ b/package.json
+@@ -22,24 +22,25 @@
+     "audit:security": "bash scripts/audit/run_security_audit.sh",
+     "audit:security:fast": "bash scripts/audit/run_security_audit.sh",
+     "audit:security:deep": "bash scripts/audit/run_security_audit_deep.sh",
+     "audit:architecture": "python3 scripts/audit/run_framework_audit.py --only architecture --run-type partial --print-summary",
+     "audit:complexity": "python3 scripts/audit/run_framework_audit.py --only complexity --run-type partial --print-summary",
+     "audit:god-classes": "python3 scripts/audit/run_framework_audit.py --only god-classes --run-type partial --print-summary",
+     "audit:solid": "python3 scripts/audit/run_framework_audit.py --only solid --run-type partial --print-summary",
+     "audit:grasp": "python3 scripts/audit/run_framework_audit.py --only grasp --run-type partial --print-summary",
+     "audit:patches": "python3 scripts/audit/run_framework_audit.py --only patches --run-type partial --print-summary",
+     "audit:database": "python3 scripts/audit/run_framework_audit.py --only sql --run-type partial --print-summary",
+     "audit:tenant": "python3 scripts/audit/audit_tenant_isolation.py",
+     "audit:reliability": "python3 scripts/audit/run_framework_audit.py --only reliability --run-type partial --print-summary",
+     "audit:env": "python3 scripts/audit/run_framework_audit.py --only env-consistency --run-type partial --print-summary",
+     "audit:dead-code": "python3 scripts/audit/run_framework_audit.py --only env-consistency --run-type partial --print-summary",
+     "audit:duplication": "bash scripts/audit/run_backend_architecture_audit.sh",
+     "audit:tests": "npm test",
+     "audit:hotspots": "python3 scripts/audit/run_framework_audit.py --run-type full --print-summary",
+     "audit:framework": "python3 scripts/audit/run_framework_audit.py --run-type full --print-summary",
+     "audit:framework:strict": "python3 scripts/audit/run_framework_audit.py --run-type full --fail-on-gate --fail-on-error --regression-only --print-summary",
+     "test:audit-framework": "python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py'"
+-  },  "devDependencies": {
+-    "concurrently": "^9.2.1"
++  },
++  "devDependencies": {
++    "concurrently": "^9.2.4"
+   }
+ }

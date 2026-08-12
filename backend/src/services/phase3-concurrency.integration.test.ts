@@ -15,6 +15,9 @@ import {
 } from "../test-helpers/integration-test";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { isActiveOperationDuplicateError } from "../utils/active-operation-duplicate-errors";
+import { WHATSAPP_PROVIDER_STATUS_RANK } from "../constants/whatsapp-observability";
+import { pickProjectedProviderStatus } from "../utils/whatsapp-observability";
+import { employeeWorkdayService } from "./employee-workday.service";
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 
 describeDatabaseIntegration("phase3 concurrency CAS / unique", () => {
@@ -318,6 +321,170 @@ describeDatabaseIntegration("phase3 concurrency CAS / unique", () => {
         .request()
         .input("id", sql.UniqueIdentifier, notificationId)
         .query(`DELETE FROM whatsapp_operation_assignment_notifications WHERE id = @id`);
+    }
+  });
+
+  it("service-level confirm || unavailable: one durable state, messages match DB", async () => {
+    const { getPool } = await import("../database/connection");
+    const pool = getPool();
+    const start = new Date(Date.now() + 55 * 24 * 60 * 60 * 1000);
+    start.setUTCHours(16, 0, 0, 0);
+    const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+    const localWorkDate = start.toISOString().slice(0, 10);
+
+    const op = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("serviceId", sql.UniqueIdentifier, serviceId)
+      .input("scheduledStart", sql.DateTime2, start)
+      .input("scheduledEnd", sql.DateTime2, end)
+      .query(`
+        INSERT INTO scheduled_operations (
+          company_id, service_id, operation_kind, scheduled_start, scheduled_end,
+          early_tolerance_minutes, late_tolerance_minutes, status
+        )
+        OUTPUT INSERTED.id
+        VALUES (
+          @companyId, @serviceId, N'ONE_TIME', @scheduledStart, @scheduledEnd,
+          15, 15, N'SCHEDULED'
+        )
+      `);
+    const isolatedOperationId = String(op.recordset[0].id);
+    fixtures.trackOperation(companyId, isolatedOperationId);
+
+    await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, isolatedOperationId)
+      .input("scheduledStart", sql.DateTime2, start)
+      .input("scheduledEnd", sql.DateTime2, end)
+      .query(`
+        INSERT INTO operation_workdays (
+          company_id, operation_id, work_date, expected_start_at, expected_end_at,
+          early_tolerance_minutes, late_tolerance_minutes, schedule_version, status
+        )
+        VALUES (
+          @companyId, @operationId, CAST(@scheduledStart AS DATE),
+          @scheduledStart, @scheduledEnd, 120, 120, 1, N'ACTIVE'
+        )
+      `);
+
+    const assignmentId = randomUUID();
+    assignmentIds.push(assignmentId);
+    await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, assignmentId)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, isolatedOperationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("workDate", sql.Date, localWorkDate)
+      .query(`
+        INSERT INTO operation_assignments (
+          id, company_id, operation_id, employee_id, valid_from, valid_until, confirmation_status
+        )
+        VALUES (@id, @companyId, @operationId, @employeeId, @workDate, @workDate, N'PENDING')
+      `);
+
+    const [confirmResult, unavailableResult] = await Promise.all([
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, isolatedOperationId),
+      employeeWorkdayService.markAssignmentUnavailable(
+        companyId,
+        employeeId,
+        isolatedOperationId,
+      ),
+    ]);
+
+    assert.equal(confirmResult.kind, "ok");
+    assert.equal(unavailableResult.kind, "ok");
+
+    const row = await pool
+      .request()
+      .input("id", sql.UniqueIdentifier, assignmentId)
+      .query(`SELECT confirmation_status FROM operation_assignments WHERE id = @id`);
+    const status = String(row.recordset[0].confirmation_status);
+    assert.ok(status === "CONFIRMED" || status === "UNAVAILABLE");
+
+    const expectedPattern =
+      status === "CONFIRMED" ? /confirmamos tu asistencia/i : /no estás disponible/i;
+    assert.match(confirmResult.message, expectedPattern);
+    assert.match(unavailableResult.message, expectedPattern);
+  });  it("service-level missing assignment returns not_found without mutating", async () => {
+    const missingOp = randomUUID();
+    const result = await employeeWorkdayService.confirmAssignment(
+      companyId,
+      employeeId,
+      missingOp,
+    );
+    assert.equal(result.kind, "not_found");
+  });
+
+  it("Twilio outbox monotonic matrix matches pickProjectedProviderStatus", async () => {
+    const { getPool } = await import("../database/connection");
+    const pool = getPool();
+    const cases: Array<[string | null, string]> = [
+      ["sent", "delivered"],
+      ["delivered", "sent"],
+      ["delivered", "read"],
+      ["read", "delivered"],
+      ["delivered", "failed"],
+      ["failed", "read"],
+      ["undelivered", "sent"],
+    ];
+
+    for (const [current, incoming] of cases) {
+      const expected = pickProjectedProviderStatus(
+        current,
+        incoming,
+        WHATSAPP_PROVIDER_STATUS_RANK,
+      );
+      const notificationId = randomUUID();
+      const assignmentId = await insertPendingAssignment();
+      const sid = `SMm${randomUUID().replace(/-/g, "").slice(0, 26)}`;
+
+      await pool
+        .request()
+        .input("id", sql.UniqueIdentifier, notificationId)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("assignmentId", sql.UniqueIdentifier, assignmentId)
+        .input("operationId", sql.UniqueIdentifier, operationId)
+        .input("employeeId", sql.UniqueIdentifier, employeeId)
+        .input("sid", sql.NVarChar(100), sid)
+        .input("current", sql.NVarChar(40), current)
+        .query(`
+          INSERT INTO whatsapp_operation_assignment_notifications (
+            id, company_id, operation_assignment_id, operation_id, employee_id,
+            notification_type, status, provider_message_sid, provider_status
+          )
+          VALUES (
+            @id, @companyId, @assignmentId, @operationId, @employeeId,
+            N'EVENTUAL_OPERATION_ASSIGNED', N'PENDING', @sid, @current
+          )
+        `);
+
+      try {
+        await whatsappFlowTraceService.projectOutboxProviderStatusByMessageSid({
+          providerMessageSid: sid,
+          providerStatus: incoming,
+        });
+        const after = await pool
+          .request()
+          .input("id", sql.UniqueIdentifier, notificationId)
+          .query(`
+            SELECT provider_status
+            FROM whatsapp_operation_assignment_notifications
+            WHERE id = @id
+          `);
+        assert.equal(
+          String(after.recordset[0].provider_status),
+          expected,
+          `${current} + ${incoming} => ${expected}`,
+        );
+      } finally {
+        await pool
+          .request()
+          .input("id", sql.UniqueIdentifier, notificationId)
+          .query(`DELETE FROM whatsapp_operation_assignment_notifications WHERE id = @id`);
+      }
     }
   });
 });

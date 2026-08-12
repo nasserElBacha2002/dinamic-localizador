@@ -111,15 +111,33 @@ const createReadyJob = async (input: {
         input.prepared.entityType,
         input.idempotencyKey,
       );
-      if (existing) {
-        logImportEvent("import.job.idempotent_create_race", {
-          importJobId: existing.id,
-          entityType: input.entityType,
-          companyId: input.companyId,
-          status: existing.status,
-        });
-        return existing;
+      if (!existing) {
+        throw error;
       }
+
+      const sameLogicalJob =
+        existing.companyId === input.companyId &&
+        existing.entityType === input.prepared.entityType &&
+        existing.idempotencyKey === input.idempotencyKey &&
+        existing.fileHash === input.prepared.fileHash &&
+        existing.strategyVersion === input.prepared.strategyVersion &&
+        (existing.userId ?? null) === (input.userId ?? null);
+
+      if (!sameLogicalJob) {
+        throw new AppError(
+          409,
+          "IDEMPOTENCY_KEY_CONFLICT",
+          "La clave de idempotencia ya fue usada con otro archivo o contexto de importación.",
+        );
+      }
+
+      logImportEvent("import.job.idempotent_create_race", {
+        importJobId: existing.id,
+        entityType: input.entityType,
+        companyId: input.companyId,
+        status: existing.status,
+      });
+      return existing;
     }
     throw error;
   }

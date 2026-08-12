@@ -39,7 +39,8 @@
     "audit:framework": "python3 scripts/audit/run_framework_audit.py --run-type full --print-summary",
     "audit:framework:strict": "python3 scripts/audit/run_framework_audit.py --run-type full --fail-on-gate --fail-on-error --regression-only --print-summary",
     "test:audit-framework": "python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py'"
-  },  "devDependencies": {
-    "concurrently": "^9.2.1"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.4"
   }
 }

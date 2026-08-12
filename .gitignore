@@ -64,14 +64,9 @@ audit/phase3-concurrency-idempotency-status.txt
 audit/implementation-corrections-diff.txt
 audit/implementation-corrections-diffstat.txt
 audit/implementation-corrections-status.txt
-*.zip
-audit/implementation-corrections-diff.txt
-audit/implementation-corrections-diffstat.txt
-audit/implementation-corrections-status.txt
 audit/latest-diff.txt
 audit/latest-diffstat.txt
 audit/latest-status.txt
-audit/Archivo.zip
 *.zip
 
 # Keep directory placeholders

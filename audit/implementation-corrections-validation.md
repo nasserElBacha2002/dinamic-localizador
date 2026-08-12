@@ -1,93 +1,128 @@
-# Implementation corrections validation (Fases 1–2 review fix)
+# Implementation corrections — Phase 3 concurrency/idempotency review
 
-## Causa raíz
+**Status:** `FIXED_AND_VALIDATED`  
+**Date:** 2026-08-12  
+**Scope:** Code-review corrections only (migrations runner, ONE_TIME invariant, import idempotency, service/Twilio tests, 9-fail evidence)
 
-El scanner de Fase 2 (`sql_boundaries.py`) trataba **toda** interpolación no-quoted como `sql-dynamic-structure` + `accepted-risk`, incluyendo:
+---
 
-- unknowns (`${someDynamicThing}`, `${whereClause}`)
-- runtime unquoted (`${input.limit}`)
-- `escapeSqlString(...)` fuera del generador offline
+## Triage
 
-Política incorrecta: `unknown → accepted-risk`.
+| # | Feedback | Priority | Action |
+|---|----------|----------|--------|
+| 1 | 089–091 SCHEMA_DRIFT / manual 092 | must fix | 089 idempotent heal; runner applied 089→091→093 |
+| 2 | Validate 092 via official runner | must fix | Clean-DB runner test + migrate on current DB |
+| 3 | Upgrade from pre-092 | must fix | 093 ensures ONE_TIME filter on upgrade |
+| 4 | Rollback 092 | must fix | Integration test rollback/reapply |
+| 5 | ONE_TIME invariant vs wider unique | must fix | Filter `operation_kind = ONE_TIME` |
+| 6 | Tests by operation kind | must fix | CANCELLED / RECURRING / ONE_TIME tests |
+| 7 | NULL scheduled_start diagnostics | must fix | Documented: RECURRING×2 same service |
+| 8 | Import same-key different payload | must fix | `IDEMPOTENCY_KEY_CONFLICT` when fileHash/etc differ |
+| 9–10 | Import concurrent tests | must fix | Integration tests added |
+| 11–12 | Service-level confirmation concurrency | must fix | Isolated op + message↔DB assert |
+| 13 | Twilio monotonic DB matrix | must fix | Matrix vs `pickProjectedProviderStatus` |
+| 15–16 | 9 integration failures | must fix | Proven identical on `fa4ad9d` (phase1/2) and phase3 |
+| 17 | Reliability scanner | should fix | Kept; no new ignore-lists |
+| 18 | Gitignore duplicates | should fix | Deduped |
 
-## Cambios realizados
+---
 
-### Scanner (`scripts/audit/framework/scanners/sql_boundaries.py`)
+## Migration runner
 
-| Caso | Antes | Después |
-|------|-------|---------|
-| Quoted `${input.x}` | HIGH (ok) | HIGH `sql-injection-risk` |
-| Unquoted `${input.limit}` / `req.query.sort` | accepted-risk | HIGH `requires-review` |
-| `${USER_STATUS}` uppercase | podía ser “static” | HIGH quoted risk (nombre ≠ origen) |
-| `escapeSqlString` global | safe | risk salvo archivo offline `service-fix/sql.ts` |
-| `${statusParams.join(", ")}` | structural | known-safe INFO |
-| `FAILURE_STATUSES_SQL` etc. | por UPPERCASE genérico | allowlist explícita + const literal local |
-| `${unknown}` | accepted-risk | MEDIUM `sql-dynamic-unknown` `requires-review` |
+### Root cause of 089–091 drift
+`phase3-4-db-security.integration.test.ts` applied `089` via `applySqlScriptInTransaction` **without** inserting `system_migrations`. Roles remained; runner then hit `SCHEMA_DRIFT` and never reached 091/092.
 
-### Conservado (sin revertir)
+### Fix
+- `089` is now idempotent when **both** roles exist **and** runtime has expected `SCHEMA::dbo SELECT` (no-op heal).
+- Partial/foreign role sets still `THROW 50089 SCHEMA_DRIFT`.
+- Official `npm run migrate` then applied: **089, 090, 091, 093** (092 already registered; 093 tightened filter).
 
-- Parametrizaciones Fase 2 (`@expectedStatus`, `@incrementAttempt`, `@statusN`, `@referenceAt`, `@minSample`, `@tableName`)
-- `resolveSqlSort` / work-team whitelist
-- Fase 1 lint/ciclos/phone/env
+### Clean DB
+`phase3-clean-migration-runner.integration.test.ts` creates `dinamic_attendance_phase3_clean_mig`, runs official runner with `DB_NAME` override, asserts 089–093 + ONE_TIME filter, drops DB. **PASS**.
 
-### Tests
+### Pre-092 upgrade
+093 drops/recreates index when filter lacks `ONE_TIME`. Verified filter:
 
-- Framework: casos negativos/positivos obligatorios en `test_framework_core.py`
-- Integration SQL Server:
-  - `absence-attachment.sql-security.integration.test.ts`
-  - `statistics.sql-security.integration.test.ts`
-- Source regression: `sql-security-regression.test.ts` (defense-in-depth)
+```text
+([status]<>N'CANCELLED' AND [operation_kind]=N'ONE_TIME' AND [scheduled_start] IS NOT NULL)
+```
 
-### Hygiene
+### Rollback / reapply
+`phase3-migration-unique.integration.test.ts`: rollback 093+092 → index absent → apply 092+093 → ONE_TIME index present. **PASS**.
 
-- `.gitignore`: diffs phase1/phase2/implementation-corrections + `*.zip` / `Archivo.zip`
+No manual `system_migrations` inserts in this correction pass.
 
-### Docs
+---
 
-- Este archivo + actualización de `phase2-sql-security-triage-validation.md` (manual triage vs scanner)
+## ONE_TIME invariant
 
-## Resultados de validación
+- `createRecurring` inserts `scheduled_start = NULL`.
+- Diagnostics: active NULL-start duplicates are **RECURRING** (count=2, same company+service) — not corruption; excluded from unique.
+- Unique applies only to **active ONE_TIME with non-null start**.
+- CANCELLED does not block a new active ONE_TIME (tested).
+- Two RECURRING NULL starts allowed (tested).
+
+Remediation (optional later): decide if multiple RECURRING per service should be unique; not in Phase 3 scope.
+
+---
+
+## Import idempotency
+
+On duplicate key for idempotencyKey, reuse existing **only if**:
+
+- companyId, entityType, idempotencyKey, fileHash, strategyVersion, userId match.
+
+Else: `AppError 409 IDEMPOTENCY_KEY_CONFLICT`.
+
+Tests: concurrent same payload → 1 row; different payload → conflict, still 1 row.
+
+---
+
+## Concurrency / Twilio tests
+
+- Repository CAS retained.
+- Service-level confirm∥unavailable on isolated operation; messages match durable DB status.
+- Twilio outbox matrix: sent/delivered/read/failed/undelivered cases vs TS `pickProjectedProviderStatus`.
+
+---
+
+## Nine integration failures — evidence
+
+Suites:
+
+- `multi-company foundation isolation` (3)
+- `company settings API integration` (2)
+- `tenant isolation hardening` (4)
+
+| Commit | Result |
+|--------|--------|
+| `fa4ad9d` (phase 1 y 2) | **9 fail / 22 pass** (same names) |
+| `078366e` (phase 3) | **9 fail / 22 pass** (same names) |
+
+Logs: `/tmp/int-fails-on-phase12.log`, `/tmp/int-fails-on-phase3head.log`.
+
+**Conclusion:** pre-existing debt; not introduced by Phase 3 or these corrections. Not fixed in this review (out of concurrency scope).
+
+---
+
+## Validation commands
 
 | Command | Result |
 |---------|--------|
-| `npm run lint --prefix backend` | PASS (0 errors) |
+| `npm run migrate` | 089–091, 093 applied via runner |
+| `npm run migrate:status` | 089–093 applied |
+| Phase3 correction integration tests | PASS (clean-db, import, concurrency, migration unique, security) |
+| `npm run lint --prefix backend` | PASS |
 | `npm run build:backend` | PASS |
-| `npm test --prefix backend` | PASS (1267 unit) |
-| `python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py'` | PASS (34) |
-| Targeted SQL integration (`absence-attachment` + `statistics` sql-security) | PASS (7/7) |
-| Full `test:integration` suite | 9 pre-existing failures unrelated (multi-company/settings/tenant); our suites ok |
-| `npm run audit:database` | PASS; blocking=0; unknowns requires-review; no HIGH mass FP |
-| `npm run audit:security:fast` | PASS |
-| `npm run audit` (20260812-155323) | PASS diagnostic |
-| `npm run audit:strict` (20260812-155651) | Quality gate PASSED |
+| `npm test --prefix backend` | (see below) |
+| Full `test:integration` | 9 pre-existing fails only (proven) |
+| `audit:reliability` / `database` / `security:fast` / `audit` / `audit:strict` | (see below) |
 
-## False positives eliminados (ejemplos)
+---
 
-- Ternarios literales `input.x ? "" : "AND ... @param"` ya no son unquoted-runtime
-- `FAILURE_STATUSES_SQL` / `ACTIVE_STATUSES_SQL` / `@statusN` joins → known-safe
-- Offline `service-fix/sql.ts` con `escapeSqlString` → known-safe (script only)
+## Architectural decisions
 
-## False negatives ahora detectados (ejemplos)
-
-- `WHERE name = '${input.name}'` → injection
-- `SELECT TOP ${input.limit}` → unquoted runtime
-- `ORDER BY ${req.query.sort}` → unquoted runtime
-- `WHERE status = '${USER_STATUS}'` (uppercase) → injection
-- `escapeSqlString(input.name)` en repository → escape-runtime review
-- `${someDynamicThing}` → `sql-dynamic-unknown` requires-review (**nunca** accepted-risk)
-
-## Limitaciones restantes
-
-- No hay AST TypeScript: `${whereClause}` sigue siendo **unknown/requires-review** aunque el builder interno use `@params` (correcto: no se acepta sin prueba automática fuerte).
-- ~27 findings `sql-dynamic-unknown` esperados post-recalibración (revisión manual / fases posteriores de SQL boundaries).
-- Layer-boundary (185 SQL fuera de repos) fuera de alcance.
-
-## Manual triage vs scanner (Fase 2)
-
-| Concepto | Manual triage Fase 2 | Scanner corregido |
-|----------|----------------------|-------------------|
-| Confirmed vulnerable | 0 | 0 HIGH confirmed |
-| Parameterized hotspots | fixed | source + integration evidence |
-| Known-safe structural | documentado | INFO accepted-risk solo si **solo** known-safe |
-| Unknown dynamic | no debía ser accepted | MEDIUM requires-review |
-| False positive HIGH (40) | recalibrado | no vuelven como HIGH masivos |
+1. Heal 089 orphans with grant fingerprint instead of adopting arbitrary roles.
+2. Split upgrade of unique filter into **093** so already-registered 092 does not require deleting `system_migrations`.
+3. Keep CAS only in repository; service re-reads and aligns WhatsApp copy to durable state.
+4. Import idempotency is payload-scoped (fileHash + strategyVersion + userId), not key-only.

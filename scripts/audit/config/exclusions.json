@@ -1,0 +1,8 @@
+{
+  "exclusions": [],
+  "_schema": {
+    "required": ["reason"],
+    "optional": ["id", "rule", "file", "owner", "expires", "status"],
+    "notes": "expires is ISO date (YYYY-MM-DD). Expired exclusions are not applied."
+  }
+}

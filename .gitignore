@@ -31,13 +31,30 @@ review/
 # Audit generated artifacts (keep structure, ignore volatile run snapshots)
 audit/raw/runs/
 audit/raw/_meta/
+audit/raw/partial/
 audit/raw/*.txt
 audit/raw/*.json
 audit/raw/*.md
 audit/audit-summary.md
 audit/audit-status.json
 audit/audit-diff.md
+audit/audit-report.json
+audit/audit-report.md
+audit/findings.json
+audit/findings.md
+audit/findings.prev.json
+audit/current-run.json
 audit/baseline/audit-status.baseline.json
+audit/baseline/findings.baseline.json
+audit/audit-improvements-diff.txt
+audit/audit-improvements-diffstat.txt
+audit/audit-improvements-status.txt
+audit/audit-framework-corrections-diff.txt
+audit/audit-framework-corrections-diffstat.txt
+audit/audit-framework-corrections-status.txt
+audit/latest-diff.txt
+audit/latest-diffstat.txt
+audit/latest-status.txt
 
 # Keep directory placeholders
 !audit/raw/.gitkeep
@@ -58,3 +75,5 @@ secrets/*
 !secrets/gcp-service-account.json.example
 backend/secrets/
 !backend/secrets/.gitkeep
+__pycache__/
+*.py[cod]

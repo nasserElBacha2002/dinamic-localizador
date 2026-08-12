@@ -19,10 +19,27 @@
     "audit:strict": "AUDIT_STRICT=1 bash scripts/audit/run_full_audit.sh && python3 scripts/audit/enforce_quality_gate.py --strict",
     "audit:summary": "python3 scripts/audit/generate_audit_summary.py",
     "audit:baseline": "python3 scripts/audit/save_baseline.py",
+    "audit:security": "bash scripts/audit/run_security_audit.sh",
     "audit:security:fast": "bash scripts/audit/run_security_audit.sh",
-    "audit:security:deep": "bash scripts/audit/run_security_audit_deep.sh"
-  },
-  "devDependencies": {
+    "audit:security:deep": "bash scripts/audit/run_security_audit_deep.sh",
+    "audit:architecture": "python3 scripts/audit/run_framework_audit.py --only architecture --run-type partial --print-summary",
+    "audit:complexity": "python3 scripts/audit/run_framework_audit.py --only complexity --run-type partial --print-summary",
+    "audit:god-classes": "python3 scripts/audit/run_framework_audit.py --only god-classes --run-type partial --print-summary",
+    "audit:solid": "python3 scripts/audit/run_framework_audit.py --only solid --run-type partial --print-summary",
+    "audit:grasp": "python3 scripts/audit/run_framework_audit.py --only grasp --run-type partial --print-summary",
+    "audit:patches": "python3 scripts/audit/run_framework_audit.py --only patches --run-type partial --print-summary",
+    "audit:database": "python3 scripts/audit/run_framework_audit.py --only sql --run-type partial --print-summary",
+    "audit:tenant": "python3 scripts/audit/audit_tenant_isolation.py",
+    "audit:reliability": "python3 scripts/audit/run_framework_audit.py --only reliability --run-type partial --print-summary",
+    "audit:env": "python3 scripts/audit/run_framework_audit.py --only env-consistency --run-type partial --print-summary",
+    "audit:dead-code": "python3 scripts/audit/run_framework_audit.py --only env-consistency --run-type partial --print-summary",
+    "audit:duplication": "bash scripts/audit/run_backend_architecture_audit.sh",
+    "audit:tests": "npm test",
+    "audit:hotspots": "python3 scripts/audit/run_framework_audit.py --run-type full --print-summary",
+    "audit:framework": "python3 scripts/audit/run_framework_audit.py --run-type full --print-summary",
+    "audit:framework:strict": "python3 scripts/audit/run_framework_audit.py --run-type full --fail-on-gate --fail-on-error --regression-only --print-summary",
+    "test:audit-framework": "python3 -m unittest discover -s scripts/audit/framework/tests -p 'test_*.py'"
+  },  "devDependencies": {
     "concurrently": "^9.2.1"
   }
 }

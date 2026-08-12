@@ -9,7 +9,10 @@ describe("attendance checkout identity", () => {
       join(process.cwd(), "src/repositories/attendance.repository.ts"),
       "utf8",
     );
-    const botSource = readFileSync(join(process.cwd(), "src/services/whatsapp-bot.service.ts"), "utf8");
+    const checkoutFlowSource = readFileSync(
+      join(process.cwd(), "src/services/bot/checkout-attendance.flow.ts"),
+      "utf8",
+    );
     const availabilitySource = readFileSync(
       join(process.cwd(), "src/repositories/employee-workday-availability.repository.ts"),
       "utf8",
@@ -19,7 +22,7 @@ describe("attendance checkout identity", () => {
     assert.match(repositorySource, /employee_workday_id = @employeeWorkdayId/);
     assert.match(availabilitySource, /listCheckoutCandidates/);
     assert.match(availabilitySource, /ar\.employee_workday_id IS NOT NULL/);
-    assert.match(botSource, /revalidateCheckoutCandidateByAttendanceId/);
-    assert.match(botSource, /employeeWorkdayId/);
+    assert.match(checkoutFlowSource, /revalidateCheckoutCandidateByAttendanceId/);
+    assert.match(checkoutFlowSource, /employeeWorkdayId/);
   });
 });

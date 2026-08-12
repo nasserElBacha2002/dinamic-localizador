@@ -1,0 +1,12 @@
+ audit/phase2-sql-security-triage-validation.md     | 195 +++++++++++++++++++++
+ .../repositories/absence-attachment.repository.ts  |  36 +++-
+ .../src/repositories/payroll-receipt.repository.ts |   5 +-
+ backend/src/repositories/statistics.repository.ts  |  20 +--
+ backend/src/repositories/work-team.repository.ts   |  25 +--
+ backend/src/utils/service-fix/db-services.ts       |   9 +-
+ backend/src/utils/service-fix/sql.ts               |   5 +
+ backend/src/utils/sql-security-regression.test.ts  |  52 ++++++
+ backend/src/utils/sql-sort.ts                      |   2 +-
+ scripts/audit/framework/scanners/sql_boundaries.py | 148 ++++++++++++++--
+ .../audit/framework/tests/test_framework_core.py   |  26 +++
+ 11 files changed, 479 insertions(+), 44 deletions(-)

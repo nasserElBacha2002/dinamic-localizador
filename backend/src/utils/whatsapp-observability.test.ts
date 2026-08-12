@@ -6,6 +6,7 @@ import {
   createCorrelationId,
   hashPhoneForObservability,
   maskPhoneForObservability,
+  monotonicProviderStatusAdvanceSql,
   pickProjectedProviderStatus,
   sanitizeObservabilityPayload,
   truncateJson,
@@ -82,5 +83,12 @@ describe("whatsapp-observability utils", () => {
       pickProjectedProviderStatus("failed", "read", WHATSAPP_PROVIDER_STATUS_RANK),
       "failed",
     );
+  });
+
+  it("builds monotonic advance SQL that compares ranks and protects failures", () => {
+    const sql = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
+    assert.match(sql, /provider_status IS NULL/i);
+    assert.match(sql, /N'failed'/i);
+    assert.match(sql, /WHEN N'delivered' THEN 50/i);
   });
 });

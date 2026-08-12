@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -97,7 +97,7 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
     fixtures.trackEmployee(companyId, confirmedId);
     fixtures.trackEmployee(companyId, unavailableId);
 
-    const assignmentPending = await operationAssignmentService.assignEmployee(
+    await operationAssignmentService.assignEmployee(
       companyId,
       operationId,
       pendingId,

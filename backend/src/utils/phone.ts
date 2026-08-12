@@ -30,13 +30,12 @@ export const tryNormalizeWhatsAppPhone = (from: string): string | null => {
 
 /** Masks phone numbers for structured logs (e.g. +54911******11). */
 export const maskPhoneNumberForLog = (phoneNumber: string): string => {
-  let normalized = phoneNumber.trim();
-  try {
-    normalized = normalizeWhatsAppPhone(
-      normalized.startsWith("whatsapp:") ? normalized : `whatsapp:${normalized}`,
-    );
-  } catch {
-  }
+  const trimmed = phoneNumber.trim();
+  const withWhatsAppPrefix = /^whatsapp:/i.test(trimmed)
+    ? trimmed
+    : `whatsapp:${trimmed}`;
+  // Fallible parse: invalid input still masks the raw trimmed value (no PII logging).
+  const normalized = tryNormalizeWhatsAppPhone(withWhatsAppPrefix) ?? trimmed;
 
   if (normalized.length <= 8) {
     return "***";

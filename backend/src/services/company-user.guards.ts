@@ -29,9 +29,6 @@ export const assertSelfAdministrativeMutationAllowed = (
   }
 };
 
-/** @deprecated Alias — prefer assertSelfAdministrativeMutationAllowed */
-export const assertSelfEditNotAllowed = assertSelfAdministrativeMutationAllowed;
-
 /**
  * Actor must be strictly superior to the target membership role.
  * Platform admins bypass company-role hierarchy.

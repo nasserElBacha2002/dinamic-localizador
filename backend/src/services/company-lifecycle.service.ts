@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { env } from "../config/env";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
+import { companyLifecycleRepository } from "../repositories/company-lifecycle.repository";
 import { companyRepository } from "../repositories/company.repository";
 import { auditService } from "./audit.service";
 import { logAuditSafe } from "../utils/audit-post-commit";
@@ -11,7 +12,6 @@ import {
   LeaseLostError,
   companyDeletionPurgeService,
 } from "./company-deletion-purge.service";
-import { ACTIVE_BOT_SESSION_STATES_SQL } from "../utils/bot-session-states";
 
 export type Clock = () => Date;
 
@@ -92,46 +92,14 @@ const insertLifecycleEvent = async (
     detailsJson?: string | null;
   },
 ): Promise<void> => {
-  await new sql.Request(transaction)
-    .input("companyId", sql.UniqueIdentifier, input.companyId)
-    .input("eventType", sql.NVarChar(60), input.eventType)
-    .input("previousStatus", sql.NVarChar(30), input.previousStatus)
-    .input("newStatus", sql.NVarChar(30), input.newStatus)
-    .input("actorUserId", sql.UniqueIdentifier, input.actorUserId)
-    .input("reason", sql.NVarChar(500), input.reason)
-    .input("correlationId", sql.NVarChar(100), input.correlationId)
-    .input("detailsJson", sql.NVarChar(sql.MAX), input.detailsJson ?? null)
-    .query(`
-      INSERT INTO company_lifecycle_events (
-        company_id, event_type, previous_status, new_status,
-        actor_user_id, reason, correlation_id, details_json
-      )
-      VALUES (
-        @companyId, @eventType, @previousStatus, @newStatus,
-        @actorUserId, @reason, @correlationId, @detailsJson
-      )
-    `);
+  await companyLifecycleRepository.insertEvent(transaction, input);
 };
 
 const revokeCompanyAccessInTransaction = async (
   transaction: sql.Transaction,
   companyId: string,
 ): Promise<void> => {
-  // bot_simulation_sessions has no `state` column (admin sim history only).
-  // Live access is revoked via bot_sessions + pending invitations.
-  await new sql.Request(transaction)
-    .input("companyId", sql.UniqueIdentifier, companyId)
-    .query(`
-      UPDATE bot_sessions
-      SET state = N'EXPIRED', updated_at = SYSUTCDATETIME()
-      WHERE company_id = @companyId
-        AND state IN ${ACTIVE_BOT_SESSION_STATES_SQL};
-
-      UPDATE user_invitations
-      SET status = N'REVOKED', updated_at = SYSUTCDATETIME()
-      WHERE company_id = @companyId
-        AND status = N'PENDING';
-    `);
+  await companyLifecycleRepository.revokeAccessInTransaction(transaction, companyId);
 };
 
 export const companyLifecycleService = {
@@ -176,16 +144,7 @@ export const companyLifecycleService = {
     let updated: Company | null;
     try {
       // Serialize last-active invariant across concurrent deactivations.
-      const lock = await new sql.Request(transaction).query(`
-        DECLARE @result INT;
-        EXEC @result = sp_getapplock
-          @Resource = N'company-lifecycle-deactivate',
-          @LockMode = N'Exclusive',
-          @LockOwner = N'Transaction',
-          @LockTimeout = 15000;
-        SELECT @result AS lockResult;
-      `);
-      const lockResult = Number(lock.recordset[0]?.lockResult ?? -999);
+      const lockResult = await companyLifecycleRepository.acquireDeactivateAppLock(transaction);
       if (lockResult < 0) {
         throw new AppError(
           409,

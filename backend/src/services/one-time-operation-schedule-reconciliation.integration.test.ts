@@ -14,7 +14,7 @@ import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { toDateOnlyString } from "../utils/row-mappers";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
-import { oneTimeOperationScheduleReconciliationService } from "./one-time-operation-schedule-reconciliation.service";
+import { oneTimeScheduleRepairService } from "./one-time-operation-schedule-reconciliation.service";
 import { workdayMaterializationService } from "./workday-materialization.service";
 
 const uniquePhone = (suffix: number): string =>
@@ -267,7 +267,7 @@ describeDatabaseIntegration("ONE_TIME schedule reconciliation integration", () =
       `);
     assert.equal(Number(workdayCount.recordset[0].total), 1);
 
-    const dryRun = await oneTimeOperationScheduleReconciliationService.repairFromCurrentSchedule(
+    const dryRun = await oneTimeScheduleRepairService.repairFromCurrentSchedule(
       companyId,
       operationId,
       { apply: false },

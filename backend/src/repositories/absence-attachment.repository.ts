@@ -8,7 +8,10 @@ import type {
   AbsenceAttachmentStatus,
   AbsenceRequestAttachment,
 } from "../types/absence-attachment";
-import { ABSENCE_ATTACHMENT_STORAGE_PROVIDER } from "../types/absence-attachment";
+import {
+  ABSENCE_ATTACHMENT_STATUSES,
+  ABSENCE_ATTACHMENT_STORAGE_PROVIDER,
+} from "../types/absence-attachment";
 import { absenceRequestDraftRepository } from "./absence-request-draft.repository";
 
 /** Placeholder until streaming upload finalizes real SHA-256. */
@@ -574,6 +577,8 @@ export const absenceAttachmentRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, attachmentId)
       .input("status", sql.NVarChar(30), status)
+      .input("expectedStatus", sql.NVarChar(30), current.status)
+      .input("incrementAttempt", sql.Int, extra?.incrementAttempt ? 1 : 0)
       .input("lastError", sql.NVarChar(1000), extra?.lastError?.slice(0, 1000) ?? null)
       .input("deletedByUserId", sql.UniqueIdentifier, extra?.deletedByUserId ?? null)
       .input("deletionReason", sql.NVarChar(500), extra?.deletionReason ?? null)
@@ -584,12 +589,12 @@ export const absenceAttachmentRepository = {
             deleted_by_user_id = COALESCE(@deletedByUserId, deleted_by_user_id),
             deletion_reason = COALESCE(@deletionReason, deletion_reason),
             deleted_at = CASE WHEN @status = N'DELETED' THEN SYSUTCDATETIME() ELSE deleted_at END,
-            attempt_count = attempt_count + ${extra?.incrementAttempt ? 1 : 0},
+            attempt_count = attempt_count + @incrementAttempt,
             lease_owner = NULL,
             lease_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
-        WHERE id = @id AND company_id = @companyId AND status = N'${current.status}'
+        WHERE id = @id AND company_id = @companyId AND status = @expectedStatus
       `);
     if (!result.recordset[0]) {
       return null;
@@ -746,15 +751,32 @@ export const absenceAttachmentRepository = {
     olderThanMinutes: number,
     limit: number,
   ): Promise<AbsenceRequestAttachment[]> {
+    if (statuses.length === 0) {
+      return [];
+    }
+    const allowed = new Set<string>(ABSENCE_ATTACHMENT_STATUSES);
+    for (const status of statuses) {
+      if (!allowed.has(status)) {
+        throw new Error(`Invalid absence attachment status for SQL filter: ${status}`);
+      }
+    }
+
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("olderThanMinutes", sql.Int, olderThanMinutes)
-      .input("limit", sql.Int, limit)
-      .query(`
+      .input("limit", sql.Int, limit);
+
+    const statusParams = statuses.map((status, index) => {
+      const name = `status${index}`;
+      request.input(name, sql.NVarChar(30), status);
+      return `@${name}`;
+    });
+
+    const result = await request.query(`
         SELECT TOP (@limit) *
         FROM absence_request_attachments
-        WHERE status IN (${statuses.map((s) => `N'${s}'`).join(", ")})
+        WHERE status IN (${statusParams.join(", ")})
           AND updated_at < DATEADD(MINUTE, -@olderThanMinutes, SYSUTCDATETIME())
           AND attempt_count < 10
           AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
@@ -763,5 +785,36 @@ export const absenceAttachmentRepository = {
     return result.recordset.map((row) =>
       mapAbsenceAttachmentRow(row as Record<string, unknown>),
     );
+  },
+
+  async linkDraftAttachmentsToRequest(input: {
+    companyId: string;
+    draftId: string;
+    requestId: string;
+    transaction?: sql.Transaction;
+  }): Promise<number> {
+    const request = input.transaction
+      ? new sql.Request(input.transaction)
+      : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("draftId", sql.UniqueIdentifier, input.draftId)
+      .input("requestId", sql.UniqueIdentifier, input.requestId)
+      .query(`
+        UPDATE absence_request_attachments
+        SET absence_request_id = @requestId,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND draft_id = @draftId
+          AND EXISTS (
+            SELECT 1
+            FROM absence_request_drafts d
+            WHERE d.id = @draftId
+              AND d.company_id = @companyId
+              AND d.status = N'SUBMITTED'
+              AND d.submitted_request_id = @requestId
+          )
+      `);
+    return Number(result.rowsAffected[0] ?? 0);
   },
 };

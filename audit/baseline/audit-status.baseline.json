@@ -1,0 +1,650 @@
+{
+  "generated_at": "2026-08-12T20:10:51Z",
+  "mode": "diagnostic",
+  "audit_version": "3.0",
+  "overall_status": "ok",
+  "max_severity": "info",
+  "blocking_status": "pass",
+  "blocking_count": 0,
+  "accepted_exceptions": [
+    {
+      "category": "allowed_operational_sql",
+      "count": 2326,
+      "description": "SQL in scripts, migrations, and store utilities",
+      "severity": "info"
+    },
+    {
+      "category": "repository_sql",
+      "count": 739,
+      "description": "SQL inside repository layer (expected)",
+      "severity": "info"
+    }
+  ],
+  "non_blocking_findings": [
+    {
+      "check": "backend-architecture",
+      "severity": "medium",
+      "failure_type": "architecture_issue",
+      "message": "SQL outside repositories: 92 occurrence(s) to review"
+    }
+  ],
+  "areas": {
+    "frontend": {
+      "status": "ok",
+      "max_severity": "info",
+      "checks": [
+        {
+          "check": "frontend-build",
+          "status": "pass",
+          "severity": "none",
+          "message": "Completed successfully",
+          "evidence_file": "audit/raw/frontend-build.txt",
+          "failure_type": "unknown",
+          "root_cause": "Completed successfully",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-eslint",
+          "status": "pass",
+          "severity": "none",
+          "message": "Completed successfully",
+          "evidence_file": "audit/raw/frontend-eslint.txt",
+          "failure_type": "unknown",
+          "root_cause": "Completed successfully",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-heuristics",
+          "status": "pass",
+          "severity": "info",
+          "message": "Heuristic frontend audits generated",
+          "evidence_file": null,
+          "failure_type": "unknown",
+          "root_cause": "Heuristic frontend audits generated",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-npm-audit",
+          "status": "pass",
+          "severity": "none",
+          "message": "npm audit exit 0",
+          "evidence_file": "audit/raw/frontend-npm-audit.json",
+          "failure_type": "unknown",
+          "root_cause": "npm audit exit 0",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-test",
+          "status": "pass",
+          "severity": "none",
+          "message": "Completed successfully",
+          "evidence_file": "audit/raw/frontend-test.txt",
+          "failure_type": "unknown",
+          "root_cause": "Completed successfully",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-typecheck",
+          "status": "pass",
+          "severity": "none",
+          "message": "tsc --noEmit passed",
+          "evidence_file": "audit/raw/frontend-typecheck.txt",
+          "failure_type": "unknown",
+          "root_cause": "tsc --noEmit passed",
+          "action_hint": "No action required.",
+          "blocking": false
+        }
+      ]
+    },
+    "backend": {
+      "status": "ok",
+      "max_severity": "none",
+      "checks": [
+        {
+          "check": "backend-build",
+          "status": "pass",
+          "severity": "none",
+          "message": "Completed successfully",
+          "evidence_file": "audit/raw/backend-build.txt",
+          "failure_type": "unknown",
+          "root_cause": "Completed successfully",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-eslint",
+          "status": "pass",
+          "severity": "none",
+          "message": "Completed successfully",
+          "evidence_file": "audit/raw/backend-eslint.txt",
+          "failure_type": "unknown",
+          "root_cause": "Completed successfully",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-npm-audit",
+          "status": "pass",
+          "severity": "none",
+          "message": "npm audit exit 0",
+          "evidence_file": "audit/raw/backend-npm-audit.json",
+          "failure_type": "unknown",
+          "root_cause": "npm audit exit 0",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-test",
+          "status": "pass",
+          "severity": "none",
+          "message": "Completed successfully",
+          "evidence_file": "audit/raw/backend-test.txt",
+          "failure_type": "unknown",
+          "root_cause": "Completed successfully",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-typecheck",
+          "status": "pass",
+          "severity": "none",
+          "message": "tsc --noEmit passed",
+          "evidence_file": "audit/raw/backend-typecheck.txt",
+          "failure_type": "unknown",
+          "root_cause": "tsc --noEmit passed",
+          "action_hint": "No action required.",
+          "blocking": false
+        }
+      ]
+    },
+    "frontend_architecture": {
+      "status": "ok",
+      "max_severity": "info",
+      "checks": [
+        {
+          "check": "frontend-architecture",
+          "status": "pass",
+          "severity": "info",
+          "message": "Frontend architecture audit generated",
+          "evidence_file": null,
+          "failure_type": "unknown",
+          "root_cause": "Frontend architecture audit generated",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-circular-imports",
+          "status": "pass",
+          "severity": "none",
+          "message": "Tool completed",
+          "evidence_file": "audit/raw/frontend-import-boundaries.txt",
+          "failure_type": "unknown",
+          "root_cause": "Tool completed",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-dead-code",
+          "status": "pass",
+          "severity": "none",
+          "message": "Tool completed",
+          "evidence_file": "audit/raw/frontend-dead-code.txt",
+          "failure_type": "unknown",
+          "root_cause": "Tool completed",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "frontend-duplication",
+          "status": "pass",
+          "severity": "none",
+          "message": "Tool completed",
+          "evidence_file": "audit/raw/frontend-duplication.txt",
+          "failure_type": "unknown",
+          "root_cause": "Tool completed",
+          "action_hint": "No action required.",
+          "blocking": false
+        }
+      ]
+    },
+    "backend_architecture": {
+      "status": "ok",
+      "max_severity": "info",
+      "checks": [
+        {
+          "check": "backend-architecture",
+          "status": "pass",
+          "severity": "info",
+          "message": "Backend architecture audit generated",
+          "evidence_file": "audit/raw/backend-architecture-audit.md",
+          "failure_type": "unknown",
+          "root_cause": "Backend architecture audit generated",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-circular-imports",
+          "status": "pass",
+          "severity": "none",
+          "message": "Tool completed",
+          "evidence_file": "audit/raw/backend-import-boundaries.txt",
+          "failure_type": "unknown",
+          "root_cause": "Tool completed",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-dead-code",
+          "status": "pass",
+          "severity": "none",
+          "message": "Tool completed",
+          "evidence_file": "audit/raw/backend-dead-code.txt",
+          "failure_type": "unknown",
+          "root_cause": "Tool completed",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "backend-duplication",
+          "status": "pass",
+          "severity": "none",
+          "message": "Tool completed",
+          "evidence_file": "audit/raw/backend-duplication.txt",
+          "failure_type": "unknown",
+          "root_cause": "Tool completed",
+          "action_hint": "No action required.",
+          "blocking": false
+        }
+      ]
+    },
+    "security": {
+      "status": "ok",
+      "max_severity": "info",
+      "checks": [
+        {
+          "check": "security-audit",
+          "status": "pass",
+          "severity": "info",
+          "message": "Security audit artifacts generated",
+          "evidence_file": "audit/raw/security-docker-audit.md",
+          "evidence_files": [
+            "audit/raw/security-docker-audit.md",
+            "audit/raw/security-env-audit.md",
+            "audit/raw/security-npm-audit.txt",
+            "audit/raw/security-secrets-audit.md"
+          ],
+          "failure_type": "unknown",
+          "root_cause": "Security audit artifacts generated",
+          "action_hint": "Review all security evidence files for configuration and exposure risks.",
+          "blocking": false
+        },
+        {
+          "check": "security-env",
+          "status": "pass",
+          "severity": "info",
+          "message": "Environment variables documented",
+          "evidence_file": "audit/raw/security-env-audit.md",
+          "failure_type": "unknown",
+          "root_cause": "Environment variables documented",
+          "action_hint": "No action required.",
+          "blocking": false
+        },
+        {
+          "check": "security-secrets",
+          "status": "pass",
+          "severity": "none",
+          "message": "No hardcoded secrets found",
+          "evidence_file": "audit/raw/security-secrets-audit.md",
+          "failure_type": "unknown",
+          "root_cause": "No hardcoded secrets found",
+          "action_hint": "No action required.",
+          "blocking": false
+        }
+      ]
+    },
+    "domain_rules": {
+      "status": "ok",
+      "max_severity": "info",
+      "checks": [
+        {
+          "check": "backend-domain-rules",
+          "status": "pass",
+          "severity": "info",
+          "message": "Domain rules heuristic audit generated",
+          "evidence_file": "audit/raw/backend-domain-rules-audit.md",
+          "failure_type": "unknown",
+          "root_cause": "Domain rules heuristic audit generated",
+          "action_hint": "No action required.",
+          "blocking": false
+        }
+      ]
+    }
+  },
+  "checks": [
+    {
+      "check": "backend-architecture",
+      "status": "pass",
+      "severity": "info",
+      "message": "Backend architecture audit generated",
+      "evidence_file": "audit/raw/backend-architecture-audit.md",
+      "failure_type": "unknown",
+      "root_cause": "Backend architecture audit generated",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-build",
+      "status": "pass",
+      "severity": "none",
+      "message": "Completed successfully",
+      "evidence_file": "audit/raw/backend-build.txt",
+      "failure_type": "unknown",
+      "root_cause": "Completed successfully",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-circular-imports",
+      "status": "pass",
+      "severity": "none",
+      "message": "Tool completed",
+      "evidence_file": "audit/raw/backend-import-boundaries.txt",
+      "failure_type": "unknown",
+      "root_cause": "Tool completed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-dead-code",
+      "status": "pass",
+      "severity": "none",
+      "message": "Tool completed",
+      "evidence_file": "audit/raw/backend-dead-code.txt",
+      "failure_type": "unknown",
+      "root_cause": "Tool completed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-domain-rules",
+      "status": "pass",
+      "severity": "info",
+      "message": "Domain rules heuristic audit generated",
+      "evidence_file": "audit/raw/backend-domain-rules-audit.md",
+      "failure_type": "unknown",
+      "root_cause": "Domain rules heuristic audit generated",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-duplication",
+      "status": "pass",
+      "severity": "none",
+      "message": "Tool completed",
+      "evidence_file": "audit/raw/backend-duplication.txt",
+      "failure_type": "unknown",
+      "root_cause": "Tool completed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-eslint",
+      "status": "pass",
+      "severity": "none",
+      "message": "Completed successfully",
+      "evidence_file": "audit/raw/backend-eslint.txt",
+      "failure_type": "unknown",
+      "root_cause": "Completed successfully",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-npm-audit",
+      "status": "pass",
+      "severity": "none",
+      "message": "npm audit exit 0",
+      "evidence_file": "audit/raw/backend-npm-audit.json",
+      "failure_type": "unknown",
+      "root_cause": "npm audit exit 0",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-test",
+      "status": "pass",
+      "severity": "none",
+      "message": "Completed successfully",
+      "evidence_file": "audit/raw/backend-test.txt",
+      "failure_type": "unknown",
+      "root_cause": "Completed successfully",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "backend-typecheck",
+      "status": "pass",
+      "severity": "none",
+      "message": "tsc --noEmit passed",
+      "evidence_file": "audit/raw/backend-typecheck.txt",
+      "failure_type": "unknown",
+      "root_cause": "tsc --noEmit passed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "framework-deep-audit",
+      "status": "pass",
+      "severity": "info",
+      "message": "Framework findings=188 blocking=0",
+      "blocking": false,
+      "failure_type": "unknown",
+      "root_cause": "Framework findings=188 blocking=0",
+      "run_id": "20260812-200743",
+      "evidence_file": null,
+      "action_hint": "No action required."
+    },
+    {
+      "check": "frontend-architecture",
+      "status": "pass",
+      "severity": "info",
+      "message": "Frontend architecture audit generated",
+      "evidence_file": null,
+      "failure_type": "unknown",
+      "root_cause": "Frontend architecture audit generated",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-build",
+      "status": "pass",
+      "severity": "none",
+      "message": "Completed successfully",
+      "evidence_file": "audit/raw/frontend-build.txt",
+      "failure_type": "unknown",
+      "root_cause": "Completed successfully",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-circular-imports",
+      "status": "pass",
+      "severity": "none",
+      "message": "Tool completed",
+      "evidence_file": "audit/raw/frontend-import-boundaries.txt",
+      "failure_type": "unknown",
+      "root_cause": "Tool completed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-dead-code",
+      "status": "pass",
+      "severity": "none",
+      "message": "Tool completed",
+      "evidence_file": "audit/raw/frontend-dead-code.txt",
+      "failure_type": "unknown",
+      "root_cause": "Tool completed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-duplication",
+      "status": "pass",
+      "severity": "none",
+      "message": "Tool completed",
+      "evidence_file": "audit/raw/frontend-duplication.txt",
+      "failure_type": "unknown",
+      "root_cause": "Tool completed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-eslint",
+      "status": "pass",
+      "severity": "none",
+      "message": "Completed successfully",
+      "evidence_file": "audit/raw/frontend-eslint.txt",
+      "failure_type": "unknown",
+      "root_cause": "Completed successfully",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-heuristics",
+      "status": "pass",
+      "severity": "info",
+      "message": "Heuristic frontend audits generated",
+      "evidence_file": null,
+      "failure_type": "unknown",
+      "root_cause": "Heuristic frontend audits generated",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-npm-audit",
+      "status": "pass",
+      "severity": "none",
+      "message": "npm audit exit 0",
+      "evidence_file": "audit/raw/frontend-npm-audit.json",
+      "failure_type": "unknown",
+      "root_cause": "npm audit exit 0",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-test",
+      "status": "pass",
+      "severity": "none",
+      "message": "Completed successfully",
+      "evidence_file": "audit/raw/frontend-test.txt",
+      "failure_type": "unknown",
+      "root_cause": "Completed successfully",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "frontend-typecheck",
+      "status": "pass",
+      "severity": "none",
+      "message": "tsc --noEmit passed",
+      "evidence_file": "audit/raw/frontend-typecheck.txt",
+      "failure_type": "unknown",
+      "root_cause": "tsc --noEmit passed",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "security-audit",
+      "status": "pass",
+      "severity": "info",
+      "message": "Security audit artifacts generated",
+      "evidence_file": "audit/raw/security-docker-audit.md",
+      "evidence_files": [
+        "audit/raw/security-docker-audit.md",
+        "audit/raw/security-env-audit.md",
+        "audit/raw/security-npm-audit.txt",
+        "audit/raw/security-secrets-audit.md"
+      ],
+      "failure_type": "unknown",
+      "root_cause": "Security audit artifacts generated",
+      "action_hint": "Review all security evidence files for configuration and exposure risks.",
+      "blocking": false
+    },
+    {
+      "check": "security-env",
+      "status": "pass",
+      "severity": "info",
+      "message": "Environment variables documented",
+      "evidence_file": "audit/raw/security-env-audit.md",
+      "failure_type": "unknown",
+      "root_cause": "Environment variables documented",
+      "action_hint": "No action required.",
+      "blocking": false
+    },
+    {
+      "check": "security-secrets",
+      "status": "pass",
+      "severity": "none",
+      "message": "No hardcoded secrets found",
+      "evidence_file": "audit/raw/security-secrets-audit.md",
+      "failure_type": "unknown",
+      "root_cause": "No hardcoded secrets found",
+      "action_hint": "No action required.",
+      "blocking": false
+    }
+  ],
+  "artifacts": [
+    "audit/raw/backend-architecture-audit.md",
+    "audit/raw/backend-build.txt",
+    "audit/raw/backend-code-smells.txt",
+    "audit/raw/backend-complexity.txt",
+    "audit/raw/backend-dead-code.txt",
+    "audit/raw/backend-domain-rules-audit.md",
+    "audit/raw/backend-duplication.txt",
+    "audit/raw/backend-eslint.txt",
+    "audit/raw/backend-import-boundaries.txt",
+    "audit/raw/backend-npm-audit.json",
+    "audit/raw/backend-sql-analysis.json",
+    "audit/raw/backend-test.txt",
+    "audit/raw/backend-typecheck.txt",
+    "audit/raw/framework-findings.json",
+    "audit/raw/frontend-build.txt",
+    "audit/raw/frontend-code-smells.txt",
+    "audit/raw/frontend-complexity.txt",
+    "audit/raw/frontend-dead-code.txt",
+    "audit/raw/frontend-duplication.txt",
+    "audit/raw/frontend-error-handling-audit.md",
+    "audit/raw/frontend-eslint.txt",
+    "audit/raw/frontend-import-boundaries.txt",
+    "audit/raw/frontend-npm-audit.json",
+    "audit/raw/frontend-reusable-components-audit.md",
+    "audit/raw/frontend-solid-react-audit.md",
+    "audit/raw/frontend-test.txt",
+    "audit/raw/frontend-typecheck.txt",
+    "audit/raw/frontend-useeffects-audit.md",
+    "audit/raw/partial/architecture-findings.json",
+    "audit/raw/partial/architecture-report.md",
+    "audit/raw/partial/complexity-findings.json",
+    "audit/raw/partial/complexity-report.md",
+    "audit/raw/partial/god-classes-findings.json",
+    "audit/raw/partial/god-classes-report.md",
+    "audit/raw/partial/grasp-findings.json",
+    "audit/raw/partial/grasp-report.md",
+    "audit/raw/partial/reliability-findings.json",
+    "audit/raw/partial/reliability-report.md",
+    "audit/raw/partial/solid-findings.json",
+    "audit/raw/partial/solid-report.md",
+    "audit/raw/partial/sql-findings.json",
+    "audit/raw/partial/sql-report.md",
+    "audit/raw/security-docker-audit.md",
+    "audit/raw/security-env-audit.md",
+    "audit/raw/security-npm-audit.txt",
+    "audit/raw/security-secrets-audit.md"
+  ],
+  "baseline_comparison": null
+}

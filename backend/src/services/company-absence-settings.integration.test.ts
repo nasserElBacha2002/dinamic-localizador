@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -33,9 +33,9 @@ describeDatabaseIntegration("company absence settings integration", () => {
   let dinamicCompanyId = "";
   let ownerUserId = "";
   let ownerUserEmail = "";
-  let createdCompanyIds: string[] = [];
-  let createdEmployeeIds: string[] = [];
-  let createdUserIds: string[] = [];
+  const createdCompanyIds: string[] = [];
+  const createdEmployeeIds: string[] = [];
+  const createdUserIds: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();

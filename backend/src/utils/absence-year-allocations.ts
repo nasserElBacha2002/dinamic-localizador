@@ -1,6 +1,7 @@
-import type { AbsenceDayBreakdownItem } from "./absence-duration";
+import type { AbsenceDayBreakdownItem } from "./absence-day-breakdown.types";
 import { splitAbsenceQuantityByYear } from "./absence-balance-year-split";
 
+export type { AbsenceDayBreakdownItem };
 export type YearAllocation = {
   year: number;
   quantity: number;

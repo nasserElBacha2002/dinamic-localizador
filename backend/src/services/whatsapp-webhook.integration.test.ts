@@ -35,28 +35,6 @@ const attendanceA = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
 const phone = "+5491111111111";
 const botNumber = "whatsapp:+10000000000";
 
-const compatibleOperation = (id: string, serviceName = "Servicio Centro") => ({
-  id,
-  serviceName,
-  scheduledStart: "2026-07-05T15:00:00.000Z",
-  scheduledEnd: "2026-07-05T21:00:00.000Z",
-  serviceLatitude: -34.6,
-  serviceLongitude: -58.4,
-  allowedRadiusMeters: 150,
-  earlyToleranceMinutes: 15,
-  lateToleranceMinutes: 30,
-});
-
-const checkoutEligibleOperation = (id: string, serviceName = "Servicio Centro") => ({
-  id,
-  serviceName,
-  scheduledStart: "2026-07-05T15:00:00.000Z",
-  scheduledEnd: "2026-07-05T21:00:00.000Z",
-  serviceLatitude: -34.6,
-  serviceLongitude: -58.4,
-  allowedRadiusMeters: 150,
-});
-
 const checkInWorkdayCandidate = (
   operationId: string,
   employeeWorkdayId: string,

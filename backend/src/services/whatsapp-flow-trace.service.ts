@@ -1,4 +1,3 @@
-import sql from "mssql";
 import { env } from "../config/env";
 import {
   WHATSAPP_PROVIDER_STATUS_RANK,
@@ -7,7 +6,9 @@ import {
   type WhatsappFlowStepStatus,
   type WhatsappFlowStepType,
 } from "../constants/whatsapp-observability";
-import { getPool } from "../database/connection";
+import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
+import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
+import { payrollReceiptNotificationRepository } from "../repositories/payroll-receipt-notification.repository";
 import { whatsappConversationRepository } from "../repositories/whatsapp-conversation.repository";
 import { whatsappFlowExecutionRepository } from "../repositories/whatsapp-flow-execution.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
@@ -322,6 +323,7 @@ export const whatsappFlowTraceService = {
 
   async linkMessageObservability(input: {
     messageId: string;
+    companyId?: string;
     conversationId?: string | null;
     correlationId?: string | null;
     causationId?: string | null;
@@ -337,8 +339,15 @@ export const whatsappFlowTraceService = {
       return;
     }
 
+    const message = input.companyId
+      ? await whatsappMessageRepository.findById(input.companyId, input.messageId)
+      : await whatsappMessageRepository.findByIdGlobal(input.messageId);
+    if (!message) {
+      return;
+    }
+
     await safe("linkMessageObservability", () =>
-      whatsappMessageRepository.updateObservabilityFields(input.messageId, {
+      whatsappMessageRepository.updateObservabilityFields(message.companyId, input.messageId, {
         conversationId: input.conversationId ?? null,
         correlationId: input.correlationId ?? null,
         causationId: input.causationId ?? null,
@@ -391,7 +400,11 @@ export const whatsappFlowTraceService = {
     }
     const latest = events[events.length - 1];
     if (projected && latest) {
-      await whatsappMessageRepository.updateProviderStatus(messageId, {
+      const message = await whatsappMessageRepository.findByIdGlobal(messageId);
+      if (!message) {
+        return linked;
+      }
+      await whatsappMessageRepository.updateProviderStatus(message.companyId, messageId, {
         providerStatus: projected,
         providerErrorCode: latest.errorCode,
         providerErrorMessage: latest.errorMessage,
@@ -418,74 +431,44 @@ export const whatsappFlowTraceService = {
     errorCode?: string | null;
     errorMessage?: string | null;
   }): Promise<void> {
-    const message = await whatsappMessageRepository.findById(input.messageId);
+    const message = await whatsappMessageRepository.findByIdGlobal(input.messageId);
     if (!message?.notificationId) {
       return;
     }
-    const pool = getPool();
-    const req = () =>
-      pool
-        .request()
-        .input("notificationId", sql.UniqueIdentifier, message.notificationId)
-        .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
-        .input("providerErrorCode", sql.NVarChar(40), input.errorCode ?? null)
-        .input("providerErrorMessage", sql.NVarChar(1000), input.errorMessage ?? null);
-
-    await req().query(`
-      UPDATE whatsapp_attendance_notifications
-      SET provider_status = @providerStatus,
-          provider_error_code = COALESCE(@providerErrorCode, provider_error_code),
-          provider_error_message = COALESCE(@providerErrorMessage, provider_error_message),
-          provider_updated_at = SYSUTCDATETIME()
-      WHERE id = @notificationId
-    `);
-
+    const providerStatus = input.providerStatus.toLowerCase();
+    await attendanceNotificationRepository.projectProviderStatusById({
+      notificationId: message.notificationId,
+      providerStatus,
+      errorCode: input.errorCode,
+      errorMessage: input.errorMessage,
+    });
     // Payroll + assignment outboxes: project provider delivery status only —
     // never promote to DELIVERED here. Prefer notificationId when known; always
     // also correlate by provider_message_sid so callbacks work if whatsapp_messages
     // failed to persist after Twilio accepted the send.
-    await req().query(`
-      UPDATE whatsapp_payroll_receipt_notifications
-      SET provider_status = @providerStatus,
-          updated_at = SYSUTCDATETIME()
-      WHERE id = @notificationId
-    `);
-
-    await req().query(`
-      UPDATE whatsapp_operation_assignment_notifications
-      SET provider_status = @providerStatus,
-          updated_at = SYSUTCDATETIME()
-      WHERE id = @notificationId
-    `);
+    await payrollReceiptNotificationRepository.projectProviderStatusById({
+      notificationId: message.notificationId,
+      providerStatus,
+    });
+    await operationAssignmentNotificationRepository.projectProviderStatusById({
+      notificationId: message.notificationId,
+      providerStatus,
+    });
   },
 
   async projectOutboxProviderStatusByMessageSid(input: {
     providerMessageSid: string;
     providerStatus: string;
   }): Promise<void> {
-    const pool = getPool();
-    const projected = input.providerStatus.toLowerCase();
-    await pool
-      .request()
-      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
-      .input("providerStatus", sql.NVarChar(40), projected)
-      .query(`
-        UPDATE whatsapp_payroll_receipt_notifications
-        SET provider_status = @providerStatus,
-            updated_at = SYSUTCDATETIME()
-        WHERE provider_message_sid = @providerMessageSid
-      `);
-
-    await pool
-      .request()
-      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
-      .input("providerStatus", sql.NVarChar(40), projected)
-      .query(`
-        UPDATE whatsapp_operation_assignment_notifications
-        SET provider_status = @providerStatus,
-            updated_at = SYSUTCDATETIME()
-        WHERE provider_message_sid = @providerMessageSid
-      `);
+    const providerStatus = input.providerStatus.toLowerCase();
+    await payrollReceiptNotificationRepository.projectProviderStatusByMessageSid({
+      providerMessageSid: input.providerMessageSid,
+      providerStatus,
+    });
+    await operationAssignmentNotificationRepository.projectProviderStatusByMessageSid({
+      providerMessageSid: input.providerMessageSid,
+      providerStatus,
+    });
   },
 
   async recordProviderStatus(input: {
@@ -547,7 +530,7 @@ export const whatsappFlowTraceService = {
       WHATSAPP_PROVIDER_STATUS_RANK,
     );
 
-    await whatsappMessageRepository.updateProviderStatus(message.id, {
+    await whatsappMessageRepository.updateProviderStatus(message.companyId, message.id, {
       providerStatus: projected,
       providerErrorCode: input.errorCode ?? null,
       providerErrorMessage: input.errorMessage ?? null,

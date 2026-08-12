@@ -368,9 +368,10 @@ describe("employeeWorkdayService", () => {
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
-      async (_companyId, assignmentId, status) => {
+      async (_companyId, assignmentId, status, onlyIfStatusIn) => {
         updatedStatus = status;
         assert.equal(assignmentId, "assignment-1");
+        assert.deepEqual(onlyIfStatusIn, ["UNAVAILABLE"]);
         return true;
       },
     );
@@ -397,9 +398,10 @@ describe("employeeWorkdayService", () => {
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
-      async (_companyId, assignmentId, status) => {
+      async (_companyId, assignmentId, status, onlyIfStatusIn) => {
         updatedStatus = status;
         assert.equal(assignmentId, "assignment-1");
+        assert.deepEqual(onlyIfStatusIn, ["CONFIRMED"]);
         return true;
       },
     );

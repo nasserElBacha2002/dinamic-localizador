@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -22,8 +22,8 @@ const uniqueCompanyName = (): string =>
 const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}`;
 
 describeDatabaseIntegration("employee absence balance backfill integration", () => {
-  let createdCompanyIds: string[] = [];
-  let createdEmployeeIds: string[] = [];
+  const createdCompanyIds: string[] = [];
+  const createdEmployeeIds: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();

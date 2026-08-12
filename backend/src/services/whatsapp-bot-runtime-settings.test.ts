@@ -125,7 +125,7 @@ describe("whatsapp bot runtime settings integration", () => {
 
   it("registers checkout without location in dry-run with correct message", async () => {
     setupUnitTestEnv();
-    const { whatsappBotService } = await import("./whatsapp-bot.service");
+    const { processCheckoutWithoutLocation } = await import("./bot/checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );
@@ -169,7 +169,7 @@ describe("whatsapp bot runtime settings integration", () => {
       await runWithBotRuntimeSettings(
         runtimeSettings({ requireCheckoutLocation: false }),
         async () => {
-          const twiml = await whatsappBotService.processCheckoutWithoutLocation({
+          const twiml = await processCheckoutWithoutLocation({
             companyId,
             employeeId,
             employeeWorkdayId,

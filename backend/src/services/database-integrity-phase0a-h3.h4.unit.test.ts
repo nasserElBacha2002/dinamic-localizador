@@ -108,17 +108,23 @@ describe("phase0a H4 checkout without location atomicity", () => {
     assert.ok(attendanceSource.includes("registerCheckoutInTransaction"));
     assert.ok(attendanceSource.includes("AND checkout_at IS NULL"));
 
-    const botSource = await readFile(
-      new URL("./whatsapp-bot.service.ts", import.meta.url),
+    const checkoutCommandSource = await readFile(
+      new URL("./employee-workday-checkout.command.ts", import.meta.url),
       "utf8",
     );
-    const withoutLoc = botSource.indexOf("async processCheckoutWithoutLocation");
-    assert.ok(withoutLoc > 0);
-    const nextMethod = botSource.indexOf("\n  async ", withoutLoc + 10);
-    const slice = botSource.slice(withoutLoc, nextMethod > 0 ? nextMethod : undefined);
-    const completeInTx = slice.indexOf(
-      "completeSession(companyId, input.sessionId, transaction)",
+    const withoutLoc = checkoutCommandSource.indexOf(
+      "async registerCheckoutWithoutLocation",
     );
+    assert.ok(withoutLoc >= 0);
+    const nextMethod = checkoutCommandSource.indexOf(
+      "\n  async registerCheckoutWithLocation",
+      withoutLoc + 10,
+    );
+    const slice = checkoutCommandSource.slice(
+      withoutLoc,
+      nextMethod > 0 ? nextMethod : undefined,
+    );
+    const completeInTx = slice.indexOf('state: "COMPLETED"');
     const commitIdx = slice.indexOf("await transaction.commit()");
     assert.ok(completeInTx > 0, "session completion must use transaction");
     assert.ok(commitIdx > 0, "commit must exist");
@@ -130,5 +136,15 @@ describe("phase0a H4 checkout without location atomicity", () => {
       !slice.includes("await transaction.commit();\n      await completeSessionIfNeeded()"),
       "must not complete session after commit",
     );
+
+    const flowSource = await readFile(
+      new URL("./bot/checkout-attendance.flow.ts", import.meta.url),
+      "utf8",
+    );
+    assert.ok(!flowSource.includes('from "mssql"'));
+    assert.ok(!flowSource.includes("getPool"));
+    assert.ok(!flowSource.includes("new sql.Transaction"));
+    assert.ok(!flowSource.includes("botSessionRepository"));
+    assert.ok(flowSource.includes("employeeWorkdayCheckoutCommand"));
   });
 });

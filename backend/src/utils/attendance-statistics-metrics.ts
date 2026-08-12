@@ -1,3 +1,7 @@
+import type { PeriodMetricDelta } from "../types/statistics";
+
+export type { PeriodMetricDelta };
+
 export const roundRate = (numerator: number, denominator: number): number => {
   if (denominator === 0) {
     return 0;
@@ -37,16 +41,6 @@ export const hasSufficientSample = (
   consolidatedWorkdays: number,
   minSample: number,
 ): boolean => consolidatedWorkdays >= minSample;
-
-export interface PeriodMetricDelta {
-  current: number;
-  previous: number;
-  absoluteDelta: number;
-  percentDelta: number | null;
-  currentSample: number;
-  previousSample: number;
-  comparable: boolean;
-}
 
 /** Compare rate metrics (percentages) with sample gates. */
 export const buildRateDelta = (

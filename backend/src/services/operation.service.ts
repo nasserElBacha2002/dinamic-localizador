@@ -25,6 +25,7 @@ import { recurringWorkdayMaterializationService } from "./recurring-workday-mate
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../utils/operation-status";
+import { isActiveOperationDuplicateError } from "../utils/active-operation-duplicate-errors";
 import {
   isOperationStartInPast,
   resolveLifecycleOperationStatus,
@@ -40,7 +41,7 @@ import {
 import type { OperationDetail, OperationWithService } from "../types/domain";
 import { assertCompanyWorkScheduleExists } from "../utils/recurring-schedule-consistency";
 import { detectOneTimeScheduleAffectingChanges } from "../utils/one-time-schedule-change";
-import { oneTimeOperationScheduleReconciliationService } from "./one-time-operation-schedule-reconciliation.service";
+import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";
 
 const validateOneTimeDates = (
   scheduledStart: string,
@@ -159,10 +160,21 @@ export const operationService = {
     validateOneTimeDates(input.scheduledStart, input.scheduledEnd);
     validateOperationStartNotInPast(input.scheduledStart);
 
-    return operationRepository.create(companyId, {
-      ...input,
-      ...tolerances,
-    });
+    try {
+      return await operationRepository.create(companyId, {
+        ...input,
+        ...tolerances,
+      });
+    } catch (error) {
+      if (isActiveOperationDuplicateError(error)) {
+        throw new AppError(
+          409,
+          "OPERATION_DUPLICATE",
+          "Ya existe una operación para ese servicio y fecha de inicio",
+        );
+      }
+      throw error;
+    }
   },
 
   async createRecurring(
@@ -375,7 +387,7 @@ export const operationService = {
 
     let updated: OperationRecord | null;
     let reconcileResult: Awaited<
-      ReturnType<typeof oneTimeOperationScheduleReconciliationService.reconcileInTransaction>
+      ReturnType<typeof oneTimeScheduleReconciliationCommand.reconcileInTransaction>
     > | null = null;
 
     if (scheduleFlags.scheduleAffecting) {
@@ -396,7 +408,7 @@ export const operationService = {
         }
 
         reconcileResult =
-          await oneTimeOperationScheduleReconciliationService.reconcileInTransaction(
+          await oneTimeScheduleReconciliationCommand.reconcileInTransaction(
             companyId,
             transaction,
             updated,

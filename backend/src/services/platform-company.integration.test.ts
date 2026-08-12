@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
-import sql from "mssql";
 import {
   describeDatabaseIntegration,
   setupDatabaseIntegration,
@@ -28,7 +27,7 @@ const deleteCreatedCompany = async (companyId: string): Promise<void> => {
 
 describeDatabaseIntegration("platform company creation integration", () => {
   let platformAdminId = "";
-  let createdCompanyIds: string[] = [];
+  const createdCompanyIds: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();

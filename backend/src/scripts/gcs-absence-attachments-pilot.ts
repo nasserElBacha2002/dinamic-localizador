@@ -7,7 +7,6 @@
  *     src/scripts/gcs-absence-attachments-pilot.ts
  */
 import { randomUUID } from "node:crypto";
-import { Readable } from "node:stream";
 import { env } from "../config/env";
 import { resolveGoogleApplicationCredentialsPath } from "../config/resolve-gcp-credentials";
 import {

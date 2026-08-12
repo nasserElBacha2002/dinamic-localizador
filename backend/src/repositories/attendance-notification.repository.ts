@@ -13,6 +13,7 @@ import type {
   AttendanceReminderCandidate,
 } from "../types/attendance-notification";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
+import { monotonicProviderStatusAdvanceSql } from "../utils/whatsapp-observability";
 
 const mapNotificationRow = (row: Record<string, unknown>): AttendanceNotification => ({
   id: String(row.id),
@@ -766,33 +767,6 @@ export const attendanceNotificationRepository = {
     return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  /** @deprecated Use claimNotificationForAttempt */
-  async reserveNotification(
-    companyId: string,
-    input: {
-      operationId: string;
-      employeeId: string;
-      notificationType: AttendanceNotificationType;
-    },
-  ): Promise<AttendanceNotification | null> {
-    return this.claimNotificationForAttempt(companyId, input);
-  },
-
-  /** @deprecated Replaced by reclaimNotificationForAttempt */
-  async reclaimNotification(
-    companyId: string,
-    notificationId: string,
-    attemptedAt: Date = new Date(),
-  ): Promise<AttendanceNotification | null> {
-    const { staleBefore, maxAttempts } = getRetryThresholds();
-    return this.reclaimNotificationForAttempt(companyId, {
-      notificationId,
-      attemptedAt,
-      staleBefore,
-      maxAttempts,
-    });
-  },
-
   async linkObservability(
     companyId: string,
     input: {
@@ -972,21 +946,6 @@ export const attendanceNotificationRepository = {
     return result.rowsAffected[0] ?? 0;
   },
 
-  /** @deprecated Prefer supersedePendingForOperationScheduleChange */
-  async failPendingForOperationScheduleChange(
-    companyId: string,
-    operationId: string,
-    transaction: sql.Transaction,
-    errorMessage = "OPERATION_SCHEDULE_CHANGED",
-  ): Promise<number> {
-    return this.supersedePendingForOperationScheduleChange(
-      companyId,
-      operationId,
-      transaction,
-      errorMessage,
-    );
-  },
-
   async findConfirmationReminderCandidates(
     companyId: string,
     referenceAt: Date,
@@ -1074,5 +1033,29 @@ export const attendanceNotificationRepository = {
       `);
 
     return Boolean(result.recordset[0]);
+  },
+
+  async projectProviderStatusById(input: {
+    notificationId: string;
+    providerStatus: string;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  }): Promise<void> {
+    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
+    await getPool()
+      .request()
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
+      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
+      .input("providerErrorCode", sql.NVarChar(40), input.errorCode ?? null)
+      .input("providerErrorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
+      .query(`
+        UPDATE whatsapp_attendance_notifications
+        SET provider_status = @providerStatus,
+            provider_error_code = COALESCE(@providerErrorCode, provider_error_code),
+            provider_error_message = COALESCE(@providerErrorMessage, provider_error_message),
+            provider_updated_at = SYSUTCDATETIME()
+        WHERE id = @notificationId
+          AND ${advance}
+      `);
   },
 };

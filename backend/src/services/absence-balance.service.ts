@@ -406,15 +406,12 @@ export const absenceBalanceService = {
         }
 
         if (input.notes !== undefined) {
-          await new sql.Request(transaction)
-            .input("companyId", sql.UniqueIdentifier, companyId)
-            .input("balanceId", sql.UniqueIdentifier, current.id)
-            .input("notes", sql.NVarChar(500), input.notes ?? null)
-            .query(`
-              UPDATE employee_absence_balances
-              SET notes = @notes, updated_at = SYSUTCDATETIME()
-              WHERE id = @balanceId AND company_id = @companyId
-            `);
+          await absenceBalanceRepository.updateNotesInTransaction(
+            companyId,
+            current.id,
+            input.notes ?? null,
+            transaction,
+          );
         }
 
         await transaction.commit();

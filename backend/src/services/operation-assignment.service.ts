@@ -12,7 +12,6 @@ import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { OperationEmployeeAssignment } from "../types/domain";
 import {
-  assertValidAssignmentDateRange,
   isAssignmentActiveOnWorkDate,
   resolveAssignmentLifecycleState,
 } from "../utils/assignment-period";
@@ -25,7 +24,6 @@ import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { auditService } from "./audit.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
-import { workdayMaterializationService } from "./workday-materialization.service";
 
 const withLifecycleState = (
   assignment: OperationEmployeeAssignment,

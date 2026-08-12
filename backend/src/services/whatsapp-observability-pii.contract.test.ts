@@ -10,6 +10,7 @@ describe("whatsapp observability listMessages PII contract", () => {
 
     const message: WhatsAppMessage = {
       id: "11111111-1111-1111-1111-111111111111",
+      companyId: "33333333-3333-3333-3333-333333333333",
       messageSid: "SM123",
       direction: "INBOUND",
       employeeId: null,

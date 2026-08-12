@@ -278,6 +278,7 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
 
 export const mapWhatsAppMessageRow = (row: Record<string, unknown>) => ({
   id: String(row.id),
+  companyId: String(row.company_id),
   messageSid: row.message_sid ? String(row.message_sid) : null,
   direction: String(row.direction) as import("../types/twilio.types").WhatsAppMessageDirection,
   employeeId: row.employee_id ? String(row.employee_id) : null,

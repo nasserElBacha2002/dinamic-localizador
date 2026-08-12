@@ -306,6 +306,7 @@ export const workTeamAssignmentBatchRepository = {
         SET status = N'COMPLETED', completed_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @batchId
+          AND status = N'PREVIEWED'
       `);
 
     if (!result.recordset[0]) {

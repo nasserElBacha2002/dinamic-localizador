@@ -25,6 +25,7 @@ import { recurringWorkdayMaterializationService } from "./recurring-workday-mate
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../utils/operation-status";
+import { isActiveOperationDuplicateError } from "../utils/active-operation-duplicate-errors";
 import {
   isOperationStartInPast,
   resolveLifecycleOperationStatus,
@@ -159,10 +160,21 @@ export const operationService = {
     validateOneTimeDates(input.scheduledStart, input.scheduledEnd);
     validateOperationStartNotInPast(input.scheduledStart);
 
-    return operationRepository.create(companyId, {
-      ...input,
-      ...tolerances,
-    });
+    try {
+      return await operationRepository.create(companyId, {
+        ...input,
+        ...tolerances,
+      });
+    } catch (error) {
+      if (isActiveOperationDuplicateError(error)) {
+        throw new AppError(
+          409,
+          "OPERATION_DUPLICATE",
+          "Ya existe una operación para ese servicio y fecha de inicio",
+        );
+      }
+      throw error;
+    }
   },
 
   async createRecurring(

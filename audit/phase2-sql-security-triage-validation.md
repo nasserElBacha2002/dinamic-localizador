@@ -1,15 +1,19 @@
 # Phase 2 — SQL security triage validation
 
+> **Update (implementation corrections):** el scanner ya **no** marca unknowns como `accepted-risk`.
+> Ver `audit/implementation-corrections-validation.md` para la política vigente
+> (`known-safe` → INFO; `unknown` → requires-review; runtime quoted/unquoted → security).
+
 ## Resumen
 
 ```text
 Initial SQL injection suspects: 40 (one heuristic finding per file with SQL+${})
 Confirmed vulnerable (exploitable user→SQL): 0 remaining after fixes
 Needs parameterization (fixed this phase): 5 hotspot fixes
-Whitelisted identifiers (verified): 6 patterns (ORDER BY / enums / table const)
-Static fragments / safe builders: majority of remaining interpolations
-False positives / recalibrated: 40 former HIGH → 40 info sql-dynamic-structure
-Manual review remaining (high-confidence injection): 0
+Whitelisted identifiers (verified): ORDER BY / enums / table const
+Static fragments / safe builders: allowlisted + @param joins + literal ternaries
+Unknown dynamic SQL (scanner): requires-review — NOT accepted-risk
+False positives HIGH originales: eliminados como HIGH masivos
 ```
 
 Scanner after recalibration (`audit:database` run `20260812-151612`):

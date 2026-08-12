@@ -23,32 +23,73 @@ QUOTED_INTERP_RE = re.compile(
     re.I,
 )
 
-# Expressions treated as static / controlled when quoted (closed constants).
-SAFE_QUOTED_EXPR = re.compile(
-    r"^(?:"
-    r"[A-Z][A-Z0-9_]*"  # MODULE_CONST
-    r"|escapeSqlString\([^)]*\)"
-    r"|TABLE_NAME"
-    r"|FAKE_MIGRATION_NAME|RUNTIME_TEST_USER|MIGRATION_TEST_USER|DEFAULT_OPERATION_TIMEZONE|probe"
-    r")$"
+# Offline review-script generator (apply path is parameterized separately).
+OFFLINE_SCRIPT_SQL_FILES = {
+    "backend/src/utils/service-fix/sql.ts",
+}
+
+# Closed module fragments known to be static SQL (small explicit allowlist).
+KNOWN_STATIC_SQL_FRAGMENTS = frozenset(
+    {
+        "ACTIVE_STATUSES_SQL",
+        "FAILURE_STATUSES_SQL",
+        "ABSENCE_OVERLAP_STATUS_SQL",
+        "ACTIVE_BOT_SESSION_STATES_SQL",
+        "CONSOLIDATED_SAMPLE_SQL",
+        "INCIDENT_COUNT_SQL",
+        "EFFECTIVE_STATE_SQL",
+        "WORKED_MINUTES_SQL",
+        "OVERTIME_MINUTES_SQL",
+        "ON_TIME_WORKDAY_SQL",
+        "LATE_WORKDAY_SQL",
+        "PUNCTUALITY_ELIGIBLE_SQL",
+        "EARLY_DEPARTURE_WORKDAY_SQL",
+        "OPEN_ATTENDANCE_WORKDAY_SQL",
+        "CANONICAL_PRODUCTION_ATTENDANCE_APPLY",
+        "TABLE_NAME",
+    }
 )
 
-# Structural fragments (WHERE builders, CTEs, parameterized placeholder joins, etc.).
-STRUCTURAL_EXPR = re.compile(
+# Module-level const NAME = `...` / "..." / '...' (simple literal / template).
+CONST_LITERAL_RE = re.compile(
+    r"(?:export\s+)?const\s+([A-Za-z_][\w]*)\s*=\s*(?:`(?:\\`|[^`])*`|'(?:\\'|[^'])*'|\"(?:\\\"|[^\"])*\")",
+    re.M,
+)
+# Module-level const NAME = Something.map(...).join(...) building closed SQL lists.
+CONST_MAP_JOIN_RE = re.compile(
+    r"(?:export\s+)?const\s+([A-Za-z_][\w]*)\s*=\s*[A-Za-z_][\w.]*\.map\([^)]*\)\.join\(",
+    re.M,
+)
+
+# Runtime-ish expression shapes (unquoted or quoted).
+RUNTIME_EXPR_RE = re.compile(
+    r"\b(?:input|req|request|query|params|body|headers|payload|user|ctx|context)\b"
+    r"|\.query\.|\.body\.|\.params\.|\.headers\."
+    r"|process\.env",
+    re.I,
+)
+
+# Demonstrably safe structural patterns (not name-of-variable based).
+PARAM_PLACEHOLDER_JOIN_RE = re.compile(
     r"(?:"
-    r"whereClause|whereSql|where|cte|having|aggregatedCte|filteredBaseQuery|globalBaseQuery|"
-    r"scopeSql|companyClause|companyFilter|statusFilter|simulationFilter|attendanceFilter|"
-    r"excludeClause|currentAbsenceClause|expectedClause|firstAttemptClause|activeStateGuard|"
-    r"scheduleJoin|lockHint|orderBy|sortColumn|sortDirection|fields\.join|placeholders\.join|"
-    r"idParams\.join|valueSql\.join|values\.join|batchParams\.join|statusParams\.join|"
-    r"sourceRows|selectList\.join|memberCountSelect|buildNotificationEligibilitySql|"
-    r"buildEmployeeCategoryJoin|buildEmployeeLastWorkedJoin|withLock|"
-    r"ACTIVE_[A-Z0-9_]+|ABSENCE_[A-Z0-9_]+|FAILURE_STATUSES_SQL|CONSOLIDATED_SAMPLE_SQL|"
-    r"INCIDENT_COUNT_SQL|EFFECTIVE_STATE_SQL|isJunkOperationPredicate|"
-    r"\? \"\" :| \? \"AND |\? 'AND "
+    r"\w*Params\.join\s*\(\s*[\"'],\s*[\"']\s*\)"
+    r"|placeholders\.join\s*\(\s*[\"'],\s*[\"']\s*\)"
+    r"|idParams\.join\s*\(\s*[\"'],\s*[\"']\s*\)"
+    r"|batchParams\.join\s*\(\s*[\"'],\s*[\"']\s*\)"
+    r"|statusParams\.join\s*\(\s*[\"'],\s*[\"']\s*\)"
+    r"|values\.map\([^)]*@[^)]*\)\.join"
+    r"|\.map\(\s*\([^)]*\)\s*=>\s*`@[^`]+`\s*\)\.join"
     r")",
     re.I,
 )
+
+# Ternary that only chooses between empty / static SQL string literals.
+LITERAL_TERNARY_RE = re.compile(
+    r"""^\s*[^?]+\?\s*(?:""|''|`[^`$]*`|"[^"$]*"|'[^'$]*')\s*:\s*(?:""|''|`[^`$]*`|"[^"$]*"|'[^'$]*')\s*$""",
+)
+
+FIELDS_JOIN_RE = re.compile(r"^fields\.join\s*\(\s*[\"'],\s*[\"']\s*\)$")
+VALUE_SQL_JOIN_RE = re.compile(r"^(?:valueSql|values|sourceRows)\.join\s*\(")
 
 
 def _line_number(text: str, pos: int) -> int:
@@ -79,53 +120,143 @@ def _iter_sql_templates(text: str) -> list[tuple[int, str]]:
     return templates
 
 
-def _classify_quoted_expr(expr: str) -> str:
+def _collect_local_static_const_names(text: str) -> set[str]:
+    names = {m.group(1) for m in CONST_LITERAL_RE.finditer(text)}
+    names |= {m.group(1) for m in CONST_MAP_JOIN_RE.finditer(text)}
+    return names
+
+
+def _is_known_static_name(expr: str, local_statics: set[str]) -> bool:
+    name = expr.strip()
+    if name in KNOWN_STATIC_SQL_FRAGMENTS or name in local_statics:
+        return True
+    # Allow dotted re-export of a known fragment: utils.ACTIVE_STATUSES_SQL
+    if "." in name:
+        tail = name.rsplit(".", 1)[-1]
+        if tail in KNOWN_STATIC_SQL_FRAGMENTS or tail in local_statics:
+            return True
+    return False
+
+
+def _is_param_placeholder_join(expr: str) -> bool:
+    return bool(PARAM_PLACEHOLDER_JOIN_RE.search(expr))
+
+
+def _is_literal_ternary(expr: str) -> bool:
+    return bool(LITERAL_TERNARY_RE.match(expr.strip()))
+
+
+def _is_safe_structural(expr: str, local_statics: set[str]) -> bool:
     cleaned = expr.strip()
-    if SAFE_QUOTED_EXPR.match(cleaned):
-        return "static-or-script"
-    if "escapeSqlString" in cleaned:
-        return "script-generation"
-    return "quoted-value"
+    if _is_known_static_name(cleaned, local_statics):
+        return True
+    if _is_param_placeholder_join(cleaned):
+        return True
+    if _is_literal_ternary(cleaned):
+        return True
+    if FIELDS_JOIN_RE.match(cleaned) or VALUE_SQL_JOIN_RE.match(cleaned):
+        # Dynamic SET/VALUES lists built from hardcoded "col = @param" pushes.
+        return True
+    return False
 
 
-def analyze_sql_interpolations(text: str) -> dict[str, list[dict[str, object]]]:
-    """Classify interpolations inside SQL template literals."""
+def _is_runtime_expr(expr: str) -> bool:
+    return bool(RUNTIME_EXPR_RE.search(expr))
+
+
+def _contains_escape_sql_string(expr: str) -> bool:
+    return "escapeSqlString" in expr
+
+
+def analyze_sql_interpolations(
+    text: str,
+    *,
+    file_path: str | None = None,
+) -> dict[str, list[dict[str, object]]]:
+    """Classify interpolations inside SQL template literals.
+
+    Buckets:
+    - quoted_risks: values inside quotes / LIKE '%${'
+    - unquoted_runtime_risks: runtime-shaped exprs without quotes
+    - escape_runtime_risks: escapeSqlString outside offline script files
+    - known_safe: demonstrably static / @param joins / literal ternaries
+    - unknown: everything else (must not become accepted-risk)
+    """
     quoted_risks: list[dict[str, object]] = []
-    structural: list[dict[str, object]] = []
-    other: list[dict[str, object]] = []
+    unquoted_runtime_risks: list[dict[str, object]] = []
+    escape_runtime_risks: list[dict[str, object]] = []
+    known_safe: list[dict[str, object]] = []
+    unknown: list[dict[str, object]] = []
+
+    offline_script = bool(file_path and file_path in OFFLINE_SCRIPT_SQL_FILES)
+    local_statics = _collect_local_static_const_names(text)
 
     for start, chunk in _iter_sql_templates(text):
+        quoted_spans: list[tuple[int, int]] = []
         for qm in QUOTED_INTERP_RE.finditer(chunk):
             expr = (qm.group(1) or qm.group(2) or "").strip()
-            kind = _classify_quoted_expr(expr) if expr else "quoted-value"
             entry = {
                 "line": _line_number(text, start + qm.start()),
-                "expr": expr or qm.group(0),
-                "kind": kind,
+                "expr": expr or qm.group(0)[:160],
+                "kind": "quoted-value",
             }
-            if kind == "quoted-value":
-                quoted_risks.append(entry)
-            else:
-                structural.append(entry)
+            quoted_spans.append((qm.start(), qm.end()))
+
+            if offline_script and _contains_escape_sql_string(expr):
+                entry["kind"] = "offline-script-generation"
+                known_safe.append(entry)
+                continue
+            if _contains_escape_sql_string(expr):
+                entry["kind"] = "escape-runtime"
+                escape_runtime_risks.append(entry)
+                continue
+            if _is_known_static_name(expr, local_statics):
+                entry["kind"] = "static-fragment"
+                known_safe.append(entry)
+                continue
+            # Naming (USER_STATUS) is NOT proof of safety.
+            quoted_risks.append(entry)
 
         for im in INTERP_RE.finditer(chunk):
-            expr = im.group(1).strip()
-            # Skip ones already captured as quoted.
-            abs_pos = start + im.start()
-            window = text[max(0, abs_pos - 2) : abs_pos + len(im.group(0)) + 1]
-            if QUOTED_INTERP_RE.search(window):
+            abs_in_chunk = im.start()
+            if any(s <= abs_in_chunk < e for s, e in quoted_spans):
                 continue
+            expr = im.group(1).strip()
             entry = {
-                "line": _line_number(text, abs_pos),
+                "line": _line_number(text, start + abs_in_chunk),
                 "expr": expr[:160],
-                "kind": "structural" if STRUCTURAL_EXPR.search(expr) else "other",
+                "kind": "unknown",
             }
-            if entry["kind"] == "structural":
-                structural.append(entry)
-            else:
-                other.append(entry)
 
-    return {"quoted_risks": quoted_risks, "structural": structural, "other": other}
+            if offline_script:
+                entry["kind"] = "offline-script-generation"
+                known_safe.append(entry)
+                continue
+            if _contains_escape_sql_string(expr):
+                entry["kind"] = "escape-runtime"
+                escape_runtime_risks.append(entry)
+                continue
+            # Proven-safe shapes before runtime heuristics (e.g. input.x ? "" : "AND ...").
+            if _is_safe_structural(expr, local_statics):
+                entry["kind"] = "known-safe"
+                known_safe.append(entry)
+                continue
+            if _is_runtime_expr(expr):
+                entry["kind"] = "unquoted-runtime"
+                unquoted_runtime_risks.append(entry)
+                continue
+            unknown.append(entry)
+
+    return {
+        "quoted_risks": quoted_risks,
+        "unquoted_runtime_risks": unquoted_runtime_risks,
+        "escape_runtime_risks": escape_runtime_risks,
+        "known_safe": known_safe,
+        "unknown": unknown,
+        # Back-compat aliases used by older tests
+        "structural": known_safe,
+        "other": unknown,
+    }
 
 
 def scan() -> list[AuditFinding]:
@@ -162,10 +293,12 @@ def scan() -> list[AuditFinding]:
                 )
             )
 
-        analysis = analyze_sql_interpolations(text)
+        analysis = analyze_sql_interpolations(text, file_path=rel)
         quoted_risks = analysis["quoted_risks"]
-        structural = analysis["structural"]
-        other = analysis["other"]
+        unquoted_runtime = analysis["unquoted_runtime_risks"]
+        escape_runtime = analysis["escape_runtime_risks"]
+        known_safe = analysis["known_safe"]
+        unknown = analysis["unknown"]
 
         if quoted_risks:
             findings.append(
@@ -179,7 +312,7 @@ def scan() -> list[AuditFinding]:
                     title="Quoted value interpolation in SQL template",
                     description=(
                         "SQL template interpolates values inside string quotes (or LIKE '%${...}'). "
-                        "Prefer request.input() / @parameters. Review each occurrence."
+                        "Prefer request.input() / @parameters."
                     ),
                     file=rel,
                     evidence={
@@ -187,12 +320,90 @@ def scan() -> list[AuditFinding]:
                         "count": len(quoted_risks),
                         "samples": quoted_risks[:8],
                     },
-                    recommendation="Bind runtime values with .input(); keep only closed enum constants or script generators with explicit review.",
+                    recommendation="Bind runtime values with .input(); do not interpolate request/body data.",
                     blocking=False,
                 )
             )
-        elif structural or other:
-            # Structural dynamic SQL (WHERE builders, ORDER BY whitelist fragments, @param joins).
+
+        if unquoted_runtime:
+            findings.append(
+                AuditFinding(
+                    id=stable_id("sql-unquoted", rel),
+                    category="security",
+                    subcategory="sql-injection-risk",
+                    severity="high",
+                    confidence="medium",
+                    status="requires-review",
+                    title="Unquoted runtime interpolation in SQL template",
+                    description=(
+                        "SQL template interpolates a runtime-shaped expression without quotes "
+                        "(e.g. TOP/OFFSET/WHERE id = ${input...}). Treat as injection risk until parameterized."
+                    ),
+                    file=rel,
+                    evidence={
+                        "pattern": "unquoted-runtime-interpolation",
+                        "count": len(unquoted_runtime),
+                        "samples": unquoted_runtime[:8],
+                    },
+                    recommendation="Use @parameters via request.input(); never interpolate input/req/query values.",
+                    blocking=False,
+                )
+            )
+
+        if escape_runtime:
+            findings.append(
+                AuditFinding(
+                    id=stable_id("sql-escape", rel),
+                    category="security",
+                    subcategory="sql-injection-risk",
+                    severity="medium",
+                    confidence="high",
+                    status="requires-review",
+                    title="Manual SQL escaping used instead of bind parameters",
+                    description=(
+                        "escapeSqlString(...) (or equivalent) appears in a SQL template outside the "
+                        "offline service-fix script generator. Runtime queries must use bind parameters."
+                    ),
+                    file=rel,
+                    evidence={
+                        "pattern": "escape-sql-string-runtime",
+                        "count": len(escape_runtime),
+                        "samples": escape_runtime[:8],
+                    },
+                    recommendation="Replace escaping with parameterized .input() binds for executable queries.",
+                    blocking=False,
+                )
+            )
+
+        if unknown:
+            findings.append(
+                AuditFinding(
+                    id=stable_id("sql-unknown", rel),
+                    category="security",
+                    subcategory="sql-dynamic-unknown",
+                    severity="medium",
+                    confidence="medium",
+                    status="requires-review",
+                    title="Unknown dynamic SQL interpolation",
+                    description=(
+                        "SQL template interpolates ${...} that is not a proven static fragment, "
+                        "@parameter placeholder list, or literal-only ternary. Manual review required."
+                    ),
+                    file=rel,
+                    evidence={
+                        "pattern": "unknown-dynamic-sql",
+                        "count": len(unknown),
+                        "samples": unknown[:8],
+                    },
+                    recommendation=(
+                        "Prove the fragment is a closed constant / whitelist result / parameterized builder, "
+                        "or bind values. Do not accept unknown interpolations as safe by naming."
+                    ),
+                    blocking=False,
+                )
+            )
+
+        if known_safe and not (quoted_risks or unquoted_runtime or escape_runtime or unknown):
             findings.append(
                 AuditFinding(
                     id=stable_id("sql-struct", rel),
@@ -201,20 +412,44 @@ def scan() -> list[AuditFinding]:
                     severity="info",
                     confidence="medium",
                     status="accepted-risk",
-                    title="Structural SQL template interpolation",
+                    title="Demonstrably safe structural SQL interpolation",
                     description=(
-                        "Template combines SQL with ${...} fragments that look structural "
-                        "(filters, CTEs, parameterized placeholder lists, constants). "
-                        "Not classified as injection risk; keep values parameterized inside builders."
+                        "SQL template interpolations are limited to known-static fragments, "
+                        "@parameter placeholder joins, literal-only ternaries, or the offline "
+                        "service-fix SQL script generator."
                     ),
                     file=rel,
                     evidence={
-                        "pattern": "structural-sql-interpolation",
-                        "structural_count": len(structural),
-                        "other_count": len(other),
-                        "samples": (structural + other)[:8],
+                        "pattern": "known-safe-sql-interpolation",
+                        "count": len(known_safe),
+                        "samples": known_safe[:8],
                     },
                     recommendation="Keep identifiers on closed whitelists; never interpolate request/body values.",
+                    blocking=False,
+                )
+            )
+        elif known_safe:
+            # Mixed file: still record known-safe for inventory, without accepting unknowns.
+            findings.append(
+                AuditFinding(
+                    id=stable_id("sql-struct", rel),
+                    category="sql",
+                    subcategory="sql-dynamic-structure",
+                    severity="info",
+                    confidence="low",
+                    status="detected",
+                    title="Some known-safe SQL interpolations present",
+                    description=(
+                        "File also contains review/risk interpolations; known-safe samples are listed "
+                        "for triage only and do not clear unknown/runtime findings."
+                    ),
+                    file=rel,
+                    evidence={
+                        "pattern": "known-safe-sql-interpolation-partial",
+                        "count": len(known_safe),
+                        "samples": known_safe[:8],
+                    },
+                    recommendation="Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
                     blocking=False,
                 )
             )

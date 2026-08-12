@@ -18,6 +18,12 @@ const asString = (value: unknown): string | null => {
   return null;
 };
 
+/**
+ * Inbound WhatsApp webhook handler.
+ * X-Twilio-Signature is validated by `createValidateTwilioSignature` middleware
+ * before this controller runs; MessageSid idempotency is enforced in
+ * `whatsappWebhookEventRepository.claimInboundMessage`.
+ */
 export const twilioWebhookController = {
   async handleWhatsApp(req: Request, res: Response): Promise<void> {
     const parsed = twilioWebhookSchema.safeParse(req.body);

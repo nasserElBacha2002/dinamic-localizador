@@ -2,6 +2,7 @@ import { AppError } from "../errors/app-error";
 import { importJobRepository } from "../repositories/import-job.repository";
 import { auditService } from "../services/audit.service";
 import { logAuditSafe } from "../utils/audit-post-commit";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { IMPORT_JOB_TTL_MINUTES } from "./constants";
 import { assertPreparedCanPersist } from "./create-only-executor";
 import { decodeImportBase64 } from "./parse-import-file";
@@ -59,48 +60,69 @@ const createReadyJob = async (input: {
   idempotencyKey: string | null;
 }) => {
   const confirmationToken = createConfirmationToken();
-  const job = await importJobRepository.create({
-    companyId: input.companyId,
-    userId: input.userId,
-    entityType: input.prepared.entityType,
-    strategyVersion: input.prepared.strategyVersion,
-    fileName: input.prepared.fileName,
-    fileHash: input.prepared.fileHash,
-    confirmationToken,
-    idempotencyKey: input.idempotencyKey,
-    status: "READY",
-    totalRows: input.prepared.rows.length,
-    prepared: input.prepared,
-    expiresAt: jobExpiresAt(),
-  });
-
-  await logAuditSafe("import.job.ready", () =>
-    auditService.log(input.companyId, {
-      entityType: "import_job",
-      entityId: job.id,
-      action: "import.preview",
-      newData: {
-        entityType: input.entityType,
-        importJobId: job.id,
-        strategyVersion: input.prepared.strategyVersion,
-        totalRows: input.prepared.rows.length,
-        validRows: input.prepared.summary.validRows,
-        invalidRows: input.prepared.summary.invalidRows,
-      },
-      reason: "generic_import",
+  try {
+    const job = await importJobRepository.create({
+      companyId: input.companyId,
       userId: input.userId,
-    }),
-  );
+      entityType: input.prepared.entityType,
+      strategyVersion: input.prepared.strategyVersion,
+      fileName: input.prepared.fileName,
+      fileHash: input.prepared.fileHash,
+      confirmationToken,
+      idempotencyKey: input.idempotencyKey,
+      status: "READY",
+      totalRows: input.prepared.rows.length,
+      prepared: input.prepared,
+      expiresAt: jobExpiresAt(),
+    });
 
-  logImportEvent("import.job.ready", {
-    importJobId: job.id,
-    entityType: input.entityType,
-    companyId: input.companyId,
-    totalRows: input.prepared.rows.length,
-    strategyVersion: input.prepared.strategyVersion,
-  });
+    await logAuditSafe("import.job.ready", () =>
+      auditService.log(input.companyId, {
+        entityType: "import_job",
+        entityId: job.id,
+        action: "import.preview",
+        newData: {
+          entityType: input.entityType,
+          importJobId: job.id,
+          strategyVersion: input.prepared.strategyVersion,
+          totalRows: input.prepared.rows.length,
+          validRows: input.prepared.summary.validRows,
+          invalidRows: input.prepared.summary.invalidRows,
+        },
+        reason: "generic_import",
+        userId: input.userId,
+      }),
+    );
 
-  return job;
+    logImportEvent("import.job.ready", {
+      importJobId: job.id,
+      entityType: input.entityType,
+      companyId: input.companyId,
+      totalRows: input.prepared.rows.length,
+      strategyVersion: input.prepared.strategyVersion,
+    });
+
+    return job;
+  } catch (error) {
+    // UQ_import_jobs_company_idempotency: concurrent preview/execute with same key.
+    if (isDuplicateKeyError(error) && input.idempotencyKey) {
+      const existing = await importJobRepository.findByIdempotencyKey(
+        input.companyId,
+        input.prepared.entityType,
+        input.idempotencyKey,
+      );
+      if (existing) {
+        logImportEvent("import.job.idempotent_create_race", {
+          importJobId: existing.id,
+          entityType: input.entityType,
+          companyId: input.companyId,
+          status: existing.status,
+        });
+        return existing;
+      }
+    }
+    throw error;
+  }
 };
 
 export const importOrchestrator = {

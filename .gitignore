@@ -52,9 +52,27 @@ audit/audit-improvements-status.txt
 audit/audit-framework-corrections-diff.txt
 audit/audit-framework-corrections-diffstat.txt
 audit/audit-framework-corrections-status.txt
+audit/phase1-quality-gate-cleanup-diff.txt
+audit/phase1-quality-gate-cleanup-diffstat.txt
+audit/phase1-quality-gate-cleanup-status.txt
+audit/phase2-sql-security-triage-diff.txt
+audit/phase2-sql-security-triage-diffstat.txt
+audit/phase2-sql-security-triage-status.txt
+audit/phase3-concurrency-idempotency-diff.txt
+audit/phase3-concurrency-idempotency-diffstat.txt
+audit/phase3-concurrency-idempotency-status.txt
+audit/implementation-corrections-diff.txt
+audit/implementation-corrections-diffstat.txt
+audit/implementation-corrections-status.txt
+*.zip
+audit/implementation-corrections-diff.txt
+audit/implementation-corrections-diffstat.txt
+audit/implementation-corrections-status.txt
 audit/latest-diff.txt
 audit/latest-diffstat.txt
 audit/latest-status.txt
+audit/Archivo.zip
+*.zip
 
 # Keep directory placeholders
 !audit/raw/.gitkeep

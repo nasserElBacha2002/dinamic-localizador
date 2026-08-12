@@ -18,6 +18,7 @@ import {
   createCorrelationId,
   hashPhoneForObservability,
   maskPhoneForObservability,
+  monotonicProviderStatusAdvanceSql,
   pickProjectedProviderStatus,
   sanitizeObservabilityPayload,
   truncateJson,
@@ -431,6 +432,8 @@ export const whatsappFlowTraceService = {
         .input("providerErrorCode", sql.NVarChar(40), input.errorCode ?? null)
         .input("providerErrorMessage", sql.NVarChar(1000), input.errorMessage ?? null);
 
+    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
+
     await req().query(`
       UPDATE whatsapp_attendance_notifications
       SET provider_status = @providerStatus,
@@ -438,6 +441,7 @@ export const whatsappFlowTraceService = {
           provider_error_message = COALESCE(@providerErrorMessage, provider_error_message),
           provider_updated_at = SYSUTCDATETIME()
       WHERE id = @notificationId
+        AND ${advance}
     `);
 
     // Payroll + assignment outboxes: project provider delivery status only —
@@ -449,6 +453,7 @@ export const whatsappFlowTraceService = {
       SET provider_status = @providerStatus,
           updated_at = SYSUTCDATETIME()
       WHERE id = @notificationId
+        AND ${advance}
     `);
 
     await req().query(`
@@ -456,6 +461,7 @@ export const whatsappFlowTraceService = {
       SET provider_status = @providerStatus,
           updated_at = SYSUTCDATETIME()
       WHERE id = @notificationId
+        AND ${advance}
     `);
   },
 
@@ -465,6 +471,7 @@ export const whatsappFlowTraceService = {
   }): Promise<void> {
     const pool = getPool();
     const projected = input.providerStatus.toLowerCase();
+    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
     await pool
       .request()
       .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
@@ -474,6 +481,7 @@ export const whatsappFlowTraceService = {
         SET provider_status = @providerStatus,
             updated_at = SYSUTCDATETIME()
         WHERE provider_message_sid = @providerMessageSid
+          AND ${advance}
       `);
 
     await pool
@@ -485,6 +493,7 @@ export const whatsappFlowTraceService = {
         SET provider_status = @providerStatus,
             updated_at = SYSUTCDATETIME()
         WHERE provider_message_sid = @providerMessageSid
+          AND ${advance}
       `);
   },
 

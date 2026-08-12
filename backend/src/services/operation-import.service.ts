@@ -20,6 +20,7 @@ import type {
 import { mapImportHeaders } from "../utils/operation-import-headers";
 import { createOperationImportDateTimeUtils } from "../utils/operation-import-datetime";
 import { isOperationStartInPast } from "../utils/operation-lifecycle";
+import { isActiveOperationDuplicateError } from "../utils/active-operation-duplicate-errors";
 import {
   detectSpreadsheetFileType,
   isLikelyBinaryUpload,
@@ -588,6 +589,13 @@ export const operationImportService = {
       return { data: created, count: created.length };
     } catch (error) {
       await transaction.rollback();
+      if (isActiveOperationDuplicateError(error)) {
+        throw new AppError(
+          409,
+          "OPERATION_DUPLICATE",
+          "Ya existe una operación para ese servicio y fecha de inicio",
+        );
+      }
       throw error;
     }
   },

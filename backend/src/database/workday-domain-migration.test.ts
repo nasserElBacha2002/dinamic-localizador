@@ -20,7 +20,7 @@ describe("workday domain migration 039", () => {
 
   it("uses canonical timezone fallback instead of UTC", () => {
     assert.match(migration, /N'America\/Argentina\/Buenos_Aires'/);
-    assert.doesNotMatch(migration, /COALESCE\([^\)]*N'UTC'\)/);
+    assert.doesNotMatch(migration, /COALESCE\([^)]*N'UTC'\)/);
   });
 
   it("validates ONE_TIME single workday invariant", () => {

@@ -47,7 +47,7 @@ describe("bot response builders", () => {
 
   it("builds location request message", () => {
     const message = buildLocationRequestMessage(operation);
-    assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
+    assert.ok(message.includes(serviceReference));
     assert.match(message, /ubicación actual/i);
   });
 
@@ -61,7 +61,7 @@ describe("bot response builders", () => {
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
     });
     assert.match(message, /registrada correctamente/i);
-    assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
+    assert.ok(message.includes(serviceReference));
     assert.match(message, /compartí nuevamente tu ubicación/i);
   });
 

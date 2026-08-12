@@ -14,7 +14,6 @@ import type { CreateOneTimeOperationInput } from "../schemas/operation.schema";
 import type { Service } from "../types/domain";
 import type {
   OperationImportConfirmRow,
-  OperationImportFormat,
   OperationImportPreviewResult,
   OperationImportPreviewRow,
 } from "../types/operation-import";

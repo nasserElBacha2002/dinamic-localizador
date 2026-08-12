@@ -1,0 +1,2807 @@
+diff --git a/.env.example b/.env.example
+index 3e06ff8..594c337 100644
+--- a/.env.example
++++ b/.env.example
+@@ -14,142 +14,159 @@
+ # `frontend/.env` sirve para Vite local (`npm run dev`).
+ # En producción Docker, las variables VITE_* se inyectan durante el build del frontend.
+ 
+ NODE_ENV=development
+ TZ=America/Argentina/Buenos_Aires
+ 
+ BACKEND_INTERNAL_PORT=3000
+ BACKEND_HOST_PORT=3000
+ FRONTEND_HOST_PORT=5173
+ 
+ FRONTEND_URL=http://localhost:5173
+ APP_BASE_URL=http://localhost:3000
+ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+ 
+ VITE_API_URL=http://localhost:3000/api
+ VITE_GOOGLE_MAPS_API_KEY=
+ VITE_GOOGLE_MAPS_MAP_ID=
+ 
+ # Producción (deploy via GHCR): imagen pre-construida en GitHub Actions.
+ # Ejemplo: FRONTEND_IMAGE=ghcr.io/<owner>/<repo>/frontend:develop-latest
+-# FRONTEND_IMAGE=
++# docker/compose + CI/deploy only (required by docker-compose.prod.yml).
++FRONTEND_IMAGE=
+ 
+ DB_HOST=sqlserver
+ DB_PORT=1433
+ DB_PORT_EXTERNAL=14330
+ DB_NAME=dinamic_attendance
+ # Runtime identity (backend). Local Docker defaults to sa; production should use a
+ # dedicated login mapped to database role dinamic_app_runtime (see Phase 3–4 audit).
+ DB_USER=sa
+ # Contraseña SA de SQL Server para Docker Compose (sqlserver healthcheck / db-init).
+ # Also used as shared app password until runtime/migration identities are split.
+ DB_PASSWORD=
+ # Optional dedicated migration identity (migrations service / npm run migrate).
+ # Both unset → shared DB_USER/DB_PASSWORD. Both set → dedicated. Partial pair → error.
+ # To reuse the same secret deliberately, set DB_MIGRATION_PASSWORD explicitly (do not omit).
+-# DB_MIGRATION_USER=
+-# DB_MIGRATION_PASSWORD=
++DB_MIGRATION_USER=
++DB_MIGRATION_PASSWORD=
++# Optional real-login privilege smoke tests (test-only).
++# RUN_DB_PRIVILEGE_TESTS=true + credentials required to enable the suite.
++DB_PRIVILEGE_TEST_USER=
++DB_PRIVILEGE_TEST_PASSWORD=
+ DB_ENCRYPT=false
+ DB_TRUST_SERVER_CERTIFICATE=true
+ 
+ JWT_SECRET=
+ JWT_EXPIRES_IN=8h
+ 
+ INVITATION_TTL_HOURS=72
+ # EMAIL_TRANSPORT=smtp|console|disabled
+ # console only in development/test (never counts as delivered).
+ # production: use smtp (requires SMTP_*) or explicit disabled.
+ # EMAIL_TRANSPORT=console
+-# SMTP_HOST=
+-# SMTP_PORT=587
+-# SMTP_SECURE=false
+-# SMTP_USER=
+-# SMTP_PASSWORD=
+-# SMTP_FROM=
+-# SMTP_CONNECTION_TIMEOUT_MS=10000
+-# SMTP_SOCKET_TIMEOUT_MS=20000
++SMTP_HOST=
++SMTP_PORT=587
++SMTP_SECURE=false
++SMTP_USER=
++SMTP_PASSWORD=
++SMTP_FROM=
++SMTP_CONNECTION_TIMEOUT_MS=10000
++SMTP_SOCKET_TIMEOUT_MS=20000
+ 
+ TWILIO_ACCOUNT_SID=
+ TWILIO_AUTH_TOKEN=
+ TWILIO_WHATSAPP_NUMBER=
+ TWILIO_WEBHOOK_URL=
+ TWILIO_VALIDATE_SIGNATURE=false
+ # Public HTTPS URL Twilio signs for delivery status (no trailing slash).
+ # Example: https://api.example.com/api/webhooks/twilio/whatsapp/status
+ TWILIO_STATUS_CALLBACK_URL=
+ TWILIO_ARRIVAL_REMINDER_CONTENT_SID=
+ TWILIO_EXIT_REMINDER_CONTENT_SID=
+ TWILIO_TEMPLATE_NO_CHECKIN_SID=
+ TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID=
+ TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID=
+ # Content template aviso_recibo: single body var {{1}} = MM/YY (e.g. 07/26). Do not include employee name.
+ TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID=
+ # Content template EVENTUAL_OPERATION_ASSIGNED: {{1}} employeeFirstName, {{2}} service ref, {{3}} date DD/MM/YYYY (BOT_OPERATION_TIMEZONE), {{4}} time HH:mm.
+ ATTENDANCE_REMINDER_JOB_ENABLED=true
+ WHATSAPP_OBSERVABILITY_ENABLED=true
+ WHATSAPP_OBSERVABILITY_UI_ENABLED=true
+ WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED=true
+ # Dedicated secret (>=16 chars). Do not reuse JWT_SECRET.
+ WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET=
+ WHATSAPP_OBSERVABILITY_MESSAGE_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_FLOW_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_CANDIDATE_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_PROVIDER_EVENT_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED=true
+ RECURRING_WORKDAY_HORIZON_DAYS=60
+ RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED=true
+ 
+ BOT_SESSION_TTL_MINUTES=15
+ BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires
+ BOT_DEFAULT_RADIUS_METERS=150
+ BOT_GEOFENCE_REVIEW_MARGIN_METERS=30
+ BOT_ON_TIME_GRACE_MINUTES=15
+ BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES=15
+ # Opcional: empresa por defecto del bot cuando hay varias activas
+-# BOT_DEFAULT_COMPANY_ID=
+-# BOT_DEFAULT_COMPANY_NAME=Dinamic Systems
++BOT_DEFAULT_COMPANY_ID=
++BOT_DEFAULT_COMPANY_NAME=Dinamic Systems
+ 
+ # Google Cloud Storage — adjuntos de ausencias (bucket privado)
+ # Preferir ADC / Workload Identity en producción. No versionar JSON de service account.
+ # Docker: monta ./secrets → /app/secrets (ver secrets/README.md)
+ GOOGLE_APPLICATION_CREDENTIALS=/app/secrets/gcp-service-account.json
+ # Local (backend/): GOOGLE_APPLICATION_CREDENTIALS=../secrets/gcp-service-account.json
++# Optional ADC project hint used by GCS pilot scripts (not required when GCS_PROJECT_ID is set).
++GCLOUD_PROJECT=
+ GCS_PROJECT_ID=
+ GCS_BUCKET_NAME=
+ GCS_STORAGE_PREFIX=absence-attachments
+ GCS_SIGNED_URL_EXPIRATION_SECONDS=300
+ GCS_MAX_FILE_SIZE_BYTES=5242880
+ GCS_MAX_FILES_PER_REQUEST=5
+ GCS_MAX_TOTAL_SIZE_BYTES=15728640
+ GCS_UPLOAD_MODE=BACKEND_STREAM
+ GCS_REQUIRED=false
+ PLATFORM_SERVER_STATUS_CHECK_TIMEOUT_MS=3000
+ API_SERVICE_NAME=dinamic-attendance-api
+ ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED=true
+ PAYROLL_RECEIPTS_STORAGE_PREFIX=payroll-receipts
+ PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH=50
+ PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED=true
+ PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS=60000
+ PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS=120000
+ PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS=5
+ PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS=30000
+ PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS=900
+ # Content template EVENTUAL_OPERATION_ASSIGNED: {{1}} employeeFirstName, {{2}} service ref, {{3}} date DD/MM/YYYY (BOT_OPERATION_TIMEZONE), {{4}} time HH:mm.
+ # Production: set TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID, then OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED=true
+ # (fail-fast at startup if worker=true and SID empty). Local/dev default remains false.
+ OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED=false
+ OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_INTERVAL_MS=60000
+ OPERATION_ASSIGNMENT_NOTIFICATION_LEASE_MS=120000
+ OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS=5
+ OPERATION_ASSIGNMENT_NOTIFICATION_RETRY_BASE_MS=30000
+ COMPANY_DELETION_GRACE_PERIOD_DAYS=30
+ COMPANY_DELETION_JOB_ENABLED=true
+ COMPANY_DELETION_JOB_INTERVAL_MS=3600000
+ COMPANY_DELETION_LEASE_MS=1800000
+ COMPANY_DELETION_MAX_ATTEMPTS=10
+ COMPANY_DELETION_RETRY_BASE_MS=60000
+ COMPANY_PROTECTED_IDS=
+ COMPANY_PROTECTED_NAMES=Dinamic Systems
+ ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES=60
+ # Phase 5 operational integration is per-company (company_settings.absence_operational_integration_enabled).
+ # Enable with: npx tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/enable-absence-operational-integration.ts --company=<uuid>
++
++# --- Test / CI / scripts only (optional; leave empty for normal local runtime) ---
++# Enable DB-backed integration suites: RUN_DB_INTEGRATION_TESTS=true npm test
++RUN_DB_INTEGRATION_TESTS=
++RUN_DB_PRIVILEGE_TESTS=
++# Password for seed-integration-ci owner user (script-only).
++OWNER_PASSWORD=
++# Optional fixtures for absence-phase5 SQL concurrency integration test.
++TEST_COMPANY_ID=
++TEST_ABSENCE_REQUEST_ID=
+diff --git a/audit/phase1-quality-gate-cleanup-validation.md b/audit/phase1-quality-gate-cleanup-validation.md
+new file mode 100644
+index 0000000..b3299f8
+--- /dev/null
++++ b/audit/phase1-quality-gate-cleanup-validation.md
+@@ -0,0 +1,134 @@
++# Phase 1 — Quality gate cleanup validation
++
++## Antes (reconstruido al inicio de la fase)
++
++```text
++backend ESLint: 58 errors
++backend cycles: 2
++  - utils/absence-duration.ts ↔ utils/absence-year-allocations.ts
++  - types/statistics.ts ↔ utils/statistics-action-exceptions.ts
++frontend cycles: 1
++  - WorkTeamForm.tsx ↔ utils/work-team-save.ts
++phone empty catch: 1 (backend/src/utils/phone.ts maskPhoneNumberForLog)
++env documentation: fail (21 used_but_not_documented)
++```
++
++## Después (comprobado)
++
++```text
++backend ESLint: 0 errors
++backend cycles: 0 (madge ✔ No circular dependency found!)
++frontend cycles: 0 (madge ✔ No circular dependency found!)
++phone empty catch: 0 (usa tryNormalizeWhatsAppPhone ?? trimmed)
++env documentation: pass (missing_docs=0; documented=111)
++npm run audit: overall_status=ok, blocking_count=0, findings≈230 (no es objetivo de Fase 1)
++```
++
++## Comandos ejecutados
++
++| Comando | Resultado |
++|---------|-----------|
++| `npm run lint --prefix backend` | PASS (0 errors) |
++| `npm run build:backend` / `tsc -p tsconfig.json` | PASS (typecheck vía build) |
++| `npm run test --prefix backend` | PASS (1271 tests) |
++| `npm run lint --prefix frontend` | PASS (0 errors, 8 warnings preexistentes) |
++| `npm run build:frontend` (`tsc -b && vite build`) | PASS |
++| `npm run test --prefix frontend` | PASS (678 tests) |
++| `npx madge --circular` backend + frontend | PASS (0 cycles) |
++| `bash scripts/audit/run_backend_architecture_audit.sh` | PASS |
++| `bash scripts/audit/run_frontend_architecture_audit.sh` | PASS |
++| `python3 scripts/audit/audit_env_documentation.py` | PASS (missing_docs=0) |
++| `npm run audit` (run `20260812-145928`) | PASS diagnostic; security-env pass; backend-eslint pass; circular-imports pass |
++
++## ESLint — clasificación aproximada (58 → 0)
++
++| Categoría | Aprox. |
++|-----------|--------|
++| unused imports / vars (prod + test) | ~35 |
++| prefer-const / useless-assignment | ~8 |
++| regex / escaping / control-regex | ~6 |
++| incomplete refactor leftovers (`previewRows`, dead helpers, unused imports) | ~6 |
++| empty catch (`phone.ts`) | 1 |
++| other (type-param unused in AssertAssignable) | ~2 |
++
++### Incomplete-refactor checks (no se borró lógica viva)
++
++| Símbolo | Decisión |
++|---------|----------|
++| `assertValidAssignmentDateRange` | A) sigue en `operation-assignment-core.service.ts` → se eliminó solo el import muerto en `operation-assignment.service.ts` |
++| `workdayMaterializationService` | A) el flujo usa `recurringWorkdayMaterializationService` → import muerto eliminado |
++| `OperationImportFormat` | import tipo sin uso → eliminado |
++| `previewRows` | mapa muerto; el return ya usaba `rows` → eliminado |
++| `StatisticsTimeContext` | import sin uso en repository → eliminado |
++| `compatibleOperation` / `checkoutEligibleOperation` | helpers de test sin consumidores → eliminados |
++
++## Circular dependencies
++
++### Backend absence
++
++- **Causa:** `AbsenceDayBreakdown` (o tipo compartido) cruzaba `absence-duration` ↔ `absence-year-allocations`.
++- **Solución:** `absence-day-breakdown.types.ts` neutral.
++- **Dirección final:** ambos utils → types compartidos (sin ciclo).
++
++### Backend statistics
++
++- **Causa:** `types/statistics.ts` importaba utilidades de action-exceptions.
++- **Solución:** tipos/contratos de excepciones y `PeriodMetricDelta` viven en `types/statistics.ts`; utils importan types.
++- **Dirección final:** types ← utils.
++
++### Frontend WorkTeamForm
++
++- **Causa:** `work-team-save.ts` importaba tipos desde el componente React.
++- **Solución:** `work-team-form.types.ts`.
++- **Dirección final:** Form + save → types.
++
++## phone.ts
++
++- **Contrato:** parser fallible + máscara para logs sin PII completa.
++- **Antes:** `catch {}` vacío tras normalizar.
++- **Después:** `tryNormalizeWhatsAppPhone(...) ?? trimmed` (fallo de parse = mascara el valor crudo).
++- **Tests:** `backend/src/utils/phone.test.ts` (valid / invalid / short / unexpected-invalid mask).
++
++## ENV documentadas
++
++Claves pasadas de comentario `# KEY=` a `KEY=` (placeholders vacíos) en `.env.example` y/o `backend/.env.example`:
++
++| Variable | Clasificación |
++|----------|---------------|
++| `BOT_DEFAULT_COMPANY_ID` / `BOT_DEFAULT_COMPANY_NAME` | optional runtime |
++| `DB_MIGRATION_USER` / `DB_MIGRATION_PASSWORD` | migration-only optional |
++| `DB_PRIVILEGE_TEST_USER` / `DB_PRIVILEGE_TEST_PASSWORD` | test-only |
++| `SMTP_*` (+ timeouts) | optional production (smtp transport) |
++| `RUN_DB_INTEGRATION_TESTS` / `RUN_DB_PRIVILEGE_TESTS` | test-only |
++| `FRONTEND_IMAGE` | docker/compose + CI deploy |
++| `GCLOUD_PROJECT` | optional script/ADC hint |
++| `OWNER_PASSWORD` | script-only (seed-integration-ci) |
++| `TEST_COMPANY_ID` / `TEST_ABSENCE_REQUEST_ID` | test-only fixtures |
++
++Excepciones del auditor sin documentar (preexistentes): `ADMIN_*`, `MSSQL_SA_PASSWORD`, alias `GOOGLE_MAPS_API_KEY`.
++
++## Bugs reales encontrados
++
++Ninguno funcional de negocio. Solo deuda de lint/ciclos/docs y un catch vacío que no alteraba el contrato de máscara (ya degradaba al input crudo).
++
++## Findings fuera de alcance (siguen pendientes — fases posteriores)
++
++- SQL injection suspects / SQL outside repositories
++- God classes / SOLID-GRASP
++- npm moderate vulns (`@google-cloud/storage` tree)
++- Frontend ESLint warnings (hooks) preexistentes
++- Baseline oficial no creada
++
++## Quality gates Fase 1
++
++| Gate | Status |
++|------|--------|
++| backend lint | PASS |
++| backend build / typecheck | PASS |
++| backend tests | PASS |
++| frontend lint | PASS (warnings only) |
++| frontend build / typecheck | PASS |
++| frontend tests | PASS |
++| backend circular deps | PASS |
++| frontend circular deps | PASS |
++| environment documentation | PASS |
+diff --git a/backend/.env.example b/backend/.env.example
+index d43c083..960cd67 100644
+--- a/backend/.env.example
++++ b/backend/.env.example
+@@ -1,40 +1,43 @@
+ # Variables para ejecutar el backend fuera de Docker (npm run dev en backend/).
+ # En producción con Docker Compose, usá el `.env` raíz del monorepo.
+ 
+ NODE_ENV=development
+ PORT=3000
+ FRONTEND_URL=http://localhost:5173
+ APP_BASE_URL=http://localhost:3000
+ CORS_ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5174
+ TZ=America/Argentina/Buenos_Aires
+ 
+ DB_HOST=localhost
+ DB_PORT=14330
+ DB_NAME=dinamic_attendance
+ # Runtime identity. Prefer a login in role dinamic_app_runtime (not sa) in non-local envs.
+ DB_USER=sa
+ DB_PASSWORD=
+ # Optional dedicated migration identity for `npm run migrate`.
+ # Both unset → DB_USER/DB_PASSWORD. Both set → dedicated. Partial pair → config error.
+-# DB_MIGRATION_USER=
+-# DB_MIGRATION_PASSWORD=
++DB_MIGRATION_USER=
++DB_MIGRATION_PASSWORD=
++# Optional real-login privilege smoke tests (test-only).
++DB_PRIVILEGE_TEST_USER=
++DB_PRIVILEGE_TEST_PASSWORD=
+ DB_ENCRYPT=false
+ DB_TRUST_SERVER_CERTIFICATE=true
+ 
+ TWILIO_ACCOUNT_SID=
+ TWILIO_AUTH_TOKEN=
+ TWILIO_WHATSAPP_NUMBER=
+ TWILIO_WEBHOOK_URL=
+ # Debe coincidir exactamente con la URL pública configurada en Twilio (sin slash final).
+ TWILIO_VALIDATE_SIGNATURE=false
+ TWILIO_ARRIVAL_REMINDER_CONTENT_SID=
+ TWILIO_EXIT_REMINDER_CONTENT_SID=
+ TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID=
+ TWILIO_TEMPLATE_NO_CHECKIN_SID=
+ TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID=
+ # Content template variables: single body var {{1}} = MM/YY (e.g. 07/26). Do not include employee name.
+ TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID=
+ # Content template EVENTUAL_OPERATION_ASSIGNED: {{1}} employeeFirstName, {{2}} service ref, {{3}} date DD/MM/YYYY (BOT_OPERATION_TIMEZONE), {{4}} time HH:mm.
+ # Public HTTPS URL for Twilio delivery status callbacks (e.g. https://api.example.com/api/webhooks/twilio/whatsapp/status)
+ TWILIO_STATUS_CALLBACK_URL=
+ ATTENDANCE_REMINDER_JOB_ENABLED=true
+@@ -43,70 +46,73 @@ WHATSAPP_OBSERVABILITY_UI_ENABLED=true
+ WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED=true
+ # Dedicated stable secret for phone hashing/encryption (do not reuse JWT_SECRET)
+ WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET=
+ WHATSAPP_OBSERVABILITY_MESSAGE_RETENTION_DAYS=90
+ # Alias: days before template_variables_json is cleared (bodies/phones are not deleted by this job)
+ WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_FLOW_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_CANDIDATE_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_PROVIDER_EVENT_RETENTION_DAYS=90
+ WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED=true
+ RECURRING_WORKDAY_HORIZON_DAYS=60
+ RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED=true
+ BOT_SESSION_TTL_MINUTES=15
+ # Fallbacks cuando no hay fila company_settings o valor explícito por empresa
+ BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires
+ BOT_DEFAULT_RADIUS_METERS=150
+ BOT_GEOFENCE_REVIEW_MARGIN_METERS=30
+ BOT_ON_TIME_GRACE_MINUTES=15
+ BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES=15
+ # Opcional: empresa por defecto del bot cuando hay varias activas
+-# BOT_DEFAULT_COMPANY_ID=
+-# BOT_DEFAULT_COMPANY_NAME=Dinamic Systems
++BOT_DEFAULT_COMPANY_ID=
++BOT_DEFAULT_COMPANY_NAME=Dinamic Systems
+ 
+ JWT_SECRET=
+ JWT_EXPIRES_IN=8h
+ 
+ # Invitaciones de usuarios (tokens opacos; TTL en horas)
+ INVITATION_TTL_HOURS=72
+ 
+ # Email: EMAIL_TRANSPORT=smtp|console|disabled
+ # console solo en development/test (no cuenta como enviado).
+ # En production usá smtp (SMTP_* completo) o disabled explícito.
+ EMAIL_TRANSPORT=console
+ # Gmail en 587: SMTP_SECURE=false (STARTTLS). Puerto 465: SMTP_SECURE=true.
+-# SMTP_HOST=smtp.gmail.com
+-# SMTP_PORT=587
+-# SMTP_SECURE=false
+-# SMTP_USER=
+-# SMTP_PASSWORD=
+-# SMTP_FROM=
+-# SMTP_CONNECTION_TIMEOUT_MS=10000
+-# SMTP_SOCKET_TIMEOUT_MS=20000
++SMTP_HOST=
++SMTP_PORT=587
++SMTP_SECURE=false
++SMTP_USER=
++SMTP_PASSWORD=
++SMTP_FROM=
++SMTP_CONNECTION_TIMEOUT_MS=10000
++SMTP_SOCKET_TIMEOUT_MS=20000
+ 
+-# Ejecutar suites de integración con SQL Server local: RUN_DB_INTEGRATION_TESTS=true npm test
+-# RUN_DB_INTEGRATION_TESTS=true
++# Test-only toggles (local/CI). Leave empty/false for normal unit runs.
++RUN_DB_INTEGRATION_TESTS=
++RUN_DB_PRIVILEGE_TESTS=
+ 
+ # Google Cloud Storage — adjuntos de ausencias (bucket privado)
+ # Dejá el JSON real en ../secrets/gcp-service-account.json (nunca lo commits).
+ # Ver secrets/README.md en la raíz del monorepo.
+ GOOGLE_APPLICATION_CREDENTIALS=../secrets/gcp-service-account.json
++# Optional ADC project hint used by GCS pilot scripts.
++GCLOUD_PROJECT=
+ GCS_PROJECT_ID=
+ GCS_BUCKET_NAME=
+ GCS_STORAGE_PREFIX=absence-attachments
+ GCS_SIGNED_URL_EXPIRATION_SECONDS=300
+ GCS_MAX_FILE_SIZE_BYTES=5242880
+ GCS_MAX_FILES_PER_REQUEST=5
+ GCS_MAX_TOTAL_SIZE_BYTES=15728640
+ GCS_UPLOAD_MODE=BACKEND_STREAM
+ # When true, GCS must be configured and reachable for platform diagnostics to be "ok".
+ GCS_REQUIRED=false
+ PLATFORM_SERVER_STATUS_CHECK_TIMEOUT_MS=3000
+ API_SERVICE_NAME=dinamic-attendance-api
+ ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED=true
+ ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES=60
+ # Recibos de sueldo (mismo bucket GCS; prefijo distinto)
+ PAYROLL_RECEIPTS_STORAGE_PREFIX=payroll-receipts
+ PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH=50
+ PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED=true
+ PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS=60000
+ PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS=120000
+diff --git a/backend/src/controllers/company-membership.contract.test.ts b/backend/src/controllers/company-membership.contract.test.ts
+index 13f2705..4484eec 100644
+--- a/backend/src/controllers/company-membership.contract.test.ts
++++ b/backend/src/controllers/company-membership.contract.test.ts
+@@ -26,41 +26,41 @@ describe("GET /api/companies/:companyId/me contract", () => {
+   });
+ 
+   it("READ_ONLY effective permissions exclude users:manage", () => {
+     const permissions = resolvePermissionsForRole("READ_ONLY");
+     assert.equal(permissions.has("users:manage"), false);
+   });
+ });
+ 
+ describeDatabaseIntegration("GET /api/companies/:companyId/me integration", () => {
+   let baseUrl = "";
+   let closeServer: (() => Promise<void>) | null = null;
+   let dinamicCompanyId = "";
+   let platformAdminId = "";
+   let platformAdminEmail = "";
+   let ownerUserId = "";
+   let ownerUserEmail = "";
+   let readOnlyUserId = "";
+   let readOnlyUserEmail = "";
+   let outsiderUserId = "";
+   let outsiderUserEmail = "";
+-  let createdUserIds: string[] = [];
++  const createdUserIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     const { app } = await import("../app");
+     const server = await startTestServer(app);
+     baseUrl = server.baseUrl;
+     closeServer = server.close;
+ 
+     const dinamic = await companyRepository.findByName("Dinamic Systems");
+     assert.ok(dinamic);
+     dinamicCompanyId = dinamic.id;
+ 
+     const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+     assert.ok(platformAdmin?.isPlatformAdmin);
+     platformAdminId = platformAdmin.id;
+     platformAdminEmail = platformAdmin.email;
+ 
+     const passwordHash = await hashPassword("integration-test-password");
+diff --git a/backend/src/database/company-module-migration.integration.test.ts b/backend/src/database/company-module-migration.integration.test.ts
+index 5733809..b2dc7c2 100644
+--- a/backend/src/database/company-module-migration.integration.test.ts
++++ b/backend/src/database/company-module-migration.integration.test.ts
+@@ -2,41 +2,41 @@ import assert from "node:assert/strict";
+ import { readFileSync } from "node:fs";
+ import { join } from "node:path";
+ import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import { getPool } from "./connection";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ 
+ const MIGRATION_038_PATH = join(
+   process.cwd(),
+   "..",
+   "database/migrations/038_finalize_company_module_key_migration.sql",
+ );
+ 
+ const stripLegacyDatabaseUse = (batch: string): string =>
+   batch
+     .split(/\r?\n/)
+-    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_\[\]]+\s*;?\s*$/i.test(line.trim()))
++    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_[\]]+\s*;?\s*$/i.test(line.trim()))
+     .join("\n")
+     .trim();
+ 
+ const runMigration038 = async (): Promise<void> => {
+   const pool = getPool();
+   const migrationSql = readFileSync(MIGRATION_038_PATH, "utf8");
+   const batches = migrationSql
+     .split(/^\s*GO\s*$/gim)
+     .map((batch) => stripLegacyDatabaseUse(batch.trim()))
+     .filter(Boolean);
+ 
+   for (const batch of batches) {
+     await pool.request().query(batch);
+   }
+ };
+ 
+ const countLegacyModuleRows = async (): Promise<number> => {
+   const pool = getPool();
+   const result = await pool.request().query(`
+     SELECT COUNT(*) AS total
+diff --git a/backend/src/database/operational-table-rename.integration.test.ts b/backend/src/database/operational-table-rename.integration.test.ts
+index e0385eb..b2ce87d 100644
+--- a/backend/src/database/operational-table-rename.integration.test.ts
++++ b/backend/src/database/operational-table-rename.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import { getPool } from "./connection";
+ import { operationRepository } from "../repositories/operation.repository";
+ import { lookupRepository } from "../repositories/lookup.repository";
+ import { serviceRepository } from "../repositories/service.repository";
+ import {
+   describeDatabaseIntegration,
+   requireDinamicCompanyId,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ 
+ const objectId = async (name: string, type: "U" | "V"): Promise<number | null> => {
+   const pool = getPool();
+   const result = await pool
+     .request()
+     .input("name", sql.NVarChar(256), name)
+     .input("type", sql.NVarChar(2), type)
+     .query("SELECT OBJECT_ID(@name, @type) AS objectId");
+ 
+diff --git a/backend/src/database/workday-domain-migration.test.ts b/backend/src/database/workday-domain-migration.test.ts
+index 05ea933..a72f83d 100644
+--- a/backend/src/database/workday-domain-migration.test.ts
++++ b/backend/src/database/workday-domain-migration.test.ts
+@@ -3,41 +3,41 @@ import { readFileSync } from "node:fs";
+ import { join } from "node:path";
+ import { describe, it } from "node:test";
+ 
+ describe("workday domain migration 039", () => {
+   const migration = readFileSync(
+     join(process.cwd(), "../database/migrations/039_workday_domain_foundation.sql"),
+     "utf8",
+   );
+ 
+   it("maps IANA timezones to SQL Server AT TIME ZONE names", () => {
+     assert.match(migration, /fn_resolve_operation_timezone_for_sql/);
+     assert.match(migration, /Argentina Standard Time/);
+     assert.doesNotMatch(
+       migration,
+       /AT TIME ZONE\s+COALESCE\([\s\S]*America\/Argentina\/Buenos_Aires/,
+     );
+   });
+ 
+   it("uses canonical timezone fallback instead of UTC", () => {
+     assert.match(migration, /N'America\/Argentina\/Buenos_Aires'/);
+-    assert.doesNotMatch(migration, /COALESCE\([^\)]*N'UTC'\)/);
++    assert.doesNotMatch(migration, /COALESCE\([^)]*N'UTC'\)/);
+   });
+ 
+   it("validates ONE_TIME single workday invariant", () => {
+     assert.match(migration, /ONE_TIME operation has multiple operation_workdays after backfill/);
+   });
+ 
+   it("defines separate real and simulation attendance unique indexes", () => {
+     assert.match(migration, /UX_attendance_records_employee_workday_active_real/);
+     assert.match(migration, /UX_attendance_records_employee_workday_active_simulation/);
+     assert.match(migration, /is_simulation = 0/);
+     assert.match(migration, /simulation_session_id/);
+   });
+ 
+   it("validates attendance linkage before dropping legacy unique index", () => {
+     const dropLegacyIndex = migration.indexOf("DROP INDEX UX_attendance_records_operation_employee_active");
+     const validateLinkage = migration.indexOf(
+       "Active attendance records without employee_workday_id remain after backfill",
+     );
+     assert.ok(validateLinkage > 0);
+     assert.ok(dropLegacyIndex > validateLinkage);
+diff --git a/backend/src/database/workday-domain.integration.test.ts b/backend/src/database/workday-domain.integration.test.ts
+index 24788b8..b6ac659 100644
+--- a/backend/src/database/workday-domain.integration.test.ts
++++ b/backend/src/database/workday-domain.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   requireDinamicCompanyId,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { DEFAULT_OPERATION_TIMEZONE } from "../utils/operation-timezone";
+ 
+ describeDatabaseIntegration("workday domain migration backfill", () => {
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     // Integration fixtures sometimes insert ONE_TIME operations via raw SQL without
+     // materializing operation_workdays. Heal those orphans so this suite validates the
+     // invariant (exactly one workday) rather than leftover incomplete fixtures.
+     const pool = getPool();
+diff --git a/backend/src/imports/generic-import.integration.test.ts b/backend/src/imports/generic-import.integration.test.ts
+index 9bfe86b..461d65b 100644
+--- a/backend/src/imports/generic-import.integration.test.ts
++++ b/backend/src/imports/generic-import.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ import { servicesImportStrategy } from "../imports/strategies/services.strategy";
+ import { employeesImportStrategy } from "../imports/strategies/employees.strategy";
+ 
+ const uniquePhone = (suffix: number): string =>
+   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+ 
+ describeDatabaseIntegration("generic entity imports integration", () => {
+   const fixtures = createIntegrationFixtureTracker();
+   let companyId = "";
+ 
+   before(async () => {
+     await setupDatabaseIntegration();
+diff --git a/backend/src/imports/orchestrator.ts b/backend/src/imports/orchestrator.ts
+index 21cbe79..4d7647a 100644
+--- a/backend/src/imports/orchestrator.ts
++++ b/backend/src/imports/orchestrator.ts
+@@ -154,41 +154,41 @@ export const importOrchestrator = {
+         strategy.entityType,
+         input.idempotencyKey,
+       );
+       if (
+         existing &&
+         (existing.status === "COMPLETED" || existing.status === "PARTIAL" || existing.status === "FAILED")
+       ) {
+         const cached = importJobRepository.parseResult(existing);
+         if (cached) {
+           logImportEvent("import.job.idempotent_replay", {
+             importJobId: existing.id,
+             entityType,
+             companyId,
+             status: existing.status,
+           });
+           return { ...cached, importJobId: existing.id, status: existing.status };
+         }
+       }
+     }
+ 
+-    let jobId: string | null = null;
++    let jobId: string;
+     let prepared: PreparedImport;
+ 
+     if (input.importJobId && input.confirmationToken) {
+       const job = await importJobRepository.findById(companyId, input.importJobId);
+       if (!job || job.confirmationToken !== input.confirmationToken) {
+         throw new AppError(
+           400,
+           "IMPORT_CONFIRMATION_INVALID",
+           "La confirmación de importación es inválida o expiró. Volvé a validar el archivo.",
+         );
+       }
+       if (job.entityType !== strategy.entityType) {
+         throw new AppError(400, "IMPORT_ENTITY_MISMATCH", "El tipo de entidad no coincide con el job.");
+       }
+       if (job.userId && userId && job.userId !== userId) {
+         throw new AppError(403, "IMPORT_JOB_FORBIDDEN", "No podés confirmar una importación de otro usuario.");
+       }
+       if (job.expiresAt.getTime() <= Date.now()) {
+         throw new AppError(
+           400,
+diff --git a/backend/src/imports/strategies/operations.strategy.ts b/backend/src/imports/strategies/operations.strategy.ts
+index 3ee2ad8..cada992 100644
+--- a/backend/src/imports/strategies/operations.strategy.ts
++++ b/backend/src/imports/strategies/operations.strategy.ts
+@@ -64,47 +64,40 @@ const buildOperationsPrepared = async (
+       row.earlyToleranceMinutes !== null &&
+       row.lateToleranceMinutes !== null
+         ? {
+             serviceId: row.serviceId,
+             scheduledStart: row.scheduledStart,
+             scheduledEnd: row.scheduledEnd,
+             earlyToleranceMinutes: row.earlyToleranceMinutes,
+             lateToleranceMinutes: row.lateToleranceMinutes,
+             notes: row.notas.trim() ? row.notas.trim() : null,
+           }
+         : null;
+ 
+     return {
+       rowNumber: row.rowNumber,
+       values,
+       errors,
+       payload,
+     };
+   });
+ 
+-  const previewRows = rows.map((row) => ({
+-    rowNumber: row.rowNumber,
+-    status: (row.errors.length === 0 ? "valid" : "invalid") as "valid" | "invalid",
+-    values: row.values,
+-    errors: row.errors,
+-  }));
+-
+   return {
+     entityType: "operations",
+     strategyVersion: IMPORT_STRATEGY_VERSION,
+     fileName,
+     fileHash: hashImportFile(buffer),
+     fileType: result.fileType,
+     format: result.format,
+     requireAllRowsValid: true,
+     displayColumns: [
+       { key: "punto", header: result.format === "client" ? "PUNTO" : "Servicio" },
+       { key: "serviceName", header: "Servicio resuelto" },
+       { key: "rawFecha", header: result.format === "client" ? "Fecha original" : "Inicio original" },
+       { key: "scheduledStartDisplay", header: "Inicio" },
+       { key: "scheduledEndDisplay", header: "Fin" },
+       { key: "notas", header: "Notas" },
+     ],
+     fileErrors: result.fileErrors,
+     rows,
+     summary: {
+       totalRows: result.summary.totalRows,
+diff --git a/backend/src/middleware/company-permissions-routes.test.ts b/backend/src/middleware/company-permissions-routes.test.ts
+index 0ec2a25..e9027c3 100644
+--- a/backend/src/middleware/company-permissions-routes.test.ts
++++ b/backend/src/middleware/company-permissions-routes.test.ts
+@@ -1,24 +1,24 @@
+ import assert from "node:assert/strict";
+ import { describe, it } from "node:test";
+ import type { NextFunction, Request, Response } from "express";
+-import { requireAnyPermission, requirePermission } from "../middleware/company-context";
++import { requirePermission } from "../middleware/company-context";
+ import { resolvePermissionsForRole } from "../constants/company-permissions";
+ 
+ const createMockResponse = () => {
+   const response: Partial<Response> & { statusCode?: number; body?: unknown } = {};
+   response.status = (code: number) => {
+     response.statusCode = code;
+     return response as Response;
+   };
+   response.json = (body: unknown) => {
+     response.body = body;
+     return response as Response;
+   };
+   return response as Response & { statusCode?: number; body?: unknown };
+ };
+ 
+ describe("requirePermission middleware", () => {
+   it("allows READ_ONLY to read employees but blocks manage", () => {
+     const readOnlyPermissions = resolvePermissionsForRole("READ_ONLY");
+     const req = { permissions: readOnlyPermissions } as Request;
+     const res = createMockResponse();
+diff --git a/backend/src/repositories/operation-attendance-summary.integration.test.ts b/backend/src/repositories/operation-attendance-summary.integration.test.ts
+index 2f2589c..26537e2 100644
+--- a/backend/src/repositories/operation-attendance-summary.integration.test.ts
++++ b/backend/src/repositories/operation-attendance-summary.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   resolveCompanyTodayIso,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
+ import { operationAssignmentService } from "../services/operation-assignment.service";
+ import { operationService } from "../services/operation.service";
+ import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
+ import { WEEKDAYS } from "../constants/weekday";
+ import { addDaysToDateIso } from "../utils/recurring-workday-instant";
+ 
+ const uniquePhone = (suffix: number): string =>
+   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+ 
+ const allDaysSchedule = WEEKDAYS.map((dayOfWeek) => ({
+@@ -80,41 +80,41 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
+       .input("phone2", sql.NVarChar(20), uniquePhone(2))
+       .input("phone3", sql.NVarChar(20), uniquePhone(3))
+       .query(`
+         DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
+         INSERT INTO employees (company_id, name, phone_number, employee_type, active)
+         OUTPUT INSERTED.id INTO @inserted (id)
+         VALUES
+           (@companyId, N'Emp Pending', @phone1, 'fijo', 1),
+           (@companyId, N'Emp Confirmed', @phone2, 'fijo', 1),
+           (@companyId, N'Emp Unavailable', @phone3, 'fijo', 1);
+         SELECT id FROM @inserted;
+       `);
+ 
+     const [pendingId, confirmedId, unavailableId] = employees.recordset.map((row) =>
+       String((row as { id: string }).id),
+     );
+     fixtures.trackEmployee(companyId, pendingId);
+     fixtures.trackEmployee(companyId, confirmedId);
+     fixtures.trackEmployee(companyId, unavailableId);
+ 
+-    const assignmentPending = await operationAssignmentService.assignEmployee(
++    await operationAssignmentService.assignEmployee(
+       companyId,
+       operationId,
+       pendingId,
+     );
+     const assignmentConfirmed = await operationAssignmentService.assignEmployee(
+       companyId,
+       operationId,
+       confirmedId,
+     );
+     const assignmentUnavailable = await operationAssignmentService.assignEmployee(
+       companyId,
+       operationId,
+       unavailableId,
+     );
+ 
+     await pool
+       .request()
+       .input("companyId", sql.UniqueIdentifier, companyId)
+       .input("assignmentId", sql.UniqueIdentifier, assignmentConfirmed.id)
+       .input("assignmentId2", sql.UniqueIdentifier, assignmentUnavailable.id)
+diff --git a/backend/src/repositories/statistics.repository.ts b/backend/src/repositories/statistics.repository.ts
+index 65a8e80..e3418ba 100644
+--- a/backend/src/repositories/statistics.repository.ts
++++ b/backend/src/repositories/statistics.repository.ts
+@@ -2,41 +2,40 @@ import sql from "mssql";
+ import { getPool } from "../database/connection";
+ import { STATISTICS_MIN_SAMPLE_WORKDAYS } from "../constants/statistics";
+ import type { StatisticsFilters } from "../schemas/statistics.schema";
+ import type {
+   AttendanceByEmployeeRow,
+   AttendanceByOperationRow,
+   AttendanceByServiceRow,
+   AttendanceStatisticsSummary,
+   AttendanceStatusDistributionItem,
+   AttendanceTimelinePoint,
+   AttendanceWorkdayDetailRow,
+ } from "../types/statistics";
+ import {
+   calculateAbsenceRate,
+   calculateAttendanceRate,
+   calculateConsolidatedCoverageRate,
+   calculatePunctualityRate,
+   hasSufficientSample,
+ } from "../utils/attendance-statistics-metrics";
+ import { buildActionExceptions } from "../utils/statistics-action-exceptions";
+-import type { StatisticsTimeContext } from "../utils/statistics-period";
+ import {
+   applyEmployeeWorkdayStatisticsFilters,
+   buildEmployeeWorkdayStatisticsCte,
+   buildEmployeeWorkdayStatisticsFilters,
+   buildStatisticsWhereFromFilters,
+ } from "../utils/employee-workday-statistics-projection";
+ import { toDateOnlyString } from "../utils/row-mappers";
+ import type { StatisticsRankingMode } from "../schemas/statistics.schema";
+ 
+ const toNumber = (value: unknown): number => Number(value ?? 0);
+ 
+ const toIsoDate = (value: unknown): string | null => {
+   if (!value) {
+     return null;
+   }
+ 
+   const date = value instanceof Date ? value : new Date(String(value));
+   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+ };
+ 
+diff --git a/backend/src/routes/api-route-aliases.integration.test.ts b/backend/src/routes/api-route-aliases.integration.test.ts
+index de64b60..c42e04e 100644
+--- a/backend/src/routes/api-route-aliases.integration.test.ts
++++ b/backend/src/routes/api-route-aliases.integration.test.ts
+@@ -1,47 +1,47 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { companyRepository } from "../repositories/company.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { hashPassword } from "../utils/password";
+ 
+ const TEST_OPERATOR_EMAIL = "integration-route-alias-operator@test.local";
+ 
+ describeDatabaseIntegration("API canonical routes integration", () => {
+   let baseUrl = "";
+   let closeServer: (() => Promise<void>) | null = null;
+   let dinamicCompanyId = "";
+   let platformAdminId = "";
+   let platformAdminEmail = "";
+   let operatorUserId = "";
+   let operatorUserEmail = "";
+-  let createdUserIds: string[] = [];
++  const createdUserIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     const { app } = await import("../app");
+     const server = await startTestServer(app);
+     baseUrl = server.baseUrl;
+     closeServer = server.close;
+ 
+     const dinamic = await companyRepository.findByName("Dinamic Systems");
+     assert.ok(dinamic);
+     dinamicCompanyId = dinamic.id;
+ 
+     const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+     assert.ok(platformAdmin?.isPlatformAdmin);
+     platformAdminId = platformAdmin.id;
+     platformAdminEmail = platformAdmin.email;
+ 
+     const passwordHash = await hashPassword("integration-test-password");
+diff --git a/backend/src/schemas/company-module.schema.test.ts b/backend/src/schemas/company-module.schema.test.ts
+index 274a518..ae873fb 100644
+--- a/backend/src/schemas/company-module.schema.test.ts
++++ b/backend/src/schemas/company-module.schema.test.ts
+@@ -1,22 +1,21 @@
+ import assert from "node:assert/strict";
+-import { z } from "zod";
+ import { describe, it } from "node:test";
+ import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
+ import { updateCompanyModulesSchema } from "../schemas/company-module.schema";
+ 
+ describe("updateCompanyModulesSchema", () => {
+   it("accepts valid module updates", () => {
+     const parsed = updateCompanyModulesSchema.parse({
+       modules: [{ moduleKey: "attendance", isEnabled: true }],
+     });
+     assert.equal(parsed.modules.length, 1);
+   });
+ 
+   it("rejects invalid module key", () => {
+     assert.throws(() =>
+       updateCompanyModulesSchema.parse({
+         modules: [{ moduleKey: "billing", isEnabled: true }],
+       }),
+     );
+   });
+ 
+diff --git a/backend/src/scripts/gcs-absence-attachments-pilot.ts b/backend/src/scripts/gcs-absence-attachments-pilot.ts
+index 3bbed93..d3791c4 100644
+--- a/backend/src/scripts/gcs-absence-attachments-pilot.ts
++++ b/backend/src/scripts/gcs-absence-attachments-pilot.ts
+@@ -1,30 +1,29 @@
+ /**
+  * Operational GCS pilot for absence attachments.
+  * Uses ADC / GOOGLE_APPLICATION_CREDENTIALS. Never logs secrets or signed URLs.
+  *
+  * Usage:
+  *   npx tsx --import ./src/test-helpers/preload-test-env.ts \
+  *     src/scripts/gcs-absence-attachments-pilot.ts
+  */
+ import { randomUUID } from "node:crypto";
+-import { Readable } from "node:stream";
+ import { env } from "../config/env";
+ import { resolveGoogleApplicationCredentialsPath } from "../config/resolve-gcp-credentials";
+ import {
+   GoogleCloudStorageAttachmentStorage,
+   isGcsConfigured,
+ } from "../services/attachment-storage";
+ 
+ resolveGoogleApplicationCredentialsPath();
+ 
+ type Check = { name: string; ok: boolean; detail?: string };
+ 
+ const main = async (): Promise<void> => {
+   const checks: Check[] = [];
+   const report = (name: string, ok: boolean, detail?: string) => {
+     checks.push({ name, ok, detail });
+     console.info(`${ok ? "PASS" : "FAIL"} ${name}${detail ? ` — ${detail}` : ""}`);
+   };
+ 
+   if (!isGcsConfigured()) {
+     report("gcs_configured", false, "GCS_PROJECT_ID / GCS_BUCKET_NAME missing");
+diff --git a/backend/src/services/absence-calendar.integration.test.ts b/backend/src/services/absence-calendar.integration.test.ts
+index a7fd740..fd42d20 100644
+--- a/backend/src/services/absence-calendar.integration.test.ts
++++ b/backend/src/services/absence-calendar.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+ import { absenceTypeRepository } from "../repositories/absence-type.repository";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { AppError } from "../errors/app-error";
+ import { getTodayAbsenceDateIso } from "../utils/absence-date";
+ import { addDaysToDateIso } from "../utils/recurring-workday-instant";
+ import { absenceCalendarService } from "./absence-calendar.service";
+ import { absenceRequestService } from "./absence-request.service";
+ 
+ const COMPANY_TZ = "America/Argentina/Buenos_Aires";
+ 
+ const uniqueCompanyName = (): string =>
+diff --git a/backend/src/services/absence-phase0-hardening.integration.test.ts b/backend/src/services/absence-phase0-hardening.integration.test.ts
+index df03eb8..1c83784 100644
+--- a/backend/src/services/absence-phase0-hardening.integration.test.ts
++++ b/backend/src/services/absence-phase0-hardening.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   resolveCompanyTodayIso,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+ import { absenceTypeRepository } from "../repositories/absence-type.repository";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { absenceRequestService } from "./absence-request.service";
+ import { absenceReviewService } from "./absence-review.service";
+ import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
+ import { AppError } from "../errors/app-error";
+ 
+ const uniqueCompanyName = (): string =>
+   `Absence Phase0 ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ 
+diff --git a/backend/src/services/attachment-upload.service.ts b/backend/src/services/attachment-upload.service.ts
+index e7d5534..76da38c 100644
+--- a/backend/src/services/attachment-upload.service.ts
++++ b/backend/src/services/attachment-upload.service.ts
+@@ -81,43 +81,42 @@ export const attachmentUploadService = {
+         input.twilioMediaIndex,
+       );
+       if (existing) {
+         destroyQuietly(input.body);
+         return toAbsenceAttachmentDto(existing);
+       }
+     }
+ 
+     const attachmentId = newAttachmentId();
+     const storage = getAttachmentStorage();
+     const bucketName = env.GCS_BUCKET_NAME!;
+     const scopeId = input.requestId ?? input.draftId!;
+     const objectKey = buildAbsenceAttachmentObjectKey({
+       storagePrefix: env.GCS_STORAGE_PREFIX,
+       companyId: input.companyId,
+       absenceRequestId: scopeId,
+       attachmentId,
+     });
+     const sanitizedName = sanitizeOriginalFileName(input.originalFileName);
+ 
+-    let row;
+     try {
+-      row = await absenceAttachmentRepository.reservePendingUploadAtomic({
++      await absenceAttachmentRepository.reservePendingUploadAtomic({
+         id: attachmentId,
+         companyId: input.companyId,
+         absenceRequestId: input.requestId ?? null,
+         draftId: input.draftId ?? null,
+         bucketName,
+         objectKey,
+         originalFileName: sanitizedName,
+         normalizedFileName: sanitizedName,
+         declaredContentType: input.declaredContentType || "application/octet-stream",
+         detectedContentType: "application/octet-stream",
+         sizeBytes: 0,
+         checksumSha256: "0".repeat(64),
+         status: "PENDING_UPLOAD",
+         scanStatus: "UNSCANNED",
+         uploadedByUserId: input.uploadedByUserId ?? null,
+         uploadedByEmployeeId: input.uploadedByEmployeeId ?? null,
+         source: input.source,
+         twilioMessageSid: input.twilioMessageSid ?? null,
+         twilioMediaIndex: input.twilioMediaIndex ?? null,
+         idempotencyKey: input.idempotencyKey ?? null,
+diff --git a/backend/src/services/attendance-confirmation-schedule-cycle.integration.test.ts b/backend/src/services/attendance-confirmation-schedule-cycle.integration.test.ts
+index 06d77a2..f80b24e 100644
+--- a/backend/src/services/attendance-confirmation-schedule-cycle.integration.test.ts
++++ b/backend/src/services/attendance-confirmation-schedule-cycle.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it, mock } from "node:test";
++import { after, before, it, mock } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ 
+ const uniquePhone = (suffix: number): string =>
+   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+ 
+ describeDatabaseIntegration("attendance confirmation schedule cycle integration", () => {
+   const fixtures = createIntegrationFixtureTracker();
+ 
+   before(async () => {
+     await setupDatabaseIntegration();
+   });
+ 
+   after(async () => {
+diff --git a/backend/src/services/attendance-reminder-mark-sent-recovery.integration.test.ts b/backend/src/services/attendance-reminder-mark-sent-recovery.integration.test.ts
+index bca6aa7..7bd6325 100644
+--- a/backend/src/services/attendance-reminder-mark-sent-recovery.integration.test.ts
++++ b/backend/src/services/attendance-reminder-mark-sent-recovery.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it, mock } from "node:test";
++import { after, before, it, mock } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ import { ATTENDANCE_REMINDER_STALE_PENDING_MINUTES } from "../constants/attendance-notification";
+ 
+ const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}${Math.floor(Math.random() * 10)}`;
+ 
+ describeDatabaseIntegration("attendance reminder markSent recovery integration", () => {
+   const fixtures = createIntegrationFixtureTracker();
+ 
+   before(async () => {
+     await setupDatabaseIntegration();
+   });
+ 
+   after(async () => {
+diff --git a/backend/src/services/bot/bot-response.builder.test.ts b/backend/src/services/bot/bot-response.builder.test.ts
+index fd035cb..b79f34b 100644
+--- a/backend/src/services/bot/bot-response.builder.test.ts
++++ b/backend/src/services/bot/bot-response.builder.test.ts
+@@ -30,55 +30,55 @@ describe("bot response builders", () => {
+     lateToleranceMinutes: 30,
+     status: "SCHEDULED",
+   };
+ 
+   const serviceReference = "Carrefour Caballito - Av. Rivadavia 5108 - Caballito";
+ 
+   it("builds main menu message", () => {
+     assert.equal(buildMainMenuMessage(), GREETING_MESSAGE);
+   });
+ 
+   it("builds no operation message", () => {
+     assert.equal(buildNoOperationMessage(), NO_OPERATION_MESSAGE);
+     assert.equal(
+       NO_OPERATION_MESSAGE,
+       "No tenés una jornada disponible para registrar llegada o salida en este momento.",
+     );
+   });
+ 
+   it("builds location request message", () => {
+     const message = buildLocationRequestMessage(operation);
+-    assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
++    assert.ok(message.includes(serviceReference));
+     assert.match(message, /ubicación actual/i);
+   });
+ 
+   it("builds arrival registered response", () => {
+     const message = buildArrivalRegisteredMessage({
+       compatible: operation,
+       distanceMeters: 80,
+       validationStatus: "VALID",
+       punctualityStatus: "ON_TIME",
+       validationReason: "Validación automática exitosa",
+       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
+     });
+     assert.match(message, /registrada correctamente/i);
+-    assert.match(message, /Carrefour Caballito - Av\. Rivadavia 5108 - Caballito/);
++    assert.ok(message.includes(serviceReference));
+     assert.match(message, /compartí nuevamente tu ubicación/i);
+   });
+ 
+   it("builds outside radius response", () => {
+     const message = buildOutsideRadiusMessage("Distancia 250 m supera el radio permitido (150 m)");
+     assert.match(message, /No pudimos validar tu llegada/);
+     assert.match(message, /250 m/);
+   });
+ 
+   it("builds checkout rejected response", () => {
+     const message = buildCheckoutRegisteredMessage({
+       eligible: operation,
+       checkInAt: "2026-07-05T15:00:00.000Z",
+       checkoutAt: new Date("2026-07-05T21:10:00.000Z"),
+       distanceMeters: 250,
+       checkoutStatus: "CHECKOUT_REJECTED",
+       extraWorkedMinutes: 0,
+     });
+     assert.equal(message, buildCheckoutRejectedMessage());
+     assert.match(message, /ubicación fuera del radio permitido/);
+diff --git a/backend/src/services/company-absence-settings.integration.test.ts b/backend/src/services/company-absence-settings.integration.test.ts
+index a46fc06..2f1e145 100644
+--- a/backend/src/services/company-absence-settings.integration.test.ts
++++ b/backend/src/services/company-absence-settings.integration.test.ts
+@@ -1,58 +1,58 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+   requireDinamicCompanyId,
+ } from "../test-helpers/integration-test";
+ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { STANDARD_ABSENCE_TYPE_CODES } from "../constants/company-absence";
+ import { absenceTypeRepository } from "../repositories/absence-type.repository";
+ import { companyAbsenceSettingsRepository } from "../repositories/company-absence-settings.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+ import { hashPassword } from "../utils/password";
+ import { getCurrentYearInTimezone } from "../utils/operational-year";
+ 
+ const TEST_OWNER_EMAIL = "integration-absence-settings-owner@test.local";
+ 
+ const uniqueCompanyName = (): string =>
+   `Absence Settings Co ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ 
+ const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}`;
+ 
+ describeDatabaseIntegration("company absence settings integration", () => {
+   let baseUrl = "";
+   let closeServer: (() => Promise<void>) | null = null;
+   let dinamicCompanyId = "";
+   let ownerUserId = "";
+   let ownerUserEmail = "";
+-  let createdCompanyIds: string[] = [];
+-  let createdEmployeeIds: string[] = [];
+-  let createdUserIds: string[] = [];
++  const createdCompanyIds: string[] = [];
++  const createdEmployeeIds: string[] = [];
++  const createdUserIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     const { app } = await import("../app");
+     const server = await startTestServer(app);
+     baseUrl = server.baseUrl;
+     closeServer = server.close;
+ 
+     dinamicCompanyId = await requireDinamicCompanyId();
+ 
+     const passwordHash = await hashPassword("integration-test-password");
+     let owner = await userRepository.findByEmail(TEST_OWNER_EMAIL);
+     if (!owner) {
+       owner = await userRepository.create({
+         name: "Absence Settings Owner",
+         email: TEST_OWNER_EMAIL,
+         passwordHash,
+         role: "ADMIN",
+diff --git a/backend/src/services/company-deletion-purge.service.ts b/backend/src/services/company-deletion-purge.service.ts
+index 85f24c6..cfb0207 100644
+--- a/backend/src/services/company-deletion-purge.service.ts
++++ b/backend/src/services/company-deletion-purge.service.ts
+@@ -67,41 +67,41 @@ export const companyDeletionPurgeService = {
+     });
+ 
+     try {
+       await this.runFromStage(company, leaseOwner, clock, deletionRecordId);
+       await this.completeAttemptRecord(deletionRecordId, leaseOwner, companyId, clock());
+       return { deletionRecordId };
+     } catch (error) {
+       const message = error instanceof Error ? error.message : String(error);
+       await this.failAttemptRecord(deletionRecordId, message.slice(0, 1000));
+       throw error;
+     }
+   },
+ 
+   async runFromStage(
+     company: Company,
+     leaseOwner: string,
+     clock: Clock,
+     deletionRecordId: string,
+   ): Promise<void> {
+     const companyId = company.id;
+-    let start = stageIndex(company.deletionPurgeStage);
++    const start = stageIndex(company.deletionPurgeStage);
+ 
+     for (let i = start; i < STAGE_ORDER.length - 1; i += 1) {
+       const stage = STAGE_ORDER[i];
+       await this.assertLease(companyId, leaseOwner, clock);
+       const advanced = await companyRepository.setDeletionPurgeStage({
+         companyId,
+         leaseOwner,
+         stage,
+         now: clock(),
+       });
+       if (!advanced) {
+         throw new LeaseLostError(companyId);
+       }
+       await this.updateAttemptStage(deletionRecordId, stage);
+ 
+       switch (stage) {
+         case "STORAGE_DISCOVERY":
+           await this.enqueueAttachmentObjectKeys(companyId);
+           break;
+         case "STORAGE_DELETE":
+diff --git a/backend/src/services/company-isolation.integration.test.ts b/backend/src/services/company-isolation.integration.test.ts
+index 91d2451..5a9e839 100644
+--- a/backend/src/services/company-isolation.integration.test.ts
++++ b/backend/src/services/company-isolation.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import { AppError } from "../errors/app-error";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { companyContextService } from "../services/company-context.service";
+ import { companyService } from "../services/company.service";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { serviceRepository } from "../repositories/service.repository";
+ import { companyRepository } from "../repositories/company.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { getPool } from "../database/connection";
+ 
+ describeDatabaseIntegration("multi-company foundation isolation", () => {
+   let dinamicCompanyId = "";
+   let otherCompanyId = "";
+   let employeeInDinamicId = "";
+diff --git a/backend/src/services/company-modules.integration.test.ts b/backend/src/services/company-modules.integration.test.ts
+index 8125dc7..059b81b 100644
+--- a/backend/src/services/company-modules.integration.test.ts
++++ b/backend/src/services/company-modules.integration.test.ts
+@@ -1,58 +1,58 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { companyModuleRepository } from "../repositories/company-module.repository";
+ import { companyRepository } from "../repositories/company.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { hashPassword } from "../utils/password";
+ 
+ const TEST_OWNER_EMAIL = "integration-modules-owner@test.local";
+ const TEST_ADMIN_EMAIL = "integration-modules-admin@test.local";
+ const TEST_READ_ONLY_EMAIL = "integration-modules-readonly@test.local";
+ const TEST_OUTSIDER_EMAIL = "integration-modules-outsider@test.local";
+ 
+ describeDatabaseIntegration("company modules API integration", () => {
+   let baseUrl = "";
+   let closeServer: (() => Promise<void>) | null = null;
+   let dinamicCompanyId = "";
+   let ownerUserId = "";
+   let ownerUserEmail = "";
+   let adminUserId = "";
+   let adminUserEmail = "";
+   let readOnlyUserId = "";
+   let readOnlyUserEmail = "";
+   let outsiderUserId = "";
+   let outsiderUserEmail = "";
+   let platformAdminId = "";
+   let platformAdminEmail = "";
+-  let createdUserIds: string[] = [];
++  const createdUserIds: string[] = [];
+ 
+   const restoreAllModules = async (companyId: string) => {
+     await companyModuleRepository.bulkSet(
+       companyId,
+       ALL_COMPANY_MODULE_KEYS.map((moduleKey) => ({ moduleKey, isEnabled: true })),
+     );
+   };
+ 
+   const patchModules = async (
+     token: string,
+     companyId: string,
+     modules: Array<{ moduleKey: string; isEnabled: boolean }>,
+   ) => {
+     return apiRequest(baseUrl, `/api/companies/${companyId}/modules`, {
+       method: "PATCH",
+       token,
+       body: { modules },
+     });
+   };
+ 
+diff --git a/backend/src/services/company-settings.integration.test.ts b/backend/src/services/company-settings.integration.test.ts
+index da74ecf..e256dd1 100644
+--- a/backend/src/services/company-settings.integration.test.ts
++++ b/backend/src/services/company-settings.integration.test.ts
+@@ -26,41 +26,41 @@ describe("company settings permissions", () => {
+   });
+ 
+   it("READ_ONLY does not have company:settings:update", () => {
+     assert.equal(resolvePermissionsForRole("READ_ONLY").has("company:settings:update"), false);
+   });
+ });
+ 
+ describeDatabaseIntegration("company settings API integration", () => {
+   let baseUrl = "";
+   let closeServer: (() => Promise<void>) | null = null;
+   let dinamicCompanyId = "";
+   let otherCompanyId = "";
+   let platformAdminId = "";
+   let platformAdminEmail = "";
+   let ownerUserId = "";
+   let ownerUserEmail = "";
+   let readOnlyUserId = "";
+   let readOnlyUserEmail = "";
+   let outsiderUserId = "";
+   let outsiderUserEmail = "";
+-  let createdUserIds: string[] = [];
++  const createdUserIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     const { app } = await import("../app");
+     const server = await startTestServer(app);
+     baseUrl = server.baseUrl;
+     closeServer = server.close;
+ 
+     const dinamic = await companyRepository.findByName("Dinamic Systems");
+     assert.ok(dinamic);
+     dinamicCompanyId = dinamic.id;
+ 
+     const pool = getPool();
+     const otherCompanyResult = await pool.request().query(`
+       SELECT TOP 1 id FROM companies WHERE name <> N'Dinamic Systems' ORDER BY created_at ASC
+     `);
+     if (otherCompanyResult.recordset[0]?.id) {
+       otherCompanyId = String(otherCompanyResult.recordset[0].id);
+diff --git a/backend/src/services/employee-absence-balance-backfill.integration.test.ts b/backend/src/services/employee-absence-balance-backfill.integration.test.ts
+index 1f948d4..5e4017e 100644
+--- a/backend/src/services/employee-absence-balance-backfill.integration.test.ts
++++ b/backend/src/services/employee-absence-balance-backfill.integration.test.ts
+@@ -1,46 +1,46 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { absenceBalanceRepository } from "../repositories/absence-balance.repository";
+ import { absenceTypeRepository } from "../repositories/absence-type.repository";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { companyAbsenceSettingsService } from "./company-absence-settings.service";
+ import { employeeAbsenceBalanceBackfillService } from "./employee-absence-balance-backfill.service";
+ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+ import { getCurrentYearInTimezone } from "../utils/operational-year";
+ 
+ const uniqueCompanyName = (): string =>
+   `Backfill Co ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ 
+ const uniquePhone = (): string => `+54911${Date.now().toString().slice(-8)}`;
+ 
+ describeDatabaseIntegration("employee absence balance backfill integration", () => {
+-  let createdCompanyIds: string[] = [];
+-  let createdEmployeeIds: string[] = [];
++  const createdCompanyIds: string[] = [];
++  const createdEmployeeIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+   });
+ 
+   after(async () => {
+     const pool = getPool();
+ 
+     for (const employeeId of createdEmployeeIds) {
+       await pool.request().input("employeeId", sql.UniqueIdentifier, employeeId).query(`
+         DELETE FROM employee_absence_balances WHERE employee_id = @employeeId;
+         DELETE FROM employees WHERE id = @employeeId;
+       `);
+     }
+ 
+     for (const companyId of createdCompanyIds) {
+       await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
+         DELETE FROM employee_absence_balances WHERE company_id = @companyId;
+         DELETE FROM employees WHERE company_id = @companyId;
+diff --git a/backend/src/services/employee-deactivation.integration.test.ts b/backend/src/services/employee-deactivation.integration.test.ts
+index a15010a..6acc9b2 100644
+--- a/backend/src/services/employee-deactivation.integration.test.ts
++++ b/backend/src/services/employee-deactivation.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ import { employeeDeactivationService } from "./employee-deactivation.service";
+ import { employeeService } from "./employee.service";
+ import { operationAssignmentService } from "./operation-assignment.service";
+ import { AppError } from "../errors/app-error";
+ import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
+ 
+ const uniquePhone = (suffix: number): string =>
+   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+ 
+ describeDatabaseIntegration("employee assisted deactivation integration", () => {
+   const fixtures = createIntegrationFixtureTracker();
+ 
+diff --git a/backend/src/services/operation-assignment-batch.concurrency.integration.test.ts b/backend/src/services/operation-assignment-batch.concurrency.integration.test.ts
+index 0e37360..394cbaf 100644
+--- a/backend/src/services/operation-assignment-batch.concurrency.integration.test.ts
++++ b/backend/src/services/operation-assignment-batch.concurrency.integration.test.ts
+@@ -1,19 +1,19 @@
+ import assert from "node:assert/strict";
+-import { describe, it } from "node:test";
++import { it } from "node:test";
+ import { describeDatabaseIntegration } from "../test-helpers/integration-test";
+ 
+ /**
+  * Concurrency / atomic batch assignment against SQL Server.
+  * Enable with RUN_DB_INTEGRATION_TESTS=true and required DB env vars.
+  *
+  * Covered scenarios (implemented when DB is available):
+  * - two identical batches concurrent → one assigns, other skips / no partial orphan rows
+  * - batch + singular concurrent → overlap locked via UPDLOCK/HOLDLOCK
+  * - unexpected mid-batch failure → full rollback of new rows
+  * - retry of same batch → idempotent skips for already_assigned
+  */
+ describeDatabaseIntegration("operation assignment batch concurrency", () => {
+   it("documents concurrency expectations for SQL Server runs", () => {
+     assert.equal(process.env.RUN_DB_INTEGRATION_TESTS, "true");
+   });
+ });
+diff --git a/backend/src/services/operation-assignment.service.ts b/backend/src/services/operation-assignment.service.ts
+index c44b574..15a8e18 100644
+--- a/backend/src/services/operation-assignment.service.ts
++++ b/backend/src/services/operation-assignment.service.ts
+@@ -1,48 +1,46 @@
+ import sql from "mssql";
+ import { getPool } from "../database/connection";
+ import { AppError } from "../errors/app-error";
+ import { companySettingsRepository } from "../repositories/company-settings.repository";
+ import { getDateIsoInTimezone } from "../utils/absence-date";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
+ import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
+ import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
+ import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
+ import { operationRepository } from "../repositories/operation.repository";
+ import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
+ import type { OperationEmployeeAssignment } from "../types/domain";
+ import {
+-  assertValidAssignmentDateRange,
+   isAssignmentActiveOnWorkDate,
+   resolveAssignmentLifecycleState,
+ } from "../utils/assignment-period";
+ import { resolveOperationTimezone } from "../utils/operation-timezone";
+ import { isOperationAssignable } from "../utils/operation-status";
+ import { safeRollback } from "../utils/safe-transaction";
+ import { logAuditSafe } from "../utils/audit-post-commit";
+ import { operationWorkDateService } from "./operation-work-date.service";
+ import { operationAssignmentCore } from "./operation-assignment-core.service";
+ import { auditService } from "./audit.service";
+ import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
+ import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
+-import { workdayMaterializationService } from "./workday-materialization.service";
+ 
+ const withLifecycleState = (
+   assignment: OperationEmployeeAssignment,
+   referenceDate: string,
+ ): OperationEmployeeAssignment => {
+   if (assignment.cancelledAt) {
+     return { ...assignment, lifecycleState: undefined };
+   }
+ 
+   const lifecycleState = resolveAssignmentLifecycleState(
+     {
+       validFrom: assignment.validFrom,
+       validUntil: assignment.validUntil,
+       cancelledAt: assignment.cancelledAt,
+     },
+     referenceDate,
+   );
+ 
+   return {
+     ...assignment,
+diff --git a/backend/src/services/operation-import.service.ts b/backend/src/services/operation-import.service.ts
+index f01109b..13e1281 100644
+--- a/backend/src/services/operation-import.service.ts
++++ b/backend/src/services/operation-import.service.ts
+@@ -1,37 +1,36 @@
+ import sql from "mssql";
+ import {
+   IMPORT_EMPTY_LOCATION_VALUE_MESSAGE,
+   IMPORT_LOCATION_AMBIGUOUS_MESSAGE,
+   IMPORT_LOCATION_NOT_FOUND_MESSAGE,
+   IMPORT_UNKNOWN_LOCATION_TYPE_MESSAGE,
+   UNSUPPORTED_FILE_TYPE_MESSAGE,
+ } from "../constants/operation-import";
+ import { getPool } from "../database/connection";
+ import { AppError } from "../errors/app-error";
+ import { operationRepository } from "../repositories/operation.repository";
+ import { serviceRepository } from "../repositories/service.repository";
+ import type { CreateOneTimeOperationInput } from "../schemas/operation.schema";
+ import type { Service } from "../types/domain";
+ import type {
+   OperationImportConfirmRow,
+-  OperationImportFormat,
+   OperationImportPreviewResult,
+   OperationImportPreviewRow,
+ } from "../types/operation-import";
+ import { mapImportHeaders } from "../utils/operation-import-headers";
+ import { createOperationImportDateTimeUtils } from "../utils/operation-import-datetime";
+ import { isOperationStartInPast } from "../utils/operation-lifecycle";
+ import {
+   detectSpreadsheetFileType,
+   isLikelyBinaryUpload,
+   parseSpreadsheetBuffer,
+   type SpreadsheetFileType,
+ } from "../utils/spreadsheet-parse";
+ import {
+   companyOperationalDefaultsResolver,
+   type ImportOperationalDefaults,
+ } from "./company-operational-defaults.resolver";
+ import { companyLocationTypesService } from "./company-location-types.service";
+ 
+ const normalizeServiceKey = (value: string): string => {
+   const trimmed = value.trim();
+diff --git a/backend/src/services/operation-recurring-reassignment.integration.test.ts b/backend/src/services/operation-recurring-reassignment.integration.test.ts
+index f5a9d39..b94dbcc 100644
+--- a/backend/src/services/operation-recurring-reassignment.integration.test.ts
++++ b/backend/src/services/operation-recurring-reassignment.integration.test.ts
+@@ -1,38 +1,37 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import { WEEKDAYS } from "../constants/weekday";
+ import {
+   describeDatabaseIntegration,
+   normalizeSqlDateIso,
+   resolveCompanyTodayIso,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ import { operationAttendanceRepository } from "../repositories/operation-attendance.repository";
+ import { operationAssignmentService } from "../services/operation-assignment.service";
+ import { operationService } from "../services/operation.service";
+ import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
+-import { addDaysToDateIso } from "../utils/recurring-workday-instant";
+ 
+ const uniquePhone = (suffix: number): string =>
+   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+ 
+ const allDaysSchedule = WEEKDAYS.map((dayOfWeek) => ({
+   dayOfWeek,
+   isEnabled: true,
+   startTime: "09:00",
+   endTime: "18:00",
+ }));
+ 
+ interface ExpectationRow {
+   id: string;
+   work_date: string;
+   expectation_status: string;
+   cancellation_reason: string | null;
+   operation_assignment_id: string | null;
+   cancelled_at: string | null;
+ }
+ 
+diff --git a/backend/src/services/operation-schedule-confirmation-reset.integration.test.ts b/backend/src/services/operation-schedule-confirmation-reset.integration.test.ts
+index 32c7c58..f1ce4c5 100644
+--- a/backend/src/services/operation-schedule-confirmation-reset.integration.test.ts
++++ b/backend/src/services/operation-schedule-confirmation-reset.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it, mock } from "node:test";
++import { after, before, it, mock } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
+ import { getPool } from "../database/connection";
+ 
+ const uniquePhone = (suffix: number): string =>
+   `+54911${Date.now().toString().slice(-7)}${suffix}`;
+ 
+ describeDatabaseIntegration("operation schedule confirmation reset integration", () => {
+   const fixtures = createIntegrationFixtureTracker();
+ 
+   before(async () => {
+     await setupDatabaseIntegration();
+   });
+ 
+   after(async () => {
+diff --git a/backend/src/services/operator-permissions.integration.test.ts b/backend/src/services/operator-permissions.integration.test.ts
+index 059cba2..0a2ff9c 100644
+--- a/backend/src/services/operator-permissions.integration.test.ts
++++ b/backend/src/services/operator-permissions.integration.test.ts
+@@ -1,45 +1,45 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { companyRepository } from "../repositories/company.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { hashPassword } from "../utils/password";
+ 
+ const TEST_OPERATOR_EMAIL = "integration-operator@test.local";
+ 
+ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () => {
+   let baseUrl = "";
+   let closeServer: (() => Promise<void>) | null = null;
+   let dinamicCompanyId = "";
+   let operatorUserId = "";
+   let operatorUserEmail = "";
+-  let createdUserIds: string[] = [];
++  const createdUserIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     const { app } = await import("../app");
+     const server = await startTestServer(app);
+     baseUrl = server.baseUrl;
+     closeServer = server.close;
+ 
+     const dinamic = await companyRepository.findByName("Dinamic Systems");
+     assert.ok(dinamic);
+     dinamicCompanyId = dinamic.id;
+ 
+     const passwordHash = await hashPassword("integration-test-password");
+     let operator = await userRepository.findByEmail(TEST_OPERATOR_EMAIL);
+     if (!operator) {
+       operator = await userRepository.create({
+         name: "Integration Operator",
+         email: TEST_OPERATOR_EMAIL,
+diff --git a/backend/src/services/platform-company.integration.test.ts b/backend/src/services/platform-company.integration.test.ts
+index e43600e..e2c948e 100644
+--- a/backend/src/services/platform-company.integration.test.ts
++++ b/backend/src/services/platform-company.integration.test.ts
+@@ -1,51 +1,50 @@
+ import assert from "node:assert/strict";
+ import { after, before, it } from "node:test";
+-import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
+ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { companyModuleRepository } from "../repositories/company-module.repository";
+ import { companyRepository } from "../repositories/company.repository";
+ import { companySettingsRepository } from "../repositories/company-settings.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userInvitationRepository } from "../repositories/user-invitation.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { companyWorkScheduleService } from "./company-work-schedule.service";
+ import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
+ 
+ const uniqueCompanyName = (): string =>
+   `Integration Test Co ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ 
+ const deleteCreatedCompany = async (companyId: string): Promise<void> => {
+   await deleteCompanyCascade(companyId);
+ };
+ 
+ describeDatabaseIntegration("platform company creation integration", () => {
+   let platformAdminId = "";
+-  let createdCompanyIds: string[] = [];
++  const createdCompanyIds: string[] = [];
+ 
+   before(async () => {
+     setupUnitTestEnv();
+     await setupDatabaseIntegration();
+ 
+     const platformAdmin = await userRepository.findByEmail("admin@dinamicsystems.com");
+     assert.ok(platformAdmin?.isPlatformAdmin, "platform superadmin must exist");
+     platformAdminId = platformAdmin.id;
+   });
+ 
+   after(async () => {
+     try {
+       for (const companyId of createdCompanyIds.splice(0)) {
+         await deleteCreatedCompany(companyId);
+       }
+     } finally {
+       await teardownDatabaseIntegration();
+     }
+   });
+ 
+diff --git a/backend/src/services/service-name-uniqueness.integration.test.ts b/backend/src/services/service-name-uniqueness.integration.test.ts
+index 54aa854..8f510c1 100644
+--- a/backend/src/services/service-name-uniqueness.integration.test.ts
++++ b/backend/src/services/service-name-uniqueness.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+ import { getPool } from "../database/connection";
+ import { AppError } from "../errors/app-error";
+ import { serviceRepository } from "../repositories/service.repository";
+ import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+ import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
+ import { serviceService } from "./service.service";
+ 
+ const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+ 
+ const createFixtureCompany = async (
+   label: string,
+ ): Promise<{ companyId: string; ownerEmail: string }> => {
+   const suffix = uniqueSuffix();
+diff --git a/backend/src/services/tenant-isolation.integration.test.ts b/backend/src/services/tenant-isolation.integration.test.ts
+index 9bb1335..2b63e75 100644
+--- a/backend/src/services/tenant-isolation.integration.test.ts
++++ b/backend/src/services/tenant-isolation.integration.test.ts
+@@ -1,22 +1,22 @@
+ import assert from "node:assert/strict";
+-import { after, before, describe, it } from "node:test";
++import { after, before, it } from "node:test";
+ import sql from "mssql";
+ import { AppError } from "../errors/app-error";
+ import {
+   describeDatabaseIntegration,
+   setupDatabaseIntegration,
+   teardownDatabaseIntegration,
+ } from "../test-helpers/integration-test";
+ import { companyContextService } from "./company-context.service";
+ import { employeeRepository } from "../repositories/employee.repository";
+ import { serviceRepository } from "../repositories/service.repository";
+ import { operationRepository } from "../repositories/operation.repository";
+ import { attendanceRepository } from "../repositories/attendance.repository";
+ import { absenceRequestRepository } from "../repositories/absence-request.repository";
+ import { botSimulationSessionRepository } from "../repositories/bot-simulation-session.repository";
+ import { companyRepository } from "../repositories/company.repository";
+ import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+ import { userRepository } from "../repositories/user.repository";
+ import { getPool } from "../database/connection";
+ 
+ describeDatabaseIntegration("tenant isolation hardening", () => {
+diff --git a/backend/src/services/whatsapp-company-context.service.ts b/backend/src/services/whatsapp-company-context.service.ts
+index c6098b3..c2af19a 100644
+--- a/backend/src/services/whatsapp-company-context.service.ts
++++ b/backend/src/services/whatsapp-company-context.service.ts
+@@ -40,41 +40,41 @@ const buildResolvedContext = (input: {
+     phoneNumber: input.phoneNumber,
+     session: input.session,
+     resolutionSource: input.resolutionSource,
+   };
+   logResolution(context);
+   return { kind: "resolved", context };
+ };
+ 
+ const resolveForcedCompany = async (
+   companyId: string,
+   phoneNumber: string,
+ ): Promise<WhatsAppCompanyResolution> => {
+   const simulation = getBotRuntimeContext();
+   const session =
+     await botSessionRepository.findLatestValidActiveByPhoneForCompanyResolutionOnly(phoneNumber);
+   const scopedSession =
+     session?.companyId === companyId
+       ? session
+       : await botSessionRepository.findValidActiveByPhone(companyId, phoneNumber);
+ 
+-  let employeeId: string | null = null;
++  let employeeId: string | null;
+   if (simulation?.employeeIdOverride) {
+     employeeId = simulation.employeeIdOverride;
+   } else {
+     const employee = await employeeRepository.findByPhone(companyId, phoneNumber);
+     employeeId = employee?.active ? employee.id : null;
+   }
+ 
+   return buildResolvedContext({
+     companyId,
+     employeeId,
+     phoneNumber,
+     session: scopedSession,
+     resolutionSource: "simulation_forced_company",
+   });
+ };
+ 
+ const resolveFromActiveSession = async (
+   phoneNumber: string,
+ ): Promise<WhatsAppCompanyResolution | null> => {
+   const session = await botSessionRepository.findLatestValidActiveByPhoneForCompanyResolutionOnly(
+diff --git a/backend/src/services/whatsapp-webhook.integration.test.ts b/backend/src/services/whatsapp-webhook.integration.test.ts
+index 960dea1..5e1f6df 100644
+--- a/backend/src/services/whatsapp-webhook.integration.test.ts
++++ b/backend/src/services/whatsapp-webhook.integration.test.ts
+@@ -18,62 +18,40 @@ import {
+   GLOBAL_CANCEL_MESSAGE,
+   MODULE_DISABLED_MESSAGE,
+   UNKNOWN_EMPLOYEE_MESSAGE,
+ } from "./bot/bot-response.builder";
+ import {
+   NO_ACTIVE_FLOW_CANCEL_PREFIX,
+   NO_WHATSAPP_OPTIONS_MESSAGE,
+   VOLVER_ACTIVE_SESSION_MESSAGE,
+ } from "./bot/bot-menu.builder";
+ 
+ const companyA = "11111111-1111-1111-1111-111111111111";
+ const employeeA = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+ const operationA = "cccccccc-cccc-cccc-cccc-cccccccccccc";
+ const operationB = "dddddddd-dddd-dddd-dddd-dddddddddddd";
+ const employeeWorkdayA = "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee";
+ const employeeWorkdayB = "ffffffff-ffff-ffff-ffff-ffffffffffff";
+ const attendanceA = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+ const phone = "+5491111111111";
+ const botNumber = "whatsapp:+10000000000";
+ 
+-const compatibleOperation = (id: string, serviceName = "Servicio Centro") => ({
+-  id,
+-  serviceName,
+-  scheduledStart: "2026-07-05T15:00:00.000Z",
+-  scheduledEnd: "2026-07-05T21:00:00.000Z",
+-  serviceLatitude: -34.6,
+-  serviceLongitude: -58.4,
+-  allowedRadiusMeters: 150,
+-  earlyToleranceMinutes: 15,
+-  lateToleranceMinutes: 30,
+-});
+-
+-const checkoutEligibleOperation = (id: string, serviceName = "Servicio Centro") => ({
+-  id,
+-  serviceName,
+-  scheduledStart: "2026-07-05T15:00:00.000Z",
+-  scheduledEnd: "2026-07-05T21:00:00.000Z",
+-  serviceLatitude: -34.6,
+-  serviceLongitude: -58.4,
+-  allowedRadiusMeters: 150,
+-});
+-
+ const checkInWorkdayCandidate = (
+   operationId: string,
+   employeeWorkdayId: string,
+   serviceName = "Servicio Centro",
+ ) => ({
+   employeeWorkdayId,
+   operationWorkdayId: "11111111-1111-1111-1111-111111111112",
+   operationId,
+   serviceId: "22222222-2222-2222-2222-222222222222",
+   serviceName,
+   serviceAddress: "Av. Corrientes 1234",
+   serviceLocality: "CABA",
+   serviceLatitude: -34.6,
+   serviceLongitude: -58.4,
+   allowedRadiusMeters: 150,
+   operationKind: "ONE_TIME" as const,
+   workDate: "2026-07-05",
+   expectedStartAt: "2026-07-05T15:00:00.000Z",
+   expectedEndAt: "2026-07-05T21:00:00.000Z",
+   earlyToleranceMinutes: 15,
+diff --git a/backend/src/types/operational-domain.test.ts b/backend/src/types/operational-domain.test.ts
+index 9778648..9d2ab46 100644
+--- a/backend/src/types/operational-domain.test.ts
++++ b/backend/src/types/operational-domain.test.ts
+@@ -1,38 +1,38 @@
+ import assert from "node:assert/strict";
+ import { describe, it } from "node:test";
+ import type {
+   AttendanceRecord,
+   Employee,
+   Operation,
+   OperationEmployeeAssignment,
+   Service,
+ } from "./domain";
+ import type {
+   OperationAssignment,
+   OperationAttendanceRecord,
+   OperationalLocation,
+   ScheduledOperation,
+   Worker,
+ } from "./operational-domain";
+ 
+-type AssertAssignable<T extends U, U> = true;
++type AssertAssignable<_T extends U, U> = true;
+ 
+ type _OperationalLocationIsService = AssertAssignable<OperationalLocation, Service>;
+ type _ServiceIsOperationalLocation = AssertAssignable<Service, OperationalLocation>;
+ type _ScheduledOperationIsOperation = AssertAssignable<ScheduledOperation, Operation>;
+ type _OperationIsScheduledOperation = AssertAssignable<Operation, ScheduledOperation>;
+ type _WorkerIsEmployee = AssertAssignable<Worker, Employee>;
+ type _EmployeeIsWorker = AssertAssignable<Employee, Worker>;
+ type _OperationAssignmentIsOperationEmployeeAssignment = AssertAssignable<
+   OperationAssignment,
+   OperationEmployeeAssignment
+ >;
+ type _OperationAttendanceRecordIsAttendanceRecord = AssertAssignable<
+   OperationAttendanceRecord,
+   AttendanceRecord
+ >;
+ 
+ const sampleService: Service = {
+   id: "service-1",
+   name: "Centro",
+   address: "Calle 1",
+diff --git a/backend/src/types/operational-domain.ts b/backend/src/types/operational-domain.ts
+index ad044d7..b38be25 100644
+--- a/backend/src/types/operational-domain.ts
++++ b/backend/src/types/operational-domain.ts
+@@ -1,26 +1,25 @@
+ import type {
+   AttendanceRecord,
+   Employee,
+   Operation,
+   OperationEmployeeAssignment,
+-  OperationWithService,
+   Service,
+ } from "./domain";
+ 
+ /**
+  * Conceptual alias for {@link Service}.
+  *
+  * Physical table: `operational_locations`. Product term: "Servicio".
+  */
+ export type OperationalLocation = Service;
+ 
+ /**
+  * Conceptual alias for {@link Operation}.
+  *
+  * Physical table: `scheduled_operations`. Product term: "Operación" / "Jornada".
+  */
+ export type ScheduledOperation = Operation;
+ 
+ /**
+  * Conceptual alias for {@link Employee}.
+  *
+diff --git a/backend/src/types/statistics.ts b/backend/src/types/statistics.ts
+index a5e4f6c..d26e13c 100644
+--- a/backend/src/types/statistics.ts
++++ b/backend/src/types/statistics.ts
+@@ -1,26 +1,54 @@
+ import type { OperationKind } from "../constants/operation-kind";
+ import type { CheckoutStatus } from "../constants/checkout-status";
+ import type { PunctualityStatus } from "../types/domain";
+-import type { PeriodMetricDelta } from "../utils/attendance-statistics-metrics";
+ import type { DerivedEmployeeWorkdayState } from "./employee-workday-state";
+ 
++/** Period-over-period rate comparison (defined in types to keep utils → types direction). */
++export interface PeriodMetricDelta {
++  current: number;
++  previous: number;
++  absoluteDelta: number;
++  percentDelta: number | null;
++  currentSample: number;
++  previousSample: number;
++  comparable: boolean;
++}
++
++export type StatisticsActionExceptionKey =
++  | "open_attendance"
++  | "unjustified_absence"
++  | "outside_geofence"
++  | "pending_review"
++  | "late_arrival"
++  | "early_departure";
++
++export interface StatisticsActionExceptionItem {
++  key: StatisticsActionExceptionKey;
++  status: StatisticsActionExceptionKey;
++  label: string;
++  count: number;
++  /** Null when there is no valid universe for a rate. */
++  rate: number | null;
++  denominator: number;
++}
++
+ export interface AttendanceStatisticsSummary {
+   scheduledWorkdays: number;
+   attendanceRequiredWorkdays: number;
+   presentWorkdays: number;
+   absentWorkdays: number;
+   justifiedWorkdays: number;
+   expectedOpenWorkdays: number;
+   cancelledWorkdays: number;
+   attendanceRate: number;
+   absenceRate: number;
+   onTimeWorkdays: number;
+   lateWorkdays: number;
+   punctualityRate: number;
+   earlyDepartureWorkdays: number;
+   workedMinutes: number;
+   overtimeMinutes: number;
+   openAttendanceWorkdays: number;
+   outsideGeofenceCount: number;
+   pendingReviewCount: number;
+   rejectedCount: number;
+@@ -35,41 +63,41 @@ export interface AttendanceStatisticsSummary {
+   /** Workdays with a validation status. */
+   validationEvaluableWorkdays: number;
+   /** Workdays with a completed checkout (early-departure universe). */
+   checkoutEvaluableWorkdays: number;
+ }
+ 
+ export interface AttendanceStatisticsPeriodComparison {
+   attendanceRate: PeriodMetricDelta;
+   punctualityRate: PeriodMetricDelta;
+   absenceRate: PeriodMetricDelta;
+   openAttendanceRate: PeriodMetricDelta;
+   outsideGeofenceRate: PeriodMetricDelta;
+ }
+ 
+ export interface AttendanceStatisticsSummaryPayload extends AttendanceStatisticsSummary {
+   previousPeriod: AttendanceStatisticsSummary | null;
+   comparison: AttendanceStatisticsPeriodComparison | null;
+   minSampleWorkdays: number;
+   companyTimeZone: string;
+   companyLocalDate: string;
+-  actionExceptions: import("../utils/statistics-action-exceptions").StatisticsActionExceptionItem[];
++  actionExceptions: StatisticsActionExceptionItem[];
+ }
+ 
+ export interface AttendanceTimelinePoint {
+   date: string;
+   present: number;
+   absent: number;
+   justified: number;
+   expected: number;
+   scheduled: number;
+   onTime: number;
+   late: number;
+   outsideGeofence: number;
+   pendingReview: number;
+   rejected: number;
+   attendanceRate: number;
+   punctualityRate: number;
+   /** Day still in progress in company reference clock. */
+   isPartial: boolean;
+ }
+ 
+diff --git a/backend/src/utils/absence-attachments/file-validation.ts b/backend/src/utils/absence-attachments/file-validation.ts
+index 2de72e6..3f90e7f 100644
+--- a/backend/src/utils/absence-attachments/file-validation.ts
++++ b/backend/src/utils/absence-attachments/file-validation.ts
+@@ -19,41 +19,41 @@ const FORBIDDEN_EXTENSIONS = new Set([
+   ".mjs",
+   ".cjs",
+   ".html",
+   ".htm",
+   ".svg",
+   ".zip",
+   ".rar",
+   ".7z",
+   ".bat",
+   ".cmd",
+   ".sh",
+   ".php",
+   ".dll",
+   ".so",
+   ".docm",
+   ".xlsm",
+   ".pptm",
+ ]);
+ 
+ export const sanitizeOriginalFileName = (raw: string): string => {
+-  const trimmed = raw.trim().replace(/[\u0000-\u001f\u007f]/g, "");
++  const trimmed = raw.trim().replace(/\p{Cc}/gu, "");
+   const base = trimmed.split(/[/\\]/).pop() ?? "file";
+   const withoutTraversal = base.replace(/\.\./g, "");
+   const sanitized = withoutTraversal.replace(/[^\w.\- ()áéíóúÁÉÍÓÚñÑ]/gi, "_").slice(0, 180);
+   return sanitized.length > 0 ? sanitized : "file";
+ };
+ 
+ export const normalizeFileName = (
+   original: string,
+   detectedMime: AbsenceAttachmentAllowedMime,
+ ): string => {
+   const sanitized = sanitizeOriginalFileName(original);
+   const ext = MIME_EXTENSIONS[detectedMime][0];
+   const knownExts = Object.values(MIME_EXTENSIONS).flat();
+ 
+   let base = sanitized;
+   // Collapse corrupt ChatGPT-style names that lost a dot: "p.m.png" → "p.mpng".
+   if (/\.mpng$/i.test(base)) {
+     base = base.slice(0, -".mpng".length);
+   }
+   for (let i = 0; i < 4; i += 1) {
+diff --git a/backend/src/utils/absence-day-breakdown.types.ts b/backend/src/utils/absence-day-breakdown.types.ts
+new file mode 100644
+index 0000000..0df577a
+--- /dev/null
++++ b/backend/src/utils/absence-day-breakdown.types.ts
+@@ -0,0 +1,15 @@
++import type { AbsenceCalendarDateType } from "../constants/absence-calendar";
++
++/**
++ * One calendar day in an absence duration breakdown.
++ * Shared contract between duration calculation and year allocation helpers.
++ */
++export type AbsenceDayBreakdownItem = {
++  date: string;
++  counted: number;
++  isWorkingDay: boolean;
++  reason: "WORKING" | "WEEKEND" | "HOLIDAY" | "NON_WORKING" | "OVERRIDE_WORKING" | "PARTIAL";
++  label?: string;
++};
++
++export type { AbsenceCalendarDateType };
+diff --git a/backend/src/utils/absence-duration.ts b/backend/src/utils/absence-duration.ts
+index d9b8dc0..a586695 100644
+--- a/backend/src/utils/absence-duration.ts
++++ b/backend/src/utils/absence-duration.ts
+@@ -1,50 +1,45 @@
+ import type { AbsenceDayPeriod } from "../types/absence";
+ import type { AbsenceCalendarDateType, AbsenceDayCountingMode } from "../constants/absence-calendar";
+ import { ABSENCE_MAX_RANGE_CALENDAR_DAYS } from "../constants/absence-calendar";
+ import { isoWeekdayFromDateIso, type WeekdayNumber } from "../constants/weekday";
+ import {
+   compareAbsenceDates,
+   parseAbsenceDateInput,
+ } from "./absence-date";
++import type { AbsenceDayBreakdownItem } from "./absence-day-breakdown.types";
+ import { allocationsByYearFromBreakdown } from "./absence-year-allocations";
+ 
++export type { AbsenceDayBreakdownItem } from "./absence-day-breakdown.types";
++
+ export type CalendarWeekdayRule = {
+   dayOfWeek: WeekdayNumber;
+   isWorkingDay: boolean;
+ };
+ 
+ export type CalendarDateException = {
+   date: string;
+   name: string;
+   dateType: AbsenceCalendarDateType;
+   isWorkingDay: boolean;
+ };
+ 
+-export type AbsenceDayBreakdownItem = {
+-  date: string;
+-  counted: number;
+-  isWorkingDay: boolean;
+-  reason: "WORKING" | "WEEKEND" | "HOLIDAY" | "NON_WORKING" | "OVERRIDE_WORKING" | "PARTIAL";
+-  label?: string;
+-};
+-
+ export type AbsenceDurationCalculation = {
+   totalDays: number;
+   countingMode: AbsenceDayCountingMode;
+   calendarDays: number;
+   workingDays: number;
+   nonWorkingDays: number;
+   holidayDays: number;
+   partialDays: number;
+   timezone: string;
+   calendarId: string;
+   calendarVersion: number;
+   calculationVersion: number;
+   calculationInputHash?: string;
+   breakdown: AbsenceDayBreakdownItem[];
+   excludedSummary: string[];
+   allocationsByYear: Array<{ year: number; quantity: number }>;
+ };
+ 
+ const addDaysIso = (iso: string, days: number): string => {
+   const parsed = parseAbsenceDateInput(iso);
+diff --git a/backend/src/utils/absence-year-allocations.ts b/backend/src/utils/absence-year-allocations.ts
+index 371f7f6..2921a2e 100644
+--- a/backend/src/utils/absence-year-allocations.ts
++++ b/backend/src/utils/absence-year-allocations.ts
+@@ -1,23 +1,24 @@
+-import type { AbsenceDayBreakdownItem } from "./absence-duration";
++import type { AbsenceDayBreakdownItem } from "./absence-day-breakdown.types";
+ import { splitAbsenceQuantityByYear } from "./absence-balance-year-split";
+ 
++export type { AbsenceDayBreakdownItem };
+ export type YearAllocation = {
+   year: number;
+   quantity: number;
+ };
+ 
+ /**
+  * Aggregate counted day fractions from calendar breakdown by calendar year.
+  * Preferred source for ledger allocations when breakdown is available.
+  */
+ export const allocationsByYearFromBreakdown = (
+   breakdown: AbsenceDayBreakdownItem[],
+ ): YearAllocation[] => {
+   const byYear = new Map<number, number>();
+   for (const item of breakdown) {
+     if (!item.counted || item.counted <= 0) {
+       continue;
+     }
+     const year = Number.parseInt(item.date.slice(0, 4), 10);
+     if (!Number.isFinite(year)) {
+       continue;
+diff --git a/backend/src/utils/attendance-statistics-metrics.ts b/backend/src/utils/attendance-statistics-metrics.ts
+index d9e7194..22a8bdc 100644
+--- a/backend/src/utils/attendance-statistics-metrics.ts
++++ b/backend/src/utils/attendance-statistics-metrics.ts
+@@ -1,70 +1,64 @@
++import type { PeriodMetricDelta } from "../types/statistics";
++
++export type { PeriodMetricDelta };
++
+ export const roundRate = (numerator: number, denominator: number): number => {
+   if (denominator === 0) {
+     return 0;
+   }
+ 
+   return Math.round((numerator / denominator) * 1000) / 10;
+ };
+ 
+ export const calculateAttendanceRate = (presentWorkdays: number, absentWorkdays: number): number =>
+   roundRate(presentWorkdays, presentWorkdays + absentWorkdays);
+ 
+ export const calculateAbsenceRate = (presentWorkdays: number, absentWorkdays: number): number =>
+   roundRate(absentWorkdays, presentWorkdays + absentWorkdays);
+ 
+ export const calculatePunctualityRate = (onTimeWorkdays: number, lateWorkdays: number): number =>
+   roundRate(onTimeWorkdays, onTimeWorkdays + lateWorkdays);
+ 
+ export const calculateJustifiedRate = (justifiedWorkdays: number, scheduledWorkdays: number): number =>
+   roundRate(justifiedWorkdays, scheduledWorkdays);
+ 
+ /**
+  * Consolidated coverage: present / (present + absent).
+  * EXPECTED (in-progress / future) must not enter the denominator.
+  */
+ export const calculateConsolidatedCoverageRate = (
+   presentWorkdays: number,
+   absentWorkdays: number,
+ ): number => roundRate(presentWorkdays, presentWorkdays + absentWorkdays);
+ 
+ /** @deprecated Prefer calculateConsolidatedCoverageRate for rankings. */
+ export const calculateCoverageRate = (
+   presentWorkdays: number,
+   expectedStaffWorkdays: number,
+ ): number => roundRate(presentWorkdays, expectedStaffWorkdays);
+ 
+ export const hasSufficientSample = (
+   consolidatedWorkdays: number,
+   minSample: number,
+ ): boolean => consolidatedWorkdays >= minSample;
+ 
+-export interface PeriodMetricDelta {
+-  current: number;
+-  previous: number;
+-  absoluteDelta: number;
+-  percentDelta: number | null;
+-  currentSample: number;
+-  previousSample: number;
+-  comparable: boolean;
+-}
+-
+ /** Compare rate metrics (percentages) with sample gates. */
+ export const buildRateDelta = (
+   currentRate: number,
+   previousRate: number,
+   currentSample: number,
+   previousSample: number,
+   minSample: number,
+ ): PeriodMetricDelta => {
+   const comparable = currentSample >= minSample && previousSample >= minSample;
+   return {
+     current: currentRate,
+     previous: previousRate,
+     absoluteDelta: Math.round((currentRate - previousRate) * 10) / 10,
+     percentDelta:
+       comparable && previousRate !== 0
+         ? Math.round(((currentRate - previousRate) / previousRate) * 1000) / 10
+         : null,
+     currentSample,
+     previousSample,
+     comparable,
+diff --git a/backend/src/utils/payroll-receipts/extract-document-from-filename.ts b/backend/src/utils/payroll-receipts/extract-document-from-filename.ts
+index e2f4fac..1ed6072 100644
+--- a/backend/src/utils/payroll-receipts/extract-document-from-filename.ts
++++ b/backend/src/utils/payroll-receipts/extract-document-from-filename.ts
+@@ -72,41 +72,41 @@ type CandidateHit = { raw: string; normalized: string };
+  * - 11 consecutive digits
+  * - XX-XXXXXXXX-X with optional spaces / dots / dashes between groups
+  */
+ function collectCandidates(basename: string): CandidateHit[] {
+   const hits: CandidateHit[] = [];
+   const seen = new Set<string>();
+ 
+   const addHit = (raw: string) => {
+     const normalized = normalizeToElevenDigits(raw);
+     if (!normalized) {
+       return;
+     }
+     const key = `${normalized}|${raw}`;
+     if (seen.has(key)) {
+       return;
+     }
+     seen.add(key);
+     hits.push({ raw, normalized });
+   };
+ 
+-  const formatted = /\d{2}[\s.\-]*\d{8}[\s.\-]*\d/g;
++  const formatted = /\d{2}[\s.-]*\d{8}[\s.-]*\d/g;
+   let match: RegExpExecArray | null;
+   while ((match = formatted.exec(basename)) !== null) {
+     addHit(match[0]);
+   }
+ 
+   const plain = /\d{11}/g;
+   while ((match = plain.exec(basename)) !== null) {
+     addHit(match[0]);
+   }
+ 
+   return hits;
+ }
+ 
+ /**
+  * Extract and validate a CUIL/CUIT from a payroll receipt filename.
+  * Uses basename only (strips path and extension).
+  */
+ export function extractAndValidateDocumentFromFilename(filename: string): ExtractDocumentResult {
+   const basename = basenameWithoutExtension(filename);
+   const candidates = collectCandidates(basename);
+diff --git a/backend/src/utils/payroll-receipts/file-validation.ts b/backend/src/utils/payroll-receipts/file-validation.ts
+index b8c5d2d..28e4900 100644
+--- a/backend/src/utils/payroll-receipts/file-validation.ts
++++ b/backend/src/utils/payroll-receipts/file-validation.ts
+@@ -8,41 +8,41 @@ const FORBIDDEN_EXTENSIONS = new Set([
+   ".mjs",
+   ".cjs",
+   ".html",
+   ".htm",
+   ".svg",
+   ".zip",
+   ".rar",
+   ".7z",
+   ".bat",
+   ".cmd",
+   ".sh",
+   ".php",
+   ".dll",
+   ".so",
+   ".docm",
+   ".xlsm",
+   ".pptm",
+ ]);
+ 
+ export const sanitizeOriginalFileName = (raw: string): string => {
+-  const trimmed = raw.trim().replace(/[\u0000-\u001f\u007f]/g, "");
++  const trimmed = raw.trim().replace(/\p{Cc}/gu, "");
+   const base = trimmed.split(/[/\\]/).pop() ?? "file";
+   const withoutTraversal = base.replace(/\.\./g, "");
+   const sanitized = withoutTraversal.replace(/[^\w.\- ()áéíóúÁÉÍÓÚñÑ]/gi, "_").slice(0, 180);
+   return sanitized.length > 0 ? sanitized : "file";
+ };
+ 
+ export const detectPdfFromMagicBytes = (buffer: Buffer): boolean => {
+   if (buffer.length < 4) {
+     return false;
+   }
+   return buffer[0] === 0x25 && buffer[1] === 0x50 && buffer[2] === 0x44 && buffer[3] === 0x46;
+ };
+ 
+ export const sha256Hex = (buffer: Buffer): string =>
+   createHash("sha256").update(buffer).digest("hex");
+ 
+ export const newPayrollReceiptId = (): string => randomUUID();
+ 
+ /**
+  * Object key:
+diff --git a/backend/src/utils/phone.test.ts b/backend/src/utils/phone.test.ts
+new file mode 100644
+index 0000000..4c1e122
+--- /dev/null
++++ b/backend/src/utils/phone.test.ts
+@@ -0,0 +1,48 @@
++import assert from "node:assert/strict";
++import { describe, it } from "node:test";
++import {
++  maskPhoneNumberForLog,
++  normalizePhoneNumber,
++  normalizeWhatsAppPhone,
++  tryNormalizeWhatsAppPhone,
++} from "./phone";
++
++describe("phone normalization", () => {
++  it("normalizes a valid E.164 phone", () => {
++    assert.equal(normalizePhoneNumber("+5491111111111"), "+5491111111111");
++  });
++
++  it("normalizes whatsapp-prefixed input", () => {
++    assert.equal(normalizeWhatsAppPhone("whatsapp:+5491111111111"), "+5491111111111");
++  });
++
++  it("rejects invalid phones via tryNormalizeWhatsAppPhone", () => {
++    assert.equal(tryNormalizeWhatsAppPhone("not-a-phone"), null);
++    assert.equal(tryNormalizeWhatsAppPhone(""), null);
++    assert.equal(tryNormalizeWhatsAppPhone("whatsapp:123"), null);
++  });
++
++  it("throws on invalid normalizePhoneNumber input", () => {
++    assert.throws(() => normalizePhoneNumber("5491111111111"), /INVALID_PHONE_FORMAT/);
++    assert.throws(() => normalizePhoneNumber("+12"), /INVALID_PHONE_FORMAT/);
++  });
++});
++
++describe("maskPhoneNumberForLog", () => {
++  it("masks valid E.164 phone numbers for logs", () => {
++    assert.equal(maskPhoneNumberForLog("+5491111111111"), "+54911******11");
++  });
++
++  it("masks whatsapp-prefixed numbers", () => {
++    assert.equal(maskPhoneNumberForLog("whatsapp:+5491111111111"), "+54911******11");
++  });
++
++  it("masks invalid input without throwing", () => {
++    assert.equal(maskPhoneNumberForLog("abc"), "***");
++    assert.equal(maskPhoneNumberForLog("123456789012"), "123456******12");
++  });
++
++  it("masks short input as ***", () => {
++    assert.equal(maskPhoneNumberForLog("12345678"), "***");
++  });
++});
+diff --git a/backend/src/utils/phone.ts b/backend/src/utils/phone.ts
+index 6d34191..93c3cc8 100644
+--- a/backend/src/utils/phone.ts
++++ b/backend/src/utils/phone.ts
+@@ -13,34 +13,33 @@ export const normalizePhoneNumber = (phoneNumber: string): string => {
+   }
+ 
+   return normalized;
+ };
+ 
+ export const normalizeWhatsAppPhone = (from: string): string => {
+   const withoutPrefix = from.trim().replace(/^whatsapp:/i, "");
+   return normalizePhoneNumber(withoutPrefix);
+ };
+ 
+ export const tryNormalizeWhatsAppPhone = (from: string): string | null => {
+   try {
+     return normalizeWhatsAppPhone(from);
+   } catch {
+     return null;
+   }
+ };
+ 
+ /** Masks phone numbers for structured logs (e.g. +54911******11). */
+ export const maskPhoneNumberForLog = (phoneNumber: string): string => {
+-  let normalized = phoneNumber.trim();
+-  try {
+-    normalized = normalizeWhatsAppPhone(
+-      normalized.startsWith("whatsapp:") ? normalized : `whatsapp:${normalized}`,
+-    );
+-  } catch {
+-  }
++  const trimmed = phoneNumber.trim();
++  const withWhatsAppPrefix = /^whatsapp:/i.test(trimmed)
++    ? trimmed
++    : `whatsapp:${trimmed}`;
++  // Fallible parse: invalid input still masks the raw trimmed value (no PII logging).
++  const normalized = tryNormalizeWhatsAppPhone(withWhatsAppPrefix) ?? trimmed;
+ 
+   if (normalized.length <= 8) {
+     return "***";
+   }
+ 
+   return `${normalized.slice(0, 6)}******${normalized.slice(-2)}`;
+ };
+diff --git a/backend/src/utils/statistics-action-exceptions.ts b/backend/src/utils/statistics-action-exceptions.ts
+index 0a8774b..46377e5 100644
+--- a/backend/src/utils/statistics-action-exceptions.ts
++++ b/backend/src/utils/statistics-action-exceptions.ts
+@@ -1,40 +1,31 @@
+-import type { AttendanceStatisticsSummary } from "../types/statistics";
++import type {
++  AttendanceStatisticsSummary,
++  StatisticsActionExceptionItem,
++  StatisticsActionExceptionKey,
++} from "../types/statistics";
+ import { roundRate } from "./attendance-statistics-metrics";
+ 
+-export type StatisticsActionExceptionKey =
+-  | "open_attendance"
+-  | "unjustified_absence"
+-  | "outside_geofence"
+-  | "pending_review"
+-  | "late_arrival"
+-  | "early_departure";
+-
+-export interface StatisticsActionExceptionItem {
+-  key: StatisticsActionExceptionKey;
+-  status: StatisticsActionExceptionKey;
+-  label: string;
+-  count: number;
+-  /** Null when there is no valid universe for a rate. */
+-  rate: number | null;
+-  denominator: number;
+-}
++export type {
++  StatisticsActionExceptionItem,
++  StatisticsActionExceptionKey,
++} from "../types/statistics";
+ 
+ const EXCEPTION_LABELS: Record<StatisticsActionExceptionKey, string> = {
+   open_attendance: "Jornadas sin cierre",
+   unjustified_absence: "Ausencias no justificadas",
+   outside_geofence: "Fuera de geocerca",
+   pending_review: "Pendientes de revisión",
+   late_arrival: "Llegadas tarde",
+   early_departure: "Salidas tempranas",
+ };
+ 
+ const rateOrNull = (count: number, denominator: number): number | null =>
+   denominator > 0 ? roundRate(count, denominator) : null;
+ 
+ /**
+  * Non-exclusive action categories with per-exception denominators.
+  */
+ export const buildActionExceptions = (
+   summary: AttendanceStatisticsSummary,
+ ): StatisticsActionExceptionItem[] => {
+   const consolidatedRequired = summary.presentWorkdays + summary.absentWorkdays;
+diff --git a/frontend/src/components/work-teams/WorkTeamForm.tsx b/frontend/src/components/work-teams/WorkTeamForm.tsx
+index df08f8f..3d2df89 100644
+--- a/frontend/src/components/work-teams/WorkTeamForm.tsx
++++ b/frontend/src/components/work-teams/WorkTeamForm.tsx
+@@ -1,32 +1,29 @@
+ import { Button, Stack, Text, Textarea, TextInput } from "@mantine/core";
+ import { useEffect, useMemo, useState } from "react";
+ import { SectionCard } from "../../design-system";
+ import { WorkTeamMemberMultiSelect } from "./WorkTeamMemberMultiSelect";
+ import type { Employee } from "../../types/employee";
+ import { areEmployeeIdSetsEqual } from "../../utils/work-team-save";
++import type { WorkTeamFormValues } from "./work-team-form.types";
+ 
+-export interface WorkTeamFormValues {
+-  name: string;
+-  description: string;
+-  employeeIds: string[];
+-}
++export type { WorkTeamFormValues } from "./work-team-form.types";
+ 
+ interface WorkTeamFormProps {
+   defaultValues: WorkTeamFormValues;
+   existingMembers?: Employee[];
+   submitLabel: string;
+   loading?: boolean;
+   errorMessage?: string | null;
+   onDirtyChange?: (dirty: boolean) => void;
+   onSubmit: (values: WorkTeamFormValues) => Promise<void>;
+   onCancel: () => void;
+ }
+ 
+ const buildFormKey = (values: WorkTeamFormValues): string =>
+   `${values.name}|${values.description}|${values.employeeIds.join(",")}`;
+ 
+ export function WorkTeamForm(props: WorkTeamFormProps) {
+   return <WorkTeamFormFields key={buildFormKey(props.defaultValues)} {...props} />;
+ }
+ 
+ function WorkTeamFormFields({
+diff --git a/frontend/src/components/work-teams/work-team-form.types.ts b/frontend/src/components/work-teams/work-team-form.types.ts
+new file mode 100644
+index 0000000..9c2b23f
+--- /dev/null
++++ b/frontend/src/components/work-teams/work-team-form.types.ts
+@@ -0,0 +1,5 @@
++export interface WorkTeamFormValues {
++  name: string;
++  description: string;
++  employeeIds: string[];
++}
+diff --git a/frontend/src/utils/work-team-save.ts b/frontend/src/utils/work-team-save.ts
+index 7c86734..22532b3 100644
+--- a/frontend/src/utils/work-team-save.ts
++++ b/frontend/src/utils/work-team-save.ts
+@@ -1,21 +1,21 @@
+-import type { WorkTeamFormValues } from "../components/work-teams/WorkTeamForm";
++import type { WorkTeamFormValues } from "../components/work-teams/work-team-form.types";
+ 
+ export type { WorkTeamFormValues };
+ 
+ export function normalizeEmployeeIds(ids: readonly string[]): string[] {
+   return [...new Set(ids.map((id) => id.trim()).filter(Boolean))].sort((a, b) =>
+     a.localeCompare(b),
+   );
+ }
+ 
+ export function areEmployeeIdSetsEqual(a: readonly string[], b: readonly string[]): boolean {
+   const left = normalizeEmployeeIds(a);
+   const right = normalizeEmployeeIds(b);
+   if (left.length !== right.length) {
+     return false;
+   }
+   return left.every((id, index) => id === right[index]);
+ }
+ 
+ export interface WorkTeamSavePlan {
+   profileChanged: boolean;

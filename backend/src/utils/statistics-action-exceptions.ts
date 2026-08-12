@@ -1,23 +1,14 @@
-import type { AttendanceStatisticsSummary } from "../types/statistics";
+import type {
+  AttendanceStatisticsSummary,
+  StatisticsActionExceptionItem,
+  StatisticsActionExceptionKey,
+} from "../types/statistics";
 import { roundRate } from "./attendance-statistics-metrics";
 
-export type StatisticsActionExceptionKey =
-  | "open_attendance"
-  | "unjustified_absence"
-  | "outside_geofence"
-  | "pending_review"
-  | "late_arrival"
-  | "early_departure";
-
-export interface StatisticsActionExceptionItem {
-  key: StatisticsActionExceptionKey;
-  status: StatisticsActionExceptionKey;
-  label: string;
-  count: number;
-  /** Null when there is no valid universe for a rate. */
-  rate: number | null;
-  denominator: number;
-}
+export type {
+  StatisticsActionExceptionItem,
+  StatisticsActionExceptionKey,
+} from "../types/statistics";
 
 const EXCEPTION_LABELS: Record<StatisticsActionExceptionKey, string> = {
   open_attendance: "Jornadas sin cierre",

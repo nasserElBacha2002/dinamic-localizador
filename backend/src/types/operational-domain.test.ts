@@ -15,7 +15,7 @@ import type {
   Worker,
 } from "./operational-domain";
 
-type AssertAssignable<T extends U, U> = true;
+type AssertAssignable<_T extends U, U> = true;
 
 type _OperationalLocationIsService = AssertAssignable<OperationalLocation, Service>;
 type _ServiceIsOperationalLocation = AssertAssignable<Service, OperationalLocation>;

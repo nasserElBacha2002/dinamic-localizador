@@ -171,7 +171,7 @@ export const importOrchestrator = {
       }
     }
 
-    let jobId: string | null = null;
+    let jobId: string;
     let prepared: PreparedImport;
 
     if (input.importJobId && input.confirmationToken) {

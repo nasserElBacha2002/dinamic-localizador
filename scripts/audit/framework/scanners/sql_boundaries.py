@@ -15,13 +15,49 @@ TENANT_TABLE_HINT = re.compile(
     re.I,
 )
 COMPANY_FILTER = re.compile(r"company_id|companyId|@companyId", re.I)
+INTERP_RE = re.compile(r"\$\{([^}]{1,240})\}")
+
+# Value-like interpolations inside SQL string literals (primary injection risk).
+QUOTED_INTERP_RE = re.compile(
+    r"(?:N)?'\$\{([^}]+)\}'|\"\$\{([^}]+)\}\"|LIKE\s+'%\$\{",
+    re.I,
+)
+
+# Expressions treated as static / controlled when quoted (closed constants).
+SAFE_QUOTED_EXPR = re.compile(
+    r"^(?:"
+    r"[A-Z][A-Z0-9_]*"  # MODULE_CONST
+    r"|escapeSqlString\([^)]*\)"
+    r"|TABLE_NAME"
+    r"|FAKE_MIGRATION_NAME|RUNTIME_TEST_USER|MIGRATION_TEST_USER|DEFAULT_OPERATION_TIMEZONE|probe"
+    r")$"
+)
+
+# Structural fragments (WHERE builders, CTEs, parameterized placeholder joins, etc.).
+STRUCTURAL_EXPR = re.compile(
+    r"(?:"
+    r"whereClause|whereSql|where|cte|having|aggregatedCte|filteredBaseQuery|globalBaseQuery|"
+    r"scopeSql|companyClause|companyFilter|statusFilter|simulationFilter|attendanceFilter|"
+    r"excludeClause|currentAbsenceClause|expectedClause|firstAttemptClause|activeStateGuard|"
+    r"scheduleJoin|lockHint|orderBy|sortColumn|sortDirection|fields\.join|placeholders\.join|"
+    r"idParams\.join|valueSql\.join|values\.join|batchParams\.join|statusParams\.join|"
+    r"sourceRows|selectList\.join|memberCountSelect|buildNotificationEligibilitySql|"
+    r"buildEmployeeCategoryJoin|buildEmployeeLastWorkedJoin|withLock|"
+    r"ACTIVE_[A-Z0-9_]+|ABSENCE_[A-Z0-9_]+|FAILURE_STATUSES_SQL|CONSOLIDATED_SAMPLE_SQL|"
+    r"INCIDENT_COUNT_SQL|EFFECTIVE_STATE_SQL|isJunkOperationPredicate|"
+    r"\? \"\" :| \? \"AND |\? 'AND "
+    r")",
+    re.I,
+)
 
 
-def _has_sql_in_interpolated_template(text: str) -> bool:
-    """Detect SQL keywords inside a template literal that also interpolates ${...}.
+def _line_number(text: str, pos: int) -> int:
+    return text.count("\n", 0, pos) + 1
 
-    Uses a linear scan to avoid catastrophic regex backtracking on large files.
-    """
+
+def _iter_sql_templates(text: str) -> list[tuple[int, str]]:
+    """Return (start_index, template_body) for backtick templates containing SQL + ${}."""
+    templates: list[tuple[int, str]] = []
     i = 0
     n = len(text)
     while i < n:
@@ -38,9 +74,58 @@ def _has_sql_in_interpolated_template(text: str) -> bool:
             break
         chunk = text[i + 1 : j]
         if "${" in chunk and SQL_RE.search(chunk):
-            return True
+            templates.append((i + 1, chunk))
         i = j + 1
-    return False
+    return templates
+
+
+def _classify_quoted_expr(expr: str) -> str:
+    cleaned = expr.strip()
+    if SAFE_QUOTED_EXPR.match(cleaned):
+        return "static-or-script"
+    if "escapeSqlString" in cleaned:
+        return "script-generation"
+    return "quoted-value"
+
+
+def analyze_sql_interpolations(text: str) -> dict[str, list[dict[str, object]]]:
+    """Classify interpolations inside SQL template literals."""
+    quoted_risks: list[dict[str, object]] = []
+    structural: list[dict[str, object]] = []
+    other: list[dict[str, object]] = []
+
+    for start, chunk in _iter_sql_templates(text):
+        for qm in QUOTED_INTERP_RE.finditer(chunk):
+            expr = (qm.group(1) or qm.group(2) or "").strip()
+            kind = _classify_quoted_expr(expr) if expr else "quoted-value"
+            entry = {
+                "line": _line_number(text, start + qm.start()),
+                "expr": expr or qm.group(0),
+                "kind": kind,
+            }
+            if kind == "quoted-value":
+                quoted_risks.append(entry)
+            else:
+                structural.append(entry)
+
+        for im in INTERP_RE.finditer(chunk):
+            expr = im.group(1).strip()
+            # Skip ones already captured as quoted.
+            abs_pos = start + im.start()
+            window = text[max(0, abs_pos - 2) : abs_pos + len(im.group(0)) + 1]
+            if QUOTED_INTERP_RE.search(window):
+                continue
+            entry = {
+                "line": _line_number(text, abs_pos),
+                "expr": expr[:160],
+                "kind": "structural" if STRUCTURAL_EXPR.search(expr) else "other",
+            }
+            if entry["kind"] == "structural":
+                structural.append(entry)
+            else:
+                other.append(entry)
+
+    return {"quoted_risks": quoted_risks, "structural": structural, "other": other}
 
 
 def scan() -> list[AuditFinding]:
@@ -77,20 +162,59 @@ def scan() -> list[AuditFinding]:
                 )
             )
 
-        if _has_sql_in_interpolated_template(text):
+        analysis = analyze_sql_interpolations(text)
+        quoted_risks = analysis["quoted_risks"]
+        structural = analysis["structural"]
+        other = analysis["other"]
+
+        if quoted_risks:
             findings.append(
                 AuditFinding(
                     id=stable_id("sql-dyn", rel),
                     category="security",
                     subcategory="sql-injection-risk",
                     severity="high",
-                    confidence="medium",
+                    confidence="high",
                     status="suspected",
-                    title="SQL keywords inside interpolated template literal",
-                    description="Template literal appears to combine SQL keywords with ${...}. Review for parameterized queries.",
+                    title="Quoted value interpolation in SQL template",
+                    description=(
+                        "SQL template interpolates values inside string quotes (or LIKE '%${...}'). "
+                        "Prefer request.input() / @parameters. Review each occurrence."
+                    ),
                     file=rel,
-                    evidence={"pattern": "sql-in-template-literal"},
-                    recommendation="Use parameterized .input() / bind parameters; never interpolate user input into SQL.",
+                    evidence={
+                        "pattern": "quoted-value-interpolation",
+                        "count": len(quoted_risks),
+                        "samples": quoted_risks[:8],
+                    },
+                    recommendation="Bind runtime values with .input(); keep only closed enum constants or script generators with explicit review.",
+                    blocking=False,
+                )
+            )
+        elif structural or other:
+            # Structural dynamic SQL (WHERE builders, ORDER BY whitelist fragments, @param joins).
+            findings.append(
+                AuditFinding(
+                    id=stable_id("sql-struct", rel),
+                    category="sql",
+                    subcategory="sql-dynamic-structure",
+                    severity="info",
+                    confidence="medium",
+                    status="accepted-risk",
+                    title="Structural SQL template interpolation",
+                    description=(
+                        "Template combines SQL with ${...} fragments that look structural "
+                        "(filters, CTEs, parameterized placeholder lists, constants). "
+                        "Not classified as injection risk; keep values parameterized inside builders."
+                    ),
+                    file=rel,
+                    evidence={
+                        "pattern": "structural-sql-interpolation",
+                        "structural_count": len(structural),
+                        "other_count": len(other),
+                        "samples": (structural + other)[:8],
+                    },
+                    recommendation="Keep identifiers on closed whitelists; never interpolate request/body values.",
                     blocking=False,
                 )
             )

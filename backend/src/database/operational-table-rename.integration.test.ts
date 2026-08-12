@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import { getPool } from "./connection";
 import { operationRepository } from "../repositories/operation.repository";

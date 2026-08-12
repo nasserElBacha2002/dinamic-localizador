@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import { WEEKDAYS } from "../constants/weekday";
 import {
@@ -15,7 +15,6 @@ import { operationAttendanceRepository } from "../repositories/operation-attenda
 import { operationAssignmentService } from "../services/operation-assignment.service";
 import { operationService } from "../services/operation.service";
 import { recurringWorkdayMaterializationService } from "../services/recurring-workday-materialization.service";
-import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;

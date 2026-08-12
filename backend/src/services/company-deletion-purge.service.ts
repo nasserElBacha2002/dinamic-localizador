@@ -84,7 +84,7 @@ export const companyDeletionPurgeService = {
     deletionRecordId: string,
   ): Promise<void> {
     const companyId = company.id;
-    let start = stageIndex(company.deletionPurgeStage);
+    const start = stageIndex(company.deletionPurgeStage);
 
     for (let i = start; i < STAGE_ORDER.length - 1; i += 1) {
       const stage = STAGE_ORDER[i];

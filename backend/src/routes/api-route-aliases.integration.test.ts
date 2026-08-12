@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -24,7 +24,7 @@ describeDatabaseIntegration("API canonical routes integration", () => {
   let platformAdminEmail = "";
   let operatorUserId = "";
   let operatorUserEmail = "";
-  let createdUserIds: string[] = [];
+  const createdUserIds: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();

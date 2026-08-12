@@ -15,6 +15,7 @@ from framework.gate import evaluate_gate, should_block  # noqa: E402
 from framework.models import AuditFinding  # noqa: E402
 from framework.runner import dedupe  # noqa: E402
 from framework.scanners.god_class import score_file  # noqa: E402
+from framework.scanners.sql_boundaries import analyze_sql_interpolations  # noqa: E402
 
 
 def _finding(**kwargs) -> AuditFinding:
@@ -111,6 +112,31 @@ class TestGate(unittest.TestCase):
         result = evaluate_gate(findings)
         self.assertFalse(result["passed"])
         self.assertEqual(result["blocking_count"], 1)
+
+
+class TestSqlInterpolationClassification(unittest.TestCase):
+    def test_quoted_user_value_is_injection_risk(self):
+        text = """
+        const q = `SELECT * FROM employees WHERE name = N'${input.name}'`;
+        """
+        analysis = analyze_sql_interpolations(text)
+        self.assertEqual(len(analysis["quoted_risks"]), 1)
+        self.assertEqual(analysis["quoted_risks"][0]["kind"], "quoted-value")
+
+    def test_structural_where_clause_is_not_quoted_risk(self):
+        text = """
+        const q = `SELECT * FROM employees ${whereClause} ORDER BY ${orderBy}`;
+        """
+        analysis = analyze_sql_interpolations(text)
+        self.assertEqual(analysis["quoted_risks"], [])
+        self.assertGreaterEqual(len(analysis["structural"]), 1)
+
+    def test_escape_sql_string_script_is_not_quoted_risk(self):
+        text = """
+        const q = `UPDATE t SET a = N'${escapeSqlString(fix.newAddress)}'`;
+        """
+        analysis = analyze_sql_interpolations(text)
+        self.assertEqual(analysis["quoted_risks"], [])
 
 
 class TestBaselineAndDedupe(unittest.TestCase):

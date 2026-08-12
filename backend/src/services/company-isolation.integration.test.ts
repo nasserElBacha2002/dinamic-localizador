@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import { AppError } from "../errors/app-error";
 import {

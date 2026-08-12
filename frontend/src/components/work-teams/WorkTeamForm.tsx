@@ -4,12 +4,9 @@ import { SectionCard } from "../../design-system";
 import { WorkTeamMemberMultiSelect } from "./WorkTeamMemberMultiSelect";
 import type { Employee } from "../../types/employee";
 import { areEmployeeIdSetsEqual } from "../../utils/work-team-save";
+import type { WorkTeamFormValues } from "./work-team-form.types";
 
-export interface WorkTeamFormValues {
-  name: string;
-  description: string;
-  employeeIds: string[];
-}
+export type { WorkTeamFormValues } from "./work-team-form.types";
 
 interface WorkTeamFormProps {
   defaultValues: WorkTeamFormValues;

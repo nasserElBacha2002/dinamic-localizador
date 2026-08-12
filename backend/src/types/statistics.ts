@@ -1,8 +1,36 @@
 import type { OperationKind } from "../constants/operation-kind";
 import type { CheckoutStatus } from "../constants/checkout-status";
 import type { PunctualityStatus } from "../types/domain";
-import type { PeriodMetricDelta } from "../utils/attendance-statistics-metrics";
 import type { DerivedEmployeeWorkdayState } from "./employee-workday-state";
+
+/** Period-over-period rate comparison (defined in types to keep utils → types direction). */
+export interface PeriodMetricDelta {
+  current: number;
+  previous: number;
+  absoluteDelta: number;
+  percentDelta: number | null;
+  currentSample: number;
+  previousSample: number;
+  comparable: boolean;
+}
+
+export type StatisticsActionExceptionKey =
+  | "open_attendance"
+  | "unjustified_absence"
+  | "outside_geofence"
+  | "pending_review"
+  | "late_arrival"
+  | "early_departure";
+
+export interface StatisticsActionExceptionItem {
+  key: StatisticsActionExceptionKey;
+  status: StatisticsActionExceptionKey;
+  label: string;
+  count: number;
+  /** Null when there is no valid universe for a rate. */
+  rate: number | null;
+  denominator: number;
+}
 
 export interface AttendanceStatisticsSummary {
   scheduledWorkdays: number;
@@ -52,7 +80,7 @@ export interface AttendanceStatisticsSummaryPayload extends AttendanceStatistics
   minSampleWorkdays: number;
   companyTimeZone: string;
   companyLocalDate: string;
-  actionExceptions: import("../utils/statistics-action-exceptions").StatisticsActionExceptionItem[];
+  actionExceptions: StatisticsActionExceptionItem[];
 }
 
 export interface AttendanceTimelinePoint {

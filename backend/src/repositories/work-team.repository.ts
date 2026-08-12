@@ -4,7 +4,15 @@ import { getPool } from "../database/connection";
 import type { ListWorkTeamsQuery } from "../schemas/work-team.schema";
 import type { WorkTeam, WorkTeamMember } from "../types/work-team";
 import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
+import { resolveSqlSort } from "../utils/sql-sort";
 import { mapEmployeeRow } from "../utils/row-mappers";
+
+const WORK_TEAM_LIST_SORT_COLUMNS = {
+  name: "wt.name",
+  memberCount: "member_count",
+  activeMemberCount: "active_member_count",
+  updatedAt: "wt.updated_at",
+} as const;
 
 const mapWorkTeamRow = (row: Record<string, unknown>): WorkTeam => ({
   id: String(row.id),
@@ -183,15 +191,12 @@ export const workTeamRepository = {
     }
 
     const whereClause = buildWhereClause(filters);
-    const sortColumn =
-      query.sortBy === "name"
-        ? "wt.name"
-        : query.sortBy === "memberCount"
-          ? "member_count"
-          : query.sortBy === "activeMemberCount"
-            ? "active_member_count"
-            : "wt.updated_at";
-    const sortDirection = query.sortDirection === "asc" ? "ASC" : "DESC";
+    const orderBy = resolveSqlSort(
+      query.sortBy,
+      WORK_TEAM_LIST_SORT_COLUMNS,
+      WORK_TEAM_LIST_SORT_COLUMNS.updatedAt,
+      query.sortDirection === "asc" ? "asc" : "desc",
+    );
     const offset = (query.page - 1) * query.limit;
 
     const countRequest = pool.request();
@@ -210,7 +215,7 @@ export const workTeamRepository = {
       SELECT wt.*, ${memberCountSelect}
       FROM work_teams wt
       ${whereClause}
-      ORDER BY ${sortColumn} ${sortDirection}, wt.name ASC
+      ORDER BY ${orderBy}, wt.name ASC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 

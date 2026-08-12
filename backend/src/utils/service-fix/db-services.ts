@@ -19,10 +19,13 @@ const pickColumn = (
 };
 
 export const detectServicesSchema = async (pool: sql.ConnectionPool): Promise<ServicesSchema> => {
-  const result = await pool.request().query(`
+  const result = await pool
+    .request()
+    .input("tableName", sql.NVarChar(128), TABLE_NAME)
+    .query(`
     SELECT COLUMN_NAME
     FROM INFORMATION_SCHEMA.COLUMNS
-    WHERE TABLE_NAME = '${TABLE_NAME}'
+    WHERE TABLE_NAME = @tableName
   `);
 
   const availableColumns = new Set<string>(
@@ -89,7 +92,7 @@ const buildSelectQuery = (schema: ServicesSchema): string => {
 
   return `
     SELECT ${selectList.join(", ")}
-    FROM ${schema.tableName}
+    FROM ${TABLE_NAME}
   `;
 };
 

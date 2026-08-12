@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it } from "node:test";
+import { after, before, it } from "node:test";
 import sql from "mssql";
 import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import {
@@ -35,7 +35,7 @@ describeDatabaseIntegration("company modules API integration", () => {
   let outsiderUserEmail = "";
   let platformAdminId = "";
   let platformAdminEmail = "";
-  let createdUserIds: string[] = [];
+  const createdUserIds: string[] = [];
 
   const restoreAllModules = async (companyId: string) => {
     await companyModuleRepository.bulkSet(

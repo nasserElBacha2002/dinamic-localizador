@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it, mock } from "node:test";
+import { after, before, it, mock } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,

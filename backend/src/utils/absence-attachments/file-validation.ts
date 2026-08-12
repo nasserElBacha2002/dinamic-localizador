@@ -36,7 +36,7 @@ const FORBIDDEN_EXTENSIONS = new Set([
 ]);
 
 export const sanitizeOriginalFileName = (raw: string): string => {
-  const trimmed = raw.trim().replace(/[\u0000-\u001f\u007f]/g, "");
+  const trimmed = raw.trim().replace(/\p{Cc}/gu, "");
   const base = trimmed.split(/[/\\]/).pop() ?? "file";
   const withoutTraversal = base.replace(/\.\./g, "");
   const sanitized = withoutTraversal.replace(/[^\w.\- ()áéíóúÁÉÍÓÚñÑ]/gi, "_").slice(0, 180);

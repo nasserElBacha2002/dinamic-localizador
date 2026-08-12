@@ -1,0 +1,5144 @@
+{
+  "run_id": "20260812-200743",
+  "generated_at": "2026-08-12T20:10:49.716332+00:00",
+  "run_type": "full",
+  "completed": true,
+  "finding_count": 188,
+  "findings": [
+    {
+      "id": "arch-7ddd2c436e",
+      "category": "architecture",
+      "subcategory": "layer-violation",
+      "severity": "high",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "controllers-must-not-import-database",
+      "description": "Import '../database/db-probe' violates rule controllers-must-not-import-database (from **/controllers/**).",
+      "file": "backend/src/controllers/health.controller.ts",
+      "line": null,
+      "evidence": {
+        "import": "../database/db-probe",
+        "rule": "controllers-must-not-import-database",
+        "to_pattern": "/database/"
+      },
+      "recommendation": "Respect layer boundaries defined in audit/config/thresholds.json.",
+      "blocking": false
+    },
+    {
+      "id": "arch-fanout-top",
+      "category": "architecture",
+      "subcategory": "fan-out",
+      "severity": "info",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Top fan-out modules",
+      "description": "Modules with most direct imports (coupling signal).",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "top_fan_out": [
+          {
+            "file": "backend/src/routes/index.ts",
+            "imports": 34
+          },
+          {
+            "file": "backend/src/services/operation.service.ts",
+            "imports": 30
+          },
+          {
+            "file": "backend/src/services/whatsapp-bot.service.ts",
+            "imports": 26
+          },
+          {
+            "file": "backend/src/services/absence-request.service.ts",
+            "imports": 23
+          },
+          {
+            "file": "backend/src/services/operation-assignment.service.ts",
+            "imports": 23
+          },
+          {
+            "file": "backend/src/services/work-team-assignment.service.ts",
+            "imports": 23
+          },
+          {
+            "file": "backend/src/services/absence-calendar.service.ts",
+            "imports": 21
+          },
+          {
+            "file": "backend/src/services/recurring-workday-materialization.service.ts",
+            "imports": 21
+          },
+          {
+            "file": "backend/src/services/whatsapp-router/whatsapp-router.service.ts",
+            "imports": 21
+          },
+          {
+            "file": "backend/src/services/attendance.service.ts",
+            "imports": 20
+          },
+          {
+            "file": "backend/src/services/bot-simulator.service.ts",
+            "imports": 20
+          },
+          {
+            "file": "backend/src/services/user-invitation.service.ts",
+            "imports": 20
+          },
+          {
+            "file": "backend/src/imports/strategies/employees.strategy.ts",
+            "imports": 19
+          },
+          {
+            "file": "backend/src/services/payroll-receipt.service.ts",
+            "imports": 19
+          },
+          {
+            "file": "backend/src/services/absence-operational-conflict.service.ts",
+            "imports": 18
+          }
+        ]
+      },
+      "recommendation": "Review high fan-out modules when also flagged as god classes.",
+      "blocking": false
+    },
+    {
+      "id": "god-c0628c8b9c",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: absence-calendar.service.ts",
+      "description": "absence-calendar.service.ts scored 9 (WATCH). LOC>600 (+2); internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2)",
+      "file": "backend/src/services/absence-calendar.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 707,
+        "methods": 10,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 20,
+        "infra_imports": 1,
+        "domains": [
+          "employee",
+          "company"
+        ],
+        "branches": 40,
+        "control_flow_token_count": 40,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-be32e41c71",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: absence-request.service.ts",
+      "description": "absence-request.service.ts scored 11 (WATCH). LOC>600 (+2); internal_imports>20 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=3 (+2)",
+      "file": "backend/src/services/absence-request.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 936,
+        "methods": 6,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 22,
+        "infra_imports": 1,
+        "domains": [
+          "employee",
+          "whatsapp",
+          "company"
+        ],
+        "branches": 28,
+        "control_flow_token_count": 28,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 11,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>20 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=3 (+2)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-1e3066002c",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: attendance-reminder.service.ts",
+      "description": "attendance-reminder.service.ts scored 9 (WATCH). LOC>600 (+2); internal_imports>8 (+2); external_integrations=twilio (+2); multiple_domains=7 (+3)",
+      "file": "backend/src/services/attendance-reminder.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 833,
+        "methods": 4,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 17,
+        "infra_imports": 2,
+        "domains": [
+          "attendance",
+          "employee",
+          "whatsapp",
+          "company",
+          "notification",
+          "conversation",
+          "reminder"
+        ],
+        "branches": 41,
+        "control_flow_token_count": 41,
+        "direct_sql": false,
+        "external_integrations": [
+          "twilio"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>8 (+2)",
+          "external_integrations=twilio (+2)",
+          "multiple_domains=7 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-87f11f7396",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: bot-session.service.ts",
+      "description": "bot-session.service.ts scored 10 (WATCH). LOC>600 (+2); methods>20 (+3); external_integrations=twilio,mssql (+2); multiple_domains=5 (+3)",
+      "file": "backend/src/services/bot-session.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 712,
+        "methods": 21,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 6,
+        "infra_imports": 2,
+        "domains": [
+          "attendance",
+          "employee",
+          "payroll",
+          "company",
+          "notification"
+        ],
+        "branches": 26,
+        "control_flow_token_count": 26,
+        "direct_sql": false,
+        "external_integrations": [
+          "twilio",
+          "mssql"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 10,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "methods>20 (+3)",
+          "external_integrations=twilio,mssql (+2)",
+          "multiple_domains=5 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-7e6eb771ce",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: check-in-attendance.flow.ts",
+      "description": "check-in-attendance.flow.ts scored 9 (WATCH). LOC>600 (+2); internal_imports>8 (+2); external_integrations=twilio (+2); multiple_domains=7 (+3)",
+      "file": "backend/src/services/bot/check-in-attendance.flow.ts",
+      "line": null,
+      "evidence": {
+        "loc": 684,
+        "methods": 3,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 18,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "whatsapp",
+          "inventory",
+          "company",
+          "conversation",
+          "geofence"
+        ],
+        "branches": 28,
+        "control_flow_token_count": 28,
+        "direct_sql": false,
+        "external_integrations": [
+          "twilio"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>8 (+2)",
+          "external_integrations=twilio (+2)",
+          "multiple_domains=7 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-fb2c27965a",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: checkout-attendance.flow.ts",
+      "description": "checkout-attendance.flow.ts scored 9 (WATCH). LOC>600 (+2); internal_imports>8 (+2); external_integrations=twilio (+2); multiple_domains=6 (+3)",
+      "file": "backend/src/services/bot/checkout-attendance.flow.ts",
+      "line": null,
+      "evidence": {
+        "loc": 788,
+        "methods": 4,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 15,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "whatsapp",
+          "company",
+          "conversation",
+          "geofence"
+        ],
+        "branches": 39,
+        "control_flow_token_count": 39,
+        "direct_sql": false,
+        "external_integrations": [
+          "twilio"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>8 (+2)",
+          "external_integrations=twilio (+2)",
+          "multiple_domains=6 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-cc76eb89f1",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: company-absence-settings.service.ts",
+      "description": "company-absence-settings.service.ts scored 9 (WATCH). internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=3 (+2)",
+      "file": "backend/src/services/company-absence-settings.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 164,
+        "methods": 5,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 12,
+        "infra_imports": 1,
+        "domains": [
+          "employee",
+          "store",
+          "company"
+        ],
+        "branches": 13,
+        "control_flow_token_count": 13,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 0,
+        "complex_methods_approx": 0,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=3 (+2)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-042c99b087",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: employee-deactivation.service.ts",
+      "description": "employee-deactivation.service.ts scored 9 (WATCH). internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=3 (+2)",
+      "file": "backend/src/services/employee-deactivation.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 258,
+        "methods": 2,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 14,
+        "infra_imports": 1,
+        "domains": [
+          "employee",
+          "assignment",
+          "company"
+        ],
+        "branches": 15,
+        "control_flow_token_count": 15,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 0,
+        "complex_methods_approx": 0,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=3 (+2)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-b1bd61b196",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: employee.service.ts",
+      "description": "employee.service.ts scored 9 (WATCH). internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=3 (+2)",
+      "file": "backend/src/services/employee.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 180,
+        "methods": 5,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 9,
+        "infra_imports": 1,
+        "domains": [
+          "employee",
+          "whatsapp",
+          "company"
+        ],
+        "branches": 13,
+        "control_flow_token_count": 13,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 0,
+        "complex_methods_approx": 0,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=3 (+2)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-90602d9e4c",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: one-time-schedule-consistency.inspector.ts",
+      "description": "one-time-schedule-consistency.inspector.ts scored 10 (WATCH). internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=5 (+3)",
+      "file": "backend/src/services/one-time-schedule-consistency.inspector.ts",
+      "line": null,
+      "evidence": {
+        "loc": 333,
+        "methods": 2,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 10,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "assignment",
+          "company",
+          "notification"
+        ],
+        "branches": 25,
+        "control_flow_token_count": 25,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 10,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=5 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-fdc8a7e9e3",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: operation-assignment.service.ts",
+      "description": "operation-assignment.service.ts scored 11 (WATCH). LOC>600 (+2); internal_imports>20 (+2); elevated_control_flow_token_count (+2); external_integrations=mssql (+2); multiple_domains=5 (+3)",
+      "file": "backend/src/services/operation-assignment.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 774,
+        "methods": 6,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 22,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "assignment",
+          "company",
+          "notification"
+        ],
+        "branches": 61,
+        "control_flow_token_count": 61,
+        "direct_sql": false,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 11,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>20 (+2)",
+          "elevated_control_flow_token_count (+2)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=5 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-f3d23039eb",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: operation.service.ts",
+      "description": "operation.service.ts scored 12 (WATCH). LOC>600 (+2); internal_imports>20 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=6 (+3)",
+      "file": "backend/src/services/operation.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 764,
+        "methods": 12,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 29,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "assignment",
+          "store",
+          "company",
+          "notification"
+        ],
+        "branches": 55,
+        "control_flow_token_count": 55,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 2,
+        "complex_methods_approx": 2,
+        "score": 12,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>20 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=6 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-441d7d9743",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: payroll-receipt.service.ts",
+      "description": "payroll-receipt.service.ts scored 10 (WATCH). LOC>600 (+2); internal_imports>8 (+2); direct_sql_outside_repository (+3); multiple_domains=4 (+3)",
+      "file": "backend/src/services/payroll-receipt.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 950,
+        "methods": 10,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 17,
+        "infra_imports": 0,
+        "domains": [
+          "employee",
+          "payroll",
+          "store",
+          "company"
+        ],
+        "branches": 38,
+        "control_flow_token_count": 38,
+        "direct_sql": true,
+        "external_integrations": [],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 10,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "multiple_domains=4 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-cd90a0b8be",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: recurring-workday-materialization.service.ts",
+      "description": "recurring-workday-materialization.service.ts scored 10 (WATCH). LOC>600 (+2); internal_imports>20 (+2); direct_sql_outside_repository (+3); multiple_domains=5 (+3)",
+      "file": "backend/src/services/recurring-workday-materialization.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 603,
+        "methods": 7,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 21,
+        "infra_imports": 0,
+        "domains": [
+          "attendance",
+          "employee",
+          "assignment",
+          "store",
+          "company"
+        ],
+        "branches": 43,
+        "control_flow_token_count": 43,
+        "direct_sql": true,
+        "external_integrations": [],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 10,
+        "band": "WATCH",
+        "reasons": [
+          "LOC>600 (+2)",
+          "internal_imports>20 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "multiple_domains=5 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-8c435db883",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: whatsapp-bot.service.ts",
+      "description": "whatsapp-bot.service.ts scored 10 (WATCH). internal_imports>20 (+2); direct_sql_outside_repository (+3); external_integrations=twilio (+2); multiple_domains=5 (+3)",
+      "file": "backend/src/services/whatsapp-bot.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 522,
+        "methods": 5,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 26,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "whatsapp",
+          "company",
+          "conversation"
+        ],
+        "branches": 45,
+        "control_flow_token_count": 45,
+        "direct_sql": true,
+        "external_integrations": [
+          "twilio"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 10,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>20 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=twilio (+2)",
+          "multiple_domains=5 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-03728dc63f",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: work-team.service.ts",
+      "description": "work-team.service.ts scored 9 (WATCH). internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=3 (+2)",
+      "file": "backend/src/services/work-team.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 423,
+        "methods": 11,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 10,
+        "infra_imports": 1,
+        "domains": [
+          "employee",
+          "assignment",
+          "company"
+        ],
+        "branches": 24,
+        "control_flow_token_count": 24,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 0,
+        "complex_methods_approx": 0,
+        "score": 9,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=3 (+2)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "god-69409bd86b",
+      "category": "architecture",
+      "subcategory": "god-class",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "God service/class candidate: workday-materialization.service.ts",
+      "description": "workday-materialization.service.ts scored 10 (WATCH). internal_imports>8 (+2); direct_sql_outside_repository (+3); external_integrations=mssql (+2); multiple_domains=4 (+3)",
+      "file": "backend/src/services/workday-materialization.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 473,
+        "methods": 6,
+        "private_methods": 0,
+        "constructor_deps": 0,
+        "internal_imports": 11,
+        "infra_imports": 1,
+        "domains": [
+          "attendance",
+          "employee",
+          "assignment",
+          "company"
+        ],
+        "branches": 32,
+        "control_flow_token_count": 32,
+        "direct_sql": true,
+        "external_integrations": [
+          "mssql"
+        ],
+        "control_flow_density_proxy": 1,
+        "complex_methods_approx": 1,
+        "score": 10,
+        "band": "WATCH",
+        "reasons": [
+          "internal_imports>8 (+2)",
+          "direct_sql_outside_repository (+3)",
+          "external_integrations=mssql (+2)",
+          "multiple_domains=4 (+3)"
+        ]
+      },
+      "recommendation": "Split by domain responsibility; extract repositories/integrations; keep orchestration thin. Heuristic \u2014 confirm before refactor.",
+      "blocking": false
+    },
+    {
+      "id": "cx-file-efa6b3437e",
+      "category": "complexity",
+      "subcategory": "file-size",
+      "severity": "low",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Large file watch (936 LOC)",
+      "description": "File exceeds watch LOC threshold.",
+      "file": "backend/src/services/absence-request.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 936,
+        "threshold": 800
+      },
+      "recommendation": "Monitor growth; split if cohesion drops.",
+      "blocking": false
+    },
+    {
+      "id": "cx-file-a05acbe9aa",
+      "category": "complexity",
+      "subcategory": "file-size",
+      "severity": "low",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Large file watch (833 LOC)",
+      "description": "File exceeds watch LOC threshold.",
+      "file": "backend/src/services/attendance-reminder.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 833,
+        "threshold": 800
+      },
+      "recommendation": "Monitor growth; split if cohesion drops.",
+      "blocking": false
+    },
+    {
+      "id": "cx-file-534f05f9fb",
+      "category": "complexity",
+      "subcategory": "file-size",
+      "severity": "low",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Large file watch (950 LOC)",
+      "description": "File exceeds watch LOC threshold.",
+      "file": "backend/src/services/payroll-receipt.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 950,
+        "threshold": 800
+      },
+      "recommendation": "Monitor growth; split if cohesion drops.",
+      "blocking": false
+    },
+    {
+      "id": "cx-file-a1953e0f8a",
+      "category": "complexity",
+      "subcategory": "file-size",
+      "severity": "low",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Large file watch (1034 LOC)",
+      "description": "File exceeds watch LOC threshold.",
+      "file": "backend/src/services/user-invitation.service.ts",
+      "line": null,
+      "evidence": {
+        "loc": 1034,
+        "threshold": 800
+      },
+      "recommendation": "Monitor growth; split if cohesion drops.",
+      "blocking": false
+    },
+    {
+      "id": "cx-file-7d14245a5f",
+      "category": "complexity",
+      "subcategory": "file-size",
+      "severity": "medium",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Large file (1203 LOC)",
+      "description": "File exceeds high LOC threshold. Metric warning, not automatic architecture violation.",
+      "file": "backend/src/repositories/employee-workday.repository.ts",
+      "line": null,
+      "evidence": {
+        "loc": 1203,
+        "threshold": 1200
+      },
+      "recommendation": "Consider splitting only if responsibilities are mixed.",
+      "blocking": false
+    },
+    {
+      "id": "npm-scripts-inventory",
+      "category": "dead-code",
+      "subcategory": "npm-scripts",
+      "severity": "info",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Root npm scripts inventory",
+      "description": "35 root scripts declared.",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "scripts": [
+          "admin:create",
+          "audit",
+          "audit:architecture",
+          "audit:baseline",
+          "audit:complexity",
+          "audit:database",
+          "audit:dead-code",
+          "audit:duplication",
+          "audit:env",
+          "audit:framework",
+          "audit:framework:strict",
+          "audit:god-classes",
+          "audit:grasp",
+          "audit:hotspots",
+          "audit:patches",
+          "audit:reliability",
+          "audit:security",
+          "audit:security:deep",
+          "audit:security:fast",
+          "audit:solid",
+          "audit:strict",
+          "audit:summary",
+          "audit:tenant",
+          "audit:tests",
+          "build",
+          "build:backend",
+          "build:frontend",
+          "dev",
+          "dev:backend",
+          "dev:frontend",
+          "lint",
+          "migrate",
+          "migrate:status",
+          "test",
+          "test:audit-framework"
+        ]
+      },
+      "recommendation": null,
+      "blocking": false
+    },
+    {
+      "id": "env-documented-unused",
+      "category": "dead-code",
+      "subcategory": "env",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "ENV documented but nonexistent in scanned sources",
+      "description": "105 vars in .env.example not found via process.env.* scan (may be false positive for shell/compose).",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "vars": [
+          "ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED",
+          "ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES",
+          "API_SERVICE_NAME",
+          "APP_BASE_URL",
+          "ATTENDANCE_REMINDER_JOB_ENABLED",
+          "BACKEND_HOST_PORT",
+          "BACKEND_INTERNAL_PORT",
+          "BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES",
+          "BOT_DEFAULT_RADIUS_METERS",
+          "BOT_GEOFENCE_REVIEW_MARGIN_METERS",
+          "BOT_ON_TIME_GRACE_MINUTES",
+          "BOT_OPERATION_TIMEZONE",
+          "BOT_SESSION_TTL_MINUTES",
+          "COMPANY_DELETION_GRACE_PERIOD_DAYS",
+          "COMPANY_DELETION_JOB_ENABLED",
+          "COMPANY_DELETION_JOB_INTERVAL_MS",
+          "COMPANY_DELETION_LEASE_MS",
+          "COMPANY_DELETION_MAX_ATTEMPTS",
+          "COMPANY_DELETION_RETRY_BASE_MS",
+          "COMPANY_PROTECTED_IDS",
+          "COMPANY_PROTECTED_NAMES",
+          "CORS_ALLOWED_ORIGINS",
+          "DB_ENCRYPT",
+          "DB_HOST",
+          "DB_MIGRATION_PASSWORD",
+          "DB_MIGRATION_USER",
+          "DB_NAME",
+          "DB_PASSWORD",
+          "DB_PORT",
+          "DB_PORT_EXTERNAL",
+          "DB_PRIVILEGE_TEST_PASSWORD",
+          "DB_PRIVILEGE_TEST_USER",
+          "DB_TRUST_SERVER_CERTIFICATE",
+          "DB_USER",
+          "EMAIL_TRANSPORT",
+          "FRONTEND_HOST_PORT",
+          "FRONTEND_IMAGE",
+          "FRONTEND_URL",
+          "GCS_BUCKET_NAME",
+          "GCS_MAX_FILES_PER_REQUEST",
+          "GCS_MAX_FILE_SIZE_BYTES",
+          "GCS_MAX_TOTAL_SIZE_BYTES",
+          "GCS_PROJECT_ID",
+          "GCS_REQUIRED",
+          "GCS_SIGNED_URL_EXPIRATION_SECONDS",
+          "GCS_STORAGE_PREFIX",
+          "GCS_UPLOAD_MODE",
+          "INVITATION_TTL_HOURS",
+          "JWT_EXPIRES_IN",
+          "JWT_SECRET",
+          "NODE_ENV",
+          "OPERATION_ASSIGNMENT_NOTIFICATION_LEASE_MS",
+          "OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS",
+          "OPERATION_ASSIGNMENT_NOTIFICATION_RETRY_BASE_MS",
+          "OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED",
+          "OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_INTERVAL_MS",
+          "PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH",
+          "PAYROLL_RECEIPTS_STORAGE_PREFIX",
+          "PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS",
+          "PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS",
+          "PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS",
+          "PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS",
+          "PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED",
+          "PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS",
+          "PLATFORM_SERVER_STATUS_CHECK_TIMEOUT_MS",
+          "PORT",
+          "RECURRING_WORKDAY_HORIZON_DAYS",
+          "RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED",
+          "RUN_DB_INTEGRATION_TESTS",
+          "RUN_DB_PRIVILEGE_TESTS",
+          "SMTP_CONNECTION_TIMEOUT_MS",
+          "SMTP_FROM",
+          "SMTP_HOST",
+          "SMTP_PASSWORD",
+          "SMTP_PORT",
+          "SMTP_SECURE",
+          "SMTP_SOCKET_TIMEOUT_MS",
+          "SMTP_USER",
+          "TEST_ABSENCE_REQUEST_ID",
+          "TEST_COMPANY_ID"
+        ],
+        "count": 105
+      },
+      "recommendation": "Remove stale docs or note vars consumed outside process.env.",
+      "blocking": false
+    },
+    {
+      "id": "env-read-undocumented",
+      "category": "dead-code",
+      "subcategory": "env",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "detected",
+      "title": "ENV read but undocumented",
+      "description": "5 env vars referenced in code but missing from .env.example files.",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "vars": [
+          "ADMIN_EMAIL",
+          "ADMIN_NAME",
+          "ADMIN_PASSWORD",
+          "GOOGLE_MAPS_API_KEY",
+          "MIGRATIONS_DIR"
+        ],
+        "count": 5
+      },
+      "recommendation": "Document required/optional env vars in .env.example.",
+      "blocking": false
+    },
+    {
+      "id": "grasp-ctrl-f5e1985641",
+      "category": "grasp",
+      "subcategory": "controller",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Controller doing too much (GRASP)",
+      "description": "Controller shows SQL/business branching/external calls.",
+      "file": "backend/src/controllers/twilio-webhook.controller.ts",
+      "line": null,
+      "evidence": {
+        "signals": 2,
+        "externals": [
+          "twilio"
+        ]
+      },
+      "recommendation": "Keep controllers thin: validate \u2192 service \u2192 map response.",
+      "blocking": false
+    },
+    {
+      "id": "cohesion-87f11f7396",
+      "category": "grasp",
+      "subcategory": "high-cohesion",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Low cohesion candidate",
+      "description": "Service touches domains ['attendance', 'employee', 'payroll', 'company', 'notification'] with ~21 methods.",
+      "file": "backend/src/services/bot-session.service.ts",
+      "line": null,
+      "evidence": {
+        "domains": [
+          "attendance",
+          "employee",
+          "payroll",
+          "company",
+          "notification"
+        ],
+        "methods": 21
+      },
+      "recommendation": "Split by bounded context if method clusters are independent.",
+      "blocking": false
+    },
+    {
+      "id": "cohesion-be4443de2f",
+      "category": "grasp",
+      "subcategory": "high-cohesion",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Low cohesion candidate",
+      "description": "Service touches domains ['attendance', 'employee', 'payroll', 'whatsapp', 'assignment', 'store', 'company', 'notification', 'conversation'] with ~15 methods.",
+      "file": "backend/src/services/whatsapp-flow-trace.service.ts",
+      "line": null,
+      "evidence": {
+        "domains": [
+          "attendance",
+          "employee",
+          "payroll",
+          "whatsapp",
+          "assignment",
+          "store",
+          "company",
+          "notification",
+          "conversation"
+        ],
+        "methods": 15
+      },
+      "recommendation": "Split by bounded context if method clusters are independent.",
+      "blocking": false
+    },
+    {
+      "id": "patches-summary",
+      "category": "patches",
+      "subcategory": "summary",
+      "severity": "info",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Patch/hack/workaround marker summary",
+      "description": "Aggregated marker counts across backend/frontend sources (detail capped).",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "counts": {
+          "FALLBACK": 13,
+          "DEPRECATED": 40,
+          "LEGACY": 17,
+          "COMPAT": 3,
+          "TEMPORARY": 2,
+          "TODO": 2,
+          "TYPE_BYPASS": 2
+        },
+        "detail_cap": 80
+      },
+      "recommendation": "Triage HACK/FIXME/WORKAROUND first; do not treat every TODO as high severity.",
+      "blocking": false
+    },
+    {
+      "id": "patch-e42120a2b1",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "/** Runtime / shared fallback identity (historical DB_USER). */",
+      "file": "backend/src/config/env-migrations.ts",
+      "line": 16,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-7731485812",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "* @deprecated Prefer COMPANY_PROTECTED_IDS. Comma-separated names (mutable).",
+      "file": "backend/src/config/env.ts",
+      "line": 119,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-7ac2256551",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "* Empty = no ID-based protection (names may still apply as legacy fallback).",
+      "file": "backend/src/config/env.ts",
+      "line": 115,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-1cfd847d66",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* Legacy compatibility seeds from the previous global store_format model.",
+      "file": "backend/src/constants/company-location-types.ts",
+      "line": 8,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-93e61a2c79",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer PAYROLL_RECEIPT_SEND_ACCEPTED for create/send path. */",
+      "file": "backend/src/constants/whatsapp-observability.ts",
+      "line": 76,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-80104c5590",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer POST .../adjustments. Requires expectedVersion. */",
+      "file": "backend/src/controllers/absence-balance.controller.ts",
+      "line": 21,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-c9cf5b34b6",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer POST /:id/deactivate. Soft-deactivates without profile updates. */",
+      "file": "backend/src/controllers/employee.controller.ts",
+      "line": 69,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-46bb9a8a25",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* - /health/database \u2192 alias of readiness for legacy deploy probes.",
+      "file": "backend/src/controllers/health.controller.ts",
+      "line": 8,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-fe4aa626ed",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer /health/ready. Kept as opaque readiness alias for deploy scripts. */",
+      "file": "backend/src/controllers/health.controller.ts",
+      "line": 51,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-8f8fbc1dfc",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** Migrations may contain legacy `USE <database>` statements; the pool already targets env.DB_NAME. */",
+      "file": "backend/src/database/run-migrations.ts",
+      "line": 15,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-8382e0b983",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer findAffectedAssignments \u2014 kept for list counts compatibility. */",
+      "file": "backend/src/repositories/absence-request.repository.ts",
+      "line": 641,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-85c3aa5aba",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use completeInlineJob or markCompletedWithLease */",
+      "file": "backend/src/repositories/absence-workday-sync-job.repository.ts",
+      "line": 391,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-aa181b1d7f",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "* @deprecated Prefer employeeWorkdayAvailabilityRepository checkout candidates.",
+      "file": "backend/src/repositories/attendance.repository.ts",
+      "line": 490,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-7fdb0d382d",
+      "category": "patches",
+      "subcategory": "compat",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "COMPAT marker",
+      "description": "/** Compat: claim up to `limit` via repeated claimNextOne. */",
+      "file": "backend/src/repositories/operation-assignment-notification.repository.ts",
+      "line": 329,
+      "evidence": {
+        "marker": "COMPAT"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-843d966dbc",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use buildOperationalEmployeesBaseQuery */",
+      "file": "backend/src/repositories/operation-attendance.repository.ts",
+      "line": 75,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-448794b8d4",
+      "category": "patches",
+      "subcategory": "compat",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "COMPAT marker",
+      "description": "/** Compat: claim up to `limit` via repeated claimNextOne. */",
+      "file": "backend/src/repositories/payroll-receipt-notification.repository.ts",
+      "line": 331,
+      "evidence": {
+        "marker": "COMPAT"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-528f979333",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer POST adjustments. Removal after ledger rollout completes. */",
+      "file": "backend/src/schemas/absence-balance.schema.ts",
+      "line": 19,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-21f5a0c339",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "* Deprecated compatibility contract for POST /users.",
+      "file": "backend/src/schemas/company-user.schema.ts",
+      "line": 15,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-271be3bdef",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* Invitation-only: name, email, role. Rejects legacy/ignored fields.",
+      "file": "backend/src/schemas/company-user.schema.ts",
+      "line": 16,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-7ca58d091c",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* - legacy singular `employeeId=id1` (via mergeLegacySingularId)",
+      "file": "backend/src/schemas/uuid-id-list.ts",
+      "line": 7,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-8bb5c8e7d5",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* Domain terminology guard \u2014 fails when forbidden legacy tokens appear outside explicit allowlists.",
+      "file": "backend/src/scripts/check-domain-terminology.ts",
+      "line": 2,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-884a4b57aa",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "/** Test/DI override \u2014 must not be used as silent production fallback. */",
+      "file": "backend/src/services/attachment-storage/attachment-storage-provider.ts",
+      "line": 31,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-5ca4718d3b",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "/** Contract-test only \u2014 never use as productive fallback. */",
+      "file": "backend/src/services/attachment-storage/in-memory-attachment-storage.ts",
+      "line": 42,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-fd2c9939b6",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "// Legacy name fallback only when no IDs configured.",
+      "file": "backend/src/services/company-lifecycle.service.ts",
+      "line": 38,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-7ceada1bd3",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "// Defensive fallback only: ensureDefaults runs before listModules in normal flows.",
+      "file": "backend/src/services/company-module.service.ts",
+      "line": 25,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-5ab31838b6",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated alias of notificationsSuperseded */",
+      "file": "backend/src/services/one-time-operation-schedule-reconciliation.service.ts",
+      "line": 29,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-2b92d7ca64",
+      "category": "patches",
+      "subcategory": "temporary",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "TEMPORARY marker",
+      "description": "// Prefer temporary when any receipt can still be retried.",
+      "file": "backend/src/services/payroll-receipt-period-query.service.ts",
+      "line": 156,
+      "evidence": {
+        "marker": "TEMPORARY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-90b3aef9af",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Intro text before multi-receipt send was removed; ignored. */",
+      "file": "backend/src/services/payroll-receipt-period-query.service.ts",
+      "line": 65,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-13867b2f06",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "* Legacy/single-tenant fallback only. Not full SaaS routing.",
+      "file": "backend/src/services/whatsapp-company-context.service.ts",
+      "line": 176,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-e7ff8ecdd8",
+      "category": "patches",
+      "subcategory": "todo",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "TODO marker",
+      "description": "* TODO(phase-1.7): Real multi-company routing should use an explicit per-company mapping",
+      "file": "backend/src/services/whatsapp-company-context.service.ts",
+      "line": 102,
+      "evidence": {
+        "marker": "TODO"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-d506840690",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "// Durable fallback: outbox rows store provider_message_sid even when",
+      "file": "backend/src/services/whatsapp-flow-trace.service.ts",
+      "line": 516,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-448d007856",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** CALENDAR_DAYS preserves legacy inclusive counting; BUSINESS_DAYS uses company calendar. */",
+      "file": "backend/src/types/absence.ts",
+      "line": 35,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-be18135d95",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer attachmentPolicy; kept for backward compatibility. */",
+      "file": "backend/src/types/absence.ts",
+      "line": 30,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-d91a5c2dba",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated use effectiveState = JUSTIFIED */",
+      "file": "backend/src/types/statistics.ts",
+      "line": 207,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-4b378986d6",
+      "category": "patches",
+      "subcategory": "compat",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "COMPAT marker",
+      "description": "/** @deprecated Read compat for sessions created before Phase 3 rename */",
+      "file": "backend/src/types/twilio.types.ts",
+      "line": 85,
+      "evidence": {
+        "marker": "COMPAT"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-c4744b2251",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** @deprecated Read compat \u2014 see legacy-operation-session-context.ts */",
+      "file": "backend/src/types/twilio.types.ts",
+      "line": 75,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-9d0a647403",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "* @deprecated Prefer allocationsByYearFromBreakdown / resolveYearAllocations.",
+      "file": "backend/src/utils/absence-balance-year-split.ts",
+      "line": 4,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-fab0f9c8e6",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "* This proportional calendar-day split is an approximate LEGACY fallback only.",
+      "file": "backend/src/utils/absence-balance-year-split.ts",
+      "line": 5,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-ee956d688d",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** Calendar-days breakdown for legacy (flag-off) duration calculation. */",
+      "file": "backend/src/utils/absence-duration.ts",
+      "line": 250,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-fdb9f5113a",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "* Prefer persisted/calendar breakdown. Legacy fallback is approximate proportional split.",
+      "file": "backend/src/utils/absence-year-allocations.ts",
+      "line": 36,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-19a36eb051",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer calculateConsolidatedCoverageRate for rankings. */",
+      "file": "backend/src/utils/attendance-statistics-metrics.ts",
+      "line": 34,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-30c19ee9b7",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use recordSimulationArtifact */",
+      "file": "backend/src/utils/bot-runtime-context.ts",
+      "line": 103,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "bypass-0bab3e1f31",
+      "category": "patches",
+      "subcategory": "type-bypass",
+      "severity": "low",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Type/lint bypass",
+      "description": "/** Any change that requires transactional reconciliation of derived entities. */",
+      "file": "backend/src/utils/one-time-schedule-change.ts",
+      "line": 21,
+      "evidence": {
+        "line": "/** Any change that requires transactional reconciliation of derived entities. */"
+      },
+      "recommendation": "Prefer fixing types over suppressions; document accepted bypasses.",
+      "blocking": false
+    },
+    {
+      "id": "patch-f681895772",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer OneTimeScheduleChangeImpact; kept for call-site compatibility. */",
+      "file": "backend/src/utils/one-time-schedule-change.ts",
+      "line": 25,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-8f4d7de62c",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "* Canonical operation timezone fallback chain (runtime).",
+      "file": "backend/src/utils/operation-timezone.ts",
+      "line": 5,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-f32a33a643",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use buildReminderDueWindow */",
+      "file": "backend/src/utils/reminder-time-window.ts",
+      "line": 64,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-aa149f8281",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* Canonical production attendance per EmployeeWorkday when legacy duplicates exist.",
+      "file": "backend/src/utils/statistics-canonical-attendance.ts",
+      "line": 2,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-6f6abea68d",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "// Legacy plaintext rows written before encryption rollout.",
+      "file": "backend/src/utils/whatsapp-observability-phone-crypto.ts",
+      "line": 23,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-4f61b75356",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** Normalize legacy `employeeId` query param into canonical `employeeIds`. */",
+      "file": "frontend/src/api/absence-query-keys.ts",
+      "line": 85,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-674bc558a4",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use scopedApiPath via scopedApiClient instead. */",
+      "file": "frontend/src/api/company-path.ts",
+      "line": 40,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-1956432203",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use cancelOperationAssignment */",
+      "file": "frontend/src/api/operations.api.ts",
+      "line": 141,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "bypass-e0403b5510",
+      "category": "patches",
+      "subcategory": "type-bypass",
+      "severity": "low",
+      "confidence": "high",
+      "status": "detected",
+      "title": "Type/lint bypass",
+      "description": "// eslint-disable-next-line react-hooks/exhaustive-deps -- identity alone must not reset the form",
+      "file": "frontend/src/components/operations/OperationForm.tsx",
+      "line": 185,
+      "evidence": {
+        "line": "// eslint-disable-next-line react-hooks/exhaustive-deps -- identity alone must not reset the form"
+      },
+      "recommendation": "Prefer fixing types over suppressions; document accepted bypasses.",
+      "blocking": false
+    },
+    {
+      "id": "patch-831381a7a2",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "* @deprecated Prefer composing `useServiceLocationPicker` with `ServiceForm` two-column layout.",
+      "file": "frontend/src/components/services/location-picker/ServiceLocationPicker.tsx",
+      "line": 9,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-515685faff",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use ServiceInteractiveMapPanel or LocationAddressSearch + LocationMapCanvas. */",
+      "file": "frontend/src/components/services/location-picker/components/LocationMapSection.tsx",
+      "line": 112,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-15e46b7cd0",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** Single-target export (legacy). Ignored when `targets` is provided. */",
+      "file": "frontend/src/components/statistics/ExportActionButtons.tsx",
+      "line": 19,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-180f4c7c7a",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer employeeCategoryKeys.list */",
+      "file": "frontend/src/hooks/useEmployeeCategories.ts",
+      "line": 16,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-d4e1b10efc",
+      "category": "patches",
+      "subcategory": "todo",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "TODO marker",
+      "description": "<Tabs.Tab value=\"all\">Todo</Tabs.Tab>",
+      "file": "frontend/src/pages/bot-simulator/components/BotTechnicalDetails.tsx",
+      "line": 37,
+      "evidence": {
+        "marker": "TODO"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-9fd5e2fd7c",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use `/imports?entity=operations`. Kept for deep-link compatibility. */",
+      "file": "frontend/src/pages/operations/OperationImportPage.tsx",
+      "line": 3,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-4fec8ddf8b",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer {@link getOperationDisplayName} \u2014 same service-based identity. */",
+      "file": "frontend/src/pages/operations/operations-list-columns.ts",
+      "line": 5,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-553a9e3b3b",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer CreateCompanyVisibleFieldKey */",
+      "file": "frontend/src/pages/platform/create-platform-company-form.ts",
+      "line": 23,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-024128563e",
+      "category": "patches",
+      "subcategory": "temporary",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "TEMPORARY marker",
+      "description": "* `/work-teams/:id/edit` \u2014 profile + members form (temporary combined save).",
+      "file": "frontend/src/pages/work-teams/WorkTeamEditPage.tsx",
+      "line": 22,
+      "evidence": {
+        "marker": "TEMPORARY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-18026f1f1b",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer invalidateServiceListAndLookupQueries + setQueryData for detail. */",
+      "file": "frontend/src/queryKeys/invalidation.ts",
+      "line": 27,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-41aa4dd898",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Prefer attachmentPolicy; kept for backward compatibility. */",
+      "file": "frontend/src/types/absence.ts",
+      "line": 34,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-643f1807c8",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "/** Legacy singular; prefer `employeeIds` (comma-separated / multi). */",
+      "file": "frontend/src/types/payroll-receipt.ts",
+      "line": 78,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-1f1900a28c",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated use effectiveState = JUSTIFIED */",
+      "file": "frontend/src/types/statistics.ts",
+      "line": 193,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-724c021e24",
+      "category": "patches",
+      "subcategory": "deprecated",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "DEPRECATED marker",
+      "description": "/** @deprecated Use isDateRangeValid or isDateRangeComplete instead */",
+      "file": "frontend/src/utils/date-range.ts",
+      "line": 307,
+      "evidence": {
+        "marker": "DEPRECATED"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-9703f6b7e6",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "// Legacy plain-string values from earlier builds.",
+      "file": "frontend/src/utils/invitation-email.ts",
+      "line": 36,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-da7dffb542",
+      "category": "patches",
+      "subcategory": "legacy",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "LEGACY marker",
+      "description": "* Combine singular legacy id with plural list.",
+      "file": "frontend/src/utils/multi-value-filter.ts",
+      "line": 57,
+      "evidence": {
+        "marker": "LEGACY"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "patch-174720b801",
+      "category": "patches",
+      "subcategory": "fallback",
+      "severity": "low",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "FALLBACK marker",
+      "description": "* Fallback: \"Sin asignar\" via `getRelatedName` \u2014 never raw technical IDs.",
+      "file": "frontend/src/utils/operation-display.ts",
+      "line": 11,
+      "evidence": {
+        "marker": "FALLBACK"
+      },
+      "recommendation": "Track ownership and expiry; remove temporary patches when safe.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-0a5d10f7b9",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns false",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/constants/company-settings.ts",
+      "line": 80,
+      "evidence": {
+        "returned": "false"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-349b3d11d0",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns false",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/controllers/health.controller.ts",
+      "line": 34,
+      "evidence": {
+        "returned": "false"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-4048e92a4f",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/jobs/attendance-reminder.job.ts",
+      "line": 19,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-dfa6aab06e",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/jobs/recurring-workday-materialization.job.ts",
+      "line": 33,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-f8ec14504b",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/attendance-reminder.service.ts",
+      "line": 560,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-b397354b3c",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns {}",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/services/bot-session.service.ts",
+      "line": 27,
+      "evidence": {
+        "returned": "{}"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-32b9afbe08",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/employee-workday-checkout.command.ts",
+      "line": 74,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-618313706b",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/operation-assignment-notification.service.ts",
+      "line": 184,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-ee027fc100",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/operation-assignment.service.ts",
+      "line": 285,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-01c38551eb",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/payroll-receipt-notification.service.ts",
+      "line": 316,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-0b27033c9c",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/whatsapp-bot.service.ts",
+      "line": 417,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-cd1b53134e",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns null",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/services/whatsapp-company-context.service.ts",
+      "line": 200,
+      "evidence": {
+        "returned": "null"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-dc143d7a41",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns {}",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/services/whatsapp-router/payroll-receipt.handler.ts",
+      "line": 29,
+      "evidence": {
+        "returned": "{}"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-b53486c8ac",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/services/work-team-assignment.service.ts",
+      "line": 650,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-log-d6b241f950",
+      "category": "reliability",
+      "subcategory": "exception-log-only",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "requires-review",
+      "title": "Catch logs without rethrow/return",
+      "description": "Possible log-and-continue pattern; verify intentional.",
+      "file": "backend/src/utils/audit-post-commit.ts",
+      "line": 7,
+      "evidence": {},
+      "recommendation": "Document fallbacks; rethrow when caller must observe failure.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-a16751352d",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns null",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/utils/phone.ts",
+      "line": 26,
+      "evidence": {
+        "returned": "null"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-f75a74fc26",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns {}",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/utils/service-reconciliation/geocoding.ts",
+      "line": 154,
+      "evidence": {
+        "returned": "{}"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "ex-default-6808a17549",
+      "category": "reliability",
+      "subcategory": "exception-return-default",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "suspected",
+      "title": "Catch returns null",
+      "description": "Failure path returns a default/success-like value. Confirm intentional fallback.",
+      "file": "backend/src/utils/whatsapp-observability-phone-crypto.ts",
+      "line": 43,
+      "evidence": {
+        "returned": "null"
+      },
+      "recommendation": "Avoid converting failures into success; prefer explicit Result/error types.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-b5b3867b15",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/database/operational-location-duplicate-remediation.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 2,
+        "samples": [
+          {
+            "line": 42,
+            "expr": "companyFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 56,
+            "expr": "companyFilter",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-281a662147",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/absence-attachment.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 3,
+        "samples": [
+          {
+            "line": 247,
+            "expr": "lockHint",
+            "kind": "unknown"
+          },
+          {
+            "line": 372,
+            "expr": "scopeSql",
+            "kind": "unknown"
+          },
+          {
+            "line": 465,
+            "expr": "scopeSql",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-93b6cf4702",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/absence-calendar.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 303,
+            "expr": "filters.join(\" AND \")",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-3dcbdd3962",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/absence-request.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 4,
+        "samples": [
+          {
+            "line": 277,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 300,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 338,
+            "expr": "lockHint",
+            "kind": "unknown"
+          },
+          {
+            "line": 344,
+            "expr": "excludeClause",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-b412921116",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/absence-type.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 32,
+            "expr": "whereClause",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-36f432341f",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/attendance-notification.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 7,
+        "samples": [
+          {
+            "line": 220,
+            "expr": "buildNotificationEligibilitySql()",
+            "kind": "unknown"
+          },
+          {
+            "line": 314,
+            "expr": "buildNotificationEligibilitySql()",
+            "kind": "unknown"
+          },
+          {
+            "line": 409,
+            "expr": "buildNotificationEligibilitySql()",
+            "kind": "unknown"
+          },
+          {
+            "line": 710,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 760,
+            "expr": "firstAttemptClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 998,
+            "expr": "buildNotificationEligibilitySql()",
+            "kind": "unknown"
+          },
+          {
+            "line": 1058,
+            "expr": "advance",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-6db2b0df8c",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/attendance.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 7,
+        "samples": [
+          {
+            "line": 216,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 241,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 282,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 341,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 445,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 597,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 638,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-d803178097",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/bot-session.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 23,
+        "samples": [
+          {
+            "line": 41,
+            "expr": "withLock(transaction)",
+            "kind": "unknown"
+          },
+          {
+            "line": 44,
+            "expr": "ACTIVE_STATE_SQL",
+            "kind": "unknown"
+          },
+          {
+            "line": 46,
+            "expr": "scopeSql",
+            "kind": "unknown"
+          },
+          {
+            "line": 69,
+            "expr": "ACTIVE_STATE_SQL",
+            "kind": "unknown"
+          },
+          {
+            "line": 71,
+            "expr": "scopeSql",
+            "kind": "unknown"
+          },
+          {
+            "line": 91,
+            "expr": "withLock(transaction)",
+            "kind": "unknown"
+          },
+          {
+            "line": 94,
+            "expr": "ACTIVE_STATE_SQL",
+            "kind": "unknown"
+          },
+          {
+            "line": 96,
+            "expr": "scopeSql",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-ad00869bd0",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/company-module.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 129,
+            "expr": "values",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-acd0e7e5cd",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/employee-workday-availability.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 5,
+        "samples": [
+          {
+            "line": 128,
+            "expr": "attendanceFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 183,
+            "expr": "attendanceFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 633,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 704,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          },
+          {
+            "line": 765,
+            "expr": "simulationFilter",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-f12b14762c",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/employee-workday.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 4,
+        "samples": [
+          {
+            "line": 867,
+            "expr": "currentAbsenceClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 1085,
+            "expr": "sourceRows",
+            "kind": "unknown"
+          },
+          {
+            "line": 1139,
+            "expr": "sourceRows",
+            "kind": "unknown"
+          },
+          {
+            "line": 1184,
+            "expr": "sourceRows",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-cefb094142",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/employee.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 8,
+        "samples": [
+          {
+            "line": 41,
+            "expr": "companyIdParam",
+            "kind": "unknown"
+          },
+          {
+            "line": 54,
+            "expr": "buildEmployeeCategoryJoin()",
+            "kind": "unknown"
+          },
+          {
+            "line": 55,
+            "expr": "buildEmployeeLastWorkedJoin()",
+            "kind": "unknown"
+          },
+          {
+            "line": 66,
+            "expr": "buildEmployeeCategoryJoin()",
+            "kind": "unknown"
+          },
+          {
+            "line": 99,
+            "expr": "employeeAlias",
+            "kind": "unknown"
+          },
+          {
+            "line": 339,
+            "expr": "buildEmployeeCategoryJoin()",
+            "kind": "unknown"
+          },
+          {
+            "line": 414,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 493,
+            "expr": "categoryGuard",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-41186dec85",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/lookup.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 3,
+        "samples": [
+          {
+            "line": 62,
+            "expr": "filters.join(\" AND \")",
+            "kind": "unknown"
+          },
+          {
+            "line": 109,
+            "expr": "filters.join(\" AND \")",
+            "kind": "unknown"
+          },
+          {
+            "line": 158,
+            "expr": "filters.join(\" AND \")",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-82d5be65a7",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/operation-assignment-notification.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 2,
+        "samples": [
+          {
+            "line": 756,
+            "expr": "advance",
+            "kind": "unknown"
+          },
+          {
+            "line": 774,
+            "expr": "advance",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-be846f8bed",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/operation-attendance.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 3,
+        "samples": [
+          {
+            "line": 193,
+            "expr": "globalBaseQuery",
+            "kind": "unknown"
+          },
+          {
+            "line": 217,
+            "expr": "filteredBaseQuery",
+            "kind": "unknown"
+          },
+          {
+            "line": 267,
+            "expr": "filteredBaseQuery",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-184f87353d",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/operation-workday.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 2,
+        "samples": [
+          {
+            "line": 645,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 666,
+            "expr": "whereClause",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-58b846a414",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/operation.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 7,
+        "samples": [
+          {
+            "line": 159,
+            "expr": "valueClauses.join(\", \")",
+            "kind": "unknown"
+          },
+          {
+            "line": 215,
+            "expr": "valueRows.join(\", \")",
+            "kind": "unknown"
+          },
+          {
+            "line": 441,
+            "expr": "scheduleJoin",
+            "kind": "unknown"
+          },
+          {
+            "line": 442,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 470,
+            "expr": "scheduleJoin",
+            "kind": "unknown"
+          },
+          {
+            "line": 471,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 472,
+            "expr": "orderBy",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-b2cd8d932b",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/payroll-receipt-notification.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 2,
+        "samples": [
+          {
+            "line": 758,
+            "expr": "advance",
+            "kind": "unknown"
+          },
+          {
+            "line": 776,
+            "expr": "advance",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-5a58f14f60",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/payroll-receipt.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 5,
+        "samples": [
+          {
+            "line": 210,
+            "expr": "where",
+            "kind": "unknown"
+          },
+          {
+            "line": 228,
+            "expr": "where",
+            "kind": "unknown"
+          },
+          {
+            "line": 431,
+            "expr": "expectedClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 794,
+            "expr": "where",
+            "kind": "unknown"
+          },
+          {
+            "line": 806,
+            "expr": "where",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-c5359cd1fd",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/pending-storage-deletion.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 24,
+            "expr": "qualified",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-024b031a9d",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/service.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 3,
+        "samples": [
+          {
+            "line": 238,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 249,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 250,
+            "expr": "orderBy",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-848b5c05d2",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/statistics.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 14,
+        "samples": [
+          {
+            "line": 322,
+            "expr": "cte",
+            "kind": "unknown"
+          },
+          {
+            "line": 422,
+            "expr": "cte",
+            "kind": "unknown"
+          },
+          {
+            "line": 465,
+            "expr": "having",
+            "kind": "unknown"
+          },
+          {
+            "line": 486,
+            "expr": "orderBy",
+            "kind": "unknown"
+          },
+          {
+            "line": 546,
+            "expr": "cte",
+            "kind": "unknown"
+          },
+          {
+            "line": 604,
+            "expr": "having",
+            "kind": "unknown"
+          },
+          {
+            "line": 627,
+            "expr": "orderBy",
+            "kind": "unknown"
+          },
+          {
+            "line": 691,
+            "expr": "cte",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-3bf6f65fe5",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/whatsapp-conversation.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 2,
+        "samples": [
+          {
+            "line": 57,
+            "expr": "companyClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 125,
+            "expr": "companyClause",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-386f094167",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/whatsapp-observability.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 3,
+        "samples": [
+          {
+            "line": 108,
+            "expr": "whereSql",
+            "kind": "unknown"
+          },
+          {
+            "line": 120,
+            "expr": "whereSql",
+            "kind": "unknown"
+          },
+          {
+            "line": 317,
+            "expr": "whereSql",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-2b3e8aa702",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/repositories/work-team.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 3,
+        "samples": [
+          {
+            "line": 207,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 217,
+            "expr": "whereClause",
+            "kind": "unknown"
+          },
+          {
+            "line": 218,
+            "expr": "orderBy",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-b677998001",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/scripts/audit-statistics-grain-core.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 42,
+            "expr": "companyFilter",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-f116617359",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/scripts/fix-services-from-reconciliation.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 186,
+            "expr": "plan.summary.totalMissingInsertCandidates",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-e2a206e825",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/utils/employee-workday-statistics-projection.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 244,
+            "expr": "additionalWhereClause",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-9923cbcc68",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/utils/service-fix/db-services.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 1,
+        "samples": [
+          {
+            "line": 94,
+            "expr": "selectList.join(\", \")",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "sql-unknown-c760e54b9a",
+      "category": "security",
+      "subcategory": "sql-dynamic-unknown",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Unknown dynamic SQL interpolation",
+      "description": "SQL template interpolates ${...} that is not a proven static fragment, @parameter placeholder list, or literal-only ternary. Manual review required.",
+      "file": "backend/src/utils/service-fix/plan.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "unknown-dynamic-sql",
+        "count": 2,
+        "samples": [
+          {
+            "line": 253,
+            "expr": "distance.toFixed(2)",
+            "kind": "unknown"
+          },
+          {
+            "line": 280,
+            "expr": "distance.toFixed(2)",
+            "kind": "unknown"
+          }
+        ]
+      },
+      "recommendation": "Prove the fragment is a closed constant / whitelist result / parameterized builder, or bind values. Do not accept unknown interpolations as safe by naming.",
+      "blocking": false
+    },
+    {
+      "id": "dip-b8349468c8",
+      "category": "solid",
+      "subcategory": "dip",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Concrete infrastructure constructed in application layer",
+      "description": "new <InfraClient>() found in service/controller. Factories/DI may be preferable.",
+      "file": "backend/src/services/attachment-storage/gcs-attachment-storage.ts",
+      "line": null,
+      "evidence": {},
+      "recommendation": "Prefer injected ports; allow factories at composition root.",
+      "blocking": false
+    },
+    {
+      "id": "ocp-1e3066002c",
+      "category": "solid",
+      "subcategory": "ocp",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Repeated type/provider branching (OCP risk)",
+      "description": "Found ~0 type-switches and ~14 type-ifs. Structural repetition may need strategy pattern.",
+      "file": "backend/src/services/attendance-reminder.service.ts",
+      "line": null,
+      "evidence": {
+        "switches": 0,
+        "type_ifs": 14
+      },
+      "recommendation": "Only refactor if branching keeps growing across providers.",
+      "blocking": false
+    },
+    {
+      "id": "ocp-676c8816d9",
+      "category": "solid",
+      "subcategory": "ocp",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Repeated type/provider branching (OCP risk)",
+      "description": "Found ~0 type-switches and ~7 type-ifs. Structural repetition may need strategy pattern.",
+      "file": "backend/src/services/bot/direct-attendance-location.service.ts",
+      "line": null,
+      "evidence": {
+        "switches": 0,
+        "type_ifs": 7
+      },
+      "recommendation": "Only refactor if branching keeps growing across providers.",
+      "blocking": false
+    },
+    {
+      "id": "ocp-6b1b3b62e2",
+      "category": "solid",
+      "subcategory": "ocp",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Repeated type/provider branching (OCP risk)",
+      "description": "Found ~0 type-switches and ~4 type-ifs. Structural repetition may need strategy pattern.",
+      "file": "backend/src/services/operation-assignment-core.service.ts",
+      "line": null,
+      "evidence": {
+        "switches": 0,
+        "type_ifs": 4
+      },
+      "recommendation": "Only refactor if branching keeps growing across providers.",
+      "blocking": false
+    },
+    {
+      "id": "ocp-5138e2ba35",
+      "category": "solid",
+      "subcategory": "ocp",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Repeated type/provider branching (OCP risk)",
+      "description": "Found ~0 type-switches and ~4 type-ifs. Structural repetition may need strategy pattern.",
+      "file": "backend/src/services/whatsapp-router/attendance-confirmation-response.handler.ts",
+      "line": null,
+      "evidence": {
+        "switches": 0,
+        "type_ifs": 4
+      },
+      "recommendation": "Only refactor if branching keeps growing across providers.",
+      "blocking": false
+    },
+    {
+      "id": "ocp-845ec20834",
+      "category": "solid",
+      "subcategory": "ocp",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Repeated type/provider branching (OCP risk)",
+      "description": "Found ~0 type-switches and ~5 type-ifs. Structural repetition may need strategy pattern.",
+      "file": "backend/src/services/whatsapp-router/payroll-receipt.handler.ts",
+      "line": null,
+      "evidence": {
+        "switches": 0,
+        "type_ifs": 5
+      },
+      "recommendation": "Only refactor if branching keeps growing across providers.",
+      "blocking": false
+    },
+    {
+      "id": "ocp-c760e54b9a",
+      "category": "solid",
+      "subcategory": "ocp",
+      "severity": "low",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "Repeated type/provider branching (OCP risk)",
+      "description": "Found ~0 type-switches and ~6 type-ifs. Structural repetition may need strategy pattern.",
+      "file": "backend/src/utils/service-fix/plan.ts",
+      "line": null,
+      "evidence": {
+        "switches": 0,
+        "type_ifs": 6
+      },
+      "recommendation": "Only refactor if branching keeps growing across providers.",
+      "blocking": false
+    },
+    {
+      "id": "srp-880cdc5a55",
+      "category": "solid",
+      "subcategory": "srp",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "SUSPECTED SRP violation",
+      "description": "Multiple responsibility signals (3) in one module with ~13 methods / domains=['attendance', 'company', 'geofence', 'reminder'].",
+      "file": "backend/src/services/company.service.ts",
+      "line": null,
+      "evidence": {
+        "responsibility_signals": 3,
+        "domains": [
+          "attendance",
+          "company",
+          "geofence",
+          "reminder"
+        ],
+        "methods": 13,
+        "direct_sql": true,
+        "externals": [],
+        "layer": "services"
+      },
+      "recommendation": "Confirm mixed concerns; extract collaborators if validated.",
+      "blocking": false
+    },
+    {
+      "id": "srp-f3d23039eb",
+      "category": "solid",
+      "subcategory": "srp",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "SUSPECTED SRP violation",
+      "description": "Multiple responsibility signals (3) in one module with ~12 methods / domains=['attendance', 'employee', 'assignment', 'store', 'company', 'notification'].",
+      "file": "backend/src/services/operation.service.ts",
+      "line": null,
+      "evidence": {
+        "responsibility_signals": 3,
+        "domains": [
+          "attendance",
+          "employee",
+          "assignment",
+          "store",
+          "company",
+          "notification"
+        ],
+        "methods": 12,
+        "direct_sql": true,
+        "externals": [
+          "mssql"
+        ],
+        "layer": "services"
+      },
+      "recommendation": "Confirm mixed concerns; extract collaborators if validated.",
+      "blocking": false
+    },
+    {
+      "id": "srp-03728dc63f",
+      "category": "solid",
+      "subcategory": "srp",
+      "severity": "medium",
+      "confidence": "low",
+      "status": "suspected",
+      "title": "SUSPECTED SRP violation",
+      "description": "Multiple responsibility signals (3) in one module with ~11 methods / domains=['employee', 'assignment', 'company'].",
+      "file": "backend/src/services/work-team.service.ts",
+      "line": null,
+      "evidence": {
+        "responsibility_signals": 3,
+        "domains": [
+          "employee",
+          "assignment",
+          "company"
+        ],
+        "methods": 11,
+        "direct_sql": true,
+        "externals": [
+          "mssql"
+        ],
+        "layer": "services"
+      },
+      "recommendation": "Confirm mixed concerns; extract collaborators if validated.",
+      "blocking": false
+    },
+    {
+      "id": "sql-inventory-summary",
+      "category": "sql",
+      "subcategory": "inventory",
+      "severity": "info",
+      "confidence": "high",
+      "status": "detected",
+      "title": "SQL presence by layer",
+      "description": "Count of backend source files containing SQL keywords, grouped by layer. executable_by_layer counts files with getPool/.query/mssql Request.",
+      "file": null,
+      "line": null,
+      "evidence": {
+        "counts_by_layer": {
+          "repositories": 55,
+          "services": 26,
+          "utils": 16,
+          "scripts": 13,
+          "other": 12,
+          "routes": 12,
+          "controllers": 7,
+          "database": 3,
+          "imports": 2,
+          "config": 1,
+          "middleware": 1,
+          "types": 1
+        },
+        "executable_by_layer": {
+          "repositories": 55,
+          "scripts": 11,
+          "services": 10,
+          "utils": 3,
+          "database": 2
+        }
+      },
+      "recommendation": "Prefer executable SQL concentrated in repositories; investigate controllers/routes/services executable counts.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-281a662147",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/absence-attachment.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 4,
+        "samples": [
+          {
+            "line": 205,
+            "expr": "includeDeleted ? \"\" : \"AND status <> N'DELETED'\"",
+            "kind": "known-safe"
+          },
+          {
+            "line": 373,
+            "expr": "ACTIVE_STATUSES_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 467,
+            "expr": "ACTIVE_STATUSES_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 779,
+            "expr": "statusParams.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-3dcbdd3962",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/absence-request.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 4,
+        "samples": [
+          {
+            "line": 341,
+            "expr": "ABSENCE_OVERLAP_STATUS_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 390,
+            "expr": "statusFilter",
+            "kind": "known-safe"
+          },
+          {
+            "line": 471,
+            "expr": "statusFilter",
+            "kind": "known-safe"
+          },
+          {
+            "line": 749,
+            "expr": "placeholders.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-b412921116",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/absence-type.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 1,
+        "samples": [
+          {
+            "line": 143,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-36f432341f",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/attendance-notification.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 36,
+        "samples": [
+          {
+            "line": 194,
+            "expr": "REMINDER_CANDIDATE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 199,
+            "expr": "WORKDAY_REMINDER_JOINS",
+            "kind": "known-safe"
+          },
+          {
+            "line": 209,
+            "expr": "REMINDER_SCHEDULE_VERSION_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 215,
+            "expr": "WORKDAY_ASSIGNMENT_COVERAGE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 216,
+            "expr": "PHONE_FILTER_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 250,
+            "expr": "WORKDAY_REMINDER_JOINS",
+            "kind": "known-safe"
+          },
+          {
+            "line": 261,
+            "expr": "WORKDAY_ASSIGNMENT_COVERAGE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 262,
+            "expr": "PHONE_FILTER_SQL",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-d803178097",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/bot-session.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 1,
+        "samples": [
+          {
+            "line": 369,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-6176b6b6ac",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/company-lifecycle.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 1,
+        "samples": [
+          {
+            "line": 56,
+            "expr": "ACTIVE_BOT_SESSION_STATES_SQL",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-95144923a9",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/company-location-types.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 2,
+        "samples": [
+          {
+            "line": 31,
+            "expr": "activeOnly ? \"AND is_active = 1\" : \"\"",
+            "kind": "known-safe"
+          },
+          {
+            "line": 151,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-ecef735b68",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/company-settings.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 1,
+        "samples": [
+          {
+            "line": 340,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-0acdbdba36",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/employee-assignment-query.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 2,
+        "samples": [
+          {
+            "line": 116,
+            "expr": "ASSIGNED_OPERATION_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 170,
+            "expr": "statusParams.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-589c8ef873",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/employee-category.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 2,
+        "samples": [
+          {
+            "line": 54,
+            "expr": "options.includeInactive ? \"\" : \"AND ec.is_active = 1\"",
+            "kind": "known-safe"
+          },
+          {
+            "line": 194,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-8ffe25d7bc",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/employee-deactivation.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 2,
+        "samples": [
+          {
+            "line": 122,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 203,
+            "expr": "params.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-acd0e7e5cd",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/employee-workday-availability.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 7,
+        "samples": [
+          {
+            "line": 113,
+            "expr": "CHECK_IN_CANDIDATE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 131,
+            "expr": "CHECK_IN_EXPECTATION_FILTER",
+            "kind": "known-safe"
+          },
+          {
+            "line": 168,
+            "expr": "CHECK_IN_CANDIDATE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 187,
+            "expr": "CHECK_IN_EXPECTATION_FILTER",
+            "kind": "known-safe"
+          },
+          {
+            "line": 607,
+            "expr": "CHECK_IN_CANDIDATE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 677,
+            "expr": "CHECK_IN_CANDIDATE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 743,
+            "expr": "CHECK_IN_CANDIDATE_SELECT",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-f12b14762c",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/employee-workday.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 9,
+        "samples": [
+          {
+            "line": 652,
+            "expr": "placeholders.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 678,
+            "expr": "placeholders.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 790,
+            "expr": "placeholders.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 928,
+            "expr": "WORKDAY_SCHEDULE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 972,
+            "expr": "WORKDAY_SCHEDULE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 981,
+            "expr": "placeholders.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 1002,
+            "expr": "WORKDAY_SCHEDULE_SELECT",
+            "kind": "known-safe"
+          },
+          {
+            "line": 1037,
+            "expr": "WORKDAY_SCHEDULE_SELECT",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-cefb094142",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/employee.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 3,
+        "samples": [
+          {
+            "line": 195,
+            "expr": "valueSql.join(\",\\n\")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 315,
+            "expr": "params.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 490,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-f16791ecc8",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/operation-employee.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 7,
+        "samples": [
+          {
+            "line": 120,
+            "expr": "placeholders.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 121,
+            "expr": "OVERLAP_CLAUSE",
+            "kind": "known-safe"
+          },
+          {
+            "line": 155,
+            "expr": "input.excludeAssignmentId ? \"AND id <> @excludeAssignmentId\" : \"\"",
+            "kind": "known-safe"
+          },
+          {
+            "line": 156,
+            "expr": "OVERLAP_CLAUSE",
+            "kind": "known-safe"
+          },
+          {
+            "line": 233,
+            "expr": "ACTIVE_ON_WORK_DATE_CLAUSE_UNALIASED",
+            "kind": "known-safe"
+          },
+          {
+            "line": 373,
+            "expr": "statusParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 510,
+            "expr": "ACTIVE_ON_WORK_DATE_CLAUSE_UNALIASED",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-8d9149f5af",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/operation-schedule.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 3,
+        "samples": [
+          {
+            "line": 93,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 130,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 149,
+            "expr": "scheduleIdParams.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-58b846a414",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/operation.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 1,
+        "samples": [
+          {
+            "line": 541,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-5a58f14f60",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/payroll-receipt.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 1,
+        "samples": [
+          {
+            "line": 863,
+            "expr": "FAILURE_STATUSES_SQL",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-024b031a9d",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/service.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 3,
+        "samples": [
+          {
+            "line": 112,
+            "expr": "valueSql.join(\",\\n\")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 339,
+            "expr": "params.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 415,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-848b5c05d2",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/statistics.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 19,
+        "samples": [
+          {
+            "line": 441,
+            "expr": "INCIDENT_COUNT_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 444,
+            "expr": "CONSOLIDATED_SAMPLE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 448,
+            "expr": "CONSOLIDATED_SAMPLE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 472,
+            "expr": "aggregatedCte",
+            "kind": "known-safe"
+          },
+          {
+            "line": 483,
+            "expr": "aggregatedCte",
+            "kind": "known-safe"
+          },
+          {
+            "line": 561,
+            "expr": "CONSOLIDATED_SAMPLE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 573,
+            "expr": "CONSOLIDATED_SAMPLE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 577,
+            "expr": "CONSOLIDATED_SAMPLE_SQL",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-609cdb0d01",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/user-company-membership.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 3,
+        "samples": [
+          {
+            "line": 179,
+            "expr": "whereClause",
+            "kind": "known-safe"
+          },
+          {
+            "line": 213,
+            "expr": "whereClause",
+            "kind": "known-safe"
+          },
+          {
+            "line": 262,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-1b25ce9420",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/repositories/work-team-assignment-batch.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 1,
+        "samples": [
+          {
+            "line": 469,
+            "expr": "batchParams.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-2b3e8aa702",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/repositories/work-team.repository.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 8,
+        "samples": [
+          {
+            "line": 127,
+            "expr": "memberCountSelect",
+            "kind": "known-safe"
+          },
+          {
+            "line": 158,
+            "expr": "excludeId ? \"AND id <> @excludeId\" : \"\"",
+            "kind": "known-safe"
+          },
+          {
+            "line": 215,
+            "expr": "memberCountSelect",
+            "kind": "known-safe"
+          },
+          {
+            "line": 267,
+            "expr": "fields.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 303,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 367,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 394,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          },
+          {
+            "line": 432,
+            "expr": "idParams.join(\", \")",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-30a7ed2a4e",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/scripts/cleanup-integration-junk.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 3,
+        "samples": [
+          {
+            "line": 54,
+            "expr": "TEST_EMPLOYEE_PREDICATE",
+            "kind": "known-safe"
+          },
+          {
+            "line": 78,
+            "expr": "isJunkOperationPredicate",
+            "kind": "known-safe"
+          },
+          {
+            "line": 88,
+            "expr": "TEST_EMPLOYEE_PREDICATE",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-e2a206e825",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/utils/employee-workday-statistics-projection.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 9,
+        "samples": [
+          {
+            "line": 216,
+            "expr": "WORKED_MINUTES_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 217,
+            "expr": "OVERTIME_MINUTES_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 218,
+            "expr": "ON_TIME_WORKDAY_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 219,
+            "expr": "LATE_WORKDAY_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 220,
+            "expr": "PUNCTUALITY_ELIGIBLE_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 221,
+            "expr": "EARLY_DEPARTURE_WORKDAY_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 222,
+            "expr": "OPEN_ATTENDANCE_WORKDAY_SQL",
+            "kind": "known-safe"
+          },
+          {
+            "line": 223,
+            "expr": "EFFECTIVE_STATE_SQL",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-9923cbcc68",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "low",
+      "status": "detected",
+      "title": "Some known-safe SQL interpolations present",
+      "description": "File also contains review/risk interpolations; known-safe samples are listed for triage only and do not clear unknown/runtime findings.",
+      "file": "backend/src/utils/service-fix/db-services.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation-partial",
+        "count": 1,
+        "samples": [
+          {
+            "line": 95,
+            "expr": "TABLE_NAME",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Resolve unknown/runtime findings; keep known-safe fragments unchanged.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-a16a2d7904",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/utils/service-fix/sql.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 10,
+        "samples": [
+          {
+            "line": 29,
+            "expr": "formatDecimal(fix.newLatitude)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 30,
+            "expr": "formatDecimal(fix.newLongitude)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 32,
+            "expr": "whereCurrentService(fix)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 35,
+            "expr": "escapeSqlString(fix.newAddress)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 37,
+            "expr": "whereCurrentService(fix)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 40,
+            "expr": "escapeSqlString(newName)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 42,
+            "expr": "escapeSqlString(fix.dbId)",
+            "kind": "offline-script-generation"
+          },
+          {
+            "line": 47,
+            "expr": "whereCurrentService(fix)",
+            "kind": "offline-script-generation"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-struct-c598187821",
+      "category": "sql",
+      "subcategory": "sql-dynamic-structure",
+      "severity": "info",
+      "confidence": "medium",
+      "status": "accepted-risk",
+      "title": "Demonstrably safe structural SQL interpolation",
+      "description": "SQL template interpolations are limited to known-static fragments, @parameter placeholder joins, literal-only ternaries, or the offline service-fix SQL script generator.",
+      "file": "backend/src/utils/statistics-canonical-attendance.ts",
+      "line": null,
+      "evidence": {
+        "pattern": "known-safe-sql-interpolation",
+        "count": 1,
+        "samples": [
+          {
+            "line": 33,
+            "expr": "CANONICAL_ATTENDANCE_ORDER_BY",
+            "kind": "known-safe"
+          }
+        ]
+      },
+      "recommendation": "Keep identifiers on closed whitelists; never interpolate request/body values.",
+      "blocking": false
+    },
+    {
+      "id": "sql-service-boundary-90602d9e4c",
+      "category": "sql",
+      "subcategory": "layer-boundary",
+      "severity": "medium",
+      "confidence": "medium",
+      "status": "requires-review",
+      "title": "Executable SQL in service layer",
+      "description": "Service contains executable SQL access. Prefer repository methods; services may open/pass transactions but should not own query text.",
+      "file": "backend/src/services/one-time-schedule-consistency.inspector.ts",
+      "line": null,
+      "evidence": {
+        "layer": "services",
+        "classification": "PRODUCTION_BOUNDARY_VIOLATION",
+        "transaction_hints": false
+      },
+      "recommendation": "Extract queries into a cohesive repository; preserve existing transaction parameters / CAS predicates.",
+      "blocking": false
+    }
+  ],
+  "gate": {
+    "passed": true,
+    "blocking_count": 0,
+    "max_severity": "high",
+    "blockers": [],
+    "policy": {
+      "block_severities": [
+        "critical"
+      ],
+      "block_high_with_confidence": [
+        "high"
+      ],
+      "ignore_statuses": [
+        "accepted-risk",
+        "false-positive"
+      ]
+    },
+    "regression_only": false
+  }
+}

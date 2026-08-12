@@ -44,8 +44,8 @@ audit/findings.json
 audit/findings.md
 audit/findings.prev.json
 audit/current-run.json
-audit/baseline/audit-status.baseline.json
-audit/baseline/findings.baseline.json
+# Official confirmed baseline is versioned (Phase 7–8).
+# Raw run snapshots remain under audit/raw/ (gitignored elsewhere).
 audit/audit-improvements-diff.txt
 audit/audit-improvements-diffstat.txt
 audit/audit-improvements-status.txt

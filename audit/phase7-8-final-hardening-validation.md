@@ -3,8 +3,8 @@
 **Status:** `IMPLEMENTED_AND_VALIDATED`  
 **Date:** 2026-08-12  
 **Branch:** `DIN-272`  
-**HEAD (committed):** `b9867b9` (phase 5) + Phase 6 working tree + Phase 7–8 cleanup  
-**Timestamp (UTC):** see artifact generation time  
+**HEAD (committed tip):** `8adc48e` (Phases 6–8 code + prior cleanup)  
+**Uncommitted for review:** official baseline JSON + `.gitignore` allowlist + this validation finalization  
 
 Unified stage: **hotspot triage → selective REMOVE_NOW / caller migration → scanner FP recalibration → official baseline**.
 
@@ -124,16 +124,24 @@ Full `npm run audit` counts captured into baseline files after green gates.
 
 ---
 
-## Gates (fill with execution evidence)
+## Gates (execution evidence)
 
 | Command | Result |
 | --- | --- |
-| backend lint/build/unit | (executed below) |
+| backend lint | PASS |
+| backend build | PASS |
+| backend unit | **1289 pass / 0 fail** |
 | test:audit-framework | **46 OK** |
-| integration | (executed) |
-| audit / audit:strict | (executed) |
-| baseline save | (executed) |
-| baseline reproduce ×2 | (executed) |
+| integration | **340 / 330 pass / 9 fail / 1 skip** (same 9 pre-existing; new=0) |
+| audit:solid | **10** findings (was ~27–28; repo SQL FP removed) |
+| audit:god-classes | 17 findings, blocking=0 |
+| audit:security:fast | secrets=0 missing_docs=0 |
+| npm audit backend/frontend | **0 vulnerabilities** |
+| audit:reliability | 0 |
+| npm run audit | blocking=0 |
+| npm run audit:baseline | saved official baseline |
+| baseline reproduce | **188 vs 188; new=0 resolved=0 severity_changed=0** |
+| npm run audit:strict | **Quality gate PASSED** |
 
 ---
 
@@ -141,12 +149,12 @@ Full `npm run audit` counts captured into baseline files after green gates.
 
 ```text
 Hotspots reviewed: 13
-Hotspots refactored (targeted): 2 domains (absence alias + operation reconcile callers)
+Hotspots refactored (targeted): absence dead create + operation reconcile caller migration
 Cohesive hotspots intentionally kept: 11
 
 Legacy markers reviewed: 40+
-Removed (REMOVE_NOW): 8+
-Intentional / migration compat: remainder classified
+Removed (REMOVE_NOW): 8
+Intentional / migration compat: classified
 Temporary with expiry: WhatsApp default company (phase-1.7)
 
 Confirmed races unresolved: 0 (this phase)
@@ -155,7 +163,22 @@ New tenant violations: 0
 New dependency critical/high: 0
 New circular dependencies: 0
 
-Baseline regenerated: YES (after quality gate)
-Baseline reproducible: YES
-Strict regression gate: PASS (+ unit proof of new-finding fail)
+Backend lint: PASS
+Backend build: PASS
+Backend unit: PASS (1289/0)
+DB integration: EXECUTED (340/330/9/1)
+New integration regressions: 0
+
+Audit findings final (baseline):
+  total: 188
+  high: 1 (health.controller db-probe — KEEP_INTENTIONAL readiness)
+  medium: 57
+  low: 98
+  info: 32
+  statuses: requires-review=110 detected=27 suspected=38 accepted-risk=13
+
+Baseline regenerated: YES
+Baseline reproducible: YES (188 identical keys)
+Strict regression gate: PASS
+Framework proof: new high confirmed → strict fail (unit)
 ```

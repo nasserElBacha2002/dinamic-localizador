@@ -69,7 +69,8 @@
     ]
   },
   "sql": {
-    "risk_layers": ["controllers", "routes", "middleware"]
+    "risk_layers": ["controllers", "routes", "middleware"],
+    "flag_service_executable_sql": true
   },
   "gate": {
     "block_severities": ["critical"],

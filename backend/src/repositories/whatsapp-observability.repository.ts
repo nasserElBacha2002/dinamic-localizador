@@ -5,6 +5,7 @@ import type { WhatsAppMessage } from "../types/twilio.types";
 import type { WhatsappConversation } from "../types/whatsapp-observability";
 import { whatsappConversationRepository } from "./whatsapp-conversation.repository";
 import { whatsappFlowExecutionRepository } from "./whatsapp-flow-execution.repository";
+import { whatsappMessageRepository } from "./whatsapp-message.repository";
 import { whatsappProviderEventRepository } from "./whatsapp-provider-event.repository";
 import { maskPhoneForObservability } from "../utils/whatsapp-observability";
 
@@ -245,15 +246,10 @@ export const whatsappObservabilityRepository = {
   },
 
   async getMessageDetail(messageId: string) {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("id", sql.UniqueIdentifier, messageId)
-      .query(`SELECT TOP 1 * FROM whatsapp_messages WHERE id = @id`);
-    if (!result.recordset[0]) {
+    const message = await whatsappMessageRepository.findByIdGlobal(messageId);
+    if (!message) {
       return null;
     }
-    const message = mapWhatsAppMessageRow(result.recordset[0] as Record<string, unknown>);
     const providerEvents = message.providerMessageSid
       ? await whatsappProviderEventRepository.listByMessageSid(message.providerMessageSid)
       : await whatsappProviderEventRepository.listByMessageId(messageId);

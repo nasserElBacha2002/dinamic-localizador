@@ -221,6 +221,120 @@ class TestSqlInterpolationClassification(unittest.TestCase):
         )
 
 
+class TestSqlBoundaryLayerCalibration(unittest.TestCase):
+    def test_classify_layer_integration_test(self):
+        from framework.utils import classify_layer
+
+        self.assertEqual(
+            classify_layer("backend/src/services/foo.integration.test.ts"),
+            "tests",
+        )
+        self.assertEqual(classify_layer("backend/src/services/foo.service.ts"), "services")
+        self.assertEqual(
+            classify_layer("backend/src/controllers/foo.controller.ts"),
+            "controllers",
+        )
+
+    def test_service_transaction_only_not_boundary(self):
+        from framework.scanners import sql_boundaries as mod
+        from unittest import mock
+        from pathlib import Path
+
+        content = """
+import sql from "mssql";
+import { getPool } from "../database/connection";
+export async function run() {
+  const tx = new sql.Transaction(getPool());
+  await tx.begin();
+  await tx.commit();
+}
+"""
+        fake = Path("/repo/backend/src/services/tx-only.service.ts")
+        with mock.patch.object(mod, "iter_source_files", return_value=[fake]), mock.patch.object(
+            mod, "read_text", return_value=content
+        ), mock.patch.object(mod, "repo_root", return_value=Path("/repo")), mock.patch.object(
+            mod, "load_thresholds", return_value={"sql": {"flag_service_executable_sql": True, "risk_layers": ["controllers", "routes"]}}
+        ):
+            findings = mod.scan()
+        self.assertEqual([f for f in findings if f.subcategory == "layer-boundary"], [])
+
+    def test_service_with_query_is_boundary(self):
+        from framework.scanners import sql_boundaries as mod
+        from unittest import mock
+        from pathlib import Path
+
+        content = """
+import { getPool } from "../database/connection";
+export async function run() {
+  await getPool().request().query("SELECT 1");
+}
+"""
+        fake = Path("/repo/backend/src/services/owns-sql.service.ts")
+        with mock.patch.object(mod, "iter_source_files", return_value=[fake]), mock.patch.object(
+            mod, "read_text", return_value=content
+        ), mock.patch.object(mod, "repo_root", return_value=Path("/repo")), mock.patch.object(
+            mod, "load_thresholds", return_value={"sql": {"flag_service_executable_sql": True, "risk_layers": ["controllers", "routes"]}}
+        ):
+            findings = mod.scan()
+        boundaries = [f for f in findings if f.subcategory == "layer-boundary"]
+        self.assertEqual(len(boundaries), 1)
+
+    def test_controller_select_keyword_only_not_finding(self):
+        from framework.scanners import sql_boundaries as mod
+        from unittest import mock
+        from pathlib import Path
+
+        content = """
+export const help = "Use SELECT carefully in docs";
+export function handler() { return { ok: true }; }
+"""
+        fake = Path("/repo/backend/src/controllers/docs.controller.ts")
+        with mock.patch.object(mod, "iter_source_files", return_value=[fake]), mock.patch.object(
+            mod, "read_text", return_value=content
+        ), mock.patch.object(mod, "repo_root", return_value=Path("/repo")), mock.patch.object(
+            mod, "load_thresholds", return_value={"sql": {"flag_service_executable_sql": True, "risk_layers": ["controllers", "routes"]}}
+        ):
+            findings = mod.scan()
+        self.assertEqual([f for f in findings if f.subcategory == "layer-boundary"], [])
+
+    def test_controller_request_query_sql_is_finding(self):
+        from framework.scanners import sql_boundaries as mod
+        from unittest import mock
+        from pathlib import Path
+
+        content = """
+export async function handler(req) {
+  await req.query("SELECT * FROM employees");
+}
+"""
+        fake = Path("/repo/backend/src/controllers/bad.controller.ts")
+        with mock.patch.object(mod, "iter_source_files", return_value=[fake]), mock.patch.object(
+            mod, "read_text", return_value=content
+        ), mock.patch.object(mod, "repo_root", return_value=Path("/repo")), mock.patch.object(
+            mod, "load_thresholds", return_value={"sql": {"flag_service_executable_sql": True, "risk_layers": ["controllers", "routes"]}}
+        ):
+            findings = mod.scan()
+        boundaries = [f for f in findings if f.subcategory == "layer-boundary"]
+        self.assertEqual(len(boundaries), 1)
+
+    def test_integration_test_excluded_from_service_boundary(self):
+        from framework.scanners import sql_boundaries as mod
+        from unittest import mock
+        from pathlib import Path
+
+        content = """
+await getPool().request().query("SELECT 1");
+"""
+        fake = Path("/repo/backend/src/services/foo.integration.test.ts")
+        with mock.patch.object(mod, "iter_source_files", return_value=[fake]), mock.patch.object(
+            mod, "read_text", return_value=content
+        ), mock.patch.object(mod, "repo_root", return_value=Path("/repo")), mock.patch.object(
+            mod, "load_thresholds", return_value={"sql": {"flag_service_executable_sql": True, "risk_layers": ["controllers", "routes"]}}
+        ):
+            findings = mod.scan()
+        self.assertEqual([f for f in findings if f.subcategory == "layer-boundary"], [])
+
+
 class TestReliabilityScanner(unittest.TestCase):
     def test_cas_status_update_is_not_race_finding(self):
         from framework.scanners import reliability as mod

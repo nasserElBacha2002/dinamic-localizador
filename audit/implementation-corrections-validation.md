@@ -1,128 +1,118 @@
-# Implementation corrections — Phase 3 concurrency/idempotency review
+# Phase 5 SQL Boundaries — Implementation Corrections Validation
 
 **Status:** `FIXED_AND_VALIDATED`  
 **Date:** 2026-08-12  
-**Scope:** Code-review corrections only (migrations runner, ONE_TIME invariant, import idempotency, service/Twilio tests, 9-fail evidence)
+**Base SHA (pre–Phase 5):** `11aa51e` (phase 4)  
+**Current:** working tree (Phase 5 + corrections; uncommitted)
 
 ---
 
-## Triage
+## Root causes addressed
 
-| # | Feedback | Priority | Action |
-|---|----------|----------|--------|
-| 1 | 089–091 SCHEMA_DRIFT / manual 092 | must fix | 089 idempotent heal; runner applied 089→091→093 |
-| 2 | Validate 092 via official runner | must fix | Clean-DB runner test + migrate on current DB |
-| 3 | Upgrade from pre-092 | must fix | 093 ensures ONE_TIME filter on upgrade |
-| 4 | Rollback 092 | must fix | Integration test rollback/reapply |
-| 5 | ONE_TIME invariant vs wider unique | must fix | Filter `operation_kind = ONE_TIME` |
-| 6 | Tests by operation kind | must fix | CANCELLED / RECURRING / ONE_TIME tests |
-| 7 | NULL scheduled_start diagnostics | must fix | Documented: RECURRING×2 same service |
-| 8 | Import same-key different payload | must fix | `IDEMPOTENCY_KEY_CONFLICT` when fileHash/etc differ |
-| 9–10 | Import concurrent tests | must fix | Integration tests added |
-| 11–12 | Service-level confirmation concurrency | must fix | Isolated op + message↔DB assert |
-| 13 | Twilio monotonic DB matrix | must fix | Matrix vs `pickProjectedProviderStatus` |
-| 15–16 | 9 integration failures | must fix | Proven identical on `fa4ad9d` (phase1/2) and phase3 |
-| 17 | Reliability scanner | should fix | Kept; no new ignore-lists |
-| 18 | Gitignore duplicates | should fix | Deduped |
+1. **Integration “10th failure”** — A/B on the same DB/env showed **10 leaf failures on base `11aa51e` already**. The extra Phase 5 narrative failure was the known Phase 3 suite flake `service-level confirm || unavailable…`, present on both SHAs. Evidence: isolated 10× runs (base 5/10 fail, current 2/10 fail) with identical assertion error before fix.
+2. **Phase 3 flake root cause** — Test required *both* concurrent response messages to match the durable DB winner. CAS correctly leaves one durable status; the loser still returns `ok` with its own copy. Fixed assertion (no sleeps). After fix: **10/10 PASS**.
+3. **Draft submit ignored CAS `rowsAffected`** — Winner path now requires `affected === 1`; on 0 re-reads durable draft (idempotent replay / idempotency conflict / cancelled / expired / not found). Attachments link only after CAS win (SQL also guards `submitted_request_id`).
+4. **Orphan requests** — Submit holds `UPDLOCK` on OPEN draft before `createFromAdmin`; CAS update runs in the same lock transaction. Lost/aborted creates cancel PENDING orphans. Invariant: `draftId → ≤1 durable request` via `submitted_request_id`.
+5. **Pending storage / deletion records** — Mutations now require `company_id` (+ lease where applicable) and return `rowsAffected`.
+6. **Compatibility alias** — Removed `company-data-cascade.service.ts`; fixture cascades moved to `test-helpers/integration-entity-cascade.ts`; production purge stays set-based in `company-purge.repository.ts`.
+7. **Tenant audit noise** — Missing legacy route filenames updated; mutation `WHERE id=@id` scanner tightened; WhatsApp message UPDATEs tenant-scoped; global UUID SELECTs classified `SAFE_GLOBAL_ID`.
+8. **Raw tenant report** — `audit/tenant-isolation-audit.txt` gitignored / untracked.
 
 ---
 
-## Migration runner
+## Integration pre/post comparison
 
-### Root cause of 089–091 drift
-`phase3-4-db-security.integration.test.ts` applied `089` via `applySqlScriptInTransaction` **without** inserting `system_migrations`. Roles remained; runner then hit `SCHEMA_DRIFT` and never reached 091/092.
+| | PRE-PHASE5 (`11aa51e`) | POST-CORRECTION (current) |
+| --- | --- | --- |
+| tests | 330 | 338 |
+| pass | 319 | 328 |
+| fail | 10 | 9 |
+| skip | 1 | 1 |
 
-### Fix
-- `089` is now idempotent when **both** roles exist **and** runtime has expected `SCHEMA::dbo SELECT` (no-op heal).
-- Partial/foreign role sets still `THROW 50089 SCHEMA_DRIFT`.
-- Official `npm run migrate` then applied: **089, 090, 091, 093** (092 already registered; 093 tightened filter).
+**New failures attributable to Phase 5: 0**
 
-### Clean DB
-`phase3-clean-migration-runner.integration.test.ts` creates `dinamic_attendance_phase3_clean_mig`, runs official runner with `DB_NAME` override, asserts 089–093 + ONE_TIME filter, drops DB. **PASS**.
+Pre-existing leaf failures (same 9 on both; Phase 3 flake removed on current):
 
-### Pre-092 upgrade
-093 drops/recreates index when filter lacks `ONE_TIME`. Verified filter:
+- multi-company foundation isolation (3)
+- company settings API integration (2)
+- tenant isolation hardening (4)
 
-```text
-([status]<>N'CANCELLED' AND [operation_kind]=N'ONE_TIME' AND [scheduled_start] IS NOT NULL)
-```
+Phase 3 leaf that failed on base and was fixed on current:
 
-### Rollback / reapply
-`phase3-migration-unique.integration.test.ts`: rollback 093+092 → index absent → apply 092+093 → ONE_TIME index present. **PASS**.
+- `service-level confirm || unavailable: one durable state, messages match DB`
 
-No manual `system_migrations` inserts in this correction pass.
+Added passing suites on current: draft CAS concurrency (5), purge equivalence (2), lifecycle deactivate (1).
 
----
+### A/B Phase 3 isolated evidence
 
-## ONE_TIME invariant
-
-- `createRecurring` inserts `scheduled_start = NULL`.
-- Diagnostics: active NULL-start duplicates are **RECURRING** (count=2, same company+service) — not corruption; excluded from unique.
-- Unique applies only to **active ONE_TIME with non-null start**.
-- CANCELLED does not block a new active ONE_TIME (tested).
-- Two RECURRING NULL starts allowed (tested).
-
-Remediation (optional later): decide if multiple RECURRING per service should be unique; not in Phase 3 scope.
+| SHA | runs | pass | fail | signature |
+| --- | --- | --- | --- | --- |
+| `11aa51e` | 10 | 5 | 5 | AssertionError: both messages must match winner regex |
+| current (before assertion fix) | 10 | 8 | 2 | same |
+| current (after assertion fix) | 10 | 10 | 0 | — |
 
 ---
 
-## Import idempotency
+## CAS draft correction
 
-On duplicate key for idempotencyKey, reuse existing **only if**:
-
-- companyId, entityType, idempotencyKey, fileHash, strategyVersion, userId match.
-
-Else: `AppError 409 IDEMPOTENCY_KEY_CONFLICT`.
-
-Tests: concurrent same payload → 1 row; different payload → conflict, still 1 row.
+- `markSubmittedIfOpen(..., transaction?)` returns rowsAffected; service requires `=== 1`.
+- Lock-open → create → CAS-in-lock-tx → commit → link attachments.
+- `linkDraftAttachmentsToRequest` requires draft `SUBMITTED` with matching `submitted_request_id`.
+- Concurrent SQL tests cover same key, different keys, submit∥cancel, submit∥expire, attachment binding.
 
 ---
 
-## Concurrency / Twilio tests
+## Tenant audit triage
 
-- Repository CAS retained.
-- Service-level confirm∥unavailable on isolated operation; messages match durable DB status.
-- Twilio outbox matrix: sent/delivered/read/failed/undelivered cases vs TS `pickProjectedProviderStatus`.
+| Finding | Classification | Action |
+| --- | --- | --- |
+| `whatsapp-message` UPDATE `WHERE id=@id` | CONFIRMED | Added `company_id` to updates; callers pass tenant from message row |
+| `whatsapp-message` SELECT by id (Twilio SID bootstrap) | SAFE_GLOBAL_ID | `findByIdGlobal` for correlation before tenant known |
+| `whatsapp-observability` message detail SELECT | SAFE_GLOBAL_ID / TENANT_SCOPED_UPSTREAM | Delegates to `findByIdGlobal`; platform UI is UUID lookup |
+| missing `store/inventory*.routes.ts` | STALE_AUDIT_RULE | Auditor list → `service/operation/operation-assignment.routes.ts` |
+| pending storage mark by id only | CONFIRMED | Fixed `markDeleted/markFailed(companyId, …)` |
+| deletion record stage/fail by id only | CONFIRMED | Homogenized with `company_id` (+ lease on fail/complete) |
 
----
-
-## Nine integration failures — evidence
-
-Suites:
-
-- `multi-company foundation isolation` (3)
-- `company settings API integration` (2)
-- `tenant isolation hardening` (4)
-
-| Commit | Result |
-|--------|--------|
-| `fa4ad9d` (phase 1 y 2) | **9 fail / 22 pass** (same names) |
-| `078366e` (phase 3) | **9 fail / 22 pass** (same names) |
-
-Logs: `/tmp/int-fails-on-phase12.log`, `/tmp/int-fails-on-phase3head.log`.
-
-**Conclusion:** pre-existing debt; not introduced by Phase 3 or these corrections. Not fixed in this review (out of concurrency scope).
+`npm run audit:tenant` → exit 0 (No findings).
 
 ---
 
-## Validation commands
+## Purge / lifecycle / provider
+
+- Purge equivalence integration: operational delete, identity stage, pending storage retained then marked, other company untouched, txn rollback.
+- Lifecycle deactivate DB: applock path, invitation revoke, bot session expire, lifecycle event.
+- Phase 3 Twilio monotonic matrix still passes in suite.
+
+---
+
+## Quality gates
 
 | Command | Result |
-|---------|--------|
-| `npm run migrate` | 089–091, 093 applied via runner |
-| `npm run migrate:status` | 089–093 applied |
-| Phase3 correction integration tests | PASS (clean-db, import, concurrency, migration unique, security) |
+| --- | --- |
 | `npm run lint --prefix backend` | PASS |
-| `npm run build:backend` | PASS |
-| `npm test --prefix backend` | (see below) |
-| Full `test:integration` | 9 pre-existing fails only (proven) |
-| `audit:reliability` / `database` / `security:fast` / `audit` / `audit:strict` | (see below) |
+| `npm run build --prefix backend` | PASS |
+| `npm test --prefix backend` | PASS (1296) |
+| `RUN_DB_INTEGRATION_TESTS=true npm run test:integration` | 328 pass / 9 fail (pre-existing) / 1 skip |
+| `npm run test:audit-framework` | PASS (43) |
+| `npm run audit:database` | findings=60 blocking=0 passed |
+| `npm run audit:tenant` | 0 findings |
+| `npm run audit:architecture` | findings=2 blocking=0 |
+| `npm run audit:reliability` | findings=0 |
+| `npm run audit:security:fast` | secrets=0 (completed) |
+| `npm run audit` / `audit:strict` | PASS (blocking=0; Quality gate PASSED) |
 
 ---
 
-## Architectural decisions
+## Files deleted / renamed
 
-1. Heal 089 orphans with grant fingerprint instead of adopting arbitrary roles.
-2. Split upgrade of unique filter into **093** so already-registered 092 does not require deleting `system_migrations`.
-3. Keep CAS only in repository; service re-reads and aligns WhatsApp copy to durable state.
-4. Import idempotency is payload-scoped (fileHash + strategyVersion + userId), not key-only.
+- **Deleted:** `backend/src/services/company-data-cascade.service.ts`
+- **Added:** `backend/src/test-helpers/integration-entity-cascade.ts` (fixture cascades)
+- **Untracked/gitignored:** `audit/tenant-isolation-audit.txt`
+
+---
+
+## Remaining debt
+
+- 9 pre-existing company isolation / settings / tenant route integration failures (unchanged vs base).
+- Diagnostic service SQL still deferred: `one-time-schedule-consistency.inspector.ts`.
+- `fromDraftId` option on `createFromAdmin` remains unused; durable binding is draft CAS + lock (document if a future unique `draft_id` column is desired).

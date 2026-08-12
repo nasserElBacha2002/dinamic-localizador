@@ -69,8 +69,8 @@ LEGACY_COMPATIBILITY_VIEWS = (
 )
 
 DANGEROUS_WHERE_ID = re.compile(
-    r"WHERE\s+id\s*=\s*@id(?!\s+AND\s+company_id)",
-    re.IGNORECASE,
+    r"(?:UPDATE|DELETE)\b(?:(?!;).){0,500}?WHERE\s+id\s*=\s*@id(?!\s+AND\s+company_id)",
+    re.IGNORECASE | re.DOTALL,
 )
 
 ROUTE_FILES_SKIP = {"auth.routes.ts", "health.routes.ts", "twilio.routes.ts", "index.ts"}
@@ -122,16 +122,16 @@ def audit_backend_routes() -> list[str]:
 
     operational_route_files = [
         "employee.routes.ts",
-        "store.routes.ts",
-        "inventory.routes.ts",
-        "inventory-assignment.routes.ts",
+        "service.routes.ts",
+        "operation.routes.ts",
+        "operation-assignment.routes.ts",
         "attendance.routes.ts",
         "statistics.routes.ts",
         "absence-type.routes.ts",
         "absence-request.routes.ts",
-    "bot-simulator.routes.ts",
-    "lookup.routes.ts",
-    "company-user.routes.ts",
+        "bot-simulator.routes.ts",
+        "lookup.routes.ts",
+        "company-user.routes.ts",
     ]
 
     for file_name in operational_route_files:

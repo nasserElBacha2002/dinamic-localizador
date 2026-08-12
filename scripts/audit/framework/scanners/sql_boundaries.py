@@ -9,6 +9,22 @@ from ..models import AuditFinding
 from ..utils import classify_layer, iter_source_files, read_text, stable_id
 
 SQL_RE = re.compile(r"\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b", re.I)
+# Executable SQL access (not keyword mentions in comments / error messages alone).
+# Note: `import mssql` alone is insufficient — services often import it only for Transaction.
+EXECUTABLE_SQL_RE = re.compile(
+    r"\bgetPool\s*\(|\.query\s*\(|\.batch\s*\(|new\s+sql\.Request\b",
+    re.I,
+)
+# Services may call getPool() only to open Transaction; that is orchestration, not owning SQL.
+SERVICE_OWNED_SQL_RE = re.compile(
+    r"\.query\s*\(|\.batch\s*\(|new\s+sql\.Request\b",
+    re.I,
+)
+# Transaction orchestration without owning SQL strings is often legitimate in services.
+TRANSACTION_ONLY_HINT = re.compile(
+    r"new\s+sql\.Transaction\b|\.begin\s*\(|\.commit\s*\(|\.rollback\s*\(",
+    re.I,
+)
 TENANT_TABLE_HINT = re.compile(
     r"\b(FROM|JOIN|UPDATE|INTO)\s+(dbo\.)?(employees|inventories|stores|attendance_records|"
     r"operation_assignments|payroll_receipts|conversations|whatsapp_messages)\b",
@@ -264,7 +280,11 @@ def scan() -> list[AuditFinding]:
     root = repo_root()
     roots = [root / "backend" / "src"]
     risk_layers = set(thresholds.get("sql", {}).get("risk_layers", ["controllers", "routes"]))
+    service_executable_as_boundary = bool(
+        thresholds.get("sql", {}).get("flag_service_executable_sql", True)
+    )
     counts: dict[str, int] = {}
+    executable_by_layer: dict[str, int] = {}
     findings: list[AuditFinding] = []
 
     for path in iter_source_files(roots):
@@ -274,21 +294,62 @@ def scan() -> list[AuditFinding]:
         if not SQL_RE.search(text):
             continue
         counts[layer] = counts.get(layer, 0) + 1
+        has_executable = bool(EXECUTABLE_SQL_RE.search(text))
+        if has_executable:
+            executable_by_layer[layer] = executable_by_layer.get(layer, 0) + 1
 
-        if layer in risk_layers:
+        # Controllers/routes/middleware: only flag executable SQL (not keyword-only FPs).
+        if layer in risk_layers and has_executable:
             findings.append(
                 AuditFinding(
                     id=stable_id("sql-layer", rel),
                     category="sql",
                     subcategory="layer-boundary",
                     severity="high",
+                    confidence="high",
+                    status="requires-review",
+                    title=f"Executable SQL in {layer}",
+                    description=(
+                        "getPool / .query / mssql Request detected outside repositories. "
+                        "Move persistence to a repository; keep this layer free of queries."
+                    ),
+                    file=rel,
+                    evidence={
+                        "layer": layer,
+                        "classification": "PRODUCTION_BOUNDARY_VIOLATION",
+                        "executable_sql": True,
+                    },
+                    recommendation="Move SQL to repositories when possible; keep controllers free of queries.",
+                    blocking=False,
+                )
+            )
+
+        # Services owning query text (not merely opening transactions via getPool).
+        service_owns_sql = bool(SERVICE_OWNED_SQL_RE.search(text))
+        if service_executable_as_boundary and layer == "services" and service_owns_sql:
+            findings.append(
+                AuditFinding(
+                    id=stable_id("sql-service-boundary", rel),
+                    category="sql",
+                    subcategory="layer-boundary",
+                    severity="medium",
                     confidence="medium",
                     status="requires-review",
-                    title=f"SQL keywords in {layer}",
-                    description="SQL detected outside typical data-access layer. Confirm whether repository should own this query.",
+                    title="Executable SQL in service layer",
+                    description=(
+                        "Service contains executable SQL access. Prefer repository methods; "
+                        "services may open/pass transactions but should not own query text."
+                    ),
                     file=rel,
-                    evidence={"layer": layer},
-                    recommendation="Move SQL to repositories when possible; keep controllers free of queries.",
+                    evidence={
+                        "layer": layer,
+                        "classification": "PRODUCTION_BOUNDARY_VIOLATION",
+                        "transaction_hints": bool(TRANSACTION_ONLY_HINT.search(text)),
+                    },
+                    recommendation=(
+                        "Extract queries into a cohesive repository; preserve existing "
+                        "transaction parameters / CAS predicates."
+                    ),
                     blocking=False,
                 )
             )
@@ -486,9 +547,20 @@ def scan() -> list[AuditFinding]:
             confidence="high",
             status="detected",
             title="SQL presence by layer",
-            description="Count of backend source files containing SQL keywords, grouped by layer.",
-            evidence={"counts_by_layer": dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0])))},
-            recommendation="Prefer SQL concentrated in repositories; investigate controllers/routes counts.",
+            description=(
+                "Count of backend source files containing SQL keywords, grouped by layer. "
+                "executable_by_layer counts files with getPool/.query/mssql Request."
+            ),
+            evidence={
+                "counts_by_layer": dict(sorted(counts.items(), key=lambda kv: (-kv[1], kv[0]))),
+                "executable_by_layer": dict(
+                    sorted(executable_by_layer.items(), key=lambda kv: (-kv[1], kv[0]))
+                ),
+            },
+            recommendation=(
+                "Prefer executable SQL concentrated in repositories; investigate "
+                "controllers/routes/services executable counts."
+            ),
             blocking=False,
         )
     )

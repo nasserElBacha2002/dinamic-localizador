@@ -20,12 +20,15 @@ Moderate remaining: 0
 npm ci: PASS (backend + root)
 Backend build/tests: PASS
 Frontend audit/build/tests: PASS (0 vulns; lock unchanged)
-GCS regression (mocked contract + payroll/attachment unit): PASS
-Payroll/attachments regression: PASS
-Real GCS integration: NOT RUN (no pilot credentials in this session)
+Application storage contract: PASS (mocked wrapper)
+Google SDK compatibility: PASS (real packages + multipart v4 paths)
+Node 20 SDK runtime: PASS (production image v20.20.2)
+Real GCS provider integration: NOT RUN (no ADC/bucket credentials this session)
+Payroll/attachments unit regression: PASS
 Supply-chain verification: PASS (npm audit signatures)
 Quality gates: NOT lowered
 npm audit fix --force: NOT used
+Generated phase4 *-diff/status: gitignored (not versioned)
 ```
 
 ---
@@ -131,7 +134,7 @@ App code does **not** import the `uuid` package. IDs use `node:crypto.randomUUID
 
 - **None** in application code.
 - `@google-cloud/storage` **7.21.0 → 7.22.0** (same major 7). Engines in package: `node >=18` (was `>=14`). Production Docker: `node:20-alpine` — compatible. No Node upgrade required.
-- `uuid` **9 → 11** via override only: CommonJS `require('uuid').v4` verified working under Node 22 / backend CJS.
+- `uuid` **9 → 11** via override only: CommonJS `require('uuid').v4` verified under **Node 22 (local)** and **Node 20.20.2 (Docker production image)** via real gaxios/teeny-request multipart paths.
 - Rejected: `npm audit fix --force` path that would install Storage **5.18.3** (semver major downgrade).
 
 ---
@@ -144,7 +147,10 @@ App code does **not** import the `uuid` package. IDs use `node:crypto.randomUUID
 | `backend/package-lock.json` | Storage 7.22.0 + uuid 11.1.1 resolved/integrity |
 | `package.json` | `concurrently` `^9.2.1` → `^9.2.4` |
 | `package-lock.json` | concurrently 9.2.4 + shell-quote 1.9.0 |
-| `gcs-attachment-storage.test.ts` | **new** mocked SDK contract: upload+generation string, signed download/upload v4, 404/403 mapping, delete/checkAccess |
+| `gcs-attachment-storage.test.ts` | mocked wrapper contract (`storage as never` test double — intentional) |
+| `google-sdk-compatibility.test.ts` | unit harness for real-package smoke |
+| `scripts/google-sdk-compatibility-smoke.cjs` | real Storage/gaxios/teeny-request/uuid smoke (no mocks; local HTTP only) |
+| `.gitignore` | ignore generated `audit/phase4-dependency-security-{diff,diffstat,status}.txt` |
 
 No GCS credential / TTL / ADC / Workload Identity / architecture changes.
 
@@ -158,7 +164,10 @@ override:
   version: ^11.1.1
   reason: Parent SDKs (gaxios@6.7.1, teeny-request@9.0.0) still declare uuid ^9; no patched parent release clears GHSA-w5hq-g745-h8pq without forcing Storage 5.x downgrade.
   upstream issue: GHSA-w5hq-g745-h8pq; npm audit suggests unsafe Storage 5.18.3 downgrade
-  API compatibility: consumers use uuid.v4() only; verified require('uuid').v4 on 11.1.1
+  API compatibility: consumers use uuid.v4() only — confirmed in installed sources:
+    gaxios@6.7.1 build/src/gaxios.js:63 require("uuid"); :417 uuid.v4() multipart boundary
+    teeny-request@9.0.0 build/src/index.js:22 require("uuid"); :135 uuid.v4() multipart boundary
+  exercised: gaxios + teeny-request multipart requests against local HTTP (real modules)
   removal condition: remove when @google-cloud/storage (or gaxios/teeny-request) depends on uuid >=11.1.1 without override
 ```
 
@@ -166,30 +175,66 @@ Existing unrelated override retained: `brace-expansion@5.0.9`.
 
 ---
 
-## GCS
+## GCS layers (separated)
 
-### Flows tested (mocked / unit)
+### Application storage contract
+
+**Result: PASS**
+
+`gcs-attachment-storage.test.ts` (mocked `Storage` injection via `as never` test double):
 
 | Flow | Result |
 | --- | --- |
-| Client construction (`new Storage` / injected mock) | PASS |
 | `putObject` write stream + `getMetadata` generation as **string** | PASS |
 | Signed download URL (`v4` / `read` / TTL) | PASS |
 | Signed upload URL (`v4` / `write` / contentType) | PASS |
 | Error mapping 404 → `GCS_OBJECT_NOT_FOUND`, 403 → `GCS_PERMISSION_DENIED` | PASS |
 | `deleteObject` `ignoreNotFound` + `checkAccess` | PASS |
-| In-memory attachment contract | PASS |
-| `payrollReceiptService` unit (upload/replace/delete with in-memory storage) | PASS |
-| Absence attachment policy unit | PASS |
+| In-memory attachment + payrollReceiptService unit | PASS |
 
-### Not executed this session
+### Google SDK compatibility
+
+**Result: PASS**
+
+`scripts/google-sdk-compatibility-smoke.cjs` + `google-sdk-compatibility.test.ts` load **real** packages (no mocks):
+
+| Check | Result |
+| --- | --- |
+| `@google-cloud/storage` / `gaxios` / `teeny-request` / `uuid` load | PASS |
+| Effective `uuid` version | **11.1.1** (≥ 11.1.1) via gaxios and teeny-request resolution |
+| `uuid.v4()` | PASS |
+| gaxios multipart path (real `uuid.v4` boundary) | PASS (local HTTP) |
+| teeny-request multipart path (real `uuid.v4` boundary) | PASS (local HTTP) |
+| `new Storage({ projectId })` | PASS |
+| CJS `require('uuid')` under uuid@11 | PASS (no ESM breakage) |
+
+### Node 20 SDK runtime
+
+**Result: PASS**
+
+Executed smoke inside production image (`node:20-alpine`, Node **v20.20.2**):
+
+```text
+docker build -f backend/Dockerfile --target production -t dinamic-phase4-backend-deps:test backend
+docker run --rm -w /app \
+  -v "$PWD/backend/scripts/google-sdk-compatibility-smoke.cjs:/app/google-sdk-compatibility-smoke.cjs:ro" \
+  dinamic-phase4-backend-deps:test \
+  node /app/google-sdk-compatibility-smoke.cjs
+→ ok:true, uuid 11.1.1, storageConstructed, gaxios/teeny boundaries
+```
+
+Docker **build alone is not sufficient**; this is an explicit runtime execution.
+
+### Real GCS provider integration
+
+**Result: NOT RUN**
 
 ```text
 gcs:pilot:absence-attachments against real GCS
 integration tests requiring live bucket / ADC credentials
 ```
 
-Documented: real GCS integration **not** validated here.
+No ADC/bucket credentials available in this session. **Not declared PASS.**
 
 ### Retry / timeouts / credentials
 
@@ -233,12 +278,14 @@ Outside `npm audit`: typosquatting / compromised maintainer risk remains inheren
 
 | Item | Evidence |
 | --- | --- |
-| Local Node | v22.14.0 / npm 11.4.2 |
-| Backend Docker | `FROM node:20-alpine` — Storage engines `>=18` OK |
-| Backend image build | `docker build -f backend/Dockerfile --target production` → **PASS** (`dinamic-phase4-backend-deps:test`) |
+| Local Node | v22.14.0 / npm 11.4.2 (unit suite) |
+| Backend Docker base | `FROM node:20-alpine` — Storage engines `>=18` OK |
+| Backend image build | `docker build … --target production` → **PASS** |
+| Node 20 runtime smoke | **PASS** inside production image (v20.20.2) — see GCS layers |
 | `docker compose config` | fails without filled `.env` ports (pre-existing; unrelated) |
 | `npm ci` clean | backend + root **PASS**; audit still 0 |
 | Frontend lock | unchanged; audit 0 |
+| Generated review txt under `audit/phase4-*-{diff,diffstat,status}.txt` | **gitignored**; removed from tracking |
 
 ---
 
@@ -254,14 +301,15 @@ Outside `npm audit`: typosquatting / compromised maintainer risk remains inheren
 | `npm ci` backend + root | PASS |
 | `npm run lint --prefix backend` | PASS |
 | `npm run build --prefix backend` | PASS |
-| `npm test --prefix backend` | PASS (1299 tests) |
-| GCS/payroll/attachment focused unit tests | PASS (22) |
+| `npm test --prefix backend` | PASS |
+| GCS mocked contract + SDK compatibility unit | PASS |
+| Node 20 Docker production runtime smoke | PASS (v20.20.2) |
 | `npm run lint --prefix frontend` | PASS (0 errors, 8 pre-existing warnings) |
 | `npm run build --prefix frontend` | PASS |
-| `npm test --prefix frontend` | PASS (676 tests) |
+| `npm test --prefix frontend` | PASS |
 | Backend Docker production build | PASS |
-| Real GCS pilot | SKIP (no credentials) |
-| Full `test:integration` DB suite | SKIP this phase (no dep logic change; Phase 3 flake separate) |
+| Real GCS pilot | **NOT RUN** |
+| Full `test:integration` DB suite | SKIP this correction (no dep logic / SQL change) |
 
 ---
 

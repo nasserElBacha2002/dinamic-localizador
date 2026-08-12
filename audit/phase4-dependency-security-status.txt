@@ -1,7 +1,0 @@
-# Phase 4 scoped paths only (dependency security)
- A audit/phase4-dependency-security-validation.md
- M backend/package-lock.json
- M backend/package.json
- A backend/src/services/attachment-storage/gcs-attachment-storage.test.ts
- M package-lock.json
- M package.json

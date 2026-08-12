@@ -1,8 +1,11 @@
-import sql from "mssql";
 import { randomUUID } from "node:crypto";
-import { getPool } from "../database/connection";
+import sql from "mssql";
 import { AppError } from "../errors/app-error";
 import { resolveAttachmentPolicy } from "../domain/absence-attachment-policy";
+import { getPool } from "../database/connection";
+import { absenceAttachmentRepository } from "../repositories/absence-attachment.repository";
+import { absenceRequestDraftRepository } from "../repositories/absence-request-draft.repository";
+import { absenceRequestRepository } from "../repositories/absence-request.repository";
 import { absenceTypeRepository } from "../repositories/absence-type.repository";
 import { employeeRepository } from "../repositories/employee.repository";
 import { absenceAttachmentService } from "./absence-attachment.service";
@@ -29,35 +32,66 @@ export type AbsenceRequestDraft = {
   createdAt: string;
 };
 
-const mapDraft = (row: Record<string, unknown>): AbsenceRequestDraft => ({
-  id: String(row.id),
-  companyId: String(row.company_id),
-  employeeId: String(row.employee_id),
-  absenceTypeId: String(row.absence_type_id),
-  startDate: String(row.start_date).slice(0, 10),
-  endDate: String(row.end_date).slice(0, 10),
-  startPeriod: String(row.start_period) as AbsenceDayPeriod,
-  endPeriod: String(row.end_period) as AbsenceDayPeriod,
-  reason: String(row.reason),
-  attachmentPolicySnapshot: String(
-    row.attachment_policy_snapshot,
-  ) as AbsenceAttachmentPolicy,
-  status: String(row.status) as AbsenceRequestDraft["status"],
-  submitIdempotencyKey: row.submit_idempotency_key
-    ? String(row.submit_idempotency_key)
-    : null,
-  submittedRequestId: row.submitted_request_id ? String(row.submitted_request_id) : null,
-  expiresAt:
-    row.expires_at instanceof Date
-      ? row.expires_at.toISOString()
-      : new Date(String(row.expires_at)).toISOString(),
-  createdAt:
-    row.created_at instanceof Date
-      ? row.created_at.toISOString()
-      : new Date(String(row.created_at)).toISOString(),
-});
-
 const DRAFT_TTL_HOURS = 24;
+
+const rollbackLockTx = async (lockTx: sql.Transaction): Promise<void> => {
+  try {
+    await lockTx.rollback();
+  } catch {
+    /* already rolled back / completed */
+  }
+};
+
+/**
+ * Durable submit pointer is `absence_request_drafts.submitted_request_id`
+ * (CAS OPEN→SUBMITTED). At most one durable request per draftId.
+ */
+const resolveDurableSubmitResult = async (
+  companyId: string,
+  draftId: string,
+  submitIdempotencyKey: string,
+) => {
+  const draft = await absenceRequestDraftRepository.findById(companyId, draftId);
+  if (!draft) {
+    throw new AppError(404, "ABSENCE_DRAFT_NOT_FOUND", "Borrador no encontrado");
+  }
+  if (draft.status === "SUBMITTED" && draft.submittedRequestId) {
+    if (
+      draft.submitIdempotencyKey &&
+      draft.submitIdempotencyKey !== submitIdempotencyKey
+    ) {
+      throw new AppError(
+        409,
+        "ABSENCE_DRAFT_IDEMPOTENCY_CONFLICT",
+        "El borrador ya fue enviado con otra clave de idempotencia",
+      );
+    }
+    return absenceRequestService.getById(companyId, draft.submittedRequestId);
+  }
+  if (draft.status === "CANCELLED") {
+    throw new AppError(409, "ABSENCE_DRAFT_NOT_OPEN", "El borrador fue cancelado");
+  }
+  if (draft.status === "EXPIRED") {
+    throw new AppError(409, "ABSENCE_DRAFT_EXPIRED", "El borrador expiró");
+  }
+  throw new AppError(409, "ABSENCE_DRAFT_NOT_OPEN", "El borrador no está abierto");
+};
+
+/**
+ * Cancel a request created during a lost/aborted draft submit so it cannot
+ * remain as a durable orphan. Only PENDING is safe without balance reversal.
+ */
+const abandonOrphanDraftRequest = async (
+  companyId: string,
+  requestId: string,
+): Promise<void> => {
+  await absenceRequestRepository.updateStatus(companyId, requestId, {
+    status: "CANCELLED",
+    cancelledAt: new Date(),
+    reviewComment: "ABSENCE_DRAFT_SUBMIT_ORPHAN_ABANDONED",
+    onlyIfStatusIn: ["PENDING"],
+  });
+};
 
 export const absenceRequestDraftService = {
   async create(
@@ -86,7 +120,6 @@ export const absenceRequestDraftService = {
       requiresAttachment: absenceType.requiresAttachment,
     });
     if (policy === "FORBIDDEN") {
-      // Forbidden types should use direct create without attachments.
       throw new AppError(
         409,
         "ABSENCE_ATTACHMENT_FORBIDDEN",
@@ -94,53 +127,28 @@ export const absenceRequestDraftService = {
       );
     }
 
-    const id = randomUUID();
-    const expiresAt = new Date(Date.now() + DRAFT_TTL_HOURS * 60 * 60 * 1000);
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("id", sql.UniqueIdentifier, id)
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
-      .input("absenceTypeId", sql.UniqueIdentifier, input.absenceTypeId)
-      .input("startDate", sql.Date, input.startDate)
-      .input("endDate", sql.Date, input.endDate)
-      .input("startPeriod", sql.NVarChar(20), input.startPeriod)
-      .input("endPeriod", sql.NVarChar(20), input.endPeriod)
-      .input("reason", sql.NVarChar(1000), input.reason)
-      .input("policy", sql.NVarChar(20), policy)
-      .input("userId", sql.UniqueIdentifier, userId)
-      .input("expiresAt", sql.DateTime2, expiresAt)
-      .query(`
-        INSERT INTO absence_request_drafts (
-          id, company_id, employee_id, absence_type_id,
-          start_date, end_date, start_period, end_period, reason,
-          attachment_policy_snapshot, status, created_by_user_id, expires_at
-        )
-        OUTPUT INSERTED.*
-        VALUES (
-          @id, @companyId, @employeeId, @absenceTypeId,
-          @startDate, @endDate, @startPeriod, @endPeriod, @reason,
-          @policy, N'OPEN', @userId, @expiresAt
-        )
-      `);
-    return mapDraft(result.recordset[0] as Record<string, unknown>);
+    return absenceRequestDraftRepository.create({
+      id: randomUUID(),
+      companyId,
+      employeeId: input.employeeId,
+      absenceTypeId: input.absenceTypeId,
+      startDate: input.startDate,
+      endDate: input.endDate,
+      startPeriod: input.startPeriod,
+      endPeriod: input.endPeriod,
+      reason: input.reason,
+      attachmentPolicy: policy,
+      createdByUserId: userId,
+      expiresAt: new Date(Date.now() + DRAFT_TTL_HOURS * 60 * 60 * 1000),
+    });
   },
 
   async get(companyId: string, draftId: string): Promise<AbsenceRequestDraft> {
-    const pool = getPool();
-    const result = await pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("id", sql.UniqueIdentifier, draftId)
-      .query(`
-        SELECT TOP 1 * FROM absence_request_drafts
-        WHERE id = @id AND company_id = @companyId
-      `);
-    if (!result.recordset[0]) {
+    const draft = await absenceRequestDraftRepository.findById(companyId, draftId);
+    if (!draft) {
       throw new AppError(404, "ABSENCE_DRAFT_NOT_FOUND", "Borrador no encontrado");
     }
-    return mapDraft(result.recordset[0] as Record<string, unknown>);
+    return draft;
   },
 
   async submit(
@@ -176,52 +184,69 @@ export const absenceRequestDraftService = {
       draft.attachmentPolicySnapshot,
     );
 
+    const pool = getPool();
+    const lockTx = new sql.Transaction(pool);
+    await lockTx.begin();
+
+    let createdRequestId: string | null = null;
+    let casWon = false;
+
     try {
+      const locked = await absenceRequestDraftRepository.lockOpenDraft(
+        companyId,
+        draftId,
+        lockTx,
+      );
+      if (!locked) {
+        await rollbackLockTx(lockTx);
+        return resolveDurableSubmitResult(companyId, draftId, submitIdempotencyKey);
+      }
+
+      // Hold UPDLOCK while creating the request (separate connection) so concurrent
+      // submit/cancel/expire block on the draft row until CAS commits.
       const detail = await absenceRequestService.createFromAdmin(
         companyId,
         {
-          employeeId: draft.employeeId,
-          absenceTypeId: draft.absenceTypeId,
-          startDate: draft.startDate,
-          endDate: draft.endDate,
-          startPeriod: draft.startPeriod,
-          endPeriod: draft.endPeriod,
-          reason: draft.reason,
+          employeeId: locked.employeeId,
+          absenceTypeId: locked.absenceTypeId,
+          startDate: locked.startDate,
+          endDate: locked.endDate,
+          startPeriod: locked.startPeriod,
+          endPeriod: locked.endPeriod,
+          reason: locked.reason,
           requestedVia: "ADMIN",
         },
         userId,
         { fromDraftId: draftId, skipAttachmentFeatureGate: true },
       );
+      createdRequestId = detail.id;
 
-      const pool = getPool();
-      await pool
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("id", sql.UniqueIdentifier, draftId)
-        .input("requestId", sql.UniqueIdentifier, detail.id)
-        .input("idempotencyKey", sql.NVarChar(120), submitIdempotencyKey)
-        .query(`
-          UPDATE absence_request_drafts
-          SET status = N'SUBMITTED',
-              submitted_request_id = @requestId,
-              submit_idempotency_key = @idempotencyKey,
-              updated_at = SYSUTCDATETIME()
-          WHERE id = @id AND company_id = @companyId AND status = N'OPEN'
-        `);
+      const affected = await absenceRequestDraftRepository.markSubmittedIfOpen(
+        {
+          companyId,
+          draftId,
+          requestId: detail.id,
+          submitIdempotencyKey,
+        },
+        lockTx,
+      );
 
-      await pool
-        .request()
-        .input("companyId", sql.UniqueIdentifier, companyId)
-        .input("draftId", sql.UniqueIdentifier, draftId)
-        .input("requestId", sql.UniqueIdentifier, detail.id)
-        .query(`
-          UPDATE absence_request_attachments
-          SET absence_request_id = @requestId,
-              updated_at = SYSUTCDATETIME()
-          WHERE company_id = @companyId AND draft_id = @draftId
-        `);
+      if (affected !== 1) {
+        await rollbackLockTx(lockTx);
+        await abandonOrphanDraftRequest(companyId, detail.id);
+        return resolveDurableSubmitResult(companyId, draftId, submitIdempotencyKey);
+      }
 
-      // Auto-approve may have been skipped for REQUIRED; retry if type allows and docs OK.
+      await lockTx.commit();
+      casWon = true;
+
+      // Attachments only after winning CAS — never to a lost-CAS request.
+      await absenceAttachmentRepository.linkDraftAttachmentsToRequest({
+        companyId,
+        draftId,
+        requestId: detail.id,
+      });
+
       if (detail.status === "PENDING") {
         try {
           await absenceAttachmentService.assertRequiredAttachmentsSatisfied(
@@ -241,11 +266,12 @@ export const absenceRequestDraftService = {
 
       return detail;
     } catch (error) {
+      await rollbackLockTx(lockTx);
+      if (createdRequestId && !casWon) {
+        await abandonOrphanDraftRequest(companyId, createdRequestId);
+      }
       if (isDuplicateKeyError(error)) {
-        const again = await this.get(companyId, draftId);
-        if (again.submittedRequestId) {
-          return absenceRequestService.getById(companyId, again.submittedRequestId);
-        }
+        return resolveDurableSubmitResult(companyId, draftId, submitIdempotencyKey);
       }
       throw error;
     }

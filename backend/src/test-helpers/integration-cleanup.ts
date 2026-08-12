@@ -2,7 +2,7 @@ import {
   deleteCompanyCascade,
   deleteEmployeeCascade,
   deleteOperationCascade,
-} from "../services/company-data-cascade.service";
+} from "./integration-entity-cascade";
 
 export { deleteCompanyCascade, deleteEmployeeCascade, deleteOperationCascade };
 

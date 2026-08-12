@@ -156,7 +156,16 @@ def extract_imports(text: str) -> list[str]:
 
 
 def classify_layer(rel_path: str) -> str:
-    parts = rel_path.replace("\\", "/").split("/")
+    posix = rel_path.replace("\\", "/")
+    base = posix.rsplit("/", 1)[-1]
+    if (
+        base.endswith(".test.ts")
+        or base.endswith(".test.tsx")
+        or base.endswith(".integration.test.ts")
+        or "/test-helpers/" in posix
+    ):
+        return "tests"
+    parts = posix.split("/")
     for marker in (
         "controllers",
         "routes",
@@ -172,6 +181,7 @@ def classify_layer(rel_path: str) -> str:
         "types",
         "dto",
         "config",
+        "imports",
     ):
         if marker in parts:
             return marker

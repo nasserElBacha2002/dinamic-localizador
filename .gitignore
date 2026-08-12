@@ -61,12 +61,19 @@ audit/phase2-sql-security-triage-status.txt
 audit/phase3-concurrency-idempotency-diff.txt
 audit/phase3-concurrency-idempotency-diffstat.txt
 audit/phase3-concurrency-idempotency-status.txt
+audit/phase4-dependency-security-diff.txt
+audit/phase4-dependency-security-diffstat.txt
+audit/phase4-dependency-security-status.txt
+audit/phase5-sql-boundaries-diff.txt
+audit/phase5-sql-boundaries-diffstat.txt
+audit/phase5-sql-boundaries-status.txt
 audit/implementation-corrections-diff.txt
 audit/implementation-corrections-diffstat.txt
 audit/implementation-corrections-status.txt
 audit/latest-diff.txt
 audit/latest-diffstat.txt
 audit/latest-status.txt
+audit/tenant-isolation-audit.txt
 *.zip
 
 # Keep directory placeholders

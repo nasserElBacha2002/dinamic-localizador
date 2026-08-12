@@ -25,6 +25,9 @@ type MockFile = {
  * Contract smoke for GCS SDK wiring (mocked). Does not hit a real bucket.
  * Covers signed URL options, generation-as-string, and error mapping used by
  * payroll receipts / absence attachments.
+ *
+ * Real package compatibility (uuid override / gaxios / teeny-request) lives in
+ * google-sdk-compatibility.test.ts — do not treat this mock suite as SDK proof.
  */
 describe("GoogleCloudStorageAttachmentStorage SDK contract (mocked)", () => {
   const makeStorage = (file: MockFile) => {
@@ -44,6 +47,8 @@ describe("GoogleCloudStorageAttachmentStorage SDK contract (mocked)", () => {
         return bucket;
       },
     };
+    // Intentional test double: Storage SDK surface is large; `as never` avoids a
+    // hand-rolled partial type solely for the wrapper contract suite.
     return new GoogleCloudStorageAttachmentStorage(
       {
         projectId: "test-project",

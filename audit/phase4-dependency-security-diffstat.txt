@@ -1,7 +1,0 @@
- audit/phase4-dependency-security-validation.md     | 295 +++++++++++++++++++++
- backend/package-lock.json                          |  19 +-
- backend/package.json                               |   5 +-
- .../gcs-attachment-storage.test.ts                 | 222 ++++++++++++++++
- package-lock.json                                  |  16 +-
- package.json                                       |   5 +-
- 6 files changed, 540 insertions(+), 22 deletions(-)

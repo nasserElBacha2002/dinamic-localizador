@@ -786,4 +786,35 @@ export const absenceAttachmentRepository = {
       mapAbsenceAttachmentRow(row as Record<string, unknown>),
     );
   },
+
+  async linkDraftAttachmentsToRequest(input: {
+    companyId: string;
+    draftId: string;
+    requestId: string;
+    transaction?: sql.Transaction;
+  }): Promise<number> {
+    const request = input.transaction
+      ? new sql.Request(input.transaction)
+      : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("draftId", sql.UniqueIdentifier, input.draftId)
+      .input("requestId", sql.UniqueIdentifier, input.requestId)
+      .query(`
+        UPDATE absence_request_attachments
+        SET absence_request_id = @requestId,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND draft_id = @draftId
+          AND EXISTS (
+            SELECT 1
+            FROM absence_request_drafts d
+            WHERE d.id = @draftId
+              AND d.company_id = @companyId
+              AND d.status = N'SUBMITTED'
+              AND d.submitted_request_id = @requestId
+          )
+      `);
+    return Number(result.rowsAffected[0] ?? 0);
+  },
 };

@@ -767,33 +767,6 @@ export const attendanceNotificationRepository = {
     return mapNotificationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  /** @deprecated Use claimNotificationForAttempt */
-  async reserveNotification(
-    companyId: string,
-    input: {
-      operationId: string;
-      employeeId: string;
-      notificationType: AttendanceNotificationType;
-    },
-  ): Promise<AttendanceNotification | null> {
-    return this.claimNotificationForAttempt(companyId, input);
-  },
-
-  /** @deprecated Replaced by reclaimNotificationForAttempt */
-  async reclaimNotification(
-    companyId: string,
-    notificationId: string,
-    attemptedAt: Date = new Date(),
-  ): Promise<AttendanceNotification | null> {
-    const { staleBefore, maxAttempts } = getRetryThresholds();
-    return this.reclaimNotificationForAttempt(companyId, {
-      notificationId,
-      attemptedAt,
-      staleBefore,
-      maxAttempts,
-    });
-  },
-
   async linkObservability(
     companyId: string,
     input: {
@@ -971,21 +944,6 @@ export const attendanceNotificationRepository = {
       `);
 
     return result.rowsAffected[0] ?? 0;
-  },
-
-  /** @deprecated Prefer supersedePendingForOperationScheduleChange */
-  async failPendingForOperationScheduleChange(
-    companyId: string,
-    operationId: string,
-    transaction: sql.Transaction,
-    errorMessage = "OPERATION_SCHEDULE_CHANGED",
-  ): Promise<number> {
-    return this.supersedePendingForOperationScheduleChange(
-      companyId,
-      operationId,
-      transaction,
-      errorMessage,
-    );
   },
 
   async findConfirmationReminderCandidates(

@@ -8,6 +8,7 @@ import {
   isSimulationActive,
   setLastBotResponse,
 } from "../../utils/bot-runtime-context";
+import { runOutboundPersistAfterCommitHookForTests } from "../../utils/checkout-transaction-hooks";
 import { whatsappFlowTraceService } from "../whatsapp-flow-trace.service";
 
 export const buildTwiml = (message: string): string => {
@@ -38,6 +39,8 @@ export const saveOutboundMessage = async (
     setLastBotResponse(input.body);
     return;
   }
+
+  await runOutboundPersistAfterCommitHookForTests();
 
   const outbound = await whatsappMessageRepository.create({
     companyId,

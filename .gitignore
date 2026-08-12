@@ -67,6 +67,12 @@ audit/phase4-dependency-security-status.txt
 audit/phase5-sql-boundaries-diff.txt
 audit/phase5-sql-boundaries-diffstat.txt
 audit/phase5-sql-boundaries-status.txt
+audit/phase6-whatsapp-bot-refactor-diff.txt
+audit/phase6-whatsapp-bot-refactor-diffstat.txt
+audit/phase6-whatsapp-bot-refactor-status.txt
+audit/phase7-8-final-hardening-diff.txt
+audit/phase7-8-final-hardening-diffstat.txt
+audit/phase7-8-final-hardening-status.txt
 audit/implementation-corrections-diff.txt
 audit/implementation-corrections-diffstat.txt
 audit/implementation-corrections-status.txt

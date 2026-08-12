@@ -4,8 +4,8 @@ import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 
 describe("whatsapp check-in during approved absence", () => {
-  const bot = readFileSync(
-    resolve(process.cwd(), "src/services/whatsapp-bot.service.ts"),
+  const checkInFlow = readFileSync(
+    resolve(process.cwd(), "src/services/bot/check-in-attendance.flow.ts"),
     "utf8",
   );
   const messages = readFileSync(
@@ -24,7 +24,7 @@ describe("whatsapp check-in during approved absence", () => {
 
   it("uses dedicated arrival-during-absence message", () => {
     assert.match(messages, /ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE/);
-    assert.match(bot, /recordedDuringApprovedAbsence/);
-    assert.match(bot, /ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE/);
+    assert.match(checkInFlow, /recordedDuringApprovedAbsence/);
+    assert.match(checkInFlow, /ARRIVAL_DURING_APPROVED_ABSENCE_MESSAGE/);
   });
 });

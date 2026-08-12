@@ -402,6 +402,55 @@ class TestBaselineAndDedupe(unittest.TestCase):
         self.assertEqual(diff["counts"]["new"], 1)
         self.assertEqual(diff["counts"]["resolved"], 1)
 
+    def test_regression_only_gate_allows_baseline_keys(self):
+        baseline = [
+            _finding(
+                id="known",
+                title="known-debt",
+                file="backend/src/a.ts",
+                severity="high",
+                confidence="high",
+                status="confirmed",
+                category="architecture",
+            )
+        ]
+        current = list(baseline)
+        diff = compare_findings(current, baseline)
+        gate = evaluate_gate(current, baseline_diff=diff, regression_only=True)
+        self.assertTrue(gate["passed"])
+        self.assertEqual(gate["blocking_count"], 0)
+
+    def test_regression_only_gate_blocks_new_high_confirmed(self):
+        baseline = [_finding(id="old", title="old-title", file="backend/src/a.ts")]
+        current = baseline + [
+            _finding(
+                id="new-high",
+                title="new-regression",
+                file="backend/src/b.ts",
+                severity="high",
+                confidence="high",
+                status="confirmed",
+                category="security",
+                blocking=False,
+            )
+        ]
+        diff = compare_findings(current, baseline)
+        self.assertEqual(diff["counts"]["new"], 1)
+        gate = evaluate_gate(current, baseline_diff=diff, regression_only=True)
+        self.assertFalse(gate["passed"])
+        self.assertGreaterEqual(gate["blocking_count"], 1)
+
+    def test_resolved_finding_disappears_from_baseline_diff(self):
+        baseline = [
+            _finding(id="gone", title="resolved-debt", file="backend/src/a.ts"),
+            _finding(id="keep", title="kept-debt", file="backend/src/b.ts"),
+        ]
+        current = [_finding(id="keep", title="kept-debt", file="backend/src/b.ts")]
+        diff = compare_findings(current, baseline)
+        self.assertEqual(diff["counts"]["resolved"], 1)
+        self.assertEqual(diff["resolved_findings"][0]["id"], "gone")
+        self.assertEqual(diff["counts"]["new"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -41,7 +41,7 @@ import {
 import type { OperationDetail, OperationWithService } from "../types/domain";
 import { assertCompanyWorkScheduleExists } from "../utils/recurring-schedule-consistency";
 import { detectOneTimeScheduleAffectingChanges } from "../utils/one-time-schedule-change";
-import { oneTimeOperationScheduleReconciliationService } from "./one-time-operation-schedule-reconciliation.service";
+import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";
 
 const validateOneTimeDates = (
   scheduledStart: string,
@@ -387,7 +387,7 @@ export const operationService = {
 
     let updated: OperationRecord | null;
     let reconcileResult: Awaited<
-      ReturnType<typeof oneTimeOperationScheduleReconciliationService.reconcileInTransaction>
+      ReturnType<typeof oneTimeScheduleReconciliationCommand.reconcileInTransaction>
     > | null = null;
 
     if (scheduleFlags.scheduleAffecting) {
@@ -408,7 +408,7 @@ export const operationService = {
         }
 
         reconcileResult =
-          await oneTimeOperationScheduleReconciliationService.reconcileInTransaction(
+          await oneTimeScheduleReconciliationCommand.reconcileInTransaction(
             companyId,
             transaction,
             updated,

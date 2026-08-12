@@ -45,9 +45,10 @@ def scan(categories: set[str] | None = None) -> list[AuditFinding]:
         sql = has_direct_sql(text)
         externals = external_integrations(text)
 
-        # SRP suspected
+        # SRP suspected — repositories owning SQL is expected (Phase 5 boundary);
+        # do not treat "has SQL" as a mixed-responsibility signal in repository layer.
         responsibility_signals = 0
-        if sql:
+        if sql and layer != "repositories":
             responsibility_signals += 1
         if externals:
             responsibility_signals += 1
@@ -58,7 +59,7 @@ def scan(categories: set[str] | None = None) -> list[AuditFinding]:
         if "res." in text and layer == "services":
             responsibility_signals += 1
 
-        if responsibility_signals >= 3 and methods >= 10:
+        if responsibility_signals >= 3 and methods >= 10 and layer != "repositories":
             findings.append(
                 AuditFinding(
                     id=stable_id("srp", rel),
@@ -79,6 +80,7 @@ def scan(categories: set[str] | None = None) -> list[AuditFinding]:
                         "methods": methods,
                         "direct_sql": sql,
                         "externals": externals,
+                        "layer": layer,
                     },
                     recommendation="Confirm mixed concerns; extract collaborators if validated.",
                     blocking=False,

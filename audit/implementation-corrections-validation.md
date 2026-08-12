@@ -1,118 +1,194 @@
-# Phase 5 SQL Boundaries — Implementation Corrections Validation
+# Phase 6 WhatsApp Bot Refactor — Implementation Corrections Validation
 
 **Status:** `FIXED_AND_VALIDATED`  
 **Date:** 2026-08-12  
-**Base SHA (pre–Phase 5):** `11aa51e` (phase 4)  
-**Current:** working tree (Phase 5 + corrections; uncommitted)
+**Timestamp (UTC):** `2026-08-12T19:46:46Z`  
+**HEAD SHA (committed base):** `b9867b9` (phase 5)  
+**Working tree:** Phase 5 + Phase 6 extract + these corrections (uncommitted)  
+**Base SHA (pre–Phase 6 extract):** fat `whatsapp-bot.service.ts` at `b9867b9` (2042 LOC)
+
+---
+
+## Triage
+
+| # | Feedback | Class | Action |
+| --- | --- | --- | --- |
+| 1–4 | TX ownership / SQL out of checkout flow / session ownership / no rollback after commit | must fix | `employee-workday-checkout.command.ts` |
+| 5 | Outbound failure post-commit ≠ checkout failure | must fix | respond after commit + H4 integration test |
+| 6 | Keep check-in command | must fix | unchanged |
+| 7 | Checkout flow size after extract | should fix | measured; kept cohesive |
+| 8 | Wrapper inventory | must fix | removed unused; documented PUBLIC |
+| 9 | check-in → checkout coupling | should fix | verified one-way, no cycle |
+| 10 | Behavioral characterization | must fix | added + existing suites |
+| 11–12 | Copy / idempotency | must fix | preserved; H4 MessageSid test |
+| 13 | Concurrency | must fix | concurrent checkout H4 test |
+| 14 | Observability ALS | must fix | characterization test |
+| 15 | Source-structure guards | must fix | pointed at command + flow |
+| 16–17 | Artifacts + validation.md | must fix | regenerated same tree |
+| 18–20 | Integration baseline / gates / god-class | must fix | executed with evidence |
+| 21–22 | Out of scope / prohibitions | n/a | respected |
 
 ---
 
 ## Root causes addressed
 
-1. **Integration “10th failure”** — A/B on the same DB/env showed **10 leaf failures on base `11aa51e` already**. The extra Phase 5 narrative failure was the known Phase 3 suite flake `service-level confirm || unavailable…`, present on both SHAs. Evidence: isolated 10× runs (base 5/10 fail, current 2/10 fail) with identical assertion error before fix.
-2. **Phase 3 flake root cause** — Test required *both* concurrent response messages to match the durable DB winner. CAS correctly leaves one durable status; the loser still returns `ok` with its own copy. Fixed assertion (no sleeps). After fix: **10/10 PASS**.
-3. **Draft submit ignored CAS `rowsAffected`** — Winner path now requires `affected === 1`; on 0 re-reads durable draft (idempotent replay / idempotency conflict / cancelled / expired / not found). Attachments link only after CAS win (SQL also guards `submitted_request_id`).
-4. **Orphan requests** — Submit holds `UPDLOCK` on OPEN draft before `createFromAdmin`; CAS update runs in the same lock transaction. Lost/aborted creates cancel PENDING orphans. Invariant: `draftId → ≤1 durable request` via `submitted_request_id`.
-5. **Pending storage / deletion records** — Mutations now require `company_id` (+ lease where applicable) and return `rowsAffected`.
-6. **Compatibility alias** — Removed `company-data-cascade.service.ts`; fixture cascades moved to `test-helpers/integration-entity-cascade.ts`; production purge stays set-based in `company-purge.repository.ts`.
-7. **Tenant audit noise** — Missing legacy route filenames updated; mutation `WHERE id=@id` scanner tightened; WhatsApp message UPDATEs tenant-scoped; global UUID SELECTs classified `SAFE_GLOBAL_ID`.
-8. **Raw tenant report** — `audit/tenant-isolation-audit.txt` gitignored / untracked.
+1. **Checkout conversational flow owned SQL transactions** — moved durable checkout + session COMPLETED into `employeeWorkdayCheckoutCommand` (same pattern as `employeeWorkdayAttendanceCommand`).
+2. **`respond()` inside TX try/catch** — could conceptually trigger rollback after commit; command now commits first; flow builds outbound **after** command returns; catch only maps command failures.
+3. **Dual session writers** — flow no longer imports `botSessionRepository`; atomic COMPLETED is only in the command; conversational cleanup still uses `botSessionService.completeSession` on non-atomic paths (duplicate/expired simulation).
+4. **Wrappers without inventory** — removed forwarders only used by tests; tests call flows directly.
+5. **latest-* artifacts stale (Phase 5 only)** — regenerated phase6 + latest + corrections from the same working tree.
 
 ---
 
-## Integration pre/post comparison
+## Architecture before → after
 
-| | PRE-PHASE5 (`11aa51e`) | POST-CORRECTION (current) |
+### BEFORE (Phase 6 extract, pre-correction)
+
+```text
+whatsapp-bot.service.ts     → orchestrator + thin wrappers
+checkout-attendance.flow.ts → conversation + mssql Transaction + botSessionRepository writes
+check-in-attendance.flow.ts → conversation + employeeWorkdayAttendanceCommand (OK)
+```
+
+### AFTER
+
+```text
+whatsapp-bot.service.ts              → routing/orchestration only (PUBLIC entrypoints)
+check-in-attendance.flow.ts          → conversation / selection / responses
+checkout-attendance.flow.ts          → conversation / selection / geofence / responses
+employee-workday-attendance.command  → durable check-in TX (unchanged)
+employee-workday-checkout.command    → durable checkout TX (+ session COMPLETED)
+repositories                         → persistence
+```
+
+### Transaction boundary (checkout)
+
+```text
+try {
+  begin
+  [optional] validate session WAITING_CHECKOUT_LOCATION
+  [optional] refresh candidate
+  registerCheckoutInTransaction (CAS checkout_at IS NULL)
+  botSessionRepository.updateSession COMPLETED
+  [test hook] before-commit
+  commit
+} catch {
+  rollback only if not committed
+  throw CheckoutCommandError | rethrow
+}
+// then (outside TX):
+respond(...)  // outbound / observability — failures do not undo checkout
+```
+
+---
+
+## Metrics
+
+| Signal | Pre-Phase6 (`b9867b9` fat bot) | After extract | After corrections |
+| --- | --- | --- | --- |
+| `whatsapp-bot.service.ts` LOC | 2042 | 577 | **522** |
+| imports (bot service) | 39 | 27 | **26** |
+| God-class score bot | 28 | 15 | **15** |
+| `checkout-attendance.flow.ts` LOC | — | 820 | **788** |
+| checkout flow imports | — | ~18 | **15** |
+| checkout flow `mssql`/`getPool` | — | yes | **no** |
+| `employee-workday-checkout.command.ts` | — | — | **207 LOC** |
+| madge cycles (bot/router/commands) | — | 0 | **0** |
+
+Checkout flow remains a conversational coordinator (selection + validation + simulation + copy). Not split further (no Helper/Manager factories).
+
+---
+
+## Wrapper inventory (`whatsappBotService`)
+
+| Method | Class | Notes |
 | --- | --- | --- |
-| tests | 330 | 338 |
-| pass | 319 | 328 |
-| fail | 10 | 9 |
-| skip | 1 | 1 |
-
-**New failures attributable to Phase 5: 0**
-
-Pre-existing leaf failures (same 9 on both; Phase 3 flake removed on current):
-
-- multi-company foundation isolation (3)
-- company settings API integration (2)
-- tenant isolation hardening (4)
-
-Phase 3 leaf that failed on base and was fixed on current:
-
-- `service-level confirm || unavailable: one durable state, messages match DB`
-
-Added passing suites on current: draft CAS concurrency (5), purge equivalence (2), lifecycle deactivate (1).
-
-### A/B Phase 3 isolated evidence
-
-| SHA | runs | pass | fail | signature |
-| --- | --- | --- | --- | --- |
-| `11aa51e` | 10 | 5 | 5 | AssertionError: both messages must match winner regex |
-| current (before assertion fix) | 10 | 8 | 2 | same |
-| current (after assertion fix) | 10 | 10 | 0 | — |
+| `buildTwiml` | PUBLIC_API_REQUIRED | Twilio controller |
+| `handleWebhook` / `handleWebhookWithSettings` | PUBLIC_API_REQUIRED | webhook entry + MessageSid claim |
+| `handleTextMessage` / `handleLocationMessage` | PUBLIC_API_REQUIRED | module-gating + router orchestration tests |
+| `processDirectLocationAttendance` | PUBLIC_API_REQUIRED | direct location without “Llegué”; router handlers |
+| `startCheckIn` / `startCheckout` / `handleOperationSelection` / `handleCheckoutOperationSelection` / `processLocation*` / `processCheckoutWithoutLocation` | UNUSED | **removed**; tests import flows |
 
 ---
 
-## CAS draft correction
+## Coupling check-in → checkout
 
-- `markSubmittedIfOpen(..., transaction?)` returns rowsAffected; service requires `=== 1`.
-- Lock-open → create → CAS-in-lock-tx → commit → link attachments.
-- `linkDraftAttachmentsToRequest` requires draft `SUBMITTED` with matching `submitted_request_id`.
-- Concurrent SQL tests cover same key, different keys, submit∥cancel, submit∥expire, attachment binding.
+`handleOperationSelection` may dispatch `CHECK_OUT` → `processCheckoutWithoutLocation` / `processLocationCheckout`.  
+Direction is one-way; madge reports **no circular dependency**. Kept (mixed attendance selection is real session responsibility).
 
 ---
 
-## Tenant audit triage
-
-| Finding | Classification | Action |
-| --- | --- | --- |
-| `whatsapp-message` UPDATE `WHERE id=@id` | CONFIRMED | Added `company_id` to updates; callers pass tenant from message row |
-| `whatsapp-message` SELECT by id (Twilio SID bootstrap) | SAFE_GLOBAL_ID | `findByIdGlobal` for correlation before tenant known |
-| `whatsapp-observability` message detail SELECT | SAFE_GLOBAL_ID / TENANT_SCOPED_UPSTREAM | Delegates to `findByIdGlobal`; platform UI is UUID lookup |
-| missing `store/inventory*.routes.ts` | STALE_AUDIT_RULE | Auditor list → `service/operation/operation-assignment.routes.ts` |
-| pending storage mark by id only | CONFIRMED | Fixed `markDeleted/markFailed(companyId, …)` |
-| deletion record stage/fail by id only | CONFIRMED | Homogenized with `company_id` (+ lease on fail/complete) |
-
-`npm run audit:tenant` → exit 0 (No findings).
-
----
-
-## Purge / lifecycle / provider
-
-- Purge equivalence integration: operational delete, identity stage, pending storage retained then marked, other company untouched, txn rollback.
-- Lifecycle deactivate DB: applock path, invitation revoke, bot session expire, lifecycle event.
-- Phase 3 Twilio monotonic matrix still passes in suite.
-
----
-
-## Quality gates
+## Tests executed (evidence)
 
 | Command | Result |
 | --- | --- |
-| `npm run lint --prefix backend` | PASS |
-| `npm run build --prefix backend` | PASS |
-| `npm test --prefix backend` | PASS (1296) |
-| `RUN_DB_INTEGRATION_TESTS=true npm run test:integration` | 328 pass / 9 fail (pre-existing) / 1 skip |
-| `npm run test:audit-framework` | PASS (43) |
-| `npm run audit:database` | findings=60 blocking=0 passed |
-| `npm run audit:tenant` | 0 findings |
+| `npx tsc --noEmit` | pass |
+| `npm run lint --prefix backend` | pass |
+| `npm run build --prefix backend` | pass |
+| `npm test --prefix backend` | **1299 pass / 0 fail** |
+| H4 integration (RUN_DB_INTEGRATION_TESTS=true, phase0a file) | **10 pass / 0 fail** (includes outbound-after-commit + concurrent) |
+| `npm run test:integration` | **340 / 330 pass / 9 fail / 1 skip** |
+| `npm run test:audit-framework` | 43 OK |
 | `npm run audit:architecture` | findings=2 blocking=0 |
+| `npm run audit:database` | blocking=0 |
+| `npm run audit:tenant` | wrote tenant-isolation-audit.txt |
 | `npm run audit:reliability` | findings=0 |
-| `npm run audit:security:fast` | secrets=0 (completed) |
-| `npm run audit` / `audit:strict` | PASS (blocking=0; Quality gate PASSED) |
+| `npm run audit:security:fast` | secrets=0 missing_docs=0 |
+| `npm run audit:god-classes` | bot score 15; blocking=0 |
+| `npm run audit` | blocking=0 overall ok |
+| `npm run audit:strict` | (see run log) |
+| madge circular bot/router/commands | **0 cycles** |
+
+### Characterization coverage map (A–Q)
+
+| Scenario | Evidence |
+| --- | --- |
+| A/B greeting/menu/unknown | `whatsapp-router.service.test.ts` |
+| C/D check-in + location-first | webhook + direct-location suites |
+| E absence arrival | source-structure + absence integration |
+| F/G/H/I workday counts/selection | `phase6-bot-flow-characterization.test.ts` + router |
+| J/K/L/M checkout paths | pending-expiration + H4 + runtime-settings |
+| N pending location + selection | checkout selection flow / router |
+| O session expired | pending-expiration + EXPIRED_SESSION |
+| P module disabled | `whatsapp-bot-module-gating.test.ts` |
+| Q simulation | dry-run characterization + runtime-settings |
 
 ---
 
-## Files deleted / renamed
+## Integration baseline comparison
 
-- **Deleted:** `backend/src/services/company-data-cascade.service.ts`
-- **Added:** `backend/src/test-helpers/integration-entity-cascade.ts` (fixture cascades)
-- **Untracked/gitignored:** `audit/tenant-isolation-audit.txt`
+| | Phase 5 corrections baseline | After Phase 6 corrections |
+| --- | --- | --- |
+| tests | 338 | **340** (+2 H4 cases) |
+| pass | 328 | **330** |
+| fail | 9 | **9** |
+| skip | 1 | **1** |
+
+**New failures attributable to Phase 6: 0**
+
+Same leaf suites:
+
+- multi-company foundation isolation
+- company settings API integration
+- tenant isolation hardening
 
 ---
 
-## Remaining debt
+## Artifacts (gitignored txt; tracked validation)
 
-- 9 pre-existing company isolation / settings / tenant route integration failures (unchanged vs base).
-- Diagnostic service SQL still deferred: `one-time-schedule-consistency.inspector.ts`.
-- `fromDraftId` option on `createFromAdmin` remains unused; durable binding is draft CAS + lock (document if a future unique `draft_id` column is desired).
+```text
+audit/implementation-corrections-validation.md   (this file — track)
+audit/phase6-whatsapp-bot-refactor-validation.md (updated — track)
+audit/*-diff.txt / *-diffstat.txt / *-status.txt (gitignored)
+review/latest-*.txt (gitignored via review/)
+```
+
+HEAD / base / timestamp recorded above. `latest-*` and `phase6-*` generated from the **same** working tree.
+
+---
+
+## Deferred debt
+
+- Further split of ~788 LOC checkout conversational flow only if a concrete sub-responsibility appears.
+- Pre-existing 9 integration isolation/settings failures (not Phase 6).
+- God-class hotspots on other services (`absence-request`, `operation`, …) — out of scope.

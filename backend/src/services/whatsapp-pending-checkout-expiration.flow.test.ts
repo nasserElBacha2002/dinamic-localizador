@@ -95,7 +95,7 @@ describe("whatsapp pending checkout expiration flows", () => {
 
   it("rejects checkout location when pending checkout expired while session was open", async () => {
     setupUnitTestEnv();
-    const { whatsappBotService } = await import("./whatsapp-bot.service");
+    const { processLocationCheckout } = await import("./bot/checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );
@@ -115,7 +115,7 @@ describe("whatsapp pending checkout expiration flows", () => {
       simulationContext(new Date("2026-07-06T10:00:00.000Z")),
       async () =>
         runWithBotRuntimeSettings(runtimeSettings(), async () =>
-          whatsappBotService.processLocationCheckout({
+          processLocationCheckout({
             companyId,
             session: buildSession(),
             employeeId,
@@ -137,7 +137,7 @@ describe("whatsapp pending checkout expiration flows", () => {
 
   it("uses generic unavailable message when open checkout attendance is gone", async () => {
     setupUnitTestEnv();
-    const { whatsappBotService } = await import("./whatsapp-bot.service");
+    const { processLocationCheckout } = await import("./bot/checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );
@@ -157,7 +157,7 @@ describe("whatsapp pending checkout expiration flows", () => {
       simulationContext(new Date("2026-07-05T21:05:00.000Z")),
       async () =>
         runWithBotRuntimeSettings(runtimeSettings(), async () =>
-          whatsappBotService.processLocationCheckout({
+          processLocationCheckout({
             companyId,
             session: buildSession(),
             employeeId,
@@ -183,7 +183,7 @@ describe("whatsapp pending checkout expiration flows", () => {
 
   it("revalidates stored checkout option when numeric selection arrives after expiration", async () => {
     setupUnitTestEnv();
-    const { whatsappBotService } = await import("./whatsapp-bot.service");
+    const { handleCheckoutOperationSelection } = await import("./bot/checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );
@@ -193,7 +193,6 @@ describe("whatsapp pending checkout expiration flows", () => {
 
     let waitingLocationCalls = 0;
     let registerCalls = 0;
-    let withoutLocationCalls = 0;
 
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
       kind: "expired" as const,
@@ -208,10 +207,6 @@ describe("whatsapp pending checkout expiration flows", () => {
     mock.method(attendanceRepository, "registerCheckoutInTransaction", async () => {
       registerCalls += 1;
       throw new Error("registerCheckoutInTransaction must not be called");
-    });
-    mock.method(whatsappBotService, "processCheckoutWithoutLocation", async () => {
-      withoutLocationCalls += 1;
-      return "<Response><Message>should-not-run</Message></Response>";
     });
 
     const candidate = checkoutCandidate();
@@ -243,7 +238,7 @@ describe("whatsapp pending checkout expiration flows", () => {
       simulationContext(new Date("2026-07-06T10:00:00.000Z")),
       async () =>
         runWithBotRuntimeSettings(runtimeSettings(), async () =>
-          whatsappBotService.handleCheckoutOperationSelection({
+          handleCheckoutOperationSelection({
             companyId,
             session,
             body: "1",
@@ -257,13 +252,12 @@ describe("whatsapp pending checkout expiration flows", () => {
 
     assert.match(twiml, new RegExp(PENDING_CHECKOUT_EXPIRED_MESSAGE.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
     assert.equal(waitingLocationCalls, 0);
-    assert.equal(withoutLocationCalls, 0);
     assert.equal(registerCalls, 0);
   });
 
   it("rejects expired checkout when checkout location is disabled", async () => {
     setupUnitTestEnv();
-    const { whatsappBotService } = await import("./whatsapp-bot.service");
+    const { processCheckoutWithoutLocation } = await import("./bot/checkout-attendance.flow");
     const { employeeWorkdayAvailabilityService } = await import(
       "./employee-workday-availability.service"
     );
@@ -300,7 +294,7 @@ describe("whatsapp pending checkout expiration flows", () => {
         return runWithBotRuntimeSettings(
           runtimeSettings({ requireCheckoutLocation: false }),
           async () =>
-            whatsappBotService.processCheckoutWithoutLocation({
+            processCheckoutWithoutLocation({
               companyId,
               employeeId,
               employeeWorkdayId,

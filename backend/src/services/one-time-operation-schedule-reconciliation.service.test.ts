@@ -280,7 +280,7 @@ describe("operationService.updateOneTime notes-only", () => {
     setupUnitTestEnv();
     const { operationService } = await import("./operation.service");
     const { auditService } = await import("./audit.service");
-    const { oneTimeOperationScheduleReconciliationService } = await import(
+    const { oneTimeScheduleReconciliationCommand } = await import(
       "./one-time-operation-schedule-reconciliation.service"
     );
 
@@ -291,7 +291,7 @@ describe("operationService.updateOneTime notes-only", () => {
       notes: input.notes ?? baseOperation.notes,
     }));
     mock.method(
-      oneTimeOperationScheduleReconciliationService,
+      oneTimeScheduleReconciliationCommand,
       "reconcileInTransaction",
       async () => {
         reconcileCalls += 1;

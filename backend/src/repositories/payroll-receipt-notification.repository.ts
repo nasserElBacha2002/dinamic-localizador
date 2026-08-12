@@ -504,16 +504,6 @@ export const payrollReceiptNotificationRepository = {
     }
   },
 
-  /** @deprecated Use markSendAccepted */
-  async markSent(input: {
-    companyId: string;
-    notificationId: string;
-    providerMessageSid: string;
-    sentAt?: Date;
-  }): Promise<void> {
-    return this.markSendAccepted(input);
-  },
-
   async markFailed(input: {
     companyId: string;
     notificationId: string;

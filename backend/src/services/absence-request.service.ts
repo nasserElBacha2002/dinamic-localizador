@@ -933,27 +933,4 @@ export const absenceRequestService = {
 
     return this.getById(companyId, requestId);
   },
-
-  /** @deprecated Use createFromAdmin or createFromWhatsapp */
-  async create(
-    companyId: string,
-    input: CreateAbsenceRequestInput,
-    performedByUserId?: string | null,
-  ) {
-    if (input.requestedVia === "WHATSAPP") {
-      if (!input.sourceMessageSid) {
-        throw new AppError(400, "INVALID_SOURCE_MESSAGE_SID", "sourceMessageSid es obligatorio para WhatsApp");
-      }
-      const result = await this.createFromWhatsapp(companyId, {
-        ...input,
-        sourceMessageSid: input.sourceMessageSid,
-      });
-      return result.detail;
-    }
-
-    if (!performedByUserId) {
-      throw new AppError(401, "UNAUTHORIZED", "Usuario no autenticado");
-    }
-    return this.createFromAdmin(companyId, input, performedByUserId);
-  },
 };

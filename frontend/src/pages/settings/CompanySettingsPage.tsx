@@ -237,8 +237,8 @@ export function CompanySettingsPage() {
             />
 
             <SettingsSummaryCard
-              title="Zonas de residencia"
-              description="Zonas aproximadas (barrio/localidad) para colaboradores. No se guardan domicilios exactos."
+              title="Barrios y localidades"
+              description="Catálogo geográfico compartido por colaboradores y servicios (barrio + localidad). No se guardan domicilios exactos."
               summaryItems={
                 locationZonesQuery.data
                   ? buildLocationZonesSummary(locationZonesQuery.data).summaryItems

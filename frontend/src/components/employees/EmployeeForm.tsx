@@ -17,7 +17,7 @@ import {
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValues } from "../../schemas/employee.schema";
 import { employeeTypeLabels } from "../../utils/labels";
-import { hasPermission } from "../../utils/permissions";
+import { hasAnyPermission, hasPermission } from "../../utils/permissions";
 import { EmployeeCategorySelect } from "./EmployeeCategorySelect";
 import { EmployeeLocationZoneSelect } from "./EmployeeLocationZoneSelect";
 
@@ -52,6 +52,10 @@ export function EmployeeForm({
     permissionsQuery.data?.permissions,
     "company:settings:update",
   );
+  const canCreateLocationZones = hasAnyPermission(permissionsQuery.data?.permissions, [
+    "employees:manage",
+    "company:settings:update",
+  ]);
 
   const employeeTypeOptions = useMemo(
     () =>
@@ -120,6 +124,7 @@ export function EmployeeForm({
               <EmployeeLocationZoneSelect
                 control={control}
                 name="locationZoneId"
+                canCreate={canCreateLocationZones}
                 disabled={loading}
                 retainedZone={retainedLocationZone}
               />

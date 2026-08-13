@@ -5,6 +5,7 @@ import { normalizeOptionalText } from "../utils/normalize-optional-text";
 import { buildPaginationMeta } from "../utils/pagination";
 import { isOperationalLocationNameDuplicateKeyError } from "../utils/service-name-duplicate-errors";
 import { companyLocationTypesService } from "./company-location-types.service";
+import { locationZoneService } from "./location-zone.service";
 
 const SERVICE_NAME_ALREADY_EXISTS_MESSAGE =
   "Ya existe un servicio con este nombre en la compañía.";
@@ -53,10 +54,19 @@ export const serviceService = {
       throw new AppError(409, "SERVICE_NAME_ALREADY_EXISTS", SERVICE_NAME_ALREADY_EXISTS_MESSAGE);
     }
 
+    const zone = await locationZoneService.findOrCreateByNameLocality(
+      companyId,
+      normalized.neighborhood ?? "",
+      normalized.locality ?? null,
+    );
+
     try {
       return await serviceRepository.create(companyId, {
         ...normalized,
         name,
+        neighborhood: zone?.name ?? normalized.neighborhood ?? null,
+        locality: zone?.locality ?? normalized.locality ?? null,
+        locationZoneId: zone?.id ?? null,
       });
     } catch (error) {
       throwIfDuplicateName(error);
@@ -88,7 +98,7 @@ export const serviceService = {
   },
 
   async update(companyId: string, id: string, input: UpdateServiceInput) {
-    await this.getById(companyId, id);
+    const existing = await this.getById(companyId, id);
 
     const normalized = normalizeServiceTextFields(input);
 
@@ -107,9 +117,37 @@ export const serviceService = {
       }
     }
 
-    const updatePayload: UpdateServiceInput = {
+    const neighborhood =
+      normalized.neighborhood !== undefined ? normalized.neighborhood : existing.neighborhood;
+    const locality = normalized.locality !== undefined ? normalized.locality : existing.locality;
+    const geoTouched =
+      normalized.neighborhood !== undefined || normalized.locality !== undefined;
+
+    let locationZoneId: string | null | undefined = undefined;
+    let syncedNeighborhood: string | null | undefined = undefined;
+    let syncedLocality: string | null | undefined = undefined;
+
+    if (geoTouched) {
+      const zone = await locationZoneService.findOrCreateByNameLocality(
+        companyId,
+        neighborhood ?? "",
+        locality ?? null,
+      );
+      locationZoneId = zone?.id ?? null;
+      syncedNeighborhood = zone?.name ?? neighborhood ?? null;
+      syncedLocality = zone?.locality ?? locality ?? null;
+    }
+
+    const updatePayload = {
       ...normalized,
       name: input.name !== undefined ? input.name.trim() : undefined,
+      ...(geoTouched
+        ? {
+            neighborhood: syncedNeighborhood,
+            locality: syncedLocality,
+            locationZoneId,
+          }
+        : {}),
     };
 
     if (updatePayload.name !== undefined) {

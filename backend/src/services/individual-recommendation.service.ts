@@ -18,22 +18,25 @@ import {
   buildRecommendationReasons,
   compareScoredCandidates,
   distanceMetersBetween,
+  minIsoDate,
   resolveLocationProximityBucket,
   scoreCandidateFeatures,
   type AffinityPairStats,
 } from "./recommendation/recommendation-scorer";
 
-const resolveRecommendationReferenceDate = async (
+/**
+ * targetWorkDate: operation work context (who is currently assigned).
+ * For ONE_TIME = operation work date; for RECURRING = today in company TZ.
+ */
+const resolveTargetWorkDate = async (
   companyId: string,
   operationId: string,
   operationKind: string | null | undefined,
+  todayInTz: string,
 ): Promise<string> => {
   if (operationKind === "RECURRING") {
-    const settings = await companySettingsRepository.findByCompanyId(companyId);
-    const timezone = resolveOperationTimezone(settings?.operationTimezone);
-    return getDateIsoInTimezone(new Date(), timezone);
+    return todayInTz;
   }
-
   return operationWorkDateService.resolveOperationWorkDate(companyId, operationId);
 };
 
@@ -41,6 +44,10 @@ export const individualRecommendationService = {
   /**
    * Read-only individual employee recommendations for an existing operation.
    * Does not create assignments or mutate any operational state.
+   *
+   * Queries per request (typical):
+   * 1 operation, 2 settings (timezone), 3 service, 4 active assignments,
+   * 5 candidates, 6 affinity batch, 7 service-experience batch.
    */
   async recommendEmployees(
     companyId: string,
@@ -74,21 +81,28 @@ export const individualRecommendationService = {
         );
       }
 
+      const settings = await companySettingsRepository.findByCompanyId(companyId);
+      const timezone = resolveOperationTimezone(settings?.operationTimezone);
+      const todayDate = getDateIsoInTimezone(new Date(), timezone);
+
+      const targetWorkDate = await resolveTargetWorkDate(
+        companyId,
+        operationId,
+        operation.operationKind,
+        todayDate,
+      );
+      /** Never treat a workday on/after "today" as historical experience. */
+      const historyCutoffDate = minIsoDate(todayDate, targetWorkDate);
+
       const service = await serviceRepository.findById(companyId, operation.serviceId);
       if (!service) {
         throw new AppError(404, "SERVICE_NOT_FOUND", "Servicio de la operación no encontrado");
       }
 
-      const referenceDate = await resolveRecommendationReferenceDate(
-        companyId,
-        operationId,
-        operation.operationKind,
-      );
-
       const activeAssignments = await operationEmployeeRepository.listActiveForOperationOnWorkDate(
         companyId,
         operationId,
-        referenceDate,
+        targetWorkDate,
       );
       const assignedEmployeeIds = [
         ...new Set(activeAssignments.map((assignment) => assignment.employeeId)),
@@ -98,20 +112,19 @@ export const individualRecommendationService = {
         companyId,
         assignedEmployeeIds,
       );
-      const candidateIds = candidates.map((candidate) => candidate.employeeId);
 
       const [affinityPairs, serviceExperienceRows] = await Promise.all([
         recommendationFeatureRepository.listAffinityPairs({
           companyId,
           assignedEmployeeIds,
-          candidateEmployeeIds: candidateIds,
-          referenceDate,
+          historyCutoffDate,
+          todayDate,
         }),
         recommendationFeatureRepository.listServiceExperience({
           companyId,
           serviceId: operation.serviceId,
-          candidateEmployeeIds: candidateIds,
-          referenceDate,
+          excludedEmployeeIds: assignedEmployeeIds,
+          historyCutoffDate,
           excludeOperationId: operationId,
         }),
       ]);
@@ -134,14 +147,23 @@ export const individualRecommendationService = {
         serviceExperienceRows.map((row) => [row.employeeId, row.serviceWorkdayCount]),
       );
 
+      const serviceLocationZoneId = service.locationZoneId ?? null;
+
       const scored = candidates.map((candidate) => {
-        const distanceMeters = distanceMetersBetween(
-          candidate.centroidLatitude,
-          candidate.centroidLongitude,
-          service.latitude,
-          service.longitude,
+        const sameZone = Boolean(
+          candidate.locationZoneId &&
+            serviceLocationZoneId &&
+            candidate.locationZoneId === serviceLocationZoneId,
         );
-        const locationBucket = resolveLocationProximityBucket(distanceMeters);
+        const distanceMeters = sameZone
+          ? null
+          : distanceMetersBetween(
+              candidate.centroidLatitude,
+              candidate.centroidLongitude,
+              service.latitude,
+              service.longitude,
+            );
+        const locationBucket = resolveLocationProximityBucket(distanceMeters, sameZone);
         return scoreCandidateFeatures({
           employeeId: candidate.employeeId,
           assignedCount: assignedEmployeeIds.length,

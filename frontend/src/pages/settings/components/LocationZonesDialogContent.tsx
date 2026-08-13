@@ -98,8 +98,8 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Catálogo de zonas aproximadas de residencia para colaboradores. No se almacenan direcciones
-        exactas.
+        Catálogo geográfico compartido (barrio + localidad) para colaboradores y servicios. No se
+        almacenan direcciones exactas.
       </Text>
 
       <FormErrorAlert message={submitError} />

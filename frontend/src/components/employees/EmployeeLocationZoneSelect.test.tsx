@@ -78,10 +78,12 @@ function createTestQueryClient() {
 
 function ZoneFormHarness({
   retainedZone = null,
+  canCreate = false,
   defaultValues = { locationZoneId: null as string | null },
   onValuesChange,
 }: {
   retainedZone?: { id: string; name: string; locality?: string | null } | null;
+  canCreate?: boolean;
   defaultValues?: FormValues;
   onValuesChange?: (values: FormValues) => void;
 }) {
@@ -99,6 +101,7 @@ function ZoneFormHarness({
       <EmployeeLocationZoneSelect
         control={form.control}
         name="locationZoneId"
+        canCreate={canCreate}
         retainedZone={retainedZone}
       />
     </FormProvider>
@@ -107,6 +110,7 @@ function ZoneFormHarness({
 
 function renderSelect(options: {
   retainedZone?: { id: string; name: string; locality?: string | null } | null;
+  canCreate?: boolean;
   defaultValues?: FormValues;
   onValuesChange?: (values: FormValues) => void;
 } = {}) {
@@ -182,7 +186,7 @@ describe("EmployeeLocationZoneSelect", () => {
       assert.ok(view.getByText(/Caballito/));
       assert.ok(view.getByText("Sin especificar"));
     });
-    await user.click(view.getByText(/Caballito \(/));
+    await user.click(view.getByText(/Caballito —/));
 
     await waitFor(() => {
       assert.equal(latestValues.locationZoneId, "zone-caballito");
@@ -240,5 +244,68 @@ describe("EmployeeLocationZoneSelect", () => {
     await waitFor(() => {
       assert.ok(view.getByText(/No se pudieron cargar las zonas/));
     });
+  });
+
+  it("creates a missing zone from the creatable input", async () => {
+    const user = userEvent.setup({ document: globalThis.document });
+    const originalPost = scopedApiClient.post;
+    let postedBody: Record<string, unknown> | null = null;
+
+    scopedApiClient.post = (async (_url: string, body: unknown) => {
+      postedBody = body as Record<string, unknown>;
+      return {
+        data: {
+          data: {
+            id: "zone-new",
+            companyId: "company-1",
+            name: "Villa del Parque",
+            normalizedName: "villa del parque",
+            locality: "CABA",
+            normalizedLocality: "caba",
+            centroidLatitude: null,
+            centroidLongitude: null,
+            isActive: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        },
+        status: 201,
+        statusText: "Created",
+        headers: {},
+        config: {},
+      } as never;
+    }) as typeof scopedApiClient.post;
+
+    const view = renderSelect({
+      canCreate: true,
+      onValuesChange: (values) => {
+        latestValues = values;
+      },
+    });
+
+    await waitFor(() => {
+      assert.equal((view.getByLabelText("Zona de residencia") as HTMLInputElement).disabled, false);
+    });
+
+    const input = view.getByLabelText("Zona de residencia");
+    await user.click(input);
+    await user.type(input, "Villa del Parque");
+    await waitFor(() => {
+      assert.ok(view.getByText(/Crear “Villa del Parque”/));
+    });
+    await user.click(view.getByText(/Crear “Villa del Parque”/));
+
+    const localityInput = view.getByLabelText("Localidad");
+    await user.clear(localityInput);
+    await user.type(localityInput, "CABA");
+    await user.click(view.getByRole("button", { name: "Crear y seleccionar" }));
+
+    await waitFor(() => {
+      assert.equal(latestValues.locationZoneId, "zone-new");
+      assert.equal(postedBody?.name, "Villa del Parque");
+      assert.equal(postedBody?.locality, "CABA");
+    });
+
+    scopedApiClient.post = originalPost;
   });
 });

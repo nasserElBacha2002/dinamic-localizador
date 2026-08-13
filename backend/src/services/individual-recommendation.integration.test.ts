@@ -27,6 +27,12 @@ const isoDaysAgo = (days: number): string => {
   return date.toISOString().slice(0, 10);
 };
 
+const isoDaysFromNow = (days: number): string => {
+  const date = new Date();
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().slice(0, 10);
+};
+
 async function createService(
   companyId: string,
   name: string,
@@ -117,6 +123,30 @@ async function createCurrentOperation(input: {
   serviceId: string;
 }): Promise<string> {
   const start = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+  const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+  const op = await getPool()
+    .request()
+    .input("companyId", sql.UniqueIdentifier, input.companyId)
+    .input("serviceId", sql.UniqueIdentifier, input.serviceId)
+    .input("scheduledStart", sql.DateTime2, start)
+    .input("scheduledEnd", sql.DateTime2, end)
+    .query(`
+      INSERT INTO scheduled_operations (
+        company_id, service_id, scheduled_start, scheduled_end,
+        early_tolerance_minutes, late_tolerance_minutes, status, operation_kind
+      )
+      OUTPUT INSERTED.id
+      VALUES (@companyId, @serviceId, @scheduledStart, @scheduledEnd, 60, 90, N'SCHEDULED', N'ONE_TIME')
+    `);
+  return String(op.recordset[0].id);
+}
+
+async function createOneTimeOperationOnDate(input: {
+  companyId: string;
+  serviceId: string;
+  workDate: string;
+}): Promise<string> {
+  const start = new Date(`${input.workDate}T12:00:00.000Z`);
   const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
   const op = await getPool()
     .request()
@@ -390,6 +420,102 @@ describeDatabaseIntegration("individual employee recommendations phase1", () => 
     assert.ok(exp && none);
     assert.ok(exp.rank < none.rank);
     assert.ok(exp.reasons.some((reason) => reason.code === "SERVICE_EXPERIENCE"));
+    const serviceReason = exp.reasons.find((reason) => reason.code === "SERVICE_EXPERIENCE");
+    assert.deepEqual(serviceReason?.params, { serviceWorkdays: 3 });
+  });
+
+  it("ignores future workdays before target as historical experience", async () => {
+    const suffix = uniqueSuffix();
+    const company = await createPlatformCompanyFixture({
+      name: `Rec FutureHist ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `rec-fh-${suffix}@integration.test` },
+    });
+    const companyId = company.data.company.id;
+    createdCompanyIds.push(companyId);
+
+    const serviceId = await createService(companyId, `Svc FH ${suffix}`, -34.6, -58.38);
+
+    const empA = await employeeService.create(companyId, {
+      name: "FH A",
+      phoneNumber: uniquePhone(31),
+      employeeType: "fijo",
+      documentNumber: null,
+      categoryId: null,
+      locationZoneId: null,
+    });
+    const empB = await employeeService.create(companyId, {
+      name: "FH B",
+      phoneNumber: uniquePhone(32),
+      employeeType: "fijo",
+      documentNumber: null,
+      categoryId: null,
+      locationZoneId: null,
+    });
+
+    const pastDate = isoDaysAgo(5);
+    const futureDate = isoDaysFromNow(5);
+    const targetDate = isoDaysFromNow(20);
+
+    const past = await createPastOperationWithWorkday({
+      companyId,
+      serviceId,
+      workDate: pastDate,
+    });
+    await expectEmployeeOnWorkday({
+      companyId,
+      workdayId: past.workdayId,
+      employeeId: empA.id,
+    });
+    await expectEmployeeOnWorkday({
+      companyId,
+      workdayId: past.workdayId,
+      employeeId: empB.id,
+    });
+
+    const future = await createPastOperationWithWorkday({
+      companyId,
+      serviceId,
+      workDate: futureDate,
+    });
+    await expectEmployeeOnWorkday({
+      companyId,
+      workdayId: future.workdayId,
+      employeeId: empA.id,
+    });
+    await expectEmployeeOnWorkday({
+      companyId,
+      workdayId: future.workdayId,
+      employeeId: empB.id,
+    });
+
+    const targetOperationId = await createOneTimeOperationOnDate({
+      companyId,
+      serviceId,
+      workDate: targetDate,
+    });
+    await operationAssignmentService.assignEmployee(companyId, targetOperationId, empA.id);
+
+    const result = await individualRecommendationService.recommendEmployees(
+      companyId,
+      targetOperationId,
+      10,
+    );
+    const recB = result.recommendations.find((item) => item.employee.id === empB.id);
+    assert.ok(recB);
+
+    const teamAffinity = recB.reasons.find((reason) => reason.code === "TEAM_AFFINITY");
+    assert.ok(teamAffinity);
+    assert.equal(teamAffinity.params?.sharedOccurrences, 1);
+
+    assert.equal(
+      recB.reasons.some((reason) => reason.code === "RECENT_COLLABORATION"),
+      true,
+    );
+
+    const serviceExperience = recB.reasons.find((reason) => reason.code === "SERVICE_EXPERIENCE");
+    assert.ok(serviceExperience);
+    assert.equal(serviceExperience.params?.serviceWorkdays, 1);
   });
 
   it("excludes inactive, already assigned, and cancelled operations", async () => {

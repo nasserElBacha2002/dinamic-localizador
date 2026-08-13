@@ -20,7 +20,7 @@ export function LocationZonesDialog({
     <ResponsiveModal
       opened={opened}
       onClose={onClose}
-      title="Zonas de residencia"
+      title="Barrios y localidades"
       size="lg"
       bodyMode="scroll"
       footer={

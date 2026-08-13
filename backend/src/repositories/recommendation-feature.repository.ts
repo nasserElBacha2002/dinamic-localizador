@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { WORKFORCE_RECOMMENDATION_V1_RECENCY } from "../constants/workforce-recommendation-v1";
 import { getPool } from "../database/connection";
 
 export interface RecommendationCandidateRow {
@@ -7,6 +8,7 @@ export interface RecommendationCandidateRow {
   employeeType: string;
   categoryId: string | null;
   categoryName: string | null;
+  locationZoneId: string | null;
   centroidLatitude: number | null;
   centroidLongitude: number | null;
 }
@@ -26,27 +28,12 @@ export interface ServiceExperienceRow {
   serviceWorkdayCount: number;
 }
 
-const bindUuidList = (
-  request: sql.Request,
-  prefix: string,
-  ids: string[],
-): string => {
-  if (ids.length === 0) {
-    return "";
-  }
-  return ids
-    .map((id, index) => {
-      const name = `${prefix}${index}`;
-      request.input(name, sql.UniqueIdentifier, id);
-      return `@${name}`;
-    })
-    .join(", ");
-};
+const uuidJsonParam = (ids: string[]): string => JSON.stringify(ids);
 
 /**
  * Historical co-occurrence semantic (V1):
  * Same ACTIVE operation_workday, non-cancelled employee expectations,
- * work_date strictly before @referenceDate (excludes future-only),
+ * work_date strictly before @historyCutoffDate (never counts future-as-of-today),
  * and assignment still covering that work_date when linked.
  *
  * This is scheduled co-presence on an effective workday — not attendance PRESENT.
@@ -64,7 +51,7 @@ const HISTORICAL_EMPLOYEE_WORKDAY_CTE = `
     WHERE ew.company_id = @companyId
       AND ew.expectation_status <> N'CANCELLED'
       AND ow.status = N'ACTIVE'
-      AND ow.work_date < @referenceDate
+      AND ow.work_date < @historyCutoffDate
       AND (
         ew.operation_assignment_id IS NULL
         OR EXISTS (
@@ -85,13 +72,10 @@ export const recommendationFeatureRepository = {
     companyId: string,
     excludedEmployeeIds: string[],
   ): Promise<RecommendationCandidateRow[]> {
-    const request = getPool().request().input("companyId", sql.UniqueIdentifier, companyId);
-
-    let excludedClause = "";
-    if (excludedEmployeeIds.length > 0) {
-      const params = bindUuidList(request, "ex", excludedEmployeeIds);
-      excludedClause = `AND e.id NOT IN (${params})`;
-    }
+    const request = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("excludedIdsJson", sql.NVarChar(sql.MAX), uuidJsonParam(excludedEmployeeIds));
 
     const result = await request.query(`
       SELECT
@@ -100,6 +84,7 @@ export const recommendationFeatureRepository = {
         e.employee_type AS employee_type,
         e.category_id AS category_id,
         ec.name AS category_name,
+        e.location_zone_id AS location_zone_id,
         lz.centroid_latitude AS centroid_latitude,
         lz.centroid_longitude AS centroid_longitude
       FROM employees e
@@ -111,7 +96,11 @@ export const recommendationFeatureRepository = {
        AND lz.company_id = e.company_id
       WHERE e.company_id = @companyId
         AND e.active = 1
-        ${excludedClause}
+        AND NOT EXISTS (
+          SELECT 1
+          FROM OPENJSON(@excludedIdsJson) j
+          WHERE TRY_CAST(j.[value] AS UNIQUEIDENTIFIER) = e.id
+        )
       ORDER BY e.id ASC
     `);
 
@@ -121,6 +110,7 @@ export const recommendationFeatureRepository = {
       employeeType: String(row.employee_type),
       categoryId: row.category_id ? String(row.category_id) : null,
       categoryName: row.category_name ? String(row.category_name) : null,
+      locationZoneId: row.location_zone_id ? String(row.location_zone_id) : null,
       centroidLatitude:
         row.centroid_latitude === null || row.centroid_latitude === undefined
           ? null
@@ -132,45 +122,68 @@ export const recommendationFeatureRepository = {
     }));
   },
 
+  /**
+   * Affinity pairs for all active non-assigned employees vs assigned set.
+   * Candidate IDs are derived set-based (no per-candidate SQL parameters).
+   */
   async listAffinityPairs(input: {
     companyId: string;
     assignedEmployeeIds: string[];
-    candidateEmployeeIds: string[];
-    referenceDate: string;
+    historyCutoffDate: string;
+    todayDate: string;
   }): Promise<AffinityPairRow[]> {
-    if (input.assignedEmployeeIds.length === 0 || input.candidateEmployeeIds.length === 0) {
+    if (input.assignedEmployeeIds.length === 0) {
       return [];
     }
 
     const request = getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
-      .input("referenceDate", sql.Date, input.referenceDate);
-
-    const assignedParams = bindUuidList(request, "asg", input.assignedEmployeeIds);
-    const candidateParams = bindUuidList(request, "cand", input.candidateEmployeeIds);
+      .input("historyCutoffDate", sql.Date, input.historyCutoffDate)
+      .input("todayDate", sql.Date, input.todayDate)
+      .input("recentDays", sql.Int, WORKFORCE_RECOMMENDATION_V1_RECENCY.recentDays)
+      .input("midDays", sql.Int, WORKFORCE_RECOMMENDATION_V1_RECENCY.midDays)
+      .input("assignedIdsJson", sql.NVarChar(sql.MAX), uuidJsonParam(input.assignedEmployeeIds));
 
     const result = await request.query(`
-      WITH ${HISTORICAL_EMPLOYEE_WORKDAY_CTE}
+      WITH assigned AS (
+        SELECT DISTINCT TRY_CAST([value] AS UNIQUEIDENTIFIER) AS employee_id
+        FROM OPENJSON(@assignedIdsJson)
+        WHERE TRY_CAST([value] AS UNIQUEIDENTIFIER) IS NOT NULL
+      ),
+      ${HISTORICAL_EMPLOYEE_WORKDAY_CTE}
       SELECT
         cand.employee_id AS candidate_id,
         asg.employee_id AS assigned_employee_id,
         COUNT_BIG(*) AS shared_occurrences,
         CONVERT(varchar(10), MAX(cand.work_date), 23) AS last_shared_at,
-        SUM(CASE WHEN DATEDIFF(day, cand.work_date, @referenceDate) <= 90 THEN 1 ELSE 0 END) AS recent_90,
+        SUM(
+          CASE WHEN DATEDIFF(day, cand.work_date, @todayDate) <= @recentDays THEN 1 ELSE 0 END
+        ) AS recent_90,
         SUM(
           CASE
-            WHEN DATEDIFF(day, cand.work_date, @referenceDate) BETWEEN 91 AND 365 THEN 1
+            WHEN DATEDIFF(day, cand.work_date, @todayDate) > @recentDays
+             AND DATEDIFF(day, cand.work_date, @todayDate) <= @midDays
+            THEN 1
             ELSE 0
           END
         ) AS mid_365,
-        SUM(CASE WHEN DATEDIFF(day, cand.work_date, @referenceDate) > 365 THEN 1 ELSE 0 END) AS older
+        SUM(
+          CASE WHEN DATEDIFF(day, cand.work_date, @todayDate) > @midDays THEN 1 ELSE 0 END
+        ) AS older
       FROM historical_ew cand
       INNER JOIN historical_ew asg
         ON asg.operation_workday_id = cand.operation_workday_id
        AND asg.employee_id <> cand.employee_id
-      WHERE cand.employee_id IN (${candidateParams})
-        AND asg.employee_id IN (${assignedParams})
+      INNER JOIN assigned a
+        ON a.employee_id = asg.employee_id
+      INNER JOIN employees e
+        ON e.id = cand.employee_id
+       AND e.company_id = @companyId
+       AND e.active = 1
+      WHERE NOT EXISTS (
+        SELECT 1 FROM assigned x WHERE x.employee_id = cand.employee_id
+      )
       GROUP BY cand.employee_id, asg.employee_id
     `);
 
@@ -188,22 +201,17 @@ export const recommendationFeatureRepository = {
   async listServiceExperience(input: {
     companyId: string;
     serviceId: string;
-    candidateEmployeeIds: string[];
-    referenceDate: string;
+    excludedEmployeeIds: string[];
+    historyCutoffDate: string;
     excludeOperationId: string;
   }): Promise<ServiceExperienceRow[]> {
-    if (input.candidateEmployeeIds.length === 0) {
-      return [];
-    }
-
     const request = getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("serviceId", sql.UniqueIdentifier, input.serviceId)
-      .input("referenceDate", sql.Date, input.referenceDate)
-      .input("excludeOperationId", sql.UniqueIdentifier, input.excludeOperationId);
-
-    const candidateParams = bindUuidList(request, "cand", input.candidateEmployeeIds);
+      .input("historyCutoffDate", sql.Date, input.historyCutoffDate)
+      .input("excludeOperationId", sql.UniqueIdentifier, input.excludeOperationId)
+      .input("excludedIdsJson", sql.NVarChar(sql.MAX), uuidJsonParam(input.excludedEmployeeIds));
 
     const result = await request.query(`
       SELECT
@@ -216,13 +224,21 @@ export const recommendationFeatureRepository = {
       INNER JOIN scheduled_operations so
         ON so.id = ow.operation_id
        AND so.company_id = ew.company_id
+      INNER JOIN employees e
+        ON e.id = ew.employee_id
+       AND e.company_id = @companyId
+       AND e.active = 1
       WHERE ew.company_id = @companyId
         AND so.service_id = @serviceId
         AND so.id <> @excludeOperationId
-        AND ew.employee_id IN (${candidateParams})
         AND ew.expectation_status <> N'CANCELLED'
         AND ow.status = N'ACTIVE'
-        AND ow.work_date < @referenceDate
+        AND ow.work_date < @historyCutoffDate
+        AND NOT EXISTS (
+          SELECT 1
+          FROM OPENJSON(@excludedIdsJson) j
+          WHERE TRY_CAST(j.[value] AS UNIQUEIDENTIFIER) = ew.employee_id
+        )
         AND (
           ew.operation_assignment_id IS NULL
           OR EXISTS (

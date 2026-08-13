@@ -98,6 +98,7 @@ export const mapServiceRow = (row: Record<string, unknown>): Service => ({
   address: row.address ? String(row.address) : null,
   neighborhood: row.neighborhood ? String(row.neighborhood) : null,
   locality: row.locality ? String(row.locality) : null,
+  locationZoneId: row.location_zone_id ? String(row.location_zone_id) : null,
   serviceFormat: parseServiceFormat(row.store_format),
   latitude: Number(row.latitude),
   longitude: Number(row.longitude),

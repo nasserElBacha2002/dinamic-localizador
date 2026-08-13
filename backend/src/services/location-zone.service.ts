@@ -91,6 +91,52 @@ export const locationZoneService = {
     });
   },
 
+  /**
+   * Idempotent resolve for shared geographic catalog (services + employees).
+   * Does not invent centroids from service coordinates.
+   */
+  async findOrCreateByNameLocality(
+    companyId: string,
+    nameInput: string,
+    localityInput: string | null | undefined,
+  ): Promise<LocationZone | null> {
+    await assertActiveCompany(companyId);
+    const trimmedName = nameInput.trim();
+    if (!trimmedName) {
+      return null;
+    }
+
+    const resolved = resolveNameKey(trimmedName, localityInput);
+    const existing = await locationZoneRepository.findByNormalizedKey(
+      companyId,
+      resolved.normalizedName,
+      resolved.normalizedLocality,
+    );
+    if (existing) {
+      return existing;
+    }
+
+    try {
+      return await locationZoneRepository.create(companyId, {
+        ...resolved,
+        centroidLatitude: null,
+        centroidLongitude: null,
+      });
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        const raced = await locationZoneRepository.findByNormalizedKey(
+          companyId,
+          resolved.normalizedName,
+          resolved.normalizedLocality,
+        );
+        if (raced) {
+          return raced;
+        }
+      }
+      throw error;
+    }
+  },
+
   async create(
     companyId: string,
     role: CompanyMembershipSummary["role"],

@@ -41,6 +41,8 @@ export interface Service {
   address: string | null;
   neighborhood: string | null;
   locality: string | null;
+  /** Shared company geographic zone (barrio+localidad). Denormalized neighborhood/locality mirror it. */
+  locationZoneId: string | null;
   serviceFormat: ServiceFormat | null;
   latitude: number;
   longitude: number;

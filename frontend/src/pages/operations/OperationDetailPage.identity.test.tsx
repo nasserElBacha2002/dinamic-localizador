@@ -148,7 +148,9 @@ describe("OperationDetailPage entity identity", () => {
     const avatar = view.container.querySelector("[data-entity-avatar='operation']");
     assert.equal(avatar?.textContent, "S");
     assert.ok(view.getByRole("button", { name: "Volver al listado" }));
-    assert.ok(view.getByRole("button", { name: "Más acciones de la operación" }));
+    assert.equal(view.queryByRole("button", { name: "Más acciones de la operación" }), null);
+    assert.ok(view.getByRole("button", { name: /^Editar$/i }));
+    assert.ok(view.getByRole("button", { name: /Editar operación/i }));
     assert.match(view.container.textContent ?? "", /Detalle de la operación/i);
   });
 });

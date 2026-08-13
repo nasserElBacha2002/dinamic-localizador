@@ -125,6 +125,8 @@ describe("OperationsListPage responsive (real page)", () => {
     assert.ok(view.getByRole("table"));
     assert.equal(view.container.querySelector("[data-entity-avatar='service']")?.textContent, "S");
     assert.match(view.container.textContent ?? "", /15 min/);
+    assert.ok(view.getByRole("button", { name: /Importar operaciones/i }));
+    assert.equal(view.queryByRole("button", { name: "Más acciones de operaciones" }), null);
     const serviceLink = await waitFor(() =>
       view.getByRole("link", { name: /Sucursal Centro/i }),
     );

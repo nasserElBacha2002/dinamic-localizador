@@ -1,4 +1,4 @@
-export { PageHeader, type PageHeaderProps } from "./PageHeader";
+export { PageHeader, EntityPageTitle, type PageHeaderProps, type EntityPageTitleProps } from "./PageHeader";
 export { MetricCard, type MetricCardProps } from "./MetricCard";
 export { StatusBadge, type StatusBadgeProps, type StatusBadgeTone } from "./StatusBadge";
 export { SectionCard, type SectionCardProps } from "./SectionCard";

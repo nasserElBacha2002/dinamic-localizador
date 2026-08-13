@@ -156,6 +156,23 @@ describe("ServiceDetailPage", () => {
     assert.ok(view.getByTestId("service-location-map-view"));
     assert.equal(view.queryByRole("textbox"), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
+    assert.equal(view.queryByRole("link", { name: /^Crear operación$/i }), null);
+  });
+
+  it("operations manager can open create operation with serviceId preset", async () => {
+    membershipPermissions = ["operations:manage", "services:read"];
+    const view = renderPage(
+      <Routes>
+        <Route path="/services/:id" element={<ServiceDetailPage />} />
+      </Routes>,
+      { route: "/services/svc-1" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("link", { name: /^Crear operación$/i }));
+    });
+    const createLink = view.getByRole("link", { name: /^Crear operación$/i });
+    assert.equal(createLink.getAttribute("href"), "/operations/new?serviceId=svc-1");
   });
 
   it("legacy /stores/:id lands on service detail", async () => {

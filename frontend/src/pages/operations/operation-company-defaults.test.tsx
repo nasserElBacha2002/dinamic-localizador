@@ -77,6 +77,15 @@ describe("buildOperationCreateDefaultValues", () => {
     assert.notEqual(defaults.earlyToleranceMinutes, settings.lateGraceMinutes);
     assert.notEqual(defaults.lateToleranceMinutes, settings.earlyLeaveToleranceMinutes);
   });
+
+  it("prefills serviceId when provided", () => {
+    const settings = createMockCompanySettings();
+    const defaults = buildOperationCreateDefaultValues(settings, {
+      serviceId: "  svc-preset-1  ",
+    });
+
+    assert.equal(defaults.serviceId, "svc-preset-1");
+  });
 });
 
 describe("Operation create tolerance prefill", () => {

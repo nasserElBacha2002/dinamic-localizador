@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { Alert } from "@mantine/core";
+import { useSearchParams } from "react-router";
 import { OperationForm } from "../../components/operations/OperationForm";
 import { LoadingState, PageHeader } from "../../design-system";
 import { useCompanySettingsForOperationCreate } from "../../hooks/useCompanySettings";
@@ -49,6 +50,7 @@ function toCreatePayload(values: OperationFormValues, settingsLoaded: boolean): 
 
 export function OperationCreatePage() {
   const { goBackToList } = useListBackNavigation("/operations");
+  const [searchParams] = useSearchParams();
   const createMutation = useCreateOperation();
   const {
     data: companySettings,
@@ -59,14 +61,20 @@ export function OperationCreatePage() {
   } = useCompanySettingsForOperationCreate();
   const companyWorkScheduleQuery = useCompanyWorkSchedule(settingsLoaded);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const presetServiceId = useMemo(
+    () => searchParams.get("serviceId")?.trim() ?? "",
+    [searchParams],
+  );
 
   const defaultValues = useMemo<OperationFormValues | null>(() => {
     if (!companySettings) {
       return null;
     }
 
-    return buildOperationCreateDefaultValues(companySettings);
-  }, [companySettings]);
+    return buildOperationCreateDefaultValues(companySettings, {
+      serviceId: presetServiceId,
+    });
+  }, [companySettings, presetServiceId]);
 
   const handleSubmit = async (values: OperationFormValues) => {
     setErrorMessage(null);
@@ -107,7 +115,7 @@ export function OperationCreatePage() {
       ) : null}
       {defaultValues ? (
         <OperationForm
-          key={`settings-${companySettings?.updatedAt}-${defaultValues.earlyToleranceMinutes}-${defaultValues.lateToleranceMinutes}`}
+          key={`settings-${companySettings?.updatedAt}-${defaultValues.earlyToleranceMinutes}-${defaultValues.lateToleranceMinutes}-${presetServiceId}`}
           mode="create"
           defaultValues={defaultValues}
           companyWorkSchedule={companyWorkScheduleQuery.data ?? null}

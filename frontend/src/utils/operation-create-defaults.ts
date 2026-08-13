@@ -5,10 +5,13 @@ import { getTodayDateInput } from "./dates";
 
 export function buildOperationCreateDefaultValues(
   settings: CompanySettings,
+  options?: { serviceId?: string },
 ): OperationFormValues {
+  const presetServiceId = options?.serviceId?.trim() ?? "";
+
   return {
     operationKind: "ONE_TIME",
-    serviceId: "",
+    serviceId: presetServiceId,
     scheduledStart: "",
     scheduledEnd: "",
     validFrom: getTodayDateInput(),

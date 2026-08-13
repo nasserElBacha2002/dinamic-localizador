@@ -1,5 +1,5 @@
 import { Button, Group, Stack } from "@mantine/core";
-import { useParams } from "react-router";
+import { Link as RouterLink, useParams } from "react-router";
 import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import { ServiceLocationMapView } from "../../components/services/location-picker/components/ServiceLocationMapView";
 import {
@@ -25,6 +25,10 @@ export function ServiceDetailPage() {
   const { goBackToList } = useListBackNavigation("/services");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "services:manage");
+  const canCreateOperation = hasPermission(
+    permissionsQuery.data?.permissions,
+    "operations:manage",
+  );
   const serviceQuery = useService(id);
 
   if (!id) {
@@ -60,6 +64,14 @@ export function ServiceDetailPage() {
         description={`Detalle de ${terminology.service.singular.toLowerCase()}`}
         action={
           <Group gap="sm">
+            {canCreateOperation && service.active ? (
+              <Button
+                component={RouterLink}
+                to={`/operations/new?serviceId=${encodeURIComponent(service.id)}`}
+              >
+                {`Crear ${terminology.operation.singular.toLowerCase()}`}
+              </Button>
+            ) : null}
             {canManage ? <EntityEditAction entity="services" id={service.id} /> : null}
             <Button variant="default" onClick={goBackToList}>
               Volver al listado

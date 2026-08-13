@@ -43,7 +43,7 @@ export function EmployeeDetailPage() {
     return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
   }
 
-  if (employeeQuery.isLoading || permissionsQuery.isPending || modulesQuery.isPending) {
+  if (employeeQuery.isLoading || permissionsQuery.isPending) {
     return <LoadingState />;
   }
 
@@ -61,8 +61,9 @@ export function EmployeeDetailPage() {
   const employee = employeeQuery.data;
   const currentYear = new Date().getFullYear();
 
+  // Module quick-links are best-effort: never block the detail page on modules load/error.
   const moduleLinks =
-    !modulesQuery.isError && modulesQuery.data
+    !modulesQuery.isPending && !modulesQuery.isError && modulesQuery.data
       ? filterEmployeeModuleQuickLinks(
           employee.id,
           modulesQuery.data,

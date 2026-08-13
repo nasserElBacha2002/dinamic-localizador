@@ -1,7 +1,8 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
-import { useNavigate, useParams } from "react-router";
+import { useParams } from "react-router";
 import { EntityLink } from "../../components/entity-link";
+import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
   ActionMenu,
   ConfirmDialog,
@@ -27,13 +28,11 @@ import type { WorkTeamUsageRecord } from "../../types/work-team";
 import { formatDateTime } from "../../utils/dates";
 import { safeText } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
-import { getEntityEditPath } from "../../utils/entity-routes";
 import { operationKindLabels } from "../../utils/operation-schedule-display";
 import { hasPermission } from "../../utils/permissions";
 
 export function WorkTeamDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
   const { goBackToList } = useListBackNavigation("/work-teams");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
@@ -120,11 +119,7 @@ export function WorkTeamDetailPage() {
           <ActionMenu
             primary={
               canManage ? (
-                <Button
-                  onClick={() => navigate(getEntityEditPath("work-teams", team.id))}
-                >
-                  Editar
-                </Button>
+                <EntityEditAction entity="work-teams" id={team.id} label="Editar" />
               ) : (
                 <Button variant="default" onClick={goBackToList}>
                   Volver al listado

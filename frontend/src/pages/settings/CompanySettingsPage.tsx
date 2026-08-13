@@ -9,13 +9,16 @@ import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
 import { useCompanySettings } from "../../hooks/useCompanySettings";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
+import { useLocationZones } from "../../hooks/useLocationZones";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { companyRoleLabels } from "../../utils/labels";
 import { getApiErrorMessage } from "../../utils/errors";
+import { hasPermission } from "../../utils/permissions";
 import {
   buildAbsenceSummary,
   buildEmployeeCategoriesSummary,
   buildLocationTypesSummary,
+  buildLocationZonesSummary,
   buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
@@ -27,6 +30,7 @@ import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDia
 import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
 import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
+import { LocationZonesDialog } from "./components/LocationZonesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
@@ -41,7 +45,8 @@ type DialogKey =
   | "absenceOperationalIntegration"
   | "locationTypes"
   | "workSchedule"
-  | "employeeCategories";
+  | "employeeCategories"
+  | "locationZones";
 
 const parseTab = (value: string | null): SettingsTab =>
   value === "absences" ? "absences" : "company";
@@ -55,6 +60,8 @@ export function CompanySettingsPage() {
   const canRead = permissionsQuery.data?.permissions.includes("company:read") ?? false;
   const canUpdate =
     permissionsQuery.data?.permissions.includes("company:settings:update") ?? false;
+  const canManageLocationZones =
+    canUpdate || hasPermission(permissionsQuery.data?.permissions, "employees:manage");
 
   const companyTabEnabled = canRead && activeTab === "company";
   const absencesTabEnabled = canRead && activeTab === "absences";
@@ -66,6 +73,7 @@ export function CompanySettingsPage() {
     { includeInactive: true },
     companyTabEnabled,
   );
+  const locationZonesQuery = useLocationZones({ includeInactive: true }, companyTabEnabled);
 
   const absenceSettingsQuery = useCompanyAbsenceSettings(absencesTabEnabled);
   const absenceCalendarQuery = useDefaultAbsenceCalendar(absencesTabEnabled);
@@ -226,6 +234,29 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar categorías"
               canEdit={canUpdate && !employeeCategoriesQuery.isError}
               onAction={() => setOpenDialog("employeeCategories")}
+            />
+
+            <SettingsSummaryCard
+              title="Zonas de residencia"
+              description="Zonas aproximadas (barrio/localidad) para colaboradores. No se guardan domicilios exactos."
+              summaryItems={
+                locationZonesQuery.data
+                  ? buildLocationZonesSummary(locationZonesQuery.data).summaryItems
+                  : []
+              }
+              chips={
+                locationZonesQuery.data
+                  ? buildLocationZonesSummary(locationZonesQuery.data).chips
+                  : []
+              }
+              loading={locationZonesQuery.isLoading}
+              error={
+                locationZonesQuery.isError ? getApiErrorMessage(locationZonesQuery.error) : null
+              }
+              onRetry={() => void locationZonesQuery.refetch()}
+              actionLabel="Gestionar zonas"
+              canEdit={canManageLocationZones && !locationZonesQuery.isError}
+              onAction={() => setOpenDialog("locationZones")}
             />
           </SimpleGrid>
         </Tabs.Panel>
@@ -457,6 +488,15 @@ export function CompanySettingsPage() {
           onClose={() => setOpenDialog(null)}
           categories={employeeCategoriesQuery.data}
           canUpdate={canUpdate}
+        />
+      ) : null}
+
+      {openDialog === "locationZones" && locationZonesQuery.data ? (
+        <LocationZonesDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          zones={locationZonesQuery.data}
+          canUpdate={canManageLocationZones}
         />
       ) : null}
 

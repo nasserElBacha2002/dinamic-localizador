@@ -55,6 +55,10 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/employee-categories`,
     );
     assert.equal(
+      scopedApiPath("location-zones"),
+      `companies/${ACTIVE_COMPANY_ID}/location-zones`,
+    );
+    assert.equal(
       scopedApiPath("/employees"),
       `companies/${ACTIVE_COMPANY_ID}/employees`,
     );

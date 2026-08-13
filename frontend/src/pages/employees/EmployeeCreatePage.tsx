@@ -25,6 +25,7 @@ export function EmployeeCreatePage() {
         phoneNumber: values.phoneNumber,
         employeeType: values.employeeType,
         categoryId: values.categoryId ?? null,
+        locationZoneId: values.locationZoneId ?? null,
       });
       goBackToList();
     } catch (error) {
@@ -45,6 +46,7 @@ export function EmployeeCreatePage() {
           phoneNumber: "",
           employeeType: "",
           categoryId: null,
+          locationZoneId: null,
           active: true,
         }}
         submitLabel={`Crear ${terminology.worker.singular.toLowerCase()}`}

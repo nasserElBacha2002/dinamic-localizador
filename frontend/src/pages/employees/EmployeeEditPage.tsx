@@ -84,6 +84,7 @@ export function EmployeeEditPage() {
     phoneNumber: values.phoneNumber,
     employeeType: values.employeeType,
     categoryId: values.categoryId ?? null,
+    locationZoneId: values.locationZoneId ?? null,
   });
 
   const handleSubmit = async (values: EmployeeFormValues) => {
@@ -178,11 +179,21 @@ export function EmployeeEditPage() {
           phoneNumber: employee.phoneNumber,
           employeeType: employee.employeeType,
           categoryId: employee.categoryId,
+          locationZoneId: employee.locationZoneId,
           active: employee.active,
         }}
         retainedCategory={
           employee.category
             ? { id: employee.category.id, name: employee.category.name }
+            : null
+        }
+        retainedLocationZone={
+          employee.locationZone
+            ? {
+                id: employee.locationZone.id,
+                name: employee.locationZone.name,
+                locality: employee.locationZone.locality,
+              }
             : null
         }
         submitLabel="Guardar cambios"

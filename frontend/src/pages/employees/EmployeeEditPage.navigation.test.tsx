@@ -20,6 +20,8 @@ const employee = {
   employeeType: "INTERNAL",
   categoryId: null,
   category: null,
+  locationZoneId: null,
+  locationZone: null,
   active: true,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -39,6 +41,16 @@ mockApiModule("api/employee-categories.api", {
     throw new Error("not used");
   },
   updateEmployeeCategory: async () => {
+    throw new Error("not used");
+  },
+});
+
+mockApiModule("api/location-zones.api", {
+  getLocationZones: async () => [],
+  createLocationZone: async () => {
+    throw new Error("not used");
+  },
+  updateLocationZone: async () => {
     throw new Error("not used");
   },
 });

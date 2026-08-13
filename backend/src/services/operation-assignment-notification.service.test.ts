@@ -63,6 +63,8 @@ const activeEmployee = {
   employeeType: "INTERNAL" as const,
   categoryId: null,
   category: null,
+  locationZoneId: null,
+  locationZone: null,
   active: true,
   lastWorkedAt: null,
   createdAt: new Date().toISOString(),

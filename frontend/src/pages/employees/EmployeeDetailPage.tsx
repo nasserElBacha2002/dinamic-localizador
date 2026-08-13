@@ -88,6 +88,20 @@ export function EmployeeDetailPage() {
               value: employeeTypeLabels[employee.employeeType],
             },
             { label: "Categoría", value: safeText(employee.category?.name ?? null) },
+            ...(canManage
+              ? [
+                  {
+                    label: "Zona de residencia",
+                    value: safeText(
+                      employee.locationZone
+                        ? employee.locationZone.locality
+                          ? `${employee.locationZone.name} (${employee.locationZone.locality})`
+                          : employee.locationZone.name
+                        : null,
+                    ),
+                  },
+                ]
+              : []),
             {
               label: "Estado",
               value: (

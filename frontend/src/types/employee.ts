@@ -1,6 +1,7 @@
 import type { EmployeeType } from "../constants/employee-types";
 import type { EmployeeListSortField } from "./employee-list";
 import type { EmployeeCategorySummary } from "./employee-category";
+import type { LocationZoneSummary } from "./location-zone";
 
 export type { EmployeeListSortField } from "./employee-list";
 export {
@@ -17,6 +18,8 @@ export interface Employee {
   employeeType: EmployeeType;
   categoryId: string | null;
   category: EmployeeCategorySummary | null;
+  locationZoneId: string | null;
+  locationZone: LocationZoneSummary | null;
   active: boolean;
   lastWorkedAt: string | null;
   createdAt: string;
@@ -40,6 +43,7 @@ export interface CreateEmployeeInput {
   phoneNumber: string;
   employeeType: EmployeeType;
   categoryId?: string | null;
+  locationZoneId?: string | null;
 }
 
 export interface UpdateEmployeeInput {
@@ -48,5 +52,6 @@ export interface UpdateEmployeeInput {
   phoneNumber?: string;
   employeeType?: EmployeeType;
   categoryId?: string | null;
+  locationZoneId?: string | null;
   active?: boolean;
 }

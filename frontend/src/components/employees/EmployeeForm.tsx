@@ -19,6 +19,7 @@ import { employeeFormSchema, type EmployeeFormInputValues, type EmployeeFormValu
 import { employeeTypeLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
 import { EmployeeCategorySelect } from "./EmployeeCategorySelect";
+import { EmployeeLocationZoneSelect } from "./EmployeeLocationZoneSelect";
 
 interface EmployeeFormProps {
   defaultValues: EmployeeFormInputValues;
@@ -28,6 +29,7 @@ interface EmployeeFormProps {
   loading?: boolean;
   errorMessage?: string | null;
   retainedCategory?: { id: string; name: string } | null;
+  retainedLocationZone?: { id: string; name: string; locality?: string | null } | null;
   /** Reports dirty state to the page-level unsaved controller (edit routes only). */
   onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: EmployeeFormValues) => Promise<void>;
@@ -41,6 +43,7 @@ export function EmployeeForm({
   loading = false,
   errorMessage,
   retainedCategory = null,
+  retainedLocationZone = null,
   onDirtyChange,
   onSubmit,
 }: EmployeeFormProps) {
@@ -113,6 +116,12 @@ export function EmployeeForm({
                 canCreate={canCreateCategories}
                 disabled={loading}
                 retainedCategory={retainedCategory}
+              />
+              <EmployeeLocationZoneSelect
+                control={control}
+                name="locationZoneId"
+                disabled={loading}
+                retainedZone={retainedLocationZone}
               />
               <Input.Wrapper label="Estado activo" inputWrapperOrder={["label", "input", "error"]}>
                 <Box

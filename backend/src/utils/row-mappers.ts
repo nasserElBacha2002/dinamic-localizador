@@ -47,6 +47,8 @@ const parseEmployeeType = (value: unknown): EmployeeType => {
 export const mapEmployeeRow = (row: Record<string, unknown>): Employee => {
   const categoryId = row.category_id ? String(row.category_id) : null;
   const categoryName = row.category_name ? String(row.category_name) : null;
+  const locationZoneId = row.location_zone_id ? String(row.location_zone_id) : null;
+  const locationZoneName = row.location_zone_name ? String(row.location_zone_name) : null;
 
   return {
     id: String(row.id),
@@ -62,6 +64,16 @@ export const mapEmployeeRow = (row: Record<string, unknown>): Employee => {
             name: categoryName,
             isSystem: Boolean(row.category_is_system),
             isActive: Boolean(row.category_is_active),
+          }
+        : null,
+    locationZoneId,
+    locationZone:
+      locationZoneId && locationZoneName
+        ? {
+            id: locationZoneId,
+            name: locationZoneName,
+            locality: row.location_zone_locality ? String(row.location_zone_locality) : null,
+            isActive: Boolean(row.location_zone_is_active),
           }
         : null,
     active: Boolean(row.active),
@@ -175,6 +187,8 @@ export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmploye
         employeeType: parseEmployeeType(row.employee_type),
         categoryId: row.employee_category_id ? String(row.employee_category_id) : null,
         category: null,
+        locationZoneId: null,
+        locationZone: null,
         active: Boolean(row.employee_active),
         lastWorkedAt: null,
         createdAt: toIsoString(row.employee_created_at as Date | string),

@@ -3,6 +3,7 @@ import type { EmployeeType } from "../constants/employee-types";
 import type { AssignmentOrigin } from "../constants/work-team-assignment";
 import type { OperationKind } from "../constants/operation-kind";
 import type { EmployeeCategorySummary } from "./employee-category";
+import type { LocationZoneSummary } from "./location-zone";
 import type { OperationScheduleSummary } from "./schedule";
 
 export type ServiceFormat = string;
@@ -15,6 +16,9 @@ export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WIN
 /** Embedded category on employee responses (scoped join). */
 export type EmployeeCategoryRef = EmployeeCategorySummary;
 
+/** Embedded approximate residence zone on employee responses. */
+export type EmployeeLocationZoneRef = LocationZoneSummary;
+
 export interface Employee {
   id: string;
   name: string;
@@ -23,6 +27,8 @@ export interface Employee {
   employeeType: EmployeeType;
   categoryId: string | null;
   category: EmployeeCategoryRef | null;
+  locationZoneId: string | null;
+  locationZone: EmployeeLocationZoneRef | null;
   active: boolean;
   lastWorkedAt: string | null;
   createdAt: string;

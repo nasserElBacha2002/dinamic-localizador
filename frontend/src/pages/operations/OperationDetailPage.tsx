@@ -1,7 +1,7 @@
-import { Box, Button, Group, SimpleGrid, Stack } from "@mantine/core";
+import { Box, Button, SimpleGrid, Stack } from "@mantine/core";
 import { notifications } from "@mantine/notifications";
 import { useMemo, useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -9,7 +9,7 @@ import { useCompanySettings } from "../../hooks/useCompanySettings";
 import {
   ActionMenu,
   ConfirmDialog,
-  EntityAvatar,
+  EntityPageTitle,
   ErrorState,
   LoadingState,
   MetricCard,
@@ -24,7 +24,6 @@ import { OperationTeamSection } from "../../components/operations/OperationTeamS
 import { OperationDetailFieldGrid } from "../../components/operations/OperationDetailFieldGrid";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import { OperationScheduledWorkdaysSection } from "../../components/operations/OperationScheduledWorkdaysSection";
-import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
   useCancelOperation,
@@ -38,6 +37,7 @@ import type { OperationStatus } from "../../types/operation";
 import { formatDateTime } from "../../utils/dates";
 import { operationScheduleLabel, terminology } from "../../domain/terminology";
 import { getApiErrorMessage, isRecurringWorkdaySyncError } from "../../utils/errors";
+import { getEntityEditPath } from "../../utils/entity-routes";
 import { getOperationDisplayName } from "../../utils/operation-display";
 import { hasPermission } from "../../utils/permissions";
 import { isOperationAssignable, isOperationEditable, isOperationReactivatable } from "../../utils/operation-status";
@@ -77,6 +77,7 @@ function operationStatusTone(status: OperationStatus): StatusBadgeTone {
 
 export function OperationDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { goBackToList } = useListBackNavigation("/operations");
   const operationQuery = useOperation(id);
   const companyWorkScheduleQuery = useCompanyWorkSchedule(Boolean(id));
@@ -212,6 +213,13 @@ export function OperationDetailPage() {
   };
 
   const headerMenuItems: ActionMenuItem[] = [];
+  if (canEdit && !editing) {
+    headerMenuItems.push({
+      key: "edit-page",
+      label: "Editar",
+      onClick: () => navigate(getEntityEditPath("operations", operation.id)),
+    });
+  }
   if (canEdit) {
     headerMenuItems.push({
       key: "toggle-edit",
@@ -250,36 +258,28 @@ export function OperationDetailPage() {
   return (
     <>
       <PageHeader
-        title={
-          <Group gap="md" wrap="nowrap" align="center">
-            <EntityAvatar name={serviceDisplayName} entityType="operation" size="lg" />
-            <span>{serviceDisplayName}</span>
-          </Group>
-        }
+        title={<EntityPageTitle name={serviceDisplayName} entityType="operation" />}
         description={`${`Detalle de la ${terminology.operation.singular.toLowerCase()}`} · ${formatOperationDetailScheduleTitle(operation)}`}
         action={
-          <Group gap="sm" wrap="wrap">
-            {canEdit && !editing ? <EntityEditAction entity="operations" id={operation.id} /> : null}
-            <ActionMenu
-              primary={
-                editing && canEdit ? (
-                  <Button
-                    type="submit"
-                    form={OPERATION_DETAIL_FORM_ID}
-                    loading={updateMutation.isPending}
-                  >
-                    Guardar cambios
-                  </Button>
-                ) : (
-                  <Button variant="default" onClick={goBackToList}>
-                    Volver al listado
-                  </Button>
-                )
-              }
-              items={headerMenuItems}
-              menuLabel="Más acciones de la operación"
-            />
-          </Group>
+          <ActionMenu
+            primary={
+              editing && canEdit ? (
+                <Button
+                  type="submit"
+                  form={OPERATION_DETAIL_FORM_ID}
+                  loading={updateMutation.isPending}
+                >
+                  Guardar cambios
+                </Button>
+              ) : (
+                <Button variant="default" onClick={goBackToList}>
+                  Volver al listado
+                </Button>
+              )
+            }
+            items={headerMenuItems}
+            menuLabel="Más acciones de la operación"
+          />
         }
       />
 

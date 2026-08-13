@@ -1,9 +1,9 @@
 import { Button, Group, Stack, Text } from "@mantine/core";
 import { useState } from "react";
-import { useParams } from "react-router";
+import { useNavigate, useParams } from "react-router";
 import { EntityLink } from "../../components/entity-link";
-import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
+  ActionMenu,
   ConfirmDialog,
   DataTable,
   DetailFieldGrid,
@@ -12,6 +12,7 @@ import {
   PageHeader,
   SectionCard,
   StatusBadge,
+  type ActionMenuItem,
   type DataTableColumn,
 } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -26,11 +27,13 @@ import type { WorkTeamUsageRecord } from "../../types/work-team";
 import { formatDateTime } from "../../utils/dates";
 import { safeText } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
+import { getEntityEditPath } from "../../utils/entity-routes";
 import { operationKindLabels } from "../../utils/operation-schedule-display";
 import { hasPermission } from "../../utils/permissions";
 
 export function WorkTeamDetailPage() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const { goBackToList } = useListBackNavigation("/work-teams");
   const permissionsQuery = useCompanyPermissions();
   const canManage = hasPermission(permissionsQuery.data?.permissions, "employees:manage");
@@ -114,29 +117,49 @@ export function WorkTeamDetailPage() {
         title={team.name}
         description="Consulta de plantilla de colaboradores e historial de uso."
         action={
-          <Group gap="sm">
-            {canManage ? (
-              <>
-                <EntityEditAction entity="work-teams" id={team.id} label="Editar" />
-                {team.isActive ? (
-                  <Button variant="light" color="red" onClick={() => setDeactivateOpen(true)}>
-                    Desactivar
-                  </Button>
-                ) : (
-                  <Button
-                    variant="light"
-                    onClick={() => activateMutation.mutate(id)}
-                    loading={activateMutation.isPending}
-                  >
-                    Activar
-                  </Button>
-                )}
-              </>
-            ) : null}
-            <Button variant="default" onClick={goBackToList}>
-              Volver al listado
-            </Button>
-          </Group>
+          <ActionMenu
+            primary={
+              canManage ? (
+                <Button
+                  onClick={() => navigate(getEntityEditPath("work-teams", team.id))}
+                >
+                  Editar
+                </Button>
+              ) : (
+                <Button variant="default" onClick={goBackToList}>
+                  Volver al listado
+                </Button>
+              )
+            }
+            items={
+              [
+                ...(canManage
+                  ? [
+                      team.isActive
+                        ? {
+                            key: "deactivate",
+                            label: "Desactivar",
+                            destructive: true,
+                            onClick: () => setDeactivateOpen(true),
+                          }
+                        : {
+                            key: "activate",
+                            label: "Activar",
+                            loading: activateMutation.isPending,
+                            disabled: activateMutation.isPending,
+                            onClick: () => activateMutation.mutate(id),
+                          },
+                      {
+                        key: "back",
+                        label: "Volver al listado",
+                        onClick: goBackToList,
+                      },
+                    ]
+                  : []),
+              ] as ActionMenuItem[]
+            }
+            menuLabel="Más acciones del grupo"
+          />
         }
       />
 

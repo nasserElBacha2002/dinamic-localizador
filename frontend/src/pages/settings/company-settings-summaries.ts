@@ -7,6 +7,7 @@ import type { CompanyLocationType } from "../../types/company-location-type";
 import type { CompanyModule } from "../../types/company-module";
 import type { CompanySettings } from "../../types/company-settings";
 import type { EmployeeCategory } from "../../types/employee-category";
+import type { LocationZone } from "../../types/location-zone";
 import type { CompanyWorkSchedule } from "../../types/schedule";
 import { buildCompanySchedulePreviewLabel } from "../../utils/operation-schedule-display";
 
@@ -179,6 +180,24 @@ export function buildEmployeeCategoriesSummary(categories: EmployeeCategory[]) {
       { label: "Base", value: `${system.length} categorías base` },
       { label: "Personalizadas", value: `${customActive.length} activas` },
       { label: "Inactivas", value: `${customInactive.length} inactivas` },
+    ],
+    chips,
+  };
+}
+
+export function buildLocationZonesSummary(zones: LocationZone[]) {
+  const active = zones.filter((zone) => zone.isActive);
+  const inactive = zones.filter((zone) => !zone.isActive);
+  const chips = active.slice(0, 3).map((zone) => zone.name);
+
+  return {
+    summaryItems: [
+      { label: "Activas", value: `${active.length} zonas` },
+      { label: "Inactivas", value: `${inactive.length} zonas` },
+      {
+        label: "Asignaciones",
+        value: `${zones.reduce((sum, zone) => sum + (zone.assignedEmployeesCount ?? 0), 0)}`,
+      },
     ],
     chips,
   };

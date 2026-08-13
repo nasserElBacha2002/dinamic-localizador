@@ -12,6 +12,7 @@ const employeeTypeSchema = z.enum(EMPLOYEE_TYPES, {
 });
 
 const categoryIdSchema = z.string().uuid("UUID de categoría inválido").nullable();
+const locationZoneIdSchema = z.string().uuid("UUID de zona inválido").nullable();
 
 export const EMPLOYEE_LIST_SORT_FIELDS = [
   "name",
@@ -30,6 +31,7 @@ export const createEmployeeSchema = z.object({
   phoneNumber: z.string().trim().min(8, "El teléfono es obligatorio").max(30),
   employeeType: employeeTypeSchema,
   categoryId: categoryIdSchema.optional(),
+  locationZoneId: locationZoneIdSchema.optional(),
 });
 
 export const updateEmployeeSchema = z
@@ -39,6 +41,7 @@ export const updateEmployeeSchema = z
     phoneNumber: z.string().trim().min(8).max(30).optional(),
     employeeType: employeeTypeSchema.optional(),
     categoryId: categoryIdSchema.optional(),
+    locationZoneId: locationZoneIdSchema.optional(),
     active: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
@@ -58,6 +61,7 @@ export const deactivateEmployeeSchema = z.object({
       phoneNumber: z.string().trim().min(8).max(30).optional(),
       employeeType: employeeTypeSchema.optional(),
       categoryId: categoryIdSchema.optional(),
+      locationZoneId: locationZoneIdSchema.optional(),
     })
     .optional(),
 });

@@ -16,6 +16,7 @@ export const employeeFormSchema = z.object({
     .min(1, "Seleccioná un tipo de empleado")
     .pipe(z.enum(EMPLOYEE_TYPES)),
   categoryId: z.string().uuid().nullable().optional(),
+  locationZoneId: z.string().uuid().nullable().optional(),
   active: z.boolean(),
 });
 

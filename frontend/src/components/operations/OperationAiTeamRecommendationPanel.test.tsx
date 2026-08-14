@@ -181,19 +181,17 @@ describe("OperationAiTeamRecommendationPanel", () => {
   it("generates a team and shows snapshot score/reasons", async () => {
     const user = userEvent.setup({ document: globalThis.document });
     const view = renderPanel();
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => {
       assert.ok(view.getByText("88% de afinidad"));
       assert.ok(view.getByText("Ana"));
     });
-    await user.click(view.getByText(/Por qué la IA recomienda este equipo/i));
+    await user.click(view.getByText(/Por qué/i));
     assert.ok(view.getByText(/5 de los 6 integrantes/i));
   });
 
   it("switches alternatives with matching score/members", async () => {
     const user = userEvent.setup({ document: globalThis.document });
     const view = renderPanel();
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => view.getByText("Ana"));
     await user.click(view.getByRole("button", { name: /Ver alternativa 2/i }));
     assert.ok(view.getByText("Gina"));
@@ -204,7 +202,6 @@ describe("OperationAiTeamRecommendationPanel", () => {
   it("marks draft stale when removing a member and blocks use", async () => {
     const user = userEvent.setup({ document: globalThis.document });
     const view = renderPanel();
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => view.getByText("Carla"));
     await user.click(view.getByRole("button", { name: /Quitar a Carla/i }));
     assert.ok(view.getByText(/Modificaste el equipo/i));
@@ -217,7 +214,6 @@ describe("OperationAiTeamRecommendationPanel", () => {
   it("recompletes with locks and restores score", async () => {
     const user = userEvent.setup({ document: globalThis.document });
     const view = renderPanel();
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => view.getByText("Carla"));
     await user.click(view.getByRole("button", { name: /Quitar a Carla/i }));
     await user.click(view.getByRole("button", { name: /Completar nuevamente con IA/i }));
@@ -230,9 +226,7 @@ describe("OperationAiTeamRecommendationPanel", () => {
   });
 
   it("sends effectiveDate for recurring operations", async () => {
-    const user = userEvent.setup({ document: globalThis.document });
-    const view = renderPanel({ operationKind: "RECURRING" });
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
+    renderPanel({ operationKind: "RECURRING" });
     await waitFor(() => assert.equal(postCalls.length, 1));
     const body = postCalls[0]!.body as { effectiveDate?: string; teamSize?: number };
     assert.ok(body.effectiveDate);
@@ -244,9 +238,7 @@ describe("OperationAiTeamRecommendationPanel", () => {
     scopedApiClient.post = (async () => {
       throw new ApiError("No hay suficientes colaboradores", "INSUFFICIENT_ELIGIBLE_EMPLOYEES", 409);
     }) as typeof scopedApiClient.post;
-    const user = userEvent.setup({ document: globalThis.document });
     const view = renderPanel();
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => {
       assert.ok(view.getByText(/suficientes colaboradores/i));
     });
@@ -270,7 +262,6 @@ describe("OperationAiTeamRecommendationPanel", () => {
         lastResult = result;
       },
     });
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => view.getByText("Ana"));
     assert.equal(postCalls.length, 1);
     await user.click(view.getByRole("button", { name: /Usar este equipo/i }));
@@ -286,10 +277,9 @@ describe("OperationAiTeamRecommendationPanel", () => {
   it("Generar otra opción navigates alternatives without new POST", async () => {
     const user = userEvent.setup({ document: globalThis.document });
     const view = renderPanel();
-    await user.click(view.getByRole("button", { name: /Armar equipo con IA/i }));
     await waitFor(() => view.getByText("Ana"));
     assert.equal(postCalls.length, 1);
-    await user.click(view.getByRole("button", { name: /Generar otra opción/i }));
+    await user.click(view.getByRole("button", { name: /Otra opción/i }));
     assert.equal(postCalls.length, 1);
     assert.ok(view.getByText("Gina"));
   });

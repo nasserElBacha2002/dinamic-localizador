@@ -160,7 +160,7 @@ describe("OperationAiRecommendationsPanel", () => {
       assert.ok(view.getByText("Juan Pérez"));
     });
     assert.ok(view.getByText("87% de afinidad", { exact: false }));
-    assert.ok(view.getAllByText("Recomendado por IA").length >= 1);
+    assert.ok(view.getAllByText("IA").length >= 1);
     assert.equal(view.queryByText("workforce-recommendation-v1"), null);
     assert.equal(view.queryByText(/probabilidad/i), null);
   });
@@ -172,7 +172,7 @@ describe("OperationAiRecommendationsPanel", () => {
       assert.ok(view.getByText("Juan Pérez"));
     });
 
-    await user.click(view.getAllByText("¿Por qué la IA lo recomienda?")[0]!);
+    await user.click(view.getAllByText("¿Por qué?")[0]!);
     await waitFor(() => {
       assert.ok(view.getAllByText(/Trabajó 8 veces con 2 integrantes/).length >= 1);
       assert.ok(view.getByText(/5 jornadas anteriores en esta sucursal/));

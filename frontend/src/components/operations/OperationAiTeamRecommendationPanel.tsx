@@ -1,6 +1,5 @@
 import {
   Accordion,
-  Alert,
   Badge,
   Button,
   Group,
@@ -10,7 +9,11 @@ import {
   TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
-import { useRecommendOperationTeam } from "../../hooks/useOperationRecommendations";
+import { AiSuggestionCard } from "../ai/AiSuggestionCard";
+import {
+  useOperationTeamRecommendation,
+  useRecommendOperationTeam,
+} from "../../hooks/useOperationRecommendations";
 import type { OperationKind } from "../../types/operation";
 import type {
   TeamRecommendationMember,
@@ -36,6 +39,8 @@ export interface OperationAiTeamRecommendationPanelProps {
   operationKind: OperationKind;
   operationWorkDate: string;
   existingMemberCount: number;
+  /** When false, do not auto-fetch (e.g. parent tab hidden). */
+  enabled?: boolean;
   assignLoading?: boolean;
   onAssign: (input: {
     employeeIds: string[];
@@ -66,6 +71,7 @@ export function OperationAiTeamRecommendationPanel({
   operationKind,
   operationWorkDate,
   existingMemberCount,
+  enabled = true,
   assignLoading = false,
   onAssign,
   onResult,
@@ -82,6 +88,7 @@ export function OperationAiTeamRecommendationPanel({
   const [lockedIds, setLockedIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
+  const [pauseAutoQuery, setPauseAutoQuery] = useState(false);
 
   const recommendMutation = useRecommendOperationTeam(operationId);
 
@@ -97,21 +104,50 @@ export function OperationAiTeamRecommendationPanel({
 
   const slotsHint = Math.max(0, teamSize - existingMemberCount);
 
+  const autoQuery = useOperationTeamRecommendation(
+    operationId,
+    {
+      teamSize,
+      alternatives: 3,
+      lockedEmployeeIds: [],
+      effectiveDate: isRecurring && recommendationDateReady ? validFrom : null,
+    },
+    enabled &&
+      recommendationDateReady &&
+      !draftDirty &&
+      !pauseAutoQuery &&
+      teamSize >= Math.max(2, existingMemberCount),
+  );
+
+  const sourceSnapshot: TeamRecommendationResponse | null =
+    draftDirty || pauseAutoQuery
+      ? recommendationSnapshot
+      : (autoQuery.data ?? recommendationSnapshot);
+
   const selectedAlternative: TeamRecommendationOption | null = useMemo(() => {
-    if (!recommendationSnapshot) {
+    if (!sourceSnapshot) {
       return null;
     }
     return (
-      recommendationSnapshot.recommendations.find((item) => item.rank === selectedRank) ??
-      recommendationSnapshot.recommendations[0] ??
+      sourceSnapshot.recommendations.find((item) => item.rank === selectedRank) ??
+      sourceSnapshot.recommendations[0] ??
       null
     );
-  }, [recommendationSnapshot, selectedRank]);
+  }, [sourceSnapshot, selectedRank]);
 
-  const incomplete = draftMembers.length < teamSize;
-  const missingCount = Math.max(0, teamSize - draftMembers.length);
-  const canUseCompleteRecommendation = !draftDirty && !incomplete && draftMembers.length === teamSize;
-  const busy = recommendMutation.isPending || assigning || assignLoading;
+  const displayMembers = draftDirty
+    ? draftMembers
+    : (selectedAlternative?.members ?? draftMembers);
+
+  const incomplete = displayMembers.length < teamSize;
+  const missingCount = Math.max(0, teamSize - displayMembers.length);
+  const canUseCompleteRecommendation =
+    !draftDirty && !incomplete && displayMembers.length === teamSize;
+  const busy =
+    recommendMutation.isPending ||
+    assigning ||
+    assignLoading ||
+    (autoQuery.isFetching && !draftDirty && !pauseAutoQuery);
 
   const applyAlternative = (option: TeamRecommendationOption) => {
     setSelectedRank(option.rank);
@@ -137,6 +173,7 @@ export function OperationAiTeamRecommendationPanel({
     }
 
     setErrorMessage(null);
+    setPauseAutoQuery(true);
     try {
       const data = await recommendMutation.mutateAsync({
         teamSize,
@@ -161,30 +198,42 @@ export function OperationAiTeamRecommendationPanel({
   };
 
   const handleNextAlternative = () => {
-    if (!recommendationSnapshot || draftDirty) {
+    if (!sourceSnapshot || draftDirty) {
       return;
     }
-    const ranks = recommendationSnapshot.recommendations.map((r) => r.rank).sort((a, b) => a - b);
+    const ranks = sourceSnapshot.recommendations.map((r) => r.rank).sort((a, b) => a - b);
     if (ranks.length < 2) {
       return;
     }
-    const idx = ranks.indexOf(selectedRank);
+    const idx = ranks.indexOf(selectedAlternative?.rank ?? selectedRank);
     const nextRank = ranks[(idx + 1) % ranks.length]!;
-    const option = recommendationSnapshot.recommendations.find((r) => r.rank === nextRank);
+    const option = sourceSnapshot.recommendations.find((r) => r.rank === nextRank);
     if (option) {
+      setPauseAutoQuery(true);
+      setRecommendationSnapshot(sourceSnapshot);
       applyAlternative(option);
     }
   };
 
   const handleRemoveSuggested = (employeeId: string) => {
-    setDraftMembers((prev) =>
-      prev.filter((m) => m.employee.id !== employeeId || m.alreadyAssigned),
-    );
+    const base = draftDirty ? draftMembers : displayMembers;
+    setDraftMembers(base.filter((m) => m.employee.id !== employeeId || m.alreadyAssigned));
     setLockedIds((prev) => prev.filter((id) => id !== employeeId));
     setDraftDirty(true);
+    setPauseAutoQuery(true);
+    if (sourceSnapshot) {
+      setRecommendationSnapshot(sourceSnapshot);
+    }
   };
 
   const handleToggleLock = (employeeId: string) => {
+    const base = draftDirty ? draftMembers : displayMembers;
+    if (!draftDirty) {
+      setDraftMembers(base);
+      if (sourceSnapshot) {
+        setRecommendationSnapshot(sourceSnapshot);
+      }
+    }
     setLockedIds((prev) =>
       prev.includes(employeeId) ? prev.filter((id) => id !== employeeId) : [...prev, employeeId],
     );
@@ -196,13 +245,14 @@ export function OperationAiTeamRecommendationPanel({
       ),
     );
     setDraftDirty(true);
+    setPauseAutoQuery(true);
   };
 
   const handleUseTeam = async () => {
     if (!canUseCompleteRecommendation) {
       setErrorMessage(
         incomplete
-          ? `${draftMembers.length} de ${teamSize} integrantes. Falta ${missingCount}.`
+          ? `${displayMembers.length} de ${teamSize} integrantes. Falta ${missingCount}.`
           : "Completá nuevamente con IA para recalcular afinidad antes de usar el equipo.",
       );
       return;
@@ -211,7 +261,7 @@ export function OperationAiTeamRecommendationPanel({
       setErrorMessage("Revisá las fechas de vigencia antes de asignar.");
       return;
     }
-    const toAssign = draftMembers.filter((m) => !m.alreadyAssigned).map((m) => m.employee.id);
+    const toAssign = displayMembers.filter((m) => !m.alreadyAssigned).map((m) => m.employee.id);
     if (toAssign.length === 0) {
       setErrorMessage("No hay integrantes nuevos para asignar.");
       return;
@@ -247,15 +297,16 @@ export function OperationAiTeamRecommendationPanel({
     }
   };
 
-  const alternativeCount = recommendationSnapshot?.recommendations.length ?? 0;
+  const alternativeCount = sourceSnapshot?.recommendations.length ?? 0;
+  const isLoadingSuggestion =
+    enabled && !draftDirty && !pauseAutoQuery && (autoQuery.isPending || autoQuery.isFetching);
+  const queryError =
+    !draftDirty && !pauseAutoQuery && autoQuery.isError
+      ? getApiErrorMessage(autoQuery.error)
+      : null;
 
   return (
     <Stack gap="md">
-      <Text size="sm" c="dimmed">
-        La IA propone un equipo completo según afinidad histórica, experiencia y proximidad.
-        El tamaño es el total del equipo (incluye a quienes ya están asignados).
-      </Text>
-
       {isRecurring ? (
         <Group grow preventGrowOverflow={false} align="flex-start">
           <TextInput
@@ -281,184 +332,185 @@ export function OperationAiTeamRecommendationPanel({
       ) : null}
 
       <NumberInput
-        label="Cantidad total de personas"
+        label="Tamaño del equipo"
         description={
           existingMemberCount > 0
-            ? `${existingMemberCount} ya asignadas. La IA buscará ${slotsHint} adicionales.`
-            : "Tamaño final del equipo (mínimo 2)."
+            ? `${existingMemberCount} ya asignadas · faltan ~${slotsHint}`
+            : "Incluye a quienes ya están asignados"
         }
         min={Math.max(2, existingMemberCount)}
         max={20}
         value={teamSize}
-        onChange={(value) => setTeamSize(typeof value === "number" ? value : Number(value) || 2)}
+        onChange={(value) => {
+          setTeamSize(typeof value === "number" ? value : Number(value) || 2);
+          setPauseAutoQuery(false);
+          setDraftDirty(false);
+          setRecommendationSnapshot(null);
+        }}
         aria-label="Cantidad total de personas del equipo"
       />
 
-      <Group>
-        <Button
-          onClick={() => void handleGenerate()}
-          loading={recommendMutation.isPending}
-          disabled={busy && !recommendMutation.isPending}
-        >
-          ✨ Armar equipo con IA
-        </Button>
-      </Group>
-
-      {errorMessage ? (
-        <Alert color="red" title="No se pudo completar" role="alert">
-          <Text size="sm">{errorMessage}</Text>
-        </Alert>
+      {isLoadingSuggestion ? (
+        <AiSuggestionCard title="✨ Sugerencia de equipo" loading />
       ) : null}
 
-      {draftMembers.length > 0 ? (
-        <Stack gap="sm">
-          <Group justify="space-between" align="center">
-            <Text fw={600}>✨ Equipo sugerido por IA</Text>
-            {!draftDirty && selectedAlternative ? (
-              <Badge
-                size="lg"
-                variant="light"
-                aria-label={formatAffinityLabel(selectedAlternative.score)}
+      {(errorMessage || queryError) && !isLoadingSuggestion ? (
+        <AiSuggestionCard
+          title="✨ Sugerencia de equipo"
+          errorMessage={errorMessage ?? queryError}
+          onRetry={() => {
+            setErrorMessage(null);
+            setPauseAutoQuery(false);
+            setDraftDirty(false);
+            void autoQuery.refetch();
+          }}
+        />
+      ) : null}
+
+      {!isLoadingSuggestion && displayMembers.length > 0 ? (
+        <AiSuggestionCard
+          title="✨ Sugerencia de equipo"
+          scoreLabel={
+            !draftDirty && selectedAlternative
+              ? formatAffinityLabel(selectedAlternative.score)
+              : null
+          }
+          actions={
+            <>
+              <Button
+                size="xs"
+                color="ai"
+                onClick={() => void handleUseTeam()}
+                loading={assigning || assignLoading}
+                disabled={busy || !canUseCompleteRecommendation}
               >
-                {formatAffinityLabel(selectedAlternative.score)}
-              </Badge>
-            ) : null}
-          </Group>
-
-          {draftDirty ? (
-            <Alert color="yellow" title="Equipo modificado" role="status">
-              <Text size="sm">
-                Modificaste el equipo. Completalo nuevamente con IA para recalcular afinidad.
-              </Text>
-            </Alert>
-          ) : null}
-
-          {incomplete ? (
-            <Alert color="orange" title="Equipo incompleto" role="status">
-              <Text size="sm">
-                {draftMembers.length} de {teamSize} integrantes. Falta {missingCount}.
-              </Text>
-            </Alert>
-          ) : null}
-
-          {!draftDirty && alternativeCount > 1 ? (
-            <Group gap="xs">
-              {recommendationSnapshot!.recommendations.map((option) => (
+                Usar este equipo
+              </Button>
+              {!draftDirty && alternativeCount > 1 ? (
                 <Button
-                  key={option.rank}
                   size="xs"
-                  variant={option.rank === selectedRank ? "filled" : "light"}
-                  onClick={() => applyAlternative(option)}
-                  aria-label={`Ver alternativa ${option.rank}`}
+                  variant="light"
+                  color="ai"
+                  onClick={handleNextAlternative}
+                  aria-label="Generar otra opción"
                 >
-                  {option.rank === 1 ? "Recomendado" : `Alt. ${option.rank}`}
+                  Otra opción
                 </Button>
-              ))}
+              ) : null}
               <Button
                 size="xs"
                 variant="subtle"
-                onClick={handleNextAlternative}
-                aria-label="Generar otra opción"
+                color="ai"
+                onClick={() => void handleGenerate(lockedIds)}
+                loading={recommendMutation.isPending}
+                disabled={busy && !recommendMutation.isPending}
               >
-                Generar otra opción
+                {draftDirty ? "Completar nuevamente con IA" : "Actualizar"}
               </Button>
-            </Group>
-          ) : null}
-
-          <Stack gap="xs" component="ul" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {draftMembers.map((member) => {
-              const badge = memberBadge(member);
-              const canRemove = !member.alreadyAssigned;
-              const canLock = !member.alreadyAssigned;
-              return (
-                <Group
-                  key={member.employee.id}
-                  justify="space-between"
-                  wrap="nowrap"
-                  p="xs"
-                  style={{ borderBottom: "1px solid var(--mantine-color-gray-2)" }}
-                  component="li"
-                >
-                  <Stack gap={2} style={{ minWidth: 0 }}>
-                    <Text size="sm" fw={500} truncate>
-                      {member.employee.name}
-                    </Text>
-                    <Badge size="xs" color={badge.color} variant="light" w="fit-content">
-                      {badge.label}
-                    </Badge>
-                  </Stack>
-                  <Group gap="xs" wrap="nowrap">
-                    {canLock ? (
-                      <Button
-                        size="xs"
-                        variant={lockedIds.includes(member.employee.id) ? "filled" : "subtle"}
-                        onClick={() => handleToggleLock(member.employee.id)}
-                        aria-label={
-                          lockedIds.includes(member.employee.id)
-                            ? `Desbloquear a ${member.employee.name}`
-                            : `Fijar a ${member.employee.name}`
-                        }
-                      >
-                        {lockedIds.includes(member.employee.id) ? "Fijo" : "Fijar"}
-                      </Button>
-                    ) : null}
-                    {canRemove ? (
-                      <Button
-                        size="xs"
-                        variant="subtle"
-                        color="red"
-                        onClick={() => handleRemoveSuggested(member.employee.id)}
-                        aria-label={`Quitar a ${member.employee.name} del equipo sugerido`}
-                      >
-                        Quitar
-                      </Button>
-                    ) : null}
+            </>
+          }
+        >
+          <Stack gap="xs">
+            {draftDirty ? (
+              <Text size="sm" c="dimmed">
+                Modificaste el equipo. Completalo nuevamente con IA para recalcular afinidad.
+              </Text>
+            ) : null}
+            {incomplete ? (
+              <Text size="sm" c="orange">
+                {displayMembers.length} de {teamSize} integrantes. Falta {missingCount}.
+              </Text>
+            ) : null}
+            {!draftDirty && alternativeCount > 1 ? (
+              <Group gap="xs">
+                {sourceSnapshot!.recommendations.map((option) => (
+                  <Button
+                    key={option.rank}
+                    size="compact-xs"
+                    variant={option.rank === (selectedAlternative?.rank ?? selectedRank) ? "filled" : "light"}
+                    color="ai"
+                    onClick={() => {
+                      setPauseAutoQuery(true);
+                      setRecommendationSnapshot(sourceSnapshot);
+                      applyAlternative(option);
+                    }}
+                    aria-label={`Ver alternativa ${option.rank}`}
+                  >
+                    {option.rank === 1 ? "Recomendado" : `Alt. ${option.rank}`}
+                  </Button>
+                ))}
+              </Group>
+            ) : null}
+            <Stack gap={4} component="ul" style={{ listStyle: "none", padding: 0, margin: 0 }}>
+              {displayMembers.map((member) => {
+                const badge = memberBadge(member);
+                const canRemove = !member.alreadyAssigned;
+                const canLock = !member.alreadyAssigned;
+                return (
+                  <Group
+                    key={member.employee.id}
+                    justify="space-between"
+                    wrap="nowrap"
+                    component="li"
+                  >
+                    <Stack gap={0} style={{ minWidth: 0 }}>
+                      <Text size="sm" fw={500} truncate>
+                        {member.employee.name}
+                      </Text>
+                      <Badge size="xs" color={badge.color} variant="light" w="fit-content">
+                        {badge.label}
+                      </Badge>
+                    </Stack>
+                    <Group gap="xs" wrap="nowrap">
+                      {canLock ? (
+                        <Button
+                          size="compact-xs"
+                          variant={lockedIds.includes(member.employee.id) ? "filled" : "subtle"}
+                          color="ai"
+                          onClick={() => handleToggleLock(member.employee.id)}
+                          aria-label={
+                            lockedIds.includes(member.employee.id)
+                              ? `Desbloquear a ${member.employee.name}`
+                              : `Fijar a ${member.employee.name}`
+                          }
+                        >
+                          {lockedIds.includes(member.employee.id) ? "Fijo" : "Fijar"}
+                        </Button>
+                      ) : null}
+                      {canRemove ? (
+                        <Button
+                          size="compact-xs"
+                          variant="subtle"
+                          color="red"
+                          onClick={() => handleRemoveSuggested(member.employee.id)}
+                          aria-label={`Quitar a ${member.employee.name} del equipo sugerido`}
+                        >
+                          Quitar
+                        </Button>
+                      ) : null}
+                    </Group>
                   </Group>
-                </Group>
-              );
-            })}
+                );
+              })}
+            </Stack>
+            {!draftDirty && selectedAlternative ? (
+              <Accordion variant="contained">
+                <Accordion.Item value="why">
+                  <Accordion.Control>¿Por qué?</Accordion.Control>
+                  <Accordion.Panel>
+                    <Stack gap={4} component="ul">
+                      {formatRecommendationReasons(selectedAlternative.reasons).map((line) => (
+                        <Text key={line} size="sm" component="li">
+                          {line}
+                        </Text>
+                      ))}
+                    </Stack>
+                  </Accordion.Panel>
+                </Accordion.Item>
+              </Accordion>
+            ) : null}
           </Stack>
-
-          {!draftDirty && selectedAlternative ? (
-            <Accordion variant="contained">
-              <Accordion.Item value="why">
-                <Accordion.Control>¿Por qué la IA recomienda este equipo?</Accordion.Control>
-                <Accordion.Panel>
-                  <Stack gap={4} component="ul">
-                    {formatRecommendationReasons(selectedAlternative.reasons).map((line) => (
-                      <Text key={line} size="sm" component="li">
-                        {line}
-                      </Text>
-                    ))}
-                    {formatRecommendationReasons(selectedAlternative.reasons).length === 0 ? (
-                      <Text size="sm" c="dimmed">
-                        La IA combinó señales disponibles para este contexto.
-                      </Text>
-                    ) : null}
-                  </Stack>
-                </Accordion.Panel>
-              </Accordion.Item>
-            </Accordion>
-          ) : null}
-
-          <Group>
-            <Button
-              onClick={() => void handleUseTeam()}
-              loading={assigning || assignLoading}
-              disabled={busy || !canUseCompleteRecommendation}
-            >
-              Usar este equipo
-            </Button>
-            <Button
-              variant="light"
-              onClick={() => void handleGenerate(lockedIds)}
-              loading={recommendMutation.isPending}
-              disabled={busy && !recommendMutation.isPending}
-            >
-              Completar nuevamente con IA
-            </Button>
-          </Group>
-        </Stack>
+        </AiSuggestionCard>
       ) : null}
     </Stack>
   );

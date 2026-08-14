@@ -4,7 +4,6 @@ import {
   Badge,
   Button,
   Group,
-  SegmentedControl,
   SimpleGrid,
   Stack,
   Text,
@@ -142,33 +141,39 @@ export function OperationAiRecommendationsPanel({
 
   return (
     <Stack gap="md">
-      <SegmentedControl
-        fullWidth
-        value={aiMode}
-        onChange={(value) => setAiMode(value as "people" | "team")}
-        data={[
-          { label: "Personas", value: "people" },
-          { label: "Equipo completo", value: "team" },
-        ]}
-        aria-label="Modo de recomendaciones con IA"
-      />
-
       {aiMode === "team" ? (
-        <OperationAiTeamRecommendationPanel
-          operationId={operationId}
-          operationKind={operationKind}
-          operationWorkDate={operationWorkDate}
-          existingMemberCount={excludeEmployeeIds.length}
-          assignLoading={assignLoading}
-          onAssign={onAssign}
-          onResult={onResult}
-        />
+        <Stack gap="sm">
+          <Button
+            variant="subtle"
+            color="ai"
+            size="xs"
+            w="fit-content"
+            onClick={() => setAiMode("people")}
+          >
+            ← Volver a personas sugeridas
+          </Button>
+          <OperationAiTeamRecommendationPanel
+            operationId={operationId}
+            operationKind={operationKind}
+            operationWorkDate={operationWorkDate}
+            existingMemberCount={excludeEmployeeIds.length}
+            enabled={enabled}
+            assignLoading={assignLoading}
+            onAssign={onAssign}
+            onResult={onResult}
+          />
+        </Stack>
       ) : (
         <>
-          <Text size="sm" c="dimmed">
-            La IA analiza historial de trabajo, experiencia y contexto operativo para sugerir
-            colaboradores. La decisión final siempre es tuya.
-          </Text>
+          <Group justify="space-between" align="flex-start" wrap="wrap" gap="xs">
+            <Text size="sm" c="dimmed" maw={420}>
+              Ranking de personas según el equipo actual. Elegí a quién agregar, o pedí un equipo
+              completo.
+            </Text>
+            <Button size="xs" variant="light" color="ai" onClick={() => setAiMode("team")}>
+              Sugerir equipo completo
+            </Button>
+          </Group>
 
           {isRecurring ? (
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
@@ -212,7 +217,7 @@ export function OperationAiRecommendationsPanel({
           />
 
           {recommendationsQuery.isPending ? (
-            <Alert color="blue" title="Recomendaciones con IA" withCloseButton={false}>
+            <Alert color="ai" title="✨ Buscando sugerencias" withCloseButton={false}>
               Analizando historial y contexto de la operación…
             </Alert>
           ) : null}
@@ -244,11 +249,11 @@ export function OperationAiRecommendationsPanel({
           {!recommendationsQuery.isPending &&
           !recommendationsQuery.isError &&
           filtered.length === 0 ? (
-            <Alert color="gray" title="Sin recomendaciones" withCloseButton={false}>
+            <Text size="sm" c="dimmed" role="status">
               {ranked.length === 0
-                ? `No hay ${terminology.worker.plural.toLowerCase()} disponibles para recomendar en este momento.`
+                ? `No hay ${terminology.worker.plural.toLowerCase()} disponibles para recomendar ahora.`
                 : "Ninguna recomendación coincide con la búsqueda."}
-            </Alert>
+            </Text>
           ) : null}
 
           {errorMessage ? (
@@ -271,7 +276,8 @@ export function OperationAiRecommendationsPanel({
                     p="sm"
                     role="listitem"
                     style={{
-                      border: "1px solid var(--mantine-color-gray-3)",
+                      background: "var(--mantine-color-ai-0)",
+                      border: "1px solid var(--mantine-color-ai-2)",
                       borderRadius: "var(--mantine-radius-md)",
                     }}
                   >
@@ -279,8 +285,8 @@ export function OperationAiRecommendationsPanel({
                       <Stack gap={2} style={{ flex: 1, minWidth: 0 }}>
                         <Group gap="xs" wrap="wrap">
                           <Text fw={600}>{item.employee.name}</Text>
-                          <Badge color="violet" variant="light" size="sm">
-                            Recomendado por IA
+                          <Badge color="ai" variant="light" size="sm">
+                            IA
                           </Badge>
                         </Group>
                         <Text size="sm" c="dimmed">
@@ -295,6 +301,7 @@ export function OperationAiRecommendationsPanel({
                       </Stack>
                       <Button
                         size="sm"
+                        color="ai"
                         loading={isAssigning || (assignLoading && assigningId === item.employee.id)}
                         disabled={
                           Boolean(assigningId) ||
@@ -306,14 +313,14 @@ export function OperationAiRecommendationsPanel({
                         }}
                         aria-label={`Asignar a ${item.employee.name}`}
                       >
-                        Asignar
+                        Agregar
                       </Button>
                     </Group>
 
                     {reasonLines.length > 0 ? (
                       <Accordion variant="contained" radius="md">
                         <Accordion.Item value="why">
-                          <Accordion.Control>¿Por qué la IA lo recomienda?</Accordion.Control>
+                          <Accordion.Control>¿Por qué?</Accordion.Control>
                           <Accordion.Panel>
                             <Stack
                               gap={4}
@@ -337,8 +344,8 @@ export function OperationAiRecommendationsPanel({
           ) : null}
 
           {!showAll && filtered.length > DEFAULT_VISIBLE ? (
-            <Button variant="subtle" onClick={() => setShowAll(true)}>
-              Ver todas ({filtered.length})
+            <Button variant="subtle" color="ai" onClick={() => setShowAll(true)}>
+              Ver más ({filtered.length})
             </Button>
           ) : null}
         </>

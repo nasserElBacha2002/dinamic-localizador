@@ -65,7 +65,12 @@ function WorkTeamFormFields({
   return (
     <SectionCard title="Datos del grupo" description="Plantilla reutilizable de colaboradores.">
       <Stack gap="md">
-        {enableAiAssist ? <WorkTeamAiCreationPanel onApplyMembers={setEmployeeIds} /> : null}
+        {enableAiAssist ? (
+          <WorkTeamAiCreationPanel
+            selectedEmployeeIds={employeeIds}
+            onApplyMembers={setEmployeeIds}
+          />
+        ) : null}
         <TextInput
           label="Nombre"
           required

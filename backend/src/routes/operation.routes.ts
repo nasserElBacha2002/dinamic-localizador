@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { operationImportController } from "../controllers/operation-import.controller";
 import { operationController } from "../controllers/operation.controller";
+import { operationRecommendationController } from "../controllers/operation-recommendation.controller";
 import { operationWorkdayController } from "../controllers/operation-workday.controller";
 import { asyncHandler } from "../middleware/async-handler";
 import { requirePermission } from "../middleware/company-context";
@@ -9,6 +10,10 @@ import {
   operationImportConfirmSchema,
   operationImportPreviewSchema,
 } from "../schemas/operation-import.schema";
+import {
+  listEmployeeRecommendationsQuerySchema,
+  recommendOperationTeamSchema,
+} from "../schemas/operation-recommendation.schema";
 import {
   createOperationSchema,
   operationAttendanceSummaryQuerySchema,
@@ -46,6 +51,20 @@ operationRouter.get(
   requirePermission("operations:read"),
   validate(listOperationsQuerySchema, "query"),
   asyncHandler(operationController.list),
+);
+operationRouter.get(
+  "/:id/recommendations/employees",
+  requirePermission("operations:manage"),
+  validate(operationIdParamSchema, "params"),
+  validate(listEmployeeRecommendationsQuerySchema, "query"),
+  asyncHandler(operationRecommendationController.listEmployeeRecommendations),
+);
+operationRouter.post(
+  "/:id/recommendations/team",
+  requirePermission("operations:manage"),
+  validate(operationIdParamSchema, "params"),
+  validate(recommendOperationTeamSchema),
+  asyncHandler(operationRecommendationController.recommendTeam),
 );
 operationRouter.get(
   "/:id/attendance-summary",

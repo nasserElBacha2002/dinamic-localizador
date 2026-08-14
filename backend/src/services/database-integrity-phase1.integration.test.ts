@@ -105,11 +105,13 @@ describeDatabaseIntegration("database integrity phase1 tenant composite FKs", ()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(200), `Loc ${randomUUID().slice(0, 8)}`)
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO operational_locations (
           company_id, name, address, locality, latitude, longitude, allowed_radius_meters, active
         )
-        OUTPUT INSERTED.id
-        VALUES (@companyId, @name, N'Addr', N'CABA', -34.6, -58.4, 150, 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, @name, N'Addr', N'CABA', -34.6, -58.4, 150, 1);
+        SELECT id FROM @inserted;
       `);
     return String(result.recordset[0].id);
   };

@@ -93,6 +93,20 @@ const gray: MantineColorsTuple = [
   "#2B2D32",
 ];
 
+/** Violet / lavender — AI suggestions only; brand blue stays primary. */
+const ai: MantineColorsTuple = [
+  designTokens.colors.aiLight,
+  "#EDE9FE",
+  "#DDD6FE",
+  "#C4B5FD",
+  "#A78BFA",
+  designTokens.colors.aiMuted,
+  designTokens.colors.ai,
+  designTokens.colors.aiHover,
+  "#5B21B6",
+  "#4C1D95",
+];
+
 export const mantineTheme = createTheme({
   breakpoints: { ...BREAKPOINTS },
   primaryColor: "brand",
@@ -104,6 +118,7 @@ export const mantineTheme = createTheme({
     danger,
     warning,
     gray,
+    ai,
   },
   fontFamily: designTokens.fontFamily,
   headings: {

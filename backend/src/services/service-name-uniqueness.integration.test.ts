@@ -47,11 +47,13 @@ const insertLocationDirect = async (
     .input("longitude", sql.Decimal(10, 7), longitude)
     .input("allowedRadiusMeters", sql.Int, 150)
     .query(`
+      DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
       INSERT INTO operational_locations (
         company_id, name, latitude, longitude, allowed_radius_meters
       )
-      OUTPUT INSERTED.id
-      VALUES (@companyId, @name, @latitude, @longitude, @allowedRadiusMeters)
+      OUTPUT INSERTED.id INTO @inserted (id)
+      VALUES (@companyId, @name, @latitude, @longitude, @allowedRadiusMeters);
+      SELECT id FROM @inserted;
     `);
   return String(result.recordset[0].id);
 };

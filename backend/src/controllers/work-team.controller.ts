@@ -1,8 +1,22 @@
 import type { Request, Response } from "express";
+import type { RecommendWorkTeamInput } from "../schemas/operation-recommendation.schema";
+import { teamRecommendationService } from "../services/team-recommendation.service";
 import { workTeamService } from "../services/work-team.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
 export const workTeamController = {
+  async recommendTeam(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const body = req.body as RecommendWorkTeamInput;
+    const result = await teamRecommendationService.recommendTeamForWorkTeam(companyId, {
+      teamSize: body.teamSize,
+      alternatives: body.alternatives,
+      lockedEmployeeIds: body.lockedEmployeeIds,
+      serviceId: body.serviceId,
+    });
+    res.status(200).json({ data: result });
+  },
+
   async create(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const team = await workTeamService.create(companyId, req.auth?.userId ?? null, req.body);

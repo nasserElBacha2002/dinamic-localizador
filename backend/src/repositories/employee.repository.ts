@@ -34,6 +34,13 @@ const buildEmployeeCategoryJoin = () => `
    AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
 `;
 
+/** Scoped zone join: same-company zones only. */
+const buildEmployeeLocationZoneJoin = () => `
+  LEFT JOIN location_zones lz
+    ON lz.id = e.location_zone_id
+   AND lz.company_id = e.company_id
+`;
+
 const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
   LEFT JOIN (
     SELECT employee_id, MAX(received_at) AS last_worked_at
@@ -49,9 +56,13 @@ const buildEmployeeSelect = () => `
     lw.last_worked_at,
     ec.name AS category_name,
     ec.is_system AS category_is_system,
-    ec.is_active AS category_is_active
+    ec.is_active AS category_is_active,
+    lz.name AS location_zone_name,
+    lz.locality AS location_zone_locality,
+    lz.is_active AS location_zone_is_active
   FROM employees e
   ${buildEmployeeCategoryJoin()}
+  ${buildEmployeeLocationZoneJoin()}
   ${buildEmployeeLastWorkedJoin()}
 `;
 
@@ -61,9 +72,13 @@ const buildEmployeeSelectWithoutLastWorked = () => `
     CAST(NULL AS DATETIME2) AS last_worked_at,
     ec.name AS category_name,
     ec.is_system AS category_is_system,
-    ec.is_active AS category_is_active
+    ec.is_active AS category_is_active,
+    lz.name AS location_zone_name,
+    lz.locality AS location_zone_locality,
+    lz.is_active AS location_zone_is_active
   FROM employees e
   ${buildEmployeeCategoryJoin()}
+  ${buildEmployeeLocationZoneJoin()}
 `;
 
 const resolveEmployeeOrderBy = (
@@ -85,23 +100,6 @@ const resolveEmployeeOrderBy = (
   return `${orderBy}, e.id ASC`;
 };
 
-/** Assignable = in-scope and active. Same historical inactive allowed only when matching current. */
-const categoryAssignablePredicate = (employeeAlias = "employees") => `
-  (
-    @categoryId IS NULL
-    OR EXISTS (
-      SELECT 1
-      FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
-      WHERE ec.id = @categoryId
-        AND (ec.company_id IS NULL OR ec.company_id = @companyId)
-        AND (
-          ec.is_active = 1
-          OR ec.id = ${employeeAlias}.category_id
-        )
-    )
-  )
-`;
-
 export const employeeRepository = {
   async create(
     companyId: string,
@@ -111,6 +109,7 @@ export const employeeRepository = {
       phoneNumber: string;
       employeeType: Employee["employeeType"];
       categoryId: string | null;
+      locationZoneId: string | null;
     },
     transaction?: sql.Transaction,
   ): Promise<Employee> {
@@ -122,31 +121,86 @@ export const employeeRepository = {
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("employeeType", sql.NVarChar(20), input.employeeType)
       .input("categoryId", sql.UniqueIdentifier, input.categoryId)
+      .input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId)
       .query(`
         DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
-        INSERT INTO employees (company_id, name, document_number, phone_number, employee_type, category_id)
+        DECLARE @categoryOk BIT = CASE
+          WHEN @categoryId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
+            WHERE ec.id = @categoryId
+              AND ec.is_active = 1
+              AND (ec.company_id IS NULL OR ec.company_id = @companyId)
+          ) THEN 1
+          ELSE 0
+        END;
+        DECLARE @zoneOk BIT = CASE
+          WHEN @locationZoneId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM location_zones lz WITH (UPDLOCK, HOLDLOCK)
+            WHERE lz.id = @locationZoneId
+              AND lz.is_active = 1
+              AND lz.company_id = @companyId
+          ) THEN 1
+          ELSE 0
+        END;
+
+        INSERT INTO employees (
+          company_id,
+          name,
+          document_number,
+          phone_number,
+          employee_type,
+          category_id,
+          location_zone_id
+        )
         OUTPUT INSERTED.id INTO @inserted (id)
-        SELECT @companyId, @name, @documentNumber, @phoneNumber, @employeeType, @categoryId
-        WHERE @categoryId IS NULL
-           OR EXISTS (
-             SELECT 1
-             FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
-             WHERE ec.id = @categoryId
-               AND ec.is_active = 1
-               AND (ec.company_id IS NULL OR ec.company_id = @companyId)
-           );
+        SELECT
+          @companyId,
+          @name,
+          @documentNumber,
+          @phoneNumber,
+          @employeeType,
+          @categoryId,
+          @locationZoneId
+        WHERE @categoryOk = 1
+          AND @zoneOk = 1;
+
         SELECT id FROM @inserted;
+        SELECT @categoryOk AS category_ok, @zoneOk AS zone_ok;
       `);
 
-    if (!result.recordset[0]) {
-      throw new AppError(
-        400,
-        "EMPLOYEE_CATEGORY_INVALID",
-        "La categoría seleccionada no está disponible para esta empresa.",
-      );
+    const recordsets = Array.isArray(result.recordsets)
+      ? result.recordsets
+      : [result.recordset];
+    const insertedId = recordsets[0]?.[0]?.id;
+    if (!insertedId) {
+      const flags = (recordsets[1]?.[0] ?? {}) as {
+        category_ok?: boolean | number;
+        zone_ok?: boolean | number;
+      };
+      const categoryOk = Number(flags.category_ok) === 1;
+      const zoneOk = Number(flags.zone_ok) === 1;
+      if (!categoryOk) {
+        throw new AppError(
+          400,
+          "EMPLOYEE_CATEGORY_INVALID",
+          "La categoría seleccionada no está disponible para esta empresa.",
+        );
+      }
+      if (!zoneOk) {
+        throw new AppError(
+          400,
+          "EMPLOYEE_LOCATION_ZONE_INVALID",
+          "La zona seleccionada no está disponible para esta empresa.",
+        );
+      }
+      throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudo crear el colaborador.");
     }
 
-    const withCategory = await this.findById(companyId, String(result.recordset[0].id), transaction);
+    const withCategory = await this.findById(companyId, String(insertedId), transaction);
     if (!withCategory) {
       throw new AppError(500, "EMPLOYEE_CREATE_FAILED", "No se pudo crear el colaborador.");
     }
@@ -155,7 +209,8 @@ export const employeeRepository = {
 
   /**
    * Multi-row insert for imports. Caller must pre-validate category IDs.
-   * Atomic within the provided transaction.
+   * Location zones are intentionally unsupported here (always NULL) until an
+   * explicit bulk-zone import phase is implemented.
    */
   async createMany(
     companyId: string,
@@ -190,7 +245,14 @@ export const employeeRepository = {
 
     const result = await request.query(`
       DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
-      INSERT INTO employees (company_id, name, document_number, phone_number, employee_type, category_id)
+      INSERT INTO employees (
+        company_id,
+        name,
+        document_number,
+        phone_number,
+        employee_type,
+        category_id
+      )
       OUTPUT INSERTED.id INTO @inserted (id)
       VALUES ${valueSql.join(",\n")};
       SELECT id FROM @inserted;
@@ -469,6 +531,12 @@ export const employeeRepository = {
       fields.push("category_id = @categoryId");
     }
 
+    const updatingLocationZone = input.locationZoneId !== undefined;
+    if (updatingLocationZone) {
+      request.input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId);
+      fields.push("location_zone_id = @locationZoneId");
+    }
+
     if (input.active !== undefined) {
       request.input("active", sql.Bit, input.active);
       fields.push("active = @active");
@@ -480,31 +548,96 @@ export const employeeRepository = {
 
     fields.push("updated_at = SYSUTCDATETIME()");
 
-    const categoryGuard = updatingCategory
-      ? `AND ${categoryAssignablePredicate("employees")}`
-      : "";
+    const categoryOkSql = updatingCategory
+      ? `CASE
+          WHEN @categoryId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM employee_categories ec WITH (UPDLOCK, HOLDLOCK)
+            WHERE ec.id = @categoryId
+              AND (ec.company_id IS NULL OR ec.company_id = @companyId)
+              AND (
+                ec.is_active = 1
+                OR ec.id = employees.category_id
+              )
+          ) THEN 1
+          ELSE 0
+        END`
+      : "1";
+
+    const zoneOkSql = updatingLocationZone
+      ? `CASE
+          WHEN @locationZoneId IS NULL THEN 1
+          WHEN EXISTS (
+            SELECT 1
+            FROM location_zones lz WITH (UPDLOCK, HOLDLOCK)
+            WHERE lz.id = @locationZoneId
+              AND lz.company_id = @companyId
+              AND (
+                lz.is_active = 1
+                OR lz.id = employees.location_zone_id
+              )
+          ) THEN 1
+          ELSE 0
+        END`
+      : "1";
 
     const result = await request.query(`
       DECLARE @updated TABLE (id UNIQUEIDENTIFIER);
-      UPDATE employees
-      SET ${fields.join(", ")}
-      OUTPUT INSERTED.id INTO @updated (id)
-      WHERE id = @id AND company_id = @companyId
-      ${categoryGuard};
+      DECLARE @categoryOk BIT = NULL;
+      DECLARE @zoneOk BIT = NULL;
+      DECLARE @found BIT = 0;
+
+      SELECT
+        @found = 1,
+        @categoryOk = ${categoryOkSql},
+        @zoneOk = ${zoneOkSql}
+      FROM employees
+      WHERE id = @id AND company_id = @companyId;
+
+      IF @found = 1 AND @categoryOk = 1 AND @zoneOk = 1
+      BEGIN
+        UPDATE employees
+        SET ${fields.join(", ")}
+        OUTPUT INSERTED.id INTO @updated (id)
+        WHERE id = @id
+          AND company_id = @companyId;
+      END;
+
       SELECT id FROM @updated;
+      SELECT @found AS found, @categoryOk AS category_ok, @zoneOk AS zone_ok;
     `);
 
-    if (!result.recordset[0]) {
-      if (updatingCategory) {
-        const existing = await this.findById(companyId, id, transaction);
-        if (!existing) {
+    const recordsets = Array.isArray(result.recordsets)
+      ? result.recordsets
+      : [result.recordset];
+    const updatedId = recordsets[0]?.[0]?.id;
+    if (!updatedId) {
+      if (updatingCategory || updatingLocationZone) {
+        const flags = (recordsets[1]?.[0] ?? {}) as {
+          found?: boolean | number | null;
+          category_ok?: boolean | number | null;
+          zone_ok?: boolean | number | null;
+        };
+        if (Number(flags.found) !== 1) {
           return null;
         }
-        throw new AppError(
-          400,
-          "EMPLOYEE_CATEGORY_INVALID",
-          "La categoría seleccionada no está disponible para esta empresa.",
-        );
+        const categoryOk = Number(flags.category_ok) === 1;
+        const zoneOk = Number(flags.zone_ok) === 1;
+        if (updatingCategory && !categoryOk) {
+          throw new AppError(
+            400,
+            "EMPLOYEE_CATEGORY_INVALID",
+            "La categoría seleccionada no está disponible para esta empresa.",
+          );
+        }
+        if (updatingLocationZone && !zoneOk) {
+          throw new AppError(
+            400,
+            "EMPLOYEE_LOCATION_ZONE_INVALID",
+            "La zona seleccionada no está disponible para esta empresa.",
+          );
+        }
       }
       return null;
     }

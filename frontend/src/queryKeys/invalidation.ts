@@ -2,6 +2,7 @@ import type { QueryClient } from "@tanstack/react-query";
 import { attendanceKeys } from "./attendance";
 import { employeeCategoryKeys } from "./employee-categories";
 import { employeeKeys } from "./employees";
+import { locationZoneKeys } from "./location-zones";
 import { lookupKeys } from "./lookups";
 import { operationAttendanceKeys, operationKeys } from "./operations";
 import { serviceKeys } from "./services";
@@ -119,6 +120,7 @@ export async function invalidateAfterImport(
         await invalidateEmployeeListAndLookupQueries(queryClient, id);
         await queryClient.invalidateQueries({ queryKey: employeeKeys.details(id) });
         await queryClient.invalidateQueries({ queryKey: employeeCategoryKeys.lists(id) });
+        await queryClient.invalidateQueries({ queryKey: locationZoneKeys.lists(id) });
         break;
       case "operations":
         await Promise.all([

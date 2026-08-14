@@ -35,6 +35,8 @@ const workTeam = {
         employeeType: "INTERNAL",
         categoryId: null,
         category: null,
+        locationZoneId: null,
+        locationZone: null,
         active: true,
         createdAt: "2026-01-01T00:00:00.000Z",
         updatedAt: "2026-01-01T00:00:00.000Z",

@@ -9,6 +9,7 @@ const sampleService = {
   address: null,
   neighborhood: null,
   locality: null,
+  locationZoneId: null,
   serviceFormat: "LEGACY_TYPE",
   latitude: -34.6,
   longitude: -58.38,
@@ -27,10 +28,12 @@ describe("serviceService location type validation", () => {
   it("creates service with active company location type", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { locationZoneService } = await import("./location-zone.service");
     const { serviceRepository } = await import("../repositories/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(locationZoneService, "findOrCreateByNameLocality", async () => null);
     mock.method(serviceRepository, "findByCompanyAndName", async () => null);
     mock.method(serviceRepository, "create", async (_companyId, input) => ({
       ...sampleService,
@@ -215,10 +218,12 @@ describe("serviceService name uniqueness per company", () => {
   it("allows create when name exists only in another company", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { locationZoneService } = await import("./location-zone.service");
     const { serviceRepository } = await import("../repositories/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(locationZoneService, "findOrCreateByNameLocality", async () => null);
     mock.method(serviceRepository, "findByCompanyAndName", async (companyId) => {
       assert.equal(companyId, "company-b");
       return null;
@@ -240,10 +245,12 @@ describe("serviceService name uniqueness per company", () => {
   it("maps SQL duplicate key race on create to SERVICE_NAME_ALREADY_EXISTS", async () => {
     setupUnitTestEnv();
     const { companyLocationTypesService } = await import("./company-location-types.service");
+    const { locationZoneService } = await import("./location-zone.service");
     const { serviceRepository } = await import("../repositories/service.repository");
     const { serviceService } = await import("./service.service");
 
     mock.method(companyLocationTypesService, "assertActiveServiceFormat", async () => undefined);
+    mock.method(locationZoneService, "findOrCreateByNameLocality", async () => null);
     mock.method(serviceRepository, "findByCompanyAndName", async () => null);
     mock.method(serviceRepository, "create", async () => {
       throw Object.assign(

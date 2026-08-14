@@ -35,5 +35,6 @@ export interface DeactivateEmployeeInput {
     phoneNumber?: string;
     employeeType?: EmployeeType;
     categoryId?: string | null;
+    locationZoneId?: string | null;
   };
 }

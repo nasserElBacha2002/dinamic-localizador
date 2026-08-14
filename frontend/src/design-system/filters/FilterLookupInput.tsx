@@ -36,6 +36,8 @@ export interface FilterLookupInputProps {
   required?: boolean;
   error?: boolean;
   description?: string;
+  /** Match form fields that keep helper text under the control (aligns grid rows). */
+  inputWrapperOrder?: Array<"label" | "input" | "description" | "error">;
   emptyMessage?: string;
   loadingMessage?: string;
   createOption?: FilterLookupCreateOption;
@@ -57,6 +59,7 @@ export function FilterLookupInput({
   required = false,
   error = false,
   description,
+  inputWrapperOrder,
   emptyMessage = "Sin resultados",
   loadingMessage = "Buscando...",
   createOption,
@@ -124,6 +127,7 @@ export function FilterLookupInput({
           disabled={disabled}
           error={error || undefined}
           description={description}
+          inputWrapperOrder={inputWrapperOrder}
           placeholder={placeholder}
           value={displayValue}
           rightSection={loading ? <Loader size={16} /> : <Combobox.Chevron />}

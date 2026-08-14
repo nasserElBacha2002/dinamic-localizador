@@ -1,9 +1,11 @@
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { AppError } from "../../errors/app-error";
 import { serviceRepository } from "../../repositories/service.repository";
+import type { ServiceWriteInput } from "../../repositories/service.repository";
 import { createServiceSchema, type CreateServiceInput } from "../../schemas/service.schema";
 import { auditService } from "../../services/audit.service";
 import { companyLocationTypesService } from "../../services/company-location-types.service";
+import { locationZoneService } from "../../services/location-zone.service";
 import { logAuditSafe } from "../../utils/audit-post-commit";
 import {
   markInFileDuplicates,
@@ -27,6 +29,23 @@ import {
 } from "../prepared-import";
 import type { ImportPersistContext, ImportStrategy } from "../strategy";
 import type { ImportColumnDefinition, ImportTemplate } from "../types";
+
+async function enrichServicePayloadWithLocationZone(
+  companyId: string,
+  payload: CreateServiceInput,
+): Promise<ServiceWriteInput> {
+  const zone = await locationZoneService.findOrCreateByNameLocality(
+    companyId,
+    payload.neighborhood ?? "",
+    payload.locality ?? null,
+  );
+  return {
+    ...payload,
+    neighborhood: zone?.name ?? payload.neighborhood ?? null,
+    locality: zone?.locality ?? payload.locality ?? null,
+    locationZoneId: zone?.id ?? null,
+  };
+}
 
 export const SERVICE_IMPORT_COLUMNS: ImportColumnDefinition[] = [
   { key: "name", header: "Nombre", required: true, aliases: ["servicio", "sucursal", "punto"] },
@@ -360,7 +379,12 @@ export const servicesImportStrategy: ImportStrategy = {
         return map;
       },
       persistBatch: async (cid, items): Promise<CreateOnlyPersistBatchResult> => {
-        const payloads = items.map((item) => item.payload as CreateServiceInput);
+        const payloads: ServiceWriteInput[] = [];
+        for (const item of items) {
+          payloads.push(
+            await enrichServicePayloadWithLocationZone(cid, item.payload as CreateServiceInput),
+          );
+        }
         try {
           await serviceRepository.createMany(cid, payloads);
           return {
@@ -375,7 +399,11 @@ export const servicesImportStrategy: ImportStrategy = {
             const rejected: CreateOnlyPersistBatchResult["rejected"] = [];
             for (const item of items) {
               try {
-                await serviceRepository.createMany(cid, [item.payload as CreateServiceInput]);
+                const enriched = await enrichServicePayloadWithLocationZone(
+                  cid,
+                  item.payload as CreateServiceInput,
+                );
+                await serviceRepository.createMany(cid, [enriched]);
                 created.push({ rowNumber: item.row.rowNumber });
               } catch (rowErrorValue) {
                 const rowClassified =

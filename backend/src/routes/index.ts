@@ -4,6 +4,7 @@ import { attendanceRouter } from "./attendance.routes";
 import { authRouter } from "./auth.routes";
 import { employeeRouter } from "./employee.routes";
 import { employeeCategoryRouter } from "./employee-category.routes";
+import { locationZoneRouter } from "./location-zone.routes";
 import { healthRouter } from "./health.routes";
 import { operationAssignmentRouter } from "./operation-assignment.routes";
 import { workTeamRouter } from "./work-team.routes";
@@ -78,6 +79,7 @@ const mountEmployeeRoutes = (router: Router) => {
   router.use("/employees", moduleGuard, employeeRouter);
   router.use("/workers", moduleGuard, employeeRouter);
   router.use("/employee-categories", moduleGuard, employeeCategoryRouter);
+  router.use("/location-zones", moduleGuard, locationZoneRouter);
 };
 
 const companyScopedOperationalRouter = Router({ mergeParams: true });

@@ -93,6 +93,7 @@ function renderPanel(options: {
   }) => Promise<{ status: "success" | "partial" | "error"; added: string[]; skipped: [] }>;
   excludeEmployeeIds?: string[];
   enabled?: boolean;
+  operationKind?: "ONE_TIME" | "RECURRING";
 } = {}) {
   const queryClient = createClient();
   const onAssign =
@@ -119,7 +120,7 @@ function renderPanel(options: {
           <MantineProvider>
             <OperationAiRecommendationsPanel
               operationId="op-1"
-              operationKind="ONE_TIME"
+              operationKind={options.operationKind ?? "ONE_TIME"}
               operationWorkDate="2026-08-20"
               excludeEmployeeIds={options.excludeEmployeeIds ?? []}
               enabled={options.enabled ?? true}
@@ -249,5 +250,32 @@ describe("OperationAiRecommendationsPanel", () => {
     renderPanel({ enabled: false });
     await new Promise((resolve) => setTimeout(resolve, 50));
     assert.equal(calls, 0);
+  });
+
+  it("RECURRING requests include effectiveDate matching Desde", async () => {
+    const requested: Array<string | undefined> = [];
+    scopedApiClient.get = (async (_url, config) => {
+      const params = (config as { params?: Record<string, unknown> } | undefined)?.params;
+      requested.push(
+        params?.effectiveDate === undefined ? undefined : String(params.effectiveDate),
+      );
+      return {
+        data: { data: sampleResponse },
+        status: 200,
+        statusText: "OK",
+        headers: {},
+        config: {},
+      } as never;
+    }) as typeof scopedApiClient.get;
+
+    const view = renderPanel({ operationKind: "RECURRING" });
+    await waitFor(() => {
+      assert.ok(view.getByText("Juan Pérez"));
+    });
+    assert.ok(requested.length >= 1);
+    const fromInput = view.container.querySelector('input[type="date"]') as HTMLInputElement;
+    assert.ok(fromInput);
+    assert.equal(requested[0], fromInput.value);
+    assert.match(fromInput.value, /^\d{4}-\d{2}-\d{2}$/);
   });
 });

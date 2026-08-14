@@ -10,7 +10,10 @@ import {
   operationImportConfirmSchema,
   operationImportPreviewSchema,
 } from "../schemas/operation-import.schema";
-import { listEmployeeRecommendationsQuerySchema } from "../schemas/operation-recommendation.schema";
+import {
+  listEmployeeRecommendationsQuerySchema,
+  recommendOperationTeamSchema,
+} from "../schemas/operation-recommendation.schema";
 import {
   createOperationSchema,
   operationAttendanceSummaryQuerySchema,
@@ -55,6 +58,13 @@ operationRouter.get(
   validate(operationIdParamSchema, "params"),
   validate(listEmployeeRecommendationsQuerySchema, "query"),
   asyncHandler(operationRecommendationController.listEmployeeRecommendations),
+);
+operationRouter.post(
+  "/:id/recommendations/team",
+  requirePermission("operations:manage"),
+  validate(operationIdParamSchema, "params"),
+  validate(recommendOperationTeamSchema),
+  asyncHandler(operationRecommendationController.recommendTeam),
 );
 operationRouter.get(
   "/:id/attendance-summary",

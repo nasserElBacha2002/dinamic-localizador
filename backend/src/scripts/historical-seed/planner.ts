@@ -1,5 +1,6 @@
 import { DateTime } from "luxon";
 import {
+  assertValidBatchId,
   buildWorkTeamDescription,
   buildWorkTeamName,
   generateBatchId,
@@ -239,7 +240,7 @@ export const planHistoricalSeed = (input: PlanHistoricalSeedInput): HistoricalSe
   }
 
   const rng = createSeedRandom(input.seed);
-  const batchId = input.batchId?.trim() || generateBatchId(input.seed);
+  const batchId = assertValidBatchId(input.batchId?.trim() || generateBatchId(input.seed));
   const todayIso =
     input.todayIso ??
     DateTime.now().setZone(input.timezone).toISODate()!;

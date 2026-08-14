@@ -13,6 +13,8 @@ Synthetic but coherent past operations for exercising the Recommendation Engine 
 - Does **not** call assignment/WhatsApp services — direct SQL inserts only.
 - Does **not** modify existing employees, services, or real work teams.
 - Tags all synthetic rows with `[AI_HISTORY_SEED:<batchId>]` for selective cleanup.
+- Cleanup selects rows with **literal** `CHARINDEX(@marker, notes|description) > 0` (never `LIKE`, so `[]`/`%`/`_` are not wildcards).
+- `batchId` must match `^[A-Za-z0-9_-]{1,64}$`.
 
 ## Commands
 

@@ -71,6 +71,40 @@ export function formatRecommendationReason(reason: RecommendationReason): string
     }
     case "OPERATION_TYPE_EXPERIENCE":
       return "Tiene experiencia en este tipo de operación";
+    case "TEAM_HISTORY_COVERAGE": {
+      const members = asPositiveInt(params.members);
+      const connected = asPositiveInt(params.membersWithConnections);
+      if (members !== null && connected !== null) {
+        return `${connected} de los ${members} integrantes ya tienen historial trabajando entre sí`;
+      }
+      return "El equipo tiene historial de colaboración entre varios integrantes";
+    }
+    case "TEAM_SERVICE_EXPERIENCE": {
+      const experienced = asPositiveInt(params.experiencedMembers);
+      const teamSize = asPositiveInt(params.teamSize);
+      if (experienced !== null && teamSize !== null) {
+        return `${experienced} de ${teamSize} tienen experiencia previa en esta sucursal`;
+      }
+      return "Varios integrantes tienen experiencia previa en esta sucursal";
+    }
+    case "TEAM_LOCATION_PROXIMITY": {
+      const close = asPositiveInt(params.closeMembers);
+      const teamSize = asPositiveInt(params.teamSize);
+      if (close !== null && teamSize !== null) {
+        return `${close} de ${teamSize} tienen buena proximidad con la operación`;
+      }
+      return "Varios integrantes tienen buena proximidad con la operación";
+    }
+    case "TEAM_RECENT_COLLABORATION":
+      return "Existen colaboraciones recientes dentro del grupo";
+    case "TEAM_ISOLATION_NOTE": {
+      const connected = asPositiveInt(params.connectedMembers);
+      const teamSize = asPositiveInt(params.teamSize);
+      if (connected !== null && teamSize !== null) {
+        return `${connected} de ${teamSize} tienen historial conjunto; el resto puede ser incorporación nueva`;
+      }
+      return "Algunos integrantes aún no tienen historial conjunto con el resto";
+    }
     default:
       return "Motivo adicional considerado por la IA";
   }

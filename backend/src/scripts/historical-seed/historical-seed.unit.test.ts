@@ -1,8 +1,13 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { assertSeedEnvironmentSafe, parseHistoricalSeedCliArgs } from "./cli-args";
+import {
+  assertSeedEnvironmentSafe,
+  parseHistoricalSeedCliArgs,
+  parseStrictInt,
+} from "./cli-args";
 import { offsetCoordinatesMeters, randomPointWithinRadius } from "./geo";
 import {
+  assertValidBatchId,
   buildBatchMarker,
   generateBatchId,
   isCycleIntegrationName,
@@ -35,9 +40,14 @@ describe("historical-seed markers", () => {
     assert.equal(isCycleIntegrationName("Juan Pérez"), false);
   });
 
-  it("builds stable batch markers", () => {
+  it("builds exact batch markers and validates batchId", () => {
     assert.equal(buildBatchMarker("ai-history-20260814-abc"), "[AI_HISTORY_SEED:ai-history-20260814-abc]");
     assert.match(generateBatchId(123, new Date("2026-08-14T12:00:00Z")), /^ai-history-20260814-/);
+    assert.throws(() => assertValidBatchId(""));
+    assert.throws(() => assertValidBatchId("bad%id"));
+    assert.throws(() => assertValidBatchId("bad[id]"));
+    assert.throws(() => assertValidBatchId("has space"));
+    assert.doesNotThrow(() => assertValidBatchId("ai-history-test_1"));
   });
 });
 
@@ -143,6 +153,23 @@ describe("historical-seed cli-args", () => {
     assert.equal(parsed.monthsBack, 6);
     assert.equal(parsed.seed, 5);
     assert.equal(parsed.dryRun, true);
+  });
+
+  it("rejects non-strict integers and out-of-range counts", () => {
+    assert.throws(() => parseStrictInt("abc", "--operations"));
+    assert.throws(() => parseStrictInt("100foo", "--operations"));
+    assert.throws(() =>
+      parseHistoricalSeedCliArgs(["--company-id", "x", "--operations", "0"]),
+    );
+    assert.throws(() =>
+      parseHistoricalSeedCliArgs(["--company-id", "x", "--operations", "501"]),
+    );
+    assert.throws(() =>
+      parseHistoricalSeedCliArgs(["--company-id", "x", "--months-back", "0"]),
+    );
+    assert.throws(() =>
+      parseHistoricalSeedCliArgs(["--company-id", "x", "--months-back", "37"]),
+    );
   });
 
   it("blocks production and missing allow flag", () => {

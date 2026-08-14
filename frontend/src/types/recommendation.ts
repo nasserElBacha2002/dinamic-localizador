@@ -11,9 +11,12 @@
 import type { EmployeeType } from "../constants/employee-types";
 
 export const WORKFORCE_RECOMMENDATION_ALGORITHM_VERSION = "workforce-recommendation-v1" as const;
+export const WORKFORCE_TEAM_RECOMMENDATION_ALGORITHM_VERSION =
+  "workforce-team-recommendation-v1" as const;
 
 export type WorkforceRecommendationAlgorithmVersion =
   | typeof WORKFORCE_RECOMMENDATION_ALGORITHM_VERSION
+  | typeof WORKFORCE_TEAM_RECOMMENDATION_ALGORITHM_VERSION
   | (string & {});
 
 export const RECOMMENDATION_REASON_CODES = [
@@ -22,6 +25,11 @@ export const RECOMMENDATION_REASON_CODES = [
   "SERVICE_EXPERIENCE",
   "OPERATION_TYPE_EXPERIENCE",
   "RECENT_COLLABORATION",
+  "TEAM_HISTORY_COVERAGE",
+  "TEAM_SERVICE_EXPERIENCE",
+  "TEAM_LOCATION_PROXIMITY",
+  "TEAM_RECENT_COLLABORATION",
+  "TEAM_ISOLATION_NOTE",
 ] as const;
 
 export type RecommendationReasonCode = (typeof RECOMMENDATION_REASON_CODES)[number];
@@ -52,4 +60,47 @@ export interface IndividualEmployeeRecommendationResponse {
   generatedAt: string;
   candidateCount: number;
   recommendations: IndividualEmployeeRecommendation[];
+}
+
+export interface TeamRecommendationMember {
+  employee: RecommendationEmployeeSummary;
+  alreadyAssigned: boolean;
+  locked: boolean;
+  role: "EXISTING" | "LOCKED" | "SUGGESTED";
+}
+
+export interface TeamRecommendationOption {
+  rank: number;
+  score: number;
+  complete: true;
+  members: TeamRecommendationMember[];
+  reasons: RecommendationReason[];
+}
+
+export interface TeamRecommendationResponse {
+  operationId: string | null;
+  serviceId: string | null;
+  algorithmVersion: WorkforceRecommendationAlgorithmVersion;
+  generatedAt: string;
+  requestedTeamSize: number;
+  existingMemberCount: number;
+  lockedMemberCount: number;
+  slotsToFill: number;
+  candidateCount: number;
+  pairCount: number;
+  recommendations: TeamRecommendationOption[];
+}
+
+export interface RecommendOperationTeamInput {
+  teamSize: number;
+  alternatives?: number;
+  lockedEmployeeIds?: string[];
+  effectiveDate?: string;
+}
+
+export interface RecommendWorkTeamInput {
+  teamSize: number;
+  alternatives?: number;
+  lockedEmployeeIds?: string[];
+  serviceId?: string | null;
 }

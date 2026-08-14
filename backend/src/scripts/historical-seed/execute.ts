@@ -1,16 +1,19 @@
 import { randomUUID } from "node:crypto";
 import { DateTime } from "luxon";
 import sql from "mssql";
+import { env } from "../../config/env";
 import { getPool } from "../../database/connection";
+import { companyOperationalDefaultsResolver } from "../../services/company-operational-defaults.resolver";
 import {
   combineAttendanceValidation,
   evaluateGeofence,
   evaluatePunctuality,
 } from "../../utils/attendance-validation";
 import { normalizeWorkTeamName } from "../../utils/work-team-name";
+import { seedBatchMarkerSqlPredicate } from "./cleanup";
 import { randomPointWithinRadius } from "./geo";
 import {
-  batchMarkerSqlLike,
+  assertValidBatchId,
   buildBatchMarker,
   buildOperationNotes,
   isCycleIntegrationName,
@@ -24,6 +27,29 @@ export interface CatalogLoadResult {
   services: SeedService[];
   companyName: string;
   timezone: string;
+  geofenceReviewMarginMeters: number;
+  onTimeGraceMinutes: number;
+  earlyToleranceMinutes: number;
+  lateToleranceMinutes: number;
+}
+
+export class SeedPartialFailureError extends Error {
+  readonly code = "SEED_PARTIAL_FAILURE" as const;
+
+  constructor(
+    readonly details: {
+      batchId: string;
+      operationsPlanned: number;
+      operationsCommitted: number;
+      failedOperationIndex: number;
+      cause: unknown;
+    },
+  ) {
+    super(
+      `SEED_PARTIAL_FAILURE batchId=${details.batchId} planned=${details.operationsPlanned} committed=${details.operationsCommitted} failedOperationIndex=${details.failedOperationIndex}`,
+    );
+    this.name = "SeedPartialFailureError";
+  }
 }
 
 export const loadSeedCatalog = async (companyId: string): Promise<CatalogLoadResult> => {
@@ -40,6 +66,8 @@ export const loadSeedCatalog = async (companyId: string): Promise<CatalogLoadRes
   if (!company.recordset[0]) {
     throw new Error(`Company not found or inactive: ${companyId}`);
   }
+
+  const importDefaults = await companyOperationalDefaultsResolver.getImportDefaults(companyId);
 
   const employeesResult = await pool
     .request()
@@ -82,17 +110,16 @@ export const loadSeedCatalog = async (companyId: string): Promise<CatalogLoadRes
     locationZoneId: row.location_zone_id ? String(row.location_zone_id) : null,
   }));
 
-  const timezone =
-    company.recordset[0].operation_timezone
-      ? String(company.recordset[0].operation_timezone)
-      : "America/Argentina/Buenos_Aires";
-
   return {
     employees,
     excludedCycleIntegration,
     services,
     companyName: String(company.recordset[0].company_name),
-    timezone,
+    timezone: importDefaults.operationTimezone,
+    geofenceReviewMarginMeters: importDefaults.geofenceReviewMarginMeters,
+    onTimeGraceMinutes: env.BOT_ON_TIME_GRACE_MINUTES,
+    earlyToleranceMinutes: importDefaults.earlyToleranceMinutes,
+    lateToleranceMinutes: importDefaults.lateToleranceMinutes,
   };
 };
 
@@ -100,20 +127,29 @@ export const assertBatchNotExists = async (
   companyId: string,
   batchId: string,
 ): Promise<void> => {
+  assertValidBatchId(batchId);
   const pool = getPool();
-  const marker = batchMarkerSqlLike(batchId);
+  const marker = buildBatchMarker(batchId);
   const result = await pool
     .request()
     .input("companyId", sql.UniqueIdentifier, companyId)
     .input("marker", sql.NVarChar(200), marker)
     .query(`
-      SELECT TOP 1 id
-      FROM scheduled_operations
-      WHERE company_id = @companyId AND notes LIKE @marker
+      SELECT TOP 1 id FROM (
+        SELECT id FROM scheduled_operations
+        WHERE company_id = @companyId
+          AND notes IS NOT NULL
+          AND ${seedBatchMarkerSqlPredicate("notes")}
+        UNION ALL
+        SELECT id FROM work_teams
+        WHERE company_id = @companyId
+          AND description IS NOT NULL
+          AND ${seedBatchMarkerSqlPredicate("description")}
+      ) existing
     `);
   if (result.recordset[0]) {
     throw new Error(
-      `Batch ${batchId} already has seeded operations. Run --cleanup ${batchId} first.`,
+      `BATCH_ALREADY_EXISTS: ${batchId}. Run --cleanup ${batchId} first.`,
     );
   }
 };
@@ -129,47 +165,66 @@ export interface ExecuteSeedResult {
   workTeamsCreated: number;
 }
 
+const createSyntheticWorkTeams = async (
+  plan: HistoricalSeedPlan,
+): Promise<string[]> => {
+  const pool = getPool();
+  const transaction = new sql.Transaction(pool);
+  await transaction.begin();
+  const workTeamIds: string[] = [];
+  try {
+    for (const team of plan.workTeams) {
+      const normalizedName = normalizeTeamName(team.name);
+      const created = await new sql.Request(transaction)
+        .input("id", sql.UniqueIdentifier, randomUUID())
+        .input("companyId", sql.UniqueIdentifier, plan.companyId)
+        .input("name", sql.NVarChar(150), team.name)
+        .input("normalizedName", sql.NVarChar(150), normalizedName)
+        .input("description", sql.NVarChar(500), team.description)
+        .query(`
+          INSERT INTO work_teams (id, company_id, name, normalized_name, description, is_active)
+          OUTPUT INSERTED.id
+          VALUES (@id, @companyId, @name, @normalizedName, @description, 1)
+        `);
+      const teamId = String(created.recordset[0].id);
+      workTeamIds.push(teamId);
+      for (const employeeId of team.employeeIds) {
+        await new sql.Request(transaction)
+          .input("companyId", sql.UniqueIdentifier, plan.companyId)
+          .input("workTeamId", sql.UniqueIdentifier, teamId)
+          .input("employeeId", sql.UniqueIdentifier, employeeId)
+          .query(`
+            INSERT INTO work_team_members (company_id, work_team_id, employee_id)
+            VALUES (@companyId, @workTeamId, @employeeId)
+          `);
+      }
+    }
+    await transaction.commit();
+    return workTeamIds;
+  } catch (error) {
+    await transaction.rollback();
+    throw error;
+  }
+};
+
 /**
- * Executes one planned operation atomically (operation + workday + assignments +
- * employee_workdays + attendance). Does not call assignment services (no WhatsApp).
+ * Executes planned operations. Work teams are one atomic TX; each operation is its own TX.
+ * Does not call assignment services (no WhatsApp).
  */
 export const executeHistoricalSeed = async (
   plan: HistoricalSeedPlan,
   catalog: CatalogLoadResult,
 ): Promise<ExecuteSeedResult> => {
+  assertValidBatchId(plan.batchId);
   const pool = getPool();
   const serviceById = new Map(catalog.services.map((s) => [s.id, s]));
   const rng = createSeedRandom(plan.seed ^ 0xA11CE);
+  const earlyTol = catalog.earlyToleranceMinutes;
+  const lateTol = catalog.lateToleranceMinutes;
+  const reviewMargin = catalog.geofenceReviewMarginMeters;
+  const onTimeGrace = catalog.onTimeGraceMinutes;
 
-  const workTeamIds: string[] = [];
-  for (const team of plan.workTeams) {
-    const normalizedName = normalizeTeamName(team.name);
-    const created = await pool
-      .request()
-      .input("id", sql.UniqueIdentifier, randomUUID())
-      .input("companyId", sql.UniqueIdentifier, plan.companyId)
-      .input("name", sql.NVarChar(150), team.name)
-      .input("normalizedName", sql.NVarChar(150), normalizedName)
-      .input("description", sql.NVarChar(500), team.description)
-      .query(`
-        INSERT INTO work_teams (id, company_id, name, normalized_name, description, is_active)
-        OUTPUT INSERTED.id
-        VALUES (@id, @companyId, @name, @normalizedName, @description, 1)
-      `);
-    const teamId = String(created.recordset[0].id);
-    workTeamIds.push(teamId);
-    for (const employeeId of team.employeeIds) {
-      await pool
-        .request()
-        .input("companyId", sql.UniqueIdentifier, plan.companyId)
-        .input("workTeamId", sql.UniqueIdentifier, teamId)
-        .input("employeeId", sql.UniqueIdentifier, employeeId)
-        .query(`
-          INSERT INTO work_team_members (company_id, work_team_id, employee_id)
-          VALUES (@companyId, @workTeamId, @employeeId)
-        `);
-    }
-  }
+  const workTeamIds = await createSyntheticWorkTeams(plan);
 
   let operationsCreated = 0;
   let workdaysCreated = 0;
@@ -180,7 +235,13 @@ export const executeHistoricalSeed = async (
   for (const op of plan.operations) {
     const service = serviceById.get(op.serviceId);
     if (!service) {
-      throw new Error(`Service missing from catalog: ${op.serviceId}`);
+      throw new SeedPartialFailureError({
+        batchId: plan.batchId,
+        operationsPlanned: plan.operations.length,
+        operationsCommitted: operationsCreated,
+        failedOperationIndex: op.index,
+        cause: new Error(`Service missing from catalog: ${op.serviceId}`),
+      });
     }
 
     const transaction = new sql.Transaction(pool);
@@ -202,6 +263,8 @@ export const executeHistoricalSeed = async (
         .input("serviceId", sql.UniqueIdentifier, op.serviceId)
         .input("scheduledStart", sql.DateTime2, scheduledStart)
         .input("scheduledEnd", sql.DateTime2, scheduledEnd)
+        .input("earlyTol", sql.Int, earlyTol)
+        .input("lateTol", sql.Int, lateTol)
         .input("notes", sql.NVarChar(1000), notes)
         .query(`
           INSERT INTO scheduled_operations (
@@ -212,11 +275,10 @@ export const executeHistoricalSeed = async (
           OUTPUT INSERTED.id
           VALUES (
             @companyId, @serviceId, @scheduledStart, @scheduledEnd,
-            60, 90, N'COMPLETED', N'ONE_TIME', @notes
+            @earlyTol, @lateTol, N'COMPLETED', N'ONE_TIME', @notes
           )
         `);
       const operationId = String(opResult.recordset[0].id);
-      operationsCreated += 1;
 
       const wdResult = await new sql.Request(transaction)
         .input("companyId", sql.UniqueIdentifier, plan.companyId)
@@ -224,6 +286,8 @@ export const executeHistoricalSeed = async (
         .input("workDate", sql.Date, op.workDate)
         .input("expectedStart", sql.DateTime2, scheduledStart)
         .input("expectedEnd", sql.DateTime2, scheduledEnd)
+        .input("earlyTol", sql.Int, earlyTol)
+        .input("lateTol", sql.Int, lateTol)
         .query(`
           INSERT INTO operation_workdays (
             company_id, operation_id, work_date, expected_start_at, expected_end_at,
@@ -232,16 +296,19 @@ export const executeHistoricalSeed = async (
           OUTPUT INSERTED.id
           VALUES (
             @companyId, @operationId, @workDate, @expectedStart, @expectedEnd,
-            60, 90, 1, N'ACTIVE'
+            @earlyTol, @lateTol, 1, N'ACTIVE'
           )
         `);
       const workdayId = String(wdResult.recordset[0].id);
-      workdaysCreated += 1;
 
       const sourceWorkTeamId =
         op.mode === "work_team" && op.workTeamIndex !== null
           ? workTeamIds[op.workTeamIndex] ?? null
           : null;
+
+      let opAssignments = 0;
+      let opEw = 0;
+      let opAtt = 0;
 
       for (const assignment of op.assignments) {
         const asgResult = await new sql.Request(transaction)
@@ -265,7 +332,7 @@ export const executeHistoricalSeed = async (
             )
           `);
         const assignmentId = String(asgResult.recordset[0].id);
-        assignmentsCreated += 1;
+        opAssignments += 1;
 
         const ewResult = await new sql.Request(transaction)
           .input("companyId", sql.UniqueIdentifier, plan.companyId)
@@ -283,7 +350,7 @@ export const executeHistoricalSeed = async (
             )
           `);
         const employeeWorkdayId = String(ewResult.recordset[0].id);
-        employeeWorkdaysCreated += 1;
+        opEw += 1;
 
         if (assignment.attendance === "none") {
           continue;
@@ -295,12 +362,22 @@ export const executeHistoricalSeed = async (
           service.allowedRadiusMeters,
           () => rng.next(),
         );
-        const geo = evaluateGeofence(point.distanceMeters, service.allowedRadiusMeters, 30);
+        const geo = evaluateGeofence(
+          point.distanceMeters,
+          service.allowedRadiusMeters,
+          reviewMargin,
+        );
         const receivedAt =
           assignment.attendance === "late"
-            ? new Date(scheduledStart.getTime() + 70 * 60 * 1000)
+            ? new Date(scheduledStart.getTime() + Math.min(70, lateTol - 1) * 60 * 1000)
             : new Date(scheduledStart.getTime() + 5 * 60 * 1000);
-        const punctuality = evaluatePunctuality(receivedAt, scheduledStart, 60, 90, 15);
+        const punctuality = evaluatePunctuality(
+          receivedAt,
+          scheduledStart,
+          earlyTol,
+          lateTol,
+          onTimeGrace,
+        );
         const combined = combineAttendanceValidation(geo, punctuality);
 
         await new sql.Request(transaction)
@@ -330,13 +407,24 @@ export const executeHistoricalSeed = async (
               NULL, @reason, @receivedAt
             )
           `);
-        attendanceCreated += 1;
+        opAtt += 1;
       }
 
       await transaction.commit();
+      operationsCreated += 1;
+      workdaysCreated += 1;
+      assignmentsCreated += opAssignments;
+      employeeWorkdaysCreated += opEw;
+      attendanceCreated += opAtt;
     } catch (error) {
       await transaction.rollback();
-      throw error;
+      throw new SeedPartialFailureError({
+        batchId: plan.batchId,
+        operationsPlanned: plan.operations.length,
+        operationsCommitted: operationsCreated,
+        failedOperationIndex: op.index,
+        cause: error,
+      });
     }
   }
 
@@ -358,8 +446,9 @@ export const countSeededByBatch = async (
   workTeams: number;
   marker: string;
 }> => {
+  assertValidBatchId(batchId);
   const pool = getPool();
-  const marker = batchMarkerSqlLike(batchId);
+  const marker = buildBatchMarker(batchId);
   const ops = await pool
     .request()
     .input("companyId", sql.UniqueIdentifier, companyId)
@@ -367,7 +456,9 @@ export const countSeededByBatch = async (
     .query(`
       SELECT COUNT(*) AS cnt
       FROM scheduled_operations
-      WHERE company_id = @companyId AND notes LIKE @marker
+      WHERE company_id = @companyId
+        AND notes IS NOT NULL
+        AND ${seedBatchMarkerSqlPredicate("notes")}
     `);
   const teams = await pool
     .request()
@@ -376,11 +467,13 @@ export const countSeededByBatch = async (
     .query(`
       SELECT COUNT(*) AS cnt
       FROM work_teams
-      WHERE company_id = @companyId AND description LIKE @marker
+      WHERE company_id = @companyId
+        AND description IS NOT NULL
+        AND ${seedBatchMarkerSqlPredicate("description")}
     `);
   return {
     operations: Number(ops.recordset[0].cnt),
     workTeams: Number(teams.recordset[0].cnt),
-    marker: buildBatchMarker(batchId),
+    marker,
   };
 };

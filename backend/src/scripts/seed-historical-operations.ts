@@ -6,6 +6,7 @@ import {
   assertBatchNotExists,
   executeHistoricalSeed,
   loadSeedCatalog,
+  SeedPartialFailureError,
 } from "./historical-seed/execute";
 import { isCycleIntegrationName } from "./historical-seed/markers";
 import { planHistoricalSeed } from "./historical-seed/planner";
@@ -63,6 +64,17 @@ const printPlanSummary = (input: {
   }
 };
 
+const printPartialFailure = (error: SeedPartialFailureError): void => {
+  const { batchId, operationsPlanned, operationsCommitted, failedOperationIndex } = error.details;
+  console.error("[synthetic_seed] SEED_PARTIAL_FAILURE");
+  console.error(`[synthetic_seed] batchId=${batchId}`);
+  console.error(`[synthetic_seed] operationsPlanned=${operationsPlanned}`);
+  console.error(`[synthetic_seed] operationsCommitted=${operationsCommitted}`);
+  console.error(`[synthetic_seed] failedOperationIndex=${failedOperationIndex}`);
+  console.error(`[synthetic_seed] Run: --cleanup ${batchId}`);
+  console.error("[synthetic_seed] cause:", error.details.cause);
+};
+
 async function main(): Promise<void> {
   assertSeedEnvironmentSafe();
   const options = parseHistoricalSeedCliArgs();
@@ -107,7 +119,6 @@ async function main(): Promise<void> {
       );
     }
 
-    // Safety: ensure exclusion helper matches catalog filter.
     for (const employee of catalog.employees) {
       if (isCycleIntegrationName(employee.name)) {
         throw new Error(`Cycle integration employee leaked into catalog: ${employee.name}`);
@@ -149,16 +160,26 @@ async function main(): Promise<void> {
 
     await assertBatchNotExists(options.companyId, plan.batchId);
     log("Executing seed (no WhatsApp / assignment services)…");
-    const result = await executeHistoricalSeed(plan, catalog);
-    log("Seed completed:", result);
-    log(`Batch id for cleanup: ${plan.batchId}`);
+    try {
+      const result = await executeHistoricalSeed(plan, catalog);
+      log("Seed completed:", result);
+      log(`Batch id for cleanup: ${plan.batchId}`);
+    } catch (error) {
+      if (error instanceof SeedPartialFailureError) {
+        printPartialFailure(error);
+        throw error;
+      }
+      throw error;
+    }
   } finally {
     await closeDatabase();
   }
 }
 
 main().catch((error: unknown) => {
-  console.error("[synthetic_seed] FAILED", error);
+  if (!(error instanceof SeedPartialFailureError)) {
+    console.error("[synthetic_seed] FAILED", error);
+  }
   process.exitCode = 1;
   void closeDatabase().finally(() => {
     process.exit(1);

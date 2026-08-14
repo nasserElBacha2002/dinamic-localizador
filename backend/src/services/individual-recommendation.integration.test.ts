@@ -14,8 +14,12 @@ import { insertOperationalLocationFixture } from "../test-helpers/operational-lo
 import { locationZoneService } from "./location-zone.service";
 import { employeeService } from "./employee.service";
 import { operationAssignmentService } from "./operation-assignment.service";
+import { operationService } from "./operation.service";
 import { individualRecommendationService } from "./individual-recommendation.service";
 import { AppError } from "../errors/app-error";
+import { getDateIsoInTimezone } from "../utils/absence-date";
+import { randomUUID } from "node:crypto";
+import { WEEKDAYS } from "../constants/weekday";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -641,6 +645,123 @@ describeDatabaseIntegration("individual employee recommendations phase1", () => 
     assert.equal(
       ghost.reasons.some((reason) => reason.code === "TEAM_AFFINITY"),
       false,
+    );
+  });
+
+  it("RECURRING recommendations honor effectiveDate for active team context", async () => {
+    const suffix = uniqueSuffix();
+    const company = await createPlatformCompanyFixture({
+      name: `Rec Effective ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `rec-eff-${suffix}@integration.test` },
+    });
+    const companyId = company.data.company.id;
+    createdCompanyIds.push(companyId);
+
+    const serviceId = await createService(companyId, `Svc Eff ${suffix}`, -34.6, -58.38);
+    const today = getDateIsoInTimezone(new Date(), "America/Argentina/Buenos_Aires");
+    const future = isoDaysFromNow(14);
+    const dayBeforeFuture = isoDaysFromNow(13);
+
+    const createEmp = async (name: string, seed: number) =>
+      employeeService.create(companyId, {
+        name,
+        phoneNumber: uniquePhone(seed),
+        employeeType: "fijo",
+        documentNumber: null,
+        categoryId: null,
+        locationZoneId: null,
+      });
+
+    const empA = await createEmp("Eff A", 31);
+    const empB = await createEmp("Eff B", 32);
+    const empC = await createEmp("Eff C", 33);
+
+    const operation = await operationService.createRecurring(
+      companyId,
+      {
+        operationKind: "RECURRING",
+        serviceId,
+        validFrom: today,
+        scheduleSource: "CUSTOM",
+        scheduleDays: WEEKDAYS.map((dayOfWeek) => ({
+          dayOfWeek,
+          isEnabled: true,
+          startTime: "09:00",
+          endTime: "18:00",
+        })),
+      },
+      { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
+    );
+
+    const insertAsg = async (
+      employeeId: string,
+      validFrom: string,
+      validUntil: string | null,
+    ) => {
+      await getPool()
+        .request()
+        .input("id", sql.UniqueIdentifier, randomUUID())
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("operationId", sql.UniqueIdentifier, operation.id)
+        .input("employeeId", sql.UniqueIdentifier, employeeId)
+        .input("validFrom", sql.Date, validFrom)
+        .input("validUntil", sql.Date, validUntil)
+        .query(`
+          INSERT INTO operation_assignments (
+            id, company_id, operation_id, employee_id, valid_from, valid_until,
+            confirmation_status, assignment_origin
+          )
+          VALUES (
+            @id, @companyId, @operationId, @employeeId, @validFrom, @validUntil,
+            N'CONFIRMED', N'MANUAL'
+          )
+        `);
+    };
+
+    await insertAsg(empA.id, today, dayBeforeFuture);
+    await insertAsg(empB.id, today, dayBeforeFuture);
+    await insertAsg(empC.id, future, null);
+
+    const todayResult = await individualRecommendationService.recommendEmployees(
+      companyId,
+      operation.id,
+      10,
+    );
+    assert.equal(
+      todayResult.recommendations.find((item) => item.employee.id === empA.id),
+      undefined,
+    );
+    assert.equal(
+      todayResult.recommendations.find((item) => item.employee.id === empB.id),
+      undefined,
+    );
+    assert.ok(todayResult.recommendations.find((item) => item.employee.id === empC.id));
+
+    const futureResult = await individualRecommendationService.recommendEmployees(
+      companyId,
+      operation.id,
+      10,
+      future,
+    );
+    assert.ok(futureResult.recommendations.find((item) => item.employee.id === empA.id));
+    assert.ok(futureResult.recommendations.find((item) => item.employee.id === empB.id));
+    assert.equal(
+      futureResult.recommendations.find((item) => item.employee.id === empC.id),
+      undefined,
+    );
+
+    await assert.rejects(
+      async () => {
+        const oneTimeId = await createCurrentOperation({ companyId, serviceId });
+        await individualRecommendationService.recommendEmployees(
+          companyId,
+          oneTimeId,
+          10,
+          future,
+        );
+      },
+      (error: unknown) => error instanceof AppError && error.code === "EFFECTIVE_DATE_NOT_APPLICABLE",
     );
   });
 });

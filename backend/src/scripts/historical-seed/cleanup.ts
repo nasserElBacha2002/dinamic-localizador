@@ -1,6 +1,6 @@
 import sql from "mssql";
 import { getPool } from "../../database/connection";
-import { batchMarkerSqlLike } from "./markers";
+import { assertValidBatchId, buildBatchMarker } from "./markers";
 
 export interface CleanupSeedResult {
   attendanceDeleted: number;
@@ -11,6 +11,10 @@ export interface CleanupSeedResult {
   workTeamMembersDeleted: number;
   workTeamsDeleted: number;
 }
+
+/** Literal substring match — never LIKE (avoids [] % _ semantics). */
+export const seedBatchMarkerSqlPredicate = (columnSql: string): string =>
+  `CHARINDEX(@marker, ${columnSql}) > 0`;
 
 const countSeedChildren = async (
   companyId: string,
@@ -82,8 +86,44 @@ const countSeedChildren = async (
   };
 };
 
+export const listSeedOperationIdsByBatch = async (
+  companyId: string,
+  batchId: string,
+): Promise<string[]> => {
+  const marker = buildBatchMarker(batchId);
+  const result = await getPool()
+    .request()
+    .input("companyId", sql.UniqueIdentifier, companyId)
+    .input("marker", sql.NVarChar(200), marker)
+    .query(`
+      SELECT id FROM scheduled_operations
+      WHERE company_id = @companyId
+        AND notes IS NOT NULL
+        AND ${seedBatchMarkerSqlPredicate("notes")}
+    `);
+  return (result.recordset as Array<{ id: string }>).map((r) => String(r.id));
+};
+
+export const listSeedWorkTeamIdsByBatch = async (
+  companyId: string,
+  batchId: string,
+): Promise<string[]> => {
+  const marker = buildBatchMarker(batchId);
+  const result = await getPool()
+    .request()
+    .input("companyId", sql.UniqueIdentifier, companyId)
+    .input("marker", sql.NVarChar(200), marker)
+    .query(`
+      SELECT id FROM work_teams
+      WHERE company_id = @companyId
+        AND description IS NOT NULL
+        AND ${seedBatchMarkerSqlPredicate("description")}
+    `);
+  return (result.recordset as Array<{ id: string }>).map((r) => String(r.id));
+};
+
 /**
- * Deletes only synthetic rows tagged with the batch marker.
+ * Deletes only synthetic rows tagged with the exact batch marker.
  * Does not modify employees or services.
  */
 export const cleanupHistoricalSeed = async (
@@ -91,28 +131,10 @@ export const cleanupHistoricalSeed = async (
   batchId: string,
   options: { dryRun: boolean } = { dryRun: false },
 ): Promise<CleanupSeedResult> => {
+  assertValidBatchId(batchId);
   const pool = getPool();
-  const marker = batchMarkerSqlLike(batchId);
-
-  const opIdsResult = await pool
-    .request()
-    .input("companyId", sql.UniqueIdentifier, companyId)
-    .input("marker", sql.NVarChar(200), marker)
-    .query(`
-      SELECT id FROM scheduled_operations
-      WHERE company_id = @companyId AND notes LIKE @marker
-    `);
-  const operationIds = (opIdsResult.recordset as Array<{ id: string }>).map((r) => String(r.id));
-
-  const teamIdsResult = await pool
-    .request()
-    .input("companyId", sql.UniqueIdentifier, companyId)
-    .input("marker", sql.NVarChar(200), marker)
-    .query(`
-      SELECT id FROM work_teams
-      WHERE company_id = @companyId AND description LIKE @marker
-    `);
-  const workTeamIds = (teamIdsResult.recordset as Array<{ id: string }>).map((r) => String(r.id));
+  const operationIds = await listSeedOperationIdsByBatch(companyId, batchId);
+  const workTeamIds = await listSeedWorkTeamIdsByBatch(companyId, batchId);
 
   const preview = await countSeedChildren(companyId, operationIds, workTeamIds);
   if (options.dryRun) {

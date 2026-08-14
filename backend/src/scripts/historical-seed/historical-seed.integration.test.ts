@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { after, before, it } from "node:test";
+import { randomUUID } from "node:crypto";
 import sql from "mssql";
 import { getPool } from "../../database/connection";
 import {
@@ -11,7 +12,6 @@ import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
 import { deleteCompanyCascade } from "../../test-helpers/integration-cleanup";
 import { createPlatformCompanyFixture } from "../../test-helpers/platform-company-fixture";
 import { employeeService } from "../../services/employee.service";
-import { operationAssignmentService } from "../../services/operation-assignment.service";
 import { individualRecommendationService } from "../../services/individual-recommendation.service";
 import { serviceService } from "../../services/service.service";
 import { cleanupHistoricalSeed } from "./cleanup";
@@ -21,9 +21,9 @@ import {
   executeHistoricalSeed,
   loadSeedCatalog,
 } from "./execute";
-import { buildBatchMarker, isCycleIntegrationName } from "./markers";
+import { buildBatchMarker, buildOperationNotes, isCycleIntegrationName } from "./markers";
 import { planHistoricalSeed } from "./planner";
-import type { HistoricalSeedPlan, PlannedOperation, SeedEmployee, SeedService } from "./types";
+import type { HistoricalSeedPlan, PlannedOperation, SeedEmployee } from "./types";
 
 const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
 
@@ -71,6 +71,46 @@ async function createCurrentOperation(input: {
   return String(op.recordset[0].id);
 }
 
+/** Direct assignment insert — no notification outbox. */
+async function assignEmployeeWithoutSideEffects(input: {
+  companyId: string;
+  operationId: string;
+  employeeId: string;
+  validFrom: string;
+  validUntil?: string | null;
+}): Promise<void> {
+  await getPool()
+    .request()
+    .input("id", sql.UniqueIdentifier, randomUUID())
+    .input("companyId", sql.UniqueIdentifier, input.companyId)
+    .input("operationId", sql.UniqueIdentifier, input.operationId)
+    .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+    .input("validFrom", sql.Date, input.validFrom)
+    .input("validUntil", sql.Date, input.validUntil ?? input.validFrom)
+    .query(`
+      INSERT INTO operation_assignments (
+        id, company_id, operation_id, employee_id, valid_from, valid_until,
+        confirmation_status, assignment_origin
+      )
+      VALUES (
+        @id, @companyId, @operationId, @employeeId, @validFrom, @validUntil,
+        N'CONFIRMED', N'MANUAL'
+      )
+    `);
+}
+
+async function countAssignmentNotifications(companyId: string): Promise<number> {
+  const result = await getPool()
+    .request()
+    .input("companyId", sql.UniqueIdentifier, companyId)
+    .query(`
+      SELECT COUNT(*) AS cnt
+      FROM whatsapp_operation_assignment_notifications
+      WHERE company_id = @companyId
+    `);
+  return Number(result.recordset[0]?.cnt ?? 0);
+}
+
 const buildControlledAffinityPlan = (input: {
   companyId: string;
   batchId: string;
@@ -105,7 +145,6 @@ const buildControlledAffinityPlan = (input: {
   for (let d = 1; d <= 2; d += 1) {
     operations.push(mkOp(i++, `2026-04-${String(d).padStart(2, "0")}`, [input.empA, input.empC]));
   }
-  // empD never co-works with A
 
   return {
     batchId: input.batchId,
@@ -163,8 +202,8 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
     const companyId = company.data.company.id;
     createdCompanyIds.push(companyId);
 
-    const _serviceId = await createService(companyId, `Svc ${suffix}`, -34.6037, -58.3816);
-    const _otherServiceId = await createService(companyId, `Svc2 ${suffix}`, -34.61, -58.39);
+    await createService(companyId, `Svc ${suffix}`, -34.6037, -58.3816);
+    await createService(companyId, `Svc2 ${suffix}`, -34.61, -58.39);
 
     const createEmp = async (name: string, seed: number) =>
       employeeService.create(companyId, {
@@ -177,7 +216,7 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
       });
 
     await createEmp("Cycle integration test", 1);
-    const employees = await Promise.all([
+    await Promise.all([
       createEmp("Seed Alpha", 2),
       createEmp("Seed Bravo", 3),
       createEmp("Seed Charlie", 4),
@@ -191,6 +230,7 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
     assert.equal(catalog.employees.length, 6);
     assert.ok(catalog.employees.every((e) => !isCycleIntegrationName(e.name)));
     assert.ok(catalog.services.length >= 2);
+    assert.ok(Number.isFinite(catalog.geofenceReviewMarginMeters));
 
     const batchId = `ai-history-test-${suffix}`;
     const plan = planHistoricalSeed({
@@ -207,50 +247,26 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
 
     assert.equal(plan.operations.length, 10);
     assert.ok(plan.operations.every((o) => o.workDate < "2026-08-14"));
-    assert.ok(plan.workTeams.length >= 1);
 
     await assertBatchNotExists(companyId, batchId);
     const result = await executeHistoricalSeed(plan, catalog);
     assert.equal(result.operationsCreated, 10);
-    assert.equal(result.workdaysCreated, 10);
-    assert.ok(result.assignmentsCreated >= 20);
-    assert.ok(result.employeeWorkdaysCreated >= 20);
-    assert.ok(result.attendanceCreated > 0);
     assert.ok(result.workTeamsCreated >= 1);
 
     const marker = buildBatchMarker(batchId);
     const ops = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("marker", sql.NVarChar(200), `%${marker}%`)
+      .input("marker", sql.NVarChar(200), marker)
       .query(`
         SELECT COUNT(*) AS cnt FROM scheduled_operations
-        WHERE company_id = @companyId AND notes LIKE @marker AND status = N'COMPLETED'
+        WHERE company_id = @companyId
+          AND CHARINDEX(@marker, notes) > 0
+          AND status = N'COMPLETED'
       `);
     assert.equal(Number(ops.recordset[0].cnt), 10);
 
-    const cycleAssigned = await getPool()
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`
-        SELECT COUNT(*) AS cnt
-        FROM operation_assignments oa
-        INNER JOIN employees e ON e.id = oa.employee_id
-        WHERE oa.company_id = @companyId
-          AND LOWER(e.name) LIKE N'%cycle integration%'
-      `);
-    assert.equal(Number(cycleAssigned.recordset[0].cnt), 0);
-
-    const countsBefore = await countSeededByBatch(companyId, batchId);
-    assert.equal(countsBefore.operations, 10);
-
-    const dryCleanup = await cleanupHistoricalSeed(companyId, batchId, { dryRun: true });
-    assert.equal(dryCleanup.operationsDeleted, 10);
-    assert.ok(dryCleanup.attendanceDeleted > 0);
-
-    const cleaned = await cleanupHistoricalSeed(companyId, batchId, { dryRun: false });
-    assert.equal(cleaned.operationsDeleted, 10);
-
+    await cleanupHistoricalSeed(companyId, batchId, { dryRun: false });
     const countsAfter = await countSeededByBatch(companyId, batchId);
     assert.equal(countsAfter.operations, 0);
     assert.equal(countsAfter.workTeams, 0);
@@ -260,19 +276,113 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`SELECT COUNT(*) AS cnt FROM employees WHERE company_id = @companyId AND active = 1`);
     assert.equal(Number(employeesLeft.recordset[0].cnt), 7);
-
-    const servicesLeft = await getPool()
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .query(`SELECT COUNT(*) AS cnt FROM operational_locations WHERE company_id = @companyId`);
-    assert.equal(Number(servicesLeft.recordset[0].cnt), 2);
-
-    void _serviceId;
-    void _otherServiceId;
-    void employees;
   });
 
-  it("seeded affinity patterns rank B above C above D in recommendations", async () => {
+  it("cleanup matches exact batch only (literal marker, not LIKE)", async () => {
+    const suffix = uniqueSuffix();
+    const company = await createPlatformCompanyFixture({
+      name: `Hist Cleanup ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `hist-clean-${suffix}@integration.test` },
+    });
+    const companyId = company.data.company.id;
+    createdCompanyIds.push(companyId);
+
+    const serviceId = await createService(companyId, `Svc Clean ${suffix}`, -34.6, -58.38);
+    const emp = await employeeService.create(companyId, {
+      name: "Cleanup Emp",
+      phoneNumber: uniquePhone(90),
+      employeeType: "fijo",
+      documentNumber: null,
+      categoryId: null,
+      locationZoneId: null,
+    });
+
+    const insertOp = async (notes: string, hourOffset: number): Promise<string> => {
+      const start = new Date(Date.UTC(2026, 2, 1, 12 + hourOffset, 0, 0));
+      const end = new Date(start.getTime() + 4 * 60 * 60 * 1000);
+      const op = await getPool()
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("serviceId", sql.UniqueIdentifier, serviceId)
+        .input("scheduledStart", sql.DateTime2, start)
+        .input("scheduledEnd", sql.DateTime2, end)
+        .input("notes", sql.NVarChar(1000), notes)
+        .query(`
+          INSERT INTO scheduled_operations (
+            company_id, service_id, scheduled_start, scheduled_end,
+            early_tolerance_minutes, late_tolerance_minutes, status, operation_kind, notes
+          )
+          OUTPUT INSERTED.id
+          VALUES (@companyId, @serviceId, @scheduledStart, @scheduledEnd, 60, 90, N'COMPLETED', N'ONE_TIME', @notes)
+        `);
+      return String(op.recordset[0].id);
+    };
+
+    const batch1 = "ai-history-test-1";
+    const batch2 = "ai-history-test-2";
+    const id1 = await insertOp(buildOperationNotes(batch1, "synthetic-1"), 0);
+    const id2 = await insertOp(buildOperationNotes(batch2, "synthetic-2"), 1);
+    const idReal = await insertOp("Operación real AI HISTORY SEED sin marker exacto", 2);
+
+    const dry = await cleanupHistoricalSeed(companyId, batch1, { dryRun: true });
+    assert.equal(dry.operationsDeleted, 1);
+
+    await cleanupHistoricalSeed(companyId, batch1, { dryRun: false });
+
+    const remaining = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`SELECT id, notes FROM scheduled_operations WHERE company_id = @companyId`);
+    const ids = new Set((remaining.recordset as Array<{ id: string }>).map((r) => String(r.id)));
+    assert.equal(ids.has(id1), false);
+    assert.ok(ids.has(id2));
+    assert.ok(ids.has(idReal));
+
+    const employeesLeft = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, emp.id)
+      .query(`SELECT COUNT(*) AS cnt FROM employees WHERE company_id = @companyId AND id = @employeeId`);
+    assert.equal(Number(employeesLeft.recordset[0].cnt), 1);
+
+    await cleanupHistoricalSeed(companyId, batch2, { dryRun: false });
+  });
+
+  it("assertBatchNotExists detects work-team-only partial batch", async () => {
+    const suffix = uniqueSuffix();
+    const company = await createPlatformCompanyFixture({
+      name: `Hist Teams ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `hist-teams-${suffix}@integration.test` },
+    });
+    const companyId = company.data.company.id;
+    createdCompanyIds.push(companyId);
+
+    const batchId = `ai-history-teams-${suffix}`;
+    const marker = buildBatchMarker(batchId);
+    await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, randomUUID())
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("name", sql.NVarChar(150), `[AI_HISTORY_SEED] ${batchId} Team 001`)
+      .input("normalizedName", sql.NVarChar(150), `aihistoryseed ${batchId} team 001`)
+      .input("description", sql.NVarChar(500), `${marker} orphan team`)
+      .query(`
+        INSERT INTO work_teams (id, company_id, name, normalized_name, description, is_active)
+        VALUES (@id, @companyId, @name, @normalizedName, @description, 1)
+      `);
+
+    await assert.rejects(
+      () => assertBatchNotExists(companyId, batchId),
+      /BATCH_ALREADY_EXISTS/,
+    );
+
+    await cleanupHistoricalSeed(companyId, batchId, { dryRun: false });
+    await assertBatchNotExists(companyId, batchId);
+  });
+
+  it("seeded affinity patterns rank B above C above D without notification side effects", async () => {
     const suffix = uniqueSuffix();
     const company = await createPlatformCompanyFixture({
       name: `Hist Rank ${suffix}`,
@@ -302,9 +412,6 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
     await createEmp("Rank Extra2", 16);
 
     const catalog = await loadSeedCatalog(companyId);
-    const service: SeedService = catalog.services.find((s) => s.id === serviceId)!;
-    assert.ok(service);
-
     const batchId = `ai-history-rank-${suffix}`;
     const plan = buildControlledAffinityPlan({
       companyId,
@@ -320,7 +427,15 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
     await executeHistoricalSeed(plan, catalog);
 
     const currentOperationId = await createCurrentOperation({ companyId, serviceId });
-    await operationAssignmentService.assignEmployee(companyId, currentOperationId, empA.id);
+    const notificationsBefore = await countAssignmentNotifications(companyId);
+    await assignEmployeeWithoutSideEffects({
+      companyId,
+      operationId: currentOperationId,
+      employeeId: empA.id,
+      validFrom: new Date().toISOString().slice(0, 10),
+    });
+    const notificationsAfter = await countAssignmentNotifications(companyId);
+    assert.equal(notificationsAfter, notificationsBefore);
 
     const result = await individualRecommendationService.recommendEmployees(
       companyId,

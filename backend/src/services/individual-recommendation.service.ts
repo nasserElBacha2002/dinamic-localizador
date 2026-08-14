@@ -26,16 +26,18 @@ import {
 
 /**
  * targetWorkDate: operation work context (who is currently assigned).
- * For ONE_TIME = operation work date; for RECURRING = today in company TZ.
+ * ONE_TIME = operation work date (effectiveDate ignored).
+ * RECURRING = effectiveDate ?? today in company TZ.
  */
 const resolveTargetWorkDate = async (
   companyId: string,
   operationId: string,
   operationKind: string | null | undefined,
   todayInTz: string,
+  effectiveDate?: string,
 ): Promise<string> => {
   if (operationKind === "RECURRING") {
-    return todayInTz;
+    return effectiveDate ?? todayInTz;
   }
   return operationWorkDateService.resolveOperationWorkDate(companyId, operationId);
 };
@@ -53,6 +55,7 @@ export const individualRecommendationService = {
     companyId: string,
     operationId: string,
     limitInput?: number,
+    effectiveDate?: string,
   ): Promise<IndividualEmployeeRecommendationResponse> {
     const startedAt = Date.now();
     const limit = Math.min(
@@ -65,6 +68,7 @@ export const individualRecommendationService = {
       operationId,
       algorithmVersion: WORKFORCE_RECOMMENDATION_ALGORITHM_VERSION,
       limit,
+      effectiveDate: effectiveDate ?? null,
     });
 
     try {
@@ -81,6 +85,14 @@ export const individualRecommendationService = {
         );
       }
 
+      if (operation.operationKind !== "RECURRING" && effectiveDate) {
+        throw new AppError(
+          400,
+          "EFFECTIVE_DATE_NOT_APPLICABLE",
+          "effectiveDate solo aplica a operaciones recurrentes",
+        );
+      }
+
       const settings = await companySettingsRepository.findByCompanyId(companyId);
       const timezone = resolveOperationTimezone(settings?.operationTimezone);
       const todayDate = getDateIsoInTimezone(new Date(), timezone);
@@ -90,6 +102,7 @@ export const individualRecommendationService = {
         operationId,
         operation.operationKind,
         todayDate,
+        effectiveDate,
       );
       /** Never treat a workday on/after "today" as historical experience. */
       const historyCutoffDate = minIsoDate(todayDate, targetWorkDate);

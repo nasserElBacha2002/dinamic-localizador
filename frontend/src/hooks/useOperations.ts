@@ -59,6 +59,13 @@ export async function invalidateOperationScopedQueries(
         operationId ?? "none",
       ],
     }),
+    queryClient.invalidateQueries({
+      queryKey: [
+        ...operationRecommendationKeys.company(companyId),
+        "team",
+        operationId ?? "none",
+      ],
+    }),
   ]);
 }
 

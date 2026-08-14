@@ -8,12 +8,15 @@ import {
   Select,
   Stack,
   Text,
-  TextInput,
 } from "@mantine/core";
 import { useMemo, useState } from "react";
 import { useRecommendWorkTeam } from "../../hooks/useOperationRecommendations";
 import { useServices } from "../../hooks/useServices";
-import type { TeamRecommendationMember, TeamRecommendationResponse } from "../../types/recommendation";
+import type {
+  TeamRecommendationMember,
+  TeamRecommendationOption,
+  TeamRecommendationResponse,
+} from "../../types/recommendation";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
   formatAffinityLabel,
@@ -24,14 +27,20 @@ export interface WorkTeamAiCreationPanelProps {
   onApplyMembers: (employeeIds: string[]) => void;
 }
 
+function locksFromMembers(members: TeamRecommendationMember[]): string[] {
+  return members.filter((m) => m.locked).map((m) => m.employee.id);
+}
+
 export function WorkTeamAiCreationPanel({ onApplyMembers }: WorkTeamAiCreationPanelProps) {
   const [open, setOpen] = useState(false);
   const [teamSize, setTeamSize] = useState(6);
   const [serviceId, setServiceId] = useState<string | null>(null);
-  const [nameHint, setNameHint] = useState("");
-  const [result, setResult] = useState<TeamRecommendationResponse | null>(null);
+  const [recommendationSnapshot, setRecommendationSnapshot] =
+    useState<TeamRecommendationResponse | null>(null);
+  const [selectedRank, setSelectedRank] = useState(1);
+  const [draftMembers, setDraftMembers] = useState<TeamRecommendationMember[]>([]);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [lockedIds, setLockedIds] = useState<string[]>([]);
-  const [draft, setDraft] = useState<TeamRecommendationMember[] | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
   const servicesQuery = useServices({ page: 1, limit: 100, active: true });
@@ -46,30 +55,66 @@ export function WorkTeamAiCreationPanel({ onApplyMembers }: WorkTeamAiCreationPa
     [servicesQuery.data?.data],
   );
 
-  const option = result?.recommendations[0] ?? null;
-  const members = draft ?? option?.members ?? [];
+  const selectedAlternative: TeamRecommendationOption | null = useMemo(() => {
+    if (!recommendationSnapshot) {
+      return null;
+    }
+    return (
+      recommendationSnapshot.recommendations.find((item) => item.rank === selectedRank) ??
+      recommendationSnapshot.recommendations[0] ??
+      null
+    );
+  }, [recommendationSnapshot, selectedRank]);
+
+  const incomplete = draftMembers.length < teamSize;
+  const missingCount = Math.max(0, teamSize - draftMembers.length);
+  const canApplyComplete = !draftDirty && !incomplete && draftMembers.length === teamSize;
+
+  const applyAlternative = (option: TeamRecommendationOption) => {
+    setSelectedRank(option.rank);
+    setDraftMembers(option.members);
+    setLockedIds(locksFromMembers(option.members));
+    setDraftDirty(false);
+  };
 
   const handleGenerate = async (locks?: string[]) => {
     setErrorMessage(null);
     try {
       const data = await recommendMutation.mutateAsync({
         teamSize,
-        alternatives: 2,
+        alternatives: 3,
         lockedEmployeeIds: locks ?? lockedIds,
         serviceId: serviceId || null,
       });
-      setResult(data);
+      setRecommendationSnapshot(data);
       const first = data.recommendations[0];
-      setDraft(first?.members ?? null);
-      setLockedIds(
-        (first?.members ?? [])
-          .filter((m) => m.locked)
-          .map((m) => m.employee.id),
-      );
+      if (first) {
+        applyAlternative(first);
+      } else {
+        setDraftMembers([]);
+        setDraftDirty(false);
+      }
     } catch (error) {
-      setResult(null);
-      setDraft(null);
+      setRecommendationSnapshot(null);
+      setDraftMembers([]);
+      setDraftDirty(false);
       setErrorMessage(getApiErrorMessage(error));
+    }
+  };
+
+  const handleNextAlternative = () => {
+    if (!recommendationSnapshot || draftDirty) {
+      return;
+    }
+    const ranks = recommendationSnapshot.recommendations.map((r) => r.rank).sort((a, b) => a - b);
+    if (ranks.length < 2) {
+      return;
+    }
+    const idx = ranks.indexOf(selectedRank);
+    const nextRank = ranks[(idx + 1) % ranks.length]!;
+    const option = recommendationSnapshot.recommendations.find((r) => r.rank === nextRank);
+    if (option) {
+      applyAlternative(option);
     }
   };
 
@@ -122,13 +167,6 @@ export function WorkTeamAiCreationPanel({ onApplyMembers }: WorkTeamAiCreationPa
         description="Sin sucursal, la IA no usa experiencia ni proximidad de servicio."
       />
 
-      <TextInput
-        label="Nombre sugerido (opcional, solo ayuda local)"
-        value={nameHint}
-        onChange={(event) => setNameHint(event.currentTarget.value)}
-        description="No se envía a la IA; podés copiarlo al nombre del grupo."
-      />
-
       <Button loading={recommendMutation.isPending} onClick={() => void handleGenerate()}>
         Generar equipo
       </Button>
@@ -139,30 +177,79 @@ export function WorkTeamAiCreationPanel({ onApplyMembers }: WorkTeamAiCreationPa
         </Alert>
       ) : null}
 
-      {option && members.length > 0 ? (
+      {draftMembers.length > 0 ? (
         <Stack gap="sm">
           <Group justify="space-between">
             <Text fw={500}>Equipo propuesto</Text>
-            <Badge variant="light" aria-label={formatAffinityLabel(option.score)}>
-              {formatAffinityLabel(option.score)}
-            </Badge>
+            {!draftDirty && selectedAlternative ? (
+              <Badge variant="light" aria-label={formatAffinityLabel(selectedAlternative.score)}>
+                {formatAffinityLabel(selectedAlternative.score)}
+              </Badge>
+            ) : null}
           </Group>
 
+          {draftDirty ? (
+            <Alert color="yellow" title="Equipo modificado" role="status">
+              <Text size="sm">
+                Modificaste el equipo. Completalo nuevamente con IA para recalcular afinidad.
+              </Text>
+            </Alert>
+          ) : null}
+
+          {incomplete ? (
+            <Alert color="orange" title="Equipo incompleto" role="status">
+              <Text size="sm">
+                {draftMembers.length} de {teamSize} integrantes. Falta {missingCount}.
+              </Text>
+            </Alert>
+          ) : null}
+
+          {!draftDirty && (recommendationSnapshot?.recommendations.length ?? 0) > 1 ? (
+            <Group gap="xs">
+              {recommendationSnapshot!.recommendations.map((option) => (
+                <Button
+                  key={option.rank}
+                  size="xs"
+                  variant={option.rank === selectedRank ? "filled" : "light"}
+                  onClick={() => applyAlternative(option)}
+                  aria-label={`Ver alternativa ${option.rank}`}
+                >
+                  {option.rank === 1 ? "Recomendado" : `Alt. ${option.rank}`}
+                </Button>
+              ))}
+              <Button size="xs" variant="subtle" onClick={handleNextAlternative}>
+                Generar otra opción
+              </Button>
+            </Group>
+          ) : null}
+
           <Stack gap="xs" component="ul" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {members.map((member) => (
+            {draftMembers.map((member) => (
               <Group key={member.employee.id} justify="space-between" component="li">
                 <Text size="sm">{member.employee.name}</Text>
                 <Group gap="xs">
                   <Button
                     size="xs"
                     variant={lockedIds.includes(member.employee.id) ? "filled" : "subtle"}
-                    onClick={() =>
+                    onClick={() => {
                       setLockedIds((prev) =>
                         prev.includes(member.employee.id)
                           ? prev.filter((id) => id !== member.employee.id)
                           : [...prev, member.employee.id],
-                      )
-                    }
+                      );
+                      setDraftMembers((prev) =>
+                        prev.map((m) =>
+                          m.employee.id === member.employee.id
+                            ? {
+                                ...m,
+                                locked: !m.locked,
+                                role: !m.locked ? "LOCKED" : "SUGGESTED",
+                              }
+                            : m,
+                        ),
+                      );
+                      setDraftDirty(true);
+                    }}
                     aria-label={`Fijar a ${member.employee.name}`}
                   >
                     Fijar
@@ -172,10 +259,11 @@ export function WorkTeamAiCreationPanel({ onApplyMembers }: WorkTeamAiCreationPa
                     variant="subtle"
                     color="red"
                     onClick={() => {
-                      setDraft((prev) =>
-                        (prev ?? members).filter((m) => m.employee.id !== member.employee.id),
+                      setDraftMembers((prev) =>
+                        prev.filter((m) => m.employee.id !== member.employee.id),
                       );
                       setLockedIds((prev) => prev.filter((id) => id !== member.employee.id));
+                      setDraftDirty(true);
                     }}
                     aria-label={`Quitar a ${member.employee.name}`}
                   >
@@ -186,25 +274,28 @@ export function WorkTeamAiCreationPanel({ onApplyMembers }: WorkTeamAiCreationPa
             ))}
           </Stack>
 
-          <Accordion variant="contained">
-            <Accordion.Item value="why">
-              <Accordion.Control>¿Por qué la IA recomienda este equipo?</Accordion.Control>
-              <Accordion.Panel>
-                <Stack gap={4} component="ul">
-                  {formatRecommendationReasons(option.reasons).map((line) => (
-                    <Text key={line} size="sm" component="li">
-                      {line}
-                    </Text>
-                  ))}
-                </Stack>
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
+          {!draftDirty && selectedAlternative ? (
+            <Accordion variant="contained">
+              <Accordion.Item value="why">
+                <Accordion.Control>¿Por qué la IA recomienda este equipo?</Accordion.Control>
+                <Accordion.Panel>
+                  <Stack gap={4} component="ul">
+                    {formatRecommendationReasons(selectedAlternative.reasons).map((line) => (
+                      <Text key={line} size="sm" component="li">
+                        {line}
+                      </Text>
+                    ))}
+                  </Stack>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
+          ) : null}
 
           <Group>
             <Button
+              disabled={!canApplyComplete || recommendMutation.isPending}
               onClick={() => {
-                onApplyMembers(members.map((m) => m.employee.id));
+                onApplyMembers(draftMembers.map((m) => m.employee.id));
               }}
             >
               Usar estos integrantes

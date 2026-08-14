@@ -1,5 +1,6 @@
 import sql from "mssql";
 import { WORKFORCE_RECOMMENDATION_V1_RECENCY } from "../constants/workforce-recommendation-v1";
+import { WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS } from "../constants/workforce-team-recommendation-v1";
 import { getPool } from "../database/connection";
 
 export interface RecommendationCandidateRow {
@@ -38,7 +39,53 @@ export interface CandidatePairAffinityRow {
   older: number;
 }
 
+/** Per-candidate historical connectivity aggregate (not a full pair matrix). */
+export interface CandidateConnectivitySummary {
+  employeeId: string;
+  relatedEmployeeCount: number;
+  weightedSharedOccurrences: number;
+  strongConnectionCount: number;
+  recentConnectionCount: number;
+}
+
 const uuidJsonParam = (ids: string[]): string => JSON.stringify(ids);
+
+const mapCandidateRow = (row: Record<string, unknown>): RecommendationCandidateRow => ({
+  employeeId: String(row.employee_id),
+  name: String(row.name),
+  employeeType: String(row.employee_type),
+  categoryId: row.category_id ? String(row.category_id) : null,
+  categoryName: row.category_name ? String(row.category_name) : null,
+  locationZoneId: row.location_zone_id ? String(row.location_zone_id) : null,
+  centroidLatitude:
+    row.centroid_latitude === null || row.centroid_latitude === undefined
+      ? null
+      : Number(row.centroid_latitude),
+  centroidLongitude:
+    row.centroid_longitude === null || row.centroid_longitude === undefined
+      ? null
+      : Number(row.centroid_longitude),
+});
+
+const CANDIDATE_SELECT = `
+  SELECT
+    e.id AS employee_id,
+    e.name AS name,
+    e.employee_type AS employee_type,
+    e.category_id AS category_id,
+    ec.name AS category_name,
+    e.location_zone_id AS location_zone_id,
+    lz.centroid_latitude AS centroid_latitude,
+    lz.centroid_longitude AS centroid_longitude
+  FROM employees e
+  LEFT JOIN employee_categories ec
+    ON ec.id = e.category_id
+   AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
+  LEFT JOIN location_zones lz
+    ON lz.id = e.location_zone_id
+   AND lz.company_id = e.company_id
+`;
+
 
 /**
  * Historical co-occurrence semantic (V1):
@@ -88,22 +135,7 @@ export const recommendationFeatureRepository = {
       .input("excludedIdsJson", sql.NVarChar(sql.MAX), uuidJsonParam(excludedEmployeeIds));
 
     const result = await request.query(`
-      SELECT
-        e.id AS employee_id,
-        e.name AS name,
-        e.employee_type AS employee_type,
-        e.category_id AS category_id,
-        ec.name AS category_name,
-        e.location_zone_id AS location_zone_id,
-        lz.centroid_latitude AS centroid_latitude,
-        lz.centroid_longitude AS centroid_longitude
-      FROM employees e
-      LEFT JOIN employee_categories ec
-        ON ec.id = e.category_id
-       AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
-      LEFT JOIN location_zones lz
-        ON lz.id = e.location_zone_id
-       AND lz.company_id = e.company_id
+      ${CANDIDATE_SELECT}
       WHERE e.company_id = @companyId
         AND e.active = 1
         AND NOT EXISTS (
@@ -114,29 +146,14 @@ export const recommendationFeatureRepository = {
       ORDER BY e.id ASC
     `);
 
-    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
-      employeeId: String(row.employee_id),
-      name: String(row.name),
-      employeeType: String(row.employee_type),
-      categoryId: row.category_id ? String(row.category_id) : null,
-      categoryName: row.category_name ? String(row.category_name) : null,
-      locationZoneId: row.location_zone_id ? String(row.location_zone_id) : null,
-      centroidLatitude:
-        row.centroid_latitude === null || row.centroid_latitude === undefined
-          ? null
-          : Number(row.centroid_latitude),
-      centroidLongitude:
-        row.centroid_longitude === null || row.centroid_longitude === undefined
-          ? null
-          : Number(row.centroid_longitude),
-    }));
+    return (result.recordset as Array<Record<string, unknown>>).map(mapCandidateRow);
   },
 
   /**
-   * Active employees by id (same projection as eligibility list, including zone centroids).
-   * Used for locked / already-assigned members that are excluded from the candidate pool.
+   * Existing-assignment context: company-scoped by id, includes inactive employees.
+   * Used only for members already on the operation (not for new selection).
    */
-  async listCandidatesByIds(
+  async listEmployeesByIdsForExistingContext(
     companyId: string,
     employeeIds: string[],
   ): Promise<RecommendationCandidateRow[]> {
@@ -150,22 +167,37 @@ export const recommendationFeatureRepository = {
       .input("idsJson", sql.NVarChar(sql.MAX), uuidJsonParam(employeeIds));
 
     const result = await request.query(`
-      SELECT
-        e.id AS employee_id,
-        e.name AS name,
-        e.employee_type AS employee_type,
-        e.category_id AS category_id,
-        ec.name AS category_name,
-        e.location_zone_id AS location_zone_id,
-        lz.centroid_latitude AS centroid_latitude,
-        lz.centroid_longitude AS centroid_longitude
-      FROM employees e
-      LEFT JOIN employee_categories ec
-        ON ec.id = e.category_id
-       AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
-      LEFT JOIN location_zones lz
-        ON lz.id = e.location_zone_id
-       AND lz.company_id = e.company_id
+      ${CANDIDATE_SELECT}
+      WHERE e.company_id = @companyId
+        AND EXISTS (
+          SELECT 1
+          FROM OPENJSON(@idsJson) j
+          WHERE TRY_CAST(j.[value] AS UNIQUEIDENTIFIER) = e.id
+        )
+      ORDER BY e.id ASC
+    `);
+
+    return (result.recordset as Array<Record<string, unknown>>).map(mapCandidateRow);
+  },
+
+  /**
+   * Active employees by id (eligible for new selection / requested locks).
+   */
+  async listActiveEmployeesByIds(
+    companyId: string,
+    employeeIds: string[],
+  ): Promise<RecommendationCandidateRow[]> {
+    if (employeeIds.length === 0) {
+      return [];
+    }
+
+    const request = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("idsJson", sql.NVarChar(sql.MAX), uuidJsonParam(employeeIds));
+
+    const result = await request.query(`
+      ${CANDIDATE_SELECT}
       WHERE e.company_id = @companyId
         AND e.active = 1
         AND EXISTS (
@@ -176,22 +208,18 @@ export const recommendationFeatureRepository = {
       ORDER BY e.id ASC
     `);
 
-    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
-      employeeId: String(row.employee_id),
-      name: String(row.name),
-      employeeType: String(row.employee_type),
-      categoryId: row.category_id ? String(row.category_id) : null,
-      categoryName: row.category_name ? String(row.category_name) : null,
-      locationZoneId: row.location_zone_id ? String(row.location_zone_id) : null,
-      centroidLatitude:
-        row.centroid_latitude === null || row.centroid_latitude === undefined
-          ? null
-          : Number(row.centroid_latitude),
-      centroidLongitude:
-        row.centroid_longitude === null || row.centroid_longitude === undefined
-          ? null
-          : Number(row.centroid_longitude),
-    }));
+    return (result.recordset as Array<Record<string, unknown>>).map(mapCandidateRow);
+  },
+
+  /**
+   * @deprecated Prefer listActiveEmployeesByIds / listEmployeesByIdsForExistingContext.
+   * Kept as active-only alias for callers that need eligible rows by id.
+   */
+  async listCandidatesByIds(
+    companyId: string,
+    employeeIds: string[],
+  ): Promise<RecommendationCandidateRow[]> {
+    return this.listActiveEmployeesByIds(companyId, employeeIds);
   },
 
   /**
@@ -334,6 +362,113 @@ export const recommendationFeatureRepository = {
     return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
       employeeId: String(row.employee_id),
       serviceWorkdayCount: Number(row.service_workday_count),
+    }));
+  },
+
+  /**
+   * Per-candidate historical connectivity aggregate within a candidate set.
+   * One row per candidate that has ≥1 partner in the set — not a full pair matrix.
+   */
+  async listCandidateConnectivitySummary(input: {
+    companyId: string;
+    candidateIds: string[];
+    historyCutoffDate: string;
+    todayDate: string;
+  }): Promise<CandidateConnectivitySummary[]> {
+    if (input.candidateIds.length < 2) {
+      return [];
+    }
+
+    const request = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("historyCutoffDate", sql.Date, input.historyCutoffDate)
+      .input("todayDate", sql.Date, input.todayDate)
+      .input("recentDays", sql.Int, WORKFORCE_RECOMMENDATION_V1_RECENCY.recentDays)
+      .input("midDays", sql.Int, WORKFORCE_RECOMMENDATION_V1_RECENCY.midDays)
+      .input("recentWeight", sql.Float, WORKFORCE_RECOMMENDATION_V1_RECENCY.recentWeight)
+      .input("midWeight", sql.Float, WORKFORCE_RECOMMENDATION_V1_RECENCY.midWeight)
+      .input("olderWeight", sql.Float, WORKFORCE_RECOMMENDATION_V1_RECENCY.olderWeight)
+      .input("pairAffinityCap", sql.Float, WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS.pairAffinityCap)
+      .input("candidateIdsJson", sql.NVarChar(sql.MAX), uuidJsonParam(input.candidateIds));
+
+    const result = await request.query(`
+      WITH candidates AS (
+        SELECT DISTINCT TRY_CAST([value] AS UNIQUEIDENTIFIER) AS employee_id
+        FROM OPENJSON(@candidateIdsJson)
+        WHERE TRY_CAST([value] AS UNIQUEIDENTIFIER) IS NOT NULL
+      ),
+      ${HISTORICAL_EMPLOYEE_WORKDAY_CTE},
+      pair_agg AS (
+        SELECT
+          left_ew.employee_id AS employee_a_id,
+          right_ew.employee_id AS employee_b_id,
+          COUNT_BIG(*) AS shared_occurrences,
+          SUM(
+            CASE WHEN DATEDIFF(day, left_ew.work_date, @todayDate) <= @recentDays THEN 1 ELSE 0 END
+          ) AS recent_90,
+          SUM(
+            CASE
+              WHEN DATEDIFF(day, left_ew.work_date, @todayDate) > @recentDays
+               AND DATEDIFF(day, left_ew.work_date, @todayDate) <= @midDays
+              THEN 1
+              ELSE 0
+            END
+          ) AS mid_365,
+          SUM(
+            CASE WHEN DATEDIFF(day, left_ew.work_date, @todayDate) > @midDays THEN 1 ELSE 0 END
+          ) AS older
+        FROM historical_ew left_ew
+        INNER JOIN candidates c_left
+          ON c_left.employee_id = left_ew.employee_id
+        INNER JOIN historical_ew right_ew
+          ON right_ew.operation_workday_id = left_ew.operation_workday_id
+         AND CAST(left_ew.employee_id AS varchar(36)) < CAST(right_ew.employee_id AS varchar(36))
+        INNER JOIN candidates c_right
+          ON c_right.employee_id = right_ew.employee_id
+        GROUP BY left_ew.employee_id, right_ew.employee_id
+      ),
+      directed AS (
+        SELECT
+          employee_a_id AS employee_id,
+          employee_b_id AS partner_id,
+          shared_occurrences,
+          recent_90,
+          mid_365,
+          older,
+          (recent_90 * @recentWeight + mid_365 * @midWeight + older * @olderWeight) AS weighted_shared
+        FROM pair_agg
+        UNION ALL
+        SELECT
+          employee_b_id AS employee_id,
+          employee_a_id AS partner_id,
+          shared_occurrences,
+          recent_90,
+          mid_365,
+          older,
+          (recent_90 * @recentWeight + mid_365 * @midWeight + older * @olderWeight) AS weighted_shared
+        FROM pair_agg
+      )
+      SELECT
+        employee_id,
+        COUNT_BIG(DISTINCT partner_id) AS related_employee_count,
+        SUM(weighted_shared) AS weighted_shared_occurrences,
+        SUM(
+          CASE WHEN weighted_shared >= @pairAffinityCap THEN 1 ELSE 0 END
+        ) AS strong_connection_count,
+        SUM(
+          CASE WHEN recent_90 > 0 THEN 1 ELSE 0 END
+        ) AS recent_connection_count
+      FROM directed
+      GROUP BY employee_id
+    `);
+
+    return (result.recordset as Array<Record<string, unknown>>).map((row) => ({
+      employeeId: String(row.employee_id),
+      relatedEmployeeCount: Number(row.related_employee_count),
+      weightedSharedOccurrences: Number(row.weighted_shared_occurrences),
+      strongConnectionCount: Number(row.strong_connection_count),
+      recentConnectionCount: Number(row.recent_connection_count),
     }));
   },
 

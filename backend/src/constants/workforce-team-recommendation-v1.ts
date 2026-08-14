@@ -32,13 +32,34 @@ export const WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS = {
 
 /**
  * Relative weights when features are available.
- * Recency is an intra-team collaboration-freshness signal (reuses V1 decay buckets).
+ *
+ * Recency is NOT a separate team-score weight in V1 (Option B):
+ * pair affinity intensity already applies WORKFORCE_RECOMMENDATION_V1_RECENCY
+ * decay (recent/mid/older). A separate recency term would double-count.
+ * TEAM_RECENT_COLLABORATION remains an explanatory reason only.
  */
 export const WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS = {
   teamAffinity: 0.5,
-  serviceExperience: 0.25,
-  location: 0.15,
-  recency: 0.1,
+  serviceExperience: 0.3,
+  location: 0.2,
+} as const;
+
+/**
+ * Pre-pruning blend (deterministic) before loading sparse pair matrix.
+ * Connectivity is set-based aggregate — not full N² materialization.
+ */
+export const WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_WEIGHTS = {
+  historicalConnectivity: 0.45,
+  affinityToFixed: 0.25,
+  serviceExperience: 0.2,
+  location: 0.1,
+} as const;
+
+/** Caps for connectivity aggregate used only in pre-pruning. */
+export const WORKFORCE_TEAM_RECOMMENDATION_V1_PRUNE_CAPS = {
+  relatedEmployeesCap: 8,
+  weightedSharedCap: 20,
+  strongConnectionsCap: 5,
 } as const;
 
 export const WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS = {

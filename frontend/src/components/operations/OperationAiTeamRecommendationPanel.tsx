@@ -55,6 +55,12 @@ function memberBadge(member: TeamRecommendationMember): { label: string; color: 
   return { label: "Sugerido", color: "teal" };
 }
 
+function locksFromMembers(members: TeamRecommendationMember[]): string[] {
+  return members
+    .filter((m) => m.alreadyAssigned || m.locked)
+    .map((m) => m.employee.id);
+}
+
 export function OperationAiTeamRecommendationPanel({
   operationId,
   operationKind,
@@ -68,9 +74,11 @@ export function OperationAiTeamRecommendationPanel({
   const [validFrom, setValidFrom] = useState(getTodayDateInput());
   const [validUntil, setValidUntil] = useState("");
   const [teamSize, setTeamSize] = useState(Math.max(6, existingMemberCount + 2));
-  const [result, setResult] = useState<TeamRecommendationResponse | null>(null);
+  const [recommendationSnapshot, setRecommendationSnapshot] =
+    useState<TeamRecommendationResponse | null>(null);
   const [selectedRank, setSelectedRank] = useState(1);
-  const [draftMembers, setDraftMembers] = useState<TeamRecommendationMember[] | null>(null);
+  const [draftMembers, setDraftMembers] = useState<TeamRecommendationMember[]>([]);
+  const [draftDirty, setDraftDirty] = useState(false);
   const [lockedIds, setLockedIds] = useState<string[]>([]);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [assigning, setAssigning] = useState(false);
@@ -78,7 +86,10 @@ export function OperationAiTeamRecommendationPanel({
   const recommendMutation = useRecommendOperationTeam(operationId);
 
   const validityErrors = useMemo(
-    () => (isRecurring ? getRecurringValidityErrors(validFrom, validUntil) : { validFrom: null, validUntil: null }),
+    () =>
+      isRecurring
+        ? getRecurringValidityErrors(validFrom, validUntil)
+        : { validFrom: null, validUntil: null },
     [isRecurring, validFrom, validUntil],
   );
   const hasValidityErrors = hasRecurringValidityErrors(validityErrors);
@@ -86,22 +97,27 @@ export function OperationAiTeamRecommendationPanel({
 
   const slotsHint = Math.max(0, teamSize - existingMemberCount);
 
-  const selectedOption: TeamRecommendationOption | null = useMemo(() => {
-    if (!result) {
+  const selectedAlternative: TeamRecommendationOption | null = useMemo(() => {
+    if (!recommendationSnapshot) {
       return null;
     }
-    return result.recommendations.find((item) => item.rank === selectedRank) ?? result.recommendations[0] ?? null;
-  }, [result, selectedRank]);
-
-  const displayMembers = draftMembers ?? selectedOption?.members ?? [];
-
-  const syncDraftFromOption = (option: TeamRecommendationOption) => {
-    setDraftMembers(option.members);
-    setLockedIds(
-      option.members
-        .filter((m) => m.alreadyAssigned || m.locked)
-        .map((m) => m.employee.id),
+    return (
+      recommendationSnapshot.recommendations.find((item) => item.rank === selectedRank) ??
+      recommendationSnapshot.recommendations[0] ??
+      null
     );
+  }, [recommendationSnapshot, selectedRank]);
+
+  const incomplete = draftMembers.length < teamSize;
+  const missingCount = Math.max(0, teamSize - draftMembers.length);
+  const canUseCompleteRecommendation = !draftDirty && !incomplete && draftMembers.length === teamSize;
+  const busy = recommendMutation.isPending || assigning || assignLoading;
+
+  const applyAlternative = (option: TeamRecommendationOption) => {
+    setSelectedRank(option.rank);
+    setDraftMembers(option.members);
+    setLockedIds(locksFromMembers(option.members));
+    setDraftDirty(false);
   };
 
   const handleGenerate = async (overrideLocked?: string[]) => {
@@ -128,51 +144,74 @@ export function OperationAiTeamRecommendationPanel({
         lockedEmployeeIds: overrideLocked ?? lockedIds,
         ...(isRecurring ? { effectiveDate: validFrom } : {}),
       });
-      setResult(data);
+      setRecommendationSnapshot(data);
       const first = data.recommendations[0];
-      setSelectedRank(first?.rank ?? 1);
       if (first) {
-        syncDraftFromOption(first);
+        applyAlternative(first);
       } else {
-        setDraftMembers(null);
+        setDraftMembers([]);
+        setDraftDirty(false);
       }
     } catch (error) {
-      setResult(null);
-      setDraftMembers(null);
+      setRecommendationSnapshot(null);
+      setDraftMembers([]);
+      setDraftDirty(false);
       setErrorMessage(getApiErrorMessage(error));
     }
   };
 
+  const handleNextAlternative = () => {
+    if (!recommendationSnapshot || draftDirty) {
+      return;
+    }
+    const ranks = recommendationSnapshot.recommendations.map((r) => r.rank).sort((a, b) => a - b);
+    if (ranks.length < 2) {
+      return;
+    }
+    const idx = ranks.indexOf(selectedRank);
+    const nextRank = ranks[(idx + 1) % ranks.length]!;
+    const option = recommendationSnapshot.recommendations.find((r) => r.rank === nextRank);
+    if (option) {
+      applyAlternative(option);
+    }
+  };
+
   const handleRemoveSuggested = (employeeId: string) => {
-    setDraftMembers((prev) => {
-      const base = prev ?? selectedOption?.members ?? [];
-      return base.filter((m) => m.employee.id !== employeeId || m.alreadyAssigned);
-    });
+    setDraftMembers((prev) =>
+      prev.filter((m) => m.employee.id !== employeeId || m.alreadyAssigned),
+    );
     setLockedIds((prev) => prev.filter((id) => id !== employeeId));
+    setDraftDirty(true);
   };
 
   const handleToggleLock = (employeeId: string) => {
     setLockedIds((prev) =>
       prev.includes(employeeId) ? prev.filter((id) => id !== employeeId) : [...prev, employeeId],
     );
-    setDraftMembers((prev) => {
-      const base = prev ?? selectedOption?.members ?? [];
-      return base.map((m) =>
+    setDraftMembers((prev) =>
+      prev.map((m) =>
         m.employee.id === employeeId && !m.alreadyAssigned
           ? { ...m, locked: !m.locked, role: !m.locked ? "LOCKED" : "SUGGESTED" }
           : m,
-      );
-    });
+      ),
+    );
+    setDraftDirty(true);
   };
 
   const handleUseTeam = async () => {
+    if (!canUseCompleteRecommendation) {
+      setErrorMessage(
+        incomplete
+          ? `${draftMembers.length} de ${teamSize} integrantes. Falta ${missingCount}.`
+          : "Completá nuevamente con IA para recalcular afinidad antes de usar el equipo.",
+      );
+      return;
+    }
     if (isRecurring && hasValidityErrors) {
       setErrorMessage("Revisá las fechas de vigencia antes de asignar.");
       return;
     }
-    const toAssign = displayMembers
-      .filter((m) => !m.alreadyAssigned)
-      .map((m) => m.employee.id);
+    const toAssign = draftMembers.filter((m) => !m.alreadyAssigned).map((m) => m.employee.id);
     if (toAssign.length === 0) {
       setErrorMessage("No hay integrantes nuevos para asignar.");
       return;
@@ -207,6 +246,8 @@ export function OperationAiTeamRecommendationPanel({
       setAssigning(false);
     }
   };
+
+  const alternativeCount = recommendationSnapshot?.recommendations.length ?? 0;
 
   return (
     <Stack gap="md">
@@ -257,7 +298,7 @@ export function OperationAiTeamRecommendationPanel({
         <Button
           onClick={() => void handleGenerate()}
           loading={recommendMutation.isPending}
-          disabled={assignLoading || assigning}
+          disabled={busy && !recommendMutation.isPending}
         >
           ✨ Armar equipo con IA
         </Button>
@@ -269,36 +310,63 @@ export function OperationAiTeamRecommendationPanel({
         </Alert>
       ) : null}
 
-      {selectedOption && displayMembers.length > 0 ? (
+      {draftMembers.length > 0 ? (
         <Stack gap="sm">
           <Group justify="space-between" align="center">
             <Text fw={600}>✨ Equipo sugerido por IA</Text>
-            <Badge size="lg" variant="light" aria-label={formatAffinityLabel(selectedOption.score)}>
-              {formatAffinityLabel(selectedOption.score)}
-            </Badge>
+            {!draftDirty && selectedAlternative ? (
+              <Badge
+                size="lg"
+                variant="light"
+                aria-label={formatAffinityLabel(selectedAlternative.score)}
+              >
+                {formatAffinityLabel(selectedAlternative.score)}
+              </Badge>
+            ) : null}
           </Group>
 
-          {result && result.recommendations.length > 1 ? (
+          {draftDirty ? (
+            <Alert color="yellow" title="Equipo modificado" role="status">
+              <Text size="sm">
+                Modificaste el equipo. Completalo nuevamente con IA para recalcular afinidad.
+              </Text>
+            </Alert>
+          ) : null}
+
+          {incomplete ? (
+            <Alert color="orange" title="Equipo incompleto" role="status">
+              <Text size="sm">
+                {draftMembers.length} de {teamSize} integrantes. Falta {missingCount}.
+              </Text>
+            </Alert>
+          ) : null}
+
+          {!draftDirty && alternativeCount > 1 ? (
             <Group gap="xs">
-              {result.recommendations.map((option) => (
+              {recommendationSnapshot!.recommendations.map((option) => (
                 <Button
                   key={option.rank}
                   size="xs"
                   variant={option.rank === selectedRank ? "filled" : "light"}
-                  onClick={() => {
-                    setSelectedRank(option.rank);
-                    syncDraftFromOption(option);
-                  }}
+                  onClick={() => applyAlternative(option)}
                   aria-label={`Ver alternativa ${option.rank}`}
                 >
                   {option.rank === 1 ? "Recomendado" : `Alt. ${option.rank}`}
                 </Button>
               ))}
+              <Button
+                size="xs"
+                variant="subtle"
+                onClick={handleNextAlternative}
+                aria-label="Generar otra opción"
+              >
+                Generar otra opción
+              </Button>
             </Group>
           ) : null}
 
           <Stack gap="xs" component="ul" style={{ listStyle: "none", padding: 0, margin: 0 }}>
-            {displayMembers.map((member) => {
+            {draftMembers.map((member) => {
               const badge = memberBadge(member);
               const canRemove = !member.alreadyAssigned;
               const canLock = !member.alreadyAssigned;
@@ -351,31 +419,33 @@ export function OperationAiTeamRecommendationPanel({
             })}
           </Stack>
 
-          <Accordion variant="contained">
-            <Accordion.Item value="why">
-              <Accordion.Control>¿Por qué la IA recomienda este equipo?</Accordion.Control>
-              <Accordion.Panel>
-                <Stack gap={4} component="ul">
-                  {formatRecommendationReasons(selectedOption.reasons).map((line) => (
-                    <Text key={line} size="sm" component="li">
-                      {line}
-                    </Text>
-                  ))}
-                  {formatRecommendationReasons(selectedOption.reasons).length === 0 ? (
-                    <Text size="sm" c="dimmed">
-                      La IA combinó señales disponibles para este contexto.
-                    </Text>
-                  ) : null}
-                </Stack>
-              </Accordion.Panel>
-            </Accordion.Item>
-          </Accordion>
+          {!draftDirty && selectedAlternative ? (
+            <Accordion variant="contained">
+              <Accordion.Item value="why">
+                <Accordion.Control>¿Por qué la IA recomienda este equipo?</Accordion.Control>
+                <Accordion.Panel>
+                  <Stack gap={4} component="ul">
+                    {formatRecommendationReasons(selectedAlternative.reasons).map((line) => (
+                      <Text key={line} size="sm" component="li">
+                        {line}
+                      </Text>
+                    ))}
+                    {formatRecommendationReasons(selectedAlternative.reasons).length === 0 ? (
+                      <Text size="sm" c="dimmed">
+                        La IA combinó señales disponibles para este contexto.
+                      </Text>
+                    ) : null}
+                  </Stack>
+                </Accordion.Panel>
+              </Accordion.Item>
+            </Accordion>
+          ) : null}
 
           <Group>
             <Button
               onClick={() => void handleUseTeam()}
               loading={assigning || assignLoading}
-              disabled={recommendMutation.isPending}
+              disabled={busy || !canUseCompleteRecommendation}
             >
               Usar este equipo
             </Button>
@@ -383,17 +453,9 @@ export function OperationAiTeamRecommendationPanel({
               variant="light"
               onClick={() => void handleGenerate(lockedIds)}
               loading={recommendMutation.isPending}
-              disabled={assigning || assignLoading}
+              disabled={busy && !recommendMutation.isPending}
             >
               Completar nuevamente con IA
-            </Button>
-            <Button
-              variant="subtle"
-              onClick={() => void handleGenerate([])}
-              loading={recommendMutation.isPending}
-              disabled={assigning || assignLoading}
-            >
-              Generar otra opción
             </Button>
           </Group>
         </Stack>

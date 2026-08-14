@@ -1,8 +1,10 @@
 import { AppError } from "../errors/app-error";
 import {
   WORKFORCE_TEAM_RECOMMENDATION_ALGORITHM_VERSION,
+  WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS,
   WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS,
 } from "../constants/workforce-team-recommendation-v1";
+import { WORKFORCE_RECOMMENDATION_V1_RECENCY } from "../constants/workforce-recommendation-v1";
 import type { EmployeeType } from "../constants/employee-types";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
@@ -21,6 +23,7 @@ import { getDateIsoInTimezone } from "../utils/absence-date";
 import { isOperationAssignable } from "../utils/operation-status";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { operationWorkDateService } from "./operation-work-date.service";
+import { preselectCandidateIds } from "./recommendation/candidate-preselection";
 import { composeTeamAlternatives } from "./recommendation/team-composition-engine";
 import {
   buildTeamPairMap,
@@ -30,6 +33,7 @@ import {
   distanceMetersBetween,
   minIsoDate,
   resolveLocationProximityBucket,
+  saturate,
 } from "./recommendation/recommendation-scorer";
 
 const resolveTargetWorkDate = async (
@@ -191,36 +195,12 @@ const normalizeAlternatives = (alternatives?: number): number => {
   return value;
 };
 
-const selectPairUniverse = (
-  lockedIds: string[],
-  candidateFeatures: TeamMemberFeatures[],
-  pruneLimit: number,
-): string[] => {
-  if (candidateFeatures.length <= pruneLimit) {
-    return [...new Set([...lockedIds, ...candidateFeatures.map((c) => c.employeeId)])];
-  }
-  const scored = candidateFeatures
-    .map((features) => ({
-      id: features.employeeId,
-      score:
-        (features.serviceWorkdayCount > 0 ? 0.5 : 0) +
-        (features.locationBucket === "SAME_ZONE" ||
-        features.locationBucket === "VERY_CLOSE" ||
-        features.locationBucket === "CLOSE"
-          ? 0.4
-          : features.locationBucket === "MEDIUM"
-            ? 0.2
-            : 0.05),
-    }))
-    .sort((a, b) => b.score - a.score || a.id.localeCompare(b.id));
-  return [...new Set([...lockedIds, ...scored.slice(0, pruneLimit).map((row) => row.id)])];
-};
-
 const runComposition = async (input: {
   companyId: string;
   teamSize: number;
   alternatives: number;
-  lockedIds: string[];
+  /** existing ∪ requested locks — always in the composed team */
+  fixedMemberIds: string[];
   candidates: RecommendationCandidateRow[];
   fixedRows: RecommendationCandidateRow[];
   historyCutoffDate: string;
@@ -235,12 +215,12 @@ const runComposition = async (input: {
   existingIds: ReadonlySet<string>;
   lockedRequested: ReadonlySet<string>;
   operationId: string | null;
-}): Promise<TeamRecommendationResponse> => {
+}): Promise<TeamRecommendationResponse & { prunedCandidateCount: number }> => {
   const {
     companyId,
     teamSize,
     alternatives,
-    lockedIds,
+    fixedMemberIds,
     candidates,
     fixedRows,
     historyCutoffDate,
@@ -252,14 +232,14 @@ const runComposition = async (input: {
     operationId,
   } = input;
 
-  if (lockedIds.length + candidates.length < teamSize) {
+  if (fixedMemberIds.length + candidates.length < teamSize) {
     throw new AppError(
       409,
       "INSUFFICIENT_ELIGIBLE_EMPLOYEES",
       `No hay suficientes colaboradores disponibles para completar un equipo de ${teamSize} personas`,
       {
         requestedTeamSize: teamSize,
-        fixedCount: lockedIds.length,
+        fixedCount: fixedMemberIds.length,
         eligibleCount: candidates.length,
       },
     );
@@ -298,7 +278,7 @@ const runComposition = async (input: {
   );
   const lockedFeatures = new Map<string, TeamMemberFeatures>();
   const fixedById = new Map(fixedRows.map((row) => [row.employeeId, row]));
-  for (const id of lockedIds) {
+  for (const id of fixedMemberIds) {
     const row = fixedById.get(id);
     if (!row) {
       throw new AppError(
@@ -311,7 +291,61 @@ const runComposition = async (input: {
   }
 
   const pruneLimit = WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS.candidatePruneLimit;
-  const pairUniverse = selectPairUniverse(lockedIds, candidateFeatures, pruneLimit);
+  const eligibleIds = candidateFeatures.map((c) => c.employeeId);
+
+  // Connectivity among eligible (+ fixed) for relational pre-pruning — aggregated, not N² DTO.
+  const connectivityUniverse = [...new Set([...eligibleIds, ...fixedMemberIds])];
+  const connectivityRows = await recommendationFeatureRepository.listCandidateConnectivitySummary({
+    companyId,
+    candidateIds: connectivityUniverse,
+    historyCutoffDate,
+    todayDate,
+  });
+  const connectivityById = new Map(connectivityRows.map((row) => [row.employeeId, row]));
+
+  // Affinity of candidates to fixed members (batch; empty when no fixed).
+  const affinityToFixedPairs =
+    fixedMemberIds.length > 0
+      ? await recommendationFeatureRepository.listAffinityPairs({
+          companyId,
+          assignedEmployeeIds: fixedMemberIds,
+          historyCutoffDate,
+          todayDate,
+        })
+      : [];
+  const affinityToFixedByCandidate = new Map<string, number>();
+  if (fixedMemberIds.length > 0) {
+    const weightedByCandidate = new Map<string, number>();
+    for (const pair of affinityToFixedPairs) {
+      const weighted =
+        pair.recent90 * WORKFORCE_RECOMMENDATION_V1_RECENCY.recentWeight +
+        pair.mid365 * WORKFORCE_RECOMMENDATION_V1_RECENCY.midWeight +
+        pair.older * WORKFORCE_RECOMMENDATION_V1_RECENCY.olderWeight;
+      weightedByCandidate.set(
+        pair.candidateId,
+        (weightedByCandidate.get(pair.candidateId) ?? 0) +
+          saturate(weighted, WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS.pairAffinityCap),
+      );
+    }
+    for (const [candidateId, sum] of weightedByCandidate) {
+      affinityToFixedByCandidate.set(candidateId, sum / fixedMemberIds.length);
+    }
+  }
+
+  const preselectInputs = candidateFeatures.map((features) => ({
+    features,
+    connectivity: connectivityById.get(features.employeeId) ?? null,
+    affinityToFixed: affinityToFixedByCandidate.get(features.employeeId) ?? 0,
+  }));
+
+  const prunedIds = preselectCandidateIds(preselectInputs, {
+    serviceContextAvailable,
+    locationContextAvailable,
+    pruneLimit,
+  });
+  const prunedSet = new Set(prunedIds);
+  const pairUniverse = [...new Set([...fixedMemberIds, ...prunedIds])];
+
   const pairRows = await recommendationFeatureRepository.listCandidatePairAffinity({
     companyId,
     candidateIds: pairUniverse,
@@ -319,18 +353,18 @@ const runComposition = async (input: {
     todayDate,
   });
   const pairMap = buildTeamPairMap(pairRows);
-  const poolForCompose = candidateFeatures.filter((c) => pairUniverse.includes(c.employeeId));
+  const poolForCompose = candidateFeatures.filter((c) => prunedSet.has(c.employeeId));
 
   const alternativesResult = composeTeamAlternatives(
     {
       teamSize,
-      lockedIds,
+      lockedIds: fixedMemberIds,
       candidates: poolForCompose,
       pairMap,
       serviceContextAvailable,
       locationContextAvailable,
       alternatives,
-      immutableIds: lockedIds,
+      immutableIds: fixedMemberIds,
       pruneLimit,
     },
     lockedFeatures,
@@ -364,9 +398,10 @@ const runComposition = async (input: {
     requestedTeamSize: teamSize,
     existingMemberCount: existingIds.size,
     lockedMemberCount: [...lockedRequested].filter((id) => !existingIds.has(id)).length,
-    slotsToFill: teamSize - lockedIds.length,
+    slotsToFill: teamSize - fixedMemberIds.length,
     candidateCount: candidates.length,
     pairCount: pairRows.length,
+    prunedCandidateCount: prunedIds.length,
     recommendations,
   };
 };
@@ -438,36 +473,40 @@ export const teamRecommendationService = {
         operationId,
         targetWorkDate,
       );
-      const existingIds = [
+      const existingEmployeeIds = [
         ...new Set(activeAssignments.map((assignment) => assignment.employeeId)),
       ].sort((a, b) => a.localeCompare(b));
-      const existingSet = new Set(existingIds);
+      const existingSet = new Set(existingEmployeeIds);
 
-      if (teamSize < existingIds.length) {
+      if (teamSize < existingEmployeeIds.length) {
         throw new AppError(
           400,
           "TEAM_SIZE_BELOW_EXISTING",
-          `Ya hay ${existingIds.length} personas asignadas; teamSize debe ser al menos ese valor`,
-          { existingMemberCount: existingIds.length, requestedTeamSize: teamSize },
+          `Ya hay ${existingEmployeeIds.length} personas asignadas; teamSize debe ser al menos ese valor`,
+          { existingMemberCount: existingEmployeeIds.length, requestedTeamSize: teamSize },
         );
       }
 
-      const lockedIds = [...new Set([...existingIds, ...lockedRequested])].sort((a, b) =>
-        a.localeCompare(b),
+      // Existing may be inactive — still company-scoped and kept as EXISTING.
+      const existingRows = await recommendationFeatureRepository.listEmployeesByIdsForExistingContext(
+        companyId,
+        existingEmployeeIds,
       );
-      if (lockedIds.length > teamSize) {
+      if (existingRows.length !== existingEmployeeIds.length) {
         throw new AppError(
           400,
-          "LOCKED_EXCEEDS_TEAM_SIZE",
-          "Hay más integrantes fijos/bloqueados que el tamaño de equipo solicitado",
+          "EXISTING_EMPLOYEE_INVALID",
+          "Uno o más colaboradores ya asignados no pertenecen a la empresa",
         );
       }
 
-      const fixedRows = await recommendationFeatureRepository.listCandidatesByIds(
+      // Requested locks that are not already assigned must be active & eligible.
+      const requestedLockOnly = lockedRequested.filter((id) => !existingSet.has(id));
+      const requestedLockRows = await recommendationFeatureRepository.listActiveEmployeesByIds(
         companyId,
-        lockedIds,
+        requestedLockOnly,
       );
-      if (fixedRows.length !== lockedIds.length) {
+      if (requestedLockRows.length !== requestedLockOnly.length) {
         throw new AppError(
           400,
           "LOCKED_EMPLOYEE_INVALID",
@@ -475,16 +514,28 @@ export const teamRecommendationService = {
         );
       }
 
+      const fixedMemberIds = [...new Set([...existingEmployeeIds, ...lockedRequested])].sort(
+        (a, b) => a.localeCompare(b),
+      );
+      if (fixedMemberIds.length > teamSize) {
+        throw new AppError(
+          400,
+          "LOCKED_EXCEEDS_TEAM_SIZE",
+          "Hay más integrantes fijos/bloqueados que el tamaño de equipo solicitado",
+        );
+      }
+
+      const fixedRows = [...existingRows, ...requestedLockRows];
       const candidates = await recommendationFeatureRepository.listEligibleCandidates(
         companyId,
-        lockedIds,
+        fixedMemberIds,
       );
 
       const response = await runComposition({
         companyId,
         teamSize,
         alternatives,
-        lockedIds,
+        fixedMemberIds,
         candidates,
         fixedRows,
         historyCutoffDate,
@@ -505,15 +556,19 @@ export const teamRecommendationService = {
         companyId,
         operationId,
         teamSize,
-        existingMembers: existingIds.length,
+        existingMembers: existingEmployeeIds.length,
         algorithmVersion: WORKFORCE_TEAM_RECOMMENDATION_ALGORITHM_VERSION,
         candidateCount: response.candidateCount,
+        eligibleCandidateCount: response.candidateCount,
+        prunedCandidateCount: response.prunedCandidateCount,
+        candidatePruneLimit: WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS.candidatePruneLimit,
         pairCount: response.pairCount,
         alternativesReturned: response.recommendations.length,
         durationMs: Date.now() - startedAt,
       });
 
-      return response;
+      const { prunedCandidateCount: _pruned, ...publicResponse } = response;
+      return publicResponse;
     } catch (error) {
       console.info("[team_recommendation.error]", {
         companyId,
@@ -575,8 +630,8 @@ export const teamRecommendationService = {
         };
       }
 
-      const lockedIds = [...lockedRequested].sort((a, b) => a.localeCompare(b));
-      if (lockedIds.length > teamSize) {
+      const fixedMemberIds = [...lockedRequested].sort((a, b) => a.localeCompare(b));
+      if (fixedMemberIds.length > teamSize) {
         throw new AppError(
           400,
           "LOCKED_EXCEEDS_TEAM_SIZE",
@@ -584,11 +639,11 @@ export const teamRecommendationService = {
         );
       }
 
-      const fixedRows = await recommendationFeatureRepository.listCandidatesByIds(
+      const fixedRows = await recommendationFeatureRepository.listActiveEmployeesByIds(
         companyId,
-        lockedIds,
+        fixedMemberIds,
       );
-      if (fixedRows.length !== lockedIds.length) {
+      if (fixedRows.length !== fixedMemberIds.length) {
         throw new AppError(
           400,
           "LOCKED_EMPLOYEE_INVALID",
@@ -598,14 +653,14 @@ export const teamRecommendationService = {
 
       const candidates = await recommendationFeatureRepository.listEligibleCandidates(
         companyId,
-        lockedIds,
+        fixedMemberIds,
       );
 
       const response = await runComposition({
         companyId,
         teamSize,
         alternatives,
-        lockedIds,
+        fixedMemberIds,
         candidates,
         fixedRows,
         historyCutoffDate,
@@ -624,12 +679,16 @@ export const teamRecommendationService = {
         existingMembers: 0,
         algorithmVersion: WORKFORCE_TEAM_RECOMMENDATION_ALGORITHM_VERSION,
         candidateCount: response.candidateCount,
+        eligibleCandidateCount: response.candidateCount,
+        prunedCandidateCount: response.prunedCandidateCount,
+        candidatePruneLimit: WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS.candidatePruneLimit,
         pairCount: response.pairCount,
         alternativesReturned: response.recommendations.length,
         durationMs: Date.now() - startedAt,
       });
 
-      return response;
+      const { prunedCandidateCount: _pruned, ...publicResponse } = response;
+      return publicResponse;
     } catch (error) {
       console.info("[team_recommendation.error]", {
         companyId,

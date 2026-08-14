@@ -29,8 +29,13 @@ export interface TeamMemberFeatures {
 export interface TeamScoreBreakdown {
   teamAffinity: number;
   serviceExperience: number | null;
+  /** null = location feature unavailable (no service geo OR no known evidence). */
   location: number | null;
-  recency: number;
+  /**
+   * Observability / reasons only — NOT a score weight (affinity already time-decays).
+   */
+  recencySignal: number;
+  locationCoverage: number;
   isolationPenalty: number;
   pairCoverage: number;
   averagePairAffinity: number;
@@ -67,7 +72,7 @@ const weightedFromEdge = (edge: TeamPairEdge): number =>
   edge.mid365 * WORKFORCE_RECOMMENDATION_V1_RECENCY.midWeight +
   edge.older * WORKFORCE_RECOMMENDATION_V1_RECENCY.olderWeight;
 
-/** Saturated pair affinity in [0,1]. */
+/** Saturated pair affinity in [0,1] (time-decay already applied via weightedFromEdge). */
 export const computePairAffinity = (edge: TeamPairEdge | undefined): number => {
   if (!edge || edge.sharedOccurrences <= 0) {
     return 0;
@@ -80,7 +85,13 @@ const isCloseBucket = (bucket: LocationProximityBucket): boolean =>
 
 /**
  * Team compatibility score in [0,1] with renormalization for unavailable features.
- * Isolation is a soft penalty applied after the weighted combination.
+ *
+ * Location:
+ * - locationContextAvailable=false → omit
+ * - all UNKNOWN → omit (null), not score 0
+ * - mixed known/UNKNOWN → score only over known members (UNKNOWN is neutral)
+ *
+ * Recency is folded into pair affinity intensity; not a separate weight.
  */
 export const scoreTeam = (
   memberIds: string[],
@@ -131,7 +142,6 @@ export const scoreTeam = (
   const isolationPenalty =
     WORKFORCE_TEAM_RECOMMENDATION_V1_CAPS.isolationPenaltyMax * isolationRatio;
 
-  // Coverage dominates; intensity and strong links refine. Soft isolation deducted.
   const teamAffinity = Math.max(
     0,
     Math.min(
@@ -145,7 +155,6 @@ export const scoreTeam = (
   let closeMembers = 0;
   let knownLocationMembers = 0;
   let locationSum = 0;
-  let locationKnown = 0;
 
   for (const id of sortedIds) {
     const features = featuresById.get(id);
@@ -159,7 +168,6 @@ export const scoreTeam = (
     const locScore = LOCATION_PROXIMITY_BUCKET_SCORES[bucket];
     if (locScore !== null) {
       knownLocationMembers += 1;
-      locationKnown += 1;
       locationSum += locScore;
       if (isCloseBucket(bucket)) {
         closeMembers += 1;
@@ -173,23 +181,21 @@ export const scoreTeam = (
       : 0
     : null;
 
-  const location: number | null = options.locationContextAvailable
-    ? locationKnown > 0
-      ? (closeMembers / teamSize) * 0.6 + (locationSum / locationKnown) * 0.4
-      : 0
-    : null;
+  const locationCoverage = teamSize > 0 ? knownLocationMembers / teamSize : 0;
+  const locationEvidenceAvailable = knownLocationMembers > 0;
+  const location: number | null =
+    options.locationContextAvailable && locationEvidenceAvailable
+      ? (closeMembers / knownLocationMembers) * 0.6 +
+        (locationSum / knownLocationMembers) * 0.4
+      : null;
 
-  const recency =
+  const recencySignal =
     pairsWithHistory > 0 ? Math.min(1, recentPairCount / pairsWithHistory) : 0;
 
   const parts: Array<{ weight: number; value: number }> = [
     {
       weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS.teamAffinity,
       value: teamAffinity,
-    },
-    {
-      weight: WORKFORCE_TEAM_RECOMMENDATION_V1_WEIGHTS.recency,
-      value: recency,
     },
   ];
   if (serviceExperience !== null) {
@@ -216,7 +222,8 @@ export const scoreTeam = (
     teamAffinity,
     serviceExperience,
     location,
-    recency,
+    recencySignal,
+    locationCoverage,
     isolationPenalty,
     pairCoverage,
     averagePairAffinity,
@@ -276,8 +283,8 @@ export const buildTeamReasons = (
       code: "TEAM_LOCATION_PROXIMITY",
       params: {
         closeMembers: breakdown.closeMembers,
-        teamSize,
         knownLocationMembers: breakdown.knownLocationMembers,
+        teamSize,
       },
     });
   }

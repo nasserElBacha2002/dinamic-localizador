@@ -244,4 +244,82 @@ describe("team-composition-engine V1", () => {
     assert.ok(reasons.some((r) => r.code === "TEAM_LOCATION_PROXIMITY"));
     assert.ok(breakdown.score >= 0 && breakdown.score <= 1);
   });
+
+  it("treats UNKNOWN location as neutral (not FAR)", () => {
+    const base = new Map([
+      ["A", member("A", { locationBucket: "CLOSE" })],
+      ["B", member("B", { locationBucket: "CLOSE" })],
+    ]);
+    const withUnknown = new Map([
+      ...base,
+      ["C", member("C", { locationBucket: "UNKNOWN" })],
+    ]);
+    const withFar = new Map([...base, ["C", member("C", { locationBucket: "FAR" })]]);
+    const pairMap = buildTeamPairMap([edge("A", "B", 4)]);
+
+    const unknownScore = scoreTeam(["A", "B", "C"], withUnknown, pairMap, {
+      serviceContextAvailable: false,
+      locationContextAvailable: true,
+    });
+    const farScore = scoreTeam(["A", "B", "C"], withFar, pairMap, {
+      serviceContextAvailable: false,
+      locationContextAvailable: true,
+    });
+    assert.ok(unknownScore.score > farScore.score);
+    assert.equal(unknownScore.knownLocationMembers, 2);
+    assert.ok(unknownScore.location !== null);
+  });
+
+  it("omits location weight when all members are UNKNOWN", () => {
+    const features = new Map([
+      ["A", member("A", { locationBucket: "UNKNOWN" })],
+      ["B", member("B", { locationBucket: "UNKNOWN" })],
+      ["C", member("C", { locationBucket: "UNKNOWN" })],
+    ]);
+    const pairMap = buildTeamPairMap([edge("A", "B", 5)]);
+    const breakdown = scoreTeam(["A", "B", "C"], features, pairMap, {
+      serviceContextAvailable: false,
+      locationContextAvailable: true,
+    });
+    assert.equal(breakdown.location, null);
+    assert.equal(breakdown.locationCoverage, 0);
+  });
+
+  it("prefers recent pair history over older at equal shared counts (via affinity decay)", () => {
+    const features = new Map([
+      ["A", member("A")],
+      ["B", member("B")],
+    ]);
+    const recent = buildTeamPairMap([
+      {
+        employeeAId: "A",
+        employeeBId: "B",
+        sharedOccurrences: 10,
+        lastSharedAt: "2026-07-01",
+        recent90: 10,
+        mid365: 0,
+        older: 0,
+      },
+    ]);
+    const older = buildTeamPairMap([
+      {
+        employeeAId: "A",
+        employeeBId: "B",
+        sharedOccurrences: 10,
+        lastSharedAt: "2020-01-01",
+        recent90: 0,
+        mid365: 0,
+        older: 10,
+      },
+    ]);
+    const recentScore = scoreTeam(["A", "B"], features, recent, {
+      serviceContextAvailable: false,
+      locationContextAvailable: false,
+    });
+    const olderScore = scoreTeam(["A", "B"], features, older, {
+      serviceContextAvailable: false,
+      locationContextAvailable: false,
+    });
+    assert.ok(recentScore.score > olderScore.score);
+  });
 });

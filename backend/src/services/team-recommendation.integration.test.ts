@@ -419,4 +419,171 @@ describeDatabaseIntegration("team recommendations phase3", () => {
       (error: unknown) => error instanceof AppError && error.code === "TEAM_SIZE_BELOW_EXISTING",
     );
   });
+
+  it("keeps inactive existing assignee and rejects inactive requested lock", async () => {
+    const suffix = uniqueSuffix();
+    const company = await createPlatformCompanyFixture({
+      name: `Team Inact ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `team-inact-${suffix}@integration.test` },
+    });
+    const companyId = company.data.company.id;
+    createdCompanyIds.push(companyId);
+
+    const serviceId = await insertOperationalLocationFixture({
+      companyId,
+      name: `Svc Inact ${suffix}`,
+      latitude: -34.6,
+      longitude: -58.4,
+    });
+
+    const a = (
+      await employeeService.create(companyId, {
+        name: `ExistingA ${suffix}`,
+        phoneNumber: uniquePhone(41),
+        employeeType: "fijo",
+      })
+    ).id;
+    const b = (
+      await employeeService.create(companyId, {
+        name: `CandB ${suffix}`,
+        phoneNumber: uniquePhone(42),
+        employeeType: "fijo",
+      })
+    ).id;
+    const c = (
+      await employeeService.create(companyId, {
+        name: `CandC ${suffix}`,
+        phoneNumber: uniquePhone(43),
+        employeeType: "fijo",
+      })
+    ).id;
+    const inactiveLock = (
+      await employeeService.create(companyId, {
+        name: `InactiveLock ${suffix}`,
+        phoneNumber: uniquePhone(44),
+        employeeType: "fijo",
+      })
+    ).id;
+
+    for (let i = 0; i < 4; i += 1) {
+      const { workdayId } = await createPastOperationWithWorkday({
+        companyId,
+        serviceId,
+        workDate: isoDaysAgo(15 + i),
+        startOffsetMinutes: i,
+      });
+      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: a });
+      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: b });
+      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: c });
+    }
+
+    const operationId = await createCurrentOperation({ companyId, serviceId });
+    const validFrom = new Date().toISOString().slice(0, 10);
+    await assignEmployeeDirect({ companyId, operationId, employeeId: a, validFrom });
+
+    await getPool()
+      .request()
+      .input("employeeId", sql.UniqueIdentifier, a)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`UPDATE employees SET active = 0 WHERE id = @employeeId AND company_id = @companyId`);
+
+    await getPool()
+      .request()
+      .input("employeeId", sql.UniqueIdentifier, inactiveLock)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`UPDATE employees SET active = 0 WHERE id = @employeeId AND company_id = @companyId`);
+
+    const result = await teamRecommendationService.recommendTeamForOperation(
+      companyId,
+      operationId,
+      { teamSize: 3, alternatives: 1 },
+    );
+    assert.equal(result.existingMemberCount, 1);
+    const top = result.recommendations[0]!;
+    assert.ok(top.members.some((m) => m.employee.id === a && m.alreadyAssigned));
+    assert.equal(top.members.filter((m) => !m.alreadyAssigned).length, 2);
+
+    await assert.rejects(
+      () =>
+        teamRecommendationService.recommendTeamForOperation(companyId, operationId, {
+          teamSize: 3,
+          lockedEmployeeIds: [inactiveLock],
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "LOCKED_EMPLOYEE_INVALID",
+    );
+  });
+
+  it("preselects strong historical cluster among >80 candidates", async () => {
+    const suffix = uniqueSuffix();
+    const company = await createPlatformCompanyFixture({
+      name: `Team Prune ${suffix}`,
+      defaultTimezone: "America/Argentina/Buenos_Aires",
+      owner: { name: "Owner", email: `team-prune-${suffix}@integration.test` },
+    });
+    const companyId = company.data.company.id;
+    createdCompanyIds.push(companyId);
+
+    const serviceId = await insertOperationalLocationFixture({
+      companyId,
+      name: `Svc Prune ${suffix}`,
+      latitude: -34.6,
+      longitude: -58.4,
+    });
+
+    // Cluster XYZ: create with names that sort late; no location advantage.
+    const x = (
+      await employeeService.create(companyId, {
+        name: `ZZZ-X ${suffix}`,
+        phoneNumber: uniquePhone(101),
+        employeeType: "fijo",
+      })
+    ).id;
+    const y = (
+      await employeeService.create(companyId, {
+        name: `ZZZ-Y ${suffix}`,
+        phoneNumber: uniquePhone(102),
+        employeeType: "fijo",
+      })
+    ).id;
+    const z = (
+      await employeeService.create(companyId, {
+        name: `ZZZ-Z ${suffix}`,
+        phoneNumber: uniquePhone(103),
+        employeeType: "fijo",
+      })
+    ).id;
+
+    // 97 filler candidates with ZERO history — would dominate pure lexical/context pruning.
+    for (let i = 0; i < 97; i += 1) {
+      await employeeService.create(companyId, {
+        name: `AAA-Filler-${String(i).padStart(3, "0")} ${suffix}`,
+        phoneNumber: uniquePhone(200 + i),
+        employeeType: "fijo",
+      });
+    }
+
+    for (let i = 0; i < 14; i += 1) {
+      const { workdayId } = await createPastOperationWithWorkday({
+        companyId,
+        serviceId,
+        workDate: isoDaysAgo(50 + i),
+        startOffsetMinutes: i * 2,
+      });
+      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: x });
+      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: y });
+      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: z });
+    }
+
+    const operationId = await createCurrentOperation({ companyId, serviceId });
+    const result = await teamRecommendationService.recommendTeamForOperation(
+      companyId,
+      operationId,
+      { teamSize: 3, alternatives: 1 },
+    );
+
+    assert.ok(result.candidateCount > 80);
+    const ids = result.recommendations[0]!.members.map((m) => m.employee.id).sort();
+    assert.deepEqual(ids, [x, y, z].sort());
+  });
 });

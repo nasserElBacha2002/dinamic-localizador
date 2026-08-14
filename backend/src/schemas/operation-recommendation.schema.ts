@@ -22,7 +22,7 @@ export const listEmployeeRecommendationsQuerySchema = z.object({
     .min(1)
     .max(WORKFORCE_RECOMMENDATION_V1_LIMITS.maxLimit)
     .default(WORKFORCE_RECOMMENDATION_V1_LIMITS.defaultLimit),
-  /** RECURRING only: work-date context for active assignments. Ignored for ONE_TIME. */
+  /** RECURRING only: work-date context for active assignments. Rejected for ONE_TIME. */
   effectiveDate: isoDateOnly.optional(),
 });
 
@@ -35,7 +35,13 @@ const lockedEmployeeIdsSchema = z
   .max(WORKFORCE_TEAM_RECOMMENDATION_V1_LIMITS.maxTeamSize)
   .default([]);
 
-/** Read-only POST body for operation team composition. */
+/**
+ * Read-only POST body for operation team composition.
+ *
+ * effectiveDate:
+ * - RECURRING: optional; defaults to today in company TZ when omitted.
+ * - ONE_TIME: must not be sent; service rejects with EFFECTIVE_DATE_NOT_APPLICABLE.
+ */
 export const recommendOperationTeamSchema = z.object({
   teamSize: z.coerce
     .number()

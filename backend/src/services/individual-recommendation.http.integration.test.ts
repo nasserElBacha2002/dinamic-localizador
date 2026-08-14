@@ -11,6 +11,7 @@ import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { getPool } from "../database/connection";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
 import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
+import { insertOperationalLocationFixture } from "../test-helpers/operational-location-fixture";
 import { userRepository } from "../repositories/user.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { hashPassword } from "../utils/password";
@@ -89,17 +90,12 @@ describeDatabaseIntegration("individual recommendations HTTP", () => {
       status: "ACTIVE",
     });
 
-    const service = await getPool()
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyAId)
-      .query(`
-        INSERT INTO operational_locations (
-          company_id, name, address, latitude, longitude, allowed_radius_meters, active
-        )
-        OUTPUT INSERTED.id
-        VALUES (@companyId, N'Rec HTTP Svc', N'Test', -34.6, -58.4, 150, 1)
-      `);
-    const serviceId = String(service.recordset[0].id);
+    const serviceId = await insertOperationalLocationFixture({
+      companyId: companyAId,
+      name: "Rec HTTP Svc",
+      latitude: -34.6,
+      longitude: -58.4,
+    });
 
     const start = new Date(Date.now() + 4 * 24 * 60 * 60 * 1000);
     const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);

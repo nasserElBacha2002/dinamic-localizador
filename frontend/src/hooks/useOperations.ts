@@ -29,11 +29,13 @@ import {
   operationWorkdayKeys,
 } from "../queryKeys/operations";
 import { isRecurringWorkdaySyncError } from "../utils/errors";
+import { operationRecommendationKeys } from "./useOperationRecommendations";
 import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 
 /**
  * Invalidates every query scoped to a single operation of the active company.
  * Uses scoped prefixes so other companies and operations stay cached.
+ * Includes AI recommendations (team context changes after assign/cancel/end).
  */
 export async function invalidateOperationScopedQueries(
   queryClient: ReturnType<typeof useQueryClient>,
@@ -49,6 +51,13 @@ export async function invalidateOperationScopedQueries(
     queryClient.invalidateQueries({ queryKey: operationWorkdayKeys.list(companyId, operationId) }),
     queryClient.invalidateQueries({
       queryKey: operationWorkdayKeys.detail(companyId, operationId, undefined),
+    }),
+    queryClient.invalidateQueries({
+      queryKey: [
+        ...operationRecommendationKeys.company(companyId),
+        "employees",
+        operationId ?? "none",
+      ],
     }),
   ]);
 }

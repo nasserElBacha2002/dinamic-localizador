@@ -10,6 +10,7 @@ import {
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { deleteCompanyCascade } from "../test-helpers/integration-cleanup";
 import { createPlatformCompanyFixture } from "../test-helpers/platform-company-fixture";
+import { insertOperationalLocationFixture } from "../test-helpers/operational-location-fixture";
 import { locationZoneService } from "./location-zone.service";
 import { employeeService } from "./employee.service";
 import { operationAssignmentService } from "./operation-assignment.service";
@@ -39,20 +40,12 @@ async function createService(
   latitude: number,
   longitude: number,
 ): Promise<string> {
-  const result = await getPool()
-    .request()
-    .input("companyId", sql.UniqueIdentifier, companyId)
-    .input("name", sql.NVarChar(200), name)
-    .input("latitude", sql.Decimal(10, 7), latitude)
-    .input("longitude", sql.Decimal(10, 7), longitude)
-    .query(`
-      INSERT INTO operational_locations (
-        company_id, name, address, latitude, longitude, allowed_radius_meters, active
-      )
-      OUTPUT INSERTED.id
-      VALUES (@companyId, @name, N'Test', @latitude, @longitude, 150, 1)
-    `);
-  return String(result.recordset[0].id);
+  return insertOperationalLocationFixture({
+    companyId,
+    name,
+    latitude,
+    longitude,
+  });
 }
 
 async function createPastOperationWithWorkday(input: {

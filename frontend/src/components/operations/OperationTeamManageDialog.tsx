@@ -2,6 +2,7 @@ import { ScrollArea, Tabs } from "@mantine/core";
 import { useState } from "react";
 import { ResponsiveModal } from "../../design-system";
 import type { OperationKind } from "../../types/operation";
+import { OperationAiRecommendationsPanel } from "./OperationAiRecommendationsPanel";
 import {
   OperationIndividualAssignmentPanel,
   type AssignEmployeesResult,
@@ -53,10 +54,29 @@ export function OperationTeamManageDialog({
       <Tabs value={activeTab} onChange={setActiveTab}>
         <ScrollArea type="scroll" offsetScrollbars scrollbarSize={6}>
           <Tabs.List mb="md" style={{ flexWrap: "nowrap", minWidth: "max-content" }}>
+            <Tabs.Tab value="ai">Recomendaciones con IA</Tabs.Tab>
             <Tabs.Tab value="individual">Agregar individualmente</Tabs.Tab>
             <Tabs.Tab value="groups">Agregar desde grupos</Tabs.Tab>
           </Tabs.List>
         </ScrollArea>
+
+        <Tabs.Panel value="ai">
+          <OperationAiRecommendationsPanel
+            key={`ai:${operationKind}:${operationWorkDate}`}
+            operationId={operationId}
+            operationKind={operationKind}
+            operationWorkDate={operationWorkDate}
+            excludeEmployeeIds={excludeEmployeeIds}
+            enabled={opened && activeTab === "ai"}
+            assignLoading={assignLoading}
+            onAssign={onAssignEmployees}
+            onResult={(result) => {
+              if (result.status === "success") {
+                handleClose();
+              }
+            }}
+          />
+        </Tabs.Panel>
 
         <Tabs.Panel value="individual">
           <OperationIndividualAssignmentPanel

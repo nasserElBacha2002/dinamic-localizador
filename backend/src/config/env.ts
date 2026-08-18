@@ -104,6 +104,11 @@ const envSchema = z
     COMPANY_DELETION_JOB_ENABLED: z.stringbool().default(true),
     /** Interval for the company deletion worker (ms). Default: 1 hour. */
     COMPANY_DELETION_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+    /** ONE_TIME clock status promotions (SCHEDULED/IN_PROGRESS → COMPLETED). */
+    OPERATION_LIFECYCLE_JOB_ENABLED: z.stringbool().default(true),
+    OPERATION_LIFECYCLE_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+    OPERATION_LIFECYCLE_JOB_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(100),
+    OPERATION_LIFECYCLE_JOB_MAX_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(20),
     /** Lease duration for a deletion claim (ms). Default: 30 minutes. */
     COMPANY_DELETION_LEASE_MS: z.coerce.number().int().positive().default(1_800_000),
     /** Max deletion attempts before requiring manual intervention (still DELETION_FAILED). */

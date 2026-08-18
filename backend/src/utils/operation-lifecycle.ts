@@ -1,6 +1,13 @@
 import type { Operation } from "../types/domain";
 import type { OperationStatus } from "./operation-status";
 
+/**
+ * Effective clock end for ONE_TIME lifecycle.
+ *
+ * When `scheduledEnd` is set, completion uses that instant (UTC).
+ * `lateToleranceMinutes` is an attendance/check-in window, not extra operation
+ * lifetime — it only synthesizes an end when `scheduledEnd` is missing.
+ */
 export const getOperationEffectiveEnd = (
   scheduledStart: string | null,
   scheduledEnd: string | null,

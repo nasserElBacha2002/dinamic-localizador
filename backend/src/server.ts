@@ -27,6 +27,10 @@ import {
   startOperationAssignmentNotificationJob,
   stopOperationAssignmentNotificationJob,
 } from "./jobs/operation-assignment-notification.job";
+import {
+  startOperationLifecycleJob,
+  stopOperationLifecycleJob,
+} from "./jobs/operation-lifecycle.job";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
@@ -38,6 +42,7 @@ const startServer = async (): Promise<void> => {
   startCompanyDeletionJob();
   startPayrollReceiptNotificationJob();
   startOperationAssignmentNotificationJob();
+  startOperationLifecycleJob();
 
   app.listen(env.PORT, () => {
     console.log(`API listening on port ${env.PORT}`);
@@ -53,6 +58,7 @@ const shutdown = async (): Promise<void> => {
   stopCompanyDeletionJob();
   stopPayrollReceiptNotificationJob();
   stopOperationAssignmentNotificationJob();
+  stopOperationLifecycleJob();
   await closeDatabase();
   process.exit(0);
 };

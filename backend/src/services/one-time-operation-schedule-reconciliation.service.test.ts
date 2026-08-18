@@ -284,11 +284,16 @@ describe("operationService.updateOneTime notes-only", () => {
       "./one-time-operation-schedule-reconciliation.service"
     );
 
-    let reconcileCalls = 0;
-    mock.method(operationRepository, "findById", async () => baseOperation);
-    mock.method(operationRepository, "update", async (_companyId, _id, input) => ({
+    const futureOperation = {
       ...baseOperation,
-      notes: input.notes ?? baseOperation.notes,
+      scheduledStart: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+      scheduledEnd: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
+    };
+    let reconcileCalls = 0;
+    mock.method(operationRepository, "findById", async () => futureOperation);
+    mock.method(operationRepository, "update", async (_companyId, _id, input) => ({
+      ...futureOperation,
+      notes: input.notes ?? futureOperation.notes,
     }));
     mock.method(
       oneTimeScheduleReconciliationCommand,

@@ -2,7 +2,7 @@
 // Conceptually this represents a ScheduledOperation — see types/operational-domain.ts.
 import sql from "mssql";
 import { getPool } from "../database/connection";
-import type { Operation, OperationDetail, OperationWithService } from "../types/domain";
+import type { Operation, OperationDetail, OperationStatus, OperationWithService } from "../types/domain";
 import type { CompatibleOperation } from "../types/twilio.types";
 import {
   mapOperationDetail,
@@ -573,6 +573,151 @@ export const operationRepository = {
         WHERE id = @id
           AND company_id = @companyId
           AND status = N'CANCELLED'
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapOperationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * ONE_TIME rows whose clock status should change. No lookback window — full backlog.
+   * Keyset on (COALESCE(scheduled_end, scheduled_start), id) so a poison row can be
+   * skipped for the rest of the tick without an unbounded NOT IN list.
+   * READPAST skips rows locked by another instance; CAS on promote is the integrity gate.
+   */
+  async listOneTimeLifecycleDue(input: {
+    now: Date;
+    limit: number;
+    afterSortKey?: Date | null;
+    afterId?: string | null;
+  }): Promise<Array<{ companyId: string; operation: Operation; sortKey: Date }>> {
+    const pool = getPool();
+    const hasCursor = Boolean(input.afterId && input.afterSortKey);
+    const request = pool
+      .request()
+      .input("now", sql.DateTime2, input.now)
+      .input("limit", sql.Int, input.limit);
+
+    if (hasCursor) {
+      request.input("afterSortKey", sql.DateTime2, input.afterSortKey);
+      request.input("afterId", sql.UniqueIdentifier, input.afterId);
+    }
+
+    const cursorClause = hasCursor
+      ? `AND (
+           COALESCE(i.scheduled_end, i.scheduled_start) > @afterSortKey
+           OR (
+             COALESCE(i.scheduled_end, i.scheduled_start) = @afterSortKey
+             AND i.id > @afterId
+           )
+         )`
+      : "";
+
+    const result = await request.query(`
+      SELECT TOP (@limit)
+        i.company_id,
+        i.id,
+        i.service_id,
+        i.operation_kind,
+        i.scheduled_start,
+        i.scheduled_end,
+        i.early_tolerance_minutes,
+        i.late_tolerance_minutes,
+        i.status,
+        i.notes,
+        i.created_at,
+        i.updated_at,
+        COALESCE(i.scheduled_end, i.scheduled_start) AS lifecycle_sort_key
+      FROM scheduled_operations i WITH (READPAST)
+      WHERE i.operation_kind = N'ONE_TIME'
+        AND i.status IN (N'SCHEDULED', N'IN_PROGRESS')
+        AND i.scheduled_start IS NOT NULL
+        AND (
+          COALESCE(i.scheduled_end, DATEADD(MINUTE, i.late_tolerance_minutes, i.scheduled_start)) <= @now
+          OR (
+            i.status = N'SCHEDULED'
+            AND i.scheduled_start <= @now
+            AND COALESCE(i.scheduled_end, DATEADD(MINUTE, i.late_tolerance_minutes, i.scheduled_start)) > @now
+          )
+        )
+        ${cursorClause}
+      ORDER BY COALESCE(i.scheduled_end, i.scheduled_start) ASC, i.id ASC
+    `);
+
+    return result.recordset.map((row) => {
+      const record = row as Record<string, unknown>;
+      const sortKeyRaw = record.lifecycle_sort_key;
+      const sortKey =
+        sortKeyRaw instanceof Date ? sortKeyRaw : new Date(String(sortKeyRaw));
+      return {
+        companyId: String(record.company_id),
+        operation: mapOperationRow(record),
+        sortKey,
+      };
+    });
+  },
+
+  /**
+   * Full due-set cardinality for job observability. Uses the same predicate as
+   * listOneTimeLifecycleDue (no lookback). Cheap on the open-ONE_TIME filtered index.
+   */
+  async countOneTimeLifecycleDue(now: Date): Promise<number> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("now", sql.DateTime2, now)
+      .query(`
+        SELECT COUNT(1) AS total
+        FROM scheduled_operations i
+        WHERE i.operation_kind = N'ONE_TIME'
+          AND i.status IN (N'SCHEDULED', N'IN_PROGRESS')
+          AND i.scheduled_start IS NOT NULL
+          AND (
+            COALESCE(i.scheduled_end, DATEADD(MINUTE, i.late_tolerance_minutes, i.scheduled_start)) <= @now
+            OR (
+              i.status = N'SCHEDULED'
+              AND i.scheduled_start <= @now
+              AND COALESCE(i.scheduled_end, DATEADD(MINUTE, i.late_tolerance_minutes, i.scheduled_start)) > @now
+            )
+          )
+      `);
+    return Number(result.recordset[0]?.total ?? 0);
+  },
+
+  /**
+   * Idempotent CAS promotion. Returns null when another instance already moved the row.
+   */
+  async promoteLifecycleStatus(
+    companyId: string,
+    operationId: string,
+    fromStatus: OperationStatus,
+    toStatus: OperationStatus,
+  ): Promise<Operation | null> {
+    if (fromStatus === toStatus) {
+      return this.findById(companyId, operationId);
+    }
+
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, operationId)
+      .input("fromStatus", sql.NVarChar(30), fromStatus)
+      .input("toStatus", sql.NVarChar(30), toStatus)
+      .query(`
+        UPDATE scheduled_operations
+        SET status = @toStatus,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @id
+          AND company_id = @companyId
+          AND operation_kind = N'ONE_TIME'
+          AND status = @fromStatus
+          AND status IN (N'SCHEDULED', N'IN_PROGRESS')
+          AND @toStatus IN (N'IN_PROGRESS', N'COMPLETED')
       `);
 
     if (!result.recordset[0]) {

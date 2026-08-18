@@ -1,0 +1,27 @@
+/**
+ * Shared shell for proactive AI suggestion cards.
+ * Business logic (fetch, assign, locks) stays in callers.
+ */
+.aiCard {
+  background: var(--mantine-color-ai-0);
+  border: 1px solid var(--mantine-color-ai-2);
+  border-radius: var(--mantine-radius-md);
+  padding: var(--mantine-spacing-md);
+}
+
+.aiTitle {
+  color: var(--mantine-color-ai-7);
+  font-weight: 600;
+}
+
+.aiScore {
+  color: var(--mantine-color-ai-7);
+}
+
+.aiMuted {
+  color: var(--mantine-color-dimmed);
+}
+
+.aiRetry {
+  color: var(--mantine-color-ai-6);
+}

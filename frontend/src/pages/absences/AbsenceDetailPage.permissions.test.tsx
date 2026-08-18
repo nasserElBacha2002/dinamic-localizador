@@ -147,6 +147,7 @@ describe("AbsenceDetailPage permissions", () => {
     });
     assert.equal(view.queryByRole("button", { name: /^Aprobar$/i }), null);
     assert.equal(view.queryByRole("button", { name: /Más acciones/i }), null);
+    assert.equal(view.queryByRole("button", { name: /Requiere información/i }), null);
     assert.ok(view.getByRole("button", { name: /Volver al listado/i }));
   });
 
@@ -162,6 +163,6 @@ describe("AbsenceDetailPage permissions", () => {
     await waitFor(() => {
       assert.ok(view.getByRole("button", { name: /^Aprobar$/i }));
     });
-    assert.ok(view.getByRole("button", { name: /Más acciones/i }));
+    assert.ok(view.getByRole("button", { name: /Requiere información/i }));
   });
 });

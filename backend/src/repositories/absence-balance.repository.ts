@@ -372,4 +372,21 @@ export const absenceBalanceRepository = {
       totalDays: Number(row.total_days ?? 0),
     }));
   },
+
+  async updateNotesInTransaction(
+    companyId: string,
+    balanceId: string,
+    notes: string | null,
+    transaction: sql.Transaction,
+  ): Promise<void> {
+    await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("balanceId", sql.UniqueIdentifier, balanceId)
+      .input("notes", sql.NVarChar(500), notes)
+      .query(`
+        UPDATE employee_absence_balances
+        SET notes = @notes, updated_at = SYSUTCDATETIME()
+        WHERE id = @balanceId AND company_id = @companyId
+      `);
+  },
 };

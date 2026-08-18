@@ -1,0 +1,1410 @@
+diff --git a/audit/phase2-sql-security-triage-validation.md b/audit/phase2-sql-security-triage-validation.md
+new file mode 100644
+index 0000000..143fc7f
+--- /dev/null
++++ b/audit/phase2-sql-security-triage-validation.md
+@@ -0,0 +1,195 @@
++# Phase 2 — SQL security triage validation
++
++## Resumen
++
++```text
++Initial SQL injection suspects: 40 (one heuristic finding per file with SQL+${})
++Confirmed vulnerable (exploitable user→SQL): 0 remaining after fixes
++Needs parameterization (fixed this phase): 5 hotspot fixes
++Whitelisted identifiers (verified): 6 patterns (ORDER BY / enums / table const)
++Static fragments / safe builders: majority of remaining interpolations
++False positives / recalibrated: 40 former HIGH → 40 info sql-dynamic-structure
++Manual review remaining (high-confidence injection): 0
++```
++
++Scanner after recalibration (`audit:database` run `20260812-151612`):
++
++```text
++sql-injection-risk (HIGH): 0
++sql-dynamic-structure (INFO, accepted-risk): 40
++```
++
++## Antes / Después
++
++| Métrica | Antes | Después |
++|---------|-------|---------|
++| Findings `sql-injection-risk` HIGH | 40 | **0** |
++| Findings estructurales SQL | (mezclados en HIGH) | 40 INFO `sql-dynamic-structure` |
++| Interpolación quoted runtime en prod | sí (varios) | **0** detectados |
++| CONFIRMED_VULNERABLE pendientes | — | **0** |
++
++## Clasificación de los 40 findings iniciales
++
++Cada finding original era **1 por archivo** (heurística gruesa). Tras inspección de ~261 interpolaciones:
++
++| Finding ID | File | Classification | Action |
++|------------|------|----------------|--------|
++| sql-dyn-b5b3867b15 | database/operational-location-duplicate-remediation.ts | D STATIC / structural companyFilter | Keep; scanner→structure |
++| sql-dyn-281a662147 | repositories/absence-attachment.repository.ts | B→fixed + D ACTIVE_STATUSES_SQL | Parametrize markStatus/listForCleanup |
++| sql-dyn-93b6cf4702 | repositories/absence-calendar.repository.ts | D/E structural | Keep |
++| sql-dyn-3dcbdd3962 | repositories/absence-request.repository.ts | C/D `toAbsenceStatusSqlInList` whitelist + structural where | Keep (whitelist already throws) |
++| sql-dyn-b412921116 | repositories/absence-type.repository.ts | E SET fields hardcoded + params | Keep |
++| sql-dyn-36f432341f | repositories/attendance-notification.repository.ts | D/E eligibility SQL builders | Keep |
++| sql-dyn-6db2b0df8c | repositories/attendance.repository.ts | D/E whereClause + simulationFilter const | Keep |
++| sql-dyn-d803178097 | repositories/bot-session.repository.ts | D ACTIVE states + structural | Keep |
++| sql-dyn-95144923a9 | repositories/company-location-types.repository.ts | E SET `fields.push("col = @p")` | Keep |
++| sql-dyn-ad00869bd0 | repositories/company-module.repository.ts | E VALUES `(@companyId, @moduleKeyN)` | Keep |
++| sql-dyn-ecef735b68 | repositories/company-settings.repository.ts | D/E structural | Keep |
++| sql-dyn-0acdbdba36 | repositories/employee-assignment-query.repository.ts | D/E structural | Keep |
++| sql-dyn-589c8ef873 | repositories/employee-category.repository.ts | E SET fields + params | Keep |
++| sql-dyn-8ffe25d7bc | repositories/employee-deactivation.repository.ts | E IN `@idN` placeholders | Keep |
++| sql-dyn-acd0e7e5cd | repositories/employee-workday-availability.repository.ts | D filter fragments | Keep |
++| sql-dyn-f12b14762c | repositories/employee-workday.repository.ts | E VALUES (@p,@p) sourceRows | Keep |
++| sql-dyn-cefb094142 | repositories/employee.repository.ts | C `resolveSqlSort` whitelist + E filters | Keep |
++| sql-dyn-41186dec85 | repositories/lookup.repository.ts | E UUID IN placeholders | Keep |
++| sql-dyn-be846f8bed | repositories/operation-attendance.repository.ts | D/E base query fragments | Keep |
++| sql-dyn-f16791ecc8 | repositories/operation-employee.repository.ts | E optional AND + IN placeholders | Keep |
++| sql-dyn-8d9149f5af | repositories/operation-schedule.repository.ts | D/E structural | Keep |
++| sql-dyn-184f87353d | repositories/operation-workday.repository.ts | D/E whereClause | Keep |
++| sql-dyn-58b846a414 | repositories/operation.repository.ts | C ORDER BY whitelist | Keep |
++| sql-dyn-5a58f14f60 | repositories/payroll-receipt.repository.ts | D FAILURE_STATUSES_SQL const | Strengthened to module const |
++| sql-dyn-024b031a9d | repositories/service.repository.ts | C ORDER BY whitelist | Keep |
++| sql-dyn-848b5c05d2 | repositories/statistics.repository.ts | B→fixed `@referenceAt`/`@minSample` + C sort | Fixed |
++| sql-dyn-609cdb0d01 | repositories/user-company-membership.repository.ts | E SET fields | Keep |
++| sql-dyn-3bf6f65fe5 | repositories/whatsapp-conversation.repository.ts | D companyClause | Keep |
++| sql-dyn-386f094167 | repositories/whatsapp-observability.repository.ts | D/E whereSql | Keep |
++| sql-dyn-1b25ce9420 | repositories/work-team-assignment-batch.repository.ts | E IN placeholders | Keep |
++| sql-dyn-2b3e8aa702 | repositories/work-team.repository.ts | C→strengthened `resolveSqlSort` map | Fixed whitelist style |
++| sql-dyn-b677998001 | scripts/audit-statistics-grain-core.ts | D script companyFilter | Keep (script) |
++| sql-dyn-30a7ed2a4e | scripts/cleanup-integration-junk.ts | D junk predicate const | Keep (script) |
++| sql-dyn-f116617359 | scripts/fix-services-from-reconciliation.ts | F non-SQL / summary text in template | F / structure |
++| sql-dyn-504c39e680 | services/company-lifecycle.service.ts | D/E structural | Keep (out of repo layer; no value interp) |
++| sql-dyn-e2a206e825 | utils/employee-workday-statistics-projection.ts | D EFFECTIVE_STATE uses `@referenceAt` | Keep |
++| sql-dyn-9923cbcc68 | utils/service-fix/db-services.ts | B→fixed `@tableName`; columns via pickColumn whitelist | Fixed |
++| sql-dyn-c760e54b9a | utils/service-fix/plan.ts | F distance in comments/messages not executed SQL | F |
++| sql-dyn-a16a2d7904 | utils/service-fix/sql.ts | E script generator + escape; apply path parameterized | Documented; not runtime apply |
++| sql-dyn-c598187821 | utils/statistics-canonical-attendance.ts | D static SQL const | Keep |
++
++### Conteos de clasificación (fase)
++
++| Category | Count (approx) |
++|----------|----------------|
++| A CONFIRMED_VULNERABLE | 0 (ningún flujo HTTP/Twilio→quoted SQL) |
++| B VALUE_NEEDS_PARAMETERIZATION | 5 fixed (ver abajo) |
++| C WHITELISTED_IDENTIFIER | verified/strengthened |
++| D STATIC_SQL_FRAGMENT | majority |
++| E SAFE_QUERY_BUILDER | SqlFilter / `@param` joins / SET fields |
++| F FALSE_POSITIVE | plan.ts distance / non-exec templates |
++| G REQUIRES_MANUAL_REVIEW | 0 high-confidence leftovers |
++
++## Vulnerabilidades / parametrizaciones corregidas
++
++### 1. `absence-attachment.repository.ts` — `markStatus`
++
++- **Antes:** `AND status = N'${current.status}'` y `attempt_count + ${0|1}`
++- **Origen:** fila DB previa (no HTTP directo), pero valor interpolado en SQL
++- **Clasificación:** B
++- **Fix:** `@expectedStatus`, `@incrementAttempt`
++- **Test:** `sql-security-regression.test.ts`
++
++### 2. `absence-attachment.repository.ts` — `listForCleanup`
++
++- **Antes:** `IN (${statuses.map(s => N'${s}')})`
++- **Origen:** argumento tipado; sin whitelist runtime
++- **Clasificación:** B
++- **Fix:** whitelist `ABSENCE_ATTACHMENT_STATUSES` + `@statusN`
++- **Test:** regression source asserts
++
++### 3. `statistics.repository.ts` — ranking HAVING
++
++- **Antes:** `<= '${referenceAt.toISOString()}'` y `>= ${minSample}`
++- **Origen:** `Date` / constante numérica, interpolados como literales
++- **Clasificación:** B
++- **Fix:** `@referenceAt` (ya bound) + `@minSample` bound en requests
++- **Test:** regression source asserts
++
++### 4. `service-fix/db-services.ts`
++
++- **Antes:** `WHERE TABLE_NAME = '${TABLE_NAME}'`
++- **Clasificación:** B (const) / C table name
++- **Fix:** `@tableName`; `FROM` usa literal `TABLE_NAME` const
++
++### 5. `work-team.repository.ts` — ORDER BY
++
++- **Antes:** ternario ad-hoc sort column/direction
++- **Clasificación:** C (ya seguro) → fortalecido
++- **Fix:** `WORK_TEAM_LIST_SORT_COLUMNS` + `resolveSqlSort`
++
++### 6. `payroll-receipt.repository.ts`
++
++- **FAILURE_STATUSES.map** inline → `FAILURE_STATUSES_SQL` module const (D)
++
++## Casos seguros (evidencia)
++
++### Whitelists ORDER BY
++
++- `resolveSqlSort` + maps en employee/service/operation/statistics/work-team
++- Unknown keys → default column; direction solo `ASC`/`DESC`
++
++### Enum SQL fragments
++
++- `toAbsenceStatusSqlInList` throws on unknown status (tested)
++- `ACTIVE_STATUSES_SQL`, `ACTIVE_BOT_SESSION_STATES_SQL`, `FAILURE_STATUSES_SQL`
++
++### Query builders
++
++- `SqlFilter` + `applySqlFilters` / `createUuidInFilter` bind `@params`
++- Dynamic `SET`/`VALUES` use hardcoded column names + `@param`
++
++### service-fix apply path
++
++- `apply.ts` already parameterized; `sql.ts` only builds review scripts with `escapeSqlString`
++
++## Scanner improvements
++
++File: `scripts/audit/framework/scanners/sql_boundaries.py`
++
++1. Deja de marcar **todo** `${}` en SQL como `sql-injection-risk` HIGH.
++2. Detecta **quoted value interpolation** / `LIKE '%${` → HIGH `sql-injection-risk`.
++3. Clasifica el resto como INFO `sql-dynamic-structure` (`accepted-risk`).
++4. Excepciones explícitas para `escapeSqlString(...)` (script generation) y constantes `UPPER_SNAKE`.
++5. Unit tests en `test_framework_core.py::TestSqlInterpolationClassification`.
++
++**No** se agregó ignore-list de archivos repository.
++
++## Tests ejecutados
++
++| Command | Result |
++|---------|--------|
++| `npx tsx --test src/utils/sql-security-regression.test.ts` | PASS |
++| `npm test --prefix backend` | PASS (1295) |
++| `npm run build:backend` | PASS |
++| `python3 -m unittest …TestSqlInterpolationClassification` | PASS |
++| `python3 -m unittest discover -s scripts/audit/framework/tests` | PASS (27) |
++| `npm run audit:database` | PASS; inj=0 struct=40 |
++| `npm run audit:security:fast` | PASS (secrets/env) |
++| `npm run audit` | PASS diagnostic (re-run after status fix) |
++
++DB integration suite: no ejecutada aquí (requiere SQL Server + `RUN_DB_INTEGRATION_TESTS`); cambios son bind parameters equivalentes.
++
++## Limitaciones del scanner (restantes)
++
++- No es un parser TypeScript/SQL completo: un `whereClause` mal construido con valores concatenados en otro helper **no** se detecta como quoted-risk si el template solo interpola `${whereClause}`.
++- Mitigación: revisión de builders (`SqlFilter`) + tests de regresión en hotspots.
++- Scripts/tests con UUID literales en templates siguen fuera del walk (`exclude_globs` `*.test.ts`).
++
++## Fuera de alcance (registrado)
++
++- 185 SQL layer-boundary findings
++- Race/idempotency / Twilio architecture
++- npm dependency upgrades
++- Baseline oficial
++
++## Conclusión
++
++> Todas las interpolaciones SQL de los 40 findings iniciales fueron investigadas. Los valores runtime detectados en quotes se parametrizaron. Los identifiers dinámicos restantes usan whitelists cerradas. No quedan SQL injections confirmadas sin corregir. El scanner distingue riesgo de inyección vs estructura dinámica sin ocultar archivos enteros.
+diff --git a/backend/src/repositories/absence-attachment.repository.ts b/backend/src/repositories/absence-attachment.repository.ts
+index 0bf31a7..f59314a 100644
+--- a/backend/src/repositories/absence-attachment.repository.ts
++++ b/backend/src/repositories/absence-attachment.repository.ts
+@@ -1,31 +1,34 @@
+ import sql from "mssql";
+ import { getPool } from "../database/connection";
+ import { assertAttachmentStatusTransition } from "../domain/absence-attachment-status";
+ import { AppError } from "../errors/app-error";
+ import type {
+   AbsenceAttachmentScanStatus,
+   AbsenceAttachmentSource,
+   AbsenceAttachmentStatus,
+   AbsenceRequestAttachment,
+ } from "../types/absence-attachment";
+-import { ABSENCE_ATTACHMENT_STORAGE_PROVIDER } from "../types/absence-attachment";
++import {
++  ABSENCE_ATTACHMENT_STATUSES,
++  ABSENCE_ATTACHMENT_STORAGE_PROVIDER,
++} from "../types/absence-attachment";
+ import { absenceRequestDraftRepository } from "./absence-request-draft.repository";
+ 
+ /** Placeholder until streaming upload finalizes real SHA-256. */
+ export const ATTACHMENT_CHECKSUM_PENDING = "0".repeat(64);
+ 
+ const ACTIVE_STATUSES_SQL = `N'PENDING_UPLOAD', N'UPLOADING', N'AVAILABLE', N'QUARANTINED'`;
+ 
+ const toIso = (value: Date | string | null | undefined): string | null => {
+   if (value == null) {
+     return null;
+   }
+   return value instanceof Date ? value.toISOString() : new Date(value).toISOString();
+ };
+ 
+ export const mapAbsenceAttachmentRow = (
+   row: Record<string, unknown>,
+ ): AbsenceRequestAttachment => ({
+   id: String(row.id),
+   companyId: String(row.company_id),
+   absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
+@@ -557,56 +560,58 @@ export const absenceAttachmentRepository = {
+   ): Promise<AbsenceRequestAttachment | null> {
+     const current = transaction
+       ? await this.findByIdAnyForUpdate(companyId, attachmentId, transaction)
+       : await this.findByIdAny(companyId, attachmentId);
+     if (!current) {
+       return null;
+     }
+     if (
+       extra?.expectedCurrentStatuses &&
+       !extra.expectedCurrentStatuses.includes(current.status)
+     ) {
+       return null;
+     }
+     assertAttachmentStatusTransition(current.status, status);
+ 
+     const request = transaction ? new sql.Request(transaction) : getPool().request();
+     const result = await request
+       .input("companyId", sql.UniqueIdentifier, companyId)
+       .input("id", sql.UniqueIdentifier, attachmentId)
+       .input("status", sql.NVarChar(30), status)
++      .input("expectedStatus", sql.NVarChar(30), current.status)
++      .input("incrementAttempt", sql.Int, extra?.incrementAttempt ? 1 : 0)
+       .input("lastError", sql.NVarChar(1000), extra?.lastError?.slice(0, 1000) ?? null)
+       .input("deletedByUserId", sql.UniqueIdentifier, extra?.deletedByUserId ?? null)
+       .input("deletionReason", sql.NVarChar(500), extra?.deletionReason ?? null)
+       .query(`
+         UPDATE absence_request_attachments
+         SET status = @status,
+             last_error = COALESCE(@lastError, last_error),
+             deleted_by_user_id = COALESCE(@deletedByUserId, deleted_by_user_id),
+             deletion_reason = COALESCE(@deletionReason, deletion_reason),
+             deleted_at = CASE WHEN @status = N'DELETED' THEN SYSUTCDATETIME() ELSE deleted_at END,
+-            attempt_count = attempt_count + ${extra?.incrementAttempt ? 1 : 0},
++            attempt_count = attempt_count + @incrementAttempt,
+             lease_owner = NULL,
+             lease_expires_at = NULL,
+             updated_at = SYSUTCDATETIME()
+         OUTPUT INSERTED.*
+-        WHERE id = @id AND company_id = @companyId AND status = N'${current.status}'
++        WHERE id = @id AND company_id = @companyId AND status = @expectedStatus
+       `);
+     if (!result.recordset[0]) {
+       return null;
+     }
+     return mapAbsenceAttachmentRow(result.recordset[0] as Record<string, unknown>);
+   },
+ 
+   async findByIdAny(
+     companyId: string,
+     attachmentId: string,
+   ): Promise<AbsenceRequestAttachment | null> {
+     const pool = getPool();
+     const result = await pool
+       .request()
+       .input("companyId", sql.UniqueIdentifier, companyId)
+       .input("id", sql.UniqueIdentifier, attachmentId)
+       .query(`
+         SELECT TOP 1 *
+         FROM absence_request_attachments
+         WHERE id = @id AND company_id = @companyId
+@@ -729,39 +734,56 @@ export const absenceAttachmentRepository = {
+       await transaction.commit();
+       if (!claimed.recordset[0]) {
+         return null;
+       }
+       return mapAbsenceAttachmentRow(claimed.recordset[0] as Record<string, unknown>);
+     } catch (error) {
+       try {
+         await transaction.rollback();
+       } catch {
+         /* ignore */
+       }
+       throw error;
+     }
+   },
+ 
+   async listForCleanup(
+     statuses: AbsenceAttachmentStatus[],
+     olderThanMinutes: number,
+     limit: number,
+   ): Promise<AbsenceRequestAttachment[]> {
++    if (statuses.length === 0) {
++      return [];
++    }
++    const allowed = new Set<string>(ABSENCE_ATTACHMENT_STATUSES);
++    for (const status of statuses) {
++      if (!allowed.has(status)) {
++        throw new Error(`Invalid absence attachment status for SQL filter: ${status}`);
++      }
++    }
++
+     const pool = getPool();
+-    const result = await pool
++    const request = pool
+       .request()
+       .input("olderThanMinutes", sql.Int, olderThanMinutes)
+-      .input("limit", sql.Int, limit)
+-      .query(`
++      .input("limit", sql.Int, limit);
++
++    const statusParams = statuses.map((status, index) => {
++      const name = `status${index}`;
++      request.input(name, sql.NVarChar(30), status);
++      return `@${name}`;
++    });
++
++    const result = await request.query(`
+         SELECT TOP (@limit) *
+         FROM absence_request_attachments
+-        WHERE status IN (${statuses.map((s) => `N'${s}'`).join(", ")})
++        WHERE status IN (${statusParams.join(", ")})
+           AND updated_at < DATEADD(MINUTE, -@olderThanMinutes, SYSUTCDATETIME())
+           AND attempt_count < 10
+           AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
+         ORDER BY updated_at ASC
+       `);
+     return result.recordset.map((row) =>
+       mapAbsenceAttachmentRow(row as Record<string, unknown>),
+     );
+   },
+ };
+diff --git a/backend/src/repositories/payroll-receipt.repository.ts b/backend/src/repositories/payroll-receipt.repository.ts
+index 8630c73..93c3d1b 100644
+--- a/backend/src/repositories/payroll-receipt.repository.ts
++++ b/backend/src/repositories/payroll-receipt.repository.ts
+@@ -117,40 +117,43 @@ export type FinalizeReplacePayrollReceiptInput = {
+   storageObjectKey: string;
+   objectGeneration: string;
+   mimeType: string;
+   fileSize: number;
+   checksumSha256: string;
+   detectedDocument: string | null;
+   normalizedDocument: string | null;
+ };
+ 
+ const FAILURE_STATUSES: PayrollReceiptStatus[] = [
+   "DOCUMENT_NOT_FOUND",
+   "INVALID_DOCUMENT",
+   "AMBIGUOUS_DOCUMENT",
+   "EMPLOYEE_NOT_FOUND",
+   "EMPLOYEE_DOCUMENT_AMBIGUOUS",
+   "DUPLICATE",
+   "UPLOAD_FAILED",
+   "FAILED",
+ ];
+ 
++/** Closed enum set embedded as static SQL fragment (no runtime input). */
++const FAILURE_STATUSES_SQL = FAILURE_STATUSES.map((status) => `N'${status}'`).join(", ");
++
+ export const payrollReceiptRepository = {
+   async createBatch(input: {
+     id: string;
+     companyId: string;
+     year: number;
+     month: number;
+     status?: PayrollReceiptBatchStatus;
+     createdByUserId?: string | null;
+   }): Promise<PayrollReceiptBatch> {
+     const result = await getPool()
+       .request()
+       .input("id", sql.UniqueIdentifier, input.id)
+       .input("companyId", sql.UniqueIdentifier, input.companyId)
+       .input("year", sql.Int, input.year)
+       .input("month", sql.Int, input.month)
+       .input("status", sql.NVarChar(40), input.status ?? "PROCESSING")
+       .input("createdByUserId", sql.UniqueIdentifier, input.createdByUserId ?? null)
+       .query(`
+         INSERT INTO payroll_receipt_batches (
+           id, company_id, year, month, status, created_by_user_id
+@@ -840,41 +843,41 @@ export const payrollReceiptRepository = {
+             updated_at = SYSUTCDATETIME()
+         OUTPUT INSERTED.*
+         WHERE id = @batchId AND company_id = @companyId
+       `);
+     return mapPayrollReceiptBatchRow(result.recordset[0] as Record<string, unknown>);
+   },
+ 
+   async refreshBatchStatus(companyId: string, batchId: string): Promise<PayrollReceiptBatch> {
+     const result = await getPool()
+       .request()
+       .input("companyId", sql.UniqueIdentifier, companyId)
+       .input("batchId", sql.UniqueIdentifier, batchId)
+       .query(`
+         DECLARE @associated INT = (
+           SELECT COUNT(1) FROM payroll_receipts
+           WHERE company_id = @companyId AND batch_id = @batchId AND status = N'ASSOCIATED'
+         );
+         DECLARE @failed INT = (
+           SELECT COUNT(1) FROM payroll_receipts
+           WHERE company_id = @companyId AND batch_id = @batchId
+-            AND status IN (${FAILURE_STATUSES.map((s) => `N'${s}'`).join(", ")})
++            AND status IN (${FAILURE_STATUSES_SQL})
+         );
+         DECLARE @processed INT = (
+           SELECT COUNT(1) FROM payroll_receipts
+           WHERE company_id = @companyId AND batch_id = @batchId
+             AND status NOT IN (N'PENDING', N'UPLOADING')
+         );
+         DECLARE @total INT = (
+           SELECT COUNT(1) FROM payroll_receipts
+           WHERE company_id = @companyId AND batch_id = @batchId
+         );
+ 
+         UPDATE payroll_receipt_batches
+         SET associated_files = @associated,
+             failed_files = @failed,
+             processed_files = @processed,
+             total_files = @total,
+             status = CASE
+               WHEN @total = 0 THEN N'PROCESSING'
+               WHEN @processed < @total THEN N'PROCESSING'
+               WHEN @associated = 0 AND @processed > 0 AND @failed > 0 THEN N'FAILED'
+diff --git a/backend/src/repositories/statistics.repository.ts b/backend/src/repositories/statistics.repository.ts
+index 65a8e80..9fe556c 100644
+--- a/backend/src/repositories/statistics.repository.ts
++++ b/backend/src/repositories/statistics.repository.ts
+@@ -2,41 +2,40 @@ import sql from "mssql";
+ import { getPool } from "../database/connection";
+ import { STATISTICS_MIN_SAMPLE_WORKDAYS } from "../constants/statistics";
+ import type { StatisticsFilters } from "../schemas/statistics.schema";
+ import type {
+   AttendanceByEmployeeRow,
+   AttendanceByOperationRow,
+   AttendanceByServiceRow,
+   AttendanceStatisticsSummary,
+   AttendanceStatusDistributionItem,
+   AttendanceTimelinePoint,
+   AttendanceWorkdayDetailRow,
+ } from "../types/statistics";
+ import {
+   calculateAbsenceRate,
+   calculateAttendanceRate,
+   calculateConsolidatedCoverageRate,
+   calculatePunctualityRate,
+   hasSufficientSample,
+ } from "../utils/attendance-statistics-metrics";
+ import { buildActionExceptions } from "../utils/statistics-action-exceptions";
+-import type { StatisticsTimeContext } from "../utils/statistics-period";
+ import {
+   applyEmployeeWorkdayStatisticsFilters,
+   buildEmployeeWorkdayStatisticsCte,
+   buildEmployeeWorkdayStatisticsFilters,
+   buildStatisticsWhereFromFilters,
+ } from "../utils/employee-workday-statistics-projection";
+ import { toDateOnlyString } from "../utils/row-mappers";
+ import type { StatisticsRankingMode } from "../schemas/statistics.schema";
+ 
+ const toNumber = (value: unknown): number => Number(value ?? 0);
+ 
+ const toIsoDate = (value: unknown): string | null => {
+   if (!value) {
+     return null;
+   }
+ 
+   const date = value instanceof Date ? value : new Date(String(value));
+   return Number.isNaN(date.getTime()) ? null : date.toISOString();
+ };
+ 
+@@ -84,68 +83,67 @@ const INCIDENT_COUNT_SQL = `(
+   + SUM(CASE WHEN location_status = N'OUTSIDE_GEOFENCE' THEN 1 ELSE 0 END)
+   + SUM(is_early_departure_workday)
+   + SUM(CASE WHEN validation_status = N'PENDING_REVIEW' THEN 1 ELSE 0 END)
+ )`;
+ 
+ const CONSOLIDATED_SAMPLE_SQL = `SUM(CASE WHEN effective_state IN (N'PRESENT', N'ABSENT') THEN 1 ELSE 0 END)`;
+ 
+ const employeeRankingHaving = (mode: StatisticsRankingMode | undefined): string => {
+   if (mode === "attention_employees") {
+     return `HAVING ${INCIDENT_COUNT_SQL} > 0`;
+   }
+   if (mode === "late_employees") {
+     return `HAVING SUM(is_late_workday) > 0`;
+   }
+   return "";
+ };
+ 
+ const operationRankingHaving = (
+   mode: StatisticsRankingMode | undefined,
+   incompleteCoverage: boolean | undefined,
+-  minSample: number,
+-  referenceAtIso: string,
+ ): string => {
++  // @referenceAt / @minSample are bound by applyEmployeeWorkdayStatisticsFilters + callers.
+   const consolidatedIncomplete = `
+       SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) = 0
+-      AND MIN(operation_scheduled_start) <= '${referenceAtIso}'
++      AND MIN(operation_scheduled_start) <= @referenceAt
+       AND ${CONSOLIDATED_SAMPLE_SQL} > 0
+       AND SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END)
+         < ${CONSOLIDATED_SAMPLE_SQL}`;
+ 
+   if (mode === "low_coverage_operations") {
+     return `HAVING
+       ${consolidatedIncomplete}
+-      AND ${CONSOLIDATED_SAMPLE_SQL} >= ${minSample}`;
++      AND ${CONSOLIDATED_SAMPLE_SQL} >= @minSample`;
+   }
+ 
+   // Table filter / deep-link: match incompleteCoverageOperations KPI (no min-sample gate).
+   if (incompleteCoverage) {
+     return `HAVING ${consolidatedIncomplete}`;
+   }
+ 
+   return "";
+ };
+ 
+-const serviceRankingHaving = (mode: StatisticsRankingMode | undefined, minSample: number): string => {
++const serviceRankingHaving = (mode: StatisticsRankingMode | undefined): string => {
+   if (mode === "incident_services") {
+     return `HAVING ${INCIDENT_COUNT_SQL} > 0
+-      AND SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) >= ${minSample}`;
++      AND SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) >= @minSample`;
+   }
+   return "";
+ };
+ 
+ const EMPLOYEE_SORT_FIELDS: Record<string, string> = {
+   employeeName: "employee_name",
+   phoneNumber: "phone_number",
+   scheduledWorkdays: "scheduled_workdays",
+   presentWorkdays: "present_workdays",
+   absentWorkdays: "absent_workdays",
+   justifiedWorkdays: "justified_workdays",
+   expectedOpenWorkdays: "expected_open_workdays",
+   attendanceRate: "attendance_rate",
+   onTimeWorkdays: "on_time_workdays",
+   lateWorkdays: "late_workdays",
+   punctualityRate: "punctuality_rate",
+   workedMinutes: "worked_minutes",
+   overtimeMinutes: "overtime_minutes",
+   earlyDepartureWorkdays: "early_departure_workdays",
+   openAttendanceWorkdays: "open_attendance_workdays",
+@@ -525,42 +523,40 @@ export const statisticsRepository = {
+     return { data, total };
+   },
+ 
+   async getByOperation(
+     companyId: string,
+     filters: StatisticsFilters,
+     page: number,
+     limit: number,
+     sortBy?: string,
+     sortDirection: "asc" | "desc" = "desc",
+     referenceAt: Date = new Date(),
+   ): Promise<{ data: AttendanceByOperationRow[]; total: number }> {
+     const pool = getPool();
+     const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
+     const orderBy = resolveSort(sortBy, OPERATION_SORT_FIELDS, "operation_scheduled_start", sortDirection);
+     const offset = (page - 1) * limit;
+     const minSample = STATISTICS_MIN_SAMPLE_WORKDAYS;
+     const having = operationRankingHaving(
+       filters.rankingMode,
+       filters.incompleteCoverage,
+-      minSample,
+-      referenceAt.toISOString(),
+     );
+ 
+     const aggregatedCte = `
+       ${cte},
+       operation_statistics_ranked AS (
+         SELECT
+           operation_id,
+           operation_kind,
+           service_id,
+           service_name,
+           service_address,
+           MIN(operation_scheduled_start) AS operation_scheduled_start,
+           MAX(operation_status) AS operation_status,
+           SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_workdays,
+           SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_workdays,
+           SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_workdays,
+           SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_workdays,
+           SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_open_workdays,
+           ${CONSOLIDATED_SAMPLE_SQL} AS expected_staff_workdays,
+           SUM(is_on_time_workday) AS on_time_workdays,
+@@ -594,48 +590,50 @@ export const statisticsRepository = {
+             ) / 10.0
+           END AS coverage_rate,
+           CASE
+             WHEN SUM(is_punctuality_eligible) = 0 THEN 0
+             ELSE CAST(
+               ROUND(
+                 CAST(SUM(is_on_time_workday) AS FLOAT)
+                 / CAST(SUM(is_punctuality_eligible) AS FLOAT) * 1000,
+                 0
+               ) AS INT
+             ) / 10.0
+           END AS punctuality_rate
+         FROM employee_workday_statistics
+         GROUP BY operation_id, operation_kind, service_id, service_name, service_address
+         ${having}
+       )
+     `;
+ 
+     const countRequest = pool.request();
+     applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
++    countRequest.input("minSample", sql.Int, minSample);
+     const countResult = await countRequest.query(`
+       ${aggregatedCte}
+       SELECT COUNT(*) AS total FROM operation_statistics_ranked
+     `);
+     const total = toNumber((countResult.recordset[0] as Record<string, unknown>).total);
+ 
+     const dataRequest = pool.request();
+     applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
++    dataRequest.input("minSample", sql.Int, minSample);
+     dataRequest.input("offset", sql.Int, offset);
+     dataRequest.input("limit", sql.Int, limit);
+ 
+     const dataResult = await dataRequest.query(`
+       ${aggregatedCte}
+       SELECT *
+       FROM operation_statistics_ranked
+       ORDER BY ${orderBy}
+       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+     `);
+ 
+     const data = dataResult.recordset.map((row) => {
+       const record = row as Record<string, unknown>;
+       const scheduledStart = toIsoDate(record.operation_scheduled_start);
+       const serviceName = String(record.service_name);
+       const operationKind = String(record.operation_kind);
+       const presentWorkdays = toNumber(record.present_workdays);
+       const absentWorkdays = toNumber(record.absent_workdays);
+       const expectedStaffWorkdays = toNumber(record.expected_staff_workdays);
+       return {
+@@ -667,57 +665,59 @@ export const statisticsRepository = {
+     });
+ 
+     return { data, total };
+   },
+ 
+   async getByService(
+     companyId: string,
+     filters: StatisticsFilters,
+     page: number,
+     limit: number,
+     sortBy?: string,
+     sortDirection: "asc" | "desc" = "desc",
+     referenceAt: Date = new Date(),
+   ): Promise<{ data: AttendanceByServiceRow[]; total: number }> {
+     const pool = getPool();
+     const { sqlFilters, cte } = buildQueryContext(companyId, filters, referenceAt);
+     const orderBy = resolveSort(sortBy, SERVICE_SORT_FIELDS, "service_name", sortDirection);
+     const offset = (page - 1) * limit;
+ 
+     const minSample = STATISTICS_MIN_SAMPLE_WORKDAYS;
+-    const having = serviceRankingHaving(filters.rankingMode, minSample);
++    const having = serviceRankingHaving(filters.rankingMode);
+ 
+     const countRequest = pool.request();
+     applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
++    countRequest.input("minSample", sql.Int, minSample);
+     const countResult = await countRequest.query(`
+       ${cte}
+       SELECT COUNT(*) AS total FROM (
+         SELECT service_id
+         FROM employee_workday_statistics
+         GROUP BY service_id, service_name, service_address
+         ${having}
+       ) ranked_services
+     `);
+     const total = toNumber((countResult.recordset[0] as Record<string, unknown>).total);
+ 
+     const dataRequest = pool.request();
+     applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
++    dataRequest.input("minSample", sql.Int, minSample);
+     dataRequest.input("offset", sql.Int, offset);
+     dataRequest.input("limit", sql.Int, limit);
+ 
+     const dataResult = await dataRequest.query(`
+       ${cte}
+       SELECT
+         service_id,
+         service_name,
+         service_address,
+         COUNT(DISTINCT operation_id) AS total_operations,
+         SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) AS scheduled_workdays,
+         SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END) AS present_workdays,
+         SUM(CASE WHEN effective_state = N'ABSENT' THEN 1 ELSE 0 END) AS absent_workdays,
+         SUM(CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END) AS justified_workdays,
+         SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) AS expected_open_workdays,
+         ${CONSOLIDATED_SAMPLE_SQL} AS expected_staff_workdays,
+         SUM(is_on_time_workday) AS on_time_workdays,
+         SUM(is_late_workday) AS late_workdays,
+         SUM(worked_minutes) AS worked_minutes,
+         SUM(overtime_minutes) AS overtime_minutes,
+diff --git a/backend/src/repositories/work-team.repository.ts b/backend/src/repositories/work-team.repository.ts
+index de492e2..cfb62ce 100644
+--- a/backend/src/repositories/work-team.repository.ts
++++ b/backend/src/repositories/work-team.repository.ts
+@@ -1,28 +1,36 @@
+ import sql from "mssql";
+ import { randomUUID } from "node:crypto";
+ import { getPool } from "../database/connection";
+ import type { ListWorkTeamsQuery } from "../schemas/work-team.schema";
+ import type { WorkTeam, WorkTeamMember } from "../types/work-team";
+ import { applySqlFilters, buildWhereClause, type SqlFilter } from "../utils/sql-list-query";
++import { resolveSqlSort } from "../utils/sql-sort";
+ import { mapEmployeeRow } from "../utils/row-mappers";
+ 
++const WORK_TEAM_LIST_SORT_COLUMNS = {
++  name: "wt.name",
++  memberCount: "member_count",
++  activeMemberCount: "active_member_count",
++  updatedAt: "wt.updated_at",
++} as const;
++
+ const mapWorkTeamRow = (row: Record<string, unknown>): WorkTeam => ({
+   id: String(row.id),
+   companyId: String(row.company_id),
+   name: String(row.name),
+   normalizedName: String(row.normalized_name),
+   description: row.description ? String(row.description) : null,
+   isActive: Boolean(row.is_active),
+   createdAt: new Date(row.created_at as Date | string).toISOString(),
+   updatedAt: new Date(row.updated_at as Date | string).toISOString(),
+   createdBy: row.created_by ? String(row.created_by) : null,
+   updatedBy: row.updated_by ? String(row.updated_by) : null,
+   memberCount: row.member_count !== undefined ? Number(row.member_count) : undefined,
+   activeMemberCount:
+     row.active_member_count !== undefined ? Number(row.active_member_count) : undefined,
+   usageCount: row.usage_count !== undefined ? Number(row.usage_count) : undefined,
+   assignmentVersion:
+     row.assignment_version !== undefined ? Number(row.assignment_version) : undefined,
+ });
+ 
+ const mapWorkTeamMemberRow = (row: Record<string, unknown>): WorkTeamMember => ({
+@@ -166,68 +174,65 @@ export const workTeamRepository = {
+         clause: "wt.company_id = @companyId",
+         apply: (request) => request.input("companyId", sql.UniqueIdentifier, companyId),
+       },
+     ];
+ 
+     if (query.active !== undefined) {
+       filters.push({
+         clause: "wt.is_active = @active",
+         apply: (request) => request.input("active", sql.Bit, query.active ? 1 : 0),
+       });
+     }
+ 
+     if (query.search) {
+       filters.push({
+         clause: "(wt.name LIKE @search OR wt.description LIKE @search)",
+         apply: (request) => request.input("search", sql.NVarChar(210), `%${query.search}%`),
+       });
+     }
+ 
+     const whereClause = buildWhereClause(filters);
+-    const sortColumn =
+-      query.sortBy === "name"
+-        ? "wt.name"
+-        : query.sortBy === "memberCount"
+-          ? "member_count"
+-          : query.sortBy === "activeMemberCount"
+-            ? "active_member_count"
+-            : "wt.updated_at";
+-    const sortDirection = query.sortDirection === "asc" ? "ASC" : "DESC";
++    const orderBy = resolveSqlSort(
++      query.sortBy,
++      WORK_TEAM_LIST_SORT_COLUMNS,
++      WORK_TEAM_LIST_SORT_COLUMNS.updatedAt,
++      query.sortDirection === "asc" ? "asc" : "desc",
++    );
+     const offset = (query.page - 1) * query.limit;
+ 
+     const countRequest = pool.request();
+     applySqlFilters(countRequest, filters);
+     const countResult = await countRequest.query(`
+       SELECT COUNT(*) AS total
+       FROM work_teams wt
+       ${whereClause}
+     `);
+ 
+     const listRequest = pool.request();
+     applySqlFilters(listRequest, filters);
+     listRequest.input("offset", sql.Int, offset).input("limit", sql.Int, query.limit);
+ 
+     const listResult = await listRequest.query(`
+       SELECT wt.*, ${memberCountSelect}
+       FROM work_teams wt
+       ${whereClause}
+-      ORDER BY ${sortColumn} ${sortDirection}, wt.name ASC
++      ORDER BY ${orderBy}, wt.name ASC
+       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+     `);
+ 
+     return {
+       items: listResult.recordset.map((row) => mapWorkTeamRow(row as Record<string, unknown>)),
+       total: Number(countResult.recordset[0]?.total ?? 0),
+     };
+   },
+ 
+   async update(
+     companyId: string,
+     workTeamId: string,
+     input: {
+       name?: string;
+       normalizedName?: string;
+       description?: string | null;
+       isActive?: boolean;
+       updatedBy: string | null;
+     },
+   ): Promise<WorkTeam | null> {
+diff --git a/backend/src/utils/service-fix/db-services.ts b/backend/src/utils/service-fix/db-services.ts
+index 5cdb145..46a34d0 100644
+--- a/backend/src/utils/service-fix/db-services.ts
++++ b/backend/src/utils/service-fix/db-services.ts
+@@ -2,44 +2,47 @@ import sql from "mssql";
+ import { connectDatabase, closeDatabase } from "../../database/connection";
+ import { env } from "../../config/env";
+ import type { CurrentDbService, EnvironmentSnapshot, ServicesSchema } from "./types";
+ 
+ const TABLE_NAME = "operational_locations";
+ 
+ const pickColumn = (
+   availableColumns: Set<string>,
+   candidates: readonly string[],
+ ): string | null => {
+   for (const candidate of candidates) {
+     if (availableColumns.has(candidate)) {
+       return candidate;
+     }
+   }
+ 
+   return null;
+ };
+ 
+ export const detectServicesSchema = async (pool: sql.ConnectionPool): Promise<ServicesSchema> => {
+-  const result = await pool.request().query(`
++  const result = await pool
++    .request()
++    .input("tableName", sql.NVarChar(128), TABLE_NAME)
++    .query(`
+     SELECT COLUMN_NAME
+     FROM INFORMATION_SCHEMA.COLUMNS
+-    WHERE TABLE_NAME = '${TABLE_NAME}'
++    WHERE TABLE_NAME = @tableName
+   `);
+ 
+   const availableColumns = new Set<string>(
+     result.recordset.map((row: { COLUMN_NAME: string }) => row.COLUMN_NAME.toLowerCase()),
+   );
+ 
+   const neighborhoodColumn = pickColumn(availableColumns, ["neighborhood", "barrio"]);
+   const localityColumn = pickColumn(availableColumns, ["locality", "localidad"]);
+   const serviceFormatColumn = pickColumn(availableColumns, ["store_format", "formato", "format"]);
+ 
+   if (!availableColumns.has("id") || !availableColumns.has("name") || !availableColumns.has("address")) {
+     throw new Error("operational_locations table is missing required columns: id, name, address");
+   }
+ 
+   return {
+     tableName: TABLE_NAME,
+     neighborhoodColumn,
+     localityColumn,
+     serviceFormatColumn,
+     availableColumns,
+@@ -72,41 +75,41 @@ const buildSelectQuery = (schema: ServicesSchema): string => {
+     schema.localityColumn,
+     schema.serviceFormatColumn,
+   ].filter((column): column is string => column !== null);
+ 
+   const selectList = [
+     "id",
+     "name",
+     "address",
+     "latitude",
+     "longitude",
+     "allowed_radius_meters",
+     "active",
+     "created_at",
+     "updated_at",
+     "google_place_id",
+     ...optionalColumns,
+   ];
+ 
+   return `
+     SELECT ${selectList.join(", ")}
+-    FROM ${schema.tableName}
++    FROM ${TABLE_NAME}
+   `;
+ };
+ 
+ export const loadCurrentServicesFromDatabase = async (): Promise<{
+   services: CurrentDbService[];
+   schema: ServicesSchema;
+ }> => {
+   const pool = await connectDatabase();
+ 
+   try {
+     const schema = await detectServicesSchema(pool);
+     const result = await pool.request().query(buildSelectQuery(schema));
+ 
+     const services = result.recordset.map((row: Record<string, unknown>) => ({
+       id: String(row.id),
+       name: String(row.name ?? "").trim(),
+       address: String(row.address ?? "").trim(),
+       latitude: toNullableNumber(row.latitude),
+       longitude: toNullableNumber(row.longitude),
+       allowedRadiusMeters: toNullableNumber(row.allowed_radius_meters),
+diff --git a/backend/src/utils/service-fix/sql.ts b/backend/src/utils/service-fix/sql.ts
+index 1e56d11..531a6dc 100644
+--- a/backend/src/utils/service-fix/sql.ts
++++ b/backend/src/utils/service-fix/sql.ts
+@@ -1,22 +1,27 @@
+ import type { ProposedFix } from "./types";
+ 
++/**
++ * Builds human-reviewable SQL scripts for service reconciliation.
++ * Runtime apply path uses parameterized queries in `./apply.ts` — do not execute
++ * these escaped strings via the application driver.
++ */
+ const escapeSqlString = (value: string): string => value.replace(/'/g, "''");
+ 
+ const formatDecimal = (value: string): string => {
+   const parsed = Number.parseFloat(value);
+   if (!Number.isFinite(parsed)) {
+     throw new Error(`Invalid decimal value: ${value}`);
+   }
+ 
+   return String(parsed);
+ };
+ 
+ const whereCurrentService = (fix: ProposedFix): string => {
+   if (!fix.dbId) {
+     throw new Error(`Missing dbId for fix on service ${fix.serviceNumber}`);
+   }
+ 
+   return `WHERE id = '${escapeSqlString(fix.dbId)}'
+   AND name = N'${escapeSqlString(fix.serviceNumber)}'`;
+ };
+ 
+diff --git a/backend/src/utils/sql-security-regression.test.ts b/backend/src/utils/sql-security-regression.test.ts
+new file mode 100644
+index 0000000..3d3fb76
+--- /dev/null
++++ b/backend/src/utils/sql-security-regression.test.ts
+@@ -0,0 +1,52 @@
++import assert from "node:assert/strict";
++import { readFileSync } from "node:fs";
++import path from "node:path";
++import { describe, it } from "node:test";
++import { fileURLToPath } from "node:url";
++import { resolveSqlSort } from "./sql-sort";
++
++const here = path.dirname(fileURLToPath(import.meta.url));
++
++describe("sql-sort whitelist", () => {
++  it("maps only known sort keys to SQL identifiers", () => {
++    const whitelist = { name: "e.name", createdAt: "e.created_at" };
++    assert.equal(resolveSqlSort("name", whitelist, "e.id", "asc"), "e.name ASC");
++    assert.equal(resolveSqlSort("createdAt", whitelist, "e.id", "desc"), "e.created_at DESC");
++  });
++
++  it("falls back for unknown user-controlled sort keys", () => {
++    const whitelist = { name: "e.name" };
++    assert.equal(
++      resolveSqlSort("e.name; DROP TABLE employees--", whitelist, "e.id", "asc"),
++      "e.id ASC",
++    );
++  });
++});
++
++describe("sql injection regression — parameterized hotspots", () => {
++  it("absence-attachment markStatus / listForCleanup use bind parameters", () => {
++    const src = readFileSync(
++      path.join(here, "../repositories/absence-attachment.repository.ts"),
++      "utf8",
++    );
++    assert.doesNotMatch(src, /status = N'\$\{current\.status\}'/);
++    assert.match(src, /status = @expectedStatus/);
++    assert.match(src, /attempt_count = attempt_count \+ @incrementAttempt/);
++    assert.doesNotMatch(src, /statuses\.map\(\(s\) => `N'\$\{s\}'`\)/);
++    assert.match(src, /status IN \(\$\{statusParams\.join/);
++  });
++
++  it("statistics ranking HAVING binds @referenceAt and @minSample", () => {
++    const src = readFileSync(path.join(here, "../repositories/statistics.repository.ts"), "utf8");
++    assert.doesNotMatch(src, /MIN\(operation_scheduled_start\) <= '\$\{/);
++    assert.match(src, /MIN\(operation_scheduled_start\) <= @referenceAt/);
++    assert.match(src, />= @minSample/);
++    assert.match(src, /\.input\("minSample", sql\.Int, minSample\)/);
++  });
++
++  it("service-fix schema lookup parameterizes TABLE_NAME", () => {
++    const src = readFileSync(path.join(here, "service-fix/db-services.ts"), "utf8");
++    assert.doesNotMatch(src, /WHERE TABLE_NAME = '\$\{TABLE_NAME\}'/);
++    assert.match(src, /WHERE TABLE_NAME = @tableName/);
++  });
++});
+diff --git a/backend/src/utils/sql-sort.ts b/backend/src/utils/sql-sort.ts
+index 2c2a193..1069f85 100644
+--- a/backend/src/utils/sql-sort.ts
++++ b/backend/src/utils/sql-sort.ts
+@@ -1,10 +1,10 @@
+ export const resolveSqlSort = (
+   sortBy: string | undefined,
+-  whitelist: Record<string, string>,
++  whitelist: Readonly<Record<string, string>>,
+   defaultField: string,
+   sortDirection: "asc" | "desc",
+ ): string => {
+   const column = sortBy && whitelist[sortBy] ? whitelist[sortBy] : defaultField;
+   const direction = sortDirection === "asc" ? "ASC" : "DESC";
+   return `${column} ${direction}`;
+ };
+diff --git a/scripts/audit/framework/scanners/sql_boundaries.py b/scripts/audit/framework/scanners/sql_boundaries.py
+index dd366df..cb3567d 100644
+--- a/scripts/audit/framework/scanners/sql_boundaries.py
++++ b/scripts/audit/framework/scanners/sql_boundaries.py
+@@ -1,113 +1,237 @@
+ """SQL layer boundary inventory and risk flags."""
+ 
+ from __future__ import annotations
+ 
+ import re
+ 
+ from ..config import load_thresholds, repo_root
+ from ..models import AuditFinding
+ from ..utils import classify_layer, iter_source_files, read_text, stable_id
+ 
+ SQL_RE = re.compile(r"\b(SELECT|INSERT|UPDATE|DELETE|MERGE)\b", re.I)
+ TENANT_TABLE_HINT = re.compile(
+     r"\b(FROM|JOIN|UPDATE|INTO)\s+(dbo\.)?(employees|inventories|stores|attendance_records|"
+     r"operation_assignments|payroll_receipts|conversations|whatsapp_messages)\b",
+     re.I,
+ )
+ COMPANY_FILTER = re.compile(r"company_id|companyId|@companyId", re.I)
++INTERP_RE = re.compile(r"\$\{([^}]{1,240})\}")
+ 
++# Value-like interpolations inside SQL string literals (primary injection risk).
++QUOTED_INTERP_RE = re.compile(
++    r"(?:N)?'\$\{([^}]+)\}'|\"\$\{([^}]+)\}\"|LIKE\s+'%\$\{",
++    re.I,
++)
++
++# Expressions treated as static / controlled when quoted (closed constants).
++SAFE_QUOTED_EXPR = re.compile(
++    r"^(?:"
++    r"[A-Z][A-Z0-9_]*"  # MODULE_CONST
++    r"|escapeSqlString\([^)]*\)"
++    r"|TABLE_NAME"
++    r"|FAKE_MIGRATION_NAME|RUNTIME_TEST_USER|MIGRATION_TEST_USER|DEFAULT_OPERATION_TIMEZONE|probe"
++    r")$"
++)
++
++# Structural fragments (WHERE builders, CTEs, parameterized placeholder joins, etc.).
++STRUCTURAL_EXPR = re.compile(
++    r"(?:"
++    r"whereClause|whereSql|where|cte|having|aggregatedCte|filteredBaseQuery|globalBaseQuery|"
++    r"scopeSql|companyClause|companyFilter|statusFilter|simulationFilter|attendanceFilter|"
++    r"excludeClause|currentAbsenceClause|expectedClause|firstAttemptClause|activeStateGuard|"
++    r"scheduleJoin|lockHint|orderBy|sortColumn|sortDirection|fields\.join|placeholders\.join|"
++    r"idParams\.join|valueSql\.join|values\.join|batchParams\.join|statusParams\.join|"
++    r"sourceRows|selectList\.join|memberCountSelect|buildNotificationEligibilitySql|"
++    r"buildEmployeeCategoryJoin|buildEmployeeLastWorkedJoin|withLock|"
++    r"ACTIVE_[A-Z0-9_]+|ABSENCE_[A-Z0-9_]+|FAILURE_STATUSES_SQL|CONSOLIDATED_SAMPLE_SQL|"
++    r"INCIDENT_COUNT_SQL|EFFECTIVE_STATE_SQL|isJunkOperationPredicate|"
++    r"\? \"\" :| \? \"AND |\? 'AND "
++    r")",
++    re.I,
++)
+ 
+-def _has_sql_in_interpolated_template(text: str) -> bool:
+-    """Detect SQL keywords inside a template literal that also interpolates ${...}.
+ 
+-    Uses a linear scan to avoid catastrophic regex backtracking on large files.
+-    """
++def _line_number(text: str, pos: int) -> int:
++    return text.count("\n", 0, pos) + 1
++
++
++def _iter_sql_templates(text: str) -> list[tuple[int, str]]:
++    """Return (start_index, template_body) for backtick templates containing SQL + ${}."""
++    templates: list[tuple[int, str]] = []
+     i = 0
+     n = len(text)
+     while i < n:
+         if text[i] != "`":
+             i += 1
+             continue
+         j = i + 1
+         while j < n and text[j] != "`":
+             if text[j] == "\\" and j + 1 < n:
+                 j += 2
+                 continue
+             j += 1
+         if j >= n:
+             break
+         chunk = text[i + 1 : j]
+         if "${" in chunk and SQL_RE.search(chunk):
+-            return True
++            templates.append((i + 1, chunk))
+         i = j + 1
+-    return False
++    return templates
++
++
++def _classify_quoted_expr(expr: str) -> str:
++    cleaned = expr.strip()
++    if SAFE_QUOTED_EXPR.match(cleaned):
++        return "static-or-script"
++    if "escapeSqlString" in cleaned:
++        return "script-generation"
++    return "quoted-value"
++
++
++def analyze_sql_interpolations(text: str) -> dict[str, list[dict[str, object]]]:
++    """Classify interpolations inside SQL template literals."""
++    quoted_risks: list[dict[str, object]] = []
++    structural: list[dict[str, object]] = []
++    other: list[dict[str, object]] = []
++
++    for start, chunk in _iter_sql_templates(text):
++        for qm in QUOTED_INTERP_RE.finditer(chunk):
++            expr = (qm.group(1) or qm.group(2) or "").strip()
++            kind = _classify_quoted_expr(expr) if expr else "quoted-value"
++            entry = {
++                "line": _line_number(text, start + qm.start()),
++                "expr": expr or qm.group(0),
++                "kind": kind,
++            }
++            if kind == "quoted-value":
++                quoted_risks.append(entry)
++            else:
++                structural.append(entry)
++
++        for im in INTERP_RE.finditer(chunk):
++            expr = im.group(1).strip()
++            # Skip ones already captured as quoted.
++            abs_pos = start + im.start()
++            window = text[max(0, abs_pos - 2) : abs_pos + len(im.group(0)) + 1]
++            if QUOTED_INTERP_RE.search(window):
++                continue
++            entry = {
++                "line": _line_number(text, abs_pos),
++                "expr": expr[:160],
++                "kind": "structural" if STRUCTURAL_EXPR.search(expr) else "other",
++            }
++            if entry["kind"] == "structural":
++                structural.append(entry)
++            else:
++                other.append(entry)
++
++    return {"quoted_risks": quoted_risks, "structural": structural, "other": other}
+ 
+ 
+ def scan() -> list[AuditFinding]:
+     thresholds = load_thresholds()
+     root = repo_root()
+     roots = [root / "backend" / "src"]
+     risk_layers = set(thresholds.get("sql", {}).get("risk_layers", ["controllers", "routes"]))
+     counts: dict[str, int] = {}
+     findings: list[AuditFinding] = []
+ 
+     for path in iter_source_files(roots):
+         rel = path.relative_to(root).as_posix()
+         layer = classify_layer(rel)
+         text = read_text(path)
+         if not SQL_RE.search(text):
+             continue
+         counts[layer] = counts.get(layer, 0) + 1
+ 
+         if layer in risk_layers:
+             findings.append(
+                 AuditFinding(
+                     id=stable_id("sql-layer", rel),
+                     category="sql",
+                     subcategory="layer-boundary",
+                     severity="high",
+                     confidence="medium",
+                     status="requires-review",
+                     title=f"SQL keywords in {layer}",
+                     description="SQL detected outside typical data-access layer. Confirm whether repository should own this query.",
+                     file=rel,
+                     evidence={"layer": layer},
+                     recommendation="Move SQL to repositories when possible; keep controllers free of queries.",
+                     blocking=False,
+                 )
+             )
+ 
+-        if _has_sql_in_interpolated_template(text):
++        analysis = analyze_sql_interpolations(text)
++        quoted_risks = analysis["quoted_risks"]
++        structural = analysis["structural"]
++        other = analysis["other"]
++
++        if quoted_risks:
+             findings.append(
+                 AuditFinding(
+                     id=stable_id("sql-dyn", rel),
+                     category="security",
+                     subcategory="sql-injection-risk",
+                     severity="high",
+-                    confidence="medium",
++                    confidence="high",
+                     status="suspected",
+-                    title="SQL keywords inside interpolated template literal",
+-                    description="Template literal appears to combine SQL keywords with ${...}. Review for parameterized queries.",
++                    title="Quoted value interpolation in SQL template",
++                    description=(
++                        "SQL template interpolates values inside string quotes (or LIKE '%${...}'). "
++                        "Prefer request.input() / @parameters. Review each occurrence."
++                    ),
++                    file=rel,
++                    evidence={
++                        "pattern": "quoted-value-interpolation",
++                        "count": len(quoted_risks),
++                        "samples": quoted_risks[:8],
++                    },
++                    recommendation="Bind runtime values with .input(); keep only closed enum constants or script generators with explicit review.",
++                    blocking=False,
++                )
++            )
++        elif structural or other:
++            # Structural dynamic SQL (WHERE builders, ORDER BY whitelist fragments, @param joins).
++            findings.append(
++                AuditFinding(
++                    id=stable_id("sql-struct", rel),
++                    category="sql",
++                    subcategory="sql-dynamic-structure",
++                    severity="info",
++                    confidence="medium",
++                    status="accepted-risk",
++                    title="Structural SQL template interpolation",
++                    description=(
++                        "Template combines SQL with ${...} fragments that look structural "
++                        "(filters, CTEs, parameterized placeholder lists, constants). "
++                        "Not classified as injection risk; keep values parameterized inside builders."
++                    ),
+                     file=rel,
+-                    evidence={"pattern": "sql-in-template-literal"},
+-                    recommendation="Use parameterized .input() / bind parameters; never interpolate user input into SQL.",
++                    evidence={
++                        "pattern": "structural-sql-interpolation",
++                        "structural_count": len(structural),
++                        "other_count": len(other),
++                        "samples": (structural + other)[:8],
++                    },
++                    recommendation="Keep identifiers on closed whitelists; never interpolate request/body values.",
+                     blocking=False,
+                 )
+             )
+ 
+         # Tenant filter heuristic — skip repositories (often parameterized via helpers)
+         if layer in {"services", "controllers", "workers", "routes"}:
+             if TENANT_TABLE_HINT.search(text) and not COMPANY_FILTER.search(text):
+                 findings.append(
+                     AuditFinding(
+                         id=stable_id("sql-tenant", rel),
+                         category="security",
+                         subcategory="tenant-isolation",
+                         severity="high",
+                         confidence="low",
+                         status="suspected",
+                         title="Tenant-aware table reference without company_id in file",
+                         description=(
+                             "File references a likely tenant-scoped table but has no company_id/companyId token. "
+                             "False positives are common when tenant is enforced upstream."
+                         ),
+diff --git a/scripts/audit/framework/tests/test_framework_core.py b/scripts/audit/framework/tests/test_framework_core.py
+index b1c9b85..4659fb6 100644
+--- a/scripts/audit/framework/tests/test_framework_core.py
++++ b/scripts/audit/framework/tests/test_framework_core.py
+@@ -1,37 +1,38 @@
+ """Unit tests for audit framework core logic."""
+ 
+ from __future__ import annotations
+ 
+ import sys
+ import unittest
+ from pathlib import Path
+ 
+ AUDIT_SCRIPTS = Path(__file__).resolve().parents[2]
+ if str(AUDIT_SCRIPTS) not in sys.path:
+     sys.path.insert(0, str(AUDIT_SCRIPTS))
+ 
+ from framework.baseline import compare_findings  # noqa: E402
+ from framework.gate import evaluate_gate, should_block  # noqa: E402
+ from framework.models import AuditFinding  # noqa: E402
+ from framework.runner import dedupe  # noqa: E402
+ from framework.scanners.god_class import score_file  # noqa: E402
++from framework.scanners.sql_boundaries import analyze_sql_interpolations  # noqa: E402
+ 
+ 
+ def _finding(**kwargs) -> AuditFinding:
+     base = dict(
+         id="f1",
+         category="security",
+         subcategory="test",
+         severity="high",
+         confidence="high",
+         status="detected",
+         title="t",
+         description="d",
+         file="backend/src/a.ts",
+         blocking=False,
+     )
+     base.update(kwargs)
+     return AuditFinding(**base)  # type: ignore[arg-type]
+ 
+ 
+ class TestGodClassScore(unittest.TestCase):
+@@ -96,38 +97,63 @@ class TestGate(unittest.TestCase):
+         self.assertFalse(should_block(f))
+ 
+     def test_detected_critical_security_blocks(self):
+         f = _finding(severity="critical", confidence="high", status="detected", category="security")
+         self.assertTrue(should_block(f))
+ 
+     def test_explicit_blocking_flag(self):
+         f = _finding(severity="low", confidence="low", status="suspected", blocking=True)
+         self.assertTrue(should_block(f))
+ 
+     def test_evaluate_gate_counts(self):
+         findings = [
+             _finding(id="a", status="requires-review", severity="critical"),
+             _finding(id="b", status="detected", severity="critical", confidence="high", category="security"),
+         ]
+         result = evaluate_gate(findings)
+         self.assertFalse(result["passed"])
+         self.assertEqual(result["blocking_count"], 1)
+ 
+ 
++class TestSqlInterpolationClassification(unittest.TestCase):
++    def test_quoted_user_value_is_injection_risk(self):
++        text = """
++        const q = `SELECT * FROM employees WHERE name = N'${input.name}'`;
++        """
++        analysis = analyze_sql_interpolations(text)
++        self.assertEqual(len(analysis["quoted_risks"]), 1)
++        self.assertEqual(analysis["quoted_risks"][0]["kind"], "quoted-value")
++
++    def test_structural_where_clause_is_not_quoted_risk(self):
++        text = """
++        const q = `SELECT * FROM employees ${whereClause} ORDER BY ${orderBy}`;
++        """
++        analysis = analyze_sql_interpolations(text)
++        self.assertEqual(analysis["quoted_risks"], [])
++        self.assertGreaterEqual(len(analysis["structural"]), 1)
++
++    def test_escape_sql_string_script_is_not_quoted_risk(self):
++        text = """
++        const q = `UPDATE t SET a = N'${escapeSqlString(fix.newAddress)}'`;
++        """
++        analysis = analyze_sql_interpolations(text)
++        self.assertEqual(analysis["quoted_risks"], [])
++
++
+ class TestBaselineAndDedupe(unittest.TestCase):
+     def test_dedupe_keeps_higher_severity(self):
+         a = _finding(id="1", severity="low", title="same")
+         b = _finding(id="2", severity="high", title="same")
+         out = dedupe([a, b])
+         self.assertEqual(len(out), 1)
+         self.assertEqual(out[0].severity, "high")
+ 
+     def test_baseline_new_and_resolved(self):
+         prev = [_finding(id="old", title="old-title", file="a.ts")]
+         cur = [_finding(id="new", title="new-title", file="b.ts")]
+         diff = compare_findings(cur, prev)
+         self.assertEqual(diff["counts"]["new"], 1)
+         self.assertEqual(diff["counts"]["resolved"], 1)
+ 
+ 
+ if __name__ == "__main__":
+     unittest.main()

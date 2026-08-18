@@ -89,7 +89,7 @@ function collectCandidates(basename: string): CandidateHit[] {
     hits.push({ raw, normalized });
   };
 
-  const formatted = /\d{2}[\s.\-]*\d{8}[\s.\-]*\d/g;
+  const formatted = /\d{2}[\s.-]*\d{8}[\s.-]*\d/g;
   let match: RegExpExecArray | null;
   while ((match = formatted.exec(basename)) !== null) {
     addHit(match[0]);

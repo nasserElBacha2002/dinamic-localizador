@@ -20,6 +20,8 @@ export interface Service {
   address: string | null;
   neighborhood: string | null;
   locality: string | null;
+  /** Shared geographic catalog FK (same entity as employee residence zones). */
+  locationZoneId?: string | null;
   serviceFormat: ServiceFormat | null;
   latitude: number;
   longitude: number;

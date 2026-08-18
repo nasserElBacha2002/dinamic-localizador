@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { NextFunction, Request, Response } from "express";
-import { requireAnyPermission, requirePermission } from "../middleware/company-context";
+import { requirePermission } from "../middleware/company-context";
 import { resolvePermissionsForRole } from "../constants/company-permissions";
 
 const createMockResponse = () => {

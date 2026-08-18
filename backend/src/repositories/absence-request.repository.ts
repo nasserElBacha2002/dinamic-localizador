@@ -356,14 +356,17 @@ export const absenceRequestRepository = {
       reviewedAt?: Date | null;
       reviewComment?: string | null;
       cancelledAt?: Date | null;
-      onlyIfStatusIn?: AbsenceRequestStatus[];
+      /** Required CAS guard — concurrent approve/reject must not both succeed. */
+      onlyIfStatusIn: AbsenceRequestStatus[];
     },
     transaction?: sql.Transaction,
   ): Promise<AbsenceRequest | null> {
+    if (!input.onlyIfStatusIn.length) {
+      throw new Error("absenceRequestRepository.updateStatus requires onlyIfStatusIn");
+    }
+
     const request = transaction ? new sql.Request(transaction) : getPool().request();
-    const statusFilter = input.onlyIfStatusIn?.length
-      ? `AND status IN (${toAbsenceStatusSqlInList(input.onlyIfStatusIn)})`
-      : "";
+    const statusFilter = `AND status IN (${toAbsenceStatusSqlInList(input.onlyIfStatusIn)})`;
 
     const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)

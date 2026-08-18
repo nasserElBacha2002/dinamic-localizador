@@ -277,27 +277,6 @@ export const oneTimeScheduleReconciliationCommand = {
   },
 };
 
-/** @deprecated Prefer oneTimeScheduleReconciliationCommand */
-export const oneTimeOperationScheduleReconciliationService = {
-  reconcileInTransaction:
-    oneTimeScheduleReconciliationCommand.reconcileInTransaction.bind(
-      oneTimeScheduleReconciliationCommand,
-    ),
-
-  async repairFromCurrentSchedule(
-    companyId: string,
-    operationId: string,
-    options?: { apply?: boolean },
-  ): Promise<{
-    dryRun: boolean;
-    status: OneTimeScheduleConsistencyReport["status"];
-    report: OneTimeScheduleConsistencyReport;
-    result?: OneTimeScheduleReconciliationResult;
-  }> {
-    return oneTimeScheduleRepairService.repairFromCurrentSchedule(companyId, operationId, options);
-  },
-};
-
 export const oneTimeScheduleRepairService = {
   async repairFromCurrentSchedule(
     companyId: string,

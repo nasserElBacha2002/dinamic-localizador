@@ -124,6 +124,8 @@ describe("EmployeesListPage responsive (real page)", () => {
     assert.equal(avatar?.textContent, "AL");
     assert.ok(view.getAllByText("Operaciones").length >= 1);
     assert.ok(view.getByText("Activo"));
+    assert.ok(view.getByRole("button", { name: /Importar colaboradores/i }));
+    assert.equal(view.queryByRole("button", { name: /Más acciones de colaboradores/i }), null);
   });
 
   it("shows mobile cards, search, filter drawer, and actions without desktop table", async () => {

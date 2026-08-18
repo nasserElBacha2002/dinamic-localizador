@@ -12,6 +12,15 @@ import {
   type UpdateServiceInput,
 } from "../schemas/service.schema";
 
+/** Create/update payloads may include shared geographic zone FK (denormalized neighborhood/locality remain). */
+export type ServiceWriteInput = CreateServiceInput & {
+  locationZoneId?: string | null;
+};
+
+export type ServiceUpdateWriteInput = UpdateServiceInput & {
+  locationZoneId?: string | null;
+};
+
 /**
  * Exhaustive SQL column map for service list sorting.
  * Every `ServiceListSortField` must have a whitelist entry.
@@ -42,7 +51,7 @@ export interface ServiceGeoFacets {
 }
 
 export const serviceRepository = {
-  async create(companyId: string, input: CreateServiceInput): Promise<Service> {
+  async create(companyId: string, input: ServiceWriteInput): Promise<Service> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -51,28 +60,33 @@ export const serviceRepository = {
       .input("address", sql.NVarChar(300), input.address ?? null)
       .input("neighborhood", sql.NVarChar(150), input.neighborhood ?? null)
       .input("locality", sql.NVarChar(150), input.locality ?? null)
+      .input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId ?? null)
       .input("serviceFormat", sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH), input.serviceFormat ?? null)
       .input("latitude", sql.Decimal(10, 7), input.latitude)
       .input("longitude", sql.Decimal(10, 7), input.longitude)
       .input("allowedRadiusMeters", sql.Int, input.allowedRadiusMeters)
       .input("googlePlaceId", sql.NVarChar(255), input.googlePlaceId ?? null)
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO operational_locations (
-          company_id, name, address, neighborhood, locality, store_format,
+          company_id, name, address, neighborhood, locality, location_zone_id, store_format,
           latitude, longitude, allowed_radius_meters, google_place_id
         )
-        OUTPUT INSERTED.*
+        OUTPUT INSERTED.id INTO @inserted (id)
         VALUES (
-          @companyId, @name, @address, @neighborhood, @locality, @serviceFormat,
+          @companyId, @name, @address, @neighborhood, @locality, @locationZoneId, @serviceFormat,
           @latitude, @longitude, @allowedRadiusMeters, @googlePlaceId
-        )
+        );
+        SELECT ol.*
+        FROM operational_locations ol
+        INNER JOIN @inserted i ON i.id = ol.id;
       `);
 
     return mapServiceRow(result.recordset[0] as Record<string, unknown>);
   },
 
   /** Multi-row insert for imports. Atomic for the whole batch. */
-  async createMany(companyId: string, inputs: CreateServiceInput[]): Promise<Service[]> {
+  async createMany(companyId: string, inputs: ServiceWriteInput[]): Promise<Service[]> {
     if (inputs.length === 0) {
       return [];
     }
@@ -88,6 +102,11 @@ export const serviceRepository = {
       request.input(`neighborhood${index}`, sql.NVarChar(150), input.neighborhood ?? null);
       request.input(`locality${index}`, sql.NVarChar(150), input.locality ?? null);
       request.input(
+        `locationZoneId${index}`,
+        sql.UniqueIdentifier,
+        input.locationZoneId ?? null,
+      );
+      request.input(
         `serviceFormat${index}`,
         sql.NVarChar(SERVICE_FORMAT_MAX_LENGTH),
         input.serviceFormat ?? null,
@@ -98,18 +117,22 @@ export const serviceRepository = {
       request.input(`googlePlaceId${index}`, sql.NVarChar(255), input.googlePlaceId ?? null);
       valueSql.push(`(
         @companyId, @name${index}, @address${index}, @neighborhood${index}, @locality${index},
-        @serviceFormat${index}, @latitude${index}, @longitude${index},
+        @locationZoneId${index}, @serviceFormat${index}, @latitude${index}, @longitude${index},
         @allowedRadiusMeters${index}, @googlePlaceId${index}
       )`);
     }
 
     const result = await request.query(`
+      DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
       INSERT INTO operational_locations (
-        company_id, name, address, neighborhood, locality, store_format,
+        company_id, name, address, neighborhood, locality, location_zone_id, store_format,
         latitude, longitude, allowed_radius_meters, google_place_id
       )
-      OUTPUT INSERTED.*
-      VALUES ${valueSql.join(",\n")}
+      OUTPUT INSERTED.id INTO @inserted (id)
+      VALUES ${valueSql.join(",\n")};
+      SELECT ol.*
+      FROM operational_locations ol
+      INNER JOIN @inserted i ON i.id = ol.id;
     `);
 
     return result.recordset.map((row) => mapServiceRow(row as Record<string, unknown>));
@@ -346,7 +369,7 @@ export const serviceRepository = {
     return existing;
   },
 
-  async update(companyId: string, id: string, input: UpdateServiceInput): Promise<Service | null> {
+  async update(companyId: string, id: string, input: ServiceUpdateWriteInput): Promise<Service | null> {
     const pool = getPool();
     const fields: string[] = [];
     const request = pool
@@ -372,6 +395,11 @@ export const serviceRepository = {
     if (input.locality !== undefined) {
       request.input("locality", sql.NVarChar(150), input.locality);
       fields.push("locality = @locality");
+    }
+
+    if (input.locationZoneId !== undefined) {
+      request.input("locationZoneId", sql.UniqueIdentifier, input.locationZoneId);
+      fields.push("location_zone_id = @locationZoneId");
     }
 
     if (input.serviceFormat !== undefined) {
@@ -411,10 +439,14 @@ export const serviceRepository = {
     fields.push("updated_at = SYSUTCDATETIME()");
 
     const result = await request.query(`
+      DECLARE @updated TABLE (id UNIQUEIDENTIFIER);
       UPDATE operational_locations
       SET ${fields.join(", ")}
-      OUTPUT INSERTED.*
-      WHERE id = @id AND company_id = @companyId
+      OUTPUT INSERTED.id INTO @updated (id)
+      WHERE id = @id AND company_id = @companyId;
+      SELECT ol.*
+      FROM operational_locations ol
+      INNER JOIN @updated u ON u.id = ol.id;
     `);
 
     if (!result.recordset[0]) {

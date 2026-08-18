@@ -4,6 +4,7 @@ import { useParams } from "react-router";
 import { EntityLink } from "../../components/entity-link";
 import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
+  ActionMenu,
   ConfirmDialog,
   DataTable,
   DetailFieldGrid,
@@ -12,6 +13,7 @@ import {
   PageHeader,
   SectionCard,
   StatusBadge,
+  type ActionMenuItem,
   type DataTableColumn,
 } from "../../design-system";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
@@ -114,29 +116,45 @@ export function WorkTeamDetailPage() {
         title={team.name}
         description="Consulta de plantilla de colaboradores e historial de uso."
         action={
-          <Group gap="sm">
-            {canManage ? (
-              <>
+          <ActionMenu
+            primary={
+              canManage ? (
                 <EntityEditAction entity="work-teams" id={team.id} label="Editar" />
-                {team.isActive ? (
-                  <Button variant="light" color="red" onClick={() => setDeactivateOpen(true)}>
-                    Desactivar
-                  </Button>
-                ) : (
-                  <Button
-                    variant="light"
-                    onClick={() => activateMutation.mutate(id)}
-                    loading={activateMutation.isPending}
-                  >
-                    Activar
-                  </Button>
-                )}
-              </>
-            ) : null}
-            <Button variant="default" onClick={goBackToList}>
-              Volver al listado
-            </Button>
-          </Group>
+              ) : (
+                <Button variant="default" onClick={goBackToList}>
+                  Volver al listado
+                </Button>
+              )
+            }
+            items={
+              [
+                ...(canManage
+                  ? [
+                      team.isActive
+                        ? {
+                            key: "deactivate",
+                            label: "Desactivar",
+                            destructive: true,
+                            onClick: () => setDeactivateOpen(true),
+                          }
+                        : {
+                            key: "activate",
+                            label: "Activar",
+                            loading: activateMutation.isPending,
+                            disabled: activateMutation.isPending,
+                            onClick: () => activateMutation.mutate(id),
+                          },
+                      {
+                        key: "back",
+                        label: "Volver al listado",
+                        onClick: goBackToList,
+                      },
+                    ]
+                  : []),
+              ] as ActionMenuItem[]
+            }
+            menuLabel="Más acciones del grupo"
+          />
         }
       />
 

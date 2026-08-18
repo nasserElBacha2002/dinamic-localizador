@@ -35,6 +35,7 @@ export interface DeactivateEmployeeCommand {
     phoneNumber?: string;
     employeeType?: UpdateEmployeeInput["employeeType"];
     categoryId?: string | null;
+    locationZoneId?: string | null;
   };
 }
 
@@ -204,6 +205,9 @@ export const employeeDeactivationService = {
         }
         if (command.profile.categoryId !== undefined) {
           profileUpdate.categoryId = command.profile.categoryId;
+        }
+        if (command.profile.locationZoneId !== undefined) {
+          profileUpdate.locationZoneId = command.profile.locationZoneId;
         }
       }
 

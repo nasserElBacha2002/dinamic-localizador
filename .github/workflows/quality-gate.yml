@@ -91,6 +91,7 @@ jobs:
         working-directory: backend
     env:
       RUN_DB_INTEGRATION_TESTS: "true"
+      NODE_ENV: test
       FRONTEND_URL: http://localhost:5173
       TZ: America/Argentina/Buenos_Aires
       DB_HOST: localhost
@@ -101,6 +102,21 @@ jobs:
       DB_ENCRYPT: "false"
       DB_TRUST_SERVER_CERTIFICATE: "true"
       JWT_SECRET: ci-jwt-secret-min-16-chars
+      # Seed loads full env.ts (via DB connection) without unit-test preload.
+      # Payroll worker defaults to true and fail-fast requires a Content SID.
+      PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: "false"
+      OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED: "false"
+      TWILIO_VALIDATE_SIGNATURE: "false"
+      TWILIO_ACCOUNT_SID: AC_CI_TEST
+      TWILIO_AUTH_TOKEN: ci-test-twilio-auth-token
+      TWILIO_WHATSAPP_NUMBER: "whatsapp:+10000000000"
+      TWILIO_ARRIVAL_REMINDER_CONTENT_SID: HX_CI_ARRIVAL
+      TWILIO_EXIT_REMINDER_CONTENT_SID: HX_CI_EXIT
+      TWILIO_TEMPLATE_NO_CHECKIN_SID: HX_CI_NO_CHECKIN
+      TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID: HX_CI_PAYROLL
+      TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID: HX_CI_ASSIGNMENT
+      EMAIL_TRANSPORT: console
+      GCS_REQUIRED: "false"
     steps:
       - uses: actions/checkout@v4
 

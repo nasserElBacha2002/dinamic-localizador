@@ -172,7 +172,7 @@ export const employeeWorkdayService = {
   buildConfirmedMessage(assignment: EmployeeAssignedOperation): string {
     const timeZone = getBotOperationTimezone();
     return [
-      "Listo, confirmamos tu asistencia para:",
+      "Confirmamos tu asistencia para:",
       "",
       formatAssignmentServiceReference(assignment),
       formatAssignmentDateTimeLine(assignment, timeZone),
@@ -214,11 +214,28 @@ export const employeeWorkdayService = {
       return { kind: "ok", message: this.buildConfirmedMessage(assignment) };
     }
 
-    await employeeAssignmentQueryRepository.updateConfirmationStatus(
+    const updated = await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
       assignment.assignmentId,
       "CONFIRMED",
+      [assignment.confirmationStatus],
     );
+
+    if (!updated) {
+      // Concurrent transition won; report durable state (no last-write-wins overwrite).
+      const latest = await employeeAssignmentQueryRepository.findByOperationForEmployee(
+        companyId,
+        employeeId,
+        operationId,
+      );
+      if (!latest) {
+        return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
+      }
+      if (latest.confirmationStatus === "UNAVAILABLE") {
+        return { kind: "ok", message: this.buildUnavailableMessage(latest) };
+      }
+      return { kind: "ok", message: this.buildConfirmedMessage(latest) };
+    }
 
     return { kind: "ok", message: this.buildConfirmedMessage(assignment) };
   },
@@ -246,11 +263,27 @@ export const employeeWorkdayService = {
       return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
     }
 
-    await employeeAssignmentQueryRepository.updateConfirmationStatus(
+    const updated = await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
       assignment.assignmentId,
       "UNAVAILABLE",
+      [assignment.confirmationStatus],
     );
+
+    if (!updated) {
+      const latest = await employeeAssignmentQueryRepository.findByOperationForEmployee(
+        companyId,
+        employeeId,
+        operationId,
+      );
+      if (!latest) {
+        return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
+      }
+      if (latest.confirmationStatus === "CONFIRMED") {
+        return { kind: "ok", message: this.buildConfirmedMessage(latest) };
+      }
+      return { kind: "ok", message: this.buildUnavailableMessage(latest) };
+    }
 
     return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
   },

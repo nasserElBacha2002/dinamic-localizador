@@ -13,6 +13,7 @@ import type {
 } from "../types/payroll-receipt-notification";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { payrollReceiptMetrics } from "../utils/payroll-receipts/metrics";
+import { monotonicProviderStatusAdvanceSql } from "../utils/whatsapp-observability";
 
 const requestFrom = (transaction?: sql.Transaction) =>
   transaction ? new sql.Request(transaction) : getPool().request();
@@ -187,11 +188,7 @@ export const payrollReceiptNotificationRepository = {
    * Recover expired leases without bumping attempt_count.
    * SEND_STARTED or open STARTED/AMBIGUOUS attempts → RECONCILIATION_REQUIRED.
    */
-  async recoverExpiredLeases(
-    batchSize = 50,
-    _maxAttempts = PAYROLL_RECEIPT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,
-  ): Promise<number> {
-    void _maxAttempts;
+  async recoverExpiredLeases(batchSize = 50): Promise<number> {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -507,26 +504,14 @@ export const payrollReceiptNotificationRepository = {
     }
   },
 
-  /** @deprecated Use markSendAccepted */
-  async markSent(input: {
-    companyId: string;
-    notificationId: string;
-    providerMessageSid: string;
-    sentAt?: Date;
-  }): Promise<void> {
-    return this.markSendAccepted(input);
-  },
-
   async markFailed(input: {
     companyId: string;
     notificationId: string;
     errorCode: string;
     errorMessage: string;
+    /** null = permanent (no automatic retry). */
     nextAttemptAt: Date | null;
-    /** Ignored — permanent vs retry is expressed via nextAttemptAt only. */
-    permanent?: boolean;
   }): Promise<void> {
-    void input.permanent;
     await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
@@ -754,5 +739,41 @@ export const payrollReceiptNotificationRepository = {
       return null;
     }
     return mapAttemptRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async projectProviderStatusById(input: {
+    notificationId: string;
+    providerStatus: string;
+  }): Promise<void> {
+    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
+    await getPool()
+      .request()
+      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
+      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
+      .query(`
+        UPDATE whatsapp_payroll_receipt_notifications
+        SET provider_status = @providerStatus,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @notificationId
+          AND ${advance}
+      `);
+  },
+
+  async projectProviderStatusByMessageSid(input: {
+    providerMessageSid: string;
+    providerStatus: string;
+  }): Promise<void> {
+    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
+    await getPool()
+      .request()
+      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
+      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
+      .query(`
+        UPDATE whatsapp_payroll_receipt_notifications
+        SET provider_status = @providerStatus,
+            updated_at = SYSUTCDATETIME()
+        WHERE provider_message_sid = @providerMessageSid
+          AND ${advance}
+      `);
   },
 };

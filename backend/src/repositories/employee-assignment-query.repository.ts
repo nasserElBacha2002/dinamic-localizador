@@ -123,18 +123,34 @@ export const employeeAssignmentQueryRepository = {
     return row ? mapEmployeeAssignedOperationRow(row) : null;
   },
 
+  /**
+   * Atomic confirmation transition (CAS).
+   * Requires `onlyIfStatusIn` so concurrent confirm/unavailable cannot both succeed.
+   */
   async updateConfirmationStatus(
     companyId: string,
     assignmentId: string,
     status: AssignmentConfirmationStatus,
+    onlyIfStatusIn: readonly AssignmentConfirmationStatus[],
   ): Promise<boolean> {
+    if (onlyIfStatusIn.length === 0) {
+      throw new Error("updateConfirmationStatus requires onlyIfStatusIn");
+    }
+
     const pool = getPool();
-    const result = await pool
+    const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("assignmentId", sql.UniqueIdentifier, assignmentId)
-      .input("status", sql.NVarChar(20), status)
-      .query(`
+      .input("status", sql.NVarChar(20), status);
+
+    const statusParams = onlyIfStatusIn.map((value, index) => {
+      const name = `expectedStatus${index}`;
+      request.input(name, sql.NVarChar(20), value);
+      return `@${name}`;
+    });
+
+    const result = await request.query(`
         UPDATE operation_assignments
         SET confirmation_status = @status,
             confirmed_at = CASE
@@ -151,6 +167,7 @@ export const employeeAssignmentQueryRepository = {
         WHERE company_id = @companyId
           AND id = @assignmentId
           AND cancelled_at IS NULL
+          AND confirmation_status IN (${statusParams.join(", ")})
       `);
 
     return (result.rowsAffected[0] ?? 0) > 0;

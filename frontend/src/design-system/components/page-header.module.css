@@ -1,0 +1,40 @@
+.root {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.titleBlock {
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.title {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.actions {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.actionsMobile {
+  width: 100%;
+}
+
+.pageTitle {
+  display: flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  gap: var(--mantine-spacing-md);
+}
+
+.pageTitleName {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}

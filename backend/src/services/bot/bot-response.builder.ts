@@ -73,10 +73,6 @@ export const WORKDAY_NO_LONGER_AVAILABLE_MESSAGE =
 export const LOCATION_WITHOUT_SESSION_MESSAGE =
   "No pudimos registrar asistencia con esa ubicación. Compartí tu ubicación nuevamente o escribí \"Llegué\" / \"Me voy\".";
 
-/** @deprecated Prefer buildMixedAttendanceActionPrompt — kept for callers that only need a short hint. */
-export const ATTENDANCE_LOCATION_MIXED_AMBIGUOUS_MESSAGE =
-  "Encontré más de una acción posible (llegada y salida). Respondé con el número correspondiente.";
-
 export const buildMixedAttendanceActionPrompt = (input: {
   checkInCandidates: EmployeeWorkdayCheckInCandidate[];
   checkoutCandidates: EmployeeWorkdayCheckoutCandidate[];

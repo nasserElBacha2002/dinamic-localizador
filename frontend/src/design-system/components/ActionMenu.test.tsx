@@ -8,12 +8,14 @@ import { cleanup, fireEvent, render, waitFor, within } from "@testing-library/re
 import { afterEach, describe, it } from "node:test";
 import React from "react";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
+import { mockViewport } from "../../test/mock-match-media";
 import { ActionMenu } from "./ActionMenu";
 
 installLayoutPolyfills();
 
 afterEach(() => {
   cleanup();
+  mockViewport("desktop");
 });
 
 function renderWithMenu(ui: React.ReactElement) {
@@ -21,7 +23,33 @@ function renderWithMenu(ui: React.ReactElement) {
 }
 
 describe("ActionMenu", () => {
-  it("renders primary action and secondary menu items with aria-label", async () => {
+  it("shows secondary actions as buttons on desktop", () => {
+    mockViewport("desktop");
+    const secondary: string[] = [];
+    const view = renderWithMenu(
+      <ActionMenu
+        primary={<Button>Primaria</Button>}
+        menuLabel="Más acciones de fila"
+        items={[
+          { key: "edit", label: "Editar", onClick: () => secondary.push("edit") },
+          {
+            key: "delete",
+            label: "Eliminar",
+            destructive: true,
+            onClick: () => secondary.push("delete"),
+          },
+        ]}
+      />,
+    );
+
+    assert.ok(view.getByRole("button", { name: "Primaria" }));
+    assert.equal(view.queryByRole("button", { name: "Más acciones de fila" }), null);
+    fireEvent.click(view.getByRole("button", { name: "Editar" }));
+    assert.deepEqual(secondary, ["edit"]);
+  });
+
+  it("collapses secondary actions into a menu on mobile", async () => {
+    mockViewport("mobile");
     const secondary: string[] = [];
     const view = renderWithMenu(
       <ActionMenu
@@ -48,7 +76,33 @@ describe("ActionMenu", () => {
     assert.deepEqual(secondary, ["edit"]);
   });
 
+  it("mode=menu keeps overflow even on desktop", async () => {
+    mockViewport("desktop");
+    const itemClicks: string[] = [];
+    const view = renderWithMenu(
+      <ActionMenu
+        mode="menu"
+        menuLabel="Menú fila"
+        items={[
+          {
+            key: "x",
+            label: "Secundaria",
+            onClick: () => itemClicks.push("item"),
+          },
+        ]}
+      />,
+    );
+
+    fireEvent.click(view.getByRole("button", { name: "Menú fila" }));
+    await waitFor(() => {
+      assert.ok(within(document.body).getByRole("menuitem", { name: "Secundaria" }));
+    });
+    fireEvent.click(within(document.body).getByRole("menuitem", { name: "Secundaria" }));
+    assert.deepEqual(itemClicks, ["item"]);
+  });
+
   it("stops propagation so parent click handlers do not fire", async () => {
+    mockViewport("mobile");
     const parentClicks: string[] = [];
     const itemClicks: string[] = [];
 
@@ -81,6 +135,7 @@ describe("ActionMenu", () => {
   });
 
   it("respects disabled and loading items", async () => {
+    mockViewport("mobile");
     const clicks: string[] = [];
     const view = renderWithMenu(
       <ActionMenu
@@ -113,6 +168,7 @@ describe("ActionMenu", () => {
   });
 
   it("escapes ScrollArea via portal", async () => {
+    mockViewport("mobile");
     const view = renderWithMenu(
       <ScrollArea h={80} style={{ overflow: "hidden" }}>
         <div style={{ height: 200 }}>
@@ -133,6 +189,7 @@ describe("ActionMenu", () => {
   });
 
   it("uses Mantine Menu with portal (Escape/focus managed by Floating UI)", () => {
+    mockViewport("mobile");
     const view = renderWithMenu(
       <ActionMenu menuLabel="Menú a11y" items={[{ key: "a", label: "Ítem", onClick: () => undefined }]} />,
     );

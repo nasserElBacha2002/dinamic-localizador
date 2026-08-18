@@ -119,6 +119,7 @@ export type WhatsAppMessageProcessingStatus = "RECEIVED" | "PROCESSED" | "FAILED
 
 export interface WhatsAppMessage {
   id: string;
+  companyId: string;
   messageSid: string | null;
   direction: WhatsAppMessageDirection;
   employeeId: string | null;

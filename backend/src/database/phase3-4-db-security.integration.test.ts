@@ -192,6 +192,8 @@ describeDatabaseIntegration("phase3-4 db security roles (corrections)", () => {
   after(async () => {
     try {
       await cleanupFixtures();
+      // Leave roles in place when they match 089 so the official migration runner
+      // can register 089 as a no-op heal instead of orphaning roles without system_migrations.
     } catch (error) {
       console.warn("[phase3-4-security] fixture cleanup failed", error);
     }

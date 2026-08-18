@@ -98,9 +98,8 @@ export const attachmentUploadService = {
     });
     const sanitizedName = sanitizeOriginalFileName(input.originalFileName);
 
-    let row;
     try {
-      row = await absenceAttachmentRepository.reservePendingUploadAtomic({
+      await absenceAttachmentRepository.reservePendingUploadAtomic({
         id: attachmentId,
         companyId: input.companyId,
         absenceRequestId: input.requestId ?? null,

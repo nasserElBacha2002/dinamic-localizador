@@ -3,6 +3,7 @@ import { workTeamController } from "../controllers/work-team.controller";
 import { asyncHandler } from "../middleware/async-handler";
 import { requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
+import { recommendWorkTeamSchema } from "../schemas/operation-recommendation.schema";
 import {
   addWorkTeamMembersSchema,
   createWorkTeamSchema,
@@ -16,6 +17,12 @@ import {
 
 export const workTeamRouter = Router();
 
+workTeamRouter.post(
+  "/recommendations/team",
+  requirePermission("employees:manage"),
+  validate(recommendWorkTeamSchema),
+  asyncHandler(workTeamController.recommendTeam),
+);
 workTeamRouter.post(
   "/",
   requirePermission("employees:manage"),

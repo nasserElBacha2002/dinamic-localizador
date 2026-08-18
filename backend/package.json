@@ -29,14 +29,15 @@
     "repair:one-time-schedule-drift": "tsx scripts/repair-one-time-schedule-drift.ts",
     "diagnose:operational-location-duplicates": "tsx scripts/diagnose-operational-location-duplicates.ts",
     "repair:operational-location-duplicates": "tsx scripts/repair-operational-location-duplicates.ts",
-    "seed:integration-ci": "tsx src/scripts/seed-integration-ci.ts",
+    "seed:historical-operations": "tsx src/scripts/seed-historical-operations.ts",
+    "seed:integration-ci": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/seed-integration-ci.ts",
     "cleanup:integration-junk": "tsx src/scripts/cleanup-integration-junk.ts",
     "gcs:pilot:absence-attachments": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/gcs-absence-attachments-pilot.ts",
     "test": "node ./scripts/run-unit-tests.mjs",
-    "test:integration": "EMAIL_TRANSPORT=console RUN_DB_INTEGRATION_TESTS=true tsx --import ./src/test-helpers/preload-test-env.ts --test --test-concurrency=1 --test-force-exit src/**/*.integration.test.ts"
+    "test:integration": "node ./scripts/run-integration-tests.mjs"
   },
   "dependencies": {
-    "@google-cloud/storage": "^7.21.0",
+    "@google-cloud/storage": "^7.22.0",
     "bcrypt": "^6.0.0",
     "busboy": "^1.6.0",
     "cors": "^2.8.5",
@@ -73,6 +74,7 @@
     "typescript-eslint": "^8.61.1"
   },
   "overrides": {
-    "brace-expansion": "5.0.9"
+    "brace-expansion": "5.0.9",
+    "uuid": "^11.1.1"
   }
 }

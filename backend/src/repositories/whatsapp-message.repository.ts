@@ -123,7 +123,23 @@ export const whatsappMessageRepository = {
       `);
   },
 
-  async findById(id: string): Promise<WhatsAppMessage | null> {
+  async findById(companyId: string, id: string): Promise<WhatsAppMessage | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(
+        `SELECT TOP 1 * FROM whatsapp_messages WHERE id = @id AND company_id = @companyId`,
+      );
+    if (!result.recordset[0]) {
+      return null;
+    }
+    return mapWhatsAppMessageRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /** Global UUID lookup for Twilio SID correlation before tenant is known. */
+  async findByIdGlobal(id: string): Promise<WhatsAppMessage | null> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -154,6 +170,7 @@ export const whatsappMessageRepository = {
   },
 
   async updateObservabilityFields(
+    companyId: string,
     messageId: string,
     input: {
       conversationId?: string | null;
@@ -171,6 +188,7 @@ export const whatsappMessageRepository = {
     const pool = getPool();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, messageId)
       .input("conversationId", sql.UniqueIdentifier, input.conversationId ?? null)
       .input("correlationId", sql.UniqueIdentifier, input.correlationId ?? null)
@@ -195,11 +213,12 @@ export const whatsappMessageRepository = {
             provider_status = COALESCE(@providerStatus, provider_status),
             notification_id = COALESCE(@notificationId, notification_id),
             updated_at = SYSUTCDATETIME()
-        WHERE id = @id
+        WHERE id = @id AND company_id = @companyId
       `);
   },
 
   async updateProviderStatus(
+    companyId: string,
     messageId: string,
     input: {
       providerStatus: string;
@@ -213,6 +232,7 @@ export const whatsappMessageRepository = {
     const status = input.statusKey.toLowerCase();
     await pool
       .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, messageId)
       .input("providerStatus", sql.NVarChar(40), input.providerStatus)
       .input("providerErrorCode", sql.NVarChar(40), input.providerErrorCode ?? null)
@@ -236,7 +256,7 @@ export const whatsappMessageRepository = {
             read_at = CASE WHEN @isRead = 1 THEN COALESCE(read_at, @statusTimestamp) ELSE read_at END,
             failed_at = CASE WHEN @isFailed = 1 THEN COALESCE(failed_at, @statusTimestamp) ELSE failed_at END,
             updated_at = SYSUTCDATETIME()
-        WHERE id = @id
+        WHERE id = @id AND company_id = @companyId
       `);
   },
 };

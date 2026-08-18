@@ -3,24 +3,28 @@ import { employeeService } from "../services/employee.service";
 import { employeeDeactivationService } from "../services/employee-deactivation.service";
 import { employeeAvailabilityService } from "../services/employee-availability.service";
 import { requireRequestCompanyId } from "../utils/request-company";
+import { projectEmployeeForRole } from "../utils/employee-residence-privacy";
 
 export const employeeController = {
   async create(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const employee = await employeeService.create(companyId, req.body);
-    res.status(201).json({ data: employee });
+    res.status(201).json({ data: projectEmployeeForRole(employee, req.companyRole) });
   },
 
   async list(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const result = await employeeService.list(companyId, req.validatedQuery as never);
-    res.status(200).json(result);
+    res.status(200).json({
+      ...result,
+      data: result.data.map((employee) => projectEmployeeForRole(employee, req.companyRole)),
+    });
   },
 
   async getById(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const employee = await employeeService.getById(companyId, String(req.params.id));
-    res.status(200).json({ data: employee });
+    res.status(200).json({ data: projectEmployeeForRole(employee, req.companyRole) });
   },
 
   async getOperationalAvailability(req: Request, res: Response) {
@@ -44,7 +48,7 @@ export const employeeController = {
   async update(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const employee = await employeeService.update(companyId, String(req.params.id), req.body);
-    res.status(200).json({ data: employee });
+    res.status(200).json({ data: projectEmployeeForRole(employee, req.companyRole) });
   },
 
   async deactivate(req: Request, res: Response) {
@@ -56,7 +60,7 @@ export const employeeController = {
       req.auth?.userId ?? null,
     );
     res.status(200).json({
-      data: result.employee,
+      data: projectEmployeeForRole(result.employee, req.companyRole),
       meta: {
         removedAssignmentIds: result.removedAssignmentIds,
         endedAssignments: result.endedAssignments,
@@ -75,6 +79,6 @@ export const employeeController = {
       { confirmAffectedRelease: false },
       req.auth?.userId ?? null,
     );
-    res.status(200).json({ data: result.employee });
+    res.status(200).json({ data: projectEmployeeForRole(result.employee, req.companyRole) });
   },
 };

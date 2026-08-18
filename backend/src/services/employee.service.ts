@@ -50,6 +50,9 @@ export const employeeService = {
     }
 
     const categoryId = input.categoryId === undefined ? null : input.categoryId;
+    const locationZoneId = input.locationZoneId === undefined ? null : input.locationZoneId;
+    // Assignability (active + same company; create forbids inactive) is enforced atomically
+    // inside employeeRepository.create with UPDLOCK — no divergent pre-check.
 
     await companyAbsenceSettingsService.ensureAbsenceCatalogForCompany(companyId);
 
@@ -66,6 +69,7 @@ export const employeeService = {
           phoneNumber,
           employeeType: input.employeeType,
           categoryId,
+          locationZoneId,
         },
         transaction,
       );
@@ -92,6 +96,7 @@ export const employeeService = {
   /**
    * Real multi-row create for imports. Atomic per chunk transaction.
    * Does not run interactive post-commit side effects.
+   * Location zones are always NULL until an explicit bulk-zone import phase.
    */
   async createManyForImport(
     companyId: string,
@@ -170,6 +175,9 @@ export const employeeService = {
       }
       updatePayload.phoneNumber = normalizedPhone;
     }
+
+    // Location-zone assignability (incl. historical inactive keep) is enforced only in
+    // employeeRepository.update — single write-time authority.
 
     const updated = await employeeRepository.update(companyId, id, updatePayload);
     if (!updated) {

@@ -3,7 +3,6 @@ import type {
   Employee,
   Operation,
   OperationEmployeeAssignment,
-  OperationWithService,
   Service,
 } from "./domain";
 

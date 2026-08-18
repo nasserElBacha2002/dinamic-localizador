@@ -1,5 +1,10 @@
 import type { ProposedFix } from "./types";
 
+/**
+ * Builds human-reviewable SQL scripts for service reconciliation.
+ * Runtime apply path uses parameterized queries in `./apply.ts` — do not execute
+ * these escaped strings via the application driver.
+ */
 const escapeSqlString = (value: string): string => value.replace(/'/g, "''");
 
 const formatDecimal = (value: string): string => {

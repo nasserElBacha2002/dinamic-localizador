@@ -391,6 +391,7 @@ export function OperationEmployeeTable({
 
         return (
           <ActionMenu
+            mode="menu"
             primary={
               hasAttendanceDetail ? (
                 <Button

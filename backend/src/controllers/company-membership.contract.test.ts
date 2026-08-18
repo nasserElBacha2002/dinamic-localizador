@@ -43,7 +43,7 @@ describeDatabaseIntegration("GET /api/companies/:companyId/me integration", () =
   let readOnlyUserEmail = "";
   let outsiderUserId = "";
   let outsiderUserEmail = "";
-  let createdUserIds: string[] = [];
+  const createdUserIds: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();

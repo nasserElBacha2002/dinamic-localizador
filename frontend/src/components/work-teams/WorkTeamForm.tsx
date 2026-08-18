@@ -1,15 +1,13 @@
 import { Button, Stack, Text, Textarea, TextInput } from "@mantine/core";
 import { useEffect, useMemo, useState } from "react";
 import { SectionCard } from "../../design-system";
+import { WorkTeamAiCreationPanel } from "./WorkTeamAiCreationPanel";
 import { WorkTeamMemberMultiSelect } from "./WorkTeamMemberMultiSelect";
 import type { Employee } from "../../types/employee";
 import { areEmployeeIdSetsEqual } from "../../utils/work-team-save";
+import type { WorkTeamFormValues } from "./work-team-form.types";
 
-export interface WorkTeamFormValues {
-  name: string;
-  description: string;
-  employeeIds: string[];
-}
+export type { WorkTeamFormValues } from "./work-team-form.types";
 
 interface WorkTeamFormProps {
   defaultValues: WorkTeamFormValues;
@@ -17,6 +15,8 @@ interface WorkTeamFormProps {
   submitLabel: string;
   loading?: boolean;
   errorMessage?: string | null;
+  /** Show AI composition assist (create flow). */
+  enableAiAssist?: boolean;
   onDirtyChange?: (dirty: boolean) => void;
   onSubmit: (values: WorkTeamFormValues) => Promise<void>;
   onCancel: () => void;
@@ -35,6 +35,7 @@ function WorkTeamFormFields({
   submitLabel,
   loading = false,
   errorMessage,
+  enableAiAssist = false,
   onDirtyChange,
   onSubmit,
   onCancel,
@@ -64,6 +65,12 @@ function WorkTeamFormFields({
   return (
     <SectionCard title="Datos del grupo" description="Plantilla reutilizable de colaboradores.">
       <Stack gap="md">
+        {enableAiAssist ? (
+          <WorkTeamAiCreationPanel
+            selectedEmployeeIds={employeeIds}
+            onApplyMembers={setEmployeeIds}
+          />
+        ) : null}
         <TextInput
           label="Nombre"
           required

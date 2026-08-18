@@ -21,6 +21,7 @@ export function WorkTeamCreatePage() {
         submitLabel="Crear grupo"
         loading={createMutation.isPending}
         errorMessage={errorMessage}
+        enableAiAssist
         onCancel={goBackToList}
         onSubmit={async (values) => {
           setErrorMessage(null);

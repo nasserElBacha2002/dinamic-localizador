@@ -1,5 +1,4 @@
 import assert from "node:assert/strict";
-import { z } from "zod";
 import { describe, it } from "node:test";
 import { ALL_COMPANY_MODULE_KEYS } from "../constants/company-modules";
 import { updateCompanyModulesSchema } from "../schemas/company-module.schema";

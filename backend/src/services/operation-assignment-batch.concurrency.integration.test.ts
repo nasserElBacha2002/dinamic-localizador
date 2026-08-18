@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { describe, it } from "node:test";
+import { it } from "node:test";
 import { describeDatabaseIntegration } from "../test-helpers/integration-test";
 
 /**

@@ -1,6 +1,6 @@
 export const resolveSqlSort = (
   sortBy: string | undefined,
-  whitelist: Record<string, string>,
+  whitelist: Readonly<Record<string, string>>,
   defaultField: string,
   sortDirection: "asc" | "desc",
 ): string => {

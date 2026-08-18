@@ -6,7 +6,10 @@ import {
   compareAbsenceDates,
   parseAbsenceDateInput,
 } from "./absence-date";
+import type { AbsenceDayBreakdownItem } from "./absence-day-breakdown.types";
 import { allocationsByYearFromBreakdown } from "./absence-year-allocations";
+
+export type { AbsenceDayBreakdownItem } from "./absence-day-breakdown.types";
 
 export type CalendarWeekdayRule = {
   dayOfWeek: WeekdayNumber;
@@ -18,14 +21,6 @@ export type CalendarDateException = {
   name: string;
   dateType: AbsenceCalendarDateType;
   isWorkingDay: boolean;
-};
-
-export type AbsenceDayBreakdownItem = {
-  date: string;
-  counted: number;
-  isWorkingDay: boolean;
-  reason: "WORKING" | "WEEKEND" | "HOLIDAY" | "NON_WORKING" | "OVERRIDE_WORKING" | "PARTIAL";
-  label?: string;
 };
 
 export type AbsenceDurationCalculation = {

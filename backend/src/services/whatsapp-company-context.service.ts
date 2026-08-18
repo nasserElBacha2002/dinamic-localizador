@@ -57,7 +57,7 @@ const resolveForcedCompany = async (
       ? session
       : await botSessionRepository.findValidActiveByPhone(companyId, phoneNumber);
 
-  let employeeId: string | null = null;
+  let employeeId: string | null;
   if (simulation?.employeeIdOverride) {
     employeeId = simulation.employeeIdOverride;
   } else {

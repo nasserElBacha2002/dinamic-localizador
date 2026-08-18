@@ -19,7 +19,6 @@ import {
   hasSufficientSample,
 } from "../utils/attendance-statistics-metrics";
 import { buildActionExceptions } from "../utils/statistics-action-exceptions";
-import type { StatisticsTimeContext } from "../utils/statistics-period";
 import {
   applyEmployeeWorkdayStatisticsFilters,
   buildEmployeeWorkdayStatisticsCte,
@@ -101,12 +100,11 @@ const employeeRankingHaving = (mode: StatisticsRankingMode | undefined): string 
 const operationRankingHaving = (
   mode: StatisticsRankingMode | undefined,
   incompleteCoverage: boolean | undefined,
-  minSample: number,
-  referenceAtIso: string,
 ): string => {
+  // @referenceAt / @minSample are bound by applyEmployeeWorkdayStatisticsFilters + callers.
   const consolidatedIncomplete = `
       SUM(CASE WHEN effective_state = N'EXPECTED' THEN 1 ELSE 0 END) = 0
-      AND MIN(operation_scheduled_start) <= '${referenceAtIso}'
+      AND MIN(operation_scheduled_start) <= @referenceAt
       AND ${CONSOLIDATED_SAMPLE_SQL} > 0
       AND SUM(CASE WHEN effective_state = N'PRESENT' THEN 1 ELSE 0 END)
         < ${CONSOLIDATED_SAMPLE_SQL}`;
@@ -114,7 +112,7 @@ const operationRankingHaving = (
   if (mode === "low_coverage_operations") {
     return `HAVING
       ${consolidatedIncomplete}
-      AND ${CONSOLIDATED_SAMPLE_SQL} >= ${minSample}`;
+      AND ${CONSOLIDATED_SAMPLE_SQL} >= @minSample`;
   }
 
   // Table filter / deep-link: match incompleteCoverageOperations KPI (no min-sample gate).
@@ -125,10 +123,10 @@ const operationRankingHaving = (
   return "";
 };
 
-const serviceRankingHaving = (mode: StatisticsRankingMode | undefined, minSample: number): string => {
+const serviceRankingHaving = (mode: StatisticsRankingMode | undefined): string => {
   if (mode === "incident_services") {
     return `HAVING ${INCIDENT_COUNT_SQL} > 0
-      AND SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) >= ${minSample}`;
+      AND SUM(CASE WHEN effective_state <> N'CANCELLED' THEN 1 ELSE 0 END) >= @minSample`;
   }
   return "";
 };
@@ -542,8 +540,6 @@ export const statisticsRepository = {
     const having = operationRankingHaving(
       filters.rankingMode,
       filters.incompleteCoverage,
-      minSample,
-      referenceAt.toISOString(),
     );
 
     const aggregatedCte = `
@@ -611,6 +607,7 @@ export const statisticsRepository = {
 
     const countRequest = pool.request();
     applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
+    countRequest.input("minSample", sql.Int, minSample);
     const countResult = await countRequest.query(`
       ${aggregatedCte}
       SELECT COUNT(*) AS total FROM operation_statistics_ranked
@@ -619,6 +616,7 @@ export const statisticsRepository = {
 
     const dataRequest = pool.request();
     applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
+    dataRequest.input("minSample", sql.Int, minSample);
     dataRequest.input("offset", sql.Int, offset);
     dataRequest.input("limit", sql.Int, limit);
 
@@ -684,10 +682,11 @@ export const statisticsRepository = {
     const offset = (page - 1) * limit;
 
     const minSample = STATISTICS_MIN_SAMPLE_WORKDAYS;
-    const having = serviceRankingHaving(filters.rankingMode, minSample);
+    const having = serviceRankingHaving(filters.rankingMode);
 
     const countRequest = pool.request();
     applyEmployeeWorkdayStatisticsFilters(countRequest, sqlFilters, referenceAt);
+    countRequest.input("minSample", sql.Int, minSample);
     const countResult = await countRequest.query(`
       ${cte}
       SELECT COUNT(*) AS total FROM (
@@ -701,6 +700,7 @@ export const statisticsRepository = {
 
     const dataRequest = pool.request();
     applyEmployeeWorkdayStatisticsFilters(dataRequest, sqlFilters, referenceAt);
+    dataRequest.input("minSample", sql.Int, minSample);
     dataRequest.input("offset", sql.Int, offset);
     dataRequest.input("limit", sql.Int, limit);
 

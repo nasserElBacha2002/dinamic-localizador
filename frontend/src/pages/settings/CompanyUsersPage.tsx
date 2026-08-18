@@ -471,6 +471,7 @@ export function CompanyUsersPage() {
           );
           return (
             <ActionMenu
+              mode="menu"
               primary={
                 allowed ? (
                   editButton

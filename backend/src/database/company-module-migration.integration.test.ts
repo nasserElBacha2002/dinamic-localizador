@@ -19,7 +19,7 @@ const MIGRATION_038_PATH = join(
 const stripLegacyDatabaseUse = (batch: string): string =>
   batch
     .split(/\r?\n/)
-    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_\[\]]+\s*;?\s*$/i.test(line.trim()))
+    .filter((line) => !/^\s*USE\s+[A-Za-z0-9_[\]]+\s*;?\s*$/i.test(line.trim()))
     .join("\n")
     .trim();
 

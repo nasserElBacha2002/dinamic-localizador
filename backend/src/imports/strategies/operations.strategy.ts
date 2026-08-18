@@ -81,13 +81,6 @@ const buildOperationsPrepared = async (
     };
   });
 
-  const previewRows = rows.map((row) => ({
-    rowNumber: row.rowNumber,
-    status: (row.errors.length === 0 ? "valid" : "invalid") as "valid" | "invalid",
-    values: row.values,
-    errors: row.errors,
-  }));
-
   return {
     entityType: "operations",
     strategyVersion: IMPORT_STRATEGY_VERSION,

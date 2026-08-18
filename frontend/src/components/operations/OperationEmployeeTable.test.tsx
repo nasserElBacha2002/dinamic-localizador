@@ -58,6 +58,8 @@ function buildRow(
       employeeType: "fijo",
       categoryId: null,
       category: null,
+      locationZoneId: null,
+      locationZone: null,
       active: true,
       lastWorkedAt: null,
       createdAt: "2026-01-01T00:00:00.000Z",

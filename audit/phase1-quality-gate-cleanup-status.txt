@@ -1,0 +1,62 @@
+ M .env.example
+D  audit/Archivo.zip
+ A audit/phase1-quality-gate-cleanup-validation.md
+ M backend/.env.example
+ M backend/src/controllers/company-membership.contract.test.ts
+ M backend/src/database/company-module-migration.integration.test.ts
+ M backend/src/database/operational-table-rename.integration.test.ts
+ M backend/src/database/workday-domain-migration.test.ts
+ M backend/src/database/workday-domain.integration.test.ts
+ M backend/src/imports/generic-import.integration.test.ts
+ M backend/src/imports/orchestrator.ts
+ M backend/src/imports/strategies/operations.strategy.ts
+ M backend/src/middleware/company-permissions-routes.test.ts
+ M backend/src/repositories/operation-attendance-summary.integration.test.ts
+ M backend/src/repositories/statistics.repository.ts
+ M backend/src/routes/api-route-aliases.integration.test.ts
+ M backend/src/schemas/company-module.schema.test.ts
+ M backend/src/scripts/gcs-absence-attachments-pilot.ts
+ M backend/src/services/absence-calendar.integration.test.ts
+ M backend/src/services/absence-phase0-hardening.integration.test.ts
+ M backend/src/services/attachment-upload.service.ts
+ M backend/src/services/attendance-confirmation-schedule-cycle.integration.test.ts
+ M backend/src/services/attendance-reminder-mark-sent-recovery.integration.test.ts
+ M backend/src/services/bot/bot-response.builder.test.ts
+ M backend/src/services/company-absence-settings.integration.test.ts
+ M backend/src/services/company-deletion-purge.service.ts
+ M backend/src/services/company-isolation.integration.test.ts
+ M backend/src/services/company-modules.integration.test.ts
+ M backend/src/services/company-settings.integration.test.ts
+ M backend/src/services/employee-absence-balance-backfill.integration.test.ts
+ M backend/src/services/employee-deactivation.integration.test.ts
+ M backend/src/services/operation-assignment-batch.concurrency.integration.test.ts
+ M backend/src/services/operation-assignment.service.ts
+ M backend/src/services/operation-import.service.ts
+ M backend/src/services/operation-recurring-reassignment.integration.test.ts
+ M backend/src/services/operation-schedule-confirmation-reset.integration.test.ts
+ M backend/src/services/operator-permissions.integration.test.ts
+ M backend/src/services/platform-company.integration.test.ts
+ M backend/src/services/service-name-uniqueness.integration.test.ts
+ M backend/src/services/tenant-isolation.integration.test.ts
+ M backend/src/services/whatsapp-company-context.service.ts
+ M backend/src/services/whatsapp-webhook.integration.test.ts
+ M backend/src/types/operational-domain.test.ts
+ M backend/src/types/operational-domain.ts
+ M backend/src/types/statistics.ts
+ M backend/src/utils/absence-attachments/file-validation.ts
+ A backend/src/utils/absence-day-breakdown.types.ts
+ M backend/src/utils/absence-duration.ts
+ M backend/src/utils/absence-year-allocations.ts
+ M backend/src/utils/attendance-statistics-metrics.ts
+ M backend/src/utils/payroll-receipts/extract-document-from-filename.ts
+ M backend/src/utils/payroll-receipts/file-validation.ts
+D  backend/src/utils/phone-mask.test.ts
+ A backend/src/utils/phone.test.ts
+ M backend/src/utils/phone.ts
+ M backend/src/utils/statistics-action-exceptions.ts
+ M frontend/src/components/work-teams/WorkTeamForm.tsx
+ A frontend/src/components/work-teams/work-team-form.types.ts
+ M frontend/src/utils/work-team-save.ts
+?? audit/phase1-quality-gate-cleanup-diff.txt
+?? audit/phase1-quality-gate-cleanup-diffstat.txt
+?? audit/phase1-quality-gate-cleanup-status.txt

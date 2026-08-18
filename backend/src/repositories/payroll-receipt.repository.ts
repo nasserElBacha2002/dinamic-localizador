@@ -134,6 +134,9 @@ const FAILURE_STATUSES: PayrollReceiptStatus[] = [
   "FAILED",
 ];
 
+/** Closed enum set embedded as static SQL fragment (no runtime input). */
+const FAILURE_STATUSES_SQL = FAILURE_STATUSES.map((status) => `N'${status}'`).join(", ");
+
 export const payrollReceiptRepository = {
   async createBatch(input: {
     id: string;
@@ -857,7 +860,7 @@ export const payrollReceiptRepository = {
         DECLARE @failed INT = (
           SELECT COUNT(1) FROM payroll_receipts
           WHERE company_id = @companyId AND batch_id = @batchId
-            AND status IN (${FAILURE_STATUSES.map((s) => `N'${s}'`).join(", ")})
+            AND status IN (${FAILURE_STATUSES_SQL})
         );
         DECLARE @processed INT = (
           SELECT COUNT(1) FROM payroll_receipts

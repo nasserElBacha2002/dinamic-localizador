@@ -26,12 +26,15 @@ import { absenceRequestService } from "./absence-request.service";
 import { absenceReviewService } from "./absence-review.service";
 import { attachmentDeletionService } from "./attachment-deletion.service";
 import { operationAssignmentService } from "./operation-assignment.service";
-import { whatsappBotService } from "./whatsapp-bot.service";
+import { processCheckoutWithoutLocation } from "./bot/checkout-attendance.flow";
 import { employeeWorkdayAvailabilityService } from "./employee-workday-availability.service";
 import { attendanceRepository } from "../repositories/attendance.repository";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import { runWithBotRuntimeSettings } from "../utils/bot-runtime-settings-scope";
-import { setCheckoutWithoutLocationBeforeCommitHookForTests } from "../utils/checkout-transaction-hooks";
+import {
+  setCheckoutWithoutLocationBeforeCommitHookForTests,
+  setOutboundPersistAfterCommitHookForTests,
+} from "../utils/checkout-transaction-hooks";
 import type { BotRuntimeSettings } from "../types/bot-runtime-settings";
 
 const uniqueCompanyName = (): string =>
@@ -81,6 +84,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
 
   afterEach(() => {
     setCheckoutWithoutLocationBeforeCommitHookForTests(undefined);
+    setOutboundPersistAfterCommitHookForTests(undefined);
     mock.restoreAll();
   });
 
@@ -621,6 +625,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
   const runCheckout = async (
     fixture: Awaited<ReturnType<typeof seedCheckoutFixture>>,
     messageSid: string,
+    options?: { skipWhatsAppPersistence?: boolean },
   ) => {
     mock.method(employeeWorkdayAvailabilityService, "revalidateCheckoutCandidate", async () => ({
       kind: "eligible" as const,
@@ -641,7 +646,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
       phoneNumber: "+5491111111111",
       simulatedNow: new Date(),
       mode: "persistent" as const,
-      skipWhatsAppPersistence: true,
+      skipWhatsAppPersistence: options?.skipWhatsAppPersistence ?? true,
       messages: [],
       technicalDetails: {},
       simulationArtifacts: [],
@@ -653,7 +658,7 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
 
     return runWithBotRuntimeContext(context, async () =>
       runWithBotRuntimeSettings(runtimeSettings(fixture.companyId), async () =>
-        whatsappBotService.processCheckoutWithoutLocation({
+        processCheckoutWithoutLocation({
           companyId: fixture.companyId,
           employeeId: fixture.employeeId,
           employeeWorkdayId: fixture.employeeWorkdayId,
@@ -722,6 +727,69 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
       `);
     assert.ok(attendance.recordset[0].checkout_at);
     assert.equal(String(attendance.recordset[0].checkout_message_sid), messageSid);
+
+    const session = await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, fixture.sessionId)
+      .query(`SELECT state FROM bot_sessions WHERE id = @id`);
+    assert.equal(String(session.recordset[0].state), "COMPLETED");
+  });
+
+  it("H4: outbound failure after commit keeps checkout and completed session", async () => {
+    const fixture = await seedCheckoutFixture(randomUUID());
+    let outboundAttempts = 0;
+    setOutboundPersistAfterCommitHookForTests(async () => {
+      outboundAttempts += 1;
+      throw new Error("injected outbound failure after commit");
+    });
+
+    await assert.rejects(
+      () =>
+        runCheckout(fixture, `SM-H4-OUTBOUND-${randomUUID()}`, {
+          skipWhatsAppPersistence: false,
+        }),
+      (error: unknown) =>
+        error instanceof Error && error.message.includes("injected outbound failure after commit"),
+    );
+
+    assert.equal(outboundAttempts, 1);
+
+    const attendance = await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, fixture.attendanceId)
+      .query(`SELECT checkout_at FROM attendance_records WHERE id = @id`);
+    assert.ok(attendance.recordset[0].checkout_at, "checkout must remain committed");
+
+    const session = await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, fixture.sessionId)
+      .query(`SELECT state FROM bot_sessions WHERE id = @id`);
+    assert.equal(String(session.recordset[0].state), "COMPLETED");
+  });
+
+  it("H4: two concurrent checkouts yield one durable checkout", async () => {
+    const fixture = await seedCheckoutFixture(randomUUID());
+    const sidA = `SM-H4-CONC-A-${randomUUID()}`;
+    const sidB = `SM-H4-CONC-B-${randomUUID()}`;
+
+    const [first, second] = await Promise.allSettled([
+      runCheckout(fixture, sidA),
+      runCheckout(fixture, sidB),
+    ]);
+
+    assert.equal(first.status, "fulfilled");
+    assert.equal(second.status, "fulfilled");
+
+    const attendance = await getPool()
+      .request()
+      .input("id", sql.UniqueIdentifier, fixture.attendanceId)
+      .query(`
+        SELECT checkout_at, checkout_message_sid
+        FROM attendance_records WHERE id = @id
+      `);
+    assert.ok(attendance.recordset[0].checkout_at);
+    const winnerSid = String(attendance.recordset[0].checkout_message_sid);
+    assert.ok(winnerSid === sidA || winnerSid === sidB);
 
     const session = await getPool()
       .request()

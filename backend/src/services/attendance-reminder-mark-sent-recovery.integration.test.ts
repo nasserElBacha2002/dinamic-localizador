@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { after, before, describe, it, mock } from "node:test";
+import { after, before, it, mock } from "node:test";
 import sql from "mssql";
 import {
   describeDatabaseIntegration,
@@ -21,7 +21,11 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
 
   after(async () => {
     mock.restoreAll();
-    await fixtures.cleanup();
+    try {
+      await fixtures.cleanup();
+    } catch (error) {
+      console.warn("[attendance-reminder-mark-sent-recovery] fixtures cleanup failed", error);
+    }
     await teardownDatabaseIntegration();
   });
 

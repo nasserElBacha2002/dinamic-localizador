@@ -2,6 +2,7 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { OperationKind } from "../constants/operation-kind";
 import type { OperationStatus } from "../types/domain";
+import { operationAssignmentNotificationRepository } from "./operation-assignment-notification.repository";
 import { toDateOnlyString } from "../utils/row-mappers";
 import type {
   DeactivationAssignmentSnapshot,
@@ -216,6 +217,12 @@ export const employeeDeactivationRepository = {
             AND id = @assignmentId
             AND cancelled_at IS NULL
         `);
+
+      await operationAssignmentNotificationRepository.requestCancelForAssignment(
+        companyId,
+        assignmentId,
+        transaction,
+      );
     }
 
     for (const item of plan.assignmentsToEnd) {

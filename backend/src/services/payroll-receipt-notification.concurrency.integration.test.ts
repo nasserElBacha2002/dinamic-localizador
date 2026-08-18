@@ -231,7 +231,7 @@ describeDatabaseIntegration("payroll receipt notification sql concurrency", () =
         WHERE id = @id AND company_id = @companyId
       `);
 
-    const recovered = await payrollReceiptNotificationRepository.recoverExpiredLeases(50, 5);
+    const recovered = await payrollReceiptNotificationRepository.recoverExpiredLeases(50);
     assert.ok(recovered >= 1);
 
     const after = await pool

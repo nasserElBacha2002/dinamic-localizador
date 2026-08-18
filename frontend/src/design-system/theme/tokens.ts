@@ -18,6 +18,12 @@ export const designTokens = {
     warning: "#C55B00",
     danger: "#DC2626",
     info: "#1275F2",
+    /** IA / recommendations — distinct from brand blue. */
+    ai: "#7C3AED",
+    aiHover: "#6D28D9",
+    aiLight: "#F5F3FF",
+    aiBorder: "#DDD6FE",
+    aiMuted: "#8B5CF6",
   },
   fontFamily: "Inter, system-ui, -apple-system, BlinkMacSystemFont, sans-serif",
   radius: {

@@ -9,6 +9,7 @@ export { CompanySwitcher } from "./layout/CompanySwitcher";
 export { AppNavLink } from "./layout/AppNavLink";
 export {
   PageHeader,
+  EntityPageTitle,
   MetricCard,
   StatusBadge,
   SectionCard,
@@ -28,6 +29,7 @@ export {
   SearchInput,
   mapApiPaginationMeta,
   type PageHeaderProps,
+  type EntityPageTitleProps,
   type MetricCardProps,
   type StatusBadgeProps,
   type StatusBadgeTone,

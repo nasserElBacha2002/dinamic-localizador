@@ -1,4 +1,4 @@
-import type { WorkTeamFormValues } from "../components/work-teams/WorkTeamForm";
+import type { WorkTeamFormValues } from "../components/work-teams/work-team-form.types";
 
 export type { WorkTeamFormValues };
 

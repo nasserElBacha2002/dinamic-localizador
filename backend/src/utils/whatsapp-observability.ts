@@ -102,3 +102,38 @@ export const pickProjectedProviderStatus = (
   }
   return nextRank >= currentRank ? next : current.toLowerCase();
 };
+
+/** SQL CASE matching WHATSAPP_PROVIDER_STATUS_RANK for monotonic UPDATEs. */
+export const providerStatusRankSqlExpr = (columnOrParam: string): string => `
+  CASE LOWER(${columnOrParam})
+    WHEN N'accepted' THEN 10
+    WHEN N'queued' THEN 20
+    WHEN N'sending' THEN 30
+    WHEN N'sent' THEN 40
+    WHEN N'delivered' THEN 50
+    WHEN N'read' THEN 60
+    WHEN N'undelivered' THEN 70
+    WHEN N'failed' THEN 80
+    WHEN N'canceled' THEN 90
+    WHEN N'cancelled' THEN 90
+    ELSE 0
+  END
+`;
+
+/**
+ * WHERE predicate: apply incoming provider status only when it does not regress
+ * (mirrors pickProjectedProviderStatus for outbox rows).
+ */
+export const monotonicProviderStatusAdvanceSql = (
+  currentColumn: string,
+  incomingParam: string,
+): string => `
+  (
+    ${currentColumn} IS NULL
+    OR LOWER(${incomingParam}) IN (N'failed', N'undelivered')
+    OR (
+      LOWER(${currentColumn}) NOT IN (N'failed', N'undelivered')
+      AND ${providerStatusRankSqlExpr(incomingParam)} >= ${providerStatusRankSqlExpr(currentColumn)}
+    )
+  )
+`;

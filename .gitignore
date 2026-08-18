@@ -31,13 +31,56 @@ review/
 # Audit generated artifacts (keep structure, ignore volatile run snapshots)
 audit/raw/runs/
 audit/raw/_meta/
+audit/raw/partial/
 audit/raw/*.txt
 audit/raw/*.json
 audit/raw/*.md
 audit/audit-summary.md
 audit/audit-status.json
 audit/audit-diff.md
-audit/baseline/audit-status.baseline.json
+audit/audit-report.json
+audit/audit-report.md
+audit/findings.json
+audit/findings.md
+audit/findings.prev.json
+audit/current-run.json
+# Official confirmed baseline is versioned (Phase 7–8).
+# Raw run snapshots remain under audit/raw/ (gitignored elsewhere).
+audit/audit-improvements-diff.txt
+audit/audit-improvements-diffstat.txt
+audit/audit-improvements-status.txt
+audit/audit-framework-corrections-diff.txt
+audit/audit-framework-corrections-diffstat.txt
+audit/audit-framework-corrections-status.txt
+audit/phase1-quality-gate-cleanup-diff.txt
+audit/phase1-quality-gate-cleanup-diffstat.txt
+audit/phase1-quality-gate-cleanup-status.txt
+audit/phase2-sql-security-triage-diff.txt
+audit/phase2-sql-security-triage-diffstat.txt
+audit/phase2-sql-security-triage-status.txt
+audit/phase3-concurrency-idempotency-diff.txt
+audit/phase3-concurrency-idempotency-diffstat.txt
+audit/phase3-concurrency-idempotency-status.txt
+audit/phase4-dependency-security-diff.txt
+audit/phase4-dependency-security-diffstat.txt
+audit/phase4-dependency-security-status.txt
+audit/phase5-sql-boundaries-diff.txt
+audit/phase5-sql-boundaries-diffstat.txt
+audit/phase5-sql-boundaries-status.txt
+audit/phase6-whatsapp-bot-refactor-diff.txt
+audit/phase6-whatsapp-bot-refactor-diffstat.txt
+audit/phase6-whatsapp-bot-refactor-status.txt
+audit/phase7-8-final-hardening-diff.txt
+audit/phase7-8-final-hardening-diffstat.txt
+audit/phase7-8-final-hardening-status.txt
+audit/implementation-corrections-diff.txt
+audit/implementation-corrections-diffstat.txt
+audit/implementation-corrections-status.txt
+audit/latest-diff.txt
+audit/latest-diffstat.txt
+audit/latest-status.txt
+audit/tenant-isolation-audit.txt
+*.zip
 
 # Keep directory placeholders
 !audit/raw/.gitkeep
@@ -59,3 +102,5 @@ secrets/*
 backend/secrets/
 !backend/secrets/.gitkeep
 backend/reports.tar.gz
+__pycache__/
+*.py[cod]

@@ -18,6 +18,17 @@ const ALLOWED_TRANSITIONS: Record<OperationStatus, OperationStatus[]> = {
   CANCELLED: [OPERATION_REACTIVATION_STATUS],
 };
 
+/**
+ * Clock/lifecycle promotions may skip IN_PROGRESS when the process was down
+ * across the whole window (SCHEDULED → COMPLETED). Admin PATCH must not.
+ */
+const ALLOWED_LIFECYCLE_TRANSITIONS: Record<OperationStatus, OperationStatus[]> = {
+  SCHEDULED: ["IN_PROGRESS", "COMPLETED"],
+  IN_PROGRESS: ["COMPLETED"],
+  COMPLETED: [],
+  CANCELLED: [],
+};
+
 export const canTransitionOperationStatus = (
   current: OperationStatus,
   next: OperationStatus,
@@ -27,6 +38,17 @@ export const canTransitionOperationStatus = (
   }
 
   return ALLOWED_TRANSITIONS[current].includes(next);
+};
+
+export const canTransitionOperationLifecycleStatus = (
+  current: OperationStatus,
+  next: OperationStatus,
+): boolean => {
+  if (current === next) {
+    return true;
+  }
+
+  return ALLOWED_LIFECYCLE_TRANSITIONS[current].includes(next);
 };
 
 export const isOperationEditable = (status: OperationStatus): boolean =>

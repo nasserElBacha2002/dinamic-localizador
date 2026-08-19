@@ -13,6 +13,8 @@ export interface User {
   twoFactorSecretEncrypted: string | null;
   twoFactorConfirmedAt: string | null;
   twoFactorLastUsedStep: number | null;
+  twoFactorPendingSecretEncrypted: string | null;
+  twoFactorPendingCreatedAt: string | null;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -23,6 +25,8 @@ export const TWO_FACTOR_USER_DEFAULTS = {
   twoFactorSecretEncrypted: null as string | null,
   twoFactorConfirmedAt: null as string | null,
   twoFactorLastUsedStep: null as number | null,
+  twoFactorPendingSecretEncrypted: null as string | null,
+  twoFactorPendingCreatedAt: null as string | null,
 };
 
 
@@ -60,6 +64,7 @@ export interface TwoFactorSetupResult {
 export interface TwoFactorStatus {
   enabled: boolean;
   remainingRecoveryCodes: number;
+  reconfigurationPending: boolean;
 }
 
 export const TWO_FACTOR_CHALLENGE_PURPOSE = "2fa_login" as const;

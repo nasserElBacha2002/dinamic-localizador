@@ -56,9 +56,24 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
     const setup = await twoFactorService.startSetup(user.id);
     const reloadedPending = await userRepository.findById(user.id);
     assert.equal(reloadedPending?.twoFactorEnabled, false);
-    assert.ok(reloadedPending?.twoFactorSecretEncrypted);
-    assert.doesNotMatch(reloadedPending.twoFactorSecretEncrypted, /otpauth:/);
-    assert.equal(decryptProtectedSecret(reloadedPending.twoFactorSecretEncrypted), setup.secret);
+    assert.equal(reloadedPending?.twoFactorSecretEncrypted, null);
+    assert.ok(reloadedPending?.twoFactorPendingSecretEncrypted);
+    assert.doesNotMatch(reloadedPending.twoFactorPendingSecretEncrypted, /otpauth:/);
+    assert.equal(decryptProtectedSecret(reloadedPending.twoFactorPendingSecretEncrypted), setup.secret);
+
+    await assert.rejects(
+      () =>
+        twoFactorService.confirmSetup(
+          user.id,
+          {
+            password,
+            code: generateTotpCode(setup.secret, email, Date.now() + 11 * 60_000),
+          },
+          Date.now() + 11 * 60_000,
+        ),
+      (error: unknown) => error instanceof AppError && error.code === "TWO_FACTOR_SETUP_EXPIRED",
+    );
+    assert.equal((await userRepository.findById(user.id))?.twoFactorEnabled, false);
 
     await assert.rejects(
       () =>
@@ -315,8 +330,9 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
     assert.equal(secrets.length, 2);
     const stored = await userRepository.findById(user.id);
     assert.equal(stored?.twoFactorEnabled, false);
-    assert.ok(stored?.twoFactorSecretEncrypted);
-    const persisted = decryptProtectedSecret(stored.twoFactorSecretEncrypted);
+    assert.equal(stored?.twoFactorSecretEncrypted, null);
+    assert.ok(stored?.twoFactorPendingSecretEncrypted);
+    const persisted = decryptProtectedSecret(stored.twoFactorPendingSecretEncrypted);
     assert.equal(secrets.includes(persisted), true);
   });
 
@@ -375,5 +391,187 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
       t2,
     );
     assert.equal(regenerated.recoveryCodes.length, 10);
+  });
+
+  it("reconfigures to authenticator B only after confirm, and cancels without replacing A", async () => {
+    const { getPool } = await import("../database/connection");
+    const { userRepository } = await import("../repositories/user.repository");
+    const { twoFactorService } = await import("../services/two-factor.service");
+    const { authService } = await import("../services/auth.service");
+    const { twoFactorRecoveryCodeRepository } = await import(
+      "../repositories/two-factor-recovery-code.repository"
+    );
+    const { issueLoginChallenge } = await import("../services/two-factor.service");
+
+    const email = normalizeEmail(
+      `twofactor.reconfig.${Date.now()}.${Math.random().toString(16).slice(2)}@example.com`,
+    );
+    const password = "original-password-1";
+    const user = await userRepository.create({
+      name: "Reconfigure 2FA",
+      email,
+      passwordHash: await hashPassword(password),
+      role: "ADMIN",
+    });
+    const setupA = await twoFactorService.startSetup(user.id);
+    const t0 = Date.now();
+    const enrolled = await twoFactorService.confirmSetup(
+      user.id,
+      { password, code: generateTotpCode(setupA.secret, email, t0) },
+      t0,
+    );
+    const tokenAfterEnroll = (await userRepository.findById(user.id))?.tokenVersion ?? 0;
+
+    await assert.rejects(
+      () =>
+        twoFactorService.confirmSetup(
+          user.id,
+          { password, code: generateTotpCode(setupA.secret, email, t0 + 11 * 60_000) },
+          t0 + 11 * 60_000,
+        ),
+      (error: unknown) => error instanceof AppError && error.code === "TWO_FACTOR_ALREADY_ENABLED",
+    );
+
+    const t1 = t0 + 30_000;
+    const started = await twoFactorService.startReconfigure(
+      user.id,
+      { password, code: generateTotpCode(setupA.secret, email, t1) },
+      t1,
+    );
+    const pending = await userRepository.findById(user.id);
+    assert.equal(pending?.twoFactorEnabled, true);
+    assert.equal(decryptProtectedSecret(pending?.twoFactorSecretEncrypted ?? ""), setupA.secret);
+    assert.equal(decryptProtectedSecret(pending?.twoFactorPendingSecretEncrypted ?? ""), started.secret);
+    const status = await twoFactorService.getStatus(user.id);
+    assert.equal(status.reconfigurationPending, true);
+
+    const stillA = await authService.login(email, password);
+    if (stillA.requiresTwoFactor === false) {
+      throw new Error("expected challenge");
+    }
+    const tLoginA = t1 + 30_000;
+    await twoFactorService.completeLogin(
+      {
+        challengeToken: stillA.challengeToken,
+        code: generateTotpCode(setupA.secret, email, tLoginA),
+      },
+      tLoginA,
+    );
+
+    await twoFactorService.cancelReconfigure(user.id);
+    const afterCancel = await userRepository.findById(user.id);
+    assert.equal(afterCancel?.twoFactorPendingSecretEncrypted, null);
+    assert.equal(decryptProtectedSecret(afterCancel?.twoFactorSecretEncrypted ?? ""), setupA.secret);
+    assert.equal((await twoFactorService.getStatus(user.id)).reconfigurationPending, false);
+
+    const remainingBefore = await twoFactorRecoveryCodeRepository.countUnconsumed(user.id);
+    const t2 = tLoginA + 30_000;
+    await twoFactorService.startReconfigure(
+      user.id,
+      { password, recoveryCode: enrolled.recoveryCodes[0] },
+      t2,
+    );
+    assert.equal(await twoFactorRecoveryCodeRepository.countUnconsumed(user.id), remainingBefore - 1);
+
+    await assert.rejects(
+      () => twoFactorService.confirmReconfigure(user.id, { code: "123456" }, t2 + 11 * 60_000),
+      (error: unknown) => error instanceof AppError && error.code === "TWO_FACTOR_SETUP_EXPIRED",
+    );
+    assert.equal(
+      decryptProtectedSecret((await userRepository.findById(user.id))?.twoFactorSecretEncrypted ?? ""),
+      setupA.secret,
+    );
+
+    const t3 = t2 + 30_000;
+    const startedFresh = await twoFactorService.startReconfigure(
+      user.id,
+      { password, code: generateTotpCode(setupA.secret, email, t3) },
+      t3,
+    );
+    const t4 = t3 + 30_000;
+    const confirmed = await twoFactorService.confirmReconfigure(
+      user.id,
+      { code: generateTotpCode(startedFresh.secret, email, t4) },
+      t4,
+    );
+    assert.equal(confirmed.recoveryCodes.length, 10);
+    const promoted = await userRepository.findById(user.id);
+    assert.equal(decryptProtectedSecret(promoted?.twoFactorSecretEncrypted ?? ""), startedFresh.secret);
+    assert.equal(promoted?.twoFactorPendingSecretEncrypted, null);
+    assert.ok((promoted?.tokenVersion ?? 0) > tokenAfterEnroll);
+
+    const loginB = await authService.login(email, password);
+    if (loginB.requiresTwoFactor === false) {
+      throw new Error("expected challenge");
+    }
+    const t5 = t4 + 30_000;
+    await assert.rejects(
+      () =>
+        twoFactorService.completeLogin(
+          {
+            challengeToken: loginB.challengeToken,
+            code: generateTotpCode(setupA.secret, email, t5),
+          },
+          t5,
+        ),
+      (error: unknown) => error instanceof AppError && error.code === "INVALID_TWO_FACTOR_CODE",
+    );
+    const loginB2 = await authService.login(email, password);
+    if (loginB2.requiresTwoFactor === false) {
+      throw new Error("expected challenge");
+    }
+    const session = await twoFactorService.completeLogin(
+      {
+        challengeToken: loginB2.challengeToken,
+        code: generateTotpCode(startedFresh.secret, email, t5 + 30_000),
+      },
+      t5 + 30_000,
+    );
+    assert.ok(session.token);
+
+    const pool = getPool();
+    await pool.request().input("userId", user.id).query(`
+      INSERT INTO user_two_factor_login_challenges (user_id, token_hash, expires_at)
+      VALUES (@userId, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', DATEADD(MINUTE, -1, SYSUTCDATETIME()))
+    `);
+    await issueLoginChallenge(promoted!);
+    const leftover = await pool.request().input("userId", user.id).query(`
+      SELECT COUNT(*) AS n
+      FROM user_two_factor_login_challenges
+      WHERE user_id = @userId
+        AND token_hash = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
+    `);
+    assert.equal(Number(leftover.recordset[0].n), 0);
+  });
+
+  it("allows only one concurrent reconfigure setup to consume the same TOTP", async () => {
+    const { userRepository } = await import("../repositories/user.repository");
+    const { twoFactorService } = await import("../services/two-factor.service");
+
+    const email = normalizeEmail(
+      `twofactor.reconfig.race.${Date.now()}.${Math.random().toString(16).slice(2)}@example.com`,
+    );
+    const password = "original-password-1";
+    const user = await userRepository.create({
+      name: "Reconfigure Race",
+      email,
+      passwordHash: await hashPassword(password),
+      role: "ADMIN",
+    });
+    const setup = await twoFactorService.startSetup(user.id);
+    const t0 = Date.now();
+    await twoFactorService.confirmSetup(
+      user.id,
+      { password, code: generateTotpCode(setup.secret, email, t0) },
+      t0,
+    );
+    const t1 = t0 + 30_000;
+    const code = generateTotpCode(setup.secret, email, t1);
+    const raced = await Promise.allSettled([
+      twoFactorService.startReconfigure(user.id, { password, code }, t1),
+      twoFactorService.startReconfigure(user.id, { password, code }, t1),
+    ]);
+    assert.equal(raced.filter((item) => item.status === "fulfilled").length, 1);
+    assert.equal(raced.filter((item) => item.status === "rejected").length, 1);
   });
 });

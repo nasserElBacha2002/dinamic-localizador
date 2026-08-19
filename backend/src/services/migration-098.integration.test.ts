@@ -163,11 +163,34 @@ describeDatabaseIntegration("migration 098 disposable apply/rollback/reapply", (
       await applySqlScriptInTransaction(disposable, script098);
       await assert098Present(disposable);
 
+      const script099 = readFileSync(join(migrationsDir, "099_users_two_factor_pending_secret.sql"), "utf8");
+      const rollback099 = readFileSync(
+        join(migrationsDir, "rollback", "099_users_two_factor_pending_secret_rollback.sql"),
+        "utf8",
+      );
+      await applySqlScriptInTransaction(disposable, script099);
+      const usersWith099 = await columnNames(disposable, "dbo.users");
+      assert.equal(usersWith099.has("two_factor_pending_secret_encrypted"), true);
+      assert.equal(usersWith099.has("two_factor_pending_created_at"), true);
+
+      await applySqlScriptInTransaction(disposable, rollback099);
+      const usersWithout099 = await columnNames(disposable, "dbo.users");
+      assert.equal(usersWithout099.has("two_factor_pending_secret_encrypted"), false);
+      assert.equal(usersWithout099.has("two_factor_pending_created_at"), false);
+      await assert098Present(disposable);
+
+      await applySqlScriptInTransaction(disposable, script099);
+      const usersReapplied099 = await columnNames(disposable, "dbo.users");
+      assert.equal(usersReapplied099.has("two_factor_pending_secret_encrypted"), true);
+
+      await applySqlScriptInTransaction(disposable, rollback099);
       await applySqlScriptInTransaction(disposable, rollback098);
       await assert098Absent(disposable);
 
       await applySqlScriptInTransaction(disposable, script098);
       await assert098Present(disposable);
+      await applySqlScriptInTransaction(disposable, script099);
+      assert.equal((await columnNames(disposable, "dbo.users")).has("two_factor_pending_secret_encrypted"), true);
     } finally {
       if (disposable) {
         await disposable.close();

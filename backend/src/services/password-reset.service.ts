@@ -3,6 +3,7 @@ import { env } from "../config/env";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { passwordResetTokenRepository } from "../repositories/password-reset-token.repository";
+import { twoFactorChallengeRepository } from "../repositories/two-factor-challenge.repository";
 import { userRepository } from "../repositories/user.repository";
 import { withMinimumDuration } from "../utils/minimum-duration";
 import { generateOpaqueToken, hashOpaqueToken } from "../utils/opaque-token";
@@ -211,6 +212,7 @@ export const passwordResetService = {
         passwordHash,
         transaction,
       );
+      await twoFactorChallengeRepository.deleteAllForUser(user.id, transaction);
       await transaction.commit();
       console.info("[password-reset] password updated", { userId: user.id });
       return { message: PASSWORD_RESET_SUCCESS_MESSAGE };

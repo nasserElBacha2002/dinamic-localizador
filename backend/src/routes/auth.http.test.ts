@@ -199,6 +199,7 @@ describe("auth HTTP login and password reset", () => {
     mock.method(twoFactorChallengeRepository, "insert", async () => ({
       id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     }));
+    mock.method(twoFactorChallengeRepository, "deleteStaleForUser", async () => 0);
 
     const login = await apiRequest(baseUrl, "/api/auth/login", {
       method: "POST",
@@ -268,6 +269,35 @@ describe("auth HTTP login and password reset", () => {
     assert.equal(response.status, 400);
   });
 
+  it("requires password on 2FA reconfigure setup", async () => {
+    const token = signTestToken({
+      userId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      email: "twofactor@example.com",
+      role: "ADMIN",
+    });
+    mock.method(userRepository, "findById", async () => ({
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      name: "2FA",
+      email: "twofactor@example.com",
+      passwordHash: "hash",
+      role: "ADMIN" as const,
+      isPlatformAdmin: false,
+      active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
+      twoFactorEnabled: true,
+      lastLoginAt: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    }));
+    const response = await apiRequest(baseUrl, "/api/auth/2fa/reconfigure/setup", {
+      method: "POST",
+      token,
+      body: { code: "123456" },
+    });
+    assert.equal(response.status, 400);
+  });
+
   it("rate-limits authenticated 2FA confirm, disable, and recovery regenerate", async () => {
     const userId = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
     const token = signTestToken({
@@ -298,6 +328,9 @@ describe("auth HTTP login and password reset", () => {
     mock.method(twoFactorService, "regenerateRecoveryCodes", async () => {
       throw new AppError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.");
     });
+    mock.method(twoFactorService, "startReconfigure", async () => {
+      throw new AppError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.");
+    });
 
     const max = env.TWO_FACTOR_LOGIN_RATE_LIMIT_MAX;
     const hitUntilLimited = async (path: string, body: Record<string, string>) => {
@@ -313,6 +346,10 @@ describe("auth HTTP login and password reset", () => {
     await hitUntilLimited("/api/auth/2fa/confirm", { password: "password12", code: "123456" });
     await hitUntilLimited("/api/auth/2fa/disable", { password: "password12", code: "123456" });
     await hitUntilLimited("/api/auth/2fa/recovery-codes/regenerate", {
+      password: "password12",
+      code: "123456",
+    });
+    await hitUntilLimited("/api/auth/2fa/reconfigure/setup", {
       password: "password12",
       code: "123456",
     });

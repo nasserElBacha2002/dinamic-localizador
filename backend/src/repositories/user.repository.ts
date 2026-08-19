@@ -114,12 +114,105 @@ export const userRepository = {
       .input("secret", sql.NVarChar(512), encryptedSecret)
       .query(`
         UPDATE users
-        SET two_factor_secret_encrypted = @secret,
+        SET two_factor_pending_secret_encrypted = @secret,
+            two_factor_pending_created_at = SYSUTCDATETIME(),
             updated_at = SYSUTCDATETIME()
         WHERE id = @id
           AND two_factor_enabled = 0
       `);
     return (result.rowsAffected[0] ?? 0) === 1;
+  },
+
+  async saveReconfigurationPendingSecret(
+    id: string,
+    encryptedSecret: string,
+    transaction: sql.Transaction,
+  ): Promise<boolean> {
+    const result = await new sql.Request(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .input("secret", sql.NVarChar(512), encryptedSecret)
+      .query(`
+        UPDATE users
+        SET two_factor_pending_secret_encrypted = @secret,
+            two_factor_pending_created_at = SYSUTCDATETIME(),
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+          AND two_factor_enabled = 1
+      `);
+    return (result.rowsAffected[0] ?? 0) === 1;
+  },
+
+  async clearPendingTwoFactorSecret(id: string, transaction: sql.Transaction): Promise<boolean> {
+    const result = await new sql.Request(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .query(`
+        UPDATE users
+        SET two_factor_pending_secret_encrypted = NULL,
+            two_factor_pending_created_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+          AND two_factor_pending_secret_encrypted IS NOT NULL
+      `);
+    return (result.rowsAffected[0] ?? 0) === 1;
+  },
+
+  async enableTwoFactorFromPending(
+    id: string,
+    usedTotpStep: number,
+    transaction: sql.Transaction,
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .input("usedStep", sql.BigInt, usedTotpStep)
+      .query(`
+        UPDATE users
+        SET two_factor_enabled = 1,
+            two_factor_secret_encrypted = two_factor_pending_secret_encrypted,
+            two_factor_pending_secret_encrypted = NULL,
+            two_factor_pending_created_at = NULL,
+            two_factor_confirmed_at = SYSUTCDATETIME(),
+            two_factor_last_used_step = @usedStep,
+            token_version = token_version + 1,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.token_version
+        WHERE id = @id
+          AND two_factor_enabled = 0
+          AND two_factor_pending_secret_encrypted IS NOT NULL
+      `);
+    const nextVersion = Number(result.recordset[0]?.token_version);
+    if (!Number.isInteger(nextVersion)) {
+      throw new Error("Failed to enable two-factor authentication");
+    }
+    return nextVersion;
+  },
+
+  async promotePendingTwoFactorSecret(
+    id: string,
+    usedTotpStep: number,
+    transaction: sql.Transaction,
+  ): Promise<number> {
+    const result = await new sql.Request(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .input("usedStep", sql.BigInt, usedTotpStep)
+      .query(`
+        UPDATE users
+        SET two_factor_secret_encrypted = two_factor_pending_secret_encrypted,
+            two_factor_pending_secret_encrypted = NULL,
+            two_factor_pending_created_at = NULL,
+            two_factor_confirmed_at = SYSUTCDATETIME(),
+            two_factor_last_used_step = @usedStep,
+            token_version = token_version + 1,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.token_version
+        WHERE id = @id
+          AND two_factor_enabled = 1
+          AND two_factor_pending_secret_encrypted IS NOT NULL
+      `);
+    const nextVersion = Number(result.recordset[0]?.token_version);
+    if (!Number.isInteger(nextVersion)) {
+      throw new Error("Failed to promote pending two-factor secret");
+    }
+    return nextVersion;
   },
 
   async enableTwoFactor(
@@ -156,6 +249,8 @@ export const userRepository = {
         UPDATE users
         SET two_factor_enabled = 0,
             two_factor_secret_encrypted = NULL,
+            two_factor_pending_secret_encrypted = NULL,
+            two_factor_pending_created_at = NULL,
             two_factor_confirmed_at = NULL,
             two_factor_last_used_step = NULL,
             token_version = token_version + 1,

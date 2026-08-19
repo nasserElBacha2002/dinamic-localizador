@@ -17,16 +17,19 @@ import { useNavigate } from "react-router";
 import QRCode from "qrcode";
 import { z } from "zod";
 import {
+  cancelTwoFactorReconfigure,
   confirmTwoFactor,
+  confirmTwoFactorReconfigure,
   disableTwoFactor,
   getTwoFactorStatus,
   regenerateRecoveryCodes,
   setupTwoFactor,
+  startTwoFactorReconfigure,
   type TwoFactorStatus,
 } from "../../api/auth.api";
 import { FormErrorAlert, LoadingState, PageHeader } from "../../design-system";
 import { useAuth } from "../../hooks/useAuth";
-import { getApiErrorMessage } from "../../utils/errors";
+import { getApiErrorCode, getApiErrorMessage } from "../../utils/errors";
 import { persistRecoveryCodesOnce } from "../../utils/two-factor-recovery-display";
 import { RecoveryCodesPanel } from "./RecoveryCodesPanel";
 
@@ -51,9 +54,26 @@ const regenerateSchema = z.object({
   code: z.string().trim().regex(/^\d{6}$/, "Ingresá el código de 6 dígitos"),
 });
 
+const reconfigureSetupSchema = z
+  .object({
+    password: z.string().min(1, "La contraseña es obligatoria"),
+    code: z.string().trim().optional(),
+    recoveryCode: z.string().trim().optional(),
+  })
+  .refine((values) => Boolean(values.code?.match(/^\d{6}$/)) !== Boolean(values.recoveryCode), {
+    message: "Indicá un código TOTP o un código de recuperación.",
+    path: ["code"],
+  });
+
+const reconfigureConfirmSchema = z.object({
+  code: z.string().trim().regex(/^\d{6}$/, "Ingresá el código de 6 dígitos"),
+});
+
 type ConfirmValues = z.infer<typeof confirmSchema>;
 type DisableValues = z.infer<typeof disableSchema>;
 type RegenerateValues = z.infer<typeof regenerateSchema>;
+type ReconfigureSetupValues = z.infer<typeof reconfigureSetupSchema>;
+type ReconfigureConfirmValues = z.infer<typeof reconfigureConfirmSchema>;
 
 export function SecuritySettingsPage() {
   const { logout } = useAuth();
@@ -65,6 +85,9 @@ export function SecuritySettingsPage() {
   const [setupSecret, setSetupSecret] = useState<string | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [freshRecoveryCodes, setFreshRecoveryCodes] = useState<string[] | null>(null);
+  const [reconfigureSecret, setReconfigureSecret] = useState<string | null>(null);
+  const [reconfigureUri, setReconfigureUri] = useState<string | null>(null);
+  const [reconfigureQr, setReconfigureQr] = useState<string | null>(null);
 
   const confirmForm = useForm<ConfirmValues>({
     resolver: zodResolver(confirmSchema),
@@ -77,6 +100,14 @@ export function SecuritySettingsPage() {
   const regenerateForm = useForm<RegenerateValues>({
     resolver: zodResolver(regenerateSchema),
     defaultValues: { password: "", code: "" },
+  });
+  const reconfigureSetupForm = useForm<ReconfigureSetupValues>({
+    resolver: zodResolver(reconfigureSetupSchema),
+    defaultValues: { password: "", code: "", recoveryCode: "" },
+  });
+  const reconfigureConfirmForm = useForm<ReconfigureConfirmValues>({
+    resolver: zodResolver(reconfigureConfirmSchema),
+    defaultValues: { code: "" },
   });
 
   const reload = async () => {
@@ -144,6 +175,18 @@ export function SecuritySettingsPage() {
         {status.enabled ? (
           <Text size="sm">Códigos de recuperación restantes: {status.remainingRecoveryCodes}</Text>
         ) : null}
+        {status.enabled && status.remainingRecoveryCodes === 0 ? (
+          <Alert color="red" title="Sin códigos de recuperación">
+            No tenés códigos de recuperación disponibles. Generá nuevos códigos para evitar perder
+            acceso a tu cuenta.
+          </Alert>
+        ) : null}
+        {status.enabled && status.remainingRecoveryCodes > 0 && status.remainingRecoveryCodes <= 2 ? (
+          <Alert color="yellow" title="Quedan pocos códigos">
+            Te quedan {status.remainingRecoveryCodes} códigos de recuperación. Regeneralos cuando
+            puedas.
+          </Alert>
+        ) : null}
       </Stack>
 
       <FormErrorAlert message={actionError} />
@@ -192,7 +235,11 @@ export function SecuritySettingsPage() {
                 setQrDataUrl(null);
                 setFreshRecoveryCodes(confirmed.recoveryCodes);
               } catch (error) {
-                setActionError(getApiErrorMessage(error, "No se pudo confirmar el código."));
+                setActionError(
+                  getApiErrorCode(error) === "INVALID_TWO_FACTOR_CODE"
+                    ? "Código inválido o ya usado. Esperá el siguiente código de 6 dígitos."
+                    : getApiErrorMessage(error, "No se pudo confirmar el código."),
+                );
               }
             })}
           >
@@ -221,8 +268,120 @@ export function SecuritySettingsPage() {
       {status.enabled ? (
         <Stack maw={420} gap="lg">
           <Alert color="yellow" title="Acción sensible">
-            Desactivar 2FA o regenerar códigos requiere tu contraseña y un segundo factor.
+            Desactivar 2FA, cambiar el autenticador o regenerar códigos requiere tu contraseña y un
+            segundo factor.
           </Alert>
+
+          {reconfigureUri && reconfigureSecret ? (
+            <Stack>
+              <Title order={5}>Confirmá el nuevo autenticador</Title>
+              <Text size="sm">
+                Escaneá el QR o ingresá la clave. El autenticador anterior sigue activo hasta
+                confirmar.
+              </Text>
+              {reconfigureQr ? (
+                <Image src={reconfigureQr} alt="Código QR del nuevo autenticador" w={220} />
+              ) : null}
+              <Text size="sm" ff="monospace">
+                {reconfigureSecret}
+              </Text>
+              <form
+                onSubmit={reconfigureConfirmForm.handleSubmit(async (values) => {
+                  setActionError(null);
+                  try {
+                    const result = await confirmTwoFactorReconfigure({ code: values.code });
+                    reconfigureConfirmForm.reset({ code: "" });
+                    setReconfigureUri(null);
+                    setReconfigureSecret(null);
+                    setReconfigureQr(null);
+                    setFreshRecoveryCodes(result.recoveryCodes);
+                  } catch (error) {
+                    setActionError(
+                      getApiErrorCode(error) === "INVALID_TWO_FACTOR_CODE"
+                        ? "Código inválido o ya usado. Esperá el siguiente código de 6 dígitos."
+                        : getApiErrorMessage(error, "No se pudo confirmar el nuevo autenticador."),
+                    );
+                  }
+                })}
+              >
+                <Stack>
+                  <TextInput
+                    {...reconfigureConfirmForm.register("code")}
+                    label="Código del nuevo autenticador"
+                    inputMode="numeric"
+                    error={reconfigureConfirmForm.formState.errors.code?.message}
+                  />
+                  <Group>
+                    <Button type="submit" loading={reconfigureConfirmForm.formState.isSubmitting}>
+                      Confirmar nuevo autenticador
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="subtle"
+                      onClick={async () => {
+                        setActionError(null);
+                        try {
+                          await cancelTwoFactorReconfigure();
+                          setReconfigureUri(null);
+                          setReconfigureSecret(null);
+                          setReconfigureQr(null);
+                          await reload();
+                        } catch (error) {
+                          setActionError(
+                            getApiErrorMessage(error, "No se pudo cancelar la reconfiguración."),
+                          );
+                        }
+                      }}
+                    >
+                      Cancelar
+                    </Button>
+                  </Group>
+                </Stack>
+              </form>
+            </Stack>
+          ) : (
+            <form
+              onSubmit={reconfigureSetupForm.handleSubmit(async (values) => {
+                setActionError(null);
+                try {
+                  const setup = await startTwoFactorReconfigure({
+                    password: values.password,
+                    code: values.code || undefined,
+                    recoveryCode: values.recoveryCode || undefined,
+                  });
+                  reconfigureSetupForm.reset({ password: "", code: "", recoveryCode: "" });
+                  setReconfigureUri(setup.otpauthUri);
+                  setReconfigureSecret(setup.secret);
+                  setReconfigureQr(await QRCode.toDataURL(setup.otpauthUri, { margin: 1, width: 220 }));
+                } catch (error) {
+                  setActionError(getApiErrorMessage(error, "No se pudo iniciar el cambio de autenticador."));
+                }
+              })}
+            >
+              <Stack>
+                <Title order={5}>Cambiar autenticador</Title>
+                <PasswordInput
+                  {...reconfigureSetupForm.register("password")}
+                  label="Contraseña actual"
+                  error={reconfigureSetupForm.formState.errors.password?.message}
+                />
+                <TextInput
+                  {...reconfigureSetupForm.register("code")}
+                  label="Código TOTP actual"
+                  inputMode="numeric"
+                  error={reconfigureSetupForm.formState.errors.code?.message}
+                />
+                <TextInput
+                  {...reconfigureSetupForm.register("recoveryCode")}
+                  label="O código de recuperación"
+                  error={reconfigureSetupForm.formState.errors.recoveryCode?.message}
+                />
+                <Button type="submit" variant="light" loading={reconfigureSetupForm.formState.isSubmitting}>
+                  Cambiar autenticador
+                </Button>
+              </Stack>
+            </form>
+          )}
 
           <form
             onSubmit={regenerateForm.handleSubmit(async (values) => {

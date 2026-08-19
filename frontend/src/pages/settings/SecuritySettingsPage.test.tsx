@@ -7,15 +7,32 @@ import { installLayoutPolyfills } from "../../test/layout-polyfills";
 
 installLayoutPolyfills();
 
-let statusImpl = async () => ({ enabled: false, remainingRecoveryCodes: 0 });
+let statusImpl = async () => ({
+  enabled: false,
+  remainingRecoveryCodes: 0,
+  reconfigurationPending: false,
+});
 const setupImpl = async () => ({
   otpauthUri: "otpauth://totp/Dinamic%20Attendance:ops@example.com?secret=ABC&issuer=Dinamic%20Attendance",
   secret: "ABCSECRET",
 });
 let capturedConfirm: { password?: string; code?: string } | null = null;
+let capturedReconfigure: { password?: string; code?: string; recoveryCode?: string } | null = null;
 const confirmImpl = async (input: { password: string; code: string }) => {
   capturedConfirm = input;
   return { recoveryCodes: ["AAAA-BBBB-CCCC-DDDD-EEEE"] };
+};
+const startReconfigureImpl = async (input: {
+  password: string;
+  code?: string;
+  recoveryCode?: string;
+}) => {
+  capturedReconfigure = input;
+  return {
+    otpauthUri:
+      "otpauth://totp/Dinamic%20Attendance:ops@example.com?secret=NEWSECRET&issuer=Dinamic%20Attendance",
+    secret: "NEWSECRET",
+  };
 };
 
 mockApiModule(
@@ -24,6 +41,13 @@ mockApiModule(
     getTwoFactorStatus: async () => statusImpl(),
     setupTwoFactor: async () => setupImpl(),
     confirmTwoFactor: async (input: { password: string; code: string }) => confirmImpl(input),
+    startTwoFactorReconfigure: async (input: {
+      password: string;
+      code?: string;
+      recoveryCode?: string;
+    }) => startReconfigureImpl(input),
+    confirmTwoFactorReconfigure: async () => ({ recoveryCodes: ["FFFF-GGGG-HHHH-IIII-JJJJ"] }),
+    cancelTwoFactorReconfigure: async () => ({ message: "cancelled" }),
   },
   AUTH_API_EXPORTS,
 );
@@ -48,8 +72,13 @@ afterEach(() => {
   clearActiveTestQueryClients();
   sessionStorage.clear();
   localStorage.clear();
-  statusImpl = async () => ({ enabled: false, remainingRecoveryCodes: 0 });
+  statusImpl = async () => ({
+    enabled: false,
+    remainingRecoveryCodes: 0,
+    reconfigurationPending: false,
+  });
   capturedConfirm = null;
+  capturedReconfigure = null;
 });
 
 describe("SecuritySettingsPage", () => {
@@ -103,6 +132,30 @@ describe("SecuritySettingsPage", () => {
         JSON.stringify(["AAAA-BBBB-CCCC-DDDD-EEEE"]),
       );
       assert.equal(sessionStorage.getItem("dinamic_2fa_challenge"), null);
+    });
+  });
+
+  it("warns when recovery codes are low and starts authenticator reconfiguration", async () => {
+    statusImpl = async () => ({
+      enabled: true,
+      remainingRecoveryCodes: 1,
+      reconfigurationPending: false,
+    });
+    const user = userEvent.setup({ document: globalThis.document });
+    const view = renderPage(<SecuritySettingsPage />, {
+      route: "/settings/security",
+    });
+    await waitFor(() => assert.ok(view.getByText(/quedan pocos códigos/i)));
+    await user.type(view.getAllByLabelText(/contraseña actual/i)[0], "current-password-1");
+    await user.type(view.getByLabelText(/código totp actual/i), "654321");
+    await user.click(view.getByRole("button", { name: /^cambiar autenticador$/i }));
+    await waitFor(() => {
+      assert.deepEqual(capturedReconfigure, {
+        password: "current-password-1",
+        code: "654321",
+        recoveryCode: undefined,
+      });
+      assert.ok(view.getByText("NEWSECRET"));
     });
   });
 });

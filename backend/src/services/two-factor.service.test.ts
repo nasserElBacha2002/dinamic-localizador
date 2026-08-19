@@ -149,15 +149,20 @@ describe("twoFactorService.confirmSetup", () => {
       const pending: User = {
         ...user,
         passwordHash: await hashPassword("correct-password-1"),
-        twoFactorSecretEncrypted: encryptProtectedSecret(secret),
+        twoFactorPendingSecretEncrypted: encryptProtectedSecret(secret),
+        twoFactorPendingCreatedAt: new Date(t0).toISOString(),
       };
       mock.method(userRepository, "lockByIdForUpdate", async () => pending);
       let enabledStep: number | null = null;
-      mock.method(userRepository, "enableTwoFactor", async (_id: string, usedStep: number) => {
+      mock.method(userRepository, "enableTwoFactorFromPending", async (_id: string, usedStep: number) => {
         enabledStep = usedStep;
         return 1;
       });
+      mock.method(userRepository, "enableTwoFactor", async () => {
+        throw new Error("legacy enable must not run when pending exists");
+      });
       mock.method(twoFactorRecoveryCodeRepository, "replaceAllForUser", async () => undefined);
+      mock.method(twoFactorChallengeRepository, "deleteAllForUser", async () => undefined);
 
       const result = await twoFactorService.confirmSetup(
         user.id,
@@ -173,6 +178,37 @@ describe("twoFactorService.confirmSetup", () => {
       restore();
     }
   });
+
+  it("rejects an expired pending enrollment", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      const t0 = Date.UTC(2026, 7, 19, 12, 0, 0);
+      const pending: User = {
+        ...user,
+        passwordHash: await hashPassword("correct-password-1"),
+        twoFactorPendingSecretEncrypted: encryptProtectedSecret("JBSWY3DPEHPK3PXP"),
+        twoFactorPendingCreatedAt: new Date(t0).toISOString(),
+      };
+      mock.method(userRepository, "lockByIdForUpdate", async () => pending);
+      mock.method(userRepository, "enableTwoFactorFromPending", async () => {
+        throw new Error("must not enable");
+      });
+      await assert.rejects(
+        () =>
+          twoFactorService.confirmSetup(
+            user.id,
+            {
+              password: "correct-password-1",
+              code: generateTotpCode("JBSWY3DPEHPK3PXP", pending.email, t0 + 11 * 60_000),
+            },
+            t0 + 11 * 60_000,
+          ),
+        (error: unknown) => error instanceof AppError && error.code === "TWO_FACTOR_SETUP_EXPIRED",
+      );
+    } finally {
+      restore();
+    }
+  });
 });
 
 describe("issueLoginChallenge", () => {
@@ -184,9 +220,211 @@ describe("issueLoginChallenge", () => {
     mock.method(twoFactorChallengeRepository, "insert", async () => ({
       id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
     }));
+    mock.method(twoFactorChallengeRepository, "deleteStaleForUser", async () => 0);
     const token = await issueLoginChallenge(user);
     assert.throws(() => jwt.verify(token, env.JWT_SECRET));
     const payload = jwt.verify(token, env.TWO_FACTOR_CHALLENGE_SECRET) as { purpose?: string };
     assert.equal(payload.purpose, "2fa_login");
+  });
+});
+
+describe("twoFactorService.startReconfigure", () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it("rejects JWT-authenticated reconfigure without a valid password", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      mock.method(userRepository, "lockByIdForUpdate", async () => ({
+        ...user,
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptProtectedSecret("JBSWY3DPEHPK3PXP"),
+        passwordHash: await hashPassword("correct-password-1"),
+      }));
+      mock.method(userRepository, "saveReconfigurationPendingSecret", async () => {
+        throw new Error("must not persist pending");
+      });
+      await assert.rejects(
+        () =>
+          twoFactorService.startReconfigure(user.id, {
+            password: "wrong-password-1",
+            code: "123456",
+          }),
+        (error: unknown) => error instanceof AppError && error.code === "INVALID_CREDENTIALS",
+      );
+    } finally {
+      restore();
+    }
+  });
+
+  it("stores a pending secret without replacing the active authenticator", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      const secret = "JBSWY3DPEHPK3PXP";
+      const t0 = Date.UTC(2026, 7, 19, 12, 0, 0);
+      mock.method(userRepository, "lockByIdForUpdate", async () => ({
+        ...user,
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptProtectedSecret(secret),
+        passwordHash: await hashPassword("correct-password-1"),
+      }));
+      mock.method(userRepository, "markTotpStepUsed", async () => true);
+      mock.method(userRepository, "promotePendingTwoFactorSecret", async () => {
+        throw new Error("must not promote until confirm");
+      });
+      let saved: string | null = null;
+      mock.method(
+        userRepository,
+        "saveReconfigurationPendingSecret",
+        async (_id: string, encrypted: string) => {
+          saved = encrypted;
+          return true;
+        },
+      );
+
+      const result = await twoFactorService.startReconfigure(
+        user.id,
+        {
+          password: "correct-password-1",
+          code: generateTotpCode(secret, user.email, t0),
+        },
+        t0,
+      );
+      assert.match(result.otpauthUri, /^otpauth:\/\/totp\//);
+      assert.ok(saved);
+      assert.equal(saved.includes(result.secret), false);
+      assert.notEqual(result.secret, secret);
+    } finally {
+      restore();
+    }
+  });
+
+  it("consumes a recovery code during reconfigure step-up", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      mock.method(userRepository, "lockByIdForUpdate", async () => ({
+        ...user,
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptProtectedSecret("JBSWY3DPEHPK3PXP"),
+        passwordHash: await hashPassword("correct-password-1"),
+      }));
+      mock.method(userRepository, "markTotpStepUsed", async () => {
+        throw new Error("must not consume TOTP");
+      });
+      let consumed = false;
+      mock.method(twoFactorRecoveryCodeRepository, "consumeValidByHash", async () => {
+        consumed = true;
+        return true;
+      });
+      mock.method(userRepository, "saveReconfigurationPendingSecret", async () => true);
+
+      await twoFactorService.startReconfigure(user.id, {
+        password: "correct-password-1",
+        recoveryCode: "AAAA-BBBB-CCCC-DDDD-EEEE",
+      });
+      assert.equal(consumed, true);
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("twoFactorService.confirmReconfigure", () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it("promotes the pending secret, rotates recovery codes, and bumps token_version", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      const pendingSecret = "KBSWY3DPEHPK3PXP";
+      const t0 = Date.UTC(2026, 7, 19, 12, 0, 0);
+      mock.method(userRepository, "lockByIdForUpdate", async () => ({
+        ...user,
+        twoFactorEnabled: true,
+        tokenVersion: 1,
+        twoFactorSecretEncrypted: encryptProtectedSecret("JBSWY3DPEHPK3PXP"),
+        twoFactorPendingSecretEncrypted: encryptProtectedSecret(pendingSecret),
+        twoFactorPendingCreatedAt: new Date(t0).toISOString(),
+      }));
+      let promoted = false;
+      mock.method(userRepository, "promotePendingTwoFactorSecret", async (_id: string, usedStep: number) => {
+        promoted = true;
+        assert.ok(usedStep > 0);
+        return 2;
+      });
+      mock.method(twoFactorRecoveryCodeRepository, "replaceAllForUser", async () => undefined);
+      mock.method(twoFactorChallengeRepository, "deleteAllForUser", async () => undefined);
+
+      const result = await twoFactorService.confirmReconfigure(
+        user.id,
+        { code: generateTotpCode(pendingSecret, user.email, t0) },
+        t0,
+      );
+      assert.equal(promoted, true);
+      assert.equal(result.recoveryCodes.length, 10);
+    } finally {
+      restore();
+    }
+  });
+
+  it("rejects an expired pending reconfiguration without promoting", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      const t0 = Date.UTC(2026, 7, 19, 12, 0, 0);
+      mock.method(userRepository, "lockByIdForUpdate", async () => ({
+        ...user,
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptProtectedSecret("JBSWY3DPEHPK3PXP"),
+        twoFactorPendingSecretEncrypted: encryptProtectedSecret("KBSWY3DPEHPK3PXP"),
+        twoFactorPendingCreatedAt: new Date(t0).toISOString(),
+      }));
+      mock.method(userRepository, "promotePendingTwoFactorSecret", async () => {
+        throw new Error("must not promote");
+      });
+      await assert.rejects(
+        () =>
+          twoFactorService.confirmReconfigure(
+            user.id,
+            { code: "123456" },
+            t0 + 11 * 60_000,
+          ),
+        (error: unknown) => error instanceof AppError && error.code === "TWO_FACTOR_SETUP_EXPIRED",
+      );
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe("twoFactorService.cancelReconfigure", () => {
+  afterEach(() => {
+    mock.reset();
+  });
+
+  it("clears the pending secret and keeps 2FA enabled", async () => {
+    const restore = installFakeSqlTransaction();
+    try {
+      mock.method(userRepository, "lockByIdForUpdate", async () => ({
+        ...user,
+        twoFactorEnabled: true,
+        twoFactorSecretEncrypted: encryptProtectedSecret("JBSWY3DPEHPK3PXP"),
+        twoFactorPendingSecretEncrypted: encryptProtectedSecret("KBSWY3DPEHPK3PXP"),
+        twoFactorPendingCreatedAt: new Date().toISOString(),
+      }));
+      let cleared = false;
+      mock.method(userRepository, "clearPendingTwoFactorSecret", async () => {
+        cleared = true;
+        return true;
+      });
+      mock.method(userRepository, "disableTwoFactor", async () => {
+        throw new Error("must not disable");
+      });
+      await twoFactorService.cancelReconfigure(user.id);
+      assert.equal(cleared, true);
+    } finally {
+      restore();
+    }
   });
 });

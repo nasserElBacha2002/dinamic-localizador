@@ -92,6 +92,7 @@ describe("authService.login", () => {
       "../repositories/two-factor-challenge.repository"
     );
     mock.method(twoFactorChallengeRepository, "insert", async () => ({ id: "challenge-id" }));
+    mock.method(twoFactorChallengeRepository, "deleteStaleForUser", async () => 0);
 
     const result = await authService.login("ops@example.com", "correct-password");
     assert.equal(result.requiresTwoFactor, true);

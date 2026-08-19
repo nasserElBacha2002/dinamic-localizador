@@ -47,4 +47,31 @@ export const twoFactorChallengeRepository = {
       `);
     return (result.rowsAffected[0] ?? 0) === 1;
   },
+
+  async deleteStaleForUser(userId: string, transaction?: sql.Transaction): Promise<number> {
+    const result = await requestFrom(transaction)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(`
+        DELETE TOP (200)
+        FROM user_two_factor_login_challenges
+        WHERE user_id = @userId
+          AND (
+            expires_at <= SYSUTCDATETIME()
+            OR (
+              consumed_at IS NOT NULL
+              AND consumed_at <= DATEADD(HOUR, -24, SYSUTCDATETIME())
+            )
+          )
+      `);
+    return result.rowsAffected[0] ?? 0;
+  },
+
+  async deleteAllForUser(userId: string, transaction: sql.Transaction): Promise<void> {
+    await new sql.Request(transaction)
+      .input("userId", sql.UniqueIdentifier, userId)
+      .query(`
+        DELETE FROM user_two_factor_login_challenges
+        WHERE user_id = @userId
+      `);
+  },
 };

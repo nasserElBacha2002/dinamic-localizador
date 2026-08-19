@@ -31,7 +31,7 @@ app.use(
         return;
       }
 
-      callback(new Error("Not allowed by CORS"));
+      callback(null, false);
     },
   }),
 );

@@ -106,8 +106,9 @@ describe("LoginTwoFactorPage", () => {
       },
     });
 
+    assert.ok(view.getByText(/¿perdiste acceso a tu autenticador/i));
+    assert.ok(view.getByText(/no hay un bypass automático/i));
     await user.click(view.getByRole("button", { name: /usar un código de recuperación/i }));
-    assert.ok(view.getByLabelText(/código de recuperación/i));
     await user.click(view.getByRole("button", { name: /usar código de autenticación/i }));
 
     await user.type(view.getByLabelText(/código de autenticación/i), "123456");

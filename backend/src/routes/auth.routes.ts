@@ -13,6 +13,8 @@ import {
   twoFactorConfirmSchema,
   twoFactorDisableSchema,
   twoFactorRegenerateSchema,
+  twoFactorReconfigureConfirmSchema,
+  twoFactorReconfigureSetupSchema,
 } from "../schemas/auth.schema";
 import { hashOpaqueToken } from "../utils/opaque-token";
 import { normalizeEmail } from "../utils/password";
@@ -119,4 +121,31 @@ authRouter.post(
   }),
   validate(twoFactorRegenerateSchema),
   asyncHandler(authController.twoFactorRegenerateRecovery),
+);
+authRouter.post(
+  "/2fa/reconfigure/setup",
+  authenticate,
+  createRateLimiter({
+    scope: "auth-2fa-reconfigure",
+    windowMs: twoFactorWindowMs,
+    max: env.TWO_FACTOR_LOGIN_RATE_LIMIT_MAX,
+  }),
+  validate(twoFactorReconfigureSetupSchema),
+  asyncHandler(authController.twoFactorReconfigureSetup),
+);
+authRouter.post(
+  "/2fa/reconfigure/confirm",
+  authenticate,
+  createRateLimiter({
+    scope: "auth-2fa-reconfigure",
+    windowMs: twoFactorWindowMs,
+    max: env.TWO_FACTOR_LOGIN_RATE_LIMIT_MAX,
+  }),
+  validate(twoFactorReconfigureConfirmSchema),
+  asyncHandler(authController.twoFactorReconfigureConfirm),
+);
+authRouter.delete(
+  "/2fa/reconfigure",
+  authenticate,
+  asyncHandler(authController.twoFactorReconfigureCancel),
 );

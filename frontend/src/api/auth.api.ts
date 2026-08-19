@@ -33,6 +33,7 @@ export interface TwoFactorSetupResponse {
 export interface TwoFactorStatus {
   enabled: boolean;
   remainingRecoveryCodes: number;
+  reconfigurationPending: boolean;
 }
 
 export async function login(email: string, password: string): Promise<LoginResult> {
@@ -110,5 +111,32 @@ export async function regenerateRecoveryCodes(input: {
     "auth/2fa/recovery-codes/regenerate",
     input,
   );
+  return response.data.data;
+}
+
+export async function startTwoFactorReconfigure(input: {
+  password: string;
+  code?: string;
+  recoveryCode?: string;
+}): Promise<TwoFactorSetupResponse> {
+  const response = await apiClient.post<{ data: TwoFactorSetupResponse }>(
+    "auth/2fa/reconfigure/setup",
+    input,
+  );
+  return response.data.data;
+}
+
+export async function confirmTwoFactorReconfigure(input: {
+  code: string;
+}): Promise<{ recoveryCodes: string[] }> {
+  const response = await apiClient.post<{ data: { recoveryCodes: string[] } }>(
+    "auth/2fa/reconfigure/confirm",
+    input,
+  );
+  return response.data.data;
+}
+
+export async function cancelTwoFactorReconfigure(): Promise<{ message: string }> {
+  const response = await apiClient.delete<{ data: { message: string } }>("auth/2fa/reconfigure");
   return response.data.data;
 }

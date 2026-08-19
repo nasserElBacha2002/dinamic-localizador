@@ -1,6 +1,7 @@
 import { requireContentSidWhenWorkerEnabled } from "./notification-worker-env-rules";
 import { config } from "dotenv";
 import { z } from "zod";
+import { parseCorsOrigins } from "./cors-origins";
 import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
 
 config();
@@ -49,6 +50,7 @@ const envSchema = z
     TWO_FACTOR_ENCRYPTION_KEY: z.string().optional(),
     TWO_FACTOR_CHALLENGE_SECRET: z.string().min(16).optional(),
     TWO_FACTOR_CHALLENGE_TTL_MINUTES: z.coerce.number().int().positive().default(5),
+    TWO_FACTOR_SETUP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
     /** In-memory, per process. Also applied to 2FA confirm / disable / recovery regenerate. */
     TWO_FACTOR_LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
     TWO_FACTOR_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(8),
@@ -411,40 +413,6 @@ if (!parsed.success) {
   console.error(parsed.error.format());
   process.exit(1);
 }
-
-const parseCorsOrigins = (
-  nodeEnv: "development" | "test" | "production",
-  frontendUrl: string,
-  corsAllowedOrigins?: string,
-): string[] => {
-  const origins = new Set<string>();
-
-  if (nodeEnv === "production") {
-    if (corsAllowedOrigins) {
-      for (const origin of corsAllowedOrigins.split(",")) {
-        const trimmed = origin.trim();
-        if (trimmed.length > 0) {
-          origins.add(trimmed);
-        }
-      }
-    } else {
-      origins.add(frontendUrl);
-    }
-  } else {
-    origins.add(frontendUrl);
-
-    if (corsAllowedOrigins) {
-      for (const origin of corsAllowedOrigins.split(",")) {
-        const trimmed = origin.trim();
-        if (trimmed.length > 0) {
-          origins.add(trimmed);
-        }
-      }
-    }
-  }
-
-  return Array.from(origins);
-};
 
 const DEV_TWO_FACTOR_AES_KEY = Buffer.alloc(32, 7);
 

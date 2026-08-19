@@ -57,6 +57,7 @@ export async function issueLoginChallenge(user: User): Promise<string> {
       jwtid: challengeId,
     },
   );
+  await twoFactorChallengeRepository.deleteStaleForUser(user.id);
   await twoFactorChallengeRepository.insert({
     id: challengeId,
     userId: user.id,
@@ -103,6 +104,57 @@ function decryptUserSecret(user: User): string {
   } catch {
     throw new AppError(500, "TWO_FACTOR_SECRET_UNREADABLE", "No se pudo validar el segundo factor.");
   }
+}
+
+function decryptPendingSecret(user: User): string {
+  if (!user.twoFactorPendingSecretEncrypted) {
+    throw new AppError(400, "TWO_FACTOR_SETUP_NOT_STARTED", "Iniciá la configuración de 2FA primero.");
+  }
+  try {
+    return decryptProtectedSecret(user.twoFactorPendingSecretEncrypted);
+  } catch {
+    throw new AppError(500, "TWO_FACTOR_SECRET_UNREADABLE", "No se pudo validar el segundo factor.");
+  }
+}
+
+function isPendingExpired(createdAt: string | null, now = Date.now()): boolean {
+  if (!createdAt) {
+    return true;
+  }
+  const createdMs = Date.parse(createdAt);
+  if (Number.isNaN(createdMs)) {
+    return true;
+  }
+  return now - createdMs > env.TWO_FACTOR_SETUP_TTL_MINUTES * 60_000;
+}
+
+function logTwoFactorEvent(event: string, userId: string): void {
+  console.info(`[2fa] ${event}`, { userId });
+}
+
+async function consumeCurrentSecondFactor(
+  user: User,
+  input: { code?: string; recoveryCode?: string },
+  transaction: sql.Transaction,
+  timestamp: number,
+): Promise<void> {
+  if (input.recoveryCode) {
+    const consumed = await twoFactorRecoveryCodeRepository.consumeValidByHash(
+      user.id,
+      hashRecoveryCode(input.recoveryCode),
+      transaction,
+    );
+    if (!consumed) {
+      throw GENERIC_TWO_FACTOR_FAILURE;
+    }
+    logTwoFactorEvent("AUTH_2FA_RECOVERY_CODE_USED", user.id);
+    return;
+  }
+  if (input.code) {
+    await consumeTotpIfFresh(user, input.code, transaction, timestamp);
+    return;
+  }
+  throw GENERIC_TWO_FACTOR_FAILURE;
 }
 
 async function persistRecoveryCodes(userId: string, transaction: sql.Transaction): Promise<string[]> {
@@ -184,7 +236,7 @@ export const twoFactorService = {
       }
 
       await transaction.commit();
-      console.info("[2fa] 2fa_setup_started", { userId: user.id });
+      logTwoFactorEvent("AUTH_2FA_SETUP_STARTED", user.id);
       return {
         otpauthUri: buildTotpUri(base32, user.email),
         secret: base32,
@@ -211,28 +263,42 @@ export const twoFactorService = {
       if (user.twoFactorEnabled) {
         throw new AppError(409, "TWO_FACTOR_ALREADY_ENABLED", "La autenticación en dos pasos ya está activa.");
       }
-      if (!user.twoFactorSecretEncrypted) {
-        throw new AppError(400, "TWO_FACTOR_NOT_CONFIGURED", "Iniciá la configuración de 2FA primero.");
-      }
-
       const passwordOk = await verifyPassword(input.password, user.passwordHash);
       if (!passwordOk) {
         throw new AppError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.");
       }
-
-      const secret = decryptUserSecret(user);
-      const usedStep = verifyTotpCode(secret, user.email, input.code, timestamp);
-      if (usedStep === null) {
-        throw GENERIC_TWO_FACTOR_FAILURE;
+      if (user.twoFactorPendingSecretEncrypted) {
+        if (isPendingExpired(user.twoFactorPendingCreatedAt, timestamp)) {
+          throw new AppError(
+            400,
+            "TWO_FACTOR_SETUP_EXPIRED",
+            "La configuración de 2FA expiró. Volvé a iniciarla.",
+          );
+        }
+        const secret = decryptPendingSecret(user);
+        const usedStep = verifyTotpCode(secret, user.email, input.code, timestamp);
+        if (usedStep === null) {
+          throw GENERIC_TWO_FACTOR_FAILURE;
+        }
+        await userRepository.enableTwoFactorFromPending(user.id, usedStep, transaction);
+      } else if (user.twoFactorSecretEncrypted) {
+        const secret = decryptUserSecret(user);
+        const usedStep = verifyTotpCode(secret, user.email, input.code, timestamp);
+        if (usedStep === null) {
+          throw GENERIC_TWO_FACTOR_FAILURE;
+        }
+        if (user.twoFactorLastUsedStep !== null && usedStep <= user.twoFactorLastUsedStep) {
+          throw GENERIC_TWO_FACTOR_FAILURE;
+        }
+        await userRepository.enableTwoFactor(user.id, usedStep, transaction);
+      } else {
+        throw new AppError(400, "TWO_FACTOR_NOT_CONFIGURED", "Iniciá la configuración de 2FA primero.");
       }
-      if (user.twoFactorLastUsedStep !== null && usedStep <= user.twoFactorLastUsedStep) {
-        throw GENERIC_TWO_FACTOR_FAILURE;
-      }
 
-      await userRepository.enableTwoFactor(user.id, usedStep, transaction);
       const recoveryCodes = await persistRecoveryCodes(user.id, transaction);
+      await twoFactorChallengeRepository.deleteAllForUser(user.id, transaction);
       await transaction.commit();
-      console.info("[2fa] 2fa_enabled", { userId: user.id });
+      logTwoFactorEvent("AUTH_2FA_ENABLED", user.id);
       return { recoveryCodes };
     } catch (error) {
       await rollbackTransactionSafely(transaction, { operation: "2fa-confirm", entityId: userId }, error);
@@ -251,6 +317,10 @@ export const twoFactorService = {
     return {
       enabled: user.twoFactorEnabled,
       remainingRecoveryCodes,
+      reconfigurationPending:
+        user.twoFactorEnabled &&
+        Boolean(user.twoFactorPendingSecretEncrypted) &&
+        !isPendingExpired(user.twoFactorPendingCreatedAt),
     };
   },
 
@@ -291,8 +361,9 @@ export const twoFactorService = {
 
       await userRepository.disableTwoFactor(user.id, transaction);
       await twoFactorRecoveryCodeRepository.deleteAllForUser(user.id, transaction);
+      await twoFactorChallengeRepository.deleteAllForUser(user.id, transaction);
       await transaction.commit();
-      console.info("[2fa] 2fa_disabled", { userId: user.id });
+      logTwoFactorEvent("AUTH_2FA_DISABLED", user.id);
     } catch (error) {
       await rollbackTransactionSafely(transaction, { operation: "2fa-disable", entityId: userId }, error);
       throw error;
@@ -322,7 +393,7 @@ export const twoFactorService = {
       await consumeTotpIfFresh(user, input.code, transaction, timestamp);
       const recoveryCodes = await persistRecoveryCodes(user.id, transaction);
       await transaction.commit();
-      console.info("[2fa] 2fa_recovery_codes_regenerated", { userId: user.id });
+      logTwoFactorEvent("AUTH_2FA_RECOVERY_CODES_REGENERATED", user.id);
       return { recoveryCodes };
     } catch (error) {
       await rollbackTransactionSafely(
@@ -330,6 +401,110 @@ export const twoFactorService = {
         { operation: "2fa-regenerate-recovery", entityId: userId },
         error,
       );
+      throw error;
+    }
+  },
+
+  async startReconfigure(
+    userId: string,
+    input: { password: string; code?: string; recoveryCode?: string },
+    timestamp = Date.now(),
+  ): Promise<TwoFactorSetupResult> {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const user = await userRepository.lockByIdForUpdate(userId, transaction);
+      if (!user || !user.active) {
+        throw new AppError(403, "USER_INACTIVE", "Usuario inactivo o no encontrado.");
+      }
+      if (!user.twoFactorEnabled) {
+        throw new AppError(400, "TWO_FACTOR_NOT_CONFIGURED", "La autenticación en dos pasos no está activa.");
+      }
+      const passwordOk = await verifyPassword(input.password, user.passwordHash);
+      if (!passwordOk) {
+        throw new AppError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.");
+      }
+      await consumeCurrentSecondFactor(user, input, transaction, timestamp);
+
+      const { base32 } = createTotpSecret();
+      const encrypted = encryptProtectedSecret(base32);
+      const saved = await userRepository.saveReconfigurationPendingSecret(user.id, encrypted, transaction);
+      if (!saved) {
+        throw new AppError(409, "TWO_FACTOR_NOT_CONFIGURED", "La autenticación en dos pasos no está activa.");
+      }
+
+      await transaction.commit();
+      logTwoFactorEvent("AUTH_2FA_RECONFIGURATION_STARTED", user.id);
+      return {
+        otpauthUri: buildTotpUri(base32, user.email),
+        secret: base32,
+      };
+    } catch (error) {
+      await rollbackTransactionSafely(transaction, { operation: "2fa-reconfigure-setup", entityId: userId }, error);
+      throw error;
+    }
+  },
+
+  async confirmReconfigure(
+    userId: string,
+    input: { code: string },
+    timestamp = Date.now(),
+  ): Promise<{ recoveryCodes: string[] }> {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const user = await userRepository.lockByIdForUpdate(userId, transaction);
+      if (!user || !user.active) {
+        throw new AppError(403, "USER_INACTIVE", "Usuario inactivo o no encontrado.");
+      }
+      if (!user.twoFactorEnabled) {
+        throw new AppError(400, "TWO_FACTOR_NOT_CONFIGURED", "La autenticación en dos pasos no está activa.");
+      }
+      if (!user.twoFactorPendingSecretEncrypted || isPendingExpired(user.twoFactorPendingCreatedAt, timestamp)) {
+        throw new AppError(
+          400,
+          "TWO_FACTOR_SETUP_EXPIRED",
+          "La reconfiguración expiró o no está iniciada. El autenticador actual sigue activo.",
+        );
+      }
+
+      const pendingSecret = decryptPendingSecret(user);
+      const usedStep = verifyTotpCode(pendingSecret, user.email, input.code, timestamp);
+      if (usedStep === null) {
+        throw GENERIC_TWO_FACTOR_FAILURE;
+      }
+
+      await userRepository.promotePendingTwoFactorSecret(user.id, usedStep, transaction);
+      const recoveryCodes = await persistRecoveryCodes(user.id, transaction);
+      await twoFactorChallengeRepository.deleteAllForUser(user.id, transaction);
+      await transaction.commit();
+      logTwoFactorEvent("AUTH_2FA_RECONFIGURED", user.id);
+      return { recoveryCodes };
+    } catch (error) {
+      await rollbackTransactionSafely(transaction, { operation: "2fa-reconfigure-confirm", entityId: userId }, error);
+      throw error;
+    }
+  },
+
+  async cancelReconfigure(userId: string): Promise<void> {
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+    try {
+      const user = await userRepository.lockByIdForUpdate(userId, transaction);
+      if (!user || !user.active) {
+        throw new AppError(403, "USER_INACTIVE", "Usuario inactivo o no encontrado.");
+      }
+      if (!user.twoFactorEnabled) {
+        throw new AppError(400, "TWO_FACTOR_NOT_CONFIGURED", "La autenticación en dos pasos no está activa.");
+      }
+      await userRepository.clearPendingTwoFactorSecret(user.id, transaction);
+      await transaction.commit();
+      logTwoFactorEvent("AUTH_2FA_RECONFIGURATION_CANCELLED", user.id);
+    } catch (error) {
+      await rollbackTransactionSafely(transaction, { operation: "2fa-reconfigure-cancel", entityId: userId }, error);
       throw error;
     }
   },
@@ -377,7 +552,7 @@ export const twoFactorService = {
         if (!ok) {
           throw GENERIC_TWO_FACTOR_FAILURE;
         }
-        console.info("[2fa] 2fa_recovery_code_used", { userId: user.id });
+        logTwoFactorEvent("AUTH_2FA_RECOVERY_CODE_USED", user.id);
       } else if (input.code) {
         await consumeTotpIfFresh(user, input.code, transaction, timestamp);
       } else {

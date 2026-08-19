@@ -42,6 +42,8 @@ export const twoFactorConfirmSchema = z.object({
   code: totpCodeSchema,
 });
 
+export const twoFactorRegenerateSchema = twoFactorConfirmSchema;
+
 export const twoFactorDisableSchema = z
   .object({
     password: z.string().min(1, "La contraseña es obligatoria"),
@@ -53,8 +55,18 @@ export const twoFactorDisableSchema = z
     path: ["code"],
   });
 
-export const twoFactorRegenerateSchema = z.object({
-  password: z.string().min(1, "La contraseña es obligatoria"),
+export const twoFactorReconfigureSetupSchema = z
+  .object({
+    password: z.string().min(1, "La contraseña es obligatoria"),
+    code: totpCodeSchema.optional(),
+    recoveryCode: z.string().trim().min(8).max(64).optional(),
+  })
+  .refine((values) => Boolean(values.code) !== Boolean(values.recoveryCode), {
+    message: "Indicá un código TOTP o un código de recuperación, no ambos.",
+    path: ["code"],
+  });
+
+export const twoFactorReconfigureConfirmSchema = z.object({
   code: totpCodeSchema,
 });
 

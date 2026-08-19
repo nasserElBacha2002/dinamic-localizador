@@ -72,4 +72,27 @@ export const authController = {
     });
     res.status(200).json({ data: result });
   },
+
+  async twoFactorReconfigureSetup(req: Request, res: Response) {
+    const result = await twoFactorService.startReconfigure(req.auth!.userId, {
+      password: req.body.password,
+      code: req.body.code,
+      recoveryCode: req.body.recoveryCode,
+    });
+    res.status(200).json({ data: result });
+  },
+
+  async twoFactorReconfigureConfirm(req: Request, res: Response) {
+    const result = await twoFactorService.confirmReconfigure(req.auth!.userId, {
+      code: req.body.code,
+    });
+    res.status(200).json({ data: result });
+  },
+
+  async twoFactorReconfigureCancel(req: Request, res: Response) {
+    await twoFactorService.cancelReconfigure(req.auth!.userId);
+    res.status(200).json({
+      data: { message: "Se canceló la reconfiguración. El autenticador actual sigue activo." },
+    });
+  },
 };

@@ -9,6 +9,7 @@ export const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   DB_PASSWORD: "unit-test-db-password",
   JWT_SECRET: "unit-test-jwt-secret",
   TWO_FACTOR_CHALLENGE_SECRET: "unit-test-2fa-challenge-secret",
+  TWO_FACTOR_SETUP_TTL_MINUTES: "10",
   TWO_FACTOR_ENCRYPTION_KEY: "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=",
   EMAIL_TRANSPORT: "console",
   TWILIO_VALIDATE_SIGNATURE: "false",

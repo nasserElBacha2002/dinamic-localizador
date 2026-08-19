@@ -65,14 +65,17 @@ export function LoginTwoFactorPage() {
       const from = (location.state as { from?: string } | null)?.from;
       navigate(isSafeInternalPath(from) ? from : "/", { replace: true });
     } catch (error) {
-      const message = getApiErrorMessage(error, "Código de autenticación inválido.");
       if (getApiErrorCode(error) === "INVALID_TWO_FACTOR_CHALLENGE") {
         clearTwoFactorChallenge();
         setErrorMessage("El desafío expiró. Volvé a iniciar sesión.");
         navigate("/login", { replace: true, state: { twoFactorExpired: true } });
         return;
       }
-      setErrorMessage(message);
+      setErrorMessage(
+        getApiErrorCode(error) === "INVALID_TWO_FACTOR_CODE"
+          ? "Código inválido o ya usado. Esperá el siguiente código de 6 dígitos."
+          : getApiErrorMessage(error, "Código de autenticación inválido."),
+      );
     }
   };
 
@@ -165,6 +168,14 @@ export function LoginTwoFactorPage() {
                       >
                         Usar un código de recuperación
                       </Anchor>
+                      <Text size="xs" c="dimmed">
+                        ¿Perdiste acceso a tu autenticador? Usá uno de tus códigos de recuperación.
+                      </Text>
+                      <Text size="xs" c="dimmed">
+                        Si tampoco tenés códigos de recuperación, contactá al soporte operativo de tu
+                        organización. No hay un bypass automático por email ni un restablecimiento
+                        administrativo en la aplicación.
+                      </Text>
                     </Stack>
                   </form>
                 )}

@@ -350,6 +350,12 @@ export const mapUserRow = (row: Record<string, unknown>): User => ({
     row.two_factor_last_used_step === null || row.two_factor_last_used_step === undefined
       ? null
       : Number(row.two_factor_last_used_step),
+  twoFactorPendingSecretEncrypted: row.two_factor_pending_secret_encrypted
+    ? String(row.two_factor_pending_secret_encrypted)
+    : null,
+  twoFactorPendingCreatedAt: row.two_factor_pending_created_at
+    ? toIsoString(row.two_factor_pending_created_at as Date | string)
+    : null,
   lastLoginAt: row.last_login_at ? toIsoString(row.last_login_at as Date | string) : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),

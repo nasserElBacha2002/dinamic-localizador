@@ -147,7 +147,10 @@ export function getAdminNavItems({
   isPlatformAdmin,
   modulesLoading,
 }: GetAdminNavItemsInput): AdminNavItem[] {
-  const items: AdminNavItem[] = [{ label: "Inicio", path: "/", section: "general" }];
+  const items: AdminNavItem[] = [
+    { label: "Inicio", path: "/", section: "general" },
+    { label: "Seguridad", path: "/settings/security", section: "settings" },
+  ];
 
   if (!modulesLoading) {
     if (

@@ -1,4 +1,4 @@
-FROM node:20-alpine AS development
+FROM node:22-alpine AS development
 
 WORKDIR /app
 
@@ -9,7 +9,7 @@ COPY . .
 
 CMD ["npm", "run", "dev"]
 
-FROM node:20-alpine AS build
+FROM node:22-alpine AS build
 
 WORKDIR /app
 
@@ -19,7 +19,7 @@ RUN npm ci
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS migrations
+FROM node:22-alpine AS migrations
 
 WORKDIR /app
 
@@ -30,7 +30,7 @@ COPY . .
 
 CMD ["npm", "run", "migrate"]
 
-FROM node:20-alpine AS production
+FROM node:22-alpine AS production
 
 WORKDIR /app
 

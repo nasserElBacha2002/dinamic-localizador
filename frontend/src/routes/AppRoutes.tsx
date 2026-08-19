@@ -8,11 +8,16 @@ import { AppLayout } from "../design-system";
 import { LoadingState } from "../design-system";
 import { HomePage } from "../pages/HomePage";
 import { LoginPage } from "../pages/LoginPage";
+import { LoginTwoFactorPage } from "../pages/LoginTwoFactorPage";
+import { TwoFactorRecoveryCodesPage } from "../pages/TwoFactorRecoveryCodesPage";
+import { ForgotPasswordPage } from "../pages/ForgotPasswordPage";
+import { ResetPasswordPage } from "../pages/ResetPasswordPage";
 import { AcceptInvitationPage } from "../pages/invitations/AcceptInvitationPage";
 import { PlatformCompaniesPage } from "../pages/platform/PlatformCompaniesPage";
 import { ServerStatusPage } from "../pages/platform/ServerStatusPage";
 import { CompanyUsersPage } from "../pages/settings/CompanyUsersPage";
 import { CompanySettingsPage } from "../pages/settings/CompanySettingsPage";
+import { SecuritySettingsPage } from "../pages/settings/SecuritySettingsPage";
 import { NotFoundPage } from "../pages/NotFoundPage";
 import { EmployeesListPage } from "../pages/employees/EmployeesListPage";
 import { WorkTeamsListPage } from "../pages/work-teams/WorkTeamsListPage";
@@ -136,6 +141,10 @@ export function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/login/2fa" element={<LoginTwoFactorPage />} />
+      <Route path="/login/2fa-recovery" element={<TwoFactorRecoveryCodesPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
       <Route path="/invitations/accept" element={<AcceptInvitationPage />} />
       <Route element={<ProtectedLayout />}>
         <Route path="/" element={<HomePage />} />
@@ -361,6 +370,7 @@ export function AppRoutes() {
             </FeatureRouteGuard>
           }
         />
+        <Route path="/settings/security" element={<SecuritySettingsPage />} />
         <Route
           path="/settings/users"
           element={

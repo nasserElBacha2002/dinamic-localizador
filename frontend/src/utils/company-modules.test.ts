@@ -121,8 +121,13 @@ describe("company modules frontend module", () => {
     });
     const paths = items.map((item) => item.path);
     const labels = items.map((item) => item.label);
-    assert.deepEqual(paths, ["/", "/operations", "/attendance"]);
-    assert.deepEqual(labels, ["Inicio", terminology.operation.plural, terminology.attendance.plural]);
+    assert.deepEqual(paths, ["/", "/settings/security", "/operations", "/attendance"]);
+    assert.deepEqual(labels, [
+      "Inicio",
+      "Seguridad",
+      terminology.operation.plural,
+      terminology.attendance.plural,
+    ]);
   });
 
   it("uses generic terminology labels for OWNER nav items", () => {

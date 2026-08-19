@@ -3,8 +3,14 @@ import type { AuthTokenPayload } from "../types/auth";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
-export const signTestToken = (payload: AuthTokenPayload): string =>
-  jwt.sign(payload, env.JWT_SECRET, { expiresIn: "1h" });
+export const signTestToken = (
+  payload: Omit<AuthTokenPayload, "tokenVersion"> & { tokenVersion?: number },
+): string =>
+  jwt.sign(
+    { tokenVersion: 0, ...payload },
+    env.JWT_SECRET,
+    { expiresIn: "1h" },
+  );
 
 export const apiRequest = async (
   baseUrl: string,

@@ -34,6 +34,22 @@ export function mockApiModule(
   mock.module(pathToFileURL(absolutePath).href, { namedExports: completeExports });
 }
 
+export const AUTH_API_EXPORTS = [
+  "login",
+  "loginWithTwoFactor",
+  "getCurrentUser",
+  "requestPasswordReset",
+  "resetPassword",
+  "getTwoFactorStatus",
+  "setupTwoFactor",
+  "confirmTwoFactor",
+  "disableTwoFactor",
+  "regenerateRecoveryCodes",
+  "clearStoredToken",
+  "getStoredToken",
+  "setStoredToken",
+] as const;
+
 export const OPERATIONS_API_EXPORTS = [
   "getOperations",
   "getOperationById",

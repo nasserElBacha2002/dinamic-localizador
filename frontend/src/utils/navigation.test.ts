@@ -31,9 +31,10 @@ describe("navigation grouping", () => {
     const sections = groupAdminNavItems(items);
     assert.deepEqual(
       sections.map((section) => section.key),
-      ["general", "operation"],
+      ["general", "operation", "settings"],
     );
     assert.equal(sections[0]?.items[0]?.path, "/");
+    assert.ok(sections[2]?.items.some((item) => item.path === "/settings/security"));
     assert.ok(sections[1]?.items.some((item) => item.path === "/operations"));
     assert.ok(sections[1]?.items.some((item) => item.path === "/attendance"));
     assert.ok(sections[1]?.items.some((item) => item.path === "/payroll-receipts"));

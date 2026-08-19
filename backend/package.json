@@ -2,6 +2,9 @@
   "name": "dinamic-attendance-backend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.19.0"
+  },
   "description": "API base de Dinamic Attendance.",
   "type": "commonjs",
   "main": "dist/server.js",
@@ -50,6 +53,7 @@
     "mssql": "^12.1.0",
     "multer": "^2.2.0",
     "nodemailer": "^9.0.3",
+    "otpauth": "^9.5.1",
     "twilio": "^6.0.2",
     "xlsx": "npm:@e965/xlsx@0.20.3",
     "zod": "^4.1.11"

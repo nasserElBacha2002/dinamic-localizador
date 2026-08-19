@@ -338,6 +338,18 @@ export const mapUserRow = (row: Record<string, unknown>): User => ({
   role: String(row.role) as User["role"],
   isPlatformAdmin: Boolean(row.is_platform_admin),
   active: Boolean(row.active),
+  tokenVersion: Number(row.token_version ?? 0),
+  twoFactorEnabled: Boolean(row.two_factor_enabled),
+  twoFactorSecretEncrypted: row.two_factor_secret_encrypted
+    ? String(row.two_factor_secret_encrypted)
+    : null,
+  twoFactorConfirmedAt: row.two_factor_confirmed_at
+    ? toIsoString(row.two_factor_confirmed_at as Date | string)
+    : null,
+  twoFactorLastUsedStep:
+    row.two_factor_last_used_step === null || row.two_factor_last_used_step === undefined
+      ? null
+      : Number(row.two_factor_last_used_step),
   lastLoginAt: row.last_login_at ? toIsoString(row.last_login_at as Date | string) : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),

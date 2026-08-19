@@ -22,6 +22,7 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
   let dinamicCompanyId = "";
   let operatorUserId = "";
   let operatorUserEmail = "";
+  let operatorTokenVersion = 0;
   const createdUserIds: string[] = [];
 
   before(async () => {
@@ -64,6 +65,7 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
 
     operatorUserId = operator.id;
     operatorUserEmail = operator.email;
+    operatorTokenVersion = operator.tokenVersion;
   });
 
   after(async () => {
@@ -86,6 +88,7 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
       userId: operatorUserId,
       email: operatorUserEmail,
       role: "ADMIN",
+      tokenVersion: operatorTokenVersion,
     });
 
   it("denies OPERATOR access to full employees and services APIs", async () => {

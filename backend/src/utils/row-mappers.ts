@@ -14,6 +14,17 @@ import type { AttendanceReview, User } from "../types/auth";
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+const toOptionalIsoString = (value: unknown): string | null => {
+  if (value == null || value === "") {
+    return null;
+  }
+  if (value instanceof Date) {
+    return Number.isNaN(value.getTime()) ? null : value.toISOString();
+  }
+  const parsed = new Date(String(value));
+  return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
+};
+
 const dateToCalendarIsoString = (date: Date): string => {
   const year = date.getUTCFullYear();
   const month = String(date.getUTCMonth() + 1).padStart(2, "0");
@@ -343,9 +354,7 @@ export const mapUserRow = (row: Record<string, unknown>): User => ({
   twoFactorSecretEncrypted: row.two_factor_secret_encrypted
     ? String(row.two_factor_secret_encrypted)
     : null,
-  twoFactorConfirmedAt: row.two_factor_confirmed_at
-    ? toIsoString(row.two_factor_confirmed_at as Date | string)
-    : null,
+  twoFactorConfirmedAt: toOptionalIsoString(row.two_factor_confirmed_at),
   twoFactorLastUsedStep:
     row.two_factor_last_used_step === null || row.two_factor_last_used_step === undefined
       ? null
@@ -353,10 +362,8 @@ export const mapUserRow = (row: Record<string, unknown>): User => ({
   twoFactorPendingSecretEncrypted: row.two_factor_pending_secret_encrypted
     ? String(row.two_factor_pending_secret_encrypted)
     : null,
-  twoFactorPendingCreatedAt: row.two_factor_pending_created_at
-    ? toIsoString(row.two_factor_pending_created_at as Date | string)
-    : null,
-  lastLoginAt: row.last_login_at ? toIsoString(row.last_login_at as Date | string) : null,
+  twoFactorPendingCreatedAt: toOptionalIsoString(row.two_factor_pending_created_at),
+  lastLoginAt: toOptionalIsoString(row.last_login_at),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

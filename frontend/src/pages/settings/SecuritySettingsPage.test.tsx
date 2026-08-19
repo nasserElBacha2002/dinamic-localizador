@@ -146,6 +146,9 @@ describe("SecuritySettingsPage", () => {
       route: "/settings/security",
     });
     await waitFor(() => assert.ok(view.getByText(/quedan pocos códigos/i)));
+    assert.ok(view.getByRole("heading", { name: /cambiar autenticador/i }));
+    assert.ok(view.getByRole("heading", { name: /regenerar códigos de recuperación/i }));
+    assert.ok(view.getByRole("heading", { name: /desactivar autenticación en dos pasos/i }));
     await user.type(view.getAllByLabelText(/contraseña actual/i)[0], "current-password-1");
     await user.type(view.getByLabelText(/código totp actual/i), "654321");
     await user.click(view.getByRole("button", { name: /^cambiar autenticador$/i }));

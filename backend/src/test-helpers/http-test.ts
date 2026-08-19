@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http";
-import type { AuthTokenPayload } from "../types/auth";
+import type { AuthTokenPayload, User } from "../types/auth";
 import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 
@@ -11,6 +11,16 @@ export const signTestToken = (
     env.JWT_SECRET,
     { expiresIn: "1h" },
   );
+
+export const signTestTokenForUser = (
+  user: Pick<User, "id" | "email" | "role" | "tokenVersion">,
+): string =>
+  signTestToken({
+    userId: user.id,
+    email: user.email,
+    role: user.role,
+    tokenVersion: user.tokenVersion,
+  });
 
 export const apiRequest = async (
   baseUrl: string,

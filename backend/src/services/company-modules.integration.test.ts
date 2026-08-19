@@ -35,6 +35,7 @@ describeDatabaseIntegration("company modules API integration", () => {
   let outsiderUserEmail = "";
   let platformAdminId = "";
   let platformAdminEmail = "";
+  let platformAdminTokenVersion = 0;
   const createdUserIds: string[] = [];
 
   const restoreAllModules = async (companyId: string) => {
@@ -61,6 +62,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
 
   const ownerToken = () =>
@@ -88,6 +90,7 @@ describeDatabaseIntegration("company modules API integration", () => {
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;
+    platformAdminTokenVersion = platformAdmin.tokenVersion;
 
     const passwordHash = await hashPassword("integration-test-password");
     const ensureUser = async (
@@ -392,6 +395,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
     const response = await apiRequest(
       baseUrl,
@@ -411,6 +415,7 @@ describeDatabaseIntegration("company modules API integration", () => {
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
     const response = await apiRequest(baseUrl, `/api/companies/${dinamicCompanyId}/attendance`, {
       token: platformToken,

@@ -3,7 +3,9 @@
  * Enable: RUN_DB_INTEGRATION_TESTS=true npm run test:integration
  */
 import assert from "node:assert/strict";
+import { createHash, randomBytes } from "node:crypto";
 import jwt from "jsonwebtoken";
+import sql from "mssql";
 import { after, before, it } from "node:test";
 import {
   describeDatabaseIntegration,
@@ -289,7 +291,7 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
     }
     await getPool()
       .request()
-      .input("id", other.id)
+      .input("id", sql.UniqueIdentifier, other.id)
       .query(`UPDATE users SET active = 0, updated_at = SYSUTCDATETIME() WHERE id = @id`);
     const otherT1 = otherT0 + 30_000;
     await assert.rejects(
@@ -530,17 +532,26 @@ describeDatabaseIntegration("two-factor TOTP SQL", () => {
     assert.ok(session.token);
 
     const pool = getPool();
-    await pool.request().input("userId", user.id).query(`
-      INSERT INTO user_two_factor_login_challenges (user_id, token_hash, expires_at)
-      VALUES (@userId, 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', DATEADD(MINUTE, -1, SYSUTCDATETIME()))
-    `);
+    const leftoverHash = createHash("sha256").update(randomBytes(32)).digest("hex");
+    await pool
+      .request()
+      .input("userId", sql.UniqueIdentifier, user.id)
+      .input("tokenHash", sql.Char(64), leftoverHash)
+      .query(`
+        INSERT INTO user_two_factor_login_challenges (user_id, token_hash, expires_at)
+        VALUES (@userId, @tokenHash, DATEADD(MINUTE, -1, SYSUTCDATETIME()))
+      `);
     await issueLoginChallenge(promoted!);
-    const leftover = await pool.request().input("userId", user.id).query(`
-      SELECT COUNT(*) AS n
-      FROM user_two_factor_login_challenges
-      WHERE user_id = @userId
-        AND token_hash = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'
-    `);
+    const leftover = await pool
+      .request()
+      .input("userId", sql.UniqueIdentifier, user.id)
+      .input("tokenHash", sql.Char(64), leftoverHash)
+      .query(`
+        SELECT COUNT(*) AS n
+        FROM user_two_factor_login_challenges
+        WHERE user_id = @userId
+          AND token_hash = @tokenHash
+      `);
     assert.equal(Number(leftover.recordset[0].n), 0);
   });
 

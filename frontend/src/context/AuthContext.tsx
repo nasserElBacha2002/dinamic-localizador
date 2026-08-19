@@ -5,6 +5,7 @@ import {
   getStoredToken,
   login as loginRequest,
   setStoredToken,
+  type LoginResult,
   type PublicUser,
 } from "../api/auth.api";
 import { setUnauthorizedHandler } from "../api/client";
@@ -19,6 +20,12 @@ export function AuthProvider({ children }: PropsWithChildren) {
     clearStoredToken();
     setToken(null);
     setUser(null);
+  }, []);
+
+  const establishSession = useCallback((sessionToken: string, sessionUser: PublicUser) => {
+    setStoredToken(sessionToken);
+    setToken(sessionToken);
+    setUser(sessionUser);
   }, []);
 
   useEffect(() => {
@@ -50,12 +57,23 @@ export function AuthProvider({ children }: PropsWithChildren) {
     void restoreSession();
   }, [logout]);
 
-  const login = useCallback(async (email: string, password: string) => {
-    const result = await loginRequest(email, password);
-    setStoredToken(result.token);
-    setToken(result.token);
-    setUser(result.user);
-  }, []);
+  const login = useCallback(
+    async (email: string, password: string): Promise<LoginResult> => {
+      const result = await loginRequest(email, password);
+      if (result.requiresTwoFactor === false) {
+        establishSession(result.token, result.user);
+      }
+      return result;
+    },
+    [establishSession],
+  );
+
+  const completeTwoFactorLogin = useCallback(
+    (sessionToken: string, sessionUser: PublicUser) => {
+      establishSession(sessionToken, sessionUser);
+    },
+    [establishSession],
+  );
 
   const value = useMemo<AuthContextValue>(
     () => ({
@@ -64,9 +82,10 @@ export function AuthProvider({ children }: PropsWithChildren) {
       isLoading,
       isAuthenticated: Boolean(token && user),
       login,
+      completeTwoFactorLogin,
       logout,
     }),
-    [user, token, isLoading, login, logout],
+    [user, token, isLoading, login, completeTwoFactorLogin, logout],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

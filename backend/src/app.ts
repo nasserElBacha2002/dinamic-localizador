@@ -12,7 +12,11 @@ export const app = express();
 // not the URL reconstructed by Express (protocol/host/port).
 app.set("trust proxy", 1);
 
-app.use(helmet());
+app.use(
+  helmet({
+    referrerPolicy: { policy: "no-referrer" },
+  }),
+);
 app.use(
   cors({
     // Explicit allowlist from FRONTEND_URL + CORS_ALLOWED_ORIGINS (see backend/.env.example).
@@ -27,7 +31,7 @@ app.use(
         return;
       }
 
-      callback(new Error("Not allowed by CORS"));
+      callback(null, false);
     },
   }),
 );

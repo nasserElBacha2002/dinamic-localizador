@@ -188,8 +188,10 @@ describeDatabaseIntegration("platform company routes authorization", () => {
   let closeServer: (() => Promise<void>) | null = null;
   let platformAdminId = "";
   let platformAdminEmail = "";
+  let platformAdminTokenVersion = 0;
   let regularOwnerId = "";
   let regularOwnerEmail = "";
+  let regularOwnerTokenVersion = 0;
 
   before(async () => {
     setupUnitTestEnv();
@@ -204,13 +206,14 @@ describeDatabaseIntegration("platform company routes authorization", () => {
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;
+    platformAdminTokenVersion = platformAdmin.tokenVersion;
 
     const dinamic = await companyRepository.findByName("Dinamic Systems");
     assert.ok(dinamic);
 
     const pool = getPool();
     const ownerResult = await pool.request().query(`
-      SELECT TOP 1 u.id, u.email
+      SELECT TOP 1 u.id, u.email, u.token_version
       FROM users u
       INNER JOIN user_company_memberships m ON m.user_id = u.id
       WHERE u.is_platform_admin = 0
@@ -221,6 +224,7 @@ describeDatabaseIntegration("platform company routes authorization", () => {
     assert.ok(ownerResult.recordset[0]);
     regularOwnerId = String(ownerResult.recordset[0].id);
     regularOwnerEmail = String(ownerResult.recordset[0].email);
+    regularOwnerTokenVersion = Number(ownerResult.recordset[0].token_version ?? 0);
   });
 
   after(async () => {
@@ -256,6 +260,7 @@ describeDatabaseIntegration("platform company routes authorization", () => {
       userId: regularOwnerId,
       email: regularOwnerEmail,
       role: "ADMIN",
+      tokenVersion: regularOwnerTokenVersion,
     });
     const response = await apiRequest(baseUrl, "/api/platform/companies", {
       method: "POST",
@@ -271,6 +276,7 @@ describeDatabaseIntegration("platform company routes authorization", () => {
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
     const response = await apiRequest(baseUrl, "/api/platform/companies", {
       method: "POST",

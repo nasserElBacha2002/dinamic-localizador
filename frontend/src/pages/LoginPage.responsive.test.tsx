@@ -42,5 +42,6 @@ describe("LoginPage responsive (real page)", () => {
     await waitFor(() => assert.ok(view.getByLabelText(/email/i)));
     assert.ok(view.getByLabelText(/contraseña/i));
     assert.ok(view.getByRole("button", { name: /ingresar|iniciar/i }));
+    assert.ok(view.getByRole("link", { name: /olvidaste tu contraseña/i }));
   });
 });

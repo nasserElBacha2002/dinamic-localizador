@@ -47,9 +47,15 @@ export function parseApiError(error: unknown): ApiError {
   }
 
   if (axios.isAxiosError<ApiErrorBody>(error)) {
-    const code = error.response?.data?.error?.code ?? "UNKNOWN_ERROR";
-    const message = error.response?.data?.error?.message ?? error.message;
-    return new ApiError(message, code, error.response?.status);
+    if (!error.response) {
+      return new ApiError(
+        "No se pudo conectar con el servidor. Confirmá que el API esté en marcha y que el origen (localhost vs 127.0.0.1) esté permitido.",
+        "NETWORK_ERROR",
+      );
+    }
+    const code = error.response.data?.error?.code ?? "UNKNOWN_ERROR";
+    const message = error.response.data?.error?.message ?? error.message;
+    return new ApiError(message, code, error.response.status);
   }
 
   if (error instanceof Error) {

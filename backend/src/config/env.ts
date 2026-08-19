@@ -1,6 +1,7 @@
 import { requireContentSidWhenWorkerEnabled } from "./notification-worker-env-rules";
 import { config } from "dotenv";
 import { z } from "zod";
+import { parseCorsOrigins } from "./cors-origins";
 import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
 
 config();
@@ -45,7 +46,23 @@ const envSchema = z
     BOT_DEFAULT_COMPANY_NAME: z.string().min(1).optional(),
     JWT_SECRET: z.string().min(16),
     JWT_EXPIRES_IN: z.string().default("8h"),
+    TWO_FACTOR_ISSUER: z.string().min(1).default("Dinamic Attendance"),
+    TWO_FACTOR_ENCRYPTION_KEY: z.string().optional(),
+    TWO_FACTOR_CHALLENGE_SECRET: z.string().min(16).optional(),
+    TWO_FACTOR_CHALLENGE_TTL_MINUTES: z.coerce.number().int().positive().default(5),
+    TWO_FACTOR_SETUP_TTL_MINUTES: z.coerce.number().int().positive().default(10),
+    /** In-memory, per process. Also applied to 2FA confirm / disable / recovery regenerate. */
+    TWO_FACTOR_LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+    TWO_FACTOR_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(8),
     INVITATION_TTL_HOURS: z.coerce.number().int().positive().default(72),
+    PASSWORD_RESET_TTL_MINUTES: z.coerce.number().int().positive().default(60),
+    AUTH_LOGIN_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+    AUTH_LOGIN_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(10),
+    PASSWORD_RESET_RATE_LIMIT_WINDOW_MINUTES: z.coerce.number().int().positive().default(15),
+    PASSWORD_RESET_RATE_LIMIT_MAX: z.coerce.number().int().positive().default(5),
+    /** Floor for forgot-password duration (timing mitigation, not constant-time). */
+    PASSWORD_RESET_MIN_DURATION_MS: z.coerce.number().int().nonnegative().default(300),
+    PASSWORD_RESET_DURATION_JITTER_MS: z.coerce.number().int().nonnegative().default(150),
     /**
      * Explicit email transport. When omitted:
      * - smtp if SMTP_HOST is set
@@ -360,6 +377,33 @@ const envSchema = z
         });
       }
     }
+
+    if (data.NODE_ENV === "production" && !data.TWO_FACTOR_ENCRYPTION_KEY?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "TWO_FACTOR_ENCRYPTION_KEY is required in production (32-byte key, base64 or hex)",
+        path: ["TWO_FACTOR_ENCRYPTION_KEY"],
+      });
+    }
+
+    if (data.NODE_ENV === "production" && !data.TWO_FACTOR_CHALLENGE_SECRET?.trim()) {
+      ctx.addIssue({
+        code: "custom",
+        message: "TWO_FACTOR_CHALLENGE_SECRET is required in production (min 16 chars, distinct from JWT_SECRET)",
+        path: ["TWO_FACTOR_CHALLENGE_SECRET"],
+      });
+    }
+
+    if (
+      data.TWO_FACTOR_CHALLENGE_SECRET &&
+      data.TWO_FACTOR_CHALLENGE_SECRET === data.JWT_SECRET
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "TWO_FACTOR_CHALLENGE_SECRET must not equal JWT_SECRET",
+        path: ["TWO_FACTOR_CHALLENGE_SECRET"],
+      });
+    }
   });
 
 const parsed = envSchema.safeParse(process.env);
@@ -370,38 +414,25 @@ if (!parsed.success) {
   process.exit(1);
 }
 
-const parseCorsOrigins = (
-  nodeEnv: "development" | "test" | "production",
-  frontendUrl: string,
-  corsAllowedOrigins?: string,
-): string[] => {
-  const origins = new Set<string>();
+const DEV_TWO_FACTOR_AES_KEY = Buffer.alloc(32, 7);
 
-  if (nodeEnv === "production") {
-    if (corsAllowedOrigins) {
-      for (const origin of corsAllowedOrigins.split(",")) {
-        const trimmed = origin.trim();
-        if (trimmed.length > 0) {
-          origins.add(trimmed);
-        }
-      }
-    } else {
-      origins.add(frontendUrl);
+const parseTwoFactorEncryptionKey = (raw: string | undefined, nodeEnv: string): Buffer => {
+  if (!raw?.trim()) {
+    if (nodeEnv === "production") {
+      throw new Error("TWO_FACTOR_ENCRYPTION_KEY is required in production");
     }
-  } else {
-    origins.add(frontendUrl);
-
-    if (corsAllowedOrigins) {
-      for (const origin of corsAllowedOrigins.split(",")) {
-        const trimmed = origin.trim();
-        if (trimmed.length > 0) {
-          origins.add(trimmed);
-        }
-      }
-    }
+    return DEV_TWO_FACTOR_AES_KEY;
   }
-
-  return Array.from(origins);
+  const trimmed = raw.trim();
+  const asBase64 = Buffer.from(trimmed, "base64");
+  if (asBase64.length === 32) {
+    return asBase64;
+  }
+  if (/^[0-9a-fA-F]{64}$/.test(trimmed)) {
+    return Buffer.from(trimmed, "hex");
+  }
+  console.error("TWO_FACTOR_ENCRYPTION_KEY must be 32 bytes (base64) or 64 hex characters");
+  process.exit(1);
 };
 
 const resolvedEmailTransport =
@@ -415,6 +446,15 @@ const resolvedEmailTransport =
 export const env = {
   ...parsed.data,
   EMAIL_TRANSPORT: resolvedEmailTransport as "smtp" | "console" | "disabled",
+  TWO_FACTOR_ENCRYPTION_KEY: parseTwoFactorEncryptionKey(
+    parsed.data.TWO_FACTOR_ENCRYPTION_KEY,
+    parsed.data.NODE_ENV,
+  ),
+  TWO_FACTOR_CHALLENGE_SECRET:
+    parsed.data.TWO_FACTOR_CHALLENGE_SECRET ??
+    (parsed.data.NODE_ENV === "production"
+      ? parsed.data.JWT_SECRET
+      : "dev-only-2fa-challenge-secret"),
   corsOrigins: parseCorsOrigins(
     parsed.data.NODE_ENV,
     parsed.data.FRONTEND_URL,

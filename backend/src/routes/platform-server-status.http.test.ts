@@ -100,7 +100,7 @@ describe("platform server status HTTP authorization", () => {
     assert.equal(response.status, 403);
   });
 
-  it("returns 403 for inactive user even if flagged platform admin", async () => {
+  it("returns 401 for inactive user even if flagged platform admin", async () => {
     mock.method(userRepository, "findById", async () => ({
       id: "super-inactive",
       active: false,
@@ -112,10 +112,10 @@ describe("platform server status HTTP authorization", () => {
       role: "ADMIN",
     });
     const response = await apiRequest(baseUrl, "/api/platform/servers/status", { token });
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 401);
   });
 
-  it("returns 403 for nonexistent user", async () => {
+  it("returns 401 for nonexistent user", async () => {
     mock.method(userRepository, "findById", async () => null);
     const token = signTestToken({
       userId: "missing",
@@ -123,7 +123,7 @@ describe("platform server status HTTP authorization", () => {
       role: "ADMIN",
     });
     const response = await apiRequest(baseUrl, "/api/platform/servers/status", { token });
-    assert.equal(response.status, 403);
+    assert.equal(response.status, 401);
   });
 
   it("returns 403 when JWT role is ADMIN but DB is not platform admin", async () => {

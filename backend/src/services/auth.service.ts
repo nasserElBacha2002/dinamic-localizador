@@ -2,35 +2,49 @@ import jwt from "jsonwebtoken";
 import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
 import { toPublicUser, userRepository } from "../repositories/user.repository";
-import type { AuthTokenPayload, PublicUser } from "../types/auth";
-import { normalizeEmail, verifyPassword } from "../utils/password";
+import { issueLoginChallenge } from "./two-factor.service";
+import type { AuthTokenPayload, LoginResult, PublicUser, User } from "../types/auth";
+import { signSessionToken } from "../utils/auth-token";
+import { DUMMY_PASSWORD_HASH, normalizeEmail, verifyPassword } from "../utils/password";
 
-const signToken = (payload: AuthTokenPayload): string =>
-  jwt.sign(payload, env.JWT_SECRET, { expiresIn: env.JWT_EXPIRES_IN as jwt.SignOptions["expiresIn"] });
+export function readJwtTokenVersion(payload: { tokenVersion?: unknown }): number {
+  // Pre-097 JWTs omit tokenVersion; treat as 0 so they remain valid until
+  // token_version is bumped (password reset / password hash update).
+  return typeof payload.tokenVersion === "number" &&
+    Number.isInteger(payload.tokenVersion) &&
+    payload.tokenVersion >= 0
+    ? payload.tokenVersion
+    : 0;
+}
+
+export function isSessionValid(user: User, tokenVersion: number): boolean {
+  return user.active && (user.tokenVersion ?? 0) === tokenVersion;
+}
 
 export const authService = {
-  async login(email: string, password: string): Promise<{ token: string; user: PublicUser }> {
+  async login(email: string, password: string): Promise<LoginResult> {
     const normalizedEmail = normalizeEmail(email);
     const user = await userRepository.findByEmail(normalizedEmail);
+    const passwordHash = user ? user.passwordHash : DUMMY_PASSWORD_HASH;
+    const validPassword = await verifyPassword(password, passwordHash);
 
-    if (!user || !user.active) {
+    if (!user || !user.active || !validPassword) {
       throw new AppError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.");
     }
 
-    const validPassword = await verifyPassword(password, user.passwordHash);
-    if (!validPassword) {
-      throw new AppError(401, "INVALID_CREDENTIALS", "Credenciales inválidas.");
+    if (user.twoFactorEnabled) {
+      return {
+        requiresTwoFactor: true,
+        challengeToken: await issueLoginChallenge(user),
+      };
     }
 
     await userRepository.updateLastLogin(user.id);
-
-    const token = signToken({
-      userId: user.id,
-      email: user.email,
-      role: user.role,
-    });
-
-    return { token, user: toPublicUser(user) };
+    return {
+      requiresTwoFactor: false,
+      token: signSessionToken(user),
+      user: toPublicUser(user),
+    };
   },
 
   async getCurrentUser(userId: string): Promise<PublicUser> {
@@ -44,11 +58,16 @@ export const authService = {
 
   verifyToken(token: string): AuthTokenPayload {
     try {
-      const payload = jwt.verify(token, env.JWT_SECRET) as AuthTokenPayload;
+      const payload = jwt.verify(token, env.JWT_SECRET) as jwt.JwtPayload & Partial<AuthTokenPayload>;
       if (!payload.userId || !payload.email || !payload.role) {
         throw new AppError(401, "INVALID_TOKEN", "Token inválido.");
       }
-      return payload;
+      return {
+        userId: payload.userId,
+        email: payload.email,
+        role: payload.role,
+        tokenVersion: readJwtTokenVersion(payload),
+      };
     } catch (error) {
       if (error instanceof AppError) {
         throw error;

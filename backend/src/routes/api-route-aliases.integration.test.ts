@@ -22,8 +22,10 @@ describeDatabaseIntegration("API canonical routes integration", () => {
   let dinamicCompanyId = "";
   let platformAdminId = "";
   let platformAdminEmail = "";
+  let platformAdminTokenVersion = 0;
   let operatorUserId = "";
   let operatorUserEmail = "";
+  let operatorTokenVersion = 0;
   const createdUserIds: string[] = [];
 
   before(async () => {
@@ -43,6 +45,7 @@ describeDatabaseIntegration("API canonical routes integration", () => {
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;
+    platformAdminTokenVersion = platformAdmin.tokenVersion;
 
     const passwordHash = await hashPassword("integration-test-password");
     let operator = await userRepository.findByEmail(TEST_OPERATOR_EMAIL);
@@ -71,6 +74,7 @@ describeDatabaseIntegration("API canonical routes integration", () => {
 
     operatorUserId = operator.id;
     operatorUserEmail = operator.email;
+    operatorTokenVersion = operator.tokenVersion;
   });
 
   after(async () => {
@@ -93,6 +97,7 @@ describeDatabaseIntegration("API canonical routes integration", () => {
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
 
   const operatorToken = () =>
@@ -100,6 +105,7 @@ describeDatabaseIntegration("API canonical routes integration", () => {
       userId: operatorUserId,
       email: operatorUserEmail,
       role: "ADMIN",
+      tokenVersion: operatorTokenVersion,
     });
 
   const companyPath = (suffix: string) => `/api/companies/${dinamicCompanyId}${suffix}`;

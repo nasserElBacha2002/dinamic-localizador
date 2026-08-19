@@ -37,6 +37,7 @@ describeDatabaseIntegration("company settings API integration", () => {
   let otherCompanyId = "";
   let platformAdminId = "";
   let platformAdminEmail = "";
+  let platformAdminTokenVersion = 0;
   let ownerUserId = "";
   let ownerUserEmail = "";
   let readOnlyUserId = "";
@@ -87,6 +88,7 @@ describeDatabaseIntegration("company settings API integration", () => {
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;
+    platformAdminTokenVersion = platformAdmin.tokenVersion;
 
     const passwordHash = await hashPassword("integration-test-password");
     const ensureUser = async (
@@ -241,6 +243,7 @@ describeDatabaseIntegration("company settings API integration", () => {
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
     const response = await apiRequest(baseUrl, `/api/companies/${otherCompanyId}/settings`, {
       method: "PATCH",

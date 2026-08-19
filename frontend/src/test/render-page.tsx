@@ -22,7 +22,18 @@ const defaultAuth: AuthContextValue = {
   token: "test-token",
   isLoading: false,
   isAuthenticated: true,
-  login: async () => undefined,
+  login: async () => ({
+    requiresTwoFactor: false,
+    token: "test-token",
+    user: {
+      id: "user-1",
+      email: "ops@example.com",
+      name: "Operador Test",
+      role: "ADMIN",
+      isPlatformAdmin: false,
+    },
+  }),
+  completeTwoFactorLogin: () => undefined,
   logout: () => undefined,
 };
 

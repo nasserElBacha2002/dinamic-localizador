@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { mapAssignmentRow, toDateOnlyString } from "./row-mappers";
+import { mapAssignmentRow, mapUserRow, toDateOnlyString } from "./row-mappers";
 
 describe("toDateOnlyString", () => {
   it("formats SQL Date objects as ISO calendar dates", () => {
@@ -42,5 +42,49 @@ describe("mapAssignmentRow", () => {
 
     assert.equal(assignment.validFrom, "2026-07-05");
     assert.equal(assignment.validUntil, null);
+  });
+});
+
+describe("mapUserRow", () => {
+  const baseUserRow = {
+    id: "00000000-0000-4000-8000-000000000001",
+    name: "Admin",
+    email: "admin@example.com",
+    password_hash: "hash",
+    role: "ADMIN",
+    is_platform_admin: true,
+    active: true,
+    token_version: 2,
+    two_factor_enabled: true,
+    two_factor_secret_encrypted: "enc",
+    two_factor_last_used_step: 10,
+    two_factor_pending_secret_encrypted: null,
+    created_at: new Date("2026-08-01T12:00:00.000Z"),
+    updated_at: new Date("2026-08-01T12:00:00.000Z"),
+  };
+
+  it("maps null optional timestamps without throwing", () => {
+    const user = mapUserRow({
+      ...baseUserRow,
+      two_factor_confirmed_at: null,
+      two_factor_pending_created_at: null,
+      last_login_at: null,
+    });
+    assert.equal(user.twoFactorConfirmedAt, null);
+    assert.equal(user.twoFactorPendingCreatedAt, null);
+    assert.equal(user.lastLoginAt, null);
+    assert.equal(user.tokenVersion, 2);
+  });
+
+  it("treats invalid Date objects on optional timestamps as null", () => {
+    const user = mapUserRow({
+      ...baseUserRow,
+      two_factor_confirmed_at: new Date(Number.NaN),
+      two_factor_pending_created_at: new Date("not-a-date"),
+      last_login_at: "not-a-date",
+    });
+    assert.equal(user.twoFactorConfirmedAt, null);
+    assert.equal(user.twoFactorPendingCreatedAt, null);
+    assert.equal(user.lastLoginAt, null);
   });
 });

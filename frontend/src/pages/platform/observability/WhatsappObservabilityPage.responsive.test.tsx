@@ -82,6 +82,12 @@ mockApiModule("api/company-users.api", {
   getActiveCompanyMembershipPath: () => null,
 });
 
+mockApiModule("api/lookups.api", {
+  getEmployeeLookups: async () => [],
+  getServiceLookups: async () => [],
+  getOperationLookups: async () => [],
+});
+
 import assert from "node:assert/strict";
 import { cleanup, waitFor } from "@testing-library/react";
 import { afterEach, before, describe, it } from "node:test";

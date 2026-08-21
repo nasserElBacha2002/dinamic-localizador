@@ -71,8 +71,8 @@ export function flowStepStatusTone(status: WhatsappFlowStepStatus): StatusBadgeT
 
 export const whatsappHasErrorOptions = [
   { value: "", label: "Todos" },
-  { value: "true", label: "Con error" },
-  { value: "false", label: "Sin error" },
+  { value: "true", label: "Con errores" },
+  { value: "false", label: "Sin errores" },
 ];
 
 export const whatsappConversationStatusOptions = [

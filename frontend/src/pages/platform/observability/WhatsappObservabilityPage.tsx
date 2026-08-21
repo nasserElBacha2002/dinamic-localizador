@@ -1,6 +1,7 @@
 import { Button, Group, TextInput } from "@mantine/core";
 import { useMemo } from "react";
 import { Link as RouterLink, useNavigate } from "react-router";
+import { EmployeeLookupAutocomplete } from "../../../components/lookups/EmployeeLookupAutocomplete";
 import {
   DataTable,
   ErrorState,
@@ -11,16 +12,16 @@ import {
   mapApiPaginationMeta,
   PageHeader,
   PaginationControls,
-  SearchInput,
   StatusBadge,
   type DataTableColumn,
   type DataTableMobileCardConfig,
 } from "../../../design-system";
+import { terminology } from "../../../domain/terminology";
 import { useAuth } from "../../../hooks/useAuth";
+import { useDebouncedValue } from "../../../hooks/useDebouncedValue";
 import { useTableUrlState } from "../../../hooks/useTableUrlState";
 import { useWhatsappConversations } from "../../../hooks/useWhatsappObservability";
 import type { WhatsappConversationSummary } from "../../../types/whatsapp-observability";
-import { getDateRangeQueryValue } from "../../../utils/date-range";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../../utils/date-range-url";
 import { formatDateTime } from "../../../utils/dates";
 import { getApiErrorMessage } from "../../../utils/errors";
@@ -32,12 +33,14 @@ import {
   whatsappHasErrorOptions,
 } from "./whatsapp-observability-labels";
 import {
+  buildWhatsappConversationListFilters,
   WHATSAPP_OBSERVABILITY_TABLE_DEFAULTS,
   WHATSAPP_OBSERVABILITY_TABLE_FIELDS,
   shouldOmitWhatsappObservabilityTableValue,
 } from "./whatsapp-observability-list-table-state";
 
 const LIST_PATH = "/platform/observability/whatsapp";
+const TEXT_FILTER_DEBOUNCE_MS = 300;
 
 export function WhatsappObservabilityPage() {
   const navigate = useNavigate();
@@ -49,7 +52,6 @@ export function WhatsappObservabilityPage() {
     defaults: WHATSAPP_OBSERVABILITY_TABLE_DEFAULTS,
     fields: WHATSAPP_OBSERVABILITY_TABLE_FIELDS,
     shouldOmitFromUrl: shouldOmitWhatsappObservabilityTableValue,
-    debounceSearch: true,
   });
 
   const dateRange = useMemo(
@@ -61,28 +63,22 @@ export function WhatsappObservabilityPage() {
       }),
     [table.state.dateFrom, table.state.datePreset, table.state.dateTo],
   );
-  const dateQuery = getDateRangeQueryValue(dateRange);
 
-  const conversationsQuery = useWhatsappConversations(
-    {
-      page: table.page,
-      limit: table.pageSize,
-      search: table.state.search || undefined,
-      phone: table.state.phone || undefined,
-      flowType: table.state.flowType || undefined,
-      resultCode: table.state.resultCode || undefined,
-      status: (table.state.status || undefined) as WhatsappConversationSummary["status"] | undefined,
-      hasError:
-        table.state.hasError === "true"
-          ? true
-          : table.state.hasError === "false"
-            ? false
-            : undefined,
-      from: dateQuery.from,
-      to: dateQuery.to,
-    },
-    isPlatformAdmin && uiEnabled,
+  const debouncedFlowType = useDebouncedValue(table.state.flowType, TEXT_FILTER_DEBOUNCE_MS);
+  const debouncedResultCode = useDebouncedValue(table.state.resultCode, TEXT_FILTER_DEBOUNCE_MS);
+
+  const listFilters = useMemo(
+    () =>
+      buildWhatsappConversationListFilters({
+        state: table.state,
+        dateRange,
+        flowType: debouncedFlowType,
+        resultCode: debouncedResultCode,
+      }),
+    [dateRange, debouncedFlowType, debouncedResultCode, table.state],
   );
+
+  const conversationsQuery = useWhatsappConversations(listFilters, isPlatformAdmin && uiEnabled);
 
   const columns = useMemo<DataTableColumn<WhatsappConversationSummary>[]>(
     () => [
@@ -194,13 +190,13 @@ export function WhatsappObservabilityPage() {
 
       <FilterBar
         search={
-          <SearchInput
-            value={table.searchInput}
-            onChange={table.setSearch}
-            onSearch={table.commitSearch}
-            label="Búsqueda general"
-            placeholder="Buscar por teléfono, empleado o ID…"
-            aria-label="Buscar conversaciones"
+          <EmployeeLookupAutocomplete
+            label={terminology.worker.singular}
+            value={table.state.employeeId || null}
+            onChange={(nextId) => table.setField("employeeId", nextId ?? "")}
+            activeOnly={false}
+            scope="platform"
+            placeholder={`Buscar ${terminology.worker.singular.toLowerCase()}…`}
           />
         }
         activeFilterCount={table.activeFilterCount}
@@ -212,33 +208,9 @@ export function WhatsappObservabilityPage() {
             onChange={(nextDateRange) => {
               table.setState(dateRangeToUrlFields(nextDateRange));
             }}
-            mode="mixed"
+            mode="past"
             label="Actividad"
             allowCustomRange
-          />
-        </FilterBar.Item>
-        <FilterBar.Item>
-          <TextInput
-            label="Teléfono"
-            value={table.state.phone}
-            onChange={(event) => table.setField("phone", event.currentTarget.value)}
-            placeholder="Ej. ****1234"
-          />
-        </FilterBar.Item>
-        <FilterBar.Item>
-          <TextInput
-            label="Tipo de flujo"
-            value={table.state.flowType}
-            onChange={(event) => table.setField("flowType", event.currentTarget.value)}
-            placeholder="Ej. CHECKIN"
-          />
-        </FilterBar.Item>
-        <FilterBar.Item>
-          <TextInput
-            label="Código de resultado"
-            value={table.state.resultCode}
-            onChange={(event) => table.setField("resultCode", event.currentTarget.value)}
-            placeholder="Ej. CHECKIN_COMPLETED"
           />
         </FilterBar.Item>
         <FilterBar.Item>
@@ -247,6 +219,22 @@ export function WhatsappObservabilityPage() {
             value={table.state.status}
             onChange={(nextValue) => table.setField("status", nextValue)}
             data={whatsappConversationStatusOptions}
+          />
+        </FilterBar.Item>
+        <FilterBar.Item>
+          <TextInput
+            label="Tipo de flujo"
+            value={table.state.flowType}
+            onChange={(event) => table.setField("flowType", event.currentTarget.value)}
+            placeholder="Ej. INBOUND_LOCATION"
+          />
+        </FilterBar.Item>
+        <FilterBar.Item>
+          <TextInput
+            label="Código de resultado"
+            value={table.state.resultCode}
+            onChange={(event) => table.setField("resultCode", event.currentTarget.value)}
+            placeholder="Ej. CHECKIN_COMPLETED"
           />
         </FilterBar.Item>
         <FilterBar.Item>

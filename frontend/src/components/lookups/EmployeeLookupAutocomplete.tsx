@@ -1,6 +1,7 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getEmployeeLookups } from "../../api/lookups.api";
+import { getWhatsappObservabilityEmployeeLookups } from "../../api/whatsapp-observability.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import {
@@ -13,6 +14,8 @@ import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
+export type EmployeeLookupScope = "company" | "platform";
+
 interface EmployeeLookupAutocompleteProps {
   value: string | null;
   onChange: (value: string | null) => void;
@@ -23,12 +26,18 @@ interface EmployeeLookupAutocompleteProps {
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
+  /**
+   * `company` (default): active-company lookups.
+   * `platform`: cross-company lookups for platform observability (platform admin API).
+   */
+  scope?: EmployeeLookupScope;
 }
 
 function mapEmployeeLookupToOption(employee: EmployeeLookup): SearchAutocompleteOption {
   return {
     id: employee.id,
     label: employee.fullName,
+    description: employee.companyName ?? null,
   };
 }
 
@@ -42,20 +51,35 @@ export function EmployeeLookupAutocomplete({
   disabled = false,
   required = false,
   placeholder = `Nombre del ${terminology.worker.singular.toLowerCase()}`,
+  scope = "company",
 }: EmployeeLookupAutocompleteProps) {
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
+  const isPlatformScope = scope === "platform";
+  const lookupEnabled = isPlatformScope ? true : companyReady;
+  const scopeKey = isPlatformScope ? "platform" : companyId;
 
   const fetchEmployees = useCallback(
-    async (search: string, signal: AbortSignal) =>
-      getEmployeeLookups(
+    async (search: string, signal: AbortSignal) => {
+      if (isPlatformScope) {
+        return getWhatsappObservabilityEmployeeLookups(
+          {
+            search: search || undefined,
+            limit: DEFAULT_LOOKUP_LIMIT,
+            active: activeOnly ? true : undefined,
+          },
+          { signal },
+        );
+      }
+      return getEmployeeLookups(
         {
           search: search || undefined,
           limit: DEFAULT_LOOKUP_LIMIT,
           active: activeOnly ? true : undefined,
         },
         { signal },
-      ),
-    [activeOnly],
+      );
+    },
+    [activeOnly, isPlatformScope],
   );
 
   const mapToOption = useCallback(
@@ -65,27 +89,38 @@ export function EmployeeLookupAutocomplete({
 
   const getQueryKey = useCallback(
     (search: string) =>
-      lookupKeys.employeeSearch(companyId, {
-        search,
-        activeOnly,
-        limit: DEFAULT_LOOKUP_LIMIT,
-      }),
-    [activeOnly, companyId],
+      isPlatformScope
+        ? lookupKeys.employeePlatformSearch({
+            search,
+            activeOnly,
+            limit: DEFAULT_LOOKUP_LIMIT,
+          })
+        : lookupKeys.employeeSearch(companyId, {
+            search,
+            activeOnly,
+            limit: DEFAULT_LOOKUP_LIMIT,
+          }),
+    [activeOnly, companyId, isPlatformScope],
   );
 
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
     getQueryKey,
     fetchItems: fetchEmployees,
     mapToOption,
-    scopeKey: companyId,
-    enabled: companyReady,
+    scopeKey,
+    enabled: lookupEnabled,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedLookupQuery = useQuery({
-    queryKey: lookupKeys.employeeSelected(companyId, value),
-    queryFn: ({ signal }) => getEmployeeLookups({ id: value!, limit: 1 }, { signal }),
-    enabled: companyReady && Boolean(value),
+    queryKey: isPlatformScope
+      ? lookupKeys.employeePlatformSelected(value)
+      : lookupKeys.employeeSelected(companyId, value),
+    queryFn: ({ signal }) =>
+      isPlatformScope
+        ? getWhatsappObservabilityEmployeeLookups({ id: value!, limit: 1 }, { signal })
+        : getEmployeeLookups({ id: value!, limit: 1 }, { signal }),
+    enabled: lookupEnabled && Boolean(value),
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 

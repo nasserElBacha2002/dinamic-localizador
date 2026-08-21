@@ -19,12 +19,13 @@ import { useAuth } from "../../../hooks/useAuth";
 import { useTableUrlState } from "../../../hooks/useTableUrlState";
 import { useWhatsappErrorDetail, useWhatsappErrors } from "../../../hooks/useWhatsappObservability";
 import type { WhatsappErrorAggregation } from "../../../types/whatsapp-observability";
-import { EMPTY_DATE_RANGE_VALUE, getDateRangeQueryValue } from "../../../utils/date-range";
+import { EMPTY_DATE_RANGE_VALUE } from "../../../utils/date-range";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../../utils/date-range-url";
 import { formatDateTime } from "../../../utils/dates";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { isWhatsappObservabilityUiEnabled } from "../../../utils/whatsapp-observability-config";
 import {
+  toObservabilityActivityBounds,
   WHATSAPP_OBSERVABILITY_TABLE_DEFAULTS,
   shouldOmitWhatsappObservabilityTableValue,
 } from "./whatsapp-observability-list-table-state";
@@ -56,14 +57,14 @@ export function WhatsappObservabilityErrorsPage() {
       }),
     [table.state.dateFrom, table.state.datePreset, table.state.dateTo],
   );
-  const dateQuery = getDateRangeQueryValue(dateRange);
+  const activityBounds = useMemo(() => toObservabilityActivityBounds(dateRange), [dateRange]);
 
   const errorsQuery = useWhatsappErrors(
     {
       page: table.page,
       limit: table.pageSize,
-      from: dateQuery.from,
-      to: dateQuery.to,
+      from: activityBounds.from,
+      to: activityBounds.to,
     },
     isPlatformAdmin && uiEnabled,
   );

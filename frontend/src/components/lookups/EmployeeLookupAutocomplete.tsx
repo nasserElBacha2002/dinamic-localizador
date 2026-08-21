@@ -13,6 +13,8 @@ import type { SearchAutocompleteOption } from "../../types/search-autocomplete";
 import { terminology } from "../../domain/terminology";
 import { SearchAutocomplete } from "../common/SearchAutocomplete";
 
+export type EmployeeLookupScope = "company" | "platform";
+
 interface EmployeeLookupAutocompleteProps {
   value: string | null;
   onChange: (value: string | null) => void;
@@ -23,13 +25,36 @@ interface EmployeeLookupAutocompleteProps {
   disabled?: boolean;
   required?: boolean;
   placeholder?: string;
+  /**
+   * `company` (default): active-company lookups.
+   * `platform`: cross-company lookups for platform observability (platform admin API).
+   */
+  scope?: EmployeeLookupScope;
 }
 
 function mapEmployeeLookupToOption(employee: EmployeeLookup): SearchAutocompleteOption {
   return {
     id: employee.id,
     label: employee.fullName,
+    description: employee.companyName ?? null,
   };
+}
+
+async function fetchPlatformEmployeeLookups(
+  query: {
+    search?: string;
+    limit?: number;
+    id?: string;
+    active?: boolean;
+  },
+  signal: AbortSignal,
+): Promise<EmployeeLookup[]> {
+  // Dynamic import keeps company-scoped consumers independent of the observability API module
+  // (tests often mock that module without every named export).
+  const { getWhatsappObservabilityEmployeeLookups } = await import(
+    "../../api/whatsapp-observability.api"
+  );
+  return getWhatsappObservabilityEmployeeLookups(query, { signal });
 }
 
 export function EmployeeLookupAutocomplete({
@@ -42,20 +67,35 @@ export function EmployeeLookupAutocomplete({
   disabled = false,
   required = false,
   placeholder = `Nombre del ${terminology.worker.singular.toLowerCase()}`,
+  scope = "company",
 }: EmployeeLookupAutocompleteProps) {
   const { companyId, enabled: companyReady } = useOperationalQueryEnabled();
+  const isPlatformScope = scope === "platform";
+  const lookupEnabled = isPlatformScope ? true : companyReady;
+  const scopeKey = isPlatformScope ? "platform" : companyId;
 
   const fetchEmployees = useCallback(
-    async (search: string, signal: AbortSignal) =>
-      getEmployeeLookups(
+    async (search: string, signal: AbortSignal) => {
+      if (isPlatformScope) {
+        return fetchPlatformEmployeeLookups(
+          {
+            search: search || undefined,
+            limit: DEFAULT_LOOKUP_LIMIT,
+            active: activeOnly ? true : undefined,
+          },
+          signal,
+        );
+      }
+      return getEmployeeLookups(
         {
           search: search || undefined,
           limit: DEFAULT_LOOKUP_LIMIT,
           active: activeOnly ? true : undefined,
         },
         { signal },
-      ),
-    [activeOnly],
+      );
+    },
+    [activeOnly, isPlatformScope],
   );
 
   const mapToOption = useCallback(
@@ -65,27 +105,38 @@ export function EmployeeLookupAutocomplete({
 
   const getQueryKey = useCallback(
     (search: string) =>
-      lookupKeys.employeeSearch(companyId, {
-        search,
-        activeOnly,
-        limit: DEFAULT_LOOKUP_LIMIT,
-      }),
-    [activeOnly, companyId],
+      isPlatformScope
+        ? lookupKeys.employeePlatformSearch({
+            search,
+            activeOnly,
+            limit: DEFAULT_LOOKUP_LIMIT,
+          })
+        : lookupKeys.employeeSearch(companyId, {
+            search,
+            activeOnly,
+            limit: DEFAULT_LOOKUP_LIMIT,
+          }),
+    [activeOnly, companyId, isPlatformScope],
   );
 
   const { inputValue, setInputValue, options, isLoading, hasSearched } = useAsyncSearchOptions({
     getQueryKey,
     fetchItems: fetchEmployees,
     mapToOption,
-    scopeKey: companyId,
-    enabled: companyReady,
+    scopeKey,
+    enabled: lookupEnabled,
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 
   const selectedLookupQuery = useQuery({
-    queryKey: lookupKeys.employeeSelected(companyId, value),
-    queryFn: ({ signal }) => getEmployeeLookups({ id: value!, limit: 1 }, { signal }),
-    enabled: companyReady && Boolean(value),
+    queryKey: isPlatformScope
+      ? lookupKeys.employeePlatformSelected(value)
+      : lookupKeys.employeeSelected(companyId, value),
+    queryFn: ({ signal }) =>
+      isPlatformScope
+        ? fetchPlatformEmployeeLookups({ id: value!, limit: 1 }, signal)
+        : getEmployeeLookups({ id: value!, limit: 1 }, { signal }),
+    enabled: lookupEnabled && Boolean(value),
     staleTime: LOOKUP_STALE_TIME_MS,
   });
 

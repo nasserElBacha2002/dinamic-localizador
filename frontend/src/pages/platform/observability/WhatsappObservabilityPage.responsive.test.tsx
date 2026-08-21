@@ -2,7 +2,7 @@ import { setupDomEnvironment } from "../../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule } from "../../../test/mock-api-module";
+import { mockApiModule, WHATSAPP_OBSERVABILITY_API_EXPORTS } from "../../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../../api/company-path";
 import { installLayoutPolyfills } from "../../../test/layout-polyfills";
 import { mockViewport } from "../../../test/mock-match-media";
@@ -10,53 +10,65 @@ import { mockViewport } from "../../../test/mock-match-media";
 setRuntimeCompanyId("co-1");
 installLayoutPolyfills();
 
-mockApiModule("api/whatsapp-observability.api", {
-  getWhatsappConversations: async () => ({
-    data: [
+mockApiModule(
+  "api/whatsapp-observability.api",
+  {
+    getWhatsappConversations: async () => ({
+      data: [
+        {
+          id: "conv-1",
+          companyId: "co-1",
+          employeeId: "emp-1",
+          phoneMasked: "****1234",
+          startedAt: "2026-08-01T10:00:00.000Z",
+          lastActivityAt: "2026-08-01T10:05:00.000Z",
+          status: "ACTIVE",
+          lastFlowType: "CHECKIN",
+          lastResultCode: "CHECKIN_COMPLETED",
+          messageCount: 4,
+          errorCount: 0,
+        },
+      ],
+      meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
+    }),
+    getWhatsappObservabilityEmployeeLookups: async () => [
       {
-        id: "conv-1",
+        id: "emp-1",
+        fullName: "Ana Pérez",
         companyId: "co-1",
-        employeeId: "emp-1",
-        phoneMasked: "****1234",
-        startedAt: "2026-08-01T10:00:00.000Z",
-        lastActivityAt: "2026-08-01T10:05:00.000Z",
-        status: "ACTIVE",
-        lastFlowType: "CHECKIN",
-        lastResultCode: "CHECKIN_COMPLETED",
-        messageCount: 4,
-        errorCount: 0,
+        companyName: "Empresa Test",
       },
     ],
-    meta: { page: 1, limit: 20, total: 1, totalPages: 1 },
-  }),
-  getWhatsappConversationById: async () => {
-    throw new Error("not used");
+    getWhatsappConversationById: async () => {
+      throw new Error("not used");
+    },
+    getWhatsappConversationMessages: async () => ({
+      data: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    }),
+    getWhatsappConversationProviderEvents: async () => [],
+    getWhatsappMessageById: async () => {
+      throw new Error("not used");
+    },
+    getWhatsappFlowExecutionById: async () => {
+      throw new Error("not used");
+    },
+    getWhatsappErrors: async () => ({
+      data: [],
+      meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
+    }),
+    getWhatsappErrorByCode: async () => {
+      throw new Error("not used");
+    },
+    getWhatsappNotificationById: async () => {
+      throw new Error("not used");
+    },
+    revealWhatsappConversationPhone: async () => {
+      throw new Error("not used");
+    },
   },
-  getWhatsappConversationMessages: async () => ({
-    data: [],
-    meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
-  }),
-  getWhatsappConversationProviderEvents: async () => [],
-  getWhatsappMessageById: async () => {
-    throw new Error("not used");
-  },
-  getWhatsappFlowExecutionById: async () => {
-    throw new Error("not used");
-  },
-  getWhatsappErrors: async () => ({
-    data: [],
-    meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
-  }),
-  getWhatsappErrorByCode: async () => {
-    throw new Error("not used");
-  },
-  getWhatsappNotificationById: async () => {
-    throw new Error("not used");
-  },
-  revealWhatsappConversationPhone: async () => {
-    throw new Error("not used");
-  },
-});
+  WHATSAPP_OBSERVABILITY_API_EXPORTS,
+);
 
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({
@@ -80,6 +92,12 @@ mockApiModule("api/company-users.api", {
     throw new Error("not used");
   },
   getActiveCompanyMembershipPath: () => null,
+});
+
+mockApiModule("api/lookups.api", {
+  getEmployeeLookups: async () => [],
+  getServiceLookups: async () => [],
+  getOperationLookups: async () => [],
 });
 
 import assert from "node:assert/strict";

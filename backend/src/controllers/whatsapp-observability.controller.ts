@@ -7,19 +7,24 @@ export const whatsappObservabilityController = {
     const query = req.validatedQuery as {
       companyId?: string;
       employeeId?: string;
-      phone?: string;
       from?: string;
       to?: string;
       flowType?: string;
       resultCode?: string;
       status?: string;
       hasError?: boolean;
-      search?: string;
       page: number;
       limit: number;
     };
     const result = await whatsappObservabilityService.listConversations(query);
     res.status(200).json(result);
+  },
+
+  async listEmployeeLookups(req: Request, res: Response) {
+    const data = await whatsappObservabilityService.listEmployeeLookups(
+      req.validatedQuery as never,
+    );
+    res.status(200).json({ data });
   },
 
   async getConversation(req: Request, res: Response) {

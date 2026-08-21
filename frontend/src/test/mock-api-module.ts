@@ -158,3 +158,17 @@ export const PAYROLL_RECEIPTS_API_EXPORTS = [
   "deletePayrollReceipt",
   "reconcilePayrollReceiptAssociation",
 ] as const;
+
+export const WHATSAPP_OBSERVABILITY_API_EXPORTS = [
+  "getWhatsappConversations",
+  "getWhatsappObservabilityEmployeeLookups",
+  "getWhatsappConversationById",
+  "getWhatsappConversationMessages",
+  "getWhatsappMessageById",
+  "getWhatsappFlowExecutionById",
+  "getWhatsappErrors",
+  "getWhatsappErrorByCode",
+  "getWhatsappNotificationById",
+  "getWhatsappConversationProviderEvents",
+  "revealWhatsappConversationPhone",
+] as const;

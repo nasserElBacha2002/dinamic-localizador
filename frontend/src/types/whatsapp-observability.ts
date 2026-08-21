@@ -208,14 +208,12 @@ export interface WhatsappNotificationDetail {
 export interface WhatsappConversationFilters {
   companyId?: string;
   employeeId?: string;
-  phone?: string;
   from?: string;
   to?: string;
   flowType?: string;
   resultCode?: string;
   status?: WhatsappConversationStatus;
   hasError?: boolean;
-  search?: string;
   page?: number;
   limit?: number;
 }

@@ -13,11 +13,17 @@ import {
   observabilityMessageIdParamSchema,
   observabilityNotificationIdParamSchema,
 } from "../schemas/whatsapp-observability.schema";
+import { employeeLookupQuerySchema } from "../schemas/lookup.schema";
 
 export const whatsappObservabilityRouter = Router();
 
 whatsappObservabilityRouter.use(asyncHandler(requirePlatformAdmin));
 
+whatsappObservabilityRouter.get(
+  "/employee-lookups",
+  validate(employeeLookupQuerySchema, "query"),
+  asyncHandler(whatsappObservabilityController.listEmployeeLookups),
+);
 whatsappObservabilityRouter.get(
   "/conversations",
   validate(observabilityListConversationsQuerySchema, "query"),

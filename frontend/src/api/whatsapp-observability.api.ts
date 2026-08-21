@@ -31,6 +31,33 @@ export async function getWhatsappConversations(
   return data;
 }
 
+export async function getWhatsappObservabilityEmployeeLookups(
+  query: {
+    search?: string;
+    limit?: number;
+    id?: string;
+    ids?: string[];
+    active?: boolean;
+  } = {},
+  options?: { signal?: AbortSignal },
+): Promise<
+  Array<{ id: string; fullName: string; companyId: string; companyName: string }>
+> {
+  const { data } = await apiClient.get<{
+    data: Array<{ id: string; fullName: string; companyId: string; companyName: string }>;
+  }>("platform/observability/whatsapp/employee-lookups", {
+    params: buildParams({
+      search: query.search,
+      limit: query.limit,
+      id: query.id,
+      ids: query.ids,
+      active: query.active,
+    }),
+    signal: options?.signal,
+  });
+  return data.data;
+}
+
 export async function getWhatsappConversationById(
   conversationId: string,
 ): Promise<WhatsappConversationDetail> {

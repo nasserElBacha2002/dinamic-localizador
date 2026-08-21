@@ -2,7 +2,7 @@ import { setupDomEnvironment } from "../../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule } from "../../../test/mock-api-module";
+import { mockApiModule, WHATSAPP_OBSERVABILITY_API_EXPORTS } from "../../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../../api/company-path";
 import { installLayoutPolyfills } from "../../../test/layout-polyfills";
 import { mockViewport } from "../../../test/mock-match-media";
@@ -99,8 +99,11 @@ function resetMessagesFixture(total: number) {
   allMessagesNewestFirst = Array.from({ length: total }, (_, i) => buildMsg(total - i));
 }
 
-mockApiModule("api/whatsapp-observability.api", {
+mockApiModule(
+  "api/whatsapp-observability.api",
+  {
   getWhatsappConversations: async () => ({ data: [], meta: { page: 1, limit: 20, total: 0, totalPages: 0 } }),
+  getWhatsappObservabilityEmployeeLookups: async () => [],
   getWhatsappConversationById: async () => ({
     id: conversationId,
     companyId: "co-1",
@@ -179,7 +182,9 @@ mockApiModule("api/whatsapp-observability.api", {
     throw new Error("not used");
   },
   revealWhatsappConversationPhone: async () => ({ phoneNormalized: "+5491112345678" }),
-});
+  },
+  WHATSAPP_OBSERVABILITY_API_EXPORTS,
+);
 
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({

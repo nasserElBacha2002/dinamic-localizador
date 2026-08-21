@@ -57,7 +57,7 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("name", sql.NVarChar(200), `HTTP Emp ${runId}`)
-      .input("phone", sql.NVarChar(30), `+54911${runId}99`)
+      .input("phone", sql.NVarChar(30), `+54911${Date.now().toString().slice(-8)}99`)
       .query(`
         DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO employees (company_id, name, phone_number, employee_type, active)

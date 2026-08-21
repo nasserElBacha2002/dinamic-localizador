@@ -21,6 +21,10 @@ const uniqueSuffix = (): string => `${Date.now()}-${Math.random().toString(36).s
 const uniquePhone = (seed: number): string =>
   `+54911${String(Date.now()).slice(-5)}${String(seed).padStart(3, "0")}${Math.floor(Math.random() * 90 + 10)}`;
 
+/** mssql UniqueIdentifier casing is not stable across drivers — compare canonically. */
+const sortedIds = (ids: string[]): string[] =>
+  ids.map((id) => id.toLowerCase()).sort((left, right) => left.localeCompare(right));
+
 const isoDaysAgo = (days: number): string => {
   const date = new Date();
   date.setUTCDate(date.getUTCDate() - days);
@@ -186,43 +190,29 @@ describeDatabaseIntegration("team recommendations phase3", () => {
     const b = await createEmp(`B ${suffix}`, 2);
     const c = await createEmp(`C ${suffix}`, 3);
     const d = await createEmp(`D ${suffix}`, 4);
-    const e = await createEmp(`E ${suffix}`, 5);
-    const f = await createEmp(`F ${suffix}`, 6);
 
-    // A-B-C strong cluster across many days
+    // A-B-C strong cluster across many recent days (avoid saturated rival clusters).
     for (let i = 0; i < 12; i += 1) {
       const { workdayId } = await createPastOperationWithWorkday({
         companyId,
         serviceId,
-        workDate: isoDaysAgo(30 + i),
+        workDate: isoDaysAgo(10 + i),
         startOffsetMinutes: i,
       });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: a });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: b });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: c });
     }
-    // A-D weak
+    // A-D weak distractor only (single day — cannot win a teamSize=3 seed).
     {
       const { workdayId } = await createPastOperationWithWorkday({
         companyId,
         serviceId,
-        workDate: isoDaysAgo(20),
+        workDate: isoDaysAgo(5),
         startOffsetMinutes: 100,
       });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: a });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: d });
-    }
-    // E-F distractor cluster — keep below pairAffinityCap so ABC pairs win seed
-    // ties (random UUIDs + saturated EF history previously flipped greedy seed).
-    for (let i = 0; i < 2; i += 1) {
-      const { workdayId } = await createPastOperationWithWorkday({
-        companyId,
-        serviceId,
-        workDate: isoDaysAgo(40 + i),
-        startOffsetMinutes: 200 + i,
-      });
-      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: e });
-      await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: f });
     }
 
     const operationId = await createCurrentOperation({ companyId, serviceId });
@@ -237,8 +227,8 @@ describeDatabaseIntegration("team recommendations phase3", () => {
     assert.equal(result.existingMemberCount, 0);
     assert.ok(result.recommendations.length >= 1);
     const top = result.recommendations[0]!;
-    const ids = top.members.map((m) => m.employee.id).sort();
-    assert.deepEqual(ids, [a, b, c].sort());
+    const ids = sortedIds(top.members.map((m) => m.employee.id));
+    assert.deepEqual(ids, sortedIds([a, b, c]));
     assert.equal(top.complete, true);
     assert.ok(top.score >= 0 && top.score <= 1);
     assert.ok(top.reasons.some((r) => r.code === "TEAM_HISTORY_COVERAGE"));
@@ -254,7 +244,7 @@ describeDatabaseIntegration("team recommendations phase3", () => {
       { teamSize: 3, alternatives: 2 },
     );
     assert.deepEqual(
-      again.recommendations[0]!.members.map((m) => m.employee.id).sort(),
+      sortedIds(again.recommendations[0]!.members.map((m) => m.employee.id)),
       ids,
     );
   });
@@ -555,20 +545,21 @@ describeDatabaseIntegration("team recommendations phase3", () => {
       })
     ).id;
 
-    // 97 filler candidates with ZERO history — would dominate pure lexical/context pruning.
-    for (let i = 0; i < 97; i += 1) {
-      await employeeService.create(companyId, {
+    // 97 filler candidates with ZERO history — bulk insert avoids per-row tx deadlocks.
+    await employeeService.createManyForImport(
+      companyId,
+      Array.from({ length: 97 }, (_, i) => ({
         name: `AAA-Filler-${String(i).padStart(3, "0")} ${suffix}`,
         phoneNumber: uniquePhone(200 + i),
-        employeeType: "fijo",
-      });
-    }
+        employeeType: "fijo" as const,
+      })),
+    );
 
     for (let i = 0; i < 14; i += 1) {
       const { workdayId } = await createPastOperationWithWorkday({
         companyId,
         serviceId,
-        workDate: isoDaysAgo(50 + i),
+        workDate: isoDaysAgo(8 + i),
         startOffsetMinutes: i * 2,
       });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: x });
@@ -584,7 +575,7 @@ describeDatabaseIntegration("team recommendations phase3", () => {
     );
 
     assert.ok(result.candidateCount > 80);
-    const ids = result.recommendations[0]!.members.map((m) => m.employee.id).sort();
-    assert.deepEqual(ids, [x, y, z].sort());
+    const ids = sortedIds(result.recommendations[0]!.members.map((m) => m.employee.id));
+    assert.deepEqual(ids, sortedIds([x, y, z]));
   });
 });

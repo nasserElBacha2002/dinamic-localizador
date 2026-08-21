@@ -47,12 +47,12 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
     companyAId = await insertCompany(`Obs Filter Co A ${runId}`);
     companyBId = await insertCompany(`Obs Filter Co B ${runId}`);
 
-    const insertEmployee = async (companyId: string, name: string, phoneSuffix: string) => {
+    const insertEmployee = async (companyId: string, name: string, seed: number) => {
       const result = await pool
         .request()
         .input("companyId", sql.UniqueIdentifier, companyId)
         .input("name", sql.NVarChar(200), name)
-        .input("phone", sql.NVarChar(30), `+54911${runId}${phoneSuffix}`)
+        .input("phone", sql.NVarChar(30), `+54911${Date.now().toString().slice(-7)}${String(seed).padStart(2, "0")}`)
         .query(`
           DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
           INSERT INTO employees (company_id, name, phone_number, employee_type, active)
@@ -65,9 +65,9 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
       return id;
     };
 
-    employeeA1Id = await insertEmployee(companyAId, `A1 ${runId}`, "01");
-    employeeA2Id = await insertEmployee(companyAId, `A2 ${runId}`, "02");
-    employeeB1Id = await insertEmployee(companyBId, `B1 ${runId}`, "03");
+    employeeA1Id = await insertEmployee(companyAId, `A1 ${runId}`, 1);
+    employeeA2Id = await insertEmployee(companyAId, `A2 ${runId}`, 2);
+    employeeB1Id = await insertEmployee(companyBId, `B1 ${runId}`, 3);
 
     const insertConversation = async (input: {
       companyId: string;

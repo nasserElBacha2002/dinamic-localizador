@@ -9,11 +9,13 @@ import {
 } from "../test-helpers/integration-test";
 import { apiRequest, signTestToken, startTestServer } from "../test-helpers/http-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { userRepository } from "../repositories/user.repository";
 
 describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
   const runId = randomUUID().replace(/-/g, "").slice(0, 8);
+  const fixtures = createIntegrationFixtureTracker();
   let baseUrl = "";
   let closeServer: (() => Promise<void>) | null = null;
   let platformAdminId = "";
@@ -22,8 +24,6 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
   let companyId = "";
   let employeeId = "";
   const conversationIds: string[] = [];
-  const employeeIds: string[] = [];
-  const companyIds: string[] = [];
 
   before(async () => {
     setupUnitTestEnv();
@@ -50,8 +50,8 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
         OUTPUT INSERTED.id
         VALUES (@name, N'America/Argentina/Buenos_Aires', N'ACTIVE')
       `);
-    companyId = String(companyResult.recordset[0].id);
-    companyIds.push(companyId);
+    companyId = String(companyResult.recordset[0].id).toLowerCase();
+    fixtures.trackCompany(companyId);
 
     const employeeResult = await pool
       .request()
@@ -65,8 +65,8 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
         VALUES (@companyId, @name, @phone, N'fijo', 1);
         SELECT id FROM @inserted;
       `);
-    employeeId = String(employeeResult.recordset[0].id);
-    employeeIds.push(employeeId);
+    employeeId = String(employeeResult.recordset[0].id).toLowerCase();
+    fixtures.trackEmployee(companyId, employeeId);
 
     const conversationId = randomUUID().toLowerCase();
     await pool
@@ -101,18 +101,7 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
         .input("id", sql.UniqueIdentifier, id)
         .query(`DELETE FROM whatsapp_conversations WHERE id = @id`);
     }
-    for (const id of employeeIds) {
-      await pool
-        .request()
-        .input("id", sql.UniqueIdentifier, id)
-        .query(`DELETE FROM employees WHERE id = @id`);
-    }
-    for (const id of companyIds) {
-      await pool
-        .request()
-        .input("id", sql.UniqueIdentifier, id)
-        .query(`DELETE FROM companies WHERE id = @id`);
-    }
+    await fixtures.cleanup();
     if (closeServer) {
       await closeServer();
     }
@@ -154,7 +143,7 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
     assert.equal(body.meta.limit, 20);
     assert.ok(body.meta.total >= 1);
     assert.ok(body.meta.totalPages >= 1);
-    assert.ok(body.data.some((row) => row.employeeId === employeeId));
+    assert.ok(body.data.some((row) => String(row.employeeId).toLowerCase() === employeeId));
     assert.ok(body.data.every((row) => row.phoneMasked.includes("*")));
     assert.ok(body.data.every((row) => row.phoneNormalized === undefined));
   });
@@ -202,6 +191,6 @@ describeDatabaseIntegration("whatsapp observability conversations HTTP", () => {
     const body = response.body as {
       data: Array<{ id: string; fullName: string; companyId: string; companyName: string }>;
     };
-    assert.ok(body.data.some((row) => row.id === employeeId));
+    assert.ok(body.data.some((row) => String(row.id).toLowerCase() === employeeId));
   });
 });

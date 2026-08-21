@@ -1,7 +1,6 @@
 import { useCallback, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getEmployeeLookups } from "../../api/lookups.api";
-import { getWhatsappObservabilityEmployeeLookups } from "../../api/whatsapp-observability.api";
 import { useAsyncSearchOptions } from "../../hooks/useAsyncSearchOptions";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import {
@@ -41,6 +40,23 @@ function mapEmployeeLookupToOption(employee: EmployeeLookup): SearchAutocomplete
   };
 }
 
+async function fetchPlatformEmployeeLookups(
+  query: {
+    search?: string;
+    limit?: number;
+    id?: string;
+    active?: boolean;
+  },
+  signal: AbortSignal,
+): Promise<EmployeeLookup[]> {
+  // Dynamic import keeps company-scoped consumers independent of the observability API module
+  // (tests often mock that module without every named export).
+  const { getWhatsappObservabilityEmployeeLookups } = await import(
+    "../../api/whatsapp-observability.api"
+  );
+  return getWhatsappObservabilityEmployeeLookups(query, { signal });
+}
+
 export function EmployeeLookupAutocomplete({
   value,
   onChange,
@@ -61,13 +77,13 @@ export function EmployeeLookupAutocomplete({
   const fetchEmployees = useCallback(
     async (search: string, signal: AbortSignal) => {
       if (isPlatformScope) {
-        return getWhatsappObservabilityEmployeeLookups(
+        return fetchPlatformEmployeeLookups(
           {
             search: search || undefined,
             limit: DEFAULT_LOOKUP_LIMIT,
             active: activeOnly ? true : undefined,
           },
-          { signal },
+          signal,
         );
       }
       return getEmployeeLookups(
@@ -118,7 +134,7 @@ export function EmployeeLookupAutocomplete({
       : lookupKeys.employeeSelected(companyId, value),
     queryFn: ({ signal }) =>
       isPlatformScope
-        ? getWhatsappObservabilityEmployeeLookups({ id: value!, limit: 1 }, { signal })
+        ? fetchPlatformEmployeeLookups({ id: value!, limit: 1 }, signal)
         : getEmployeeLookups({ id: value!, limit: 1 }, { signal }),
     enabled: lookupEnabled && Boolean(value),
     staleTime: LOOKUP_STALE_TIME_MS,

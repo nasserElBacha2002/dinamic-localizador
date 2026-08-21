@@ -7,19 +7,24 @@ import {
   setupDatabaseIntegration,
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
+import {
+  createIntegrationFixtureTracker,
+} from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
 import { whatsappObservabilityRepository } from "../repositories/whatsapp-observability.repository";
 
+const sameId = (left: string | null | undefined, right: string | null | undefined): boolean =>
+  String(left ?? "").toLowerCase() === String(right ?? "").toLowerCase();
+
 describeDatabaseIntegration("whatsapp observability conversation list filters", () => {
   const runId = randomUUID().replace(/-/g, "").slice(0, 8);
+  const fixtures = createIntegrationFixtureTracker();
   let companyAId = "";
   let companyBId = "";
   let employeeA1Id = "";
   let employeeA2Id = "";
   let employeeB1Id = "";
   const conversationIds: string[] = [];
-  const employeeIds: string[] = [];
-  const companyIds: string[] = [];
 
   before(async () => {
     await setupDatabaseIntegration();
@@ -34,8 +39,8 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
           OUTPUT INSERTED.id
           VALUES (@name, N'America/Argentina/Buenos_Aires', N'ACTIVE')
         `);
-      const id = String(result.recordset[0].id);
-      companyIds.push(id);
+      const id = String(result.recordset[0].id).toLowerCase();
+      fixtures.trackCompany(id);
       return id;
     };
 
@@ -55,8 +60,8 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
           VALUES (@companyId, @name, @phone, N'fijo', 1);
           SELECT id FROM @inserted;
         `);
-      const id = String(result.recordset[0].id);
-      employeeIds.push(id);
+      const id = String(result.recordset[0].id).toLowerCase();
+      fixtures.trackEmployee(companyId, id);
       return id;
     };
 
@@ -158,18 +163,7 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
         .input("id", sql.UniqueIdentifier, id)
         .query(`DELETE FROM whatsapp_conversations WHERE id = @id`);
     }
-    for (const id of employeeIds) {
-      await pool
-        .request()
-        .input("id", sql.UniqueIdentifier, id)
-        .query(`DELETE FROM employees WHERE id = @id`);
-    }
-    for (const id of companyIds) {
-      await pool
-        .request()
-        .input("id", sql.UniqueIdentifier, id)
-        .query(`DELETE FROM companies WHERE id = @id`);
-    }
+    await fixtures.cleanup();
     await teardownDatabaseIntegration();
   });
 
@@ -180,7 +174,7 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
       limit: 50,
     });
     assert.ok(result.total >= 9);
-    assert.ok(result.data.every((row) => row.employeeId === employeeA1Id));
+    assert.ok(result.data.every((row) => sameId(row.employeeId, employeeA1Id)));
   });
 
   it("isolates companyId AND employeeId across companies", async () => {
@@ -202,7 +196,7 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
       limit: 20,
     });
     assert.equal(statusOnly.total, 1);
-    assert.equal(statusOnly.data[0]?.employeeId, employeeA2Id);
+    assert.ok(sameId(statusOnly.data[0]?.employeeId, employeeA2Id));
 
     const flow = await whatsappObservabilityRepository.listConversations({
       companyId: companyAId,
@@ -211,7 +205,7 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
       limit: 20,
     });
     assert.equal(flow.total, 1);
-    assert.equal(flow.data[0]?.employeeId, employeeA1Id);
+    assert.ok(sameId(flow.data[0]?.employeeId, employeeA1Id));
 
     const resultCode = await whatsappObservabilityRepository.listConversations({
       companyId: companyAId,
@@ -272,7 +266,7 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
     });
     assert.equal(filtered.total, 1);
     assert.equal(filtered.data.length, 1);
-    assert.equal(filtered.data[0]?.employeeId, employeeA1Id);
+    assert.ok(sameId(filtered.data[0]?.employeeId, employeeA1Id));
     assert.ok(filtered.total < unfiltered.total);
 
     const page2Empty = await whatsappObservabilityRepository.listConversations({
@@ -297,8 +291,8 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
       limit: 20,
     });
     const ids = bySearch.map((row) => row.id);
-    assert.ok(ids.includes(employeeA1Id));
-    assert.ok(ids.includes(employeeB1Id));
+    assert.ok(ids.some((id) => sameId(id, employeeA1Id)));
+    assert.ok(ids.some((id) => sameId(id, employeeB1Id)));
     assert.ok(bySearch.every((row) => row.companyName.length > 0));
 
     const byId = await whatsappObservabilityRepository.listEmployeeLookups({
@@ -306,7 +300,7 @@ describeDatabaseIntegration("whatsapp observability conversation list filters", 
       limit: 1,
     });
     assert.equal(byId.length, 1);
-    assert.equal(byId[0]?.id, employeeB1Id);
-    assert.equal(byId[0]?.companyId, companyBId);
+    assert.ok(sameId(byId[0]?.id, employeeB1Id));
+    assert.ok(sameId(byId[0]?.companyId, companyBId));
   });
 });

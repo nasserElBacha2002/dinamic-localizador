@@ -212,8 +212,9 @@ describeDatabaseIntegration("team recommendations phase3", () => {
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: a });
       await expectEmployeeOnWorkday({ companyId, workdayId, employeeId: d });
     }
-    // E-F separate cluster
-    for (let i = 0; i < 8; i += 1) {
+    // E-F distractor cluster — keep below pairAffinityCap so ABC pairs win seed
+    // ties (random UUIDs + saturated EF history previously flipped greedy seed).
+    for (let i = 0; i < 2; i += 1) {
       const { workdayId } = await createPastOperationWithWorkday({
         companyId,
         serviceId,

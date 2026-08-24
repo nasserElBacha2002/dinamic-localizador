@@ -1,0 +1,74 @@
+WhatsApp message incident — SELECT results (local DB)
+Generated: 2026-08-24
+Mode: READ ONLY
+DB: localhost:1435 / dinamic_attendance
+
+========================================================================
+A) Environment gates
+========================================================================
+TWILIO_*_CONTENT_SID: all empty
+TWILIO_ACCOUNT_SID / TWILIO_AUTH_TOKEN: absent
+ATTENDANCE_REMINDER_JOB (dev log): not started — Twilio reminder configuration incomplete
+
+========================================================================
+B) Location / name resolution for "Tienda Formosa 456 - Buenos Aires"
+========================================================================
+operational_locations matching Formosa / Tienda:
+- id=1B62266A-D02E-4C62-B9D5-AA14A1A126A8
+  name=prueba-casa
+  address=Formosa 456, C1424BZJ Cdad. Autónoma de Buenos Aires, Argentina
+  locality=NULL
+  company_id=A0ECDC4C-1541-407F-BB2F-5D4992D4920B
+
+NO location named "Tienda Formosa 456".
+
+employees matching Nasser / Bacha:
+- 7BB7912E-... name=nasser-prueba
+- DC12A16D-... name=yibril el bacha
+NO employee named "Nasser El Bacha".
+
+========================================================================
+C) Formosa operations 2026-08-20 .. 2026-08-28 (sample)
+========================================================================
+Multiple ONE_TIME ops on prueba-casa (Formosa address), assignees mostly
+"Phase0A Review Emp" with confirmation_status=PENDING.
+
+Closest to 24/08:
+- operation_id=4EDE83D7-BF14-4E99-A832-2507A7D59914
+  scheduled_start=2026-08-24T16:39:00.014Z
+  (NOT 20:00 ART)
+
+NO operation found with scheduled_start corresponding to 24/08/2026 20:00 ART
+for a Nasser* employee.
+
+========================================================================
+D) Notifications for Formosa ops (Aug 20-28)
+========================================================================
+whatsapp_attendance_notifications: 0 rows
+whatsapp_operation_assignment_notifications: 0 rows
+whatsapp_messages outbound correlated: 0 rows
+
+========================================================================
+E) Recent attendance notifications (14d) — sample
+========================================================================
+Types seen: ATTENDANCE_CONFIRMATION_REMINDER only (in sample)
+provider SIDs: SM_RECOVERY_INTEGRATION, SM_V2_CYCLE, SM_V1_HISTORICAL, SM_DIRECT_RECOVERY
+→ integration/test fixtures, not production WhatsApp SIDs
+
+assignment notifications last 14d: 0 rows
+
+========================================================================
+F) Company settings (confirmation)
+========================================================================
+confirmation_reminder_enabled=true
+confirmation_reminder_hours_before=24
+(for company A0ECDC4C-... and others)
+
+========================================================================
+G) Conclusion for this DB
+========================================================================
+Incident identifiers / timeline / provider SIDs / Content SIDs:
+NOT PRESENT in accessible database.
+
+Use production connection + Twilio Console to complete
+audit/whatsapp-message-incident-production-forensics.md sections 2–8.

@@ -3,38 +3,38 @@ import { describe, it } from "node:test";
 import {
   extractLocationMessageMetadata,
   isExplicitlyForwardedLocation,
-  parseBooleanish,
+  parseTwilioFlag,
 } from "./location-message-metadata";
 
-describe("parseBooleanish", () => {
-  it("parses common truthy/falsy forms", () => {
-    assert.equal(parseBooleanish(true), true);
-    assert.equal(parseBooleanish("true"), true);
-    assert.equal(parseBooleanish("1"), true);
-    assert.equal(parseBooleanish(false), false);
-    assert.equal(parseBooleanish("false"), false);
-    assert.equal(parseBooleanish("0"), false);
-    assert.equal(parseBooleanish(""), null);
-    assert.equal(parseBooleanish(undefined), null);
-    assert.equal(parseBooleanish("maybe"), null);
+describe("parseTwilioFlag", () => {
+  it("parses Twilio truthy/falsy forms and rejects inventing true", () => {
+    assert.equal(parseTwilioFlag(true), true);
+    assert.equal(parseTwilioFlag("true"), true);
+    assert.equal(parseTwilioFlag("1"), true);
+    assert.equal(parseTwilioFlag(false), false);
+    assert.equal(parseTwilioFlag("false"), false);
+    assert.equal(parseTwilioFlag("0"), false);
+    assert.equal(parseTwilioFlag(""), false);
+    assert.equal(parseTwilioFlag(undefined), false);
+    assert.equal(parseTwilioFlag("maybe"), false);
+    assert.equal(parseTwilioFlag("yes"), false);
   });
 });
 
 describe("extractLocationMessageMetadata", () => {
-  it("returns UNKNOWN when no forward signal is present (fail-open)", () => {
+  it("treats absent Forwarded/FrequentlyForwarded as false (Twilio normal message)", () => {
     const meta = extractLocationMessageMetadata({
       MessageSid: "SM-NORMAL",
       Latitude: "-34.6",
       Longitude: "-58.4",
     });
-    assert.equal(meta.isForwarded, null);
-    assert.equal(meta.isFrequentlyForwarded, null);
-    assert.equal(meta.forwardDetection, "UNKNOWN");
+    assert.equal(meta.isForwarded, false);
+    assert.equal(meta.isFrequentlyForwarded, false);
     assert.equal(meta.sourceMessageSid, "SM-NORMAL");
     assert.equal(isExplicitlyForwardedLocation(meta), false);
   });
 
-  it("detects Forwarded=true at top level", () => {
+  it("detects Forwarded=true", () => {
     const meta = extractLocationMessageMetadata({
       MessageSid: "SM-FWD",
       Latitude: "-34.6",
@@ -42,8 +42,7 @@ describe("extractLocationMessageMetadata", () => {
       Forwarded: "true",
     });
     assert.equal(meta.isForwarded, true);
-    assert.equal(meta.forwardDetection, "FORWARDED");
-    assert.ok(meta.signalKeysFound.includes("Forwarded"));
+    assert.equal(meta.isFrequentlyForwarded, false);
     assert.equal(isExplicitlyForwardedLocation(meta), true);
   });
 
@@ -52,38 +51,29 @@ describe("extractLocationMessageMetadata", () => {
       MessageSid: "SM-FREQ",
       FrequentlyForwarded: "true",
     });
+    assert.equal(meta.isForwarded, false);
     assert.equal(meta.isFrequentlyForwarded, true);
-    assert.equal(meta.forwardDetection, "FORWARDED");
     assert.equal(isExplicitlyForwardedLocation(meta), true);
   });
 
-  it("detects Meta-style context inside ChannelMetadata JSON", () => {
-    const meta = extractLocationMessageMetadata({
-      MessageSid: "SM-META",
-      ChannelMetadata: JSON.stringify({ context: { forwarded: true } }),
-    });
-    assert.equal(meta.isForwarded, true);
-    assert.equal(meta.forwardDetection, "FORWARDED");
-  });
-
-  it("treats explicit Forwarded=false as NOT_FORWARDED", () => {
+  it("treats Forwarded=false as not forwarded", () => {
     const meta = extractLocationMessageMetadata({
       MessageSid: "SM-NOT",
       Forwarded: "false",
     });
     assert.equal(meta.isForwarded, false);
-    assert.equal(meta.forwardDetection, "NOT_FORWARDED");
     assert.equal(isExplicitlyForwardedLocation(meta), false);
   });
 
-  it("does not invent not-forwarded from unrelated passthrough fields", () => {
+  it("ignores speculative aliases (only Twilio Forwarded / FrequentlyForwarded)", () => {
     const meta = extractLocationMessageMetadata({
-      MessageSid: "SM-OTHER",
-      SmsStatus: "received",
-      AccountSid: "AC123",
-      Address: "Calle Falsa 123",
-      Label: "Home",
+      MessageSid: "SM-ALIAS",
+      WhatsappForwarded: "true",
+      ChannelMetadata: JSON.stringify({ context: { forwarded: true } }),
+      is_forwarded: "true",
     });
-    assert.equal(meta.forwardDetection, "UNKNOWN");
+    assert.equal(meta.isForwarded, false);
+    assert.equal(meta.isFrequentlyForwarded, false);
+    assert.equal(isExplicitlyForwardedLocation(meta), false);
   });
 });

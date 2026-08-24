@@ -230,15 +230,15 @@ export async function processLocationCheckIn(input: {
         recordedDuringApprovedAbsence: created.recordedDuringApprovedAbsence,
         locationEventAt: eventAt.toISOString(),
       });
-      logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_ACCEPTED", {
+      logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_RECORDED", {
         producer: "BOT_CHECK_IN",
         companyId,
         employeeId: input.employeeId,
         operationId: workday.operationId,
         messageSid: input.messageSid,
-        attendanceDecision: "ACCEPTED",
         validationStatus: validation.validationStatus,
         locationStatus: validation.locationStatus,
+        punctualityStatus: validation.punctualityStatus,
         resultCode:
           validation.locationStatus === "OUTSIDE_GEOFENCE"
             ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS

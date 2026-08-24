@@ -235,22 +235,22 @@ export const whatsappRouterService = {
     const locationMetadata = extractLocationMessageMetadata(
       ctx.payload as unknown as Record<string, unknown>,
     );
+    const hasCoordinates = Boolean(ctx.payload.Latitude && ctx.payload.Longitude);
     logWhatsAppAttendanceEvent("LOCATION_RECEIVED", {
       companyId,
       employeeId: ctx.employeeId,
       messageSid: locationMetadata.sourceMessageSid,
-      latitude: ctx.payload.Latitude ?? null,
-      longitude: ctx.payload.Longitude ?? null,
+      hasCoordinates,
       sessionState: ctx.session?.state ?? null,
+      isForwarded: locationMetadata.isForwarded,
+      isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
     });
     logWhatsAppAttendanceEvent("LOCATION_FORWARD_STATUS", {
       companyId,
       employeeId: ctx.employeeId,
       messageSid: locationMetadata.sourceMessageSid,
-      forwardDetection: locationMetadata.forwardDetection,
       isForwarded: locationMetadata.isForwarded,
       isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
-      signalKeysFound: locationMetadata.signalKeysFound,
     });
 
     if (isExplicitlyForwardedLocation(locationMetadata)) {
@@ -259,9 +259,10 @@ export const whatsappRouterService = {
         employeeId: ctx.employeeId,
         messageSid: locationMetadata.sourceMessageSid,
         resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
-        attendanceDecision: "REJECTED",
         reason: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
         sessionState: ctx.session?.state ?? null,
+        isForwarded: locationMetadata.isForwarded,
+        isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
       });
       return handlers.respond(companyId, {
         message: FORWARDED_LOCATION_REJECTED_MESSAGE,

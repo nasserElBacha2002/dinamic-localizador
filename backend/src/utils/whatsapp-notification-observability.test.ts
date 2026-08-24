@@ -2,8 +2,29 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import {
   findDuplicateTwilioContentSids,
+  summarizeTemplateVariables,
   warnOnDuplicateTwilioContentSids,
 } from "./whatsapp-notification-observability";
+
+describe("summarizeTemplateVariables", () => {
+  it("exposes keys and count without values", () => {
+    const summary = summarizeTemplateVariables({
+      "1": "Ana",
+      "2": "Local secreto",
+      "3": "10:00",
+      "4": "11/08/2026",
+    });
+    assert.deepEqual(summary.templateVariableKeys, ["1", "2", "3", "4"]);
+    assert.equal(summary.templateVariableCount, 4);
+  });
+
+  it("handles null/undefined", () => {
+    assert.deepEqual(summarizeTemplateVariables(null), {
+      templateVariableKeys: [],
+      templateVariableCount: 0,
+    });
+  });
+});
 
 describe("findDuplicateTwilioContentSids", () => {
   it("returns empty when all configured SIDs are distinct", () => {

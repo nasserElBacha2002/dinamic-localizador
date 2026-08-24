@@ -930,7 +930,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.equal(calls.processDirectLocationAttendance, 0);
   });
 
-  it("allows normal location without Forwarded signal (UNKNOWN fail-open)", async () => {
+  it("allows normal location when Forwarded fields are absent", async () => {
     setupUnitTestEnv();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -940,11 +940,36 @@ describe("whatsappRouterService.routeLocationMessage", () => {
         messageType: "LOCATION",
         session: null,
         payload: {
-          MessageSid: "SM-LOC-UNKNOWN-FWD",
+          MessageSid: "SM-LOC-ABSENT-FWD",
           From: "whatsapp:+5491111111111",
           To: "whatsapp:+10000000000",
           Latitude: "-34.6",
           Longitude: "-58.4",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /DIRECT_LOCATION_OK/);
+    assert.equal(calls.processDirectLocationAttendance, 1);
+  });
+
+  it("allows Forwarded=false through to direct attendance", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-FALSE-FWD",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "false",
         },
       }),
       handlers,

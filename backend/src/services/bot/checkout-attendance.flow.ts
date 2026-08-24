@@ -555,18 +555,18 @@ export async function processLocationCheckout(input: {
       extraWorkedMinutes: validation.extraWorkedMinutes,
     });
 
-    if (validation.checkoutStatus !== "CHECKOUT_REJECTED") {
-      logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_ACCEPTED", {
-        producer: "BOT_CHECK_OUT",
-        companyId: input.companyId,
-        employeeId: input.employeeId,
-        operationId: input.operationId,
-        messageSid: input.messageSid,
-        attendanceDecision: "ACCEPTED",
-        checkoutStatus: validation.checkoutStatus,
-        resultCode: WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
-      });
-    }
+    logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_RECORDED", {
+      producer: "BOT_CHECK_OUT",
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      operationId: input.operationId,
+      messageSid: input.messageSid,
+      checkoutStatus: validation.checkoutStatus,
+      resultCode:
+        validation.checkoutStatus === "CHECKOUT_REJECTED"
+          ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
+          : WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+    });
 
     return respond(companyId, {
       message: responseMessage,

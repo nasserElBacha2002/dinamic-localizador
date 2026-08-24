@@ -60,6 +60,13 @@ If SIDs collide, two different producers can show **visually similar** Meta bodi
 
 ---
 
+## Phone / employee scope
+
+Resolve `phone → employee_id` outside this script, then set `@employeeId`.  
+Do **not** filter by phone inside the UNION — that previously scoped only `whatsapp_messages` and could mix employees across sources.
+
+---
+
 ## Producers (do not delete without forensics)
 
 | Producer (logs) | notificationType | Channel |

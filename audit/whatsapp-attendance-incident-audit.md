@@ -11,10 +11,10 @@
 
 | Question | Answer |
 |----------|--------|
-| ¿Puede una ubicación **reenviada** registrar asistencia? | **SÍ (demostrado en código),** si Twilio/Meta sigue enviando `Latitude`/`Longitude` en el webhook. |
-| ¿Por qué? | El backend solo exige lat/lng; **no lee ni rechaza** `forwarded` / `frequently_forwarded` / `context`. Geofence valida coordenadas, no frescura ni procedencia. |
-| ¿WhatsApp/Meta entrega metadata para detectarlo? | **PROBABLE a nivel de producto Meta**, pero **NO DEMOSTRADO** el payload exacto de Twilio en este repo (no hay tests/docs de forward). En Cloud API suele existir `context.forwarded`; en Twilio el campo puede llegar como form field o no — hay que capturar un webhook real. |
-| ¿El sistema la conserva? | **NO para decisión.** Schema Zod hace `.passthrough()` → extras pueden quedar en `raw_payload`, pero **ningún flujo de asistencia los consulta**. Hash de idempotencia tampoco los incluye. |
+| ¿Puede una ubicación **reenviada** registrar asistencia? | **Mitigado en código (post-fix):** se rechaza si Twilio envía `Forwarded=true` o `FrequentlyForwarded=true` **antes** de geofence/asistencia. |
+| ¿Por qué ocurría? | Históricamente el backend solo exigía lat/lng; geofence valida coordenadas, no procedencia. |
+| ¿WhatsApp/Twilio entrega metadata para detectarlo? | **SÍ — contrato Twilio confirmado por documentación oficial:** webhooks inbound WhatsApp pueden incluir `Forwarded` y `FrequentlyForwarded` con valor `true` cuando el mensaje fue reenviado. La implementación lee únicamente esos campos. |
+| ¿El sistema la conserva / usa? | **Sí para decisión:** `extractLocationMessageMetadata` → gate en `routeLocationMessage`. `raw_payload` sigue guardando el webhook; `.passthrough()` no es el mecanismo anti-forward. |
 | ¿Hubo realmente dos recordatorios? | **NO DEMOSTRADO para el incidente concreto** (faltan filas DB / wamid). Por código, **es más probable** que sean **dos eventos distintos** (p.ej. arrival reminder 3 vars vs confirmation/assignment 4 vars) con copy similar en Twilio Content. |
 | ¿Uno podría ser confirmación con template de reminder? | **POSIBLE / PROBABLE a nivel de Content SID en Twilio (fuera del repo).** El código **no** mezcla builders: cada `notification_type` usa su SID y su mapa de variables. Un SID mal cargado en env o un body Meta mal armado producirían exactamente el efecto visual. |
 | ¿Variables invertidas? | **Builders del backend:** orden documentado y estable. **Body Meta:** **NO DEMOSTRADO** aquí. El patrón del Msg2 (`… - 15:50 comienza a las 22/08/2026`) encaja con body tipo *arrival* (3 slots) alimentado con vars de *confirmation/assignment* (`{{3}}=fecha`) **o** body que inserta `{{4}}` junto al local y `{{3}}` tras “comienza a las”. |
@@ -26,8 +26,8 @@
 
 | Caso | Veredicto |
 |------|-----------|
-| A — ubicación reenviada | **ROOT-1 confirmado como gap de producto/seguridad** |
-| B — dos mensajes “tipo reminder” | **Más alineado a hipótesis H2/H3** (dos eventos / template body mismatch) que a H1 (doble reminder del mismo tipo). H1/H4/H5 **no descartadas** sin evidencia DB. |
+| A — ubicación reenviada | **ROOT-1:** gap histórico cerrado con política anti-forward alineada al contrato Twilio (`Forwarded` / `FrequentlyForwarded`). Reproducción E2E en producción **no ejecutada** en esta sesión. |
+| B — dos mensajes “tipo reminder” | **Más alineado a hipótesis H2/H3** (dos eventos / template body mismatch) que a H1 (doble reminder del mismo tipo). H1/H4/H5 **no descartadas** sin evidencia DB. **CASO B NO DEMOSTRADO.** |
 
 ---
 
@@ -116,14 +116,29 @@ MessageSid, From, To, Body?, Latitude?, Longitude?, Address?, Label?, NumMedia?
 isLocationMessage = Boolean(payload.Latitude && payload.Longitude)
 ```
 
-### Qué **no** existe en el código de negocio
+### Qué **no** existía en el código de negocio (histórico del incidente)
 
-- `forwarded`
-- `frequently_forwarded`
-- WhatsApp `context` / quoted message SIDs
-- Validación de “live location”
-- Parser de Google Maps URL / texto `lat,lng` para check-in
-- Uso de timestamp Twilio del mensaje para elegibilidad
+Antes del fix anti-forward:
+
+- Lectura de `Forwarded` / `FrequentlyForwarded`
+- Rechazo de ubicación reenviada antes de geofence
+
+### Contrato Twilio confirmado (post-fix)
+
+Twilio documenta oficialmente que los webhooks inbound de WhatsApp pueden incluir:
+
+- `Forwarded` = `true`
+- `FrequentlyForwarded` = `true`
+
+cuando el mensaje fue reenviado. La implementación productiva usa **solo** esos campos (sin aliases Meta/`ChannelMetadata`).
+
+Ausencia de ambos campos → mensaje normal (`isForwarded=false`, `isFrequentlyForwarded=false`).
+
+### Qué sigue fuera de alcance de ROOT-1
+
+- Parser de Google Maps URL / texto `lat,lng` para check-in (**sigue rechazado / no soportado**)
+- Uso de timestamp Twilio del mensaje para elegibilidad de frescura del pin
+- Reproducción E2E del incidente en producción
 
 ### Dónde se “pierde” la metadata (si Meta/Twilio la enviara)
 

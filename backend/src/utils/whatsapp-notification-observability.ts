@@ -1,6 +1,6 @@
 /**
- * Structured WhatsApp notification observability (Caso B forensics).
- * Does not change send behavior — logs only; never logs secrets.
+ * Structured WhatsApp notification / location observability.
+ * Logs only — never secrets, GPS coordinates, or template variable values.
  */
 
 export type WhatsAppNotificationProducer =
@@ -15,11 +15,11 @@ export type WhatsAppAttendanceLocationEvent =
   | "LOCATION_RECEIVED"
   | "LOCATION_FORWARD_STATUS"
   | "FORWARDED_LOCATION_REJECTED"
-  | "LOCATION_ATTENDANCE_ACCEPTED"
+  | "LOCATION_ATTENDANCE_RECORDED"
   | "WHATSAPP_NOTIFICATION_SENT"
   | "WHATSAPP_NOTIFICATION_FAILED";
 
-export interface WhatsAppNotificationSentLog {
+export interface WhatsAppNotificationEventLog {
   event: "WHATSAPP_NOTIFICATION_SENT" | "WHATSAPP_NOTIFICATION_FAILED";
   producer: WhatsAppNotificationProducer;
   companyId: string;
@@ -28,6 +28,7 @@ export interface WhatsAppNotificationSentLog {
   operationAssignmentId?: string | null;
   notificationType: string;
   templateSid: string | null;
+  /** Full variable map is never logged — only keys/count for contract forensics. */
   templateVariables?: Record<string, string> | null;
   scheduleVersion?: number | null;
   notificationId?: string | null;
@@ -37,6 +38,19 @@ export interface WhatsAppNotificationSentLog {
   errorCode?: string | null;
   errorMessage?: string | null;
 }
+
+export const summarizeTemplateVariables = (
+  variables: Record<string, string> | null | undefined,
+): { templateVariableKeys: string[]; templateVariableCount: number } => {
+  if (!variables) {
+    return { templateVariableKeys: [], templateVariableCount: 0 };
+  }
+  const templateVariableKeys = Object.keys(variables).sort();
+  return {
+    templateVariableKeys,
+    templateVariableCount: templateVariableKeys.length,
+  };
+};
 
 export const logWhatsAppAttendanceEvent = (
   event: WhatsAppAttendanceLocationEvent,
@@ -50,7 +64,10 @@ export const logWhatsAppAttendanceEvent = (
   console.info("[whatsapp-attendance]", payload);
 };
 
-export const logWhatsAppNotificationSent = (input: WhatsAppNotificationSentLog): void => {
+export const logWhatsAppNotificationEvent = (input: WhatsAppNotificationEventLog): void => {
+  const { templateVariableKeys, templateVariableCount } = summarizeTemplateVariables(
+    input.templateVariables,
+  );
   logWhatsAppAttendanceEvent(input.event, {
     producer: input.producer,
     companyId: input.companyId,
@@ -59,7 +76,8 @@ export const logWhatsAppNotificationSent = (input: WhatsAppNotificationSentLog):
     operationAssignmentId: input.operationAssignmentId ?? null,
     notificationType: input.notificationType,
     templateSid: input.templateSid,
-    templateVariables: input.templateVariables ?? null,
+    templateVariableKeys,
+    templateVariableCount,
     scheduleVersion: input.scheduleVersion ?? null,
     notificationId: input.notificationId ?? null,
     attempt: input.attempt ?? null,
@@ -91,7 +109,9 @@ export type ContentSidCollision = {
 export const findDuplicateTwilioContentSids = (
   config: TwilioContentSidConfig,
 ): ContentSidCollision[] => {
-  const entries = (Object.entries(config) as [keyof TwilioContentSidConfig, string | null | undefined][])
+  const entries = (
+    Object.entries(config) as [keyof TwilioContentSidConfig, string | null | undefined][]
+  )
     .map(([key, value]) => [key, typeof value === "string" ? value.trim() : ""] as const)
     .filter(([, value]) => value.length > 0);
 
@@ -110,8 +130,10 @@ export const findDuplicateTwilioContentSids = (
   return collisions;
 };
 
-/** Startup / diagnostic warn — does not throw (fail-open for boot). */
-export const warnOnDuplicateTwilioContentSids = (config: TwilioContentSidConfig): ContentSidCollision[] => {
+/** Startup / diagnostic — does not throw (fail-open for boot). */
+export const warnOnDuplicateTwilioContentSids = (
+  config: TwilioContentSidConfig,
+): ContentSidCollision[] => {
   const collisions = findDuplicateTwilioContentSids(config);
   for (const collision of collisions) {
     console.error("[whatsapp-attendance]", {

@@ -21,7 +21,7 @@ import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { normalizePhoneNumber } from "../utils/phone";
-import { logWhatsAppNotificationSent } from "../utils/whatsapp-notification-observability";
+import { logWhatsAppNotificationEvent } from "../utils/whatsapp-notification-observability";
 import type { BotSession } from "../types/twilio.types";
 
 export type ReminderSendOutcome =
@@ -540,7 +540,7 @@ const sendReminderForCandidate = async (
       existingReminderId: claimed.id,
       ...reminderCandidateLogFields(candidate),
     });
-    logWhatsAppNotificationSent({
+    logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_SENT",
       producer: "ATTENDANCE_REMINDER_JOB",
       companyId,
@@ -620,7 +620,7 @@ const sendReminderForCandidate = async (
       errorMessage,
       ...reminderCandidateLogFields(candidate),
     });
-    logWhatsAppNotificationSent({
+    logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_FAILED",
       producer: "ATTENDANCE_REMINDER_JOB",
       companyId,

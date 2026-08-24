@@ -16,7 +16,7 @@ import {
   isAmbiguousTwilioSendFailure,
 } from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
-import { logWhatsAppNotificationSent } from "../utils/whatsapp-notification-observability";
+import { logWhatsAppNotificationEvent } from "../utils/whatsapp-notification-observability";
 
 /**
  * At-least-once Twilio send is possible only via manual reconcile after
@@ -369,7 +369,7 @@ const processClaimedNotification = async (
       contentVariables,
     });
     messageSid = result.messageSid;
-    logWhatsAppNotificationSent({
+    logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_SENT",
       producer: "ASSIGNMENT_NOTIFICATION_WORKER",
       companyId: notification.companyId,
@@ -391,7 +391,7 @@ const processClaimedNotification = async (
       env.OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS ??
       OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS;
 
-    logWhatsAppNotificationSent({
+    logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_FAILED",
       producer: "ASSIGNMENT_NOTIFICATION_WORKER",
       companyId: notification.companyId,

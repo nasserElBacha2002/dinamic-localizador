@@ -6,9 +6,13 @@
     and attendance records for a given employee / operation / time window.
 
   How to use:
-    1. Set @employeeId / @operationId / @fromUtc / @toUtc below.
+    1. Set @employeeId (required) and optionally @operationId / @fromUtc / @toUtc.
     2. Run against the production/staging DB with a read-only account.
     3. Interpret rows using the CASE labels in the SELECT (see comments at end).
+
+  Phone filter:
+    Intentionally NOT supported. Resolve phone → employee_id first, then set
+    @employeeId so ALL sources share the same employee scope.
 
   Does NOT modify data.
 */
@@ -16,13 +20,15 @@
 USE dinamic_attendance;
 GO
 
-DECLARE @employeeId UNIQUEIDENTIFIER = NULL; -- e.g. 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
+DECLARE @employeeId UNIQUEIDENTIFIER = NULL; -- REQUIRED — e.g. 'xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx'
 DECLARE @operationId UNIQUEIDENTIFIER = NULL; -- optional filter
 DECLARE @fromUtc DATETIME2 = DATEADD(HOUR, -48, SYSUTCDATETIME());
 DECLARE @toUtc DATETIME2 = SYSUTCDATETIME();
 
-/* Optional phone filter when employee id is unknown (E.164 without whatsapp:). */
-DECLARE @phoneNormalized NVARCHAR(32) = NULL; -- e.g. '+54911...'
+IF @employeeId IS NULL
+BEGIN
+    THROW 50001, 'Set @employeeId before running this forensics query (phone-only filter is not supported).', 1;
+END;
 
 ;WITH attendance_notifs AS (
     SELECT
@@ -32,16 +38,22 @@ DECLARE @phoneNormalized NVARCHAR(32) = NULL; -- e.g. '+54911...'
         wan.notification_type AS notification_type,
         wan.schedule_version AS schedule_version,
         wan.status AS status,
-        CAST(NULL AS NVARCHAR(64)) AS template_sid_runtime, -- Content SID is env-bound; see outbound messages
+        CAST(NULL AS NVARCHAR(64)) AS template_sid_runtime,
         wan.twilio_message_sid AS provider_message_sid,
         wan.attempt_count AS attempt,
         wan.operation_id AS operation_id,
         wan.employee_id AS employee_id,
         CAST(NULL AS UNIQUEIDENTIFIER) AS operation_assignment_id,
         wan.id AS notification_id,
-        wan.error_message AS error_message
+        wan.error_message AS error_message,
+        CONCAT(
+            CONVERT(NVARCHAR(36), wan.operation_id), N'|',
+            CONVERT(NVARCHAR(36), wan.employee_id), N'|',
+            wan.notification_type, N'|',
+            CONVERT(NVARCHAR(20), wan.schedule_version)
+        ) AS attendance_reminder_key
     FROM dbo.whatsapp_attendance_notifications wan
-    WHERE (@employeeId IS NULL OR wan.employee_id = @employeeId)
+    WHERE wan.employee_id = @employeeId
       AND (@operationId IS NULL OR wan.operation_id = @operationId)
       AND COALESCE(wan.sent_at, wan.created_at) >= @fromUtc
       AND COALESCE(wan.sent_at, wan.created_at) < @toUtc
@@ -61,9 +73,10 @@ assignment_notifs AS (
         woan.employee_id AS employee_id,
         woan.operation_assignment_id AS operation_assignment_id,
         woan.id AS notification_id,
-        woan.last_error_message AS error_message
+        woan.last_error_message AS error_message,
+        CAST(NULL AS NVARCHAR(200)) AS attendance_reminder_key
     FROM dbo.whatsapp_operation_assignment_notifications woan
-    WHERE (@employeeId IS NULL OR woan.employee_id = @employeeId)
+    WHERE woan.employee_id = @employeeId
       AND (@operationId IS NULL OR woan.operation_id = @operationId)
       AND COALESCE(woan.sent_at, woan.created_at) >= @fromUtc
       AND COALESCE(woan.sent_at, woan.created_at) < @toUtc
@@ -83,17 +96,13 @@ outbound_messages AS (
         wm.employee_id AS employee_id,
         CAST(NULL AS UNIQUEIDENTIFIER) AS operation_assignment_id,
         wm.notification_id AS notification_id,
-        wm.provider_error_message AS error_message
+        wm.provider_error_message AS error_message,
+        CAST(NULL AS NVARCHAR(200)) AS attendance_reminder_key
     FROM dbo.whatsapp_messages wm
     WHERE wm.direction = N'OUTBOUND'
-      AND (@employeeId IS NULL OR wm.employee_id = @employeeId)
+      AND wm.employee_id = @employeeId
       AND COALESCE(wm.sent_at, wm.created_at) >= @fromUtc
       AND COALESCE(wm.sent_at, wm.created_at) < @toUtc
-      AND (
-            @phoneNormalized IS NULL
-            OR wm.phone_to LIKE N'%' + @phoneNormalized + N'%'
-            OR wm.phone_from LIKE N'%' + @phoneNormalized + N'%'
-        )
 ),
 attendance_rows AS (
     SELECT
@@ -110,9 +119,10 @@ attendance_rows AS (
         ar.employee_id AS employee_id,
         CAST(NULL AS UNIQUEIDENTIFIER) AS operation_assignment_id,
         ar.id AS notification_id,
-        ar.validation_reason AS error_message
+        ar.validation_reason AS error_message,
+        CAST(NULL AS NVARCHAR(200)) AS attendance_reminder_key
     FROM dbo.attendance_records ar
-    WHERE (@employeeId IS NULL OR ar.employee_id = @employeeId)
+    WHERE ar.employee_id = @employeeId
       AND (@operationId IS NULL OR ar.operation_id = @operationId)
       AND ar.received_at >= @fromUtc
       AND ar.received_at < @toUtc
@@ -141,18 +151,17 @@ SELECT
     u.operation_assignment_id,
     u.notification_id,
     u.error_message,
-    /* Duplicate provider SID across rows → investigate provider/retry. */
-    COUNT(*) OVER (PARTITION BY u.provider_message_sid) AS same_provider_sid_row_count,
-    /* Same attendance reminder key → potential true duplication. */
-    COUNT(*) OVER (
-        PARTITION BY
-            CASE WHEN u.source_table = N'whatsapp_attendance_notifications'
-                 THEN CONCAT(CONVERT(NVARCHAR(36), u.operation_id), N'|',
-                             CONVERT(NVARCHAR(36), u.employee_id), N'|',
-                             u.notification_type, N'|',
-                             CONVERT(NVARCHAR(20), u.schedule_version))
-                 ELSE NULL END
-    ) AS same_attendance_reminder_key_count
+    u.attendance_reminder_key,
+    /* NULL provider SID → 0 (do not treat NULLs as a duplicate group). */
+    CASE
+        WHEN u.provider_message_sid IS NULL THEN 0
+        ELSE COUNT_BIG(*) OVER (PARTITION BY u.provider_message_sid)
+    END AS same_provider_sid_row_count,
+    /* Only attendance notification rows get a reminder-key count; others → NULL. */
+    CASE
+        WHEN u.attendance_reminder_key IS NULL THEN CAST(NULL AS BIGINT)
+        ELSE COUNT_BIG(*) OVER (PARTITION BY u.attendance_reminder_key)
+    END AS same_attendance_reminder_key_count
 FROM unified u
 ORDER BY COALESCE(u.event_at, u.created_at), u.source_table, u.notification_type;
 GO
@@ -161,19 +170,25 @@ GO
   Interpretation guide (Caso B):
 
   Caso 1 — ARRIVAL + ARRIVAL same operation/employee/schedule_version
-           → potencial duplicación real del mismo reminder.
+           → potencial duplicación real del mismo reminder
+           (same_attendance_reminder_key_count > 1 on attendance notification rows).
 
   Caso 2 — ARRIVAL + ATTENDANCE_CONFIRMATION_REMINDER
-           → eventos distintos (no asumir doble reminder).
+           → eventos distintos (keys distintas; no asumir doble reminder).
 
   Caso 3 — ARRIVAL + EVENTUAL_OPERATION_ASSIGNED
-           → eventos distintos (job vs assignment worker).
+           → eventos distintos (assignment key is NULL for reminder count).
 
-  Caso 4 — dos filas con el mismo provider_message_sid
+  Caso 4 — same_provider_sid_row_count > 1 with non-NULL SID
            → investigar provider/retry / observability link.
 
-  Caso 5 — dos provider_message_sid distintos
-           → dos sends reales al provider.
+  Caso 5 — provider SIDs distintos → dos sends reales.
+
+  Validation fixture (manual / staging):
+    Empleado A: ARRIVAL, CONFIRMATION, ASSIGNMENT, one NULL SID row, two rows sharing SID S1
+    Empleado B: ARRIVAL
+    Expect: no cross-employee mix; NULL SID count = 0; ARRIVAL≠CONFIRMATION≠ASSIGNMENT;
+            S1 count = 2; distinct SIDs remain distinct.
 
   Content SID runtime for attendance reminders is primarily in env + logs
   (WHATSAPP_NOTIFICATION_SENT). Outbound whatsapp_messages.template_sid is the

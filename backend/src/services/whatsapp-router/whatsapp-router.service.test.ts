@@ -826,6 +826,191 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.equal(calls.processLocationCheckout, 1);
     assert.equal(calls.processLocationCheckIn, 0);
   });
+
+  it("rejects Forwarded=true before direct location attendance (P0)", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-FWD-DIRECT",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/);
+    assert.equal(calls.processDirectLocationAttendance, 0);
+    assert.equal(calls.processLocationCheckIn, 0);
+    assert.equal(calls.processLocationCheckout, 0);
+  });
+
+  it("rejects Forwarded=true during WAITING_LOCATION before check-in", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: buildSession("WAITING_LOCATION"),
+        payload: {
+          MessageSid: "SM-LOC-FWD-CHECKIN",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/);
+    assert.equal(calls.processLocationCheckIn, 0);
+  });
+
+  it("rejects Forwarded=true during WAITING_CHECKOUT_LOCATION before checkout", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: buildSession("WAITING_CHECKOUT_LOCATION"),
+        payload: {
+          MessageSid: "SM-LOC-FWD-CHECKOUT",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/);
+    assert.equal(calls.processLocationCheckout, 0);
+  });
+
+  it("rejects forwarded location even when coordinates are near the site (24m case)", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-FWD-NEAR",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          // Coordinates alone would pass geofence; forward flag must still reject.
+          Latitude: "-34.6037",
+          Longitude: "-58.3816",
+          Forwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/);
+    assert.equal(calls.processDirectLocationAttendance, 0);
+  });
+
+  it("allows normal location without Forwarded signal (UNKNOWN fail-open)", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-UNKNOWN-FWD",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /DIRECT_LOCATION_OK/);
+    assert.equal(calls.processDirectLocationAttendance, 1);
+  });
+
+  it("rejects new MessageSid forwarded location (anti-forward is not MessageSid dedup)", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: buildSession("WAITING_LOCATION"),
+        payload: {
+          MessageSid: "SM-BRAND-NEW-FORWARD-SID",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          FrequentlyForwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/);
+    assert.equal(calls.processLocationCheckIn, 0);
+  });
+});
+
+describe("whatsappRouterService text cannot register attendance via coordinates in body", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("does not treat maps URL or lat,lng text as LOCATION attendance", async () => {
+    setupUnitTestEnv();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        messageType: "TEXT",
+        session: null,
+        body: "https://maps.google.com/?q=-34.62,-58.43",
+        payload: {
+          MessageSid: "SM-TEXT-COORDS",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Body: "https://maps.google.com/?q=-34.62,-58.43",
+        },
+      }),
+      handlers,
+    );
+
+    assert.equal(calls.processDirectLocationAttendance, 0);
+    assert.equal(calls.processLocationCheckIn, 0);
+    assert.equal(calls.processLocationCheckout, 0);
+    assert.equal(calls.startCheckIn, 0);
+    assert.ok(response.includes("Message") || response.length > 0);
+  });
 });
 
 const sampleAssignedOperation = (id = operationId) => ({
@@ -1616,7 +1801,7 @@ describe("whatsappRouterService numeric menu selection", () => {
       handlers,
     );
 
-    assert.match(response, /Asistencia confirmada/);
+    assert.match(response, /Participación confirmada/);
     assert.equal(calls.startCheckIn, 0);
   });
 

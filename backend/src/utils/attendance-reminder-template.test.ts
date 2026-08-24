@@ -27,6 +27,8 @@ describe("buildAttendanceReminderTemplateVariables", () => {
     assert.equal(variables["1"], "Ana Pérez");
     assert.equal(variables["2"], serviceReference);
     assert.match(variables["3"], /^\d{2}:\d{2}$/);
+    assert.equal(Object.keys(variables).sort().join(","), "1,2,3");
+    assert.doesNotMatch(variables["2"], /\d{2}:\d{2}/);
   });
 
   it("maps exit reminder variables using scheduled end", () => {
@@ -39,6 +41,8 @@ describe("buildAttendanceReminderTemplateVariables", () => {
     assert.equal(variables["1"], "Ana Pérez");
     assert.equal(variables["2"], serviceReference);
     assert.match(variables["3"], /^\d{2}:\d{2}$/);
+    assert.equal(Object.keys(variables).sort().join(","), "1,2,3");
+    assert.doesNotMatch(variables["2"], /\d{2}:\d{2}/);
   });
 
   it("maps no-check-in-at-start variables with canonical service reference", () => {
@@ -64,6 +68,9 @@ describe("buildAttendanceReminderTemplateVariables", () => {
     assert.equal(variables["2"], serviceReference);
     assert.match(variables["3"], /^\d{2}\/\d{2}\/\d{4}$/);
     assert.match(variables["4"], /^\d{2}:\d{2}$/);
+    assert.equal(Object.keys(variables).sort().join(","), "1,2,3,4");
+    assert.doesNotMatch(variables["2"], /\d{2}:\d{2}/);
+    assert.doesNotMatch(variables["2"], /\d{2}\/\d{2}\/\d{4}/);
   });
 
   it("falls back to service name when address and locality are missing", () => {

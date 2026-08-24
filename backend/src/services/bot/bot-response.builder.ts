@@ -50,6 +50,10 @@ export const LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE =
 export const WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE =
   "Todavía necesitamos tu ubicación actual para registrar la salida. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
 
+/** P0 — forwarded / historical location must not register physical attendance. */
+export const FORWARDED_LOCATION_REJECTED_MESSAGE =
+  "No podemos usar una ubicación reenviada para registrar asistencia.\n\nCompartí tu ubicación actual directamente desde WhatsApp.";
+
 export const LOCATION_DURING_CHECKOUT_SELECTION_MESSAGE =
   "Primero seleccioná el trabajo para registrar la salida respondiendo con el número correspondiente.";
 

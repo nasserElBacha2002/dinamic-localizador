@@ -12,6 +12,7 @@ import {
   getRequireCheckoutLocation,
 } from "../../utils/bot-runtime-settings-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import {
   buildCheckoutValidation,
   buildCheckoutValidationWithoutLocation,
@@ -553,6 +554,19 @@ export async function processLocationCheckout(input: {
       checkoutStatus: validation.checkoutStatus,
       extraWorkedMinutes: validation.extraWorkedMinutes,
     });
+
+    if (validation.checkoutStatus !== "CHECKOUT_REJECTED") {
+      logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_ACCEPTED", {
+        producer: "BOT_CHECK_OUT",
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        operationId: input.operationId,
+        messageSid: input.messageSid,
+        attendanceDecision: "ACCEPTED",
+        checkoutStatus: validation.checkoutStatus,
+        resultCode: WHATSAPP_RESULT_CODES.CHECKOUT_COMPLETED,
+      });
+    }
 
     return respond(companyId, {
       message: responseMessage,

@@ -21,6 +21,7 @@ import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
 import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { normalizePhoneNumber } from "../utils/phone";
+import { logWhatsAppNotificationSent } from "../utils/whatsapp-notification-observability";
 import type { BotSession } from "../types/twilio.types";
 
 export type ReminderSendOutcome =
@@ -539,6 +540,21 @@ const sendReminderForCandidate = async (
       existingReminderId: claimed.id,
       ...reminderCandidateLogFields(candidate),
     });
+    logWhatsAppNotificationSent({
+      event: "WHATSAPP_NOTIFICATION_SENT",
+      producer: "ATTENDANCE_REMINDER_JOB",
+      companyId,
+      employeeId: candidate.employeeId,
+      operationId: candidate.operationId,
+      notificationType,
+      templateSid: contentSid,
+      templateVariables: contentVariables,
+      scheduleVersion,
+      notificationId: claimed.id,
+      attempt: claimed.attemptCount,
+      providerMessageSid: result.messageSid,
+      sentAt: sentAt.toISOString(),
+    });
 
     if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && !preparedSession) {
       console.error("[attendance-reminder] SENT_CONTEXT_FAILED after successful Twilio send", {
@@ -603,6 +619,19 @@ const sendReminderForCandidate = async (
       existingReminderId: claimed.id,
       errorMessage,
       ...reminderCandidateLogFields(candidate),
+    });
+    logWhatsAppNotificationSent({
+      event: "WHATSAPP_NOTIFICATION_FAILED",
+      producer: "ATTENDANCE_REMINDER_JOB",
+      companyId,
+      employeeId: candidate.employeeId,
+      operationId: candidate.operationId,
+      notificationType,
+      templateSid: contentSid,
+      scheduleVersion,
+      notificationId: claimed.id,
+      attempt: claimed.attemptCount,
+      errorMessage,
     });
 
     return "failed";

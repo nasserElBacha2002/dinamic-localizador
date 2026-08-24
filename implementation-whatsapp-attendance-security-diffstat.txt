@@ -1,0 +1,25 @@
+ .../whatsapp-notification-incident-forensics.sql   |  181 ++
+ audit/whatsapp-attendance-incident-audit.md        |  382 +++
+ audit/whatsapp-content-template-forensics.md       |   91 +
+ backend/src/constants/whatsapp-observability.ts    |    2 +
+ backend/src/schemas/twilio-webhook.schema.ts       |   10 +
+ backend/src/server.ts                              |    8 +
+ .../src/services/attendance-reminder.service.ts    |   29 +
+ backend/src/services/bot/bot-response.builder.ts   |    4 +
+ .../src/services/bot/check-in-attendance.flow.ts   |   15 +
+ .../src/services/bot/checkout-attendance.flow.ts   |   14 +
+ .../operation-assignment-notification.service.ts   |   32 +
+ .../attendance-confirmation-response.handler.ts    |    2 +-
+ .../whatsapp-router.service.test.ts                |  187 +-
+ .../whatsapp-router/whatsapp-router.service.ts     |   48 +
+ .../src/utils/attendance-reminder-template.test.ts |    7 +
+ .../src/utils/location-message-metadata.test.ts    |   89 +
+ backend/src/utils/location-message-metadata.ts     |  259 ++
+ .../assigned-template-variables.test.ts            |    3 +
+ .../whatsapp-notification-observability.test.ts    |   58 +
+ .../utils/whatsapp-notification-observability.ts   |  127 +
+ ...mentation-whatsapp-attendance-security-diff.txt | 2608 ++++++++++++++++++++
+ ...ation-whatsapp-attendance-security-diffstat.txt |   22 +
+ ...ntation-whatsapp-attendance-security-status.txt |   21 +
+ ...tion-whatsapp-attendance-security-validation.md |  132 +
+ 24 files changed, 4329 insertions(+), 2 deletions(-)

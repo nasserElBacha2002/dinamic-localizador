@@ -5,6 +5,7 @@ import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
+  FORWARDED_LOCATION_REJECTED_MESSAGE,
   GENERIC_ERROR_MESSAGE,
   INVALID_COORDINATES_MESSAGE,
   LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE,
@@ -12,6 +13,11 @@ import {
   UNPARSEABLE_MESSAGE,
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "../bot/bot-response.builder";
+import {
+  extractLocationMessageMetadata,
+  isExplicitlyForwardedLocation,
+} from "../../utils/location-message-metadata";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import {
   handleActiveAbsenceSession,
   handleAbsenceIntent,
@@ -222,6 +228,48 @@ export const whatsappRouterService = {
         employeeId: null,
         phoneFrom: ctx.phoneTo,
         phoneTo: ctx.phoneFrom,
+      });
+    }
+
+    // P0 anti-forward: apply before geofence / check-in / check-out / direct location.
+    const locationMetadata = extractLocationMessageMetadata(
+      ctx.payload as unknown as Record<string, unknown>,
+    );
+    logWhatsAppAttendanceEvent("LOCATION_RECEIVED", {
+      companyId,
+      employeeId: ctx.employeeId,
+      messageSid: locationMetadata.sourceMessageSid,
+      latitude: ctx.payload.Latitude ?? null,
+      longitude: ctx.payload.Longitude ?? null,
+      sessionState: ctx.session?.state ?? null,
+    });
+    logWhatsAppAttendanceEvent("LOCATION_FORWARD_STATUS", {
+      companyId,
+      employeeId: ctx.employeeId,
+      messageSid: locationMetadata.sourceMessageSid,
+      forwardDetection: locationMetadata.forwardDetection,
+      isForwarded: locationMetadata.isForwarded,
+      isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
+      signalKeysFound: locationMetadata.signalKeysFound,
+    });
+
+    if (isExplicitlyForwardedLocation(locationMetadata)) {
+      logWhatsAppAttendanceEvent("FORWARDED_LOCATION_REJECTED", {
+        companyId,
+        employeeId: ctx.employeeId,
+        messageSid: locationMetadata.sourceMessageSid,
+        resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
+        attendanceDecision: "REJECTED",
+        reason: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
+        sessionState: ctx.session?.state ?? null,
+      });
+      return handlers.respond(companyId, {
+        message: FORWARDED_LOCATION_REJECTED_MESSAGE,
+        employeeId: ctx.employeeId,
+        phoneFrom: ctx.phoneTo,
+        phoneTo: ctx.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
+        flowType: "LOCATION_SECURITY",
       });
     }
 

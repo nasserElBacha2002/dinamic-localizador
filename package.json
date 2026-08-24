@@ -32,6 +32,7 @@
     "audit:tenant": "python3 scripts/audit/audit_tenant_isolation.py",
     "audit:reliability": "python3 scripts/audit/run_framework_audit.py --only reliability --run-type partial --print-summary",
     "audit:env": "python3 scripts/audit/run_framework_audit.py --only env-consistency --run-type partial --print-summary",
+    "validate:compose-env": "python3 scripts/validate-docker-compose-backend-env.py",
     "audit:dead-code": "bash scripts/audit/run_backend_architecture_audit.sh",
     "audit:duplication": "bash scripts/audit/run_backend_architecture_audit.sh",
     "audit:tests": "npm test",

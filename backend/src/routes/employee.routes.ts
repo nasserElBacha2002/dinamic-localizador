@@ -2,7 +2,7 @@ import { Router } from "express";
 import { absenceBalanceController } from "../controllers/absence-balance.controller";
 import { employeeController } from "../controllers/employee.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireAnyPermission, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   absenceBalanceYearQuerySchema,
@@ -18,6 +18,7 @@ import {
   createEmployeeSchema,
   deactivateEmployeeSchema,
   employeeIdParamSchema,
+  listEmployeeOperationsQuerySchema,
   listEmployeesQuerySchema,
   updateEmployeeSchema,
 } from "../schemas/employee.schema";
@@ -82,6 +83,14 @@ employeeRouter.get(
   requirePermission("employees:read"),
   validate(employeeIdParamSchema, "params"),
   asyncHandler(employeeController.getOperationalAvailability),
+);
+employeeRouter.get(
+  "/:id/operations",
+  requirePermission("employees:read"),
+  requireAnyPermission("operations:read", "operations:manage"),
+  validate(employeeIdParamSchema, "params"),
+  validate(listEmployeeOperationsQuerySchema, "query"),
+  asyncHandler(employeeController.listOperations),
 );
 employeeRouter.post(
   "/:id/deactivate",

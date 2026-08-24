@@ -2,6 +2,8 @@ import type { Request, Response } from "express";
 import { employeeService } from "../services/employee.service";
 import { employeeDeactivationService } from "../services/employee-deactivation.service";
 import { employeeAvailabilityService } from "../services/employee-availability.service";
+import { employeeOperationsService } from "../services/employee-operations.service";
+import type { ListEmployeeOperationsQuery } from "../schemas/employee.schema";
 import { requireRequestCompanyId } from "../utils/request-company";
 import { projectEmployeeForRole } from "../utils/employee-residence-privacy";
 
@@ -34,6 +36,17 @@ export const employeeController = {
       String(req.params.id),
     );
     res.status(200).json({ data: summary });
+  },
+
+  async listOperations(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const query = req.validatedQuery as ListEmployeeOperationsQuery;
+    const result = await employeeOperationsService.list(
+      companyId,
+      String(req.params.id),
+      query,
+    );
+    res.status(200).json(result);
   },
 
   async getDeactivationImpact(req: Request, res: Response) {

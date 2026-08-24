@@ -47,6 +47,9 @@ export const formatAssignmentSchedule = (
   timeZone: string,
 ): string => {
   const start = formatLocalTime(assignment.scheduledStart, timeZone);
+  if (!assignment.scheduledEnd) {
+    return start;
+  }
   const end = formatLocalTime(assignment.scheduledEnd, timeZone);
   return `${start} a ${end}`;
 };

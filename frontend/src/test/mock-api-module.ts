@@ -110,6 +110,7 @@ export const EMPLOYEES_API_EXPORTS = [
   "getEmployeeById",
   "getEmployeeDeactivationImpact",
   "getEmployeeOperationalAvailability",
+  "getEmployeeOperations",
   "createEmployee",
   "updateEmployee",
   "deactivateEmployee",

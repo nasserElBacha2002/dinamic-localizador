@@ -4,13 +4,16 @@ import type { PunctualityStatus } from "./domain";
 export interface EmployeeAssignedOperation {
   assignmentId: string;
   operationId: string;
+  operationKind: string;
+  operationWorkdayId: string;
+  employeeWorkdayId: string | null;
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;
   serviceLatitude: number | null;
   serviceLongitude: number | null;
   scheduledStart: string;
-  scheduledEnd: string;
+  scheduledEnd: string | null;
   operationStatus: string;
   confirmationStatus: AssignmentConfirmationStatus;
   attendanceReceivedAt: string | null;

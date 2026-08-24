@@ -103,6 +103,7 @@ export interface CompanySettings {
   absenceBalanceLedgerEnabled: boolean;
   absenceAttachmentsEnabled: boolean;
   absenceOperationalIntegrationEnabled: boolean;
+  adminAlertsEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

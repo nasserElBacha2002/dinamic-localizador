@@ -3,6 +3,7 @@ import { operationRepository } from "../repositories/operation.repository";
 import type { Operation } from "../types/domain";
 import { resolveLifecycleOperationStatus } from "../utils/operation-lifecycle";
 import { canTransitionOperationLifecycleStatus } from "../utils/operation-status";
+import { adminAlertMissingCheckinService } from "./admin-alert-missing-checkin.service";
 
 export type OperationLifecycleReconcileResult = {
   operationsScanned: number;
@@ -44,6 +45,9 @@ const promoteIfDue = async (
     operation.status,
     nextStatus,
   );
+  if (updated && nextStatus === "COMPLETED") {
+    void adminAlertMissingCheckinService.emitForCompletedOperation(companyId, updated);
+  }
   return updated ? "updated" : "skipped";
 };
 

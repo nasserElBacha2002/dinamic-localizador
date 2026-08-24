@@ -1,0 +1,4319 @@
+diff --git a/.env.example b/.env.example
+index 0c31c72..7f1c316 100644
+--- a/.env.example
++++ b/.env.example
+@@ -151,40 +151,49 @@ GCS_UPLOAD_MODE=BACKEND_STREAM
+ GCS_REQUIRED=false
+ PLATFORM_SERVER_STATUS_CHECK_TIMEOUT_MS=3000
+ API_SERVICE_NAME=dinamic-attendance-api
+ ABSENCE_ATTACHMENT_CLEANUP_JOB_ENABLED=true
+ PAYROLL_RECEIPTS_STORAGE_PREFIX=payroll-receipts
+ PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH=50
+ PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED=true
+ PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS=60000
+ PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS=120000
+ PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS=5
+ PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS=30000
+ PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS=900
+ # Content template EVENTUAL_OPERATION_ASSIGNED: {{1}} employeeFirstName, {{2}} service ref, {{3}} date DD/MM/YYYY (BOT_OPERATION_TIMEZONE), {{4}} time HH:mm.
+ # Production: set TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID, then OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED=true
+ # (fail-fast at startup if worker=true and SID empty). Local/dev default remains false.
+ OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED=false
+ OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_INTERVAL_MS=60000
+ OPERATION_ASSIGNMENT_NOTIFICATION_LEASE_MS=120000
+ OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS=5
+ OPERATION_ASSIGNMENT_NOTIFICATION_RETRY_BASE_MS=30000
++# Admin WhatsApp alerts (default off until recipients + Content SID configured)
++TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID=
++TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID=
++ADMIN_ALERT_WORKER_ENABLED=false
++ADMIN_ALERT_WORKER_INTERVAL_MS=60000
++ADMIN_ALERT_LEASE_MS=120000
++ADMIN_ALERT_MAX_ATTEMPTS=5
++ADMIN_ALERT_RETRY_BASE_MS=30000
++ADMIN_ALERT_FORWARDED_THROTTLE_MINUTES=60
+ COMPANY_DELETION_GRACE_PERIOD_DAYS=30
+ COMPANY_DELETION_JOB_ENABLED=true
+ COMPANY_DELETION_JOB_INTERVAL_MS=3600000
+ # ONE_TIME clock promotions (SCHEDULED/IN_PROGRESS → COMPLETED). Startup + interval. No lookback window.
+ OPERATION_LIFECYCLE_JOB_ENABLED=true
+ OPERATION_LIFECYCLE_JOB_INTERVAL_MS=60000
+ OPERATION_LIFECYCLE_JOB_BATCH_SIZE=100
+ OPERATION_LIFECYCLE_JOB_MAX_BATCHES_PER_TICK=20
+ COMPANY_DELETION_LEASE_MS=1800000
+ COMPANY_DELETION_MAX_ATTEMPTS=10
+ COMPANY_DELETION_RETRY_BASE_MS=60000
+ COMPANY_PROTECTED_IDS=
+ COMPANY_PROTECTED_NAMES=Dinamic Systems
+ ABSENCE_ATTACHMENT_PENDING_TTL_MINUTES=60
+ # Phase 5 operational integration is per-company (company_settings.absence_operational_integration_enabled).
+ # Enable with: npx tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/enable-absence-operational-integration.ts --company=<uuid>
+ 
+ # --- Test / CI / scripts only (optional; leave empty for normal local runtime) ---
+ # Enable DB-backed integration suites: RUN_DB_INTEGRATION_TESTS=true npm test
+ RUN_DB_INTEGRATION_TESTS=
+diff --git a/backend/src/config/env.ts b/backend/src/config/env.ts
+index 23f9c27..0c84b3d 100644
+--- a/backend/src/config/env.ts
++++ b/backend/src/config/env.ts
+@@ -98,40 +98,48 @@ const envSchema = z
+     PAYROLL_RECEIPTS_MAX_FILES_PER_BATCH: z.coerce.number().int().positive().default(50),
+     PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(true),
+     PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+     PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+     PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+     PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+     /** ONE_TIME assignment WhatsApp outbox worker (default off until Content SID is configured). */
+     OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(false),
+     OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce
+       .number()
+       .int()
+       .positive()
+       .default(60_000),
+     OPERATION_ASSIGNMENT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+     OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+     OPERATION_ASSIGNMENT_NOTIFICATION_RETRY_BASE_MS: z.coerce
+       .number()
+       .int()
+       .positive()
+       .default(30_000),
++    TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID: z.string().optional(),
++    TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID: z.string().optional(),
++    ADMIN_ALERT_WORKER_ENABLED: z.stringbool().default(false),
++    ADMIN_ALERT_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
++    ADMIN_ALERT_LEASE_MS: z.coerce.number().int().positive().default(120_000),
++    ADMIN_ALERT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
++    ADMIN_ALERT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
++    ADMIN_ALERT_FORWARDED_THROTTLE_MINUTES: z.coerce.number().int().positive().default(60),
+     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
+     /** Grace days between company deactivation and scheduled hard delete. */
+     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
+     COMPANY_DELETION_JOB_ENABLED: z.stringbool().default(true),
+     /** Interval for the company deletion worker (ms). Default: 1 hour. */
+     COMPANY_DELETION_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(3_600_000),
+     /** ONE_TIME clock status promotions (SCHEDULED/IN_PROGRESS → COMPLETED). */
+     OPERATION_LIFECYCLE_JOB_ENABLED: z.stringbool().default(true),
+     OPERATION_LIFECYCLE_JOB_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+     OPERATION_LIFECYCLE_JOB_BATCH_SIZE: z.coerce.number().int().positive().max(500).default(100),
+     OPERATION_LIFECYCLE_JOB_MAX_BATCHES_PER_TICK: z.coerce.number().int().positive().max(100).default(20),
+     /** Lease duration for a deletion claim (ms). Default: 30 minutes. */
+     COMPANY_DELETION_LEASE_MS: z.coerce.number().int().positive().default(1_800_000),
+     /** Max deletion attempts before requiring manual intervention (still DELETION_FAILED). */
+     COMPANY_DELETION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(10),
+     /** Base backoff for deletion retries (ms). */
+     COMPANY_DELETION_RETRY_BASE_MS: z.coerce.number().int().positive().default(60_000),
+     /**
+      * Comma-separated company UUIDs that cannot be deactivated/deleted (preferred).
+      * Empty = no ID-based protection (names may still apply as legacy fallback).
+@@ -321,40 +329,56 @@ const envSchema = z
+         path: ["TWILIO_PAYROLL_RECEIPT_AVAILABLE_CONTENT_SID"],
+       });
+     }
+ 
+     const assignmentSidGate = requireContentSidWhenWorkerEnabled(
+       {
+         workerEnabled: data.OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED,
+         contentSid: data.TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID,
+       },
+       "TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID",
+       "OPERATION_ASSIGNMENT_NOTIFICATION_WORKER_ENABLED",
+     );
+     if (!assignmentSidGate.ok) {
+       ctx.addIssue({
+         code: "custom",
+         message: assignmentSidGate.message,
+         path: ["TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID"],
+       });
+     }
+ 
++    const adminAlertSidGate = requireContentSidWhenWorkerEnabled(
++      {
++        workerEnabled: data.ADMIN_ALERT_WORKER_ENABLED,
++        contentSid: data.TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID,
++      },
++      "TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID",
++      "ADMIN_ALERT_WORKER_ENABLED",
++    );
++    if (!adminAlertSidGate.ok) {
++      ctx.addIssue({
++        code: "custom",
++        message: adminAlertSidGate.message,
++        path: ["TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID"],
++      });
++    }
++
+     const emailTransport =
+       data.EMAIL_TRANSPORT ??
+       (data.SMTP_HOST ? "smtp" : data.NODE_ENV === "production" ? "smtp" : "console");
+ 
+     if (emailTransport === "console" && data.NODE_ENV === "production") {
+       ctx.addIssue({
+         code: "custom",
+         message: "EMAIL_TRANSPORT=console is not allowed in production",
+         path: ["EMAIL_TRANSPORT"],
+       });
+     }
+ 
+     if (emailTransport === "smtp") {
+       if (!data.SMTP_HOST) {
+         ctx.addIssue({
+           code: "custom",
+           message: "SMTP_HOST is required when EMAIL_TRANSPORT=smtp",
+           path: ["SMTP_HOST"],
+         });
+       }
+diff --git a/backend/src/constants/admin-alert.ts b/backend/src/constants/admin-alert.ts
+new file mode 100644
+index 0000000..031f6c5
+--- /dev/null
++++ b/backend/src/constants/admin-alert.ts
+@@ -0,0 +1,66 @@
++export const ADMIN_ALERT_TYPES = [
++  "EMPLOYEE_UNAVAILABLE",
++  "MISSING_CHECKIN_AFTER_OPERATION",
++  "FORWARDED_LOCATION_REJECTED",
++] as const;
++
++export type AdminAlertType = (typeof ADMIN_ALERT_TYPES)[number];
++
++export const ADMIN_ALERT_TEMPLATE_CATEGORIES = [
++  "OPERATIONAL",
++  "REQUEST",
++  "SECURITY",
++] as const;
++
++export type AdminAlertTemplateCategory = (typeof ADMIN_ALERT_TEMPLATE_CATEGORIES)[number];
++
++export const ADMIN_ALERT_SEVERITIES = ["INFO", "WARNING", "CRITICAL"] as const;
++
++export type AdminAlertSeverity = (typeof ADMIN_ALERT_SEVERITIES)[number];
++
++export const ADMIN_ALERT_NOTIFICATION_STATUSES = [
++  "PENDING",
++  "PROCESSING",
++  "SEND_STARTED",
++  "SEND_ACCEPTED",
++  "FAILED",
++  "CANCELLED",
++  "SKIPPED",
++  "RECONCILIATION_REQUIRED",
++  "SENT_RECOVERY_REQUIRED",
++] as const;
++
++export type AdminAlertNotificationStatus = (typeof ADMIN_ALERT_NOTIFICATION_STATUSES)[number];
++
++export const ADMIN_ALERT_SEND_ATTEMPT_STATUSES = [
++  "STARTED",
++  "PROVIDER_ACCEPTED",
++  "PROVIDER_FAILED",
++  "AMBIGUOUS",
++] as const;
++
++export type AdminAlertSendAttemptStatus = (typeof ADMIN_ALERT_SEND_ATTEMPT_STATUSES)[number];
++
++export const ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS = 5;
++
++export const ADMIN_ALERT_CATEGORY_PREFERENCE_COLUMN: Record<
++  AdminAlertTemplateCategory,
++  "receiveOperationalAlerts" | "receiveRequestAlerts" | "receiveSecurityAlerts"
++> = {
++  OPERATIONAL: "receiveOperationalAlerts",
++  REQUEST: "receiveRequestAlerts",
++  SECURITY: "receiveSecurityAlerts",
++};
++
++export const adminAlertTypeDefaultCategory = (
++  alertType: AdminAlertType,
++): AdminAlertTemplateCategory => {
++  switch (alertType) {
++    case "FORWARDED_LOCATION_REJECTED":
++      return "SECURITY";
++    case "EMPLOYEE_UNAVAILABLE":
++    case "MISSING_CHECKIN_AFTER_OPERATION":
++    default:
++      return "OPERATIONAL";
++  }
++};
+diff --git a/backend/src/controllers/company-alert-recipient.controller.ts b/backend/src/controllers/company-alert-recipient.controller.ts
+new file mode 100644
+index 0000000..683c46d
+--- /dev/null
++++ b/backend/src/controllers/company-alert-recipient.controller.ts
+@@ -0,0 +1,92 @@
++import type { Request, Response } from "express";
++import { AppError } from "../errors/app-error";
++import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
++import type {
++  CreateCompanyAlertRecipientInput,
++  UpdateCompanyAlertRecipientInput,
++} from "../schemas/company-alert-recipient.schema";
++import { normalizePhoneNumber } from "../utils/phone";
++import { requireRequestCompanyId } from "../utils/request-company";
++
++export const companyAlertRecipientController = {
++  async list(req: Request, res: Response): Promise<void> {
++    const companyId = requireRequestCompanyId(req);
++    const recipients = await companyAlertRecipientRepository.listByCompany(companyId);
++    res.json({ data: recipients });
++  },
++
++  async create(req: Request, res: Response): Promise<void> {
++    const companyId = requireRequestCompanyId(req);
++    const input = req.body as CreateCompanyAlertRecipientInput;
++
++    let phoneNumber: string;
++    try {
++      phoneNumber = normalizePhoneNumber(input.phoneNumber);
++    } catch {
++      throw new AppError(400, "INVALID_PHONE", "El teléfono debe estar en formato E.164.");
++    }
++
++    try {
++      const created = await companyAlertRecipientRepository.create(companyId, {
++        ...input,
++        phoneNumber,
++      });
++      res.status(201).json({ data: created });
++    } catch (error) {
++      if (error instanceof Error && error.message === "COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE") {
++        throw new AppError(
++          409,
++          "DUPLICATE_PHONE",
++          "Ya existe un destinatario con ese teléfono en la compañía.",
++        );
++      }
++      throw error;
++    }
++  },
++
++  async update(req: Request, res: Response): Promise<void> {
++    const companyId = requireRequestCompanyId(req);
++    const recipientId = String(req.params.recipientId);
++    const input = req.body as UpdateCompanyAlertRecipientInput;
++
++    const payload: UpdateCompanyAlertRecipientInput = { ...input };
++    if (input.phoneNumber !== undefined) {
++      try {
++        payload.phoneNumber = normalizePhoneNumber(input.phoneNumber);
++      } catch {
++        throw new AppError(400, "INVALID_PHONE", "El teléfono debe estar en formato E.164.");
++      }
++    }
++
++    try {
++      const updated = await companyAlertRecipientRepository.update(
++        companyId,
++        recipientId,
++        payload,
++      );
++      if (!updated) {
++        throw new AppError(404, "NOT_FOUND", "Destinatario no encontrado.");
++      }
++      res.json({ data: updated });
++    } catch (error) {
++      if (error instanceof Error && error.message === "COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE") {
++        throw new AppError(
++          409,
++          "DUPLICATE_PHONE",
++          "Ya existe un destinatario con ese teléfono en la compañía.",
++        );
++      }
++      throw error;
++    }
++  },
++
++  async remove(req: Request, res: Response): Promise<void> {
++    const companyId = requireRequestCompanyId(req);
++    const recipientId = String(req.params.recipientId);
++    const disabled = await companyAlertRecipientRepository.disable(companyId, recipientId);
++    if (!disabled) {
++      throw new AppError(404, "NOT_FOUND", "Destinatario no encontrado.");
++    }
++    res.status(204).end();
++  },
++};
+diff --git a/backend/src/jobs/admin-alert.job.ts b/backend/src/jobs/admin-alert.job.ts
+new file mode 100644
+index 0000000..7f43e2a
+--- /dev/null
++++ b/backend/src/jobs/admin-alert.job.ts
+@@ -0,0 +1,57 @@
++import { env } from "../config/env";
++import { adminAlertDeliveryService } from "../services/admin-alert-delivery.service";
++
++let intervalHandle: NodeJS.Timeout | null = null;
++let isRunning = false;
++
++const runJobSafely = async (): Promise<void> => {
++  if (isRunning) {
++    console.info("[admin-alert-job] previous run still in progress, skipping tick");
++    return;
++  }
++  if (!env.ADMIN_ALERT_WORKER_ENABLED) {
++    return;
++  }
++
++  isRunning = true;
++  try {
++    const result = await adminAlertDeliveryService.processPendingBatch(8);
++    if (result.processed > 0) {
++      console.info("[admin-alert-job] tick complete", result);
++    }
++  } catch (error) {
++    console.error("[admin-alert-job] unexpected job error", {
++      error: error instanceof Error ? error.message : String(error),
++    });
++  } finally {
++    isRunning = false;
++  }
++};
++
++export const startAdminAlertJob = (): void => {
++  if (intervalHandle) {
++    return;
++  }
++  if (!env.ADMIN_ALERT_WORKER_ENABLED) {
++    console.info("[admin-alert-job] disabled by env");
++    return;
++  }
++  console.info(
++    `[admin-alert-job] starting scheduler (every ${env.ADMIN_ALERT_WORKER_INTERVAL_MS}ms)`,
++  );
++  void runJobSafely();
++  intervalHandle = setInterval(() => {
++    void runJobSafely();
++  }, env.ADMIN_ALERT_WORKER_INTERVAL_MS);
++};
++
++export const stopAdminAlertJob = (): void => {
++  if (intervalHandle) {
++    clearInterval(intervalHandle);
++    intervalHandle = null;
++  }
++};
++
++export const runAdminAlertJobOnce = async (): Promise<void> => {
++  await runJobSafely();
++};
+diff --git a/backend/src/repositories/admin-alert-context.repository.ts b/backend/src/repositories/admin-alert-context.repository.ts
+new file mode 100644
+index 0000000..e4581ef
+--- /dev/null
++++ b/backend/src/repositories/admin-alert-context.repository.ts
+@@ -0,0 +1,89 @@
++import sql from "mssql";
++import { getPool } from "../database/connection";
++import type { MissingCheckinCandidate } from "../types/admin-alert";
++
++export const adminAlertContextRepository = {
++  async getAssignmentScheduleVersion(
++    companyId: string,
++    assignmentId: string,
++  ): Promise<number | null> {
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("assignmentId", sql.UniqueIdentifier, assignmentId)
++      .query(`
++        SELECT TOP 1 confirmation_schedule_version
++        FROM operation_assignments
++        WHERE company_id = @companyId AND id = @assignmentId
++      `);
++    const row = result.recordset[0] as { confirmation_schedule_version?: number } | undefined;
++    return row ? Number(row.confirmation_schedule_version ?? 1) : null;
++  },
++
++  async listMissingCheckinCandidatesForOperation(
++    companyId: string,
++    operationId: string,
++  ): Promise<MissingCheckinCandidate[]> {
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("operationId", sql.UniqueIdentifier, operationId)
++      .query(`
++        SELECT
++          ew.id AS employee_workday_id,
++          ew.employee_id,
++          e.name AS employee_name,
++          i.id AS operation_id,
++          s.name AS service_name,
++          s.address AS service_address,
++          s.locality AS service_locality,
++          ow.expected_start_at AS scheduled_start,
++          ow.expected_end_at AS scheduled_end,
++          cs.operation_timezone
++        FROM operation_workdays ow
++        INNER JOIN scheduled_operations i
++          ON i.id = ow.operation_id AND i.company_id = @companyId
++        INNER JOIN employee_workdays ew
++          ON ew.operation_workday_id = ow.id AND ew.company_id = @companyId
++        INNER JOIN employees e
++          ON e.id = ew.employee_id AND e.company_id = @companyId
++        INNER JOIN operation_assignments oa
++          ON oa.id = ew.operation_assignment_id AND oa.company_id = @companyId
++        INNER JOIN services s
++          ON s.id = i.service_id AND s.company_id = @companyId
++        INNER JOIN company_settings cs
++          ON cs.company_id = @companyId
++        WHERE ow.operation_id = @operationId
++          AND ow.company_id = @companyId
++          AND ow.status = 'ACTIVE'
++          AND ew.expectation_status = 'EXPECTED'
++          AND oa.cancelled_at IS NULL
++          AND oa.confirmation_status <> 'UNAVAILABLE'
++          AND NOT EXISTS (
++            SELECT 1
++            FROM attendance_records ar
++            WHERE ar.employee_workday_id = ew.id
++              AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
++          )
++      `);
++
++    return result.recordset.map((row) => {
++      const record = row as Record<string, unknown>;
++      return {
++        employeeWorkdayId: String(record.employee_workday_id),
++        employeeId: String(record.employee_id),
++        employeeName: String(record.employee_name),
++        operationId: String(record.operation_id),
++        serviceName: String(record.service_name),
++        serviceAddress: record.service_address ? String(record.service_address) : null,
++        serviceLocality: record.service_locality ? String(record.service_locality) : null,
++        scheduledStart: new Date(record.scheduled_start as Date | string).toISOString(),
++        scheduledEnd:
++          record.scheduled_end === null || record.scheduled_end === undefined
++            ? null
++            : new Date(record.scheduled_end as Date | string).toISOString(),
++        operationTimezone: String(record.operation_timezone ?? "America/Argentina/Buenos_Aires"),
++      };
++    });
++  },
++};
+diff --git a/backend/src/repositories/admin-alert-notification.repository.ts b/backend/src/repositories/admin-alert-notification.repository.ts
+new file mode 100644
+index 0000000..5505641
+--- /dev/null
++++ b/backend/src/repositories/admin-alert-notification.repository.ts
+@@ -0,0 +1,623 @@
++import sql from "mssql";
++import { getPool } from "../database/connection";
++import {
++  ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
++  type AdminAlertNotificationStatus,
++  type AdminAlertSendAttemptStatus,
++  type AdminAlertSeverity,
++  type AdminAlertTemplateCategory,
++  type AdminAlertType,
++} from "../constants/admin-alert";
++import type {
++  AdminAlertNotification,
++  AdminAlertNotificationSendAttempt,
++} from "../types/admin-alert";
++import { isDuplicateKeyError } from "../utils/sql-server-errors";
++import { monotonicProviderStatusAdvanceSql } from "../utils/whatsapp-observability";
++
++const requestFrom = (transaction?: sql.Transaction) =>
++  transaction ? new sql.Request(transaction) : getPool().request();
++
++const toIso = (value: Date | string): string =>
++  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
++
++const mapRow = (row: Record<string, unknown>): AdminAlertNotification => ({
++  id: String(row.id),
++  companyId: String(row.company_id),
++  recipientId: String(row.recipient_id),
++  employeeId: row.employee_id ? String(row.employee_id) : null,
++  operationId: row.operation_id ? String(row.operation_id) : null,
++  absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
++  alertType: String(row.alert_type) as AdminAlertType,
++  severity: String(row.severity) as AdminAlertSeverity,
++  templateCategory: String(row.template_category) as AdminAlertTemplateCategory,
++  deduplicationKey: String(row.deduplication_key),
++  recipientPhone: String(row.recipient_phone),
++  contentVariablesJson: String(row.content_variables_json),
++  status: String(row.status) as AdminAlertNotificationStatus,
++  attemptCount: Number(row.attempt_count ?? 0),
++  nextAttemptAt: row.next_attempt_at ? toIso(row.next_attempt_at as Date | string) : null,
++  leaseOwner: row.lease_owner ? String(row.lease_owner) : null,
++  leaseExpiresAt: row.lease_expires_at
++    ? toIso(row.lease_expires_at as Date | string)
++    : null,
++  providerMessageSid: row.provider_message_sid ? String(row.provider_message_sid) : null,
++  providerStatus: row.provider_status ? String(row.provider_status) : null,
++  activeSendAttemptId: row.active_send_attempt_id
++    ? String(row.active_send_attempt_id)
++    : null,
++  lastErrorCode: row.last_error_code ? String(row.last_error_code) : null,
++  lastErrorMessage: row.last_error_message ? String(row.last_error_message) : null,
++  occurredAt: toIso(row.occurred_at as Date | string),
++  sentAt: row.sent_at ? toIso(row.sent_at as Date | string) : null,
++  createdAt: toIso(row.created_at as Date | string),
++  updatedAt: toIso(row.updated_at as Date | string),
++});
++
++const mapAttemptRow = (row: Record<string, unknown>): AdminAlertNotificationSendAttempt => ({
++  id: String(row.id),
++  companyId: String(row.company_id),
++  notificationId: String(row.notification_id),
++  attemptNumber: Number(row.attempt_number),
++  status: String(row.status) as AdminAlertSendAttemptStatus,
++  providerMessageSid: row.provider_message_sid ? String(row.provider_message_sid) : null,
++  lastErrorCode: row.last_error_code ? String(row.last_error_code) : null,
++  lastErrorMessage: row.last_error_message ? String(row.last_error_message) : null,
++  startedAt: toIso(row.started_at as Date | string),
++  finishedAt: row.finished_at ? toIso(row.finished_at as Date | string) : null,
++  createdAt: toIso(row.created_at as Date | string),
++  updatedAt: toIso(row.updated_at as Date | string),
++});
++
++export type AdminAlertEnqueueInput = {
++  companyId: string;
++  recipientId: string;
++  employeeId?: string | null;
++  operationId?: string | null;
++  absenceRequestId?: string | null;
++  alertType: AdminAlertType;
++  severity: AdminAlertSeverity;
++  templateCategory: AdminAlertTemplateCategory;
++  deduplicationKey: string;
++  recipientPhone: string;
++  contentVariablesJson: string;
++  occurredAt?: Date;
++};
++
++export const adminAlertNotificationRepository = {
++  async enqueue(
++    input: AdminAlertEnqueueInput,
++    transaction?: sql.Transaction,
++  ): Promise<{ notification: AdminAlertNotification; created: boolean }> {
++    try {
++      const inserted = await requestFrom(transaction)
++        .input("companyId", sql.UniqueIdentifier, input.companyId)
++        .input("recipientId", sql.UniqueIdentifier, input.recipientId)
++        .input("employeeId", sql.UniqueIdentifier, input.employeeId ?? null)
++        .input("operationId", sql.UniqueIdentifier, input.operationId ?? null)
++        .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId ?? null)
++        .input("alertType", sql.NVarChar(60), input.alertType)
++        .input("severity", sql.NVarChar(20), input.severity)
++        .input("templateCategory", sql.NVarChar(20), input.templateCategory)
++        .input("deduplicationKey", sql.NVarChar(200), input.deduplicationKey)
++        .input("recipientPhone", sql.NVarChar(20), input.recipientPhone)
++        .input("contentVariablesJson", sql.NVarChar(sql.MAX), input.contentVariablesJson)
++        .input("occurredAt", sql.DateTime2, input.occurredAt ?? new Date())
++        .query(`
++          INSERT INTO whatsapp_admin_alert_notifications (
++            company_id, recipient_id, employee_id, operation_id, absence_request_id,
++            alert_type, severity, template_category, deduplication_key, recipient_phone,
++            content_variables_json, status, occurred_at
++          )
++          OUTPUT INSERTED.*
++          VALUES (
++            @companyId, @recipientId, @employeeId, @operationId, @absenceRequestId,
++            @alertType, @severity, @templateCategory, @deduplicationKey, @recipientPhone,
++            @contentVariablesJson, N'PENDING', @occurredAt
++          )
++        `);
++      return {
++        notification: mapRow(inserted.recordset[0] as Record<string, unknown>),
++        created: true,
++      };
++    } catch (error) {
++      if (!isDuplicateKeyError(error)) {
++        throw error;
++      }
++      const existing = await requestFrom(transaction)
++        .input("companyId", sql.UniqueIdentifier, input.companyId)
++        .input("deduplicationKey", sql.NVarChar(200), input.deduplicationKey)
++        .input("recipientId", sql.UniqueIdentifier, input.recipientId)
++        .query(`
++          SELECT TOP 1 *
++          FROM whatsapp_admin_alert_notifications
++          WHERE company_id = @companyId
++            AND deduplication_key = @deduplicationKey
++            AND recipient_id = @recipientId
++        `);
++      const row = existing.recordset[0] as Record<string, unknown> | undefined;
++      if (!row) {
++        throw error;
++      }
++      return { notification: mapRow(row), created: false };
++    }
++  },
++
++  async recoverExpiredLeases(batchSize = 50): Promise<number> {
++    const pool = getPool();
++    const transaction = new sql.Transaction(pool);
++    await transaction.begin();
++    try {
++      const selected = await new sql.Request(transaction)
++        .input("batchSize", sql.Int, batchSize)
++        .query(`
++          SELECT TOP (@batchSize) id, company_id
++          FROM whatsapp_admin_alert_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
++          WHERE status IN (N'PROCESSING', N'SEND_STARTED')
++            AND lease_expires_at IS NOT NULL
++            AND lease_expires_at < SYSUTCDATETIME()
++          ORDER BY lease_expires_at ASC
++        `);
++
++      let recovered = 0;
++      for (const row of selected.recordset as Array<Record<string, unknown>>) {
++        const result = await new sql.Request(transaction)
++          .input("id", sql.UniqueIdentifier, String(row.id))
++          .input("companyId", sql.UniqueIdentifier, String(row.company_id))
++          .query(`
++            UPDATE n
++            SET last_error_code = N'LEASE_EXPIRED',
++                last_error_message = N'Lease expired before completion',
++                status = CASE
++                  WHEN n.status = N'SEND_STARTED' THEN N'RECONCILIATION_REQUIRED'
++                  WHEN EXISTS (
++                    SELECT 1
++                    FROM whatsapp_admin_alert_notification_send_attempts a
++                    WHERE a.id = n.active_send_attempt_id
++                      AND a.company_id = n.company_id
++                      AND a.status IN (N'STARTED', N'AMBIGUOUS')
++                  ) THEN N'RECONCILIATION_REQUIRED'
++                  ELSE N'PENDING'
++                END,
++                lease_owner = NULL,
++                lease_expires_at = NULL,
++                next_attempt_at = CASE
++                  WHEN n.status = N'SEND_STARTED'
++                    OR EXISTS (
++                      SELECT 1
++                      FROM whatsapp_admin_alert_notification_send_attempts a
++                      WHERE a.id = n.active_send_attempt_id
++                        AND a.company_id = n.company_id
++                        AND a.status IN (N'STARTED', N'AMBIGUOUS')
++                    )
++                  THEN NULL
++                  ELSE SYSUTCDATETIME()
++                END,
++                updated_at = SYSUTCDATETIME()
++            FROM whatsapp_admin_alert_notifications n
++            WHERE n.id = @id
++              AND n.company_id = @companyId
++              AND n.status IN (N'PROCESSING', N'SEND_STARTED')
++              AND n.lease_expires_at IS NOT NULL
++              AND n.lease_expires_at < SYSUTCDATETIME()
++          `);
++        recovered += result.rowsAffected[0] ?? 0;
++      }
++
++      await transaction.commit();
++      return recovered;
++    } catch (error) {
++      try {
++        await transaction.rollback();
++      } catch {
++        /* ignore */
++      }
++      throw error;
++    }
++  },
++
++  async claimNextOne(
++    workerId: string,
++    leaseSeconds: number,
++    maxAttempts = ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
++  ): Promise<AdminAlertNotification | null> {
++    const pool = getPool();
++    const transaction = new sql.Transaction(pool);
++    await transaction.begin();
++    try {
++      const result = await new sql.Request(transaction)
++        .input("maxAttempts", sql.Int, maxAttempts)
++        .input("leaseOwner", sql.NVarChar(100), workerId)
++        .input("leaseSeconds", sql.Int, leaseSeconds)
++        .query(`
++          ;WITH next_row AS (
++            SELECT TOP (1) id, company_id
++            FROM whatsapp_admin_alert_notifications WITH (UPDLOCK, READPAST, ROWLOCK)
++            WHERE attempt_count < @maxAttempts
++              AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
++              AND (
++                status = N'PENDING'
++                OR (
++                  status = N'FAILED'
++                  AND next_attempt_at IS NOT NULL
++                  AND next_attempt_at <= SYSUTCDATETIME()
++                )
++              )
++            ORDER BY
++              CASE WHEN status = N'PENDING' THEN 0 ELSE 1 END,
++              COALESCE(next_attempt_at, created_at) ASC,
++              created_at ASC
++          )
++          UPDATE n
++          SET status = N'PROCESSING',
++              attempt_count = attempt_count + 1,
++              lease_owner = @leaseOwner,
++              lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
++              next_attempt_at = NULL,
++              updated_at = SYSUTCDATETIME()
++          OUTPUT INSERTED.*
++          FROM whatsapp_admin_alert_notifications n
++          INNER JOIN next_row r ON r.id = n.id AND r.company_id = n.company_id
++          WHERE n.status IN (N'PENDING', N'FAILED')
++        `);
++
++      await transaction.commit();
++      if (!result.recordset[0]) {
++        return null;
++      }
++      return mapRow(result.recordset[0] as Record<string, unknown>);
++    } catch (error) {
++      try {
++        await transaction.rollback();
++      } catch {
++        /* ignore */
++      }
++      throw error;
++    }
++  },
++
++  async claimNextBatch(
++    workerId: string,
++    limit: number,
++    leaseSeconds: number,
++    maxAttempts = ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
++  ): Promise<AdminAlertNotification[]> {
++    const claimed: AdminAlertNotification[] = [];
++    for (let i = 0; i < limit; i += 1) {
++      const row = await this.claimNextOne(workerId, leaseSeconds, maxAttempts);
++      if (!row) {
++        break;
++      }
++      claimed.push(row);
++    }
++    return claimed;
++  },
++
++  async beginSendAttempt(input: {
++    companyId: string;
++    notificationId: string;
++    leaseOwner: string;
++    attemptNumber: number;
++  }): Promise<AdminAlertNotificationSendAttempt | null> {
++    const pool = getPool();
++    const transaction = new sql.Transaction(pool);
++    await transaction.begin();
++    try {
++      const inserted = await new sql.Request(transaction)
++        .input("companyId", sql.UniqueIdentifier, input.companyId)
++        .input("notificationId", sql.UniqueIdentifier, input.notificationId)
++        .input("attemptNumber", sql.Int, input.attemptNumber)
++        .query(`
++          INSERT INTO whatsapp_admin_alert_notification_send_attempts (
++            company_id, notification_id, attempt_number, status
++          )
++          OUTPUT INSERTED.*
++          VALUES (@companyId, @notificationId, @attemptNumber, N'STARTED')
++        `);
++      const attempt = mapAttemptRow(inserted.recordset[0] as Record<string, unknown>);
++
++      const cas = await new sql.Request(transaction)
++        .input("companyId", sql.UniqueIdentifier, input.companyId)
++        .input("id", sql.UniqueIdentifier, input.notificationId)
++        .input("leaseOwner", sql.NVarChar(100), input.leaseOwner)
++        .input("attemptId", sql.UniqueIdentifier, attempt.id)
++        .query(`
++          UPDATE whatsapp_admin_alert_notifications
++          SET status = N'SEND_STARTED',
++              active_send_attempt_id = @attemptId,
++              updated_at = SYSUTCDATETIME()
++          WHERE id = @id
++            AND company_id = @companyId
++            AND lease_owner = @leaseOwner
++            AND status = N'PROCESSING'
++        `);
++
++      if ((cas.rowsAffected[0] ?? 0) === 0) {
++        await transaction.rollback();
++        return null;
++      }
++
++      await transaction.commit();
++      return attempt;
++    } catch (error) {
++      try {
++        await transaction.rollback();
++      } catch {
++        /* ignore */
++      }
++      throw error;
++    }
++  },
++
++  async markSendAttemptAccepted(input: {
++    companyId: string;
++    attemptId: string;
++    providerMessageSid: string;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.attemptId)
++      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
++      .query(`
++        UPDATE whatsapp_admin_alert_notification_send_attempts
++        SET status = N'PROVIDER_ACCEPTED',
++            provider_message_sid = @providerMessageSid,
++            finished_at = SYSUTCDATETIME(),
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id AND company_id = @companyId
++      `);
++  },
++
++  async markSendAttemptFailed(input: {
++    companyId: string;
++    attemptId: string;
++    errorCode: string;
++    errorMessage: string;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.attemptId)
++      .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
++      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
++      .query(`
++        UPDATE whatsapp_admin_alert_notification_send_attempts
++        SET status = N'PROVIDER_FAILED',
++            last_error_code = @errorCode,
++            last_error_message = @errorMessage,
++            finished_at = SYSUTCDATETIME(),
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id AND company_id = @companyId
++      `);
++  },
++
++  async markSendAttemptAmbiguous(input: {
++    companyId: string;
++    attemptId: string;
++    errorCode: string;
++    errorMessage: string;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.attemptId)
++      .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
++      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
++      .query(`
++        UPDATE whatsapp_admin_alert_notification_send_attempts
++        SET status = N'AMBIGUOUS',
++            last_error_code = @errorCode,
++            last_error_message = @errorMessage,
++            finished_at = SYSUTCDATETIME(),
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id AND company_id = @companyId
++      `);
++  },
++
++  async markSendAccepted(input: {
++    companyId: string;
++    notificationId: string;
++    providerMessageSid: string;
++    sentAt?: Date;
++  }): Promise<void> {
++    const sentAt = input.sentAt ?? new Date();
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.notificationId)
++      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
++      .input("sentAt", sql.DateTime2, sentAt)
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET status = N'SEND_ACCEPTED',
++            provider_message_sid = @providerMessageSid,
++            sent_at = @sentAt,
++            lease_owner = NULL,
++            lease_expires_at = NULL,
++            next_attempt_at = NULL,
++            last_error_code = NULL,
++            last_error_message = NULL,
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id
++          AND company_id = @companyId
++          AND status IN (N'PROCESSING', N'SEND_STARTED')
++      `);
++    if ((result.rowsAffected[0] ?? 0) === 0) {
++      throw new Error("MARK_SEND_ACCEPTED_NOOP");
++    }
++  },
++
++  async markFailed(input: {
++    companyId: string;
++    notificationId: string;
++    errorCode: string;
++    errorMessage: string;
++    nextAttemptAt: Date | null;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.notificationId)
++      .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
++      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
++      .input("nextAttemptAt", sql.DateTime2, input.nextAttemptAt)
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET status = N'FAILED',
++            last_error_code = @errorCode,
++            last_error_message = @errorMessage,
++            next_attempt_at = @nextAttemptAt,
++            lease_owner = NULL,
++            lease_expires_at = NULL,
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id
++          AND company_id = @companyId
++          AND status IN (N'PROCESSING', N'SEND_STARTED')
++      `);
++  },
++
++  async markSkipped(input: {
++    companyId: string;
++    notificationId: string;
++    errorCode: string;
++    errorMessage: string;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.notificationId)
++      .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
++      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET status = N'SKIPPED',
++            last_error_code = @errorCode,
++            last_error_message = @errorMessage,
++            lease_owner = NULL,
++            lease_expires_at = NULL,
++            next_attempt_at = NULL,
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id
++          AND company_id = @companyId
++          AND status IN (N'PROCESSING', N'SEND_STARTED')
++      `);
++  },
++
++  async markSentRecoveryRequired(input: {
++    companyId: string;
++    notificationId: string;
++    providerMessageSid: string;
++    errorMessage: string;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.notificationId)
++      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
++      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET status = N'SENT_RECOVERY_REQUIRED',
++            provider_message_sid = @providerMessageSid,
++            last_error_code = N'MARK_SEND_ACCEPTED_FAILED',
++            last_error_message = @errorMessage,
++            lease_owner = NULL,
++            lease_expires_at = NULL,
++            next_attempt_at = NULL,
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id
++          AND company_id = @companyId
++          AND status IN (N'PROCESSING', N'SEND_STARTED')
++      `);
++  },
++
++  async markReconciliationRequired(input: {
++    companyId: string;
++    notificationId: string;
++    errorCode?: string;
++    errorMessage?: string;
++  }): Promise<void> {
++    await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, input.companyId)
++      .input("id", sql.UniqueIdentifier, input.notificationId)
++      .input("errorCode", sql.NVarChar(80), (input.errorCode ?? "AMBIGUOUS_SEND").slice(0, 80))
++      .input(
++        "errorMessage",
++        sql.NVarChar(1000),
++        (input.errorMessage ?? "Send outcome ambiguous; manual reconcile required").slice(
++          0,
++          1000,
++        ),
++      )
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET status = N'RECONCILIATION_REQUIRED',
++            last_error_code = @errorCode,
++            last_error_message = @errorMessage,
++            lease_owner = NULL,
++            lease_expires_at = NULL,
++            next_attempt_at = NULL,
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @id
++          AND company_id = @companyId
++          AND status IN (N'PROCESSING', N'SEND_STARTED')
++      `);
++  },
++
++  async applyProviderStatusUpdate(input: {
++    providerMessageSid: string;
++    providerStatus: string;
++  }): Promise<number> {
++    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
++    const result = await getPool()
++      .request()
++      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
++      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET provider_status = @providerStatus,
++            updated_at = SYSUTCDATETIME()
++        WHERE provider_message_sid = @providerMessageSid
++          AND ${advance}
++      `);
++    return result.rowsAffected[0] ?? 0;
++  },
++
++  async projectProviderStatusById(input: {
++    notificationId: string;
++    providerStatus: string;
++  }): Promise<void> {
++    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
++    await getPool()
++      .request()
++      .input("notificationId", sql.UniqueIdentifier, input.notificationId)
++      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET provider_status = @providerStatus,
++            updated_at = SYSUTCDATETIME()
++        WHERE id = @notificationId
++          AND ${advance}
++      `);
++  },
++
++  async projectProviderStatusByMessageSid(input: {
++    providerMessageSid: string;
++    providerStatus: string;
++  }): Promise<void> {
++    const advance = monotonicProviderStatusAdvanceSql("provider_status", "@providerStatus");
++    await getPool()
++      .request()
++      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
++      .input("providerStatus", sql.NVarChar(40), input.providerStatus.toLowerCase())
++      .query(`
++        UPDATE whatsapp_admin_alert_notifications
++        SET provider_status = @providerStatus,
++            updated_at = SYSUTCDATETIME()
++        WHERE provider_message_sid = @providerMessageSid
++          AND ${advance}
++      `);
++  },
++};
+diff --git a/backend/src/repositories/company-alert-recipient.repository.ts b/backend/src/repositories/company-alert-recipient.repository.ts
+new file mode 100644
+index 0000000..9cd9997
+--- /dev/null
++++ b/backend/src/repositories/company-alert-recipient.repository.ts
+@@ -0,0 +1,196 @@
++import sql from "mssql";
++import { getPool } from "../database/connection";
++import type { AdminAlertTemplateCategory } from "../constants/admin-alert";
++import type {
++  CompanyAlertRecipient,
++  CompanyAlertRecipientInput,
++  CompanyAlertRecipientUpdateInput,
++} from "../types/company-alert-recipient";
++import { isDuplicateKeyError } from "../utils/sql-server-errors";
++
++const toIso = (value: Date | string): string =>
++  value instanceof Date ? value.toISOString() : new Date(value).toISOString();
++
++const mapRow = (row: Record<string, unknown>): CompanyAlertRecipient => ({
++  id: String(row.id),
++  companyId: String(row.company_id),
++  userId: row.user_id ? String(row.user_id) : null,
++  phoneNumber: String(row.phone_number),
++  displayName: row.display_name ? String(row.display_name) : null,
++  isEnabled: Boolean(row.is_enabled),
++  receiveOperationalAlerts: Boolean(row.receive_operational_alerts),
++  receiveRequestAlerts: Boolean(row.receive_request_alerts),
++  receiveSecurityAlerts: Boolean(row.receive_security_alerts),
++  createdAt: toIso(row.created_at as Date | string),
++  updatedAt: toIso(row.updated_at as Date | string),
++});
++
++const categoryColumn = (category: AdminAlertTemplateCategory): string => {
++  switch (category) {
++    case "OPERATIONAL":
++      return "receive_operational_alerts";
++    case "REQUEST":
++      return "receive_request_alerts";
++    case "SECURITY":
++      return "receive_security_alerts";
++    default:
++      return "receive_operational_alerts";
++  }
++};
++
++export const companyAlertRecipientRepository = {
++  async listByCompany(companyId: string): Promise<CompanyAlertRecipient[]> {
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .query(`
++        SELECT *
++        FROM company_alert_recipients
++        WHERE company_id = @companyId
++        ORDER BY display_name ASC, phone_number ASC
++      `);
++    return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
++  },
++
++  async findById(companyId: string, id: string): Promise<CompanyAlertRecipient | null> {
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("id", sql.UniqueIdentifier, id)
++      .query(`
++        SELECT TOP 1 *
++        FROM company_alert_recipients
++        WHERE company_id = @companyId AND id = @id
++      `);
++    const row = result.recordset[0] as Record<string, unknown> | undefined;
++    return row ? mapRow(row) : null;
++  },
++
++  async findEnabledRecipients(
++    companyId: string,
++    category: AdminAlertTemplateCategory,
++  ): Promise<CompanyAlertRecipient[]> {
++    const column = categoryColumn(category);
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .query(`
++        SELECT *
++        FROM company_alert_recipients
++        WHERE company_id = @companyId
++          AND is_enabled = 1
++          AND ${column} = 1
++        ORDER BY created_at ASC
++      `);
++    return result.recordset.map((row) => mapRow(row as Record<string, unknown>));
++  },
++
++  async create(
++    companyId: string,
++    input: CompanyAlertRecipientInput,
++  ): Promise<CompanyAlertRecipient> {
++    try {
++      const result = await getPool()
++        .request()
++        .input("companyId", sql.UniqueIdentifier, companyId)
++        .input("userId", sql.UniqueIdentifier, input.userId ?? null)
++        .input("phoneNumber", sql.NVarChar(20), input.phoneNumber)
++        .input("displayName", sql.NVarChar(200), input.displayName ?? null)
++        .input("isEnabled", sql.Bit, input.isEnabled ?? true)
++        .input("receiveOperationalAlerts", sql.Bit, input.receiveOperationalAlerts ?? true)
++        .input("receiveRequestAlerts", sql.Bit, input.receiveRequestAlerts ?? false)
++        .input("receiveSecurityAlerts", sql.Bit, input.receiveSecurityAlerts ?? true)
++        .query(`
++          INSERT INTO company_alert_recipients (
++            company_id, user_id, phone_number, display_name, is_enabled,
++            receive_operational_alerts, receive_request_alerts, receive_security_alerts
++          )
++          OUTPUT INSERTED.*
++          VALUES (
++            @companyId, @userId, @phoneNumber, @displayName, @isEnabled,
++            @receiveOperationalAlerts, @receiveRequestAlerts, @receiveSecurityAlerts
++          )
++        `);
++      return mapRow(result.recordset[0] as Record<string, unknown>);
++    } catch (error) {
++      if (isDuplicateKeyError(error)) {
++        throw new Error("COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE");
++      }
++      throw error;
++    }
++  },
++
++  async update(
++    companyId: string,
++    id: string,
++    input: CompanyAlertRecipientUpdateInput,
++  ): Promise<CompanyAlertRecipient | null> {
++    const existing = await this.findById(companyId, id);
++    if (!existing) {
++      return null;
++    }
++
++    const sets: string[] = ["updated_at = SYSUTCDATETIME()"];
++    const request = getPool().request();
++    request.input("companyId", sql.UniqueIdentifier, companyId);
++    request.input("id", sql.UniqueIdentifier, id);
++
++    if (input.userId !== undefined) {
++      sets.push("user_id = @userId");
++      request.input("userId", sql.UniqueIdentifier, input.userId);
++    }
++    if (input.phoneNumber !== undefined) {
++      sets.push("phone_number = @phoneNumber");
++      request.input("phoneNumber", sql.NVarChar(20), input.phoneNumber);
++    }
++    if (input.displayName !== undefined) {
++      sets.push("display_name = @displayName");
++      request.input("displayName", sql.NVarChar(200), input.displayName);
++    }
++    if (input.isEnabled !== undefined) {
++      sets.push("is_enabled = @isEnabled");
++      request.input("isEnabled", sql.Bit, input.isEnabled);
++    }
++    if (input.receiveOperationalAlerts !== undefined) {
++      sets.push("receive_operational_alerts = @receiveOperationalAlerts");
++      request.input("receiveOperationalAlerts", sql.Bit, input.receiveOperationalAlerts);
++    }
++    if (input.receiveRequestAlerts !== undefined) {
++      sets.push("receive_request_alerts = @receiveRequestAlerts");
++      request.input("receiveRequestAlerts", sql.Bit, input.receiveRequestAlerts);
++    }
++    if (input.receiveSecurityAlerts !== undefined) {
++      sets.push("receive_security_alerts = @receiveSecurityAlerts");
++      request.input("receiveSecurityAlerts", sql.Bit, input.receiveSecurityAlerts);
++    }
++
++    try {
++      const result = await request.query(`
++        UPDATE company_alert_recipients
++        SET ${sets.join(", ")}
++        OUTPUT INSERTED.*
++        WHERE company_id = @companyId AND id = @id
++      `);
++      const row = result.recordset[0] as Record<string, unknown> | undefined;
++      return row ? mapRow(row) : null;
++    } catch (error) {
++      if (isDuplicateKeyError(error)) {
++        throw new Error("COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE");
++      }
++      throw error;
++    }
++  },
++
++  async disable(companyId: string, id: string): Promise<boolean> {
++    const result = await getPool()
++      .request()
++      .input("companyId", sql.UniqueIdentifier, companyId)
++      .input("id", sql.UniqueIdentifier, id)
++      .query(`
++        UPDATE company_alert_recipients
++        SET is_enabled = 0, updated_at = SYSUTCDATETIME()
++        WHERE company_id = @companyId AND id = @id
++      `);
++    return (result.rowsAffected[0] ?? 0) > 0;
++  },
++};
+diff --git a/backend/src/repositories/company-settings.repository.ts b/backend/src/repositories/company-settings.repository.ts
+index 259cd52..53a2778 100644
+--- a/backend/src/repositories/company-settings.repository.ts
++++ b/backend/src/repositories/company-settings.repository.ts
+@@ -47,40 +47,42 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
+   pendingOperationExpirationHours: Number(
+     row.pending_operation_expiration_hours ??
+       DEFAULT_COMPANY_OPERATIONAL_SETTINGS.pendingOperationExpirationHours,
+   ),
+   absenceAdvancedCalendarEnabled:
+     row.absence_advanced_calendar_enabled == null
+       ? false
+       : Boolean(row.absence_advanced_calendar_enabled),
+   absenceBalanceLedgerEnabled:
+     row.absence_balance_ledger_enabled == null
+       ? false
+       : Boolean(row.absence_balance_ledger_enabled),
+   absenceAttachmentsEnabled:
+     row.absence_attachments_enabled == null
+       ? false
+       : Boolean(row.absence_attachments_enabled),
+   absenceOperationalIntegrationEnabled:
+     row.absence_operational_integration_enabled == null
+       ? false
+       : Boolean(row.absence_operational_integration_enabled),
++  adminAlertsEnabled:
++    row.admin_alerts_enabled == null ? false : Boolean(row.admin_alerts_enabled),
+   createdAt: toIsoString(row.created_at as Date | string),
+   updatedAt: toIsoString(row.updated_at as Date | string),
+ });
+ 
+ export const companySettingsRepository = {
+   async findByCompanyId(companyId: string): Promise<CompanySettings | null> {
+     const pool = getPool();
+     const result = await pool
+       .request()
+       .input("companyId", sql.UniqueIdentifier, companyId)
+       .query("SELECT * FROM company_settings WHERE company_id = @companyId");
+ 
+     if (!result.recordset[0]) {
+       return null;
+     }
+ 
+     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
+   },
+ 
+   async create(
+@@ -186,40 +188,41 @@ export const companySettingsRepository = {
+     input: Partial<
+       Pick<
+         CompanySettings,
+         | "operationTimezone"
+         | "defaultRadiusMeters"
+         | "lateGraceMinutes"
+         | "earlyLeaveToleranceMinutes"
+         | "requireCheckoutLocation"
+         | "allowManualAttendanceCorrections"
+         | "defaultEarlyArrivalToleranceMinutes"
+         | "defaultLateArrivalToleranceMinutes"
+         | "defaultOperationStartTime"
+         | "defaultOperationEndTime"
+         | "geofenceReviewMarginMeters"
+         | "confirmationReminderEnabled"
+         | "confirmationReminderHoursBefore"
+         | "pendingOperationExpirationHours"
+         | "absenceAdvancedCalendarEnabled"
+         | "absenceAttachmentsEnabled"
+         | "absenceOperationalIntegrationEnabled"
++        | "adminAlertsEnabled"
+       >
+     >,
+   ): Promise<CompanySettings | null> {
+     const pool = getPool();
+     const fields: string[] = [];
+     const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+ 
+     if (input.operationTimezone !== undefined) {
+       request.input("operationTimezone", sql.NVarChar(80), input.operationTimezone);
+       fields.push("operation_timezone = @operationTimezone");
+     }
+     if (input.defaultRadiusMeters !== undefined) {
+       request.input("defaultRadiusMeters", sql.Int, input.defaultRadiusMeters);
+       fields.push("default_radius_meters = @defaultRadiusMeters");
+     }
+     if (input.lateGraceMinutes !== undefined) {
+       request.input("lateGraceMinutes", sql.Int, input.lateGraceMinutes);
+       fields.push("late_grace_minutes = @lateGraceMinutes");
+     }
+     if (input.earlyLeaveToleranceMinutes !== undefined) {
+@@ -311,40 +314,44 @@ export const companySettingsRepository = {
+       fields.push("absence_advanced_calendar_enabled = @absenceAdvancedCalendarEnabled");
+     }
+     if (input.absenceAttachmentsEnabled !== undefined) {
+       request.input(
+         "absenceAttachmentsEnabled",
+         sql.Bit,
+         input.absenceAttachmentsEnabled ? 1 : 0,
+       );
+       fields.push("absence_attachments_enabled = @absenceAttachmentsEnabled");
+     }
+     if (input.absenceOperationalIntegrationEnabled !== undefined) {
+       request.input(
+         "absenceOperationalIntegrationEnabled",
+         sql.Bit,
+         input.absenceOperationalIntegrationEnabled ? 1 : 0,
+       );
+       fields.push(
+         "absence_operational_integration_enabled = @absenceOperationalIntegrationEnabled",
+       );
+     }
++    if (input.adminAlertsEnabled !== undefined) {
++      request.input("adminAlertsEnabled", sql.Bit, input.adminAlertsEnabled ? 1 : 0);
++      fields.push("admin_alerts_enabled = @adminAlertsEnabled");
++    }
+ 
+     if (fields.length === 0) {
+       return this.findByCompanyId(companyId);
+     }
+ 
+     fields.push("updated_at = SYSUTCDATETIME()");
+ 
+     const result = await request.query(`
+       UPDATE company_settings
+       SET ${fields.join(", ")}
+       OUTPUT INSERTED.*
+       WHERE company_id = @companyId
+     `);
+ 
+     if (!result.recordset[0]) {
+       return null;
+     }
+ 
+     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
+   },
+diff --git a/backend/src/routes/company.routes.ts b/backend/src/routes/company.routes.ts
+index b68471f..c04dd0f 100644
+--- a/backend/src/routes/company.routes.ts
++++ b/backend/src/routes/company.routes.ts
+@@ -1,40 +1,46 @@
+ import { Router } from "express";
+ import { companyController } from "../controllers/company.controller";
+ import { resolveCompanyContext, requirePermission } from "../middleware/company-context";
+ import { requirePlatformAdmin } from "../middleware/require-platform-admin";
+ import { asyncHandler } from "../middleware/async-handler";
+ import { validate } from "../middleware/validate";
+ import {
+   companyIdParamSchema,
+   companyRoleCapabilitiesParamSchema,
+   updateCompanySettingsSchema,
+   weeklySchedulePayloadSchema,
+ } from "../schemas/company.schema";
+ import { updateCompanyAbsenceSettingsSchema } from "../schemas/company-absence-settings.schema";
+ import {
+   companyLocationTypeIdParamSchema,
+   createCompanyLocationTypeSchema,
+   listCompanyLocationTypesQuerySchema,
+   updateCompanyLocationTypeSchema,
+ } from "../schemas/company-location-type.schema";
+ import { updateCompanyModulesSchema } from "../schemas/company-module.schema";
++import {
++  companyAlertRecipientIdParamSchema,
++  createCompanyAlertRecipientSchema,
++  updateCompanyAlertRecipientSchema,
++} from "../schemas/company-alert-recipient.schema";
++import { companyAlertRecipientController } from "../controllers/company-alert-recipient.controller";
+ 
+ export const companyRouter = Router();
+ 
+ companyRouter.get("/", asyncHandler(companyController.listForCurrentUser));
+ 
+ companyRouter.get(
+   "/:companyId/me",
+   validate(companyIdParamSchema, "params"),
+   resolveCompanyContext,
+   asyncHandler(companyController.getMembership),
+ );
+ 
+ companyRouter.get(
+   "/:companyId/roles/:role/capabilities",
+   validate(companyRoleCapabilitiesParamSchema, "params"),
+   resolveCompanyContext,
+   requirePermission("users:manage"),
+   asyncHandler(companyController.getRoleCapabilities),
+ );
+ 
+@@ -123,20 +129,54 @@ companyRouter.delete(
+   requirePermission("company:settings:update"),
+   asyncHandler(companyController.disableLocationType),
+ );
+ 
+ companyRouter.get(
+   "/:companyId/modules",
+   validate(companyIdParamSchema, "params"),
+   resolveCompanyContext,
+   requirePermission("company:read"),
+   asyncHandler(companyController.listModules),
+ );
+ 
+ companyRouter.patch(
+   "/:companyId/modules",
+   validate(companyIdParamSchema, "params"),
+   validate(updateCompanyModulesSchema),
+   resolveCompanyContext,
+   asyncHandler(requirePlatformAdmin),
+   asyncHandler(companyController.updateModules),
+ );
++
++companyRouter.get(
++  "/:companyId/company-alert-recipients",
++  validate(companyIdParamSchema, "params"),
++  resolveCompanyContext,
++  requirePermission("company:read"),
++  asyncHandler(companyAlertRecipientController.list),
++);
++
++companyRouter.post(
++  "/:companyId/company-alert-recipients",
++  validate(companyIdParamSchema, "params"),
++  validate(createCompanyAlertRecipientSchema),
++  resolveCompanyContext,
++  requirePermission("company:settings:update"),
++  asyncHandler(companyAlertRecipientController.create),
++);
++
++companyRouter.patch(
++  "/:companyId/company-alert-recipients/:recipientId",
++  validate(companyAlertRecipientIdParamSchema, "params"),
++  validate(updateCompanyAlertRecipientSchema),
++  resolveCompanyContext,
++  requirePermission("company:settings:update"),
++  asyncHandler(companyAlertRecipientController.update),
++);
++
++companyRouter.delete(
++  "/:companyId/company-alert-recipients/:recipientId",
++  validate(companyAlertRecipientIdParamSchema, "params"),
++  resolveCompanyContext,
++  requirePermission("company:settings:update"),
++  asyncHandler(companyAlertRecipientController.remove),
++);
+diff --git a/backend/src/schemas/company-alert-recipient.schema.ts b/backend/src/schemas/company-alert-recipient.schema.ts
+new file mode 100644
+index 0000000..39976d4
+--- /dev/null
++++ b/backend/src/schemas/company-alert-recipient.schema.ts
+@@ -0,0 +1,21 @@
++import { z } from "zod";
++
++export const companyAlertRecipientIdParamSchema = z.object({
++  companyId: z.string().uuid(),
++  recipientId: z.string().uuid(),
++});
++
++export const createCompanyAlertRecipientSchema = z.object({
++  userId: z.string().uuid().nullable().optional(),
++  phoneNumber: z.string().min(8, "El teléfono es obligatorio."),
++  displayName: z.string().max(200).nullable().optional(),
++  isEnabled: z.boolean().optional(),
++  receiveOperationalAlerts: z.boolean().optional(),
++  receiveRequestAlerts: z.boolean().optional(),
++  receiveSecurityAlerts: z.boolean().optional(),
++});
++
++export const updateCompanyAlertRecipientSchema = createCompanyAlertRecipientSchema.partial();
++
++export type CreateCompanyAlertRecipientInput = z.infer<typeof createCompanyAlertRecipientSchema>;
++export type UpdateCompanyAlertRecipientInput = z.infer<typeof updateCompanyAlertRecipientSchema>;
+diff --git a/backend/src/schemas/company.schema.ts b/backend/src/schemas/company.schema.ts
+index 5cfeec0..1dfaf0e 100644
+--- a/backend/src/schemas/company.schema.ts
++++ b/backend/src/schemas/company.schema.ts
+@@ -123,40 +123,41 @@ export const updateCompanySettingsSchema = z
+       .max(
+         COMPANY_SETTINGS_LIMITS.confirmationReminderHoursBefore.max,
+         "Las horas del recordatorio no pueden superar 168.",
+       )
+       .optional(),
+     pendingOperationExpirationHours: z.coerce
+       .number()
+       .int("Las horas de vencimiento de salida pendiente deben ser un número entero.")
+       .min(
+         COMPANY_SETTINGS_LIMITS.pendingOperationExpirationHours.min,
+         "Las horas de vencimiento de salida pendiente deben ser al menos 1.",
+       )
+       .max(
+         COMPANY_SETTINGS_LIMITS.pendingOperationExpirationHours.max,
+         "Las horas de vencimiento de salida pendiente no pueden superar 168.",
+       )
+       .optional(),
+     absenceAdvancedCalendarEnabled: z.boolean().optional(),
+     absenceAttachmentsEnabled: z.boolean().optional(),
+     absenceOperationalIntegrationEnabled: z.boolean().optional(),
++    adminAlertsEnabled: z.boolean().optional(),
+   })
+   .refine((value) => Object.keys(value).length > 0, {
+     message: "Debe enviar al menos un campo para actualizar.",
+   })
+   .superRefine((value, ctx) => {
+     if (
+       value.operationTimezone !== undefined &&
+       !isValidOperationTimezone(value.operationTimezone)
+     ) {
+       ctx.addIssue({
+         code: "custom",
+         message: "La zona horaria operativa no es válida.",
+         path: ["operationTimezone"],
+       });
+     }
+   });
+ 
+ export type UpdateCompanySettingsInput = z.infer<typeof updateCompanySettingsSchema>;
+ 
+ export { weeklySchedulePayloadSchema } from "./weekly-schedule.schema";
+diff --git a/backend/src/server.ts b/backend/src/server.ts
+index 6148dc6..80f3801 100644
+--- a/backend/src/server.ts
++++ b/backend/src/server.ts
+@@ -11,72 +11,78 @@ import { startAttendanceReminderJob, stopAttendanceReminderJob } from "./jobs/at
+ import {
+   startRecurringWorkdayMaterializationJob,
+   stopRecurringWorkdayMaterializationJob,
+ } from "./jobs/recurring-workday-materialization.job";
+ import {
+   startWhatsappObservabilityCleanupJob,
+   stopWhatsappObservabilityCleanupJob,
+ } from "./jobs/whatsapp-observability-cleanup.job";
+ import {
+   startCompanyDeletionJob,
+   stopCompanyDeletionJob,
+ } from "./jobs/company-deletion.job";
+ import {
+   startPayrollReceiptNotificationJob,
+   stopPayrollReceiptNotificationJob,
+ } from "./jobs/payroll-receipt-notification.job";
+ import {
+   startOperationAssignmentNotificationJob,
+   stopOperationAssignmentNotificationJob,
+ } from "./jobs/operation-assignment-notification.job";
++import {
++  startAdminAlertJob,
++  stopAdminAlertJob,
++} from "./jobs/admin-alert.job";
+ import {
+   startOperationLifecycleJob,
+   stopOperationLifecycleJob,
+ } from "./jobs/operation-lifecycle.job";
+ 
+ const startServer = async (): Promise<void> => {
+   await connectDatabase();
+   warnOnDuplicateTwilioContentSids({
+     ARRIVAL: env.TWILIO_ARRIVAL_REMINDER_CONTENT_SID,
+     EXIT: env.TWILIO_EXIT_REMINDER_CONTENT_SID,
+     NO_CHECKIN: env.TWILIO_TEMPLATE_NO_CHECKIN_SID,
+     ATTENDANCE_CONFIRMATION: env.TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID,
+     EVENTUAL_ASSIGNMENT: env.TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID,
+   });
+   startAttendanceReminderJob();
+   startRecurringWorkdayMaterializationJob();
+   startAbsenceWorkdaySyncJob();
+   startAbsenceAttachmentCleanupJob();
+   startWhatsappObservabilityCleanupJob();
+   startCompanyDeletionJob();
+   startPayrollReceiptNotificationJob();
+   startOperationAssignmentNotificationJob();
+   startOperationLifecycleJob();
++  startAdminAlertJob();
+ 
+   app.listen(env.PORT, "0.0.0.0", () => {
+     console.log(`API listening on 0.0.0.0:${env.PORT}`);
+   });
+ };
+ 
+ const shutdown = async (): Promise<void> => {
+   stopAttendanceReminderJob();
+   stopRecurringWorkdayMaterializationJob();
+   stopAbsenceWorkdaySyncJob();
+   stopAbsenceAttachmentCleanupJob();
+   stopWhatsappObservabilityCleanupJob();
+   stopCompanyDeletionJob();
+   stopPayrollReceiptNotificationJob();
+   stopOperationAssignmentNotificationJob();
+   stopOperationLifecycleJob();
++  stopAdminAlertJob();
+   await closeDatabase();
+   process.exit(0);
+ };
+ 
+ process.on("SIGINT", shutdown);
+ process.on("SIGTERM", shutdown);
+ 
+ void startServer().catch((error) => {
+   console.error("Failed to start server.", error);
+   void closeDatabase().finally(() => {
+     process.exit(1);
+   });
+ });
+diff --git a/backend/src/services/admin-alert-delivery.service.ts b/backend/src/services/admin-alert-delivery.service.ts
+new file mode 100644
+index 0000000..da843d9
+--- /dev/null
++++ b/backend/src/services/admin-alert-delivery.service.ts
+@@ -0,0 +1,333 @@
++import { randomUUID } from "node:crypto";
++import { env } from "../config/env";
++import { ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS } from "../constants/admin-alert";
++import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
++import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
++import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
++import type { AdminAlertNotification } from "../types/admin-alert";
++import { resolveAdminAlertContentSid } from "../utils/admin-alert/content-sid";
++import { logAdminAlertEvent } from "../utils/admin-alert/observability";
++import {
++  classifyTwilioOutboundError,
++  isAmbiguousTwilioSendFailure,
++} from "../utils/twilio-error-classifier";
++import { twilioOutboundService } from "./twilio-outbound.service";
++
++const computeNextAttemptAt = (attemptCount: number, retryAfterMs?: number): Date => {
++  if (retryAfterMs !== undefined && retryAfterMs > 0) {
++    return new Date(Date.now() + retryAfterMs);
++  }
++  const baseMs = env.ADMIN_ALERT_RETRY_BASE_MS;
++  const delayMs = baseMs * Math.pow(2, Math.max(0, attemptCount - 1));
++  return new Date(Date.now() + delayMs);
++};
++
++const persistProviderAccepted = async (input: {
++  notification: AdminAlertNotification;
++  attemptId: string;
++  messageSid: string;
++}): Promise<"sent" | "recovery"> => {
++  const { notification, attemptId, messageSid } = input;
++
++  try {
++    await whatsappMessageRepository.create({
++      companyId: notification.companyId,
++      messageSid,
++      direction: "OUTBOUND",
++      employeeId: notification.employeeId,
++      phoneFrom: env.TWILIO_WHATSAPP_NUMBER ?? "whatsapp:+00000000000",
++      phoneTo: notification.recipientPhone,
++      messageType: "TEXT",
++      body: `[TEMPLATE:ADMIN_ALERT:${notification.alertType}]`,
++      latitude: null,
++      longitude: null,
++      status: "SEND_ACCEPTED",
++      rawPayload: null,
++      notificationId: notification.id,
++    });
++  } catch (obsError) {
++    console.warn("[admin-alert-delivery] outbound message persist failed (non-blocking)", {
++      notificationId: notification.id,
++      error: obsError instanceof Error ? obsError.message : String(obsError),
++    });
++  }
++
++  try {
++    await adminAlertNotificationRepository.markSendAttemptAccepted({
++      companyId: notification.companyId,
++      attemptId,
++      providerMessageSid: messageSid,
++    });
++  } catch (attemptError) {
++    const errorMessage =
++      attemptError instanceof Error ? attemptError.message : "Unknown markSendAttemptAccepted error";
++    await adminAlertNotificationRepository.markSentRecoveryRequired({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      providerMessageSid: messageSid,
++      errorMessage,
++    });
++    return "recovery";
++  }
++
++  try {
++    await adminAlertNotificationRepository.markSendAccepted({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      providerMessageSid: messageSid,
++    });
++    return "sent";
++  } catch (markError) {
++    const errorMessage =
++      markError instanceof Error ? markError.message : "Unknown markSendAccepted error";
++    await adminAlertNotificationRepository.markSentRecoveryRequired({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      providerMessageSid: messageSid,
++      errorMessage,
++    });
++    return "recovery";
++  }
++};
++
++const processClaimedNotification = async (
++  notification: AdminAlertNotification,
++  workerId: string,
++): Promise<"sent" | "skipped" | "failed" | "recovery" | "reconciliation"> => {
++  const recipient = await companyAlertRecipientRepository.findById(
++    notification.companyId,
++    notification.recipientId,
++  );
++  if (!recipient || !recipient.isEnabled) {
++    await adminAlertNotificationRepository.markSkipped({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      errorCode: "RECIPIENT_DISABLED",
++      errorMessage: "Recipient disabled or removed before send",
++    });
++    logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
++      companyId: notification.companyId,
++      recipientId: notification.recipientId,
++      alertType: notification.alertType,
++      outboxId: notification.id,
++      reason: "RECIPIENT_DISABLED",
++    });
++    return "skipped";
++  }
++
++  const contentSid = resolveAdminAlertContentSid(notification.templateCategory);
++  if (!contentSid) {
++    await adminAlertNotificationRepository.markFailed({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      errorCode: "CONFIG",
++      errorMessage: "Admin alert Content SID is not configured",
++      nextAttemptAt: null,
++    });
++    logAdminAlertEvent("ADMIN_ALERT_FAILED", {
++      companyId: notification.companyId,
++      outboxId: notification.id,
++      alertType: notification.alertType,
++      reason: "MISSING_CONTENT_SID",
++    });
++    return "failed";
++  }
++
++  const attempt = await adminAlertNotificationRepository.beginSendAttempt({
++    companyId: notification.companyId,
++    notificationId: notification.id,
++    leaseOwner: workerId,
++    attemptNumber: notification.attemptCount,
++  });
++
++  if (!attempt) {
++    await adminAlertNotificationRepository.markFailed({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      errorCode: "BEGIN_SEND_CAS_FAILED",
++      errorMessage: "Could not transition to SEND_STARTED",
++      nextAttemptAt: null,
++    });
++    return "failed";
++  }
++
++  let contentVariables: Record<string, string>;
++  try {
++    contentVariables = JSON.parse(notification.contentVariablesJson) as Record<string, string>;
++  } catch {
++    await adminAlertNotificationRepository.markFailed({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      errorCode: "INVALID_TEMPLATE_VARS",
++      errorMessage: "Stored content_variables_json is invalid",
++      nextAttemptAt: null,
++    });
++    return "failed";
++  }
++
++  let messageSid: string;
++  try {
++    const result = await twilioOutboundService.sendWhatsAppTemplate({
++      toPhoneNumber: notification.recipientPhone,
++      contentSid,
++      contentVariables,
++    });
++    messageSid = result.messageSid;
++  } catch (sendError) {
++    const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
++    const classification = classifyTwilioOutboundError(sendError);
++    const maxAttempts = env.ADMIN_ALERT_MAX_ATTEMPTS ?? ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS;
++
++    if (isAmbiguousTwilioSendFailure(classification)) {
++      await adminAlertNotificationRepository.markSendAttemptAmbiguous({
++        companyId: notification.companyId,
++        attemptId: attempt.id,
++        errorCode: classification.normalizedCode,
++        errorMessage,
++      });
++      await adminAlertNotificationRepository.markReconciliationRequired({
++        companyId: notification.companyId,
++        notificationId: notification.id,
++        errorCode: classification.normalizedCode,
++        errorMessage,
++      });
++      logAdminAlertEvent("ADMIN_ALERT_FAILED", {
++        companyId: notification.companyId,
++        outboxId: notification.id,
++        alertType: notification.alertType,
++        reason: "RECONCILIATION_REQUIRED",
++      });
++      return "reconciliation";
++    }
++
++    const exhausted = notification.attemptCount >= maxAttempts;
++    const retryable = classification.retryable && !exhausted;
++
++    await adminAlertNotificationRepository.markSendAttemptFailed({
++      companyId: notification.companyId,
++      attemptId: attempt.id,
++      errorCode: classification.normalizedCode,
++      errorMessage,
++    });
++
++    if (!retryable) {
++      await adminAlertNotificationRepository.markFailed({
++        companyId: notification.companyId,
++        notificationId: notification.id,
++        errorCode: exhausted ? "SEND_EXHAUSTED" : classification.normalizedCode,
++        errorMessage,
++        nextAttemptAt: null,
++      });
++      logAdminAlertEvent("ADMIN_ALERT_FAILED", {
++        companyId: notification.companyId,
++        outboxId: notification.id,
++        alertType: notification.alertType,
++        reason: exhausted ? "SEND_EXHAUSTED" : "SEND_PERMANENT",
++      });
++      return "failed";
++    }
++
++    const nextAttemptAt = computeNextAttemptAt(
++      notification.attemptCount,
++      classification.retryAfterMs,
++    );
++    await adminAlertNotificationRepository.markFailed({
++      companyId: notification.companyId,
++      notificationId: notification.id,
++      errorCode: classification.normalizedCode,
++      errorMessage,
++      nextAttemptAt,
++    });
++    logAdminAlertEvent("ADMIN_ALERT_RETRY", {
++      companyId: notification.companyId,
++      outboxId: notification.id,
++      alertType: notification.alertType,
++      reason: classification.normalizedCode,
++    });
++    return "failed";
++  }
++
++  const outcome = await persistProviderAccepted({
++    notification,
++    attemptId: attempt.id,
++    messageSid,
++  });
++
++  if (outcome === "sent") {
++    logAdminAlertEvent("ADMIN_ALERT_SENT", {
++      companyId: notification.companyId,
++      recipientId: notification.recipientId,
++      alertType: notification.alertType,
++      outboxId: notification.id,
++      operationId: notification.operationId,
++      employeeId: notification.employeeId,
++      providerMessageSid: messageSid,
++    });
++    return "sent";
++  }
++
++  logAdminAlertEvent("ADMIN_ALERT_FAILED", {
++    companyId: notification.companyId,
++    outboxId: notification.id,
++    alertType: notification.alertType,
++    providerMessageSid: messageSid,
++    reason: "SENT_RECOVERY_REQUIRED",
++  });
++  return "recovery";
++};
++
++export const adminAlertDeliveryService = {
++  async processPendingBatch(batchSize = 8): Promise<{
++    processed: number;
++    sent: number;
++    skipped: number;
++    failed: number;
++    recovery: number;
++    reconciliation: number;
++  }> {
++    await adminAlertNotificationRepository.recoverExpiredLeases(batchSize);
++    const workerId = randomUUID();
++    const leaseSeconds = Math.ceil(env.ADMIN_ALERT_LEASE_MS / 1000);
++    const claimed = await adminAlertNotificationRepository.claimNextBatch(
++      workerId,
++      batchSize,
++      leaseSeconds,
++      env.ADMIN_ALERT_MAX_ATTEMPTS,
++    );
++
++    let sent = 0;
++    let skipped = 0;
++    let failed = 0;
++    let recovery = 0;
++    let reconciliation = 0;
++
++    for (const notification of claimed) {
++      const outcome = await processClaimedNotification(notification, workerId);
++      switch (outcome) {
++        case "sent":
++          sent += 1;
++          break;
++        case "skipped":
++          skipped += 1;
++          break;
++        case "recovery":
++          recovery += 1;
++          break;
++        case "reconciliation":
++          reconciliation += 1;
++          break;
++        default:
++          failed += 1;
++      }
++    }
++
++    return {
++      processed: claimed.length,
++      sent,
++      skipped,
++      failed,
++      recovery,
++      reconciliation,
++    };
++  },
++};
+diff --git a/backend/src/services/admin-alert-missing-checkin.service.ts b/backend/src/services/admin-alert-missing-checkin.service.ts
+new file mode 100644
+index 0000000..f0edff7
+--- /dev/null
++++ b/backend/src/services/admin-alert-missing-checkin.service.ts
+@@ -0,0 +1,36 @@
++import type { Operation } from "../types/domain";
++import { adminAlertContextRepository } from "../repositories/admin-alert-context.repository";
++import { buildMissingCheckinDedupKey } from "../utils/admin-alert/dedup-keys";
++import { adminAlertService } from "./admin-alert.service";
++
++export const adminAlertMissingCheckinService = {
++  async emitForCompletedOperation(companyId: string, operation: Operation): Promise<void> {
++    if (operation.status !== "COMPLETED" || operation.operationKind !== "ONE_TIME") {
++      return;
++    }
++
++    const candidates = await adminAlertContextRepository.listMissingCheckinCandidatesForOperation(
++      companyId,
++      operation.id,
++    );
++
++    for (const candidate of candidates) {
++      await adminAlertService.emit({
++        companyId,
++        type: "MISSING_CHECKIN_AFTER_OPERATION",
++        employeeId: candidate.employeeId,
++        operationId: candidate.operationId,
++        deduplicationKey: buildMissingCheckinDedupKey(candidate.employeeWorkdayId),
++        payload: {
++          employeeName: candidate.employeeName,
++          serviceName: candidate.serviceName,
++          serviceAddress: candidate.serviceAddress,
++          serviceLocality: candidate.serviceLocality,
++          scheduledStart: candidate.scheduledStart,
++          scheduledEnd: candidate.scheduledEnd,
++          operationTimezone: candidate.operationTimezone,
++        },
++      });
++    }
++  },
++};
+diff --git a/backend/src/services/admin-alert.service.test.ts b/backend/src/services/admin-alert.service.test.ts
+new file mode 100644
+index 0000000..2896251
+--- /dev/null
++++ b/backend/src/services/admin-alert.service.test.ts
+@@ -0,0 +1,37 @@
++import { describe, it, mock } from "node:test";
++import assert from "node:assert/strict";
++
++describe("adminAlertService.emit", () => {
++  it("skips enqueue when admin alerts disabled", async () => {
++    mock.reset();
++
++    mock.module("../../repositories/company.repository", {
++      namedExports: {
++        companyRepository: {
++          findById: async () => ({ id: "c1", name: "Test" }),
++        },
++      },
++    });
++    mock.module("../../repositories/company-settings.repository", {
++      namedExports: {
++        companySettingsRepository: {
++          findByCompanyId: async () => ({
++            companyId: "c1",
++            adminAlertsEnabled: false,
++          }),
++        },
++      },
++    });
++
++    const { adminAlertService } = await import("../../services/admin-alert.service");
++    const result = await adminAlertService.emit({
++      companyId: "c1",
++      type: "EMPLOYEE_UNAVAILABLE",
++      deduplicationKey: "unavailable:a:1",
++      payload: { employeeName: "Juan" },
++    });
++
++    assert.equal(result.enqueued, 0);
++    assert.equal(result.dedupSkipped, 0);
++  });
++});
+diff --git a/backend/src/services/admin-alert.service.ts b/backend/src/services/admin-alert.service.ts
+new file mode 100644
+index 0000000..8bcc1f3
+--- /dev/null
++++ b/backend/src/services/admin-alert.service.ts
+@@ -0,0 +1,136 @@
++import {
++  adminAlertTypeDefaultCategory,
++  type AdminAlertSeverity,
++  type AdminAlertTemplateCategory,
++} from "../constants/admin-alert";
++import { companyRepository } from "../repositories/company.repository";
++import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
++import { companySettingsRepository } from "../repositories/company-settings.repository";
++import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
++import type { AdminAlertEmitInput, AdminAlertEmitResult } from "../types/admin-alert";
++import { buildAdminAlertTemplateVariables } from "../utils/admin-alert/template-variables";
++import { logAdminAlertEvent } from "../utils/admin-alert/observability";
++import { normalizePhoneNumber } from "../utils/phone";
++
++const isValidE164 = (phone: string): boolean => /^\+[1-9]\d{6,14}$/.test(phone);
++
++export const adminAlertService = {
++  async emit(input: AdminAlertEmitInput): Promise<AdminAlertEmitResult> {
++    const result: AdminAlertEmitResult = {
++      enqueued: 0,
++      dedupSkipped: 0,
++      recipientSkipped: 0,
++    };
++
++    const company = await companyRepository.findById(input.companyId);
++    if (!company) {
++      logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
++        companyId: input.companyId,
++        alertType: input.type,
++        reason: "COMPANY_NOT_FOUND",
++      });
++      return result;
++    }
++
++    const settings = await companySettingsRepository.findByCompanyId(input.companyId);
++    if (!settings?.adminAlertsEnabled) {
++      logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
++        companyId: input.companyId,
++        alertType: input.type,
++        reason: "ADMIN_ALERTS_DISABLED",
++      });
++      return result;
++    }
++
++    const category: AdminAlertTemplateCategory =
++      input.category ?? adminAlertTypeDefaultCategory(input.type);
++    const severity: AdminAlertSeverity = input.severity ?? "INFO";
++
++    const recipients = await companyAlertRecipientRepository.findEnabledRecipients(
++      input.companyId,
++      category,
++    );
++    if (recipients.length === 0) {
++      logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
++        companyId: input.companyId,
++        alertType: input.type,
++        reason: "NO_RECIPIENTS",
++      });
++      return result;
++    }
++
++    const templateVariables = buildAdminAlertTemplateVariables(
++      input.type,
++      category,
++      input.payload,
++    );
++    const contentVariablesJson = JSON.stringify(templateVariables);
++    const occurredAt = input.occurredAt ?? new Date();
++
++    for (const recipient of recipients) {
++      let normalizedPhone: string;
++      try {
++        normalizedPhone = normalizePhoneNumber(recipient.phoneNumber);
++      } catch {
++        result.recipientSkipped += 1;
++        logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
++          companyId: input.companyId,
++          recipientId: recipient.id,
++          alertType: input.type,
++          reason: "INVALID_PHONE",
++        });
++        continue;
++      }
++
++      if (!isValidE164(normalizedPhone)) {
++        result.recipientSkipped += 1;
++        logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
++          companyId: input.companyId,
++          recipientId: recipient.id,
++          alertType: input.type,
++          reason: "INVALID_E164",
++        });
++        continue;
++      }
++
++      const { notification, created } = await adminAlertNotificationRepository.enqueue({
++        companyId: input.companyId,
++        recipientId: recipient.id,
++        employeeId: input.employeeId ?? null,
++        operationId: input.operationId ?? null,
++        absenceRequestId: input.absenceRequestId ?? null,
++        alertType: input.type,
++        severity,
++        templateCategory: category,
++        deduplicationKey: input.deduplicationKey,
++        recipientPhone: normalizedPhone,
++        contentVariablesJson,
++        occurredAt,
++      });
++
++      if (created) {
++        result.enqueued += 1;
++        logAdminAlertEvent("ADMIN_ALERT_ENQUEUED", {
++          companyId: input.companyId,
++          recipientId: recipient.id,
++          alertType: input.type,
++          outboxId: notification.id,
++          operationId: input.operationId ?? null,
++          employeeId: input.employeeId ?? null,
++          deduplicationKey: input.deduplicationKey,
++        });
++      } else {
++        result.dedupSkipped += 1;
++        logAdminAlertEvent("ADMIN_ALERT_DEDUP_SKIPPED", {
++          companyId: input.companyId,
++          recipientId: recipient.id,
++          alertType: input.type,
++          outboxId: notification.id,
++          deduplicationKey: input.deduplicationKey,
++        });
++      }
++    }
++
++    return result;
++  },
++};
+diff --git a/backend/src/services/company.service.ts b/backend/src/services/company.service.ts
+index 28fd42e..a2ad418 100644
+--- a/backend/src/services/company.service.ts
++++ b/backend/src/services/company.service.ts
+@@ -26,40 +26,41 @@ import { isCompanyOperationallyActive } from "../types/company";
+ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => ({
+   companyId: settings.companyId,
+   operationTimezone: settings.operationTimezone,
+   defaultRadiusMeters: settings.defaultRadiusMeters,
+   lateGraceMinutes: settings.lateGraceMinutes,
+   earlyLeaveToleranceMinutes: settings.earlyLeaveToleranceMinutes,
+   requireCheckoutLocation: settings.requireCheckoutLocation,
+   allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,
+   defaultEarlyArrivalToleranceMinutes: settings.defaultEarlyArrivalToleranceMinutes,
+   defaultLateArrivalToleranceMinutes: settings.defaultLateArrivalToleranceMinutes,
+   defaultOperationStartTime: settings.defaultOperationStartTime,
+   defaultOperationEndTime: settings.defaultOperationEndTime,
+   geofenceReviewMarginMeters: settings.geofenceReviewMarginMeters,
+   confirmationReminderEnabled: settings.confirmationReminderEnabled,
+   confirmationReminderHoursBefore: settings.confirmationReminderHoursBefore,
+   pendingOperationExpirationHours: settings.pendingOperationExpirationHours,
+   absenceAdvancedCalendarEnabled: settings.absenceAdvancedCalendarEnabled,
+   absenceBalanceLedgerEnabled: settings.absenceBalanceLedgerEnabled,
+   absenceAttachmentsEnabled: settings.absenceAttachmentsEnabled,
+   absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
++  adminAlertsEnabled: settings.adminAlertsEnabled,
+   createdAt: settings.createdAt,
+   updatedAt: settings.updatedAt,
+ });
+ 
+ export const companyService = {
+   async listForUser(
+     userId: string,
+     isPlatformAdmin = false,
+   ): Promise<CompanyMembershipSummary[]> {
+     if (isPlatformAdmin) {
+       const companies = await companyRepository.listActive();
+       const memberships = await userCompanyMembershipRepository.listActiveForUser(userId);
+       const defaultCompanyId =
+         memberships.find((membership) => membership.isDefault)?.companyId ??
+         memberships[0]?.companyId;
+ 
+       return companies.map((company) => ({
+         companyId: company.id,
+         companyName: company.name,
+         role: "OWNER",
+diff --git a/backend/src/services/employee-workday.service.ts b/backend/src/services/employee-workday.service.ts
+index 440dced..1ebd292 100644
+--- a/backend/src/services/employee-workday.service.ts
++++ b/backend/src/services/employee-workday.service.ts
+@@ -1,24 +1,28 @@
+ import { INVALID_SELECTION_MESSAGE } from "./bot/bot-response.builder";
+ import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
+ import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
++import { employeeRepository } from "../repositories/employee.repository";
++import { adminAlertContextRepository } from "../repositories/admin-alert-context.repository";
+ import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
++import { buildUnavailableDedupKey } from "../utils/admin-alert/dedup-keys";
++import { adminAlertService } from "./admin-alert.service";
+ import type { OperationSelectionOption } from "../types/twilio.types";
+ import { getBotNow } from "../utils/bot-runtime-context";
+ import { getBotOperationTimezone } from "../utils/bot-runtime-settings-scope";
+ import { getDateIsoInTimezone } from "../utils/absence-date";
+ import {
+   formatAssignmentDateTimeLine,
+   formatAssignmentServiceReference,
+   formatTodayAssignmentBlock,
+   formatUpcomingAssignmentBlock,
+   formatUpcomingSelectionLine,
+   NO_CONFIRMABLE_ASSIGNMENTS_MESSAGE,
+   NO_TODAY_ASSIGNMENTS_MESSAGE,
+   NO_UNAVAILABILITY_ASSIGNMENTS_MESSAGE,
+   NO_UPCOMING_ASSIGNMENTS_MESSAGE,
+   PAST_ASSIGNMENT_MESSAGE,
+ } from "../utils/employee-assignment-format";
+ import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
+ import type { PunctualityStatus } from "../types/domain";
+ 
+ const isFutureAssignment = (assignment: EmployeeAssignedOperation, at: Date): boolean =>
+@@ -271,27 +275,51 @@ export const employeeWorkdayService = {
+       assignment.assignmentId,
+       "UNAVAILABLE",
+       [assignment.confirmationStatus],
+     );
+ 
+     if (!updated) {
+       const latest = await employeeAssignmentQueryRepository.findByOperationForEmployee(
+         companyId,
+         employeeId,
+         operationId,
+       );
+       if (!latest) {
+         return { kind: "not_found", message: INVALID_SELECTION_MESSAGE };
+       }
+       if (latest.confirmationStatus === "CONFIRMED") {
+         return { kind: "ok", message: this.buildConfirmedMessage(latest) };
+       }
+       return { kind: "ok", message: this.buildUnavailableMessage(latest) };
+     }
+ 
++    const scheduleVersion =
++      (await adminAlertContextRepository.getAssignmentScheduleVersion(
++        companyId,
++        assignment.assignmentId,
++      )) ?? 1;
++    const employee = await employeeRepository.findById(companyId, employeeId);
++    if (employee) {
++      void adminAlertService.emit({
++        companyId,
++        type: "EMPLOYEE_UNAVAILABLE",
++        employeeId,
++        operationId,
++        deduplicationKey: buildUnavailableDedupKey(assignment.assignmentId, scheduleVersion),
++        payload: {
++          employeeName: employee.name,
++          serviceName: assignment.serviceName,
++          serviceAddress: assignment.serviceAddress,
++          serviceLocality: assignment.serviceLocality,
++          scheduledStart: assignment.scheduledStart,
++          scheduledEnd: assignment.scheduledEnd,
++        },
++      });
++    }
++
+     return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
+   },
+ 
+   mapToSelectionOptions,
+   noConfirmableMessage: NO_CONFIRMABLE_ASSIGNMENTS_MESSAGE,
+   noUnavailabilityMessage: NO_UNAVAILABILITY_ASSIGNMENTS_MESSAGE,
+ };
+diff --git a/backend/src/services/operation-lifecycle.service.ts b/backend/src/services/operation-lifecycle.service.ts
+index 705da24..6e7e807 100644
+--- a/backend/src/services/operation-lifecycle.service.ts
++++ b/backend/src/services/operation-lifecycle.service.ts
+@@ -1,25 +1,26 @@
+ import { env } from "../config/env";
+ import { operationRepository } from "../repositories/operation.repository";
+ import type { Operation } from "../types/domain";
+ import { resolveLifecycleOperationStatus } from "../utils/operation-lifecycle";
+ import { canTransitionOperationLifecycleStatus } from "../utils/operation-status";
++import { adminAlertMissingCheckinService } from "./admin-alert-missing-checkin.service";
+ 
+ export type OperationLifecycleReconcileResult = {
+   operationsScanned: number;
+   operationsUpdated: number;
+   operationsSkipped: number;
+   operationsFailed: number;
+   batches: number;
+   durationMs: number;
+   backlogRemaining: number;
+ };
+ 
+ class OperationLifecycleItemError extends Error {
+   constructor(
+     readonly companyId: string,
+     readonly operation: Operation,
+     readonly cause: unknown,
+   ) {
+     super(cause instanceof Error ? cause.message : String(cause));
+     this.name = "OperationLifecycleItemError";
+   }
+@@ -27,40 +28,43 @@ class OperationLifecycleItemError extends Error {
+ 
+ const promoteIfDue = async (
+   companyId: string,
+   operation: Operation,
+   at: Date,
+ ): Promise<"updated" | "skipped"> => {
+   const nextStatus = resolveLifecycleOperationStatus(operation, at);
+   if (nextStatus === operation.status) {
+     return "skipped";
+   }
+   if (!canTransitionOperationLifecycleStatus(operation.status, nextStatus)) {
+     return "skipped";
+   }
+ 
+   const updated = await operationRepository.promoteLifecycleStatus(
+     companyId,
+     operation.id,
+     operation.status,
+     nextStatus,
+   );
++  if (updated && nextStatus === "COMPLETED") {
++    void adminAlertMissingCheckinService.emitForCompletedOperation(companyId, updated);
++  }
+   return updated ? "updated" : "skipped";
+ };
+ 
+ export const operationLifecycleService = {
+   /**
+    * Read-path sync (GET/list). On CAS miss, re-read the persisted row once so
+    * callers never observe the pre-promotion status after a concurrent win.
+    */
+   async syncPersistedStatus(
+     companyId: string,
+     operation: Operation,
+     at: Date = new Date(),
+   ): Promise<Operation> {
+     const nextStatus = resolveLifecycleOperationStatus(operation, at);
+     if (nextStatus === operation.status) {
+       return operation;
+     }
+     if (!canTransitionOperationLifecycleStatus(operation.status, nextStatus)) {
+       return operation;
+     }
+diff --git a/backend/src/services/whatsapp-flow-trace.service.ts b/backend/src/services/whatsapp-flow-trace.service.ts
+index ebc22a2..4559658 100644
+--- a/backend/src/services/whatsapp-flow-trace.service.ts
++++ b/backend/src/services/whatsapp-flow-trace.service.ts
+@@ -1,30 +1,31 @@
+ import { env } from "../config/env";
+ import {
+   WHATSAPP_PROVIDER_STATUS_RANK,
+   type WhatsappConversationStatus,
+   type WhatsappFlowExecutionStatus,
+   type WhatsappFlowStepStatus,
+   type WhatsappFlowStepType,
+ } from "../constants/whatsapp-observability";
+ import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
+ import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
++import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
+ import { payrollReceiptNotificationRepository } from "../repositories/payroll-receipt-notification.repository";
+ import { whatsappConversationRepository } from "../repositories/whatsapp-conversation.repository";
+ import { whatsappFlowExecutionRepository } from "../repositories/whatsapp-flow-execution.repository";
+ import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
+ import { whatsappProviderEventRepository } from "../repositories/whatsapp-provider-event.repository";
+ import type { WhatsappConversation, WhatsappFlowExecution } from "../types/whatsapp-observability";
+ import {
+   buildProviderEventKey,
+   createCorrelationId,
+   hashPhoneForObservability,
+   maskPhoneForObservability,
+   pickProjectedProviderStatus,
+   sanitizeObservabilityPayload,
+   truncateJson,
+ } from "../utils/whatsapp-observability";
+ import {
+   decryptPhoneForObservability,
+   encryptPhoneForObservability,
+ } from "../utils/whatsapp-observability-phone-crypto";
+ 
+@@ -437,55 +438,63 @@ export const whatsappFlowTraceService = {
+     }
+     const providerStatus = input.providerStatus.toLowerCase();
+     await attendanceNotificationRepository.projectProviderStatusById({
+       notificationId: message.notificationId,
+       providerStatus,
+       errorCode: input.errorCode,
+       errorMessage: input.errorMessage,
+     });
+     // Payroll + assignment outboxes: project provider delivery status only —
+     // never promote to DELIVERED here. Prefer notificationId when known; always
+     // also correlate by provider_message_sid so callbacks work if whatsapp_messages
+     // failed to persist after Twilio accepted the send.
+     await payrollReceiptNotificationRepository.projectProviderStatusById({
+       notificationId: message.notificationId,
+       providerStatus,
+     });
+     await operationAssignmentNotificationRepository.projectProviderStatusById({
+       notificationId: message.notificationId,
+       providerStatus,
+     });
++    await adminAlertNotificationRepository.projectProviderStatusById({
++      notificationId: message.notificationId,
++      providerStatus,
++    });
+   },
+ 
+   async projectOutboxProviderStatusByMessageSid(input: {
+     providerMessageSid: string;
+     providerStatus: string;
+   }): Promise<void> {
+     const providerStatus = input.providerStatus.toLowerCase();
+     await payrollReceiptNotificationRepository.projectProviderStatusByMessageSid({
+       providerMessageSid: input.providerMessageSid,
+       providerStatus,
+     });
+     await operationAssignmentNotificationRepository.projectProviderStatusByMessageSid({
+       providerMessageSid: input.providerMessageSid,
+       providerStatus,
+     });
++    await adminAlertNotificationRepository.projectProviderStatusByMessageSid({
++      providerMessageSid: input.providerMessageSid,
++      providerStatus,
++    });
+   },
+ 
+   async recordProviderStatus(input: {
+     providerMessageSid: string;
+     providerStatus: string;
+     errorCode?: string | null;
+     errorMessage?: string | null;
+     payload?: Record<string, unknown> | null;
+     providerTimestamp?: string | null;
+   }): Promise<{ created: boolean; messageId: string | null }> {
+     if (!this.isEnabled() && !env.WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED) {
+       return { created: false, messageId: null };
+     }
+ 
+     const sanitized = sanitizeObservabilityPayload(input.payload ?? null);
+     const providerEventKey = buildProviderEventKey({
+       messageSid: input.providerMessageSid,
+       status: input.providerStatus,
+       errorCode: input.errorCode,
+       providerTimestamp: input.providerTimestamp,
+diff --git a/backend/src/services/whatsapp-router/whatsapp-router.service.ts b/backend/src/services/whatsapp-router/whatsapp-router.service.ts
+index 3b6c9b0..578ae88 100644
+--- a/backend/src/services/whatsapp-router/whatsapp-router.service.ts
++++ b/backend/src/services/whatsapp-router/whatsapp-router.service.ts
+@@ -1,25 +1,28 @@
+ import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
+ import { isCheckoutSessionState } from "../../utils/bot-session-states";
+ import { InvalidCoordinatesError } from "../../utils/haversine";
+ import { parseOperationSelection } from "../../utils/intent";
+ import { maskPhoneNumberForLog } from "../../utils/phone";
++import { employeeRepository } from "../../repositories/employee.repository";
++import { buildForwardedLocationDedupKey } from "../../utils/admin-alert/dedup-keys";
++import { adminAlertService } from "../admin-alert.service";
+ import { parseBotIntent } from "../bot/bot-intent.parser";
+ import {
+   FORWARDED_LOCATION_REJECTED_MESSAGE,
+   GENERIC_ERROR_MESSAGE,
+   INVALID_COORDINATES_MESSAGE,
+   LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE,
+   LOCATION_WITHOUT_SESSION_MESSAGE,
+   UNPARSEABLE_MESSAGE,
+   UNKNOWN_EMPLOYEE_MESSAGE,
+ } from "../bot/bot-response.builder";
+ import {
+   extractLocationMessageMetadata,
+   isExplicitlyForwardedLocation,
+ } from "../../utils/location-message-metadata";
+ import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
+ import {
+   handleActiveAbsenceSession,
+   handleAbsenceIntent,
+   isAbsenceFlowSession,
+ } from "./absence.handler";
+@@ -247,40 +250,52 @@ export const whatsappRouterService = {
+     });
+     logWhatsAppAttendanceEvent("LOCATION_FORWARD_STATUS", {
+       companyId,
+       employeeId: ctx.employeeId,
+       messageSid: locationMetadata.sourceMessageSid,
+       isForwarded: locationMetadata.isForwarded,
+       isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
+     });
+ 
+     if (isExplicitlyForwardedLocation(locationMetadata)) {
+       logWhatsAppAttendanceEvent("FORWARDED_LOCATION_REJECTED", {
+         companyId,
+         employeeId: ctx.employeeId,
+         messageSid: locationMetadata.sourceMessageSid,
+         resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
+         reason: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
+         sessionState: ctx.session?.state ?? null,
+         isForwarded: locationMetadata.isForwarded,
+         isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
+       });
++      const employee = await employeeRepository.findById(companyId, ctx.employeeId);
++      if (employee) {
++        void adminAlertService.emit({
++          companyId,
++          type: "FORWARDED_LOCATION_REJECTED",
++          employeeId: ctx.employeeId,
++          deduplicationKey: buildForwardedLocationDedupKey(ctx.employeeId),
++          payload: {
++            employeeName: employee.name,
++          },
++        });
++      }
+       return handlers.respond(companyId, {
+         message: FORWARDED_LOCATION_REJECTED_MESSAGE,
+         employeeId: ctx.employeeId,
+         phoneFrom: ctx.phoneTo,
+         phoneTo: ctx.phoneFrom,
+         resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
+         flowType: "LOCATION_SECURITY",
+       });
+     }
+ 
+     if (!ctx.session) {
+       try {
+         return await handlers.processDirectLocationAttendance({
+           companyId,
+           employeeId: ctx.employeeId,
+           latitude: Number(ctx.payload.Latitude),
+           longitude: Number(ctx.payload.Longitude),
+           messageSid: ctx.payload.MessageSid,
+           phoneFrom: ctx.phoneFrom,
+           phoneTo: ctx.phoneTo,
+diff --git a/backend/src/types/admin-alert.ts b/backend/src/types/admin-alert.ts
+new file mode 100644
+index 0000000..ce47b9b
+--- /dev/null
++++ b/backend/src/types/admin-alert.ts
+@@ -0,0 +1,93 @@
++import type {
++  AdminAlertNotificationStatus,
++  AdminAlertSendAttemptStatus,
++  AdminAlertSeverity,
++  AdminAlertTemplateCategory,
++  AdminAlertType,
++} from "../constants/admin-alert";
++
++export type AdminAlertNotification = {
++  id: string;
++  companyId: string;
++  recipientId: string;
++  employeeId: string | null;
++  operationId: string | null;
++  absenceRequestId: string | null;
++  alertType: AdminAlertType;
++  severity: AdminAlertSeverity;
++  templateCategory: AdminAlertTemplateCategory;
++  deduplicationKey: string;
++  recipientPhone: string;
++  contentVariablesJson: string;
++  status: AdminAlertNotificationStatus;
++  attemptCount: number;
++  nextAttemptAt: string | null;
++  leaseOwner: string | null;
++  leaseExpiresAt: string | null;
++  providerMessageSid: string | null;
++  providerStatus: string | null;
++  activeSendAttemptId: string | null;
++  lastErrorCode: string | null;
++  lastErrorMessage: string | null;
++  occurredAt: string;
++  sentAt: string | null;
++  createdAt: string;
++  updatedAt: string;
++};
++
++export type AdminAlertNotificationSendAttempt = {
++  id: string;
++  companyId: string;
++  notificationId: string;
++  attemptNumber: number;
++  status: AdminAlertSendAttemptStatus;
++  providerMessageSid: string | null;
++  lastErrorCode: string | null;
++  lastErrorMessage: string | null;
++  startedAt: string;
++  finishedAt: string | null;
++  createdAt: string;
++  updatedAt: string;
++};
++
++export type AdminAlertEmitInput = {
++  companyId: string;
++  type: AdminAlertType;
++  severity?: AdminAlertSeverity;
++  category?: AdminAlertTemplateCategory;
++  employeeId?: string | null;
++  operationId?: string | null;
++  absenceRequestId?: string | null;
++  deduplicationKey: string;
++  payload: AdminAlertTemplatePayload;
++  occurredAt?: Date;
++};
++
++export type AdminAlertTemplatePayload = {
++  employeeName: string;
++  serviceName?: string | null;
++  serviceAddress?: string | null;
++  serviceLocality?: string | null;
++  scheduledStart?: string | null;
++  scheduledEnd?: string | null;
++  operationTimezone?: string | null;
++};
++
++export type AdminAlertEmitResult = {
++  enqueued: number;
++  dedupSkipped: number;
++  recipientSkipped: number;
++};
++
++export type MissingCheckinCandidate = {
++  employeeWorkdayId: string;
++  employeeId: string;
++  employeeName: string;
++  operationId: string;
++  serviceName: string;
++  serviceAddress: string | null;
++  serviceLocality: string | null;
++  scheduledStart: string;
++  scheduledEnd: string | null;
++  operationTimezone: string;
++};
+diff --git a/backend/src/types/company-alert-recipient.ts b/backend/src/types/company-alert-recipient.ts
+new file mode 100644
+index 0000000..b3fa717
+--- /dev/null
++++ b/backend/src/types/company-alert-recipient.ts
+@@ -0,0 +1,25 @@
++export type CompanyAlertRecipient = {
++  id: string;
++  companyId: string;
++  userId: string | null;
++  phoneNumber: string;
++  displayName: string | null;
++  isEnabled: boolean;
++  receiveOperationalAlerts: boolean;
++  receiveRequestAlerts: boolean;
++  receiveSecurityAlerts: boolean;
++  createdAt: string;
++  updatedAt: string;
++};
++
++export type CompanyAlertRecipientInput = {
++  userId?: string | null;
++  phoneNumber: string;
++  displayName?: string | null;
++  isEnabled?: boolean;
++  receiveOperationalAlerts?: boolean;
++  receiveRequestAlerts?: boolean;
++  receiveSecurityAlerts?: boolean;
++};
++
++export type CompanyAlertRecipientUpdateInput = Partial<CompanyAlertRecipientInput>;
+diff --git a/backend/src/types/company.ts b/backend/src/types/company.ts
+index 969152b..4be7236 100644
+--- a/backend/src/types/company.ts
++++ b/backend/src/types/company.ts
+@@ -86,40 +86,41 @@ export interface CompanySettings {
+   id: string;
+   companyId: string;
+   operationTimezone: string;
+   defaultRadiusMeters: number;
+   lateGraceMinutes: number;
+   earlyLeaveToleranceMinutes: number;
+   requireCheckoutLocation: boolean;
+   allowManualAttendanceCorrections: boolean;
+   defaultEarlyArrivalToleranceMinutes: number;
+   defaultLateArrivalToleranceMinutes: number;
+   defaultOperationStartTime: string | null;
+   defaultOperationEndTime: string | null;
+   geofenceReviewMarginMeters: number | null;
+   confirmationReminderEnabled: boolean;
+   confirmationReminderHoursBefore: number;
+   pendingOperationExpirationHours: number;
+   absenceAdvancedCalendarEnabled: boolean;
+   absenceBalanceLedgerEnabled: boolean;
+   absenceAttachmentsEnabled: boolean;
+   absenceOperationalIntegrationEnabled: boolean;
++  adminAlertsEnabled: boolean;
+   createdAt: string;
+   updatedAt: string;
+ }
+ 
+ export type CompanySettingsDto = Omit<CompanySettings, "id">;
+ 
+ export interface CompanyAbsenceSetting {
+   id: string;
+   companyId: string;
+   absenceTypeCode: string;
+   defaultAnnualDays: number;
+   autoAssignOnEmployeeCreate: boolean;
+   createdAt: string;
+   updatedAt: string;
+ }
+ 
+ export interface CompanyLocationType {
+   id: string;
+   companyId: string;
+   code: string;
+diff --git a/backend/src/utils/admin-alert/content-sid.ts b/backend/src/utils/admin-alert/content-sid.ts
+new file mode 100644
+index 0000000..ae48c0d
+--- /dev/null
++++ b/backend/src/utils/admin-alert/content-sid.ts
+@@ -0,0 +1,16 @@
++import { env } from "../../config/env";
++import type { AdminAlertTemplateCategory } from "../../constants/admin-alert";
++
++export const resolveAdminAlertContentSid = (
++  category: AdminAlertTemplateCategory,
++): string | null => {
++  switch (category) {
++    case "OPERATIONAL":
++    case "SECURITY":
++      return env.TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID?.trim() || null;
++    case "REQUEST":
++      return env.TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID?.trim() || null;
++    default:
++      return null;
++  }
++};
+diff --git a/backend/src/utils/admin-alert/dedup-keys.test.ts b/backend/src/utils/admin-alert/dedup-keys.test.ts
+new file mode 100644
+index 0000000..6af6965
+--- /dev/null
++++ b/backend/src/utils/admin-alert/dedup-keys.test.ts
+@@ -0,0 +1,26 @@
++import { describe, it } from "node:test";
++import assert from "node:assert/strict";
++import {
++  buildForwardedLocationDedupKey,
++  buildMissingCheckinDedupKey,
++  buildUnavailableDedupKey,
++} from "./dedup-keys";
++
++describe("admin alert dedup keys", () => {
++  it("builds unavailable key with schedule version", () => {
++    assert.equal(
++      buildUnavailableDedupKey("assignment-1", 2),
++      "unavailable:assignment-1:2",
++    );
++  });
++
++  it("builds missing checkin key from employee workday", () => {
++    assert.equal(buildMissingCheckinDedupKey("ew-1"), "missing-checkin:ew-1");
++  });
++
++  it("builds forwarded key with hour bucket", () => {
++    const at = new Date("2026-08-24T14:30:00.000Z");
++    const key = buildForwardedLocationDedupKey("emp-1", at);
++    assert.match(key, /^forwarded:emp-1:\d{10}$/);
++  });
++});
+diff --git a/backend/src/utils/admin-alert/dedup-keys.ts b/backend/src/utils/admin-alert/dedup-keys.ts
+new file mode 100644
+index 0000000..7e84881
+--- /dev/null
++++ b/backend/src/utils/admin-alert/dedup-keys.ts
+@@ -0,0 +1,26 @@
++import { env } from "../../config/env";
++import { getDateIsoInTimezone } from "../absence-date";
++
++/** Hour bucket for forwarded-location throttle (per employee/company/recipient). */
++export const buildForwardedLocationDedupKey = (
++  employeeId: string,
++  at: Date = new Date(),
++): string => {
++  const timeZone = env.BOT_OPERATION_TIMEZONE;
++  const dateIso = getDateIsoInTimezone(at, timeZone);
++  const hour = new Intl.DateTimeFormat("en-GB", {
++    timeZone,
++    hour: "2-digit",
++    hour12: false,
++  }).format(at);
++  const bucket = `${dateIso.replace(/-/g, "")}${hour}`;
++  return `forwarded:${employeeId}:${bucket}`;
++};
++
++export const buildUnavailableDedupKey = (
++  assignmentId: string,
++  scheduleVersion: number,
++): string => `unavailable:${assignmentId}:${scheduleVersion}`;
++
++export const buildMissingCheckinDedupKey = (employeeWorkdayId: string): string =>
++  `missing-checkin:${employeeWorkdayId}`;
+diff --git a/backend/src/utils/admin-alert/observability.ts b/backend/src/utils/admin-alert/observability.ts
+new file mode 100644
+index 0000000..f47d62a
+--- /dev/null
++++ b/backend/src/utils/admin-alert/observability.ts
+@@ -0,0 +1,26 @@
++type AdminAlertObservabilityEvent =
++  | "ADMIN_ALERT_ENQUEUED"
++  | "ADMIN_ALERT_DEDUP_SKIPPED"
++  | "ADMIN_ALERT_SENT"
++  | "ADMIN_ALERT_FAILED"
++  | "ADMIN_ALERT_RETRY"
++  | "ADMIN_ALERT_RECIPIENT_SKIPPED";
++
++type AdminAlertObservabilityPayload = {
++  companyId?: string;
++  recipientId?: string;
++  alertType?: string;
++  outboxId?: string;
++  operationId?: string | null;
++  employeeId?: string | null;
++  providerMessageSid?: string | null;
++  deduplicationKey?: string;
++  reason?: string;
++};
++
++export const logAdminAlertEvent = (
++  event: AdminAlertObservabilityEvent,
++  payload: AdminAlertObservabilityPayload,
++): void => {
++  console.info(`[admin-alert] ${event}`, payload);
++};
+diff --git a/backend/src/utils/admin-alert/template-variables.test.ts b/backend/src/utils/admin-alert/template-variables.test.ts
+new file mode 100644
+index 0000000..b24b005
+--- /dev/null
++++ b/backend/src/utils/admin-alert/template-variables.test.ts
+@@ -0,0 +1,42 @@
++import { describe, it } from "node:test";
++import assert from "node:assert/strict";
++import { buildAdminOperationalAlertTemplateVariables } from "./template-variables";
++
++describe("buildAdminOperationalAlertTemplateVariables", () => {
++  it("builds EMPLOYEE_UNAVAILABLE copy without empty variables", () => {
++    const vars = buildAdminOperationalAlertTemplateVariables("EMPLOYEE_UNAVAILABLE", {
++      employeeName: "Juan Pérez",
++      serviceName: "Carrefour Caballito",
++      scheduledStart: "2026-08-25T11:00:00.000Z",
++      operationTimezone: "America/Argentina/Buenos_Aires",
++    });
++
++    assert.equal(vars["1"], "No asistirá");
++    assert.equal(vars["2"], "Juan Pérez");
++    assert.match(vars["3"], /no podrá asistir/i);
++    assert.match(vars["4"], /Carrefour Caballito/);
++    assert.notEqual(vars["4"], "");
++  });
++
++  it("uses em dash for missing context on forwarded location", () => {
++    const vars = buildAdminOperationalAlertTemplateVariables("FORWARDED_LOCATION_REJECTED", {
++      employeeName: "Juan Pérez",
++    });
++
++    assert.equal(vars["1"], "Ubicación reenviada");
++    assert.equal(vars["4"], "—");
++  });
++
++  it("uses factual missing check-in wording", () => {
++    const vars = buildAdminOperationalAlertTemplateVariables("MISSING_CHECKIN_AFTER_OPERATION", {
++      employeeName: "Juan Pérez",
++      serviceName: "Carrefour Caballito",
++      scheduledStart: "2026-08-24T11:00:00.000Z",
++      operationTimezone: "America/Argentina/Buenos_Aires",
++    });
++
++    assert.equal(vars["1"], "Sin registro de llegada");
++    assert.match(vars["3"], /No existe registro de llegada/i);
++    assert.doesNotMatch(vars["3"], /faltó|nunca llegó|no asistió/i);
++  });
++});
+diff --git a/backend/src/utils/admin-alert/template-variables.ts b/backend/src/utils/admin-alert/template-variables.ts
+new file mode 100644
+index 0000000..ee4a518
+--- /dev/null
++++ b/backend/src/utils/admin-alert/template-variables.ts
+@@ -0,0 +1,131 @@
++import { env } from "../../config/env";
++import type { AdminAlertType, AdminAlertTemplateCategory } from "../../constants/admin-alert";
++import type { AdminAlertTemplatePayload } from "../../types/admin-alert";
++import { formatLocalTime } from "../attendance-validation";
++import { formatServiceReferenceFromFields } from "../format-service-reference";
++
++const EMPTY_CONTEXT = "—";
++
++const formatLocalDate = (iso: string, timeZone: string): string =>
++  new Intl.DateTimeFormat("es-AR", {
++    timeZone,
++    day: "2-digit",
++    month: "2-digit",
++    year: "numeric",
++  }).format(new Date(iso));
++
++const formatOperationContext = (payload: AdminAlertTemplatePayload): string => {
++  const timeZone = payload.operationTimezone?.trim() || env.BOT_OPERATION_TIMEZONE;
++  const serviceRef = formatServiceReferenceFromFields({
++    serviceName: payload.serviceName ?? "",
++    serviceAddress: payload.serviceAddress,
++    serviceLocality: payload.serviceLocality,
++  });
++
++  if (!serviceRef.trim()) {
++    return EMPTY_CONTEXT;
++  }
++
++  if (!payload.scheduledStart) {
++    return `Operación: ${serviceRef}`;
++  }
++
++  const datePart = formatLocalDate(payload.scheduledStart, timeZone);
++  const timePart = formatLocalTime(payload.scheduledStart, timeZone);
++  return `Operación: ${serviceRef} · ${datePart} ${timePart}`;
++};
++
++const formatMissingCheckinContext = (payload: AdminAlertTemplatePayload): string => {
++  const timeZone = payload.operationTimezone?.trim() || env.BOT_OPERATION_TIMEZONE;
++  const serviceRef = formatServiceReferenceFromFields({
++    serviceName: payload.serviceName ?? "",
++    serviceAddress: payload.serviceAddress,
++    serviceLocality: payload.serviceLocality,
++  });
++
++  if (!serviceRef.trim()) {
++    return EMPTY_CONTEXT;
++  }
++
++  const dateIso = payload.scheduledStart ?? payload.scheduledEnd;
++  if (!dateIso) {
++    return `Operación: ${serviceRef}`;
++  }
++
++  const datePart = formatLocalDate(dateIso, timeZone);
++  return `Operación: ${serviceRef} · ${datePart}`;
++};
++
++const alertCopyByType: Record<
++  AdminAlertType,
++  { title: string; detail: (payload: AdminAlertTemplatePayload) => string; context: (payload: AdminAlertTemplatePayload) => string }
++> = {
++  EMPLOYEE_UNAVAILABLE: {
++    title: "No asistirá",
++    detail: () => "Informó que no podrá asistir.",
++    context: formatOperationContext,
++  },
++  MISSING_CHECKIN_AFTER_OPERATION: {
++    title: "Sin registro de llegada",
++    detail: () => "No existe registro de llegada al finalizar la jornada.",
++    context: formatMissingCheckinContext,
++  },
++  FORWARDED_LOCATION_REJECTED: {
++    title: "Ubicación reenviada",
++    detail: () => "Intentó registrar asistencia utilizando una ubicación reenviada.",
++    context: (payload) => {
++      const ctx = formatOperationContext(payload);
++      return ctx === EMPTY_CONTEXT ? EMPTY_CONTEXT : ctx;
++    },
++  },
++};
++
++const sanitizeVariable = (value: string): string => {
++  const trimmed = value.trim();
++  return trimmed.length > 0 ? trimmed : EMPTY_CONTEXT;
++};
++
++/**
++ * Twilio admin_operational_alert variables:
++ * {{1}} alert title, {{2}} employee, {{3}} factual detail, {{4}} context
++ */
++export const buildAdminOperationalAlertTemplateVariables = (
++  alertType: AdminAlertType,
++  payload: AdminAlertTemplatePayload,
++): Record<string, string> => {
++  const copy = alertCopyByType[alertType];
++  return {
++    "1": sanitizeVariable(copy.title),
++    "2": sanitizeVariable(payload.employeeName),
++    "3": sanitizeVariable(copy.detail(payload)),
++    "4": sanitizeVariable(copy.context(payload)),
++  };
++};
++
++export const resolveTemplateCategoryForBuild = (
++  alertType: AdminAlertType,
++  category: AdminAlertTemplateCategory,
++): "operational" | "request" => {
++  if (category === "REQUEST") {
++    return "request";
++  }
++  return "operational";
++};
++
++export const buildAdminAlertTemplateVariables = (
++  alertType: AdminAlertType,
++  category: AdminAlertTemplateCategory,
++  payload: AdminAlertTemplatePayload,
++): Record<string, string> => {
++  const kind = resolveTemplateCategoryForBuild(alertType, category);
++  if (kind === "request") {
++    // Prepared for admin_request_alert; not used in Phase A+B emit paths.
++    return {
++      "1": sanitizeVariable(alertType),
++      "2": sanitizeVariable(payload.employeeName),
++      "3": EMPTY_CONTEXT,
++      "4": EMPTY_CONTEXT,
++    };
++  }
++  return buildAdminOperationalAlertTemplateVariables(alertType, payload);
++};
+diff --git a/database/migrations/100_company_alert_recipients_and_settings.sql b/database/migrations/100_company_alert_recipients_and_settings.sql
+new file mode 100644
+index 0000000..9a70474
+--- /dev/null
++++ b/database/migrations/100_company_alert_recipients_and_settings.sql
+@@ -0,0 +1,91 @@
++/*
++  Migration: 100_company_alert_recipients_and_settings.sql
++  Purpose:
++    - Explicit WhatsApp admin alert recipients per company (no auto-subscribe by role).
++    - Company-level adminAlertsEnabled feature flag (default off for existing tenants).
++  Rollback: database/migrations/rollback/100_company_alert_recipients_and_settings_rollback.sql
++*/
++
++USE dinamic_attendance;
++GO
++
++IF OBJECT_ID(N'dbo.companies', N'U') IS NULL
++BEGIN
++    THROW 50100, 'Precondition failed: companies missing', 1;
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.columns
++    WHERE object_id = OBJECT_ID(N'dbo.company_settings')
++      AND name = N'admin_alerts_enabled'
++)
++BEGIN
++    ALTER TABLE dbo.company_settings
++        ADD admin_alerts_enabled BIT NOT NULL
++            CONSTRAINT DF_company_settings_admin_alerts_enabled DEFAULT 0;
++END;
++GO
++
++IF OBJECT_ID(N'dbo.company_alert_recipients', N'U') IS NULL
++BEGIN
++    CREATE TABLE dbo.company_alert_recipients (
++        id UNIQUEIDENTIFIER NOT NULL
++            CONSTRAINT PK_company_alert_recipients PRIMARY KEY
++            DEFAULT NEWID(),
++        company_id UNIQUEIDENTIFIER NOT NULL,
++        user_id UNIQUEIDENTIFIER NULL,
++        phone_number NVARCHAR(20) NOT NULL,
++        display_name NVARCHAR(200) NULL,
++        is_enabled BIT NOT NULL
++            CONSTRAINT DF_car_is_enabled DEFAULT 1,
++        receive_operational_alerts BIT NOT NULL
++            CONSTRAINT DF_car_receive_operational DEFAULT 1,
++        receive_request_alerts BIT NOT NULL
++            CONSTRAINT DF_car_receive_request DEFAULT 0,
++        receive_security_alerts BIT NOT NULL
++            CONSTRAINT DF_car_receive_security DEFAULT 1,
++        created_at DATETIME2 NOT NULL
++            CONSTRAINT DF_car_created_at DEFAULT SYSUTCDATETIME(),
++        updated_at DATETIME2 NOT NULL
++            CONSTRAINT DF_car_updated_at DEFAULT SYSUTCDATETIME(),
++        CONSTRAINT FK_car_company
++            FOREIGN KEY (company_id) REFERENCES dbo.companies (id),
++        CONSTRAINT FK_car_user
++            FOREIGN KEY (user_id) REFERENCES dbo.users (id)
++    );
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UQ_car_company_phone'
++      AND object_id = OBJECT_ID(N'dbo.company_alert_recipients')
++)
++BEGIN
++    CREATE UNIQUE INDEX UQ_car_company_phone
++        ON dbo.company_alert_recipients (company_id, phone_number);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'IX_car_company_enabled'
++      AND object_id = OBJECT_ID(N'dbo.company_alert_recipients')
++)
++BEGIN
++    CREATE INDEX IX_car_company_enabled
++        ON dbo.company_alert_recipients (company_id, is_enabled);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UQ_car_id_company'
++      AND object_id = OBJECT_ID(N'dbo.company_alert_recipients')
++)
++BEGIN
++    CREATE UNIQUE INDEX UQ_car_id_company
++        ON dbo.company_alert_recipients (id, company_id);
++END;
++GO
+diff --git a/database/migrations/101_whatsapp_admin_alert_notifications.sql b/database/migrations/101_whatsapp_admin_alert_notifications.sql
+new file mode 100644
+index 0000000..6c962ed
+--- /dev/null
++++ b/database/migrations/101_whatsapp_admin_alert_notifications.sql
+@@ -0,0 +1,203 @@
++/*
++  Migration: 101_whatsapp_admin_alert_notifications.sql
++  Purpose:
++    - Durable outbox for WhatsApp admin alerts (lease claim, send attempts, dedupe).
++    - Idempotency: UNIQUE (company_id, deduplication_key, recipient_id).
++  Preconditions:
++    - company_alert_recipients (100)
++  Rollback: database/migrations/rollback/101_whatsapp_admin_alert_notifications_rollback.sql
++*/
++
++USE dinamic_attendance;
++GO
++
++IF OBJECT_ID(N'dbo.company_alert_recipients', N'U') IS NULL
++BEGIN
++    THROW 50101, 'Precondition failed: company_alert_recipients missing (apply 100 first)', 1;
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UQ_car_id_company'
++      AND object_id = OBJECT_ID(N'dbo.company_alert_recipients')
++)
++BEGIN
++    THROW 50101, 'Precondition failed: UQ_car_id_company missing', 1;
++END;
++GO
++
++IF OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications', N'U') IS NULL
++BEGIN
++    CREATE TABLE dbo.whatsapp_admin_alert_notifications (
++        id UNIQUEIDENTIFIER NOT NULL
++            CONSTRAINT PK_waan PRIMARY KEY
++            DEFAULT NEWID(),
++        company_id UNIQUEIDENTIFIER NOT NULL,
++        recipient_id UNIQUEIDENTIFIER NOT NULL,
++        employee_id UNIQUEIDENTIFIER NULL,
++        operation_id UNIQUEIDENTIFIER NULL,
++        absence_request_id UNIQUEIDENTIFIER NULL,
++        alert_type NVARCHAR(60) NOT NULL,
++        severity NVARCHAR(20) NOT NULL
++            CONSTRAINT DF_waan_severity DEFAULT N'INFO',
++        template_category NVARCHAR(20) NOT NULL,
++        deduplication_key NVARCHAR(200) NOT NULL,
++        recipient_phone NVARCHAR(20) NOT NULL,
++        content_variables_json NVARCHAR(MAX) NOT NULL,
++        status NVARCHAR(30) NOT NULL
++            CONSTRAINT DF_waan_status DEFAULT N'PENDING',
++        attempt_count INT NOT NULL
++            CONSTRAINT DF_waan_attempt_count DEFAULT 0,
++        next_attempt_at DATETIME2 NULL,
++        lease_owner NVARCHAR(100) NULL,
++        lease_expires_at DATETIME2 NULL,
++        provider_message_sid NVARCHAR(100) NULL,
++        provider_status NVARCHAR(40) NULL,
++        active_send_attempt_id UNIQUEIDENTIFIER NULL,
++        last_error_code NVARCHAR(80) NULL,
++        last_error_message NVARCHAR(1000) NULL,
++        occurred_at DATETIME2 NOT NULL
++            CONSTRAINT DF_waan_occurred_at DEFAULT SYSUTCDATETIME(),
++        sent_at DATETIME2 NULL,
++        created_at DATETIME2 NOT NULL
++            CONSTRAINT DF_waan_created_at DEFAULT SYSUTCDATETIME(),
++        updated_at DATETIME2 NOT NULL
++            CONSTRAINT DF_waan_updated_at DEFAULT SYSUTCDATETIME(),
++        CONSTRAINT FK_waan_company
++            FOREIGN KEY (company_id) REFERENCES dbo.companies (id),
++        CONSTRAINT FK_waan_recipient_company
++            FOREIGN KEY (recipient_id, company_id)
++            REFERENCES dbo.company_alert_recipients (id, company_id),
++        CONSTRAINT CK_waan_template_category
++            CHECK (template_category IN (N'OPERATIONAL', N'REQUEST', N'SECURITY')),
++        CONSTRAINT CK_waan_status
++            CHECK (status IN (
++                N'PENDING',
++                N'PROCESSING',
++                N'SEND_STARTED',
++                N'SEND_ACCEPTED',
++                N'FAILED',
++                N'CANCELLED',
++                N'SKIPPED',
++                N'RECONCILIATION_REQUIRED',
++                N'SENT_RECOVERY_REQUIRED'
++            )),
++        CONSTRAINT CK_waan_attempt_count CHECK (attempt_count >= 0)
++    );
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UQ_waan_company_dedup_recipient'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications')
++)
++BEGIN
++    CREATE UNIQUE INDEX UQ_waan_company_dedup_recipient
++        ON dbo.whatsapp_admin_alert_notifications (company_id, deduplication_key, recipient_id);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UQ_waan_id_company'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications')
++)
++BEGIN
++    CREATE UNIQUE INDEX UQ_waan_id_company
++        ON dbo.whatsapp_admin_alert_notifications (id, company_id);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'IX_waan_status_next_attempt'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications')
++)
++BEGIN
++    CREATE INDEX IX_waan_status_next_attempt
++        ON dbo.whatsapp_admin_alert_notifications (status, next_attempt_at);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'IX_waan_lease_expires'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications')
++)
++BEGIN
++    CREATE INDEX IX_waan_lease_expires
++        ON dbo.whatsapp_admin_alert_notifications (lease_expires_at);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'IX_waan_provider_message_sid'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications')
++)
++BEGIN
++    CREATE UNIQUE INDEX IX_waan_provider_message_sid
++        ON dbo.whatsapp_admin_alert_notifications (provider_message_sid)
++        WHERE provider_message_sid IS NOT NULL;
++END;
++GO
++
++IF OBJECT_ID(N'dbo.whatsapp_admin_alert_notification_send_attempts', N'U') IS NULL
++BEGIN
++    CREATE TABLE dbo.whatsapp_admin_alert_notification_send_attempts (
++        id UNIQUEIDENTIFIER NOT NULL
++            CONSTRAINT PK_waansa PRIMARY KEY
++            DEFAULT NEWID(),
++        company_id UNIQUEIDENTIFIER NOT NULL,
++        notification_id UNIQUEIDENTIFIER NOT NULL,
++        attempt_number INT NOT NULL,
++        status NVARCHAR(30) NOT NULL
++            CONSTRAINT DF_waansa_status DEFAULT N'STARTED',
++        provider_message_sid NVARCHAR(100) NULL,
++        last_error_code NVARCHAR(80) NULL,
++        last_error_message NVARCHAR(1000) NULL,
++        started_at DATETIME2 NOT NULL
++            CONSTRAINT DF_waansa_started DEFAULT SYSUTCDATETIME(),
++        finished_at DATETIME2 NULL,
++        created_at DATETIME2 NOT NULL
++            CONSTRAINT DF_waansa_created DEFAULT SYSUTCDATETIME(),
++        updated_at DATETIME2 NOT NULL
++            CONSTRAINT DF_waansa_updated_at DEFAULT SYSUTCDATETIME(),
++        CONSTRAINT FK_waansa_notification_company
++            FOREIGN KEY (notification_id, company_id)
++            REFERENCES dbo.whatsapp_admin_alert_notifications (id, company_id),
++        CONSTRAINT CK_waansa_status CHECK (status IN (
++            N'STARTED',
++            N'PROVIDER_ACCEPTED',
++            N'PROVIDER_FAILED',
++            N'AMBIGUOUS'
++        )),
++        CONSTRAINT CK_waansa_attempt_number CHECK (attempt_number >= 1)
++    );
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'UQ_waansa_notification_attempt'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notification_send_attempts')
++)
++BEGIN
++    CREATE UNIQUE INDEX UQ_waansa_notification_attempt
++        ON dbo.whatsapp_admin_alert_notification_send_attempts (notification_id, attempt_number);
++END;
++GO
++
++IF NOT EXISTS (
++    SELECT 1 FROM sys.indexes
++    WHERE name = N'IX_waansa_provider_message_sid'
++      AND object_id = OBJECT_ID(N'dbo.whatsapp_admin_alert_notification_send_attempts')
++)
++BEGIN
++    CREATE INDEX IX_waansa_provider_message_sid
++        ON dbo.whatsapp_admin_alert_notification_send_attempts (provider_message_sid)
++        WHERE provider_message_sid IS NOT NULL;
++END;
++GO
+diff --git a/database/migrations/rollback/100_company_alert_recipients_and_settings_rollback.sql b/database/migrations/rollback/100_company_alert_recipients_and_settings_rollback.sql
+new file mode 100644
+index 0000000..917b8e4
+--- /dev/null
++++ b/database/migrations/rollback/100_company_alert_recipients_and_settings_rollback.sql
+@@ -0,0 +1,19 @@
++USE dinamic_attendance;
++GO
++
++IF OBJECT_ID(N'dbo.company_alert_recipients', N'U') IS NOT NULL
++BEGIN
++    DROP TABLE dbo.company_alert_recipients;
++END;
++GO
++
++IF EXISTS (
++    SELECT 1 FROM sys.columns
++    WHERE object_id = OBJECT_ID(N'dbo.company_settings')
++      AND name = N'admin_alerts_enabled'
++)
++BEGIN
++    ALTER TABLE dbo.company_settings DROP CONSTRAINT DF_company_settings_admin_alerts_enabled;
++    ALTER TABLE dbo.company_settings DROP COLUMN admin_alerts_enabled;
++END;
++GO
+diff --git a/database/migrations/rollback/101_whatsapp_admin_alert_notifications_rollback.sql b/database/migrations/rollback/101_whatsapp_admin_alert_notifications_rollback.sql
+new file mode 100644
+index 0000000..e82a528
+--- /dev/null
++++ b/database/migrations/rollback/101_whatsapp_admin_alert_notifications_rollback.sql
+@@ -0,0 +1,14 @@
++USE dinamic_attendance;
++GO
++
++IF OBJECT_ID(N'dbo.whatsapp_admin_alert_notification_send_attempts', N'U') IS NOT NULL
++BEGIN
++    DROP TABLE dbo.whatsapp_admin_alert_notification_send_attempts;
++END;
++GO
++
++IF OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications', N'U') IS NOT NULL
++BEGIN
++    DROP TABLE dbo.whatsapp_admin_alert_notifications;
++END;
++GO
+diff --git a/frontend/src/api/company-alert-recipients.api.ts b/frontend/src/api/company-alert-recipients.api.ts
+new file mode 100644
+index 0000000..40b86bc
+--- /dev/null
++++ b/frontend/src/api/company-alert-recipients.api.ts
+@@ -0,0 +1,38 @@
++import type {
++  CompanyAlertRecipient,
++  CreateCompanyAlertRecipientInput,
++  UpdateCompanyAlertRecipientInput,
++} from "../types/company-alert-recipient";
++import { scopedApiClient } from "./scoped-client";
++
++export async function listCompanyAlertRecipients(): Promise<CompanyAlertRecipient[]> {
++  const { data } = await scopedApiClient.get<{ data: CompanyAlertRecipient[] }>(
++    "company-alert-recipients",
++  );
++  return data.data;
++}
++
++export async function createCompanyAlertRecipient(
++  input: CreateCompanyAlertRecipientInput,
++): Promise<CompanyAlertRecipient> {
++  const { data } = await scopedApiClient.post<{ data: CompanyAlertRecipient }>(
++    "company-alert-recipients",
++    input,
++  );
++  return data.data;
++}
++
++export async function updateCompanyAlertRecipient(
++  recipientId: string,
++  input: UpdateCompanyAlertRecipientInput,
++): Promise<CompanyAlertRecipient> {
++  const { data } = await scopedApiClient.patch<{ data: CompanyAlertRecipient }>(
++    `company-alert-recipients/${recipientId}`,
++    input,
++  );
++  return data.data;
++}
++
++export async function deleteCompanyAlertRecipient(recipientId: string): Promise<void> {
++  await scopedApiClient.delete(`company-alert-recipients/${recipientId}`);
++}
+diff --git a/frontend/src/api/company-path.ts b/frontend/src/api/company-path.ts
+index 64c28ff..70c41dd 100644
+--- a/frontend/src/api/company-path.ts
++++ b/frontend/src/api/company-path.ts
+@@ -12,40 +12,41 @@ export class ActiveCompanyRequiredError extends Error {
+ const ACTIVE_COMPANY_STORAGE_KEY = "dinamic.activeCompanyId";
+ 
+ const GLOBAL_API_PREFIXES = ["auth", "health", "webhooks", "database"] as const;
+ 
+ export const OPERATIONAL_API_PREFIXES = [
+   "employees",
+   "employee-categories",
+   "location-zones",
+   "operations",
+   "services",
+   "attendance",
+   "statistics",
+   "absence-types",
+   "absence-requests",
+   "absence-calendars",
+   "payroll-receipt-batches",
+   "payroll-receipts",
+   "bot-simulator",
+   "users",
+   "settings",
++  "company-alert-recipients",
+   "modules",
+   "lookups",
+   "work-teams",
+   "work-team-assignment-batches",
+   "imports",
+   "invitations",
+   "dev",
+ ] as const;
+ 
+ /** @deprecated Use scopedApiPath via scopedApiClient instead. */
+ export const LEGACY_OPERATIONAL_API_PREFIXES = OPERATIONAL_API_PREFIXES.filter(
+   (prefix) => prefix !== "dev",
+ );
+ 
+ export function getStoredCompanyId(): string | null {
+   return localStorage.getItem(ACTIVE_COMPANY_STORAGE_KEY);
+ }
+ 
+ export function setStoredCompanyId(companyId: string | null): void {
+   if (!companyId) {
+diff --git a/frontend/src/hooks/useCompanyAlertRecipients.ts b/frontend/src/hooks/useCompanyAlertRecipients.ts
+new file mode 100644
+index 0000000..04765c8
+--- /dev/null
++++ b/frontend/src/hooks/useCompanyAlertRecipients.ts
+@@ -0,0 +1,73 @@
++import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
++import {
++  createCompanyAlertRecipient,
++  deleteCompanyAlertRecipient,
++  listCompanyAlertRecipients,
++  updateCompanyAlertRecipient,
++} from "../api/company-alert-recipients.api";
++import type {
++  CreateCompanyAlertRecipientInput,
++  UpdateCompanyAlertRecipientInput,
++} from "../types/company-alert-recipient";
++import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
++
++export const companyAlertRecipientsQueryKey = (companyId?: string) =>
++  ["company-alert-recipients", companyId] as const;
++
++export function useCompanyAlertRecipients(enabled = true) {
++  const { companyId, enabled: scopeEnabled } = useOperationalQueryEnabled(enabled);
++
++  return useQuery({
++    queryKey: companyAlertRecipientsQueryKey(companyId),
++    queryFn: () => listCompanyAlertRecipients(),
++    enabled: scopeEnabled,
++  });
++}
++
++export function useCreateCompanyAlertRecipient() {
++  const queryClient = useQueryClient();
++  const { companyId } = useOperationalQueryEnabled();
++
++  return useMutation({
++    mutationFn: (input: CreateCompanyAlertRecipientInput) => createCompanyAlertRecipient(input),
++    onSuccess: () => {
++      void queryClient.invalidateQueries({
++        queryKey: companyAlertRecipientsQueryKey(companyId),
++      });
++    },
++  });
++}
++
++export function useUpdateCompanyAlertRecipient() {
++  const queryClient = useQueryClient();
++  const { companyId } = useOperationalQueryEnabled();
++
++  return useMutation({
++    mutationFn: ({
++      recipientId,
++      input,
++    }: {
++      recipientId: string;
++      input: UpdateCompanyAlertRecipientInput;
++    }) => updateCompanyAlertRecipient(recipientId, input),
++    onSuccess: () => {
++      void queryClient.invalidateQueries({
++        queryKey: companyAlertRecipientsQueryKey(companyId),
++      });
++    },
++  });
++}
++
++export function useDeleteCompanyAlertRecipient() {
++  const queryClient = useQueryClient();
++  const { companyId } = useOperationalQueryEnabled();
++
++  return useMutation({
++    mutationFn: (recipientId: string) => deleteCompanyAlertRecipient(recipientId),
++    onSuccess: () => {
++      void queryClient.invalidateQueries({
++        queryKey: companyAlertRecipientsQueryKey(companyId),
++      });
++    },
++  });
++}
+diff --git a/frontend/src/pages/settings/CompanySettingsPage.tsx b/frontend/src/pages/settings/CompanySettingsPage.tsx
+index 779ae33..e379724 100644
+--- a/frontend/src/pages/settings/CompanySettingsPage.tsx
++++ b/frontend/src/pages/settings/CompanySettingsPage.tsx
+@@ -5,85 +5,91 @@ import { useSearchParams } from "react-router";
+ import { ErrorState, LoadingState, PageHeader } from "../../design-system";
+ import { useAbsenceAttachmentStorageHealth } from "../../hooks/useAbsenceAttachments";
+ import { useCompanyAbsenceSettings } from "../../hooks/useCompanyAbsenceSettings";
+ import { useCompanyLocationTypes } from "../../hooks/useCompanyLocationTypes";
+ import { useCompanySettings } from "../../hooks/useCompanySettings";
+ import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
+ import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
+ import { useLocationZones } from "../../hooks/useLocationZones";
+ import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+ import { companyRoleLabels } from "../../utils/labels";
+ import { getApiErrorMessage } from "../../utils/errors";
+ import { hasPermission } from "../../utils/permissions";
+ import {
+   buildAbsenceSummary,
+   buildEmployeeCategoriesSummary,
+   buildLocationTypesSummary,
+   buildLocationZonesSummary,
+   buildOperationalSettingsSummary,
+   buildWorkScheduleSummary,
+ } from "./company-settings-summaries";
++import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
++import {
++  useCompanyAlertRecipients,
++} from "../../hooks/useCompanyAlertRecipients";
+ import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
+ import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
+ import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
+ import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypePolicyDialog";
+ import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
+ import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
+ import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
+ import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
+ import { LocationZonesDialog } from "./components/LocationZonesDialog";
+ import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
+ import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
+ import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+ 
+ type SettingsTab = "company" | "absences";
+ 
+ type DialogKey =
+   | "operational"
+   | "absences"
+   | "absenceTypePolicy"
+   | "absenceCalendar"
+   | "absenceOperationalIntegration"
+   | "locationTypes"
+   | "workSchedule"
+   | "employeeCategories"
+-  | "locationZones";
++  | "locationZones"
++  | "whatsappAlerts";
+ 
+ const parseTab = (value: string | null): SettingsTab =>
+   value === "absences" ? "absences" : "company";
+ 
+ export function CompanySettingsPage() {
+   const [searchParams, setSearchParams] = useSearchParams();
+   const activeTab = parseTab(searchParams.get("tab"));
+   const { companyId: activeCompanyId } = useOperationalQueryEnabled();
+ 
+   const permissionsQuery = useCompanyPermissions();
+   const canRead = permissionsQuery.data?.permissions.includes("company:read") ?? false;
+   const canUpdate =
+     permissionsQuery.data?.permissions.includes("company:settings:update") ?? false;
+   const canManageLocationZones =
+     canUpdate || hasPermission(permissionsQuery.data?.permissions, "employees:manage");
+ 
+   const companyTabEnabled = canRead && activeTab === "company";
+   const absencesTabEnabled = canRead && activeTab === "absences";
+ 
+   const settingsQuery = useCompanySettings(companyTabEnabled || absencesTabEnabled);
++  const alertRecipientsQuery = useCompanyAlertRecipients(companyTabEnabled && canRead);
+   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
+   const locationTypesQuery = useCompanyLocationTypes(false);
+   const employeeCategoriesQuery = useEmployeeCategories(
+     { includeInactive: true },
+     companyTabEnabled,
+   );
+   const locationZonesQuery = useLocationZones({ includeInactive: true }, companyTabEnabled);
+ 
+   const absenceSettingsQuery = useCompanyAbsenceSettings(absencesTabEnabled);
+   const absenceCalendarQuery = useDefaultAbsenceCalendar(absencesTabEnabled);
+   const storageHealthQuery = useAbsenceAttachmentStorageHealth(
+     absencesTabEnabled && canUpdate,
+   );
+ 
+   const [openDialog, setOpenDialog] = useState<DialogKey | null>(null);
+   const [dialogCompanyId, setDialogCompanyId] = useState(activeCompanyId);
+ 
+   if (dialogCompanyId !== activeCompanyId) {
+     setDialogCompanyId(activeCompanyId);
+     if (openDialog !== null) {
+@@ -153,40 +159,70 @@ export function CompanySettingsPage() {
+         <Tabs.List>
+           <Tabs.Tab value="company" aria-selected={activeTab === "company"}>
+             Empresa
+           </Tabs.Tab>
+           <Tabs.Tab value="absences" aria-selected={activeTab === "absences"}>
+             Ausencias
+           </Tabs.Tab>
+         </Tabs.List>
+ 
+         <Tabs.Panel value="company" pt="md">
+           <SimpleGrid cols={{ base: 1, md: 2 }} spacing="md">
+             <SettingsSummaryCard
+               title="Configuración operativa"
+               description="Defaults usados por operaciones, importaciones y validaciones del bot."
+               summaryItems={operationalSummary?.summaryItems ?? []}
+               actionLabel="Gestionar configuración operativa"
+               canEdit={canUpdate}
+               onAction={() => setOpenDialog("operational")}
+             />
+ 
++            <SettingsSummaryCard
++              title="Alertas WhatsApp"
++              description="Destinatarios explícitos y activación de alertas operativas y de seguridad para administradores."
++              summaryItems={[
++                {
++                  label: "Compañía",
++                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitadas" : "Deshabilitadas",
++                },
++                {
++                  label: "Destinatarios",
++                  value: `${alertRecipientsQuery.data?.filter((r) => r.isEnabled).length ?? 0} activos`,
++                },
++              ]}
++              loading={settingsQuery.isLoading || alertRecipientsQuery.isLoading}
++              error={
++                settingsQuery.isError
++                  ? getApiErrorMessage(settingsQuery.error)
++                  : alertRecipientsQuery.isError
++                    ? getApiErrorMessage(alertRecipientsQuery.error)
++                    : null
++              }
++              onRetry={() => {
++                void settingsQuery.refetch();
++                void alertRecipientsQuery.refetch();
++              }}
++              actionLabel="Gestionar alertas"
++              canEdit={canUpdate && !settingsQuery.isError && !alertRecipientsQuery.isError}
++              onAction={() => setOpenDialog("whatsappAlerts")}
++            />
++
+             <SettingsSummaryCard
+               title="Horario laboral semanal"
+               description="Horario predeterminado para operaciones habituales con horario de la empresa."
+               summaryItems={
+                 workScheduleQuery.data
+                   ? buildWorkScheduleSummary(workScheduleQuery.data).summaryItems
+                   : []
+               }
+               loading={workScheduleQuery.isLoading}
+               error={
+                 workScheduleQuery.isError ? getApiErrorMessage(workScheduleQuery.error) : null
+               }
+               onRetry={() => void workScheduleQuery.refetch()}
+               actionLabel="Gestionar horario"
+               canEdit={canUpdate && !workScheduleQuery.isError}
+               onAction={() => setOpenDialog("workSchedule")}
+             />
+ 
+             <SettingsSummaryCard
+               title="Formato"
+@@ -408,40 +444,50 @@ export function CompanySettingsPage() {
+                     !storageHealthQuery.data?.storageAvailable ? (
+                       <Text size="xs" c="dimmed">
+                         El almacenamiento debe estar configurado en el servidor para poder
+                         subir archivos.
+                       </Text>
+                     ) : null}
+                   </Stack>
+                 }
+               />
+             ) : null}
+ 
+             <Alert color="gray">
+               Los saldos individuales de colaboradores se gestionan en la ficha del empleado, no
+               en configuración. El ledger de saldos se activa por empresa con un proceso administrativo
+               explícito.
+             </Alert>
+           </SimpleGrid>
+         </Tabs.Panel>
+       </Tabs>
+ 
++      {openDialog === "whatsappAlerts" && settingsQuery.data ? (
++        <CompanyWhatsAppAlertsDialog
++          opened
++          onClose={() => setOpenDialog(null)}
++          settings={settingsQuery.data}
++          canUpdate={canUpdate}
++          onSaved={handleSaved}
++        />
++      ) : null}
++
+       {openDialog === "operational" && settingsQuery.data ? (
+         <CompanyOperationalSettingsDialog
+           key={`operational-${settingsQuery.data.companyId}-${settingsQuery.data.updatedAt}`}
+           opened
+           onClose={() => setOpenDialog(null)}
+           settings={settingsQuery.data}
+           canUpdate={canUpdate}
+           onSaved={handleSaved}
+         />
+       ) : null}
+ 
+       {openDialog === "absences" && absenceSettingsQuery.data ? (
+         <CompanyAbsenceSettingsDialog
+           opened
+           onClose={() => setOpenDialog(null)}
+           settings={absenceSettingsQuery.data}
+           canUpdate={canUpdate}
+           onSaved={handleSaved}
+         />
+       ) : null}
+diff --git a/frontend/src/pages/settings/components/CompanyWhatsAppAlertsDialog.tsx b/frontend/src/pages/settings/components/CompanyWhatsAppAlertsDialog.tsx
+new file mode 100644
+index 0000000..80048cd
+--- /dev/null
++++ b/frontend/src/pages/settings/components/CompanyWhatsAppAlertsDialog.tsx
+@@ -0,0 +1,43 @@
++import { Button, Group } from "@mantine/core";
++import type { CompanySettings } from "../../../types/company-settings";
++import { ResponsiveModal } from "../../../design-system";
++import { CompanyWhatsAppAlertsDialogContent } from "./CompanyWhatsAppAlertsDialogContent";
++
++interface CompanyWhatsAppAlertsDialogProps {
++  opened: boolean;
++  onClose: () => void;
++  settings: CompanySettings;
++  canUpdate: boolean;
++  onSaved: (message: string) => void;
++}
++
++export function CompanyWhatsAppAlertsDialog({
++  opened,
++  onClose,
++  settings,
++  canUpdate,
++  onSaved,
++}: CompanyWhatsAppAlertsDialogProps) {
++  return (
++    <ResponsiveModal
++      opened={opened}
++      onClose={onClose}
++      title="Alertas WhatsApp"
++      size="xl"
++      bodyMode="scroll"
++      footer={
++        <Group justify="flex-end">
++          <Button variant="default" onClick={onClose}>
++            Cerrar
++          </Button>
++        </Group>
++      }
++    >
++      <CompanyWhatsAppAlertsDialogContent
++        settings={settings}
++        canUpdate={canUpdate}
++        onSaved={onSaved}
++      />
++    </ResponsiveModal>
++  );
++}
+diff --git a/frontend/src/pages/settings/components/CompanyWhatsAppAlertsDialogContent.tsx b/frontend/src/pages/settings/components/CompanyWhatsAppAlertsDialogContent.tsx
+new file mode 100644
+index 0000000..728bf5d
+--- /dev/null
++++ b/frontend/src/pages/settings/components/CompanyWhatsAppAlertsDialogContent.tsx
+@@ -0,0 +1,269 @@
++import {
++  Button,
++  Group,
++  ScrollArea,
++  Stack,
++  Switch,
++  Table,
++  Text,
++  TextInput,
++} from "@mantine/core";
++import { useState } from "react";
++import { FormErrorAlert } from "../../../design-system";
++import {
++  useCompanyAlertRecipients,
++  useCreateCompanyAlertRecipient,
++  useDeleteCompanyAlertRecipient,
++  useUpdateCompanyAlertRecipient,
++} from "../../../hooks/useCompanyAlertRecipients";
++import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
++import type { CompanySettings } from "../../../types/company-settings";
++import { getApiErrorMessage } from "../../../utils/errors";
++
++interface CompanyWhatsAppAlertsDialogContentProps {
++  settings: CompanySettings;
++  canUpdate: boolean;
++  onSaved: (message: string) => void;
++}
++
++export function CompanyWhatsAppAlertsDialogContent({
++  settings,
++  canUpdate,
++  onSaved,
++}: CompanyWhatsAppAlertsDialogContentProps) {
++  const recipientsQuery = useCompanyAlertRecipients(true);
++  const createMutation = useCreateCompanyAlertRecipient();
++  const updateMutation = useUpdateCompanyAlertRecipient();
++  const deleteMutation = useDeleteCompanyAlertRecipient();
++  const updateSettings = useUpdateCompanySettings();
++
++  const [displayName, setDisplayName] = useState("");
++  const [phoneNumber, setPhoneNumber] = useState("");
++  const [submitError, setSubmitError] = useState<string | null>(null);
++
++  const busy =
++    createMutation.isPending ||
++    updateMutation.isPending ||
++    deleteMutation.isPending ||
++    updateSettings.isPending;
++
++  const handleToggleCompanyAlerts = async (checked: boolean) => {
++    if (!canUpdate) {
++      return;
++    }
++    setSubmitError(null);
++    try {
++      await updateSettings.mutateAsync({ adminAlertsEnabled: checked });
++      onSaved("Configuración de alertas actualizada.");
++    } catch (error) {
++      setSubmitError(getApiErrorMessage(error));
++    }
++  };
++
++  const handleCreate = async () => {
++    if (!canUpdate || !phoneNumber.trim()) {
++      return;
++    }
++    setSubmitError(null);
++    try {
++      await createMutation.mutateAsync({
++        displayName: displayName.trim() || null,
++        phoneNumber: phoneNumber.trim(),
++      });
++      setDisplayName("");
++      setPhoneNumber("");
++      onSaved("Destinatario agregado.");
++    } catch (error) {
++      setSubmitError(getApiErrorMessage(error));
++    }
++  };
++
++  const handleToggleRecipient = async (recipientId: string, isEnabled: boolean) => {
++    if (!canUpdate) {
++      return;
++    }
++    setSubmitError(null);
++    try {
++      await updateMutation.mutateAsync({ recipientId, input: { isEnabled } });
++      onSaved("Destinatario actualizado.");
++    } catch (error) {
++      setSubmitError(getApiErrorMessage(error));
++    }
++  };
++
++  const handleToggleCategory = async (
++    recipientId: string,
++    field: "receiveOperationalAlerts" | "receiveRequestAlerts" | "receiveSecurityAlerts",
++    value: boolean,
++  ) => {
++    if (!canUpdate) {
++      return;
++    }
++    setSubmitError(null);
++    try {
++      await updateMutation.mutateAsync({ recipientId, input: { [field]: value } });
++      onSaved("Preferencias actualizadas.");
++    } catch (error) {
++      setSubmitError(getApiErrorMessage(error));
++    }
++  };
++
++  const handleDelete = async (recipientId: string) => {
++    if (!canUpdate) {
++      return;
++    }
++    setSubmitError(null);
++    try {
++      await deleteMutation.mutateAsync(recipientId);
++      onSaved("Destinatario desactivado.");
++    } catch (error) {
++      setSubmitError(getApiErrorMessage(error));
++    }
++  };
++
++  return (
++    <Stack gap="md">
++      <Text size="sm" c="dimmed">
++        Configurá destinatarios explícitos para alertas WhatsApp operativas y de seguridad. No se
++        suscribe automáticamente por rol.
++      </Text>
++
++      <Switch
++        label="Alertas WhatsApp habilitadas para la compañía"
++        description="Debe estar activo junto con el worker del servidor y los templates Twilio."
++        checked={settings.adminAlertsEnabled ?? false}
++        onChange={(event) => void handleToggleCompanyAlerts(event.currentTarget.checked)}
++        disabled={!canUpdate || busy}
++      />
++
++      {canUpdate ? (
++        <Group align="flex-end" wrap="wrap">
++          <TextInput
++            label="Nombre"
++            placeholder="Ej. Responsable operaciones"
++            value={displayName}
++            onChange={(event) => setDisplayName(event.currentTarget.value)}
++            disabled={busy}
++            style={{ flex: 1, minWidth: 180 }}
++          />
++          <TextInput
++            label="Teléfono (E.164)"
++            placeholder="+5491112345678"
++            value={phoneNumber}
++            onChange={(event) => setPhoneNumber(event.currentTarget.value)}
++            disabled={busy}
++            style={{ flex: 1, minWidth: 180 }}
++          />
++          <Button onClick={() => void handleCreate()} disabled={busy || !phoneNumber.trim()}>
++            Agregar destinatario
++          </Button>
++        </Group>
++      ) : null}
++
++      {recipientsQuery.isLoading ? (
++        <Text size="sm" c="dimmed">
++          Cargando destinatarios…
++        </Text>
++      ) : null}
++
++      {recipientsQuery.data && recipientsQuery.data.length === 0 ? (
++        <Text size="sm" c="dimmed">
++          No hay destinatarios configurados.
++        </Text>
++      ) : null}
++
++      {recipientsQuery.data && recipientsQuery.data.length > 0 ? (
++        <ScrollArea type="scroll" offsetScrollbars>
++          <Table striped highlightOnHover miw={720}>
++            <Table.Thead>
++              <Table.Tr>
++                <Table.Th>Nombre</Table.Th>
++                <Table.Th>Teléfono</Table.Th>
++                <Table.Th>Activo</Table.Th>
++                <Table.Th>Operativas</Table.Th>
++                <Table.Th>Solicitudes</Table.Th>
++                <Table.Th>Seguridad</Table.Th>
++                <Table.Th />
++              </Table.Tr>
++            </Table.Thead>
++            <Table.Tbody>
++              {recipientsQuery.data.map((recipient) => (
++                <Table.Tr key={recipient.id}>
++                  <Table.Td>{recipient.displayName ?? "—"}</Table.Td>
++                  <Table.Td>{recipient.phoneNumber}</Table.Td>
++                  <Table.Td>
++                    <Switch
++                      checked={recipient.isEnabled}
++                      onChange={(event) =>
++                        void handleToggleRecipient(recipient.id, event.currentTarget.checked)
++                      }
++                      disabled={!canUpdate || busy}
++                      aria-label={`Activo ${recipient.displayName ?? recipient.phoneNumber}`}
++                    />
++                  </Table.Td>
++                  <Table.Td>
++                    <Switch
++                      checked={recipient.receiveOperationalAlerts}
++                      onChange={(event) =>
++                        void handleToggleCategory(
++                          recipient.id,
++                          "receiveOperationalAlerts",
++                          event.currentTarget.checked,
++                        )
++                      }
++                      disabled={!canUpdate || busy}
++                      aria-label="Operativas"
++                    />
++                  </Table.Td>
++                  <Table.Td>
++                    <Switch
++                      checked={recipient.receiveRequestAlerts}
++                      onChange={(event) =>
++                        void handleToggleCategory(
++                          recipient.id,
++                          "receiveRequestAlerts",
++                          event.currentTarget.checked,
++                        )
++                      }
++                      disabled={!canUpdate || busy}
++                      aria-label="Solicitudes"
++                    />
++                  </Table.Td>
++                  <Table.Td>
++                    <Switch
++                      checked={recipient.receiveSecurityAlerts}
++                      onChange={(event) =>
++                        void handleToggleCategory(
++                          recipient.id,
++                          "receiveSecurityAlerts",
++                          event.currentTarget.checked,
++                        )
++                      }
++                      disabled={!canUpdate || busy}
++                      aria-label="Seguridad"
++                    />
++                  </Table.Td>
++                  <Table.Td>
++                    {canUpdate ? (
++                      <Button
++                        variant="subtle"
++                        color="red"
++                        size="compact-sm"
++                        onClick={() => void handleDelete(recipient.id)}
++                        disabled={busy}
++                      >
++                        Desactivar
++                      </Button>
++                    ) : null}
++                  </Table.Td>
++                </Table.Tr>
++              ))}
++            </Table.Tbody>
++          </Table>
++        </ScrollArea>
++      ) : null}
++
++      <FormErrorAlert message={submitError} />
++    </Stack>
++  );
++}
+diff --git a/frontend/src/types/company-alert-recipient.ts b/frontend/src/types/company-alert-recipient.ts
+new file mode 100644
+index 0000000..cfd49e6
+--- /dev/null
++++ b/frontend/src/types/company-alert-recipient.ts
+@@ -0,0 +1,25 @@
++export type CompanyAlertRecipient = {
++  id: string;
++  companyId: string;
++  userId: string | null;
++  phoneNumber: string;
++  displayName: string | null;
++  isEnabled: boolean;
++  receiveOperationalAlerts: boolean;
++  receiveRequestAlerts: boolean;
++  receiveSecurityAlerts: boolean;
++  createdAt: string;
++  updatedAt: string;
++};
++
++export type CreateCompanyAlertRecipientInput = {
++  userId?: string | null;
++  phoneNumber: string;
++  displayName?: string | null;
++  isEnabled?: boolean;
++  receiveOperationalAlerts?: boolean;
++  receiveRequestAlerts?: boolean;
++  receiveSecurityAlerts?: boolean;
++};
++
++export type UpdateCompanyAlertRecipientInput = Partial<CreateCompanyAlertRecipientInput>;
+diff --git a/frontend/src/types/company-settings.ts b/frontend/src/types/company-settings.ts
+index 108b064..2de835c 100644
+--- a/frontend/src/types/company-settings.ts
++++ b/frontend/src/types/company-settings.ts
+@@ -1,62 +1,64 @@
+ export interface CompanySettings {
+   companyId: string;
+   operationTimezone: string;
+   defaultRadiusMeters: number;
+   lateGraceMinutes: number;
+   earlyLeaveToleranceMinutes: number;
+   requireCheckoutLocation: boolean;
+   allowManualAttendanceCorrections: boolean;
+   defaultEarlyArrivalToleranceMinutes: number;
+   defaultLateArrivalToleranceMinutes: number;
+   defaultOperationStartTime: string | null;
+   defaultOperationEndTime: string | null;
+   geofenceReviewMarginMeters: number | null;
+   confirmationReminderEnabled: boolean;
+   confirmationReminderHoursBefore: number;
+   pendingOperationExpirationHours: number;
+   absenceAdvancedCalendarEnabled?: boolean;
+   absenceAttachmentsEnabled?: boolean;
+   absenceOperationalIntegrationEnabled?: boolean;
++  adminAlertsEnabled?: boolean;
+   createdAt: string;
+   updatedAt: string;
+ }
+ 
+ export type UpdateCompanySettingsInput = Partial<
+   Pick<
+     CompanySettings,
+     | "operationTimezone"
+     | "defaultRadiusMeters"
+     | "lateGraceMinutes"
+     | "earlyLeaveToleranceMinutes"
+     | "requireCheckoutLocation"
+     | "allowManualAttendanceCorrections"
+     | "defaultEarlyArrivalToleranceMinutes"
+     | "defaultLateArrivalToleranceMinutes"
+     | "defaultOperationStartTime"
+     | "defaultOperationEndTime"
+     | "geofenceReviewMarginMeters"
+     | "confirmationReminderEnabled"
+     | "confirmationReminderHoursBefore"
+     | "pendingOperationExpirationHours"
+     | "absenceAdvancedCalendarEnabled"
+     | "absenceAttachmentsEnabled"
+     | "absenceOperationalIntegrationEnabled"
++    | "adminAlertsEnabled"
+   >
+ >;
+ 
+ export interface CompanySettingsFormValues {
+   operationTimezone: string;
+   defaultRadiusMeters: string;
+   geofenceReviewMarginMeters: string;
+   defaultOperationStartTime: string;
+   defaultOperationEndTime: string;
+   defaultEarlyArrivalToleranceMinutes: string;
+   defaultLateArrivalToleranceMinutes: string;
+   lateGraceMinutes: string;
+   earlyLeaveToleranceMinutes: string;
+   requireCheckoutLocation: boolean;
+   allowManualAttendanceCorrections: boolean;
+   confirmationReminderEnabled: boolean;
+   confirmationReminderHoursBefore: string;
+   pendingOperationExpirationHours: string;
+ }

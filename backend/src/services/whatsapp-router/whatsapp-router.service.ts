@@ -3,6 +3,9 @@ import { isCheckoutSessionState } from "../../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../../utils/haversine";
 import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
+import { employeeRepository } from "../../repositories/employee.repository";
+import { buildForwardedLocationDedupKey } from "../../utils/admin-alert/dedup-keys";
+import { adminAlertService } from "../admin-alert.service";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
   FORWARDED_LOCATION_REJECTED_MESSAGE,
@@ -264,6 +267,18 @@ export const whatsappRouterService = {
         isForwarded: locationMetadata.isForwarded,
         isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
       });
+      const employee = await employeeRepository.findById(companyId, ctx.employeeId);
+      if (employee) {
+        void adminAlertService.emit({
+          companyId,
+          type: "FORWARDED_LOCATION_REJECTED",
+          employeeId: ctx.employeeId,
+          deduplicationKey: buildForwardedLocationDedupKey(ctx.employeeId),
+          payload: {
+            employeeName: employee.name,
+          },
+        });
+      }
       return handlers.respond(companyId, {
         message: FORWARDED_LOCATION_REJECTED_MESSAGE,
         employeeId: ctx.employeeId,

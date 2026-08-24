@@ -115,6 +115,14 @@ const envSchema = z
       .int()
       .positive()
       .default(30_000),
+    TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID: z.string().optional(),
+    TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID: z.string().optional(),
+    ADMIN_ALERT_WORKER_ENABLED: z.stringbool().default(false),
+    ADMIN_ALERT_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
+    ADMIN_ALERT_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    ADMIN_ALERT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
+    ADMIN_ALERT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    ADMIN_ALERT_FORWARDED_THROTTLE_MINUTES: z.coerce.number().int().positive().default(60),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
@@ -335,6 +343,22 @@ const envSchema = z
         code: "custom",
         message: assignmentSidGate.message,
         path: ["TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID"],
+      });
+    }
+
+    const adminAlertSidGate = requireContentSidWhenWorkerEnabled(
+      {
+        workerEnabled: data.ADMIN_ALERT_WORKER_ENABLED,
+        contentSid: data.TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID,
+      },
+      "TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID",
+      "ADMIN_ALERT_WORKER_ENABLED",
+    );
+    if (!adminAlertSidGate.ok) {
+      ctx.addIssue({
+        code: "custom",
+        message: adminAlertSidGate.message,
+        path: ["TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID"],
       });
     }
 

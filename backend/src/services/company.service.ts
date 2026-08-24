@@ -43,6 +43,7 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   absenceBalanceLedgerEnabled: settings.absenceBalanceLedgerEnabled,
   absenceAttachmentsEnabled: settings.absenceAttachmentsEnabled,
   absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
+  adminAlertsEnabled: settings.adminAlertsEnabled,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });

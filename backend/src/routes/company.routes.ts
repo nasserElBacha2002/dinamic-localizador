@@ -18,6 +18,12 @@ import {
   updateCompanyLocationTypeSchema,
 } from "../schemas/company-location-type.schema";
 import { updateCompanyModulesSchema } from "../schemas/company-module.schema";
+import {
+  companyAlertRecipientIdParamSchema,
+  createCompanyAlertRecipientSchema,
+  updateCompanyAlertRecipientSchema,
+} from "../schemas/company-alert-recipient.schema";
+import { companyAlertRecipientController } from "../controllers/company-alert-recipient.controller";
 
 export const companyRouter = Router();
 
@@ -139,4 +145,38 @@ companyRouter.patch(
   resolveCompanyContext,
   asyncHandler(requirePlatformAdmin),
   asyncHandler(companyController.updateModules),
+);
+
+companyRouter.get(
+  "/:companyId/company-alert-recipients",
+  validate(companyIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:read"),
+  asyncHandler(companyAlertRecipientController.list),
+);
+
+companyRouter.post(
+  "/:companyId/company-alert-recipients",
+  validate(companyIdParamSchema, "params"),
+  validate(createCompanyAlertRecipientSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyAlertRecipientController.create),
+);
+
+companyRouter.patch(
+  "/:companyId/company-alert-recipients/:recipientId",
+  validate(companyAlertRecipientIdParamSchema, "params"),
+  validate(updateCompanyAlertRecipientSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyAlertRecipientController.update),
+);
+
+companyRouter.delete(
+  "/:companyId/company-alert-recipients/:recipientId",
+  validate(companyAlertRecipientIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyAlertRecipientController.remove),
 );

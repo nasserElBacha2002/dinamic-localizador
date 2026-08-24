@@ -17,6 +17,7 @@ export interface CompanySettings {
   absenceAdvancedCalendarEnabled?: boolean;
   absenceAttachmentsEnabled?: boolean;
   absenceOperationalIntegrationEnabled?: boolean;
+  adminAlertsEnabled?: boolean;
   createdAt: string;
   updatedAt: string;
 }
@@ -41,6 +42,7 @@ export type UpdateCompanySettingsInput = Partial<
     | "absenceAdvancedCalendarEnabled"
     | "absenceAttachmentsEnabled"
     | "absenceOperationalIntegrationEnabled"
+    | "adminAlertsEnabled"
   >
 >;
 

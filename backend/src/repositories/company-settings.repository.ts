@@ -64,6 +64,8 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
     row.absence_operational_integration_enabled == null
       ? false
       : Boolean(row.absence_operational_integration_enabled),
+  adminAlertsEnabled:
+    row.admin_alerts_enabled == null ? false : Boolean(row.admin_alerts_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -203,6 +205,7 @@ export const companySettingsRepository = {
         | "absenceAdvancedCalendarEnabled"
         | "absenceAttachmentsEnabled"
         | "absenceOperationalIntegrationEnabled"
+        | "adminAlertsEnabled"
       >
     >,
   ): Promise<CompanySettings | null> {
@@ -327,6 +330,10 @@ export const companySettingsRepository = {
       fields.push(
         "absence_operational_integration_enabled = @absenceOperationalIntegrationEnabled",
       );
+    }
+    if (input.adminAlertsEnabled !== undefined) {
+      request.input("adminAlertsEnabled", sql.Bit, input.adminAlertsEnabled ? 1 : 0);
+      fields.push("admin_alerts_enabled = @adminAlertsEnabled");
     }
 
     if (fields.length === 0) {

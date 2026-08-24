@@ -31,6 +31,22 @@ mockApiModule(
   "api/employees.api",
   {
     getEmployeeById: async () => employee,
+    getEmployeeOperations: async () => ({
+      data: [],
+      meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+    }),
+    getEmployeeOperationalAvailability: async () => ({
+      currentStatus: "AVAILABLE",
+      timezone: "America/Argentina/Buenos_Aires",
+      intervalStartAt: "2026-01-01T00:00:00.000Z",
+      intervalEndAt: "2026-01-01T23:59:59.999Z",
+      coveringAbsenceIds: [],
+      nextApprovedAbsence: null,
+      pendingRequests: [],
+      affectedOperationIds: [],
+      openConflicts: [],
+      relatedReplacements: [],
+    }),
   },
   EMPLOYEES_API_EXPORTS,
 );
@@ -80,6 +96,95 @@ mockApiModule("api/company-users.api", {
     throw new Error("not used");
   },
   getActiveCompanyMembershipPath: () => null,
+});
+
+mockApiModule("api/company-modules.api", {
+  getCompanyModules: async () => [
+    {
+      companyId: "co-1",
+      moduleKey: "attendance",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      companyId: "co-1",
+      moduleKey: "operations",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      companyId: "co-1",
+      moduleKey: "absences",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      companyId: "co-1",
+      moduleKey: "payroll_receipts",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+    {
+      companyId: "co-1",
+      moduleKey: "reports",
+      isEnabled: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    },
+  ],
+  updateCompanyModules: async () => [],
+});
+
+mockApiModule("api/statistics.api", {
+  getAttendanceStatisticsSummary: async () => ({
+    scheduledWorkdays: 0,
+    attendanceRequiredWorkdays: 0,
+    presentWorkdays: 0,
+    absentWorkdays: 0,
+    justifiedWorkdays: 0,
+    expectedOpenWorkdays: 0,
+    cancelledWorkdays: 0,
+    attendanceRate: 0,
+    absenceRate: 0,
+    onTimeWorkdays: 0,
+    lateWorkdays: 0,
+    punctualityRate: 0,
+    earlyDepartureWorkdays: 0,
+    workedMinutes: 0,
+    overtimeMinutes: 0,
+    openAttendanceWorkdays: 0,
+    outsideGeofenceCount: 0,
+    pendingReviewCount: 0,
+    rejectedCount: 0,
+    manuallyAcceptedCount: 0,
+    totalOperations: 0,
+    incompleteCoverageOperations: 0,
+    coverageRate: 0,
+    hoursDataIncomplete: false,
+  }),
+  getAttendanceStatisticsTimeline: async () => [],
+  getAttendanceActionExceptions: async () => [],
+  getAttendanceStatusDistribution: async () => [],
+  getAttendanceByEmployee: async () => ({
+    data: [],
+    meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+  }),
+  getAttendanceByOperation: async () => ({
+    data: [],
+    meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+  }),
+  getAttendanceByService: async () => ({
+    data: [],
+    meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+  }),
+  getAttendanceWorkdayDetails: async () => ({
+    data: [],
+    meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+  }),
 });
 
 mockApiModule(
@@ -138,7 +243,9 @@ describe("EmployeeDetailPage", () => {
     });
     assert.ok(view.getByText("Información general"));
     assert.ok(view.getByText(/Detalle de colaborador/i));
-    assert.equal(view.queryByRole("button", { name: /^Editar$/i }), null);
+    assert.ok(view.getByRole("tab", { name: /^Resumen$/i }));
+    assert.equal(view.queryByRole("link", { name: /^Editar$/i }), null);
+    assert.equal(view.queryByRole("button", { name: /Ver asistencias/i }), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);
     assert.equal(view.queryByRole("button", { name: /Ajustar/i }), null);
     assert.equal(view.queryByRole("textbox"), null);
@@ -146,7 +253,7 @@ describe("EmployeeDetailPage", () => {
   });
 
   it("manager with employees:manage but without absences:balance:update cannot edit balance", async () => {
-    membershipPermissions = ["employees:manage", "employees:read"];
+    membershipPermissions = ["employees:manage", "employees:read", "absences:read"];
     absenceBalances = [
       {
         absenceType: {
@@ -170,7 +277,7 @@ describe("EmployeeDetailPage", () => {
       <Routes>
         <Route path="/employees/:id" element={<EmployeeDetailPage />} />
       </Routes>,
-      { route: "/employees/emp-1" },
+      { route: "/employees/emp-1?tab=ausencias" },
     );
 
     await waitFor(() => {
@@ -182,7 +289,7 @@ describe("EmployeeDetailPage", () => {
     assert.equal(view.queryByRole("button", { name: /Ajustar/i }), null);
   });
 
-  it("user with absences:balance:update can see Ajustar", async () => {
+  it("user with absences:balance:update can see Ajustar in Ausencias tab", async () => {
     membershipPermissions = ["employees:read", "absences:balance:update", "absences:read"];
     absenceBalances = [
       {
@@ -207,7 +314,7 @@ describe("EmployeeDetailPage", () => {
       <Routes>
         <Route path="/employees/:id" element={<EmployeeDetailPage />} />
       </Routes>,
-      { route: "/employees/emp-1" },
+      { route: "/employees/emp-1?tab=ausencias" },
     );
 
     await waitFor(() => {
@@ -244,6 +351,7 @@ describe("EmployeeDetailPage", () => {
     await waitFor(() => {
       assert.ok(view.getByRole("link", { name: /^Editar$/i }));
     });
+    assert.ok(view.getByRole("button", { name: /Volver al listado/i }));
     assert.ok(view.getByText("Información general"));
     assert.equal(view.queryByRole("textbox"), null);
     assert.equal(view.queryByRole("button", { name: /Guardar cambios/i }), null);

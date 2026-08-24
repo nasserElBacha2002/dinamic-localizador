@@ -18,6 +18,7 @@ import {
   createEmployeeSchema,
   deactivateEmployeeSchema,
   employeeIdParamSchema,
+  listEmployeeOperationsQuerySchema,
   listEmployeesQuerySchema,
   updateEmployeeSchema,
 } from "../schemas/employee.schema";
@@ -82,6 +83,13 @@ employeeRouter.get(
   requirePermission("employees:read"),
   validate(employeeIdParamSchema, "params"),
   asyncHandler(employeeController.getOperationalAvailability),
+);
+employeeRouter.get(
+  "/:id/operations",
+  requirePermission("employees:read"),
+  validate(employeeIdParamSchema, "params"),
+  validate(listEmployeeOperationsQuerySchema, "query"),
+  asyncHandler(employeeController.listOperations),
 );
 employeeRouter.post(
   "/:id/deactivate",

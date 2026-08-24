@@ -1,34 +1,89 @@
-import { Button, Stack } from "@mantine/core";
-import { useNavigate, useParams } from "react-router";
-import { EmployeeAbsenceBalanceCard } from "../../components/absences/EmployeeAbsenceBalanceCard";
-import { EmployeeAbsenceHistoryTable } from "../../components/absences/EmployeeAbsenceHistoryTable";
-import { EmployeeOperationalAvailabilityCard } from "../../components/employees/EmployeeOperationalAvailabilityCard";
+import { Button, Group, Stack, Tabs } from "@mantine/core";
+import { lazy, Suspense, useMemo } from "react";
+import { useSearchParams } from "react-router";
+import { useParams } from "react-router";
 import { EntityEditAction } from "../../components/navigation/EntityEditAction";
 import {
-  ActionMenu,
-  DetailFieldGrid,
   EntityPageTitle,
   ErrorState,
   LoadingState,
   PageHeader,
-  SectionCard,
-  StatusBadge,
-  type ActionMenuItem,
 } from "../../design-system";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useEmployee } from "../../hooks/useEmployees";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { terminology } from "../../domain/terminology";
-import { safeText } from "../../utils/display-safe";
-import { filterEmployeeModuleQuickLinks } from "../../utils/employee-module-quick-links";
+import { canAccessModuleRoute, type ModuleRouteAccessKey } from "../../utils/company-modules";
 import { getApiErrorMessage } from "../../utils/errors";
-import { activeStatusLabel, employeeTypeLabels } from "../../utils/labels";
 import { hasPermission } from "../../utils/permissions";
+import {
+  EMPLOYEE_DETAIL_TABS,
+  parseEmployeeDetailTab,
+  type EmployeeDetailTabKey,
+} from "./employee-detail-tabs";
+import { EmployeeSummaryTab } from "./tabs/EmployeeSummaryTab";
+
+const EmployeeOperationsTab = lazy(() =>
+  import("./tabs/EmployeeOperationsTab").then((module) => ({
+    default: module.EmployeeOperationsTab,
+  })),
+);
+const EmployeeAttendanceTab = lazy(() =>
+  import("./tabs/EmployeeAttendanceTab").then((module) => ({
+    default: module.EmployeeAttendanceTab,
+  })),
+);
+const EmployeeAbsencesTab = lazy(() =>
+  import("./tabs/EmployeeAbsencesTab").then((module) => ({
+    default: module.EmployeeAbsencesTab,
+  })),
+);
+const EmployeePayrollTab = lazy(() =>
+  import("./tabs/EmployeePayrollTab").then((module) => ({
+    default: module.EmployeePayrollTab,
+  })),
+);
+const EmployeeStatisticsTab = lazy(() =>
+  import("./tabs/EmployeeStatisticsTab").then((module) => ({
+    default: module.EmployeeStatisticsTab,
+  })),
+);
+
+const TAB_MODULE_ACCESS: Partial<Record<EmployeeDetailTabKey, ModuleRouteAccessKey>> = {
+  asistencias: "attendance",
+  ausencias: "absences",
+  recibos: "payroll_receipts",
+  estadisticas: "reports",
+};
+
+function canAccessEmployeeDetailTab(
+  tab: EmployeeDetailTabKey,
+  modules: ReturnType<typeof useCompanyModules>["data"],
+  permissions: string[] | undefined,
+): boolean {
+  if (tab === "resumen") {
+    return true;
+  }
+
+  if (tab === "operaciones") {
+    return (
+      hasPermission(permissions, "operations:read") ||
+      hasPermission(permissions, "operations:manage")
+    );
+  }
+
+  const accessKey = TAB_MODULE_ACCESS[tab];
+  if (!accessKey) {
+    return true;
+  }
+
+  return canAccessModuleRoute(modules, permissions, accessKey);
+}
 
 export function EmployeeDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { goBackToList } = useListBackNavigation("/employees");
   const permissionsQuery = useCompanyPermissions();
   const modulesQuery = useCompanyModules();
@@ -38,6 +93,31 @@ export function EmployeeDetailPage() {
     "absences:balance:update",
   );
   const employeeQuery = useEmployee(id);
+
+  const permissions = permissionsQuery.data?.permissions;
+  const modules = modulesQuery.data;
+
+  const availableTabs = useMemo(
+    () =>
+      EMPLOYEE_DETAIL_TABS.filter((tab) =>
+        canAccessEmployeeDetailTab(tab.value, modules, permissions),
+      ),
+    [modules, permissions],
+  );
+
+  const requestedTab = parseEmployeeDetailTab(searchParams.get("tab"));
+  const activeTab = availableTabs.some((tab) => tab.value === requestedTab)
+    ? requestedTab
+    : "resumen";
+
+  const setActiveTab = (value: string | null) => {
+    const nextTab = parseEmployeeDetailTab(value);
+    if (nextTab === "resumen") {
+      setSearchParams({}, { replace: true });
+      return;
+    }
+    setSearchParams({ tab: nextTab }, { replace: true });
+  };
 
   if (!id) {
     return <ErrorState message={`${terminology.worker.singular} no encontrado.`} />;
@@ -59,30 +139,6 @@ export function EmployeeDetailPage() {
   }
 
   const employee = employeeQuery.data;
-  const currentYear = new Date().getFullYear();
-
-  // Module quick-links are best-effort: never block the detail page on modules load/error.
-  const moduleLinks =
-    !modulesQuery.isPending && !modulesQuery.isError && modulesQuery.data
-      ? filterEmployeeModuleQuickLinks(
-          employee.id,
-          modulesQuery.data,
-          permissionsQuery.data?.permissions,
-        )
-      : [];
-
-  const secondaryItems: ActionMenuItem[] = [
-    ...moduleLinks.map((link) => ({
-      key: link.accessKey,
-      label: link.label,
-      onClick: () => navigate(link.to),
-    })),
-    {
-      key: "back",
-      label: "Volver al listado",
-      onClick: goBackToList,
-    },
-  ];
 
   return (
     <Stack gap="md">
@@ -90,83 +146,58 @@ export function EmployeeDetailPage() {
         title={<EntityPageTitle name={employee.name} entityType="collaborator" />}
         description={`Detalle de ${terminology.worker.singular.toLowerCase()}`}
         action={
-          <ActionMenu
-            primary={
-              canManage ? (
-                <EntityEditAction entity="employees" id={employee.id} />
-              ) : (
-                <Button variant="default" onClick={goBackToList}>
-                  Volver al listado
-                </Button>
-              )
-            }
-            items={
-              canManage
-                ? secondaryItems
-                : moduleLinks.map((link) => ({
-                    key: link.accessKey,
-                    label: link.label,
-                    onClick: () => navigate(link.to),
-                  }))
-            }
-            menuLabel={`Más acciones del ${terminology.worker.singular.toLowerCase()}`}
-          />
+          <Group gap="sm">
+            {canManage ? <EntityEditAction entity="employees" id={employee.id} /> : null}
+            <Button variant="default" onClick={goBackToList}>
+              Volver al listado
+            </Button>
+          </Group>
         }
       />
 
-      <SectionCard title="Información general">
-        <DetailFieldGrid
-          fields={[
-            { label: "Nombre", value: employee.name },
-            { label: "Documento", value: safeText(employee.documentNumber) },
-            { label: "Teléfono", value: employee.phoneNumber },
-            {
-              label: `Tipo de ${terminology.worker.singular.toLowerCase()}`,
-              value: employeeTypeLabels[employee.employeeType],
-            },
-            { label: "Categoría", value: safeText(employee.category?.name ?? null) },
-            ...(canManage
-              ? [
-                  {
-                    label: "Zona de residencia",
-                    value: safeText(
-                      employee.locationZone
-                        ? employee.locationZone.locality
-                          ? `${employee.locationZone.name} (${employee.locationZone.locality})`
-                          : employee.locationZone.name
-                        : null,
-                    ),
-                  },
-                ]
-              : []),
-            {
-              label: "Estado",
-              value: (
-                <StatusBadge
-                  label={activeStatusLabel(employee.active)}
-                  tone={employee.active ? "success" : "neutral"}
-                />
-              ),
-            },
-          ]}
-        />
-      </SectionCard>
+      <Tabs value={activeTab} onChange={setActiveTab}>
+        <Tabs.List style={{ flexWrap: "nowrap", overflowX: "auto" }}>
+          {availableTabs.map((tab) => (
+            <Tabs.Tab key={tab.value} value={tab.value}>
+              {tab.label}
+            </Tabs.Tab>
+          ))}
+        </Tabs.List>
+      </Tabs>
 
-      <SectionCard title="Disponibilidad operacional">
-        <EmployeeOperationalAvailabilityCard employeeId={employee.id} />
-      </SectionCard>
+      {activeTab === "resumen" ? (
+        <EmployeeSummaryTab employee={employee} canManage={canManage} enabled />
+      ) : null}
 
-      <SectionCard title={`Ausencias · Saldos ${currentYear}`}>
-        <EmployeeAbsenceBalanceCard
-          employeeId={employee.id}
-          year={currentYear}
-          showEdit={canUpdateBalance}
-        />
-      </SectionCard>
+      {activeTab === "operaciones" ? (
+        <Suspense fallback={<LoadingState />}>
+          <EmployeeOperationsTab employeeId={employee.id} enabled />
+        </Suspense>
+      ) : null}
 
-      <SectionCard title={`Ausencias · Historial ${currentYear}`}>
-        <EmployeeAbsenceHistoryTable employeeId={employee.id} year={currentYear} />
-      </SectionCard>
+      {activeTab === "asistencias" ? (
+        <Suspense fallback={<LoadingState />}>
+          <EmployeeAttendanceTab employeeId={employee.id} />
+        </Suspense>
+      ) : null}
+
+      {activeTab === "ausencias" ? (
+        <Suspense fallback={<LoadingState />}>
+          <EmployeeAbsencesTab employeeId={employee.id} canUpdateBalance={canUpdateBalance} />
+        </Suspense>
+      ) : null}
+
+      {activeTab === "recibos" ? (
+        <Suspense fallback={<LoadingState />}>
+          <EmployeePayrollTab employeeId={employee.id} />
+        </Suspense>
+      ) : null}
+
+      {activeTab === "estadisticas" ? (
+        <Suspense fallback={<LoadingState />}>
+          <EmployeeStatisticsTab employeeId={employee.id} enabled />
+        </Suspense>
+      ) : null}
     </Stack>
   );
 }

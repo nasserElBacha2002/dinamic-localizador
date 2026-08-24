@@ -29,6 +29,18 @@ describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
   });
 });
 
+describe("employeeAssignmentQueryRepository.listEmployeeOperations", () => {
+  it("orders paginated results by scheduled_start alias outside the inner subquery", () => {
+    const methodSource = repositorySource.slice(
+      repositorySource.indexOf("async listEmployeeOperations"),
+      repositorySource.indexOf("async listUpcomingForEmployee"),
+    );
+    assert.match(methodSource, /ORDER BY scheduled_start DESC/);
+    assert.match(methodSource, /ORDER BY scheduled_start ASC/);
+    assert.doesNotMatch(methodSource, /ORDER BY i\.scheduled_start (ASC|DESC)/);
+  });
+});
+
 describe("employeeWorkdayAvailabilityRepository.listTodayWorkdaysForEmployee", () => {
   it("lists today workdays by work_date for ONE_TIME and RECURRING", () => {
     assert.match(availabilityRepositorySource, /async listTodayWorkdaysForEmployee/);

@@ -73,6 +73,97 @@ export const employeeAssignmentQueryRepository = {
     );
   },
 
+  async listEmployeeOperations(
+    companyId: string,
+    employeeId: string,
+    segment: "active" | "past",
+    at: Date,
+    pagination: { offset: number; limit: number },
+    dateFrom?: Date | null,
+    dateTo?: Date | null,
+  ): Promise<{ rows: EmployeeAssignedOperation[]; total: number }> {
+    const segmentClause =
+      segment === "active"
+        ? `
+          AND i.status NOT IN ('COMPLETED', 'CANCELLED')
+          AND (
+            i.status = 'IN_PROGRESS'
+            OR i.scheduled_end IS NULL
+            OR i.scheduled_end >= @at
+          )`
+        : `
+          AND (
+            i.status = 'COMPLETED'
+            OR (i.scheduled_end IS NOT NULL AND i.scheduled_end < @at)
+          )`;
+
+    const dateClause = `
+      AND (@dateFrom IS NULL OR i.scheduled_start >= @dateFrom)
+      AND (@dateTo IS NULL OR i.scheduled_start <= @dateTo)
+    `;
+
+    const orderClause =
+      segment === "active" ? "ORDER BY scheduled_start ASC" : "ORDER BY scheduled_start DESC";
+
+    const pool = getPool();
+    const countResult = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("at", sql.DateTime2, at)
+      .input("dateFrom", sql.DateTime2, dateFrom ?? null)
+      .input("dateTo", sql.DateTime2, dateTo ?? null)
+      .query(`
+        SELECT COUNT(DISTINCT ie.id) AS total
+        FROM operation_assignments ie
+        INNER JOIN scheduled_operations i
+          ON i.id = ie.operation_id AND i.company_id = @companyId
+        INNER JOIN operation_workdays ow
+          ON ow.operation_id = i.id AND ow.company_id = i.company_id
+         AND ow.work_date >= ie.valid_from
+         AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
+        WHERE ie.company_id = @companyId
+          AND ie.employee_id = @employeeId
+          AND ie.cancelled_at IS NULL
+          AND i.operation_kind = N'ONE_TIME'
+          AND i.status NOT IN ('CANCELLED')
+          ${segmentClause}
+          ${dateClause}
+      `);
+
+    const total = Number((countResult.recordset[0] as { total: number }).total ?? 0);
+    if (total === 0) {
+      return { rows: [], total: 0 };
+    }
+
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("at", sql.DateTime2, at)
+      .input("dateFrom", sql.DateTime2, dateFrom ?? null)
+      .input("dateTo", sql.DateTime2, dateTo ?? null)
+      .input("offset", sql.Int, pagination.offset)
+      .input("limit", sql.Int, pagination.limit)
+      .query(`
+        SELECT *
+        FROM (
+          ${ASSIGNED_OPERATION_SELECT}
+            ${segmentClause}
+            ${dateClause}
+        ) assigned_operations
+        ${orderClause}
+        OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
+      `);
+
+    return {
+      rows: result.recordset.map((row) =>
+        mapEmployeeAssignedOperationRow(row as Record<string, unknown>),
+      ),
+      total,
+    };
+  },
+
   async listUpcomingForEmployee(
     companyId: string,
     employeeId: string,

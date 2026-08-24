@@ -8,8 +8,8 @@ describe("frontend absence operational surfaces", () => {
     resolve(process.cwd(), "src/components/operations/OperationEmployeeTable.tsx"),
     "utf8",
   );
-  const employeePage = readFileSync(
-    resolve(process.cwd(), "src/pages/employees/EmployeeDetailPage.tsx"),
+  const employeeSummaryTab = readFileSync(
+    resolve(process.cwd(), "src/pages/employees/tabs/EmployeeSummaryTab.tsx"),
     "utf8",
   );
   const availabilityCard = readFileSync(
@@ -25,8 +25,8 @@ describe("frontend absence operational surfaces", () => {
   });
 
   it("shows operational availability on employee detail", () => {
-    assert.match(employeePage, /Disponibilidad operacional/);
-    assert.match(employeePage, /EmployeeOperationalAvailabilityCard/);
+    assert.match(employeeSummaryTab, /Disponibilidad operacional/);
+    assert.match(employeeSummaryTab, /EmployeeOperationalAvailabilityCard/);
     assert.match(availabilityCard, /operational-availability/);
     assert.match(availabilityCard, /Conflictos abiertos/);
   });

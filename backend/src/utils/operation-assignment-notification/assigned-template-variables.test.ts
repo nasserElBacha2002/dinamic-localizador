@@ -18,6 +18,9 @@ describe("buildOperationAssignmentAssignedTemplateVariables", () => {
     assert.equal(vars["2"], "Obra Norte - Calle Falsa 123 - CABA");
     assert.equal(vars["3"], "11/08/2026");
     assert.equal(vars["4"], "09:00");
+    assert.equal(Object.keys(vars).sort().join(","), "1,2,3,4");
+    assert.doesNotMatch(vars["2"], /\d{2}:\d{2}/);
+    assert.doesNotMatch(vars["2"], /\d{2}\/\d{2}\/\d{4}/);
   });
 
   it("uses service name alone when address/locality empty", () => {

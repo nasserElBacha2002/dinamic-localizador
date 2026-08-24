@@ -1,6 +1,7 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, connectDatabase } from "./database/connection";
+import { warnOnDuplicateTwilioContentSids } from "./utils/whatsapp-notification-observability";
 import { startAbsenceWorkdaySyncJob, stopAbsenceWorkdaySyncJob } from "./jobs/absence-workday-sync.job";
 import {
   startAbsenceAttachmentCleanupJob,
@@ -34,6 +35,13 @@ import {
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+  warnOnDuplicateTwilioContentSids({
+    ARRIVAL: env.TWILIO_ARRIVAL_REMINDER_CONTENT_SID,
+    EXIT: env.TWILIO_EXIT_REMINDER_CONTENT_SID,
+    NO_CHECKIN: env.TWILIO_TEMPLATE_NO_CHECKIN_SID,
+    ATTENDANCE_CONFIRMATION: env.TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID,
+    EVENTUAL_ASSIGNMENT: env.TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID,
+  });
   startAttendanceReminderJob();
   startRecurringWorkdayMaterializationJob();
   startAbsenceWorkdaySyncJob();

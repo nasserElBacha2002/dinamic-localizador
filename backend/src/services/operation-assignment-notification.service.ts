@@ -16,6 +16,7 @@ import {
   isAmbiguousTwilioSendFailure,
 } from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
+import { logWhatsAppNotificationEvent } from "../utils/whatsapp-notification-observability";
 
 /**
  * At-least-once Twilio send is possible only via manual reconcile after
@@ -368,12 +369,43 @@ const processClaimedNotification = async (
       contentVariables,
     });
     messageSid = result.messageSid;
+    logWhatsAppNotificationEvent({
+      event: "WHATSAPP_NOTIFICATION_SENT",
+      producer: "ASSIGNMENT_NOTIFICATION_WORKER",
+      companyId: notification.companyId,
+      employeeId: employee.id,
+      operationId: notification.operationId,
+      operationAssignmentId: notification.operationAssignmentId,
+      notificationType: notification.notificationType,
+      templateSid: contentSid,
+      templateVariables: contentVariables,
+      notificationId: notification.id,
+      attempt: notification.attemptCount,
+      providerMessageSid: messageSid,
+      sentAt: new Date().toISOString(),
+    });
   } catch (sendError) {
     const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
     const classification = classifyTwilioOutboundError(sendError);
     const maxAttempts =
       env.OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS ??
       OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS;
+
+    logWhatsAppNotificationEvent({
+      event: "WHATSAPP_NOTIFICATION_FAILED",
+      producer: "ASSIGNMENT_NOTIFICATION_WORKER",
+      companyId: notification.companyId,
+      employeeId: employee.id,
+      operationId: notification.operationId,
+      operationAssignmentId: notification.operationAssignmentId,
+      notificationType: notification.notificationType,
+      templateSid: contentSid,
+      templateVariables: contentVariables,
+      notificationId: notification.id,
+      attempt: notification.attemptCount,
+      errorCode: classification.normalizedCode,
+      errorMessage,
+    });
 
     if (isAmbiguousTwilioSendFailure(classification)) {
       await operationAssignmentNotificationRepository.markSendAttemptAmbiguous({

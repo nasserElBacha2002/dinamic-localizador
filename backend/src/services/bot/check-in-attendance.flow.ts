@@ -7,6 +7,7 @@ import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration
 import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/bot-runtime-settings-scope";
 import { getObservabilityTrace } from "../../utils/whatsapp-observability-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
+import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import { companyModuleService } from "../company-module.service";
 import {
   getAttendanceModuleBlockedMessage,
@@ -228,6 +229,20 @@ export async function processLocationCheckIn(input: {
         validationStatus: validation.validationStatus,
         recordedDuringApprovedAbsence: created.recordedDuringApprovedAbsence,
         locationEventAt: eventAt.toISOString(),
+      });
+      logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_RECORDED", {
+        producer: "BOT_CHECK_IN",
+        companyId,
+        employeeId: input.employeeId,
+        operationId: workday.operationId,
+        messageSid: input.messageSid,
+        validationStatus: validation.validationStatus,
+        locationStatus: validation.locationStatus,
+        punctualityStatus: validation.punctualityStatus,
+        resultCode:
+          validation.locationStatus === "OUTSIDE_GEOFENCE"
+            ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
+            : WHATSAPP_RESULT_CODES.CHECKIN_COMPLETED,
       });
 
       const responseMessage = created.recordedDuringApprovedAbsence

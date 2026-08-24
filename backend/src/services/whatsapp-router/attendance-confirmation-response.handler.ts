@@ -86,7 +86,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
           ctx,
           handlers,
           [
-            "✅ Asistencia confirmada.",
+            "✅ Participación confirmada.",
             "",
             `Te esperamos en ${formatAssignmentServiceReference(assignment)} el ${formatAssignmentDateTimeLine(assignment, timeZone)}.`,
             "",

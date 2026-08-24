@@ -36,6 +36,10 @@ jobs:
       - name: Typecheck
         run: npm run build
 
+      - name: Validate Docker Compose backend env propagation
+        working-directory: ${{ github.workspace }}
+        run: python3 scripts/validate-docker-compose-backend-env.py
+
       - name: Tests
         run: npm test
 

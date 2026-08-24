@@ -28,6 +28,7 @@ describeDatabaseIntegration("GET /companies/:companyId/roles/:role/capabilities"
   let otherCompanyId = "";
   let platformAdminId = "";
   let platformAdminEmail = "";
+  let platformAdminTokenVersion = 0;
   let ownerUserId = "";
   let ownerUserEmail = "";
   let adminUserId = "";
@@ -56,6 +57,7 @@ describeDatabaseIntegration("GET /companies/:companyId/roles/:role/capabilities"
     assert.ok(platformAdmin?.isPlatformAdmin);
     platformAdminId = platformAdmin.id;
     platformAdminEmail = platformAdmin.email;
+    platformAdminTokenVersion = platformAdmin.tokenVersion;
 
     const pool = getPool();
     const otherCompanyResult = await pool.request().query(`
@@ -286,6 +288,7 @@ describeDatabaseIntegration("GET /companies/:companyId/roles/:role/capabilities"
       userId: platformAdminId,
       email: platformAdminEmail,
       role: "ADMIN",
+      tokenVersion: platformAdminTokenVersion,
     });
     const response = await apiRequest(baseUrl, pathFor(dinamicCompanyId, "HR"), { token });
     assert.equal(response.status, 200);

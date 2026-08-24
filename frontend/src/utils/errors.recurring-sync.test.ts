@@ -38,4 +38,11 @@ describe("errors recurring sync mapping", () => {
     assert.equal(parsed.code, "RECURRING_WORKDAY_SYNC_FAILED");
     assert.equal(isRecurringWorkdaySyncError(parsed), true);
   });
+
+  it("maps axios network failures without a response", () => {
+    const axiosError = new axios.AxiosError("Network Error", "ERR_NETWORK");
+    const parsed = parseApiError(axiosError);
+    assert.equal(parsed.code, "NETWORK_ERROR");
+    assert.match(parsed.message, /no se pudo conectar con el servidor/i);
+  });
 });

@@ -3,23 +3,17 @@ import { getPool } from "../database/connection";
 import { mapWhatsAppMessageRow } from "../utils/row-mappers";
 import type { WhatsAppMessage } from "../types/twilio.types";
 import type { WhatsappConversation } from "../types/whatsapp-observability";
+import {
+  applyWhatsappConversationListFilters,
+  type ConversationListFilterCriteria,
+} from "../utils/whatsapp-observability-conversation-filters";
 import { whatsappConversationRepository } from "./whatsapp-conversation.repository";
 import { whatsappFlowExecutionRepository } from "./whatsapp-flow-execution.repository";
 import { whatsappMessageRepository } from "./whatsapp-message.repository";
 import { whatsappProviderEventRepository } from "./whatsapp-provider-event.repository";
 import { maskPhoneForObservability } from "../utils/whatsapp-observability";
 
-export interface ConversationListFilters {
-  companyId?: string;
-  employeeId?: string;
-  phone?: string;
-  from?: string;
-  to?: string;
-  flowType?: string;
-  resultCode?: string;
-  status?: string;
-  hasError?: boolean;
-  search?: string;
+export interface ConversationListFilters extends ConversationListFilterCriteria {
   page: number;
   limit: number;
 }
@@ -50,74 +44,24 @@ export const whatsappObservabilityRepository = {
     const pool = getPool();
     const offset = (filters.page - 1) * filters.limit;
 
-    const applyFilters = (request: sql.Request): string => {
-      const where: string[] = ["1=1"];
-      if (filters.companyId) {
-        request.input("companyId", sql.UniqueIdentifier, filters.companyId);
-        where.push("c.company_id = @companyId");
-      }
-      if (filters.employeeId) {
-        request.input("employeeId", sql.UniqueIdentifier, filters.employeeId);
-        where.push("c.employee_id = @employeeId");
-      }
-      if (filters.status) {
-        request.input("status", sql.NVarChar(20), filters.status);
-        where.push("c.status = @status");
-      }
-      if (filters.flowType) {
-        request.input("flowType", sql.NVarChar(60), filters.flowType);
-        where.push("c.last_flow_type = @flowType");
-      }
-      if (filters.resultCode) {
-        request.input("resultCode", sql.NVarChar(80), filters.resultCode);
-        where.push("c.last_result_code = @resultCode");
-      }
-      if (filters.hasError === true) {
-        where.push("c.error_count > 0");
-      }
-      if (filters.hasError === false) {
-        where.push("c.error_count = 0");
-      }
-      if (filters.from) {
-        request.input("fromAt", sql.DateTime2, new Date(filters.from));
-        where.push("c.last_activity_at >= @fromAt");
-      }
-      if (filters.to) {
-        request.input("toAt", sql.DateTime2, new Date(filters.to));
-        where.push("c.last_activity_at <= @toAt");
-      }
-      if (filters.phone) {
-        const digits = filters.phone.replace(/\D/g, "");
-        request.input("phoneLike", sql.NVarChar(40), `%${digits.slice(-6)}%`);
-        where.push("(c.phone_masked LIKE @phoneLike OR c.phone_normalized LIKE @phoneLike)");
-      }
-      if (filters.search) {
-        request.input("search", sql.NVarChar(120), `%${filters.search.slice(0, 100)}%`);
-        where.push(
-          "(c.phone_masked LIKE @search OR c.last_result_code LIKE @search OR c.last_flow_type LIKE @search)",
-        );
-      }
-      return where.join(" AND ");
-    };
-
     const countRequest = pool.request();
-    const whereSql = applyFilters(countRequest);
+    const whereSql = applyWhatsappConversationListFilters(countRequest, filters);
     const countResult = await countRequest.query(`
       SELECT COUNT(1) AS total
       FROM whatsapp_conversations c
-      WHERE ${whereSql}
+      ${whereSql || "WHERE 1=1"}
     `);
     const total = Number((countResult.recordset[0] as { total: number }).total ?? 0);
 
     const listRequest = pool.request();
-    applyFilters(listRequest);
+    applyWhatsappConversationListFilters(listRequest, filters);
     listRequest.input("offset", sql.Int, offset);
     listRequest.input("limit", sql.Int, filters.limit);
 
     const listResult = await listRequest.query(`
       SELECT c.*
       FROM whatsapp_conversations c
-      WHERE ${whereSql}
+      ${whereSql || "WHERE 1=1"}
       ORDER BY c.last_activity_at DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
@@ -525,5 +469,62 @@ export const whatsappObservabilityRepository = {
       `);
 
     return metrics;
+  },
+
+  /**
+   * Platform-wide employee lookup for observability filters.
+   * Must match the conversation list universe (cross-company).
+   */
+  async listEmployeeLookups(query: {
+    search?: string;
+    limit?: number;
+    id?: string;
+    ids?: string[];
+    active?: boolean;
+  }): Promise<Array<{ id: string; fullName: string; companyId: string; companyName: string }>> {
+    const pool = getPool();
+    const request = pool.request().input("limit", sql.Int, query.limit ?? 20);
+    const filters = ["1=1"];
+    const ids = query.ids ?? (query.id ? [query.id] : []);
+
+    if (ids.length === 1) {
+      request.input("id", sql.UniqueIdentifier, ids[0]);
+      filters.push("e.id = @id");
+    } else if (ids.length > 1) {
+      const placeholders = ids.map((id, index) => {
+        const param = `id${index}`;
+        request.input(param, sql.UniqueIdentifier, id);
+        return `@${param}`;
+      });
+      filters.push(`e.id IN (${placeholders.join(", ")})`);
+    }
+
+    if (query.search) {
+      request.input("search", sql.NVarChar(150), `%${query.search}%`);
+      filters.push("(e.name LIKE @search OR c.name LIKE @search)");
+    }
+
+    if (query.active === true) {
+      filters.push("e.active = 1");
+    }
+
+    const result = await request.query(`
+      SELECT TOP (@limit)
+        e.id,
+        e.name AS full_name,
+        e.company_id,
+        c.name AS company_name
+      FROM employees e
+      INNER JOIN companies c ON c.id = e.company_id
+      WHERE ${filters.join(" AND ")}
+      ORDER BY e.name ASC, c.name ASC
+    `);
+
+    return result.recordset.map((row) => ({
+      id: String(row.id),
+      fullName: String(row.full_name),
+      companyId: String(row.company_id),
+      companyName: String(row.company_name),
+    }));
   },
 };

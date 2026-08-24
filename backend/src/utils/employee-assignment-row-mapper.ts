@@ -15,6 +15,12 @@ export const mapEmployeeAssignedOperationRow = (
 ): EmployeeAssignedOperation => ({
   assignmentId: String(row.assignment_id),
   operationId: String(row.operation_id),
+  operationKind: String(row.operation_kind ?? "ONE_TIME"),
+  operationWorkdayId: String(row.operation_workday_id ?? row.operation_id),
+  employeeWorkdayId:
+    row.employee_workday_id === null || row.employee_workday_id === undefined
+      ? null
+      : String(row.employee_workday_id),
   serviceName: String(row.service_name),
   serviceAddress: row.service_address ? String(row.service_address) : null,
   serviceLocality: row.service_locality ? String(row.service_locality) : null,
@@ -22,7 +28,10 @@ export const mapEmployeeAssignedOperationRow = (
   serviceLongitude:
     row.service_longitude === null || row.service_longitude === undefined ? null : Number(row.service_longitude),
   scheduledStart: new Date(row.scheduled_start as Date | string).toISOString(),
-  scheduledEnd: new Date(row.scheduled_end as Date | string).toISOString(),
+  scheduledEnd:
+    row.scheduled_end === null || row.scheduled_end === undefined
+      ? null
+      : new Date(row.scheduled_end as Date | string).toISOString(),
   operationStatus: String(row.operation_status),
   confirmationStatus: parseConfirmationStatus(row.confirmation_status),
   attendanceReceivedAt: row.received_at

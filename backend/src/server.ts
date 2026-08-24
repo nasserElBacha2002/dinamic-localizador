@@ -1,6 +1,7 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, connectDatabase } from "./database/connection";
+import { warnOnDuplicateTwilioContentSids } from "./utils/whatsapp-notification-observability";
 import { startAbsenceWorkdaySyncJob, stopAbsenceWorkdaySyncJob } from "./jobs/absence-workday-sync.job";
 import {
   startAbsenceAttachmentCleanupJob,
@@ -27,9 +28,20 @@ import {
   startOperationAssignmentNotificationJob,
   stopOperationAssignmentNotificationJob,
 } from "./jobs/operation-assignment-notification.job";
+import {
+  startOperationLifecycleJob,
+  stopOperationLifecycleJob,
+} from "./jobs/operation-lifecycle.job";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+  warnOnDuplicateTwilioContentSids({
+    ARRIVAL: env.TWILIO_ARRIVAL_REMINDER_CONTENT_SID,
+    EXIT: env.TWILIO_EXIT_REMINDER_CONTENT_SID,
+    NO_CHECKIN: env.TWILIO_TEMPLATE_NO_CHECKIN_SID,
+    ATTENDANCE_CONFIRMATION: env.TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID,
+    EVENTUAL_ASSIGNMENT: env.TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID,
+  });
   startAttendanceReminderJob();
   startRecurringWorkdayMaterializationJob();
   startAbsenceWorkdaySyncJob();
@@ -38,9 +50,10 @@ const startServer = async (): Promise<void> => {
   startCompanyDeletionJob();
   startPayrollReceiptNotificationJob();
   startOperationAssignmentNotificationJob();
+  startOperationLifecycleJob();
 
-  app.listen(env.PORT, () => {
-    console.log(`API listening on port ${env.PORT}`);
+  app.listen(env.PORT, "0.0.0.0", () => {
+    console.log(`API listening on 0.0.0.0:${env.PORT}`);
   });
 };
 
@@ -53,6 +66,7 @@ const shutdown = async (): Promise<void> => {
   stopCompanyDeletionJob();
   stopPayrollReceiptNotificationJob();
   stopOperationAssignmentNotificationJob();
+  stopOperationLifecycleJob();
   await closeDatabase();
   process.exit(0);
 };

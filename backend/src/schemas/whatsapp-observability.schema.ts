@@ -29,7 +29,6 @@ export const observabilityListConversationsQuerySchema = z
   .object({
     companyId: optionalUuid,
     employeeId: optionalUuid,
-    phone: z.string().max(40).optional(),
     from: isoDate.optional(),
     to: isoDate.optional(),
     flowType: z.string().max(60).optional(),
@@ -44,7 +43,6 @@ export const observabilityListConversationsQuerySchema = z
         }
         return value === "true" || value === "1";
       }),
-    search: z.string().max(120).optional(),
     page: z.coerce.number().int().min(1).default(1),
     limit: z.coerce.number().int().min(1).max(100).default(20),
   })

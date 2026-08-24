@@ -42,6 +42,9 @@ const mapTodayWorkdayRow = (
 ): EmployeeAssignedOperation => ({
   assignmentId: row.assignmentId,
   operationId: row.operationId,
+  operationKind: "ONE_TIME",
+  operationWorkdayId: row.operationWorkdayId,
+  employeeWorkdayId: row.employeeWorkdayId,
   serviceName: row.serviceName,
   serviceAddress: row.serviceAddress,
   serviceLocality: row.serviceLocality,

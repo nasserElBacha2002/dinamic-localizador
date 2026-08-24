@@ -1,5 +1,6 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
+  Anchor,
   Box,
   Button,
   Paper,
@@ -11,12 +12,13 @@ import {
 } from "@mantine/core";
 import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
-import { Navigate, useLocation, useNavigate, useSearchParams } from "react-router";
+import { Navigate, Link, useLocation, useNavigate, useSearchParams } from "react-router";
 import { z } from "zod";
 import { FormErrorAlert } from "../design-system";
 import { useAuth } from "../hooks/useAuth";
 import { getApiErrorMessage } from "../utils/errors";
 import { isSafeInternalPath } from "../utils/invitation-email";
+import { persistTwoFactorChallenge } from "../utils/two-factor-challenge";
 import classes from "./login-page.module.css";
 
 const loginSchema = z.object({
@@ -61,7 +63,20 @@ export function LoginPage() {
     setErrorMessage(null);
 
     try {
-      await login(values.email, values.password);
+      const result = await login(values.email, values.password);
+      if (result.requiresTwoFactor) {
+        persistTwoFactorChallenge(result.challengeToken);
+        const next = searchParams.get("next");
+        navigate("/login/2fa", {
+          replace: true,
+          state: {
+            from: isSafeInternalPath(next)
+              ? next
+              : (location.state as { from?: string } | null)?.from,
+          },
+        });
+        return;
+      }
       const next = searchParams.get("next");
       if (isSafeInternalPath(next)) {
         navigate(next, { replace: true });
@@ -141,6 +156,12 @@ export function LoginPage() {
                   <Button type="submit" fullWidth loading={isSubmitting} loaderProps={{ type: "dots" }}>
                     {isSubmitting ? "Ingresando..." : "Iniciar sesión"}
                   </Button>
+
+                  <Text ta="center" size="sm">
+                    <Anchor component={Link} to="/forgot-password">
+                      ¿Olvidaste tu contraseña?
+                    </Anchor>
+                  </Text>
                 </Stack>
               </form>
             </Stack>

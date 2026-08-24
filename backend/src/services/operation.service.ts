@@ -26,10 +26,8 @@ import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationScheduleSummaryService } from "./operation-schedule-summary.service";
 import { canTransitionOperationStatus, isOperationEditable, isOperationReactivatable, OPERATION_REACTIVATION_STATUS } from "../utils/operation-status";
 import { isActiveOperationDuplicateError } from "../utils/active-operation-duplicate-errors";
-import {
-  isOperationStartInPast,
-  resolveLifecycleOperationStatus,
-} from "../utils/operation-lifecycle";
+import { isOperationStartInPast } from "../utils/operation-lifecycle";
+import { operationLifecycleService } from "./operation-lifecycle.service";
 import { buildPaginationMeta } from "../utils/pagination";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { getDateIsoInTimezone } from "../utils/absence-date";
@@ -75,13 +73,7 @@ const syncLifecycleStatus = async (
   companyId: string,
   operation: OperationRecord,
 ): Promise<OperationRecord> => {
-  const resolvedStatus = resolveLifecycleOperationStatus(operation);
-  if (resolvedStatus === operation.status || !canTransitionOperationStatus(operation.status, resolvedStatus)) {
-    return operation;
-  }
-
-  const updated = await operationRepository.update(companyId, operation.id, { status: resolvedStatus });
-  return updated ?? operation;
+  return operationLifecycleService.syncPersistedStatus(companyId, operation);
 };
 
 const resolveCreateTolerances = async (

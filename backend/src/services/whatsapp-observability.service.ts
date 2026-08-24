@@ -56,14 +56,12 @@ export const whatsappObservabilityService = {
   async listConversations(filters: {
     companyId?: string;
     employeeId?: string;
-    phone?: string;
     from?: string;
     to?: string;
     flowType?: string;
     resultCode?: string;
     status?: string;
     hasError?: boolean;
-    search?: string;
     page?: number;
     limit?: number;
   }) {
@@ -84,6 +82,17 @@ export const whatsappObservabilityService = {
         totalPages: Math.max(1, Math.ceil(result.total / limit)),
       },
     };
+  },
+
+  async listEmployeeLookups(query: {
+    search?: string;
+    limit?: number;
+    id?: string;
+    ids?: string[];
+    active?: boolean;
+  }) {
+    this.assertUiEnabled();
+    return whatsappObservabilityRepository.listEmployeeLookups(query);
   },
 
   async getConversation(conversationId: string, userId: string) {

@@ -81,6 +81,11 @@ export function setupDomEnvironment(): void {
     writable: true,
     value: window.localStorage,
   });
+  Object.defineProperty(globalThis, "sessionStorage", {
+    configurable: true,
+    writable: true,
+    value: window.sessionStorage,
+  });
 
   if (!globalThis.ResizeObserver) {
     Object.defineProperty(globalThis, "ResizeObserver", {

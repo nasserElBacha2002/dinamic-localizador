@@ -1,6 +1,9 @@
 export interface EmployeeLookup {
   id: string;
   fullName: string;
+  /** Present on platform-wide observability lookups. */
+  companyId?: string;
+  companyName?: string;
 }
 
 export interface ServiceLookup {

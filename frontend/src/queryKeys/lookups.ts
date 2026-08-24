@@ -43,15 +43,25 @@ export const lookupKeys = {
   employees: () => [...lookupKeys.all, "employees"] as const,
   employeeCompany: (companyId: string | undefined) =>
     [...lookupKeys.employees(), companyId] as const,
+  employeePlatform: () => [...lookupKeys.employees(), "platform"] as const,
   employeeSearches: (companyId: string | undefined) =>
     [...lookupKeys.employeeCompany(companyId), "search"] as const,
+  employeePlatformSearches: () => [...lookupKeys.employeePlatform(), "search"] as const,
   employeeSearch: (
     companyId: string | undefined,
     params: { search?: string; activeOnly?: boolean; limit?: number },
   ) =>
     [...lookupKeys.employeeSearches(companyId), normalizeLookupSearchParams(params)] as const,
+  employeePlatformSearch: (params: {
+    search?: string;
+    activeOnly?: boolean;
+    limit?: number;
+  }) =>
+    [...lookupKeys.employeePlatformSearches(), normalizeLookupSearchParams(params)] as const,
   employeeSelected: (companyId: string | undefined, employeeId: string | undefined) =>
     [...lookupKeys.employeeCompany(companyId), "selected", employeeId] as const,
+  employeePlatformSelected: (employeeId: string | undefined) =>
+    [...lookupKeys.employeePlatform(), "selected", employeeId] as const,
 
   operations: () => [...lookupKeys.all, "operations"] as const,
   operationCompany: (companyId: string | undefined) =>

@@ -8,6 +8,7 @@ import {
 
 describe("operation lifecycle", () => {
   const baseOperation = {
+    operationKind: "ONE_TIME" as const,
     status: "SCHEDULED" as const,
     scheduledStart: "2026-06-22T14:29:00.000Z",
     scheduledEnd: "2026-06-23T01:29:00.000Z",
@@ -43,6 +44,48 @@ describe("operation lifecycle", () => {
       90,
     );
     assert.equal(end.toISOString(), "2026-06-22T15:59:00.000Z");
+  });
+
+  it("does not add late tolerance when scheduledEnd is present (attendance-only window)", () => {
+    const end = getOperationEffectiveEnd(
+      "2026-08-13T23:50:00.000Z",
+      "2026-08-14T06:00:00.000Z",
+      30,
+    );
+    assert.equal(end?.toISOString(), "2026-08-14T06:00:00.000Z");
+    assert.equal(
+      resolveLifecycleOperationStatus(
+        { ...baseOperation, operationKind: "ONE_TIME", lateToleranceMinutes: 30 },
+        new Date("2026-08-14T06:00:00.000Z"),
+      ),
+      "COMPLETED",
+    );
+  });
+
+  it("resolves COMPLETED from SCHEDULED when the clock skipped the in-progress window", () => {
+    assert.equal(
+      resolveLifecycleOperationStatus(
+        { ...baseOperation, operationKind: "ONE_TIME", status: "SCHEDULED" },
+        new Date("2026-06-25T00:00:00.000Z"),
+      ),
+      "COMPLETED",
+    );
+  });
+
+  it("does not auto-complete RECURRING operations", () => {
+    assert.equal(
+      resolveLifecycleOperationStatus(
+        {
+          ...baseOperation,
+          operationKind: "RECURRING",
+          scheduledStart: null,
+          scheduledEnd: null,
+          status: "SCHEDULED",
+        },
+        new Date("2026-06-25T00:00:00.000Z"),
+      ),
+      "SCHEDULED",
+    );
   });
 
   it("keeps terminal statuses unchanged", () => {

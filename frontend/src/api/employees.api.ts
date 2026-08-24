@@ -97,6 +97,49 @@ export async function getEmployeeOperationalAvailability(
   return data.data;
 }
 
+export type EmployeeAssignedOperation = {
+  assignmentId: string;
+  operationId: string;
+  operationKind: string;
+  operationWorkdayId: string;
+  employeeWorkdayId: string | null;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
+  serviceLatitude: number | null;
+  serviceLongitude: number | null;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  operationStatus: string;
+  confirmationStatus: string;
+  attendanceReceivedAt: string | null;
+  attendanceCheckoutAt: string | null;
+  punctualityStatus: string | null;
+};
+
+export type EmployeeOperationsFilters = {
+  page?: number;
+  limit?: number;
+  segment?: "active" | "past";
+  dateFrom?: string;
+  dateTo?: string;
+};
+
+export async function getEmployeeOperations(
+  id: string,
+  filters: EmployeeOperationsFilters = {},
+  options?: EmployeeRequestOptions,
+): Promise<PaginatedResponse<EmployeeAssignedOperation>> {
+  const { data } = await scopedApiClient.get<PaginatedResponse<EmployeeAssignedOperation>>(
+    `employees/${id}/operations`,
+    {
+      params: buildParams(filters as Record<string, string | number | boolean | undefined>),
+      ...options,
+    },
+  );
+  return data;
+}
+
 export async function createEmployee(
   input: CreateEmployeeInput,
   options?: EmployeeRequestOptions,

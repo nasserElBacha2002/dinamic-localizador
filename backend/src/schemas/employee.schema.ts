@@ -2,6 +2,7 @@ import { z } from "zod";
 import { EMPLOYEE_TYPES } from "../constants/employee-types";
 import {
   activeFilterSchema,
+  dateRangeSchema,
   paginationQuerySchema,
   searchFilterSchema,
   tableSortSchema,
@@ -79,6 +80,22 @@ export const listEmployeesQuerySchema = paginationQuerySchema
     sortBy: z.enum(EMPLOYEE_LIST_SORT_FIELDS).optional(),
   });
 
+export const listEmployeeOperationsQuerySchema = paginationQuerySchema
+  .merge(dateRangeSchema)
+  .extend({
+    segment: z.enum(["active", "past"]).default("active"),
+  })
+  .superRefine((data, ctx) => {
+    if (data.dateFrom && data.dateTo && data.dateFrom > data.dateTo) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "dateFrom debe ser anterior o igual a dateTo",
+        path: ["dateTo"],
+      });
+    }
+  });
+
 export type CreateEmployeeInput = z.infer<typeof createEmployeeSchema>;
 export type UpdateEmployeeInput = z.infer<typeof updateEmployeeSchema>;
 export type ListEmployeesQuery = z.infer<typeof listEmployeesQuerySchema>;
+export type ListEmployeeOperationsQuery = z.infer<typeof listEmployeeOperationsQuerySchema>;

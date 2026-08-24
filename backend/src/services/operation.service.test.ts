@@ -198,3 +198,31 @@ describe("operationService.create", () => {
     );
   });
 });
+
+describe("operationService.getById lifecycle", () => {
+  afterEach(() => {
+    mock.restoreAll();
+  });
+
+  it("case 10: lazy GET persists COMPLETED when SCHEDULED is past scheduledEnd", async () => {
+    setupUnitTestEnv();
+    const stale = {
+      ...createdOperation,
+      scheduledStart: "2026-08-13T23:50:00.000Z",
+      scheduledEnd: "2026-08-14T06:00:00.000Z",
+      status: "SCHEDULED" as const,
+    };
+    let promotions = 0;
+    mock.method(operationRepository, "findById", async () => stale);
+    mock.method(operationRepository, "promoteLifecycleStatus", async (_companyId, id, _from, to) => {
+      promotions += 1;
+      return { ...stale, id, status: to, updatedAt: "2026-08-16T00:00:00.000Z" };
+    });
+
+    const { operationService } = await import("./operation.service");
+    const result = await operationService.getById(COMPANY_ID, stale.id);
+
+    assert.equal(result.status, "COMPLETED");
+    assert.equal(promotions, 1);
+  });
+});

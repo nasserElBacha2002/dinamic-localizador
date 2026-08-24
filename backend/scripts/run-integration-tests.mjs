@@ -4,10 +4,11 @@
  *
  * Same discovery rules as unit tests: do not rely on shell recursive globs.
  */
-import { readdirSync, statSync, existsSync } from "node:fs";
+import { readdirSync, statSync, existsSync, createWriteStream, readFileSync, unlinkSync } from "node:fs";
 import { join, relative } from "node:path";
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 
 const backendRoot = join(fileURLToPath(new URL(".", import.meta.url)), "..");
 const srcRoot = join(backendRoot, "src");
@@ -40,7 +41,10 @@ if (!existsSync(tsxBin)) {
 
 console.log(`[run-integration-tests] running ${files.length} integration test files`);
 
-const result = spawnSync(
+const logPath = join(tmpdir(), `dinamic-integration-${process.pid}.log`);
+const logStream = createWriteStream(logPath);
+
+const child = spawn(
   tsxBin,
   [
     "--import",
@@ -52,19 +56,56 @@ const result = spawnSync(
   ],
   {
     cwd: backendRoot,
-    stdio: "inherit",
     env: {
       ...process.env,
       EMAIL_TRANSPORT: process.env.EMAIL_TRANSPORT ?? "console",
       RUN_DB_INTEGRATION_TESTS: "true",
     },
     shell: process.platform === "win32",
+    stdio: ["inherit", "pipe", "pipe"],
   },
 );
 
-if (result.error) {
-  console.error(result.error);
-  process.exit(1);
-}
+child.stdout.on("data", (chunk) => {
+  process.stdout.write(chunk);
+  logStream.write(chunk);
+});
+child.stderr.on("data", (chunk) => {
+  process.stderr.write(chunk);
+  logStream.write(chunk);
+});
 
-process.exit(result.status === null ? 1 : result.status);
+child.on("error", (error) => {
+  console.error(error);
+  logStream.end();
+  process.exit(1);
+});
+
+child.on("close", (status, signal) => {
+  logStream.end(() => {
+    let failCount = 0;
+    try {
+      const combined = readFileSync(logPath, "utf8");
+      const failMatch = combined.match(/^# fail (\d+)\s*$/m);
+      failCount = failMatch ? Number(failMatch[1]) : 0;
+      unlinkSync(logPath);
+    } catch {
+      // ignore log cleanup / parse errors
+    }
+
+    if (signal) {
+      process.exit(1);
+    }
+    const code = status === null ? 1 : status;
+    // --test-force-exit can report exit 0 even when TAP "# fail" > 0.
+    if (code !== 0 || failCount > 0) {
+      if (code === 0 && failCount > 0) {
+        console.error(
+          `[run-integration-tests] forcing exit 1 because TAP reported # fail ${failCount}`,
+        );
+      }
+      process.exit(code !== 0 ? code : 1);
+    }
+    process.exit(0);
+  });
+});

@@ -4,6 +4,7 @@ import { AppError } from "../errors/app-error";
 import { roleHasPermission } from "../constants/company-permissions";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import type { UserCompanyMembership } from "../types/company";
+import { TWO_FACTOR_USER_DEFAULTS } from "../types/auth";
 
 const activeCompany = {
   id: "company-1",
@@ -222,6 +223,8 @@ describe("company user service rules", () => {
       role: "ADMIN",
       isPlatformAdmin: false,
       active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
       lastLoginAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -274,6 +277,8 @@ describe("company user service rules", () => {
       role: "ADMIN",
       isPlatformAdmin: false,
       active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
       lastLoginAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -322,6 +327,8 @@ describe("company user service rules", () => {
       role: "ADMIN",
       isPlatformAdmin: false,
       active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
       lastLoginAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -381,6 +388,8 @@ describe("company user service rules", () => {
       role: "ADMIN",
       isPlatformAdmin: true,
       active: true,
+      tokenVersion: 0,
+      ...TWO_FACTOR_USER_DEFAULTS,
       lastLoginAt: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),

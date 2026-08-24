@@ -1,12 +1,15 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
-import { getDuplicateKeyConstraint, isDuplicateKeyError } from "./sql-server-errors";
+import { getDuplicateKeyConstraint, isDuplicateKeyError, isSqlDeadlockError } from "./sql-server-errors";
 
 describe("sql-server-errors", () => {
   it("detects duplicate key numbers", () => {
     assert.equal(isDuplicateKeyError({ number: 2627 }), true);
     assert.equal(isDuplicateKeyError({ number: 2601 }), true);
     assert.equal(isDuplicateKeyError({ number: 50000 }), false);
+    assert.equal(isSqlDeadlockError({ number: 1205 }), true);
+    assert.equal(isSqlDeadlockError({ originalError: { number: 1205 } }), true);
+    assert.equal(isSqlDeadlockError({ number: 2627 }), false);
   });
 
   it("extracts unique index names from messages", () => {

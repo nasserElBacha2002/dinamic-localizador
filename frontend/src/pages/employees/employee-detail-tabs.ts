@@ -1,3 +1,5 @@
+import type { ModuleRouteAccessKey } from "../../utils/company-modules";
+
 export type EmployeeDetailTabKey =
   | "resumen"
   | "operaciones"
@@ -6,13 +8,19 @@ export type EmployeeDetailTabKey =
   | "recibos"
   | "estadisticas";
 
-export const EMPLOYEE_DETAIL_TABS: Array<{ value: EmployeeDetailTabKey; label: string }> = [
+export type EmployeeDetailTabConfig = {
+  value: EmployeeDetailTabKey;
+  label: string;
+  moduleAccessKey?: ModuleRouteAccessKey;
+};
+
+export const EMPLOYEE_DETAIL_TABS: EmployeeDetailTabConfig[] = [
   { value: "resumen", label: "Resumen" },
-  { value: "operaciones", label: "Operaciones" },
-  { value: "asistencias", label: "Asistencias" },
-  { value: "ausencias", label: "Ausencias" },
-  { value: "recibos", label: "Recibos" },
-  { value: "estadisticas", label: "Estadísticas" },
+  { value: "operaciones", label: "Operaciones", moduleAccessKey: "operations" },
+  { value: "asistencias", label: "Asistencias", moduleAccessKey: "attendance" },
+  { value: "ausencias", label: "Ausencias", moduleAccessKey: "absences" },
+  { value: "recibos", label: "Recibos", moduleAccessKey: "payroll_receipts" },
+  { value: "estadisticas", label: "Estadísticas", moduleAccessKey: "reports" },
 ];
 
 export const parseEmployeeDetailTab = (value: string | null): EmployeeDetailTabKey => {

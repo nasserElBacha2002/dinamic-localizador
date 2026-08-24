@@ -112,6 +112,13 @@ export const MODULE_ROUTE_ACCESS = {
     /** Reading Estadísticas requires reports:read. Export alone must not grant access. */
     requiredAnyPermission: ["reports:read"] as const satisfies readonly CompanyPermission[],
   },
+  operations: {
+    moduleKey: "operations" as const,
+    requiredAnyPermission: [
+      "operations:read",
+      "operations:manage",
+    ] as const satisfies readonly CompanyPermission[],
+  },
 } as const;
 
 export type ModuleRouteAccessKey = keyof typeof MODULE_ROUTE_ACCESS;

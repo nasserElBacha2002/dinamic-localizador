@@ -21,6 +21,7 @@ interface EmployeeSummaryTabProps {
   employee: Employee;
   canManage: boolean;
   enabled: boolean;
+  canAccessOperations: boolean;
 }
 
 function SummaryMetric({ label, value }: { label: string; value: string }) {
@@ -36,24 +37,30 @@ function SummaryMetric({ label, value }: { label: string; value: string }) {
   );
 }
 
-export function EmployeeSummaryTab({ employee, canManage, enabled }: EmployeeSummaryTabProps) {
+export function EmployeeSummaryTab({
+  employee,
+  canManage,
+  enabled,
+  canAccessOperations,
+}: EmployeeSummaryTabProps) {
   const monthRange = useMemo(() => getDefaultStatisticsDateRange(), []);
   const monthQuery = getDateRangeQueryValue(monthRange);
+  const operationsEnabled = enabled && canAccessOperations;
 
   const activeOpsQuery = useEmployeeOperations(
     employee.id,
     { segment: "active", page: 1, limit: 1 },
-    enabled,
+    operationsEnabled,
   );
   const activeOpsCountQuery = useEmployeeOperations(
     employee.id,
     { segment: "active", page: 1, limit: 1 },
-    enabled,
+    operationsEnabled,
   );
   const pastOpsQuery = useEmployeeOperations(
     employee.id,
     { segment: "past", page: 1, limit: 1 },
-    enabled,
+    operationsEnabled,
   );
   const monthOpsActiveQuery = useEmployeeOperations(
     employee.id,
@@ -64,7 +71,7 @@ export function EmployeeSummaryTab({ employee, canManage, enabled }: EmployeeSum
       dateFrom: monthQuery.from ? dateInputToIsoStart(monthQuery.from) : undefined,
       dateTo: monthQuery.to ? dateInputToIsoEnd(monthQuery.to) : undefined,
     },
-    enabled,
+    operationsEnabled,
   );
   const monthOpsPastQuery = useEmployeeOperations(
     employee.id,
@@ -75,7 +82,7 @@ export function EmployeeSummaryTab({ employee, canManage, enabled }: EmployeeSum
       dateFrom: monthQuery.from ? dateInputToIsoStart(monthQuery.from) : undefined,
       dateTo: monthQuery.to ? dateInputToIsoEnd(monthQuery.to) : undefined,
     },
-    enabled,
+    operationsEnabled,
   );
 
   const statisticsQuery = useStatisticsSummary(
@@ -151,29 +158,41 @@ export function EmployeeSummaryTab({ employee, canManage, enabled }: EmployeeSum
           <SummaryMetric
             label="Próxima operación"
             value={
-              nextOperation
-                ? `${nextOperation.serviceName} · ${formatDateTime(nextOperation.scheduledStart)}`
-                : "Sin operaciones activas"
+              !canAccessOperations
+                ? "—"
+                : nextOperation
+                  ? `${nextOperation.serviceName} · ${formatDateTime(nextOperation.scheduledStart)}`
+                  : "Sin operaciones activas"
             }
           />
           <SummaryMetric
             label="Última operación"
             value={
-              lastOperation
-                ? `${lastOperation.serviceName} · ${formatDateTime(lastOperation.scheduledStart)}`
-                : "Sin historial"
+              !canAccessOperations
+                ? "—"
+                : lastOperation
+                  ? `${lastOperation.serviceName} · ${formatDateTime(lastOperation.scheduledStart)}`
+                  : "Sin historial"
             }
           />
           <SummaryMetric
             label="Operaciones activas"
-            value={activeOpsQuery.isLoading ? "…" : String(activeCount)}
+            value={
+              !canAccessOperations
+                ? "—"
+                : activeOpsQuery.isLoading
+                  ? "…"
+                  : String(activeCount)
+            }
           />
           <SummaryMetric
             label="Operaciones este mes"
             value={
-              monthOpsActiveQuery.isLoading || monthOpsPastQuery.isLoading
-                ? "…"
-                : String(monthOpsCount)
+              !canAccessOperations
+                ? "—"
+                : monthOpsActiveQuery.isLoading || monthOpsPastQuery.isLoading
+                  ? "…"
+                  : String(monthOpsCount)
             }
           />
           <SummaryMetric

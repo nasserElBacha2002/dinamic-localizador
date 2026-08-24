@@ -31,10 +31,38 @@ mockApiModule(
   "api/employees.api",
   {
     getEmployeeById: async () => employee,
-    getEmployeeOperations: async () => ({
-      data: [],
-      meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
-    }),
+    getEmployeeOperations: async (_id, filters) => {
+      if (filters?.segment === "past") {
+        return {
+          data: [
+            {
+              assignmentId: "asg-1",
+              operationId: "op-1",
+              operationKind: "ONE_TIME",
+              operationWorkdayId: "ow-1",
+              employeeWorkdayId: "ew-1",
+              serviceName: "Local Centro",
+              serviceAddress: null,
+              serviceLocality: null,
+              serviceLatitude: null,
+              serviceLongitude: null,
+              scheduledStart: "2026-08-24T13:00:00.000Z",
+              scheduledEnd: null,
+              operationStatus: "IN_PROGRESS",
+              confirmationStatus: "CONFIRMED",
+              attendanceReceivedAt: null,
+              attendanceCheckoutAt: null,
+              punctualityStatus: null,
+            },
+          ],
+          meta: { page: 1, limit: 10, total: 1, totalPages: 1 },
+        };
+      }
+      return {
+        data: [],
+        meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+      };
+    },
     getEmployeeOperationalAvailability: async () => ({
       currentStatus: "AVAILABLE",
       timezone: "America/Argentina/Buenos_Aires",
@@ -211,7 +239,13 @@ let EmployeeEditPage: React.ComponentType;
 
 function LocationProbe() {
   const location = useLocation();
-  return <div data-testid="location-probe" data-pathname={location.pathname} />;
+  return (
+    <div
+      data-testid="location-probe"
+      data-pathname={location.pathname}
+      data-search={location.search}
+    />
+  );
 }
 
 before(async () => {
@@ -230,6 +264,79 @@ afterEach(() => {
 });
 
 describe("EmployeeDetailPage", () => {
+  it("operaciones tab renders past operation with null scheduledEnd", async () => {
+    membershipPermissions = ["employees:read", "operations:read"];
+    const view = renderPage(
+      <Routes>
+        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+      </Routes>,
+      { route: "/employees/emp-1?tab=operaciones" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByText("Operaciones pasadas"));
+    });
+    await waitFor(() => {
+      assert.ok(view.getByText("Local Centro"));
+    });
+
+    const bodyText = view.container.textContent ?? "";
+    assert.doesNotMatch(bodyText, /Invalid Date/i);
+    assert.doesNotMatch(bodyText, /\bnull\b/i);
+    assert.ok(bodyText.includes("—"));
+  });
+
+  it("viewer without operations permission does not see Operaciones tab", async () => {
+    membershipPermissions = ["employees:read", "absences:read", "attendance:read", "reports:read"];
+    const view = renderPage(
+      <Routes>
+        <Route path="/employees/:id" element={<EmployeeDetailPage />} />
+      </Routes>,
+      { route: "/employees/emp-1" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("tab", { name: /^Resumen$/i }));
+    });
+    assert.equal(view.queryByRole("tab", { name: /^Operaciones$/i }), null);
+  });
+
+  it("preserves unrelated query params when switching tabs", async () => {
+    membershipPermissions = [
+      "employees:read",
+      "operations:read",
+      "attendance:read",
+      "absences:read",
+      "reports:read",
+      "payroll_receipts:read",
+    ];
+    const view = renderPage(
+      <Routes>
+        <Route
+          path="/employees/:id"
+          element={
+            <>
+              <EmployeeDetailPage />
+              <LocationProbe />
+            </>
+          }
+        />
+      </Routes>,
+      { route: "/employees/emp-1?from=list&tab=operaciones" },
+    );
+
+    await waitFor(() => {
+      assert.ok(view.getByRole("tab", { name: /^Operaciones$/i }));
+    });
+
+    fireEvent.click(view.getByRole("tab", { name: /^Resumen$/i }));
+    await waitFor(() => {
+      const search = view.getByTestId("location-probe").getAttribute("data-search") ?? "";
+      assert.ok(search.includes("from=list"));
+      assert.ok(!search.includes("tab="));
+    });
+  });
+
   it("viewer sees cards without Editar or inputs", async () => {
     const view = renderPage(
       <Routes>

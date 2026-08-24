@@ -147,7 +147,9 @@ function OperationsTableSection({
         <DataTable
           columns={columns}
           rows={rows}
-          getRowKey={(row) => row.assignmentId}
+          getRowKey={(row) =>
+            row.employeeWorkdayId ?? `${row.assignmentId}-${row.operationWorkdayId}`
+          }
           loading={query.isPending}
           error={
             query.isError

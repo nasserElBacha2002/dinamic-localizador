@@ -2,7 +2,7 @@ import { Router } from "express";
 import { absenceBalanceController } from "../controllers/absence-balance.controller";
 import { employeeController } from "../controllers/employee.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireAnyPermission, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   absenceBalanceYearQuerySchema,
@@ -87,6 +87,7 @@ employeeRouter.get(
 employeeRouter.get(
   "/:id/operations",
   requirePermission("employees:read"),
+  requireAnyPermission("operations:read", "operations:manage"),
   validate(employeeIdParamSchema, "params"),
   validate(listEmployeeOperationsQuerySchema, "query"),
   asyncHandler(employeeController.listOperations),

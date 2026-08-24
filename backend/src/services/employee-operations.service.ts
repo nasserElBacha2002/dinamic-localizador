@@ -1,16 +1,9 @@
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { employeeRepository } from "../repositories/employee.repository";
+import type { ListEmployeeOperationsQuery } from "../schemas/employee.schema";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import { AppError } from "../errors/app-error";
 import { buildPaginationMeta, getPagination } from "../utils/pagination";
-
-export type ListEmployeeOperationsQuery = {
-  page: number;
-  limit: number;
-  segment: "active" | "past";
-  dateFrom?: string;
-  dateTo?: string;
-};
 
 export const employeeOperationsService = {
   async list(

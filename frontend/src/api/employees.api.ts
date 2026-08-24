@@ -100,13 +100,16 @@ export async function getEmployeeOperationalAvailability(
 export type EmployeeAssignedOperation = {
   assignmentId: string;
   operationId: string;
+  operationKind: string;
+  operationWorkdayId: string;
+  employeeWorkdayId: string | null;
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;
   serviceLatitude: number | null;
   serviceLongitude: number | null;
   scheduledStart: string;
-  scheduledEnd: string;
+  scheduledEnd: string | null;
   operationStatus: string;
   confirmationStatus: string;
   attendanceReceivedAt: string | null;

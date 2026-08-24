@@ -14,13 +14,12 @@ import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useEmployee } from "../../hooks/useEmployees";
 import { useListBackNavigation } from "../../hooks/useListBackNavigation";
 import { terminology } from "../../domain/terminology";
-import { canAccessModuleRoute, type ModuleRouteAccessKey } from "../../utils/company-modules";
+import { canAccessModuleRoute } from "../../utils/company-modules";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
 import {
   EMPLOYEE_DETAIL_TABS,
   parseEmployeeDetailTab,
-  type EmployeeDetailTabKey,
 } from "./employee-detail-tabs";
 import { EmployeeSummaryTab } from "./tabs/EmployeeSummaryTab";
 
@@ -50,35 +49,16 @@ const EmployeeStatisticsTab = lazy(() =>
   })),
 );
 
-const TAB_MODULE_ACCESS: Partial<Record<EmployeeDetailTabKey, ModuleRouteAccessKey>> = {
-  asistencias: "attendance",
-  ausencias: "absences",
-  recibos: "payroll_receipts",
-  estadisticas: "reports",
-};
-
 function canAccessEmployeeDetailTab(
-  tab: EmployeeDetailTabKey,
+  tab: (typeof EMPLOYEE_DETAIL_TABS)[number],
   modules: ReturnType<typeof useCompanyModules>["data"],
   permissions: string[] | undefined,
 ): boolean {
-  if (tab === "resumen") {
+  if (!tab.moduleAccessKey) {
     return true;
   }
 
-  if (tab === "operaciones") {
-    return (
-      hasPermission(permissions, "operations:read") ||
-      hasPermission(permissions, "operations:manage")
-    );
-  }
-
-  const accessKey = TAB_MODULE_ACCESS[tab];
-  if (!accessKey) {
-    return true;
-  }
-
-  return canAccessModuleRoute(modules, permissions, accessKey);
+  return canAccessModuleRoute(modules, permissions, tab.moduleAccessKey);
 }
 
 export function EmployeeDetailPage() {
@@ -97,11 +77,10 @@ export function EmployeeDetailPage() {
   const permissions = permissionsQuery.data?.permissions;
   const modules = modulesQuery.data;
 
+  const canAccessOperations = canAccessModuleRoute(modules, permissions, "operations");
+
   const availableTabs = useMemo(
-    () =>
-      EMPLOYEE_DETAIL_TABS.filter((tab) =>
-        canAccessEmployeeDetailTab(tab.value, modules, permissions),
-      ),
+    () => EMPLOYEE_DETAIL_TABS.filter((tab) => canAccessEmployeeDetailTab(tab, modules, permissions)),
     [modules, permissions],
   );
 
@@ -112,11 +91,13 @@ export function EmployeeDetailPage() {
 
   const setActiveTab = (value: string | null) => {
     const nextTab = parseEmployeeDetailTab(value);
+    const next = new URLSearchParams(searchParams);
     if (nextTab === "resumen") {
-      setSearchParams({}, { replace: true });
-      return;
+      next.delete("tab");
+    } else {
+      next.set("tab", nextTab);
     }
-    setSearchParams({ tab: nextTab }, { replace: true });
+    setSearchParams(next, { replace: true });
   };
 
   if (!id) {
@@ -166,7 +147,12 @@ export function EmployeeDetailPage() {
       </Tabs>
 
       {activeTab === "resumen" ? (
-        <EmployeeSummaryTab employee={employee} canManage={canManage} enabled />
+        <EmployeeSummaryTab
+          employee={employee}
+          canManage={canManage}
+          enabled
+          canAccessOperations={canAccessOperations}
+        />
       ) : null}
 
       {activeTab === "operaciones" ? (

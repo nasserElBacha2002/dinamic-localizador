@@ -30,14 +30,21 @@ describe("employeeAssignmentQueryRepository.listTodayForEmployee", () => {
 });
 
 describe("employeeAssignmentQueryRepository.listEmployeeOperations", () => {
-  it("orders paginated results by scheduled_start alias outside the inner subquery", () => {
+  it("lists workday-based operations for ONE_TIME and RECURRING with consistent pagination", () => {
+    assert.match(repositorySource, /const EMPLOYEE_WORKDAY_OPERATIONS_SELECT/);
+    assert.match(repositorySource, /ow\.expected_start_at AS scheduled_start/);
+    assert.match(repositorySource, /ow\.expected_end_at AS scheduled_end/);
+
     const methodSource = repositorySource.slice(
       repositorySource.indexOf("async listEmployeeOperations"),
       repositorySource.indexOf("async listUpcomingForEmployee"),
     );
-    assert.match(methodSource, /ORDER BY scheduled_start DESC/);
-    assert.match(methodSource, /ORDER BY scheduled_start ASC/);
+    assert.doesNotMatch(methodSource, /i\.operation_kind = N'ONE_TIME'/);
+    assert.match(methodSource, /SELECT COUNT\(\*\) AS total/);
+    assert.match(methodSource, /ORDER BY scheduled_start DESC, operation_workday_id DESC, assignment_id DESC/);
+    assert.match(methodSource, /ORDER BY scheduled_start ASC, operation_workday_id ASC, assignment_id ASC/);
     assert.doesNotMatch(methodSource, /ORDER BY i\.scheduled_start (ASC|DESC)/);
+    assert.match(methodSource, /ow\.expected_end_at IS NULL/);
   });
 });
 

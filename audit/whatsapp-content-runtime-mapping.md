@@ -31,7 +31,7 @@
 
 | Template lógico | ENV | Variables | Eventos |
 | --------------- | --- | --------- | ------- |
-| `admin_operational_alert` | `TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID` | {{1}} título, {{2}} empleado, {{3}} detalle, {{4}} contexto | `EMPLOYEE_UNAVAILABLE`, `MISSING_CHECKIN_AFTER_OPERATION`, `FORWARDED_LOCATION_REJECTED`, `ATTENDANCE_THRESHOLD_CROSSED` |
+| `admin_operational_alert` | `TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID` | {{1}} título, {{2}} empleado, {{3}} detalle, {{4}} contexto | `EMPLOYEE_UNAVAILABLE`, `MISSING_CHECKIN_AFTER_OPERATION`, `ATTENDANCE_THRESHOLD_CROSSED` |
 | `admin_request_alert` | `TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID` | {{1}} tipo solicitud, {{2}} empleado, {{3}} período, {{4}} estado | `ABSENCE_REQUEST_PENDING` (vacaciones, licencia, estudio, trámite, etc.) |
 
 Vacaciones, licencia médica, día de estudio y demás tipos de ausencia con aprobación manual comparten **`admin_request_alert`**. No hay SID por tipo de ausencia.

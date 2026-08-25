@@ -3,12 +3,8 @@ import { isCheckoutSessionState } from "../../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../../utils/haversine";
 import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
-import { employeeRepository } from "../../repositories/employee.repository";
-import { buildForwardedLocationDedupKey } from "../../utils/admin-alert/dedup-keys";
-import { emitAdminAlertSafely } from "../admin-alert-emit.helpers";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
-  FORWARDED_LOCATION_REJECTED_MESSAGE,
   GENERIC_ERROR_MESSAGE,
   INVALID_COORDINATES_MESSAGE,
   LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE,
@@ -16,10 +12,6 @@ import {
   UNPARSEABLE_MESSAGE,
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "../bot/bot-response.builder";
-import {
-  extractLocationMessageMetadata,
-  isExplicitlyForwardedLocation,
-} from "../../utils/location-message-metadata";
 import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import {
   handleActiveAbsenceSession,
@@ -234,66 +226,16 @@ export const whatsappRouterService = {
       });
     }
 
-    // P0 anti-forward: apply before geofence / check-in / check-out / direct location.
-    const locationMetadata = extractLocationMessageMetadata(
-      ctx.payload as unknown as Record<string, unknown>,
-    );
+    const messageSid =
+      typeof ctx.payload.MessageSid === "string" ? ctx.payload.MessageSid : "";
     const hasCoordinates = Boolean(ctx.payload.Latitude && ctx.payload.Longitude);
     logWhatsAppAttendanceEvent("LOCATION_RECEIVED", {
       companyId,
       employeeId: ctx.employeeId,
-      messageSid: locationMetadata.sourceMessageSid,
+      messageSid,
       hasCoordinates,
       sessionState: ctx.session?.state ?? null,
-      isForwarded: locationMetadata.isForwarded,
-      isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
     });
-    logWhatsAppAttendanceEvent("LOCATION_FORWARD_STATUS", {
-      companyId,
-      employeeId: ctx.employeeId,
-      messageSid: locationMetadata.sourceMessageSid,
-      isForwarded: locationMetadata.isForwarded,
-      isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
-    });
-
-    if (isExplicitlyForwardedLocation(locationMetadata)) {
-      logWhatsAppAttendanceEvent("FORWARDED_LOCATION_REJECTED", {
-        companyId,
-        employeeId: ctx.employeeId,
-        messageSid: locationMetadata.sourceMessageSid,
-        resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
-        reason: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
-        sessionState: ctx.session?.state ?? null,
-        isForwarded: locationMetadata.isForwarded,
-        isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
-      });
-      const employee = await employeeRepository.findById(companyId, ctx.employeeId);
-      if (employee) {
-        // Option B (V1): best-effort security alert. No durable security-event table;
-        // Twilio redelivery may recover only if the inbound webhook is retried.
-        await emitAdminAlertSafely(
-          {
-            companyId,
-            type: "FORWARDED_LOCATION_REJECTED",
-            employeeId: ctx.employeeId,
-            deduplicationKey: buildForwardedLocationDedupKey(ctx.employeeId),
-            occurredAt: new Date(),
-            payload: {
-              employeeName: employee.name,
-            },
-          },
-          "whatsapp-forwarded-location",
-        );
-      }
-      return handlers.respond(companyId, {
-        message: FORWARDED_LOCATION_REJECTED_MESSAGE,
-        employeeId: ctx.employeeId,
-        phoneFrom: ctx.phoneTo,
-        phoneTo: ctx.phoneFrom,
-        resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
-        flowType: "LOCATION_SECURITY",
-      });
-    }
 
     if (!ctx.session) {
       try {

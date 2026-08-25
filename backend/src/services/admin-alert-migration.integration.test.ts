@@ -48,6 +48,7 @@ describeDatabaseIntegration("admin alert migration 103 constraints", () => {
     const definition = await readCheckDefinition("CK_waan_alert_type");
     assert.match(definition, /EMPLOYEE_UNAVAILABLE/);
     assert.match(definition, /MISSING_CHECKIN_AFTER_OPERATION/);
+    // Legacy value retained in historical CHECK (101–104); app no longer emits it.
     assert.match(definition, /FORWARDED_LOCATION_REJECTED/);
     assert.match(definition, /ABSENCE_REQUEST_PENDING/);
   });

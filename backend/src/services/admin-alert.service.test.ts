@@ -139,8 +139,8 @@ describe("adminAlertService", () => {
 
     const result = await adminAlertService.emit({
       companyId: "company-1",
-      type: "FORWARDED_LOCATION_REJECTED",
-      deduplicationKey: "forwarded:e:1",
+      type: "EMPLOYEE_UNAVAILABLE",
+      deduplicationKey: "unavailable:a:1",
       payload: { employeeName: "Emp" },
     });
 

@@ -21,12 +21,12 @@ describe("buildAdminOperationalAlertTemplateVariables", () => {
     assert.notEqual(vars["4"], "");
   });
 
-  it("uses em dash for missing context on forwarded location", () => {
-    const vars = buildAdminOperationalAlertTemplateVariables("FORWARDED_LOCATION_REJECTED", {
+  it("uses em dash for missing context on missing check-in", () => {
+    const vars = buildAdminOperationalAlertTemplateVariables("MISSING_CHECKIN_AFTER_OPERATION", {
       employeeName: "Juan Pérez",
     });
 
-    assert.equal(vars["1"], "Ubicación reenviada");
+    assert.equal(vars["1"], "Sin registro de llegada");
     assert.equal(vars["4"], "—");
   });
 

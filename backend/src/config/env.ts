@@ -122,7 +122,6 @@ const envSchema = z
     ADMIN_ALERT_LEASE_MS: z.coerce.number().int().positive().default(120_000),
     ADMIN_ALERT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     ADMIN_ALERT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
-    ADMIN_ALERT_FORWARDED_THROTTLE_MINUTES: z.coerce.number().int().positive().default(60),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),

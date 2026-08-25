@@ -36,7 +36,7 @@ export function CompanyWhatsAppAlertsDialogContent({
 }: CompanyWhatsAppAlertsDialogContentProps) {
   const recipientsQuery = useCompanyAlertRecipients(canUpdate);
   const usersQuery = useCompanyUsers(
-    { status: "ACTIVE", limit: 200, page: 1 },
+    { status: "ACTIVE", limit: 100, page: 1 },
     canUpdate,
   );
   const createMutation = useCreateCompanyAlertRecipient();
@@ -95,7 +95,6 @@ export function CompanyWhatsAppAlertsDialogContent({
         label: user.phoneNumber
           ? `${user.name} (${user.email}) — ${user.phoneNumber}`
           : `${user.name} (${user.email}) — sin teléfono`,
-        disabled: !user.phoneNumber,
       }));
   }, [companyUsers, recipientUserIds]);
 
@@ -313,6 +312,11 @@ export function CompanyWhatsAppAlertsDialogContent({
 
       {canUpdate ? (
         <Stack gap="xs">
+          {usersQuery.isError ? (
+            <Text size="sm" c="red">
+              No se pudieron cargar los usuarios: {getApiErrorMessage(usersQuery.error)}
+            </Text>
+          ) : null}
           <Group align="flex-end" wrap="wrap">
             <Select
               label="Usuario de la empresa"
@@ -324,8 +328,12 @@ export function CompanyWhatsAppAlertsDialogContent({
               data={userSelectData}
               value={selectedUserId}
               onChange={(value) => setSelectedUserId(typeof value === "string" ? value : null)}
-              disabled={busy || usersQuery.isLoading}
-              nothingFoundMessage="No hay usuarios disponibles"
+              disabled={busy || usersQuery.isLoading || usersQuery.isError}
+              nothingFoundMessage={
+                companyUsers.length === 0
+                  ? "No hay usuarios activos en la empresa"
+                  : "Sin coincidencias (o ya están agregados)"
+              }
               style={{ flex: 1, minWidth: 260 }}
             />
             <Button
@@ -335,6 +343,16 @@ export function CompanyWhatsAppAlertsDialogContent({
               Agregar destinatario
             </Button>
           </Group>
+          {userSelectData.length > 0 &&
+          userSelectData.every((option) => {
+            const user = companyUsers.find((candidate) => candidate.userId === option.value);
+            return !user?.phoneNumber?.trim();
+          }) ? (
+            <Text size="sm" c="orange">
+              Los usuarios aparecen, pero ninguno tiene teléfono. Cargalo en Usuarios de la empresa
+              (formato E.164) para poder agregarlos.
+            </Text>
+          ) : null}
           {selectedUser && !selectedUser.phoneNumber?.trim() ? (
             <Text size="sm" c="orange">
               Este usuario no tiene teléfono. Editalo en Usuarios de la empresa (formato E.164, ej.

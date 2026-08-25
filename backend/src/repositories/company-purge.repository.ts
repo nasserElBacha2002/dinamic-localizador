@@ -115,6 +115,12 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM work_teams WHERE company_id = @companyId;
 
     DELETE FROM attendance_reviews WHERE company_id = @companyId;
+
+    IF OBJECT_ID(N'dbo.attendance_alert_evaluation_queue', N'U') IS NOT NULL
+      DELETE FROM attendance_alert_evaluation_queue WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.employee_attendance_alert_state', N'U') IS NOT NULL
+      DELETE FROM employee_attendance_alert_state WHERE company_id = @companyId;
+
     DELETE FROM employees WHERE company_id = @companyId;
   `);
 };
@@ -145,6 +151,18 @@ export const deleteCompanyIdentityAndConfigSetBased = async (
     DELETE FROM company_location_types WHERE company_id = @companyId;
     DELETE FROM user_company_memberships WHERE company_id = @companyId;
     DELETE FROM company_modules WHERE company_id = @companyId;
+
+    IF OBJECT_ID(N'dbo.whatsapp_admin_alert_notification_send_attempts', N'U') IS NOT NULL
+      DELETE FROM whatsapp_admin_alert_notification_send_attempts WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.whatsapp_admin_alert_notifications', N'U') IS NOT NULL
+      DELETE FROM whatsapp_admin_alert_notifications WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.attendance_alert_evaluation_queue', N'U') IS NOT NULL
+      DELETE FROM attendance_alert_evaluation_queue WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.employee_attendance_alert_state', N'U') IS NOT NULL
+      DELETE FROM employee_attendance_alert_state WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.company_alert_recipients', N'U') IS NOT NULL
+      DELETE FROM company_alert_recipients WHERE company_id = @companyId;
+
     DELETE FROM company_settings WHERE company_id = @companyId;
 
     IF OBJECT_ID(N'dbo.import_jobs', N'U') IS NOT NULL

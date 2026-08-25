@@ -44,6 +44,13 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   absenceAttachmentsEnabled: settings.absenceAttachmentsEnabled,
   absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
   adminAlertsEnabled: settings.adminAlertsEnabled,
+  adminAlertsEnabledAt: settings.adminAlertsEnabledAt,
+  attendanceThresholdAlertsEnabled: settings.attendanceThresholdAlertsEnabled,
+  attendanceAlertThresholdPercent: settings.attendanceAlertThresholdPercent,
+  attendanceAlertWindowDays: settings.attendanceAlertWindowDays,
+  attendanceAlertMinimumWorkdays: settings.attendanceAlertMinimumWorkdays,
+  attendanceAlertCooldownDays: settings.attendanceAlertCooldownDays,
+  attendanceAlertConfigVersion: settings.attendanceAlertConfigVersion,
   createdAt: settings.createdAt,
   updatedAt: settings.updatedAt,
 });
@@ -121,6 +128,23 @@ export const companyService = {
     const updated = await companySettingsRepository.update(companyId, input);
     if (!updated) {
       throw new AppError(404, "COMPANY_SETTINGS_NOT_FOUND", "Configuración de empresa no encontrada.");
+    }
+
+    const thresholdSettingsTouched =
+      input.attendanceThresholdAlertsEnabled !== undefined ||
+      input.attendanceAlertThresholdPercent !== undefined ||
+      input.attendanceAlertWindowDays !== undefined ||
+      input.attendanceAlertMinimumWorkdays !== undefined ||
+      input.attendanceAlertCooldownDays !== undefined;
+
+    if (thresholdSettingsTouched && updated.attendanceThresholdAlertsEnabled) {
+      const { attendanceThresholdAlertService } = await import(
+        "./attendance-threshold-alert.service"
+      );
+      await attendanceThresholdAlertService.onThresholdSettingsChanged(
+        companyId,
+        updated.attendanceAlertWindowDays,
+      );
     }
 
     return toCompanySettingsDto(updated);

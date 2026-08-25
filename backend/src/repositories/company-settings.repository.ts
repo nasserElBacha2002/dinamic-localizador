@@ -66,6 +66,22 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
       : Boolean(row.absence_operational_integration_enabled),
   adminAlertsEnabled:
     row.admin_alerts_enabled == null ? false : Boolean(row.admin_alerts_enabled),
+  adminAlertsEnabledAt: row.admin_alerts_enabled_at
+    ? toIsoString(row.admin_alerts_enabled_at as Date | string)
+    : null,
+  attendanceThresholdAlertsEnabled:
+    row.attendance_threshold_alerts_enabled == null
+      ? false
+      : Boolean(row.attendance_threshold_alerts_enabled),
+  attendanceAlertThresholdPercent: Number(
+    row.attendance_alert_threshold_percent ?? 80,
+  ),
+  attendanceAlertWindowDays: Number(row.attendance_alert_window_days ?? 30),
+  attendanceAlertMinimumWorkdays: Number(
+    row.attendance_alert_minimum_workdays ?? 5,
+  ),
+  attendanceAlertCooldownDays: Number(row.attendance_alert_cooldown_days ?? 7),
+  attendanceAlertConfigVersion: Number(row.attendance_alert_config_version ?? 0),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });
@@ -206,12 +222,18 @@ export const companySettingsRepository = {
         | "absenceAttachmentsEnabled"
         | "absenceOperationalIntegrationEnabled"
         | "adminAlertsEnabled"
+        | "attendanceThresholdAlertsEnabled"
+        | "attendanceAlertThresholdPercent"
+        | "attendanceAlertWindowDays"
+        | "attendanceAlertMinimumWorkdays"
+        | "attendanceAlertCooldownDays"
       >
     >,
   ): Promise<CompanySettings | null> {
     const pool = getPool();
     const fields: string[] = [];
     const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    let bumpAttendanceConfigVersion = false;
 
     if (input.operationTimezone !== undefined) {
       request.input("operationTimezone", sql.NVarChar(80), input.operationTimezone);
@@ -333,7 +355,61 @@ export const companySettingsRepository = {
     }
     if (input.adminAlertsEnabled !== undefined) {
       request.input("adminAlertsEnabled", sql.Bit, input.adminAlertsEnabled ? 1 : 0);
-      fields.push("admin_alerts_enabled = @adminAlertsEnabled");
+      // false→true: stamp a new frontier. true stays true / true→false: keep enabled_at.
+      fields.push(`admin_alerts_enabled = @adminAlertsEnabled`);
+      fields.push(`admin_alerts_enabled_at = CASE
+        WHEN @adminAlertsEnabled = 1 AND ISNULL(admin_alerts_enabled, 0) = 0
+          THEN SYSUTCDATETIME()
+        ELSE admin_alerts_enabled_at
+      END`);
+    }
+    if (input.attendanceThresholdAlertsEnabled !== undefined) {
+      request.input(
+        "attendanceThresholdAlertsEnabled",
+        sql.Bit,
+        input.attendanceThresholdAlertsEnabled ? 1 : 0,
+      );
+      fields.push(
+        "attendance_threshold_alerts_enabled = @attendanceThresholdAlertsEnabled",
+      );
+      bumpAttendanceConfigVersion = true;
+    }
+    if (input.attendanceAlertThresholdPercent !== undefined) {
+      request.input(
+        "attendanceAlertThresholdPercent",
+        sql.Int,
+        input.attendanceAlertThresholdPercent,
+      );
+      fields.push("attendance_alert_threshold_percent = @attendanceAlertThresholdPercent");
+      bumpAttendanceConfigVersion = true;
+    }
+    if (input.attendanceAlertWindowDays !== undefined) {
+      request.input("attendanceAlertWindowDays", sql.Int, input.attendanceAlertWindowDays);
+      fields.push("attendance_alert_window_days = @attendanceAlertWindowDays");
+      bumpAttendanceConfigVersion = true;
+    }
+    if (input.attendanceAlertMinimumWorkdays !== undefined) {
+      request.input(
+        "attendanceAlertMinimumWorkdays",
+        sql.Int,
+        input.attendanceAlertMinimumWorkdays,
+      );
+      fields.push("attendance_alert_minimum_workdays = @attendanceAlertMinimumWorkdays");
+      bumpAttendanceConfigVersion = true;
+    }
+    if (input.attendanceAlertCooldownDays !== undefined) {
+      request.input(
+        "attendanceAlertCooldownDays",
+        sql.Int,
+        input.attendanceAlertCooldownDays,
+      );
+      fields.push("attendance_alert_cooldown_days = @attendanceAlertCooldownDays");
+      bumpAttendanceConfigVersion = true;
+    }
+    if (bumpAttendanceConfigVersion) {
+      fields.push(
+        "attendance_alert_config_version = ISNULL(attendance_alert_config_version, 0) + 1",
+      );
     }
 
     if (fields.length === 0) {

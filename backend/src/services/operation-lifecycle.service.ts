@@ -46,7 +46,7 @@ const promoteIfDue = async (
     nextStatus,
   );
   if (updated && nextStatus === "COMPLETED") {
-    void adminAlertMissingCheckinService.emitForCompletedOperation(companyId, updated);
+    await adminAlertMissingCheckinService.emitForCompletedOperation(companyId, updated);
   }
   return updated ? "updated" : "skipped";
 };

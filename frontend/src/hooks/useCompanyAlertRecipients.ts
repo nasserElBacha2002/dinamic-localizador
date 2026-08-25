@@ -14,13 +14,13 @@ import { useOperationalQueryEnabled } from "./useOperationalQueryEnabled";
 export const companyAlertRecipientsQueryKey = (companyId?: string) =>
   ["company-alert-recipients", companyId] as const;
 
-export function useCompanyAlertRecipients(enabled = true) {
-  const { companyId, enabled: scopeEnabled } = useOperationalQueryEnabled(enabled);
+export function useCompanyAlertRecipients(canManage = true) {
+  const { companyId, enabled: scopeEnabled } = useOperationalQueryEnabled(canManage);
 
   return useQuery({
     queryKey: companyAlertRecipientsQueryKey(companyId),
     queryFn: () => listCompanyAlertRecipients(),
-    enabled: scopeEnabled,
+    enabled: scopeEnabled && canManage,
   });
 }
 

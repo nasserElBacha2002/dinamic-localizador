@@ -28,6 +28,16 @@ backend/reports/
 # Local git review artifacts (Cursor commands)
 review/
 
+# Root-generated implementation review dumps (never commit)
+/implementation-*-diff.txt
+/implementation-*-diffstat.txt
+/implementation-*-status.txt
+/implementation-*-validation.md
+/latest-diff.txt
+/latest-diffstat.txt
+/latest-status.txt
+/latest-validation.txt
+
 # Audit generated artifacts (keep structure, ignore volatile run snapshots)
 audit/raw/runs/
 audit/raw/_meta/

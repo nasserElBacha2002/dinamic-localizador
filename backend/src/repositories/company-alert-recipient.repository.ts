@@ -114,7 +114,7 @@ export const companyAlertRecipientRepository = {
       return mapRow(result.recordset[0] as Record<string, unknown>);
     } catch (error) {
       if (isDuplicateKeyError(error)) {
-        throw new Error("COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE");
+        throw new Error("COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE", { cause: error });
       }
       throw error;
     }
@@ -175,7 +175,7 @@ export const companyAlertRecipientRepository = {
       return row ? mapRow(row) : null;
     } catch (error) {
       if (isDuplicateKeyError(error)) {
-        throw new Error("COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE");
+        throw new Error("COMPANY_ALERT_RECIPIENT_DUPLICATE_PHONE", { cause: error });
       }
       throw error;
     }

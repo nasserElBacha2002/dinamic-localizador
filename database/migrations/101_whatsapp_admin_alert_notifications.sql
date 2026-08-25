@@ -71,6 +71,14 @@ BEGIN
             REFERENCES dbo.company_alert_recipients (id, company_id),
         CONSTRAINT CK_waan_template_category
             CHECK (template_category IN (N'OPERATIONAL', N'REQUEST', N'SECURITY')),
+        CONSTRAINT CK_waan_alert_type
+            CHECK (alert_type IN (
+                N'EMPLOYEE_UNAVAILABLE',
+                N'MISSING_CHECKIN_AFTER_OPERATION',
+                N'FORWARDED_LOCATION_REJECTED'
+            )),
+        CONSTRAINT CK_waan_severity
+            CHECK (severity IN (N'INFO', N'WARNING', N'CRITICAL')),
         CONSTRAINT CK_waan_status
             CHECK (status IN (
                 N'PENDING',

@@ -50,6 +50,52 @@ export type AdminAlertNotificationSendAttempt = {
   updatedAt: string;
 };
 
+/** Operational/security admin alerts (admin_operational_alert template). */
+export type AdminAlertOperationalTemplatePayload = {
+  employeeName: string;
+  serviceName?: string | null;
+  serviceAddress?: string | null;
+  serviceLocality?: string | null;
+  scheduledStart?: string | null;
+  scheduledEnd?: string | null;
+  operationTimezone?: string | null;
+  /** Phase D — attendance threshold (display values only). */
+  attendanceRatePercent?: number;
+  attendanceThresholdPercent?: number;
+  attendanceWindowDays?: number;
+  attendanceEvaluatedWorkdays?: number;
+};
+
+/** Request admin alerts (admin_request_alert template). Phase C: absence pending review. */
+export type AdminAlertRequestTemplatePayload = {
+  employeeName: string;
+  absenceTypeName: string;
+  startDate: string;
+  endDate: string;
+  statusLabel: string;
+};
+
+export type AdminAlertTemplatePayload =
+  | AdminAlertOperationalTemplatePayload
+  | AdminAlertRequestTemplatePayload;
+
+export const isAdminAlertRequestPayload = (
+  payload: AdminAlertTemplatePayload,
+  category: AdminAlertTemplateCategory,
+): payload is AdminAlertRequestTemplatePayload => {
+  if (category !== "REQUEST" && !("absenceTypeName" in payload)) {
+    return false;
+  }
+  const candidate = payload as AdminAlertRequestTemplatePayload;
+  return (
+    typeof candidate.employeeName === "string" &&
+    typeof candidate.absenceTypeName === "string" &&
+    typeof candidate.startDate === "string" &&
+    typeof candidate.endDate === "string" &&
+    typeof candidate.statusLabel === "string"
+  );
+};
+
 export type AdminAlertEmitInput = {
   companyId: string;
   type: AdminAlertType;
@@ -61,16 +107,6 @@ export type AdminAlertEmitInput = {
   deduplicationKey: string;
   payload: AdminAlertTemplatePayload;
   occurredAt?: Date;
-};
-
-export type AdminAlertTemplatePayload = {
-  employeeName: string;
-  serviceName?: string | null;
-  serviceAddress?: string | null;
-  serviceLocality?: string | null;
-  scheduledStart?: string | null;
-  scheduledEnd?: string | null;
-  operationTimezone?: string | null;
 };
 
 export type AdminAlertEmitResult = {
@@ -90,4 +126,46 @@ export type MissingCheckinCandidate = {
   scheduledStart: string;
   scheduledEnd: string | null;
   operationTimezone: string;
+};
+
+/** Missing outbox obligation: one domain event × one eligible recipient. */
+export type AdminAlertOutboxObligation = {
+  companyId: string;
+  recipientId: string;
+  recipientPhone: string;
+  alertType: AdminAlertType;
+  category: AdminAlertTemplateCategory;
+  severity: AdminAlertSeverity;
+  employeeId: string;
+  operationId: string | null;
+  absenceRequestId: string | null;
+  deduplicationKey: string;
+  occurredAt: string;
+  payload: AdminAlertTemplatePayload;
+};
+
+export type UnavailableAlertCandidate = {
+  companyId: string;
+  assignmentId: string;
+  employeeId: string;
+  operationId: string;
+  scheduleVersion: number;
+  employeeName: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  occurredAt: string;
+};
+
+export type PendingAbsenceAlertCandidate = {
+  companyId: string;
+  requestId: string;
+  employeeId: string;
+  employeeName: string;
+  absenceTypeName: string;
+  startDate: string;
+  endDate: string;
+  occurredAt: string;
 };

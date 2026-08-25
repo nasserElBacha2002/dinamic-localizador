@@ -151,7 +151,7 @@ companyRouter.get(
   "/:companyId/company-alert-recipients",
   validate(companyIdParamSchema, "params"),
   resolveCompanyContext,
-  requirePermission("company:read"),
+  requirePermission("company:settings:update"),
   asyncHandler(companyAlertRecipientController.list),
 );
 

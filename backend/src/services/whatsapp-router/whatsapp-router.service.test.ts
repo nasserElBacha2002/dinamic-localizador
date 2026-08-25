@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import { setupUnitTestEnv } from "../../test-helpers/unit-test-env";
+import { mockAdminAlertSideEffects } from "../../test-helpers/mock-admin-alert-side-effects";
 import type { BotSession } from "../../types/twilio.types";
 import {
   GLOBAL_CANCEL_MESSAGE,
@@ -146,13 +147,18 @@ const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: Handle
   return { handlers, calls };
 };
 
+const prepareRouterUnitTest = async (): Promise<void> => {
+  setupUnitTestEnv();
+  await mockAdminAlertSideEffects();
+};
+
 describe("whatsappRouterService.routeTextMessage", () => {
   afterEach(() => {
     mock.restoreAll();
   });
 
   it("returns unknown employee message when employeeId is null", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -167,7 +173,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes Llegué to attendance handler when modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -182,7 +188,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("blocks Llegué when attendance is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
@@ -198,7 +204,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("blocks Llegué when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
@@ -214,7 +220,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes Me voy to checkout handler when attendance is enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -229,7 +235,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("blocks Me voy when attendance is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
@@ -245,7 +251,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes Pedir ausencia to absence handler when absences is enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { absenceBotService } = await import("../absence-bot.service");
     const { handlers, calls } = createMockHandlers();
@@ -268,7 +274,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("blocks Pedir ausencia when absences is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { absenceBotService } = await import("../absence-bot.service");
     const { handlers, calls } = createMockHandlers();
@@ -292,7 +298,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes unknown text to module-aware menu", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const expectedMenu = buildGreetingMessage(enabledStates());
@@ -309,7 +315,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("returns expired session message for numeric selection after expired session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -329,7 +335,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
   for (const command of ["menú", "menu", "inicio"] as const) {
     it(`routes "${command}" to module-aware menu`, async () => {
-      setupUnitTestEnv();
+      await prepareRouterUnitTest();
       const { whatsappRouterService } = await import("./whatsapp-router.service");
       const { handlers, calls } = createMockHandlers();
 
@@ -346,7 +352,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
   for (const command of ["ayuda", "help"] as const) {
     it(`routes "${command}" to help message with dynamic menu`, async () => {
-      setupUnitTestEnv();
+      await prepareRouterUnitTest();
       const { whatsappRouterService } = await import("./whatsapp-router.service");
       const { handlers, calls } = createMockHandlers();
 
@@ -368,7 +374,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     "WAITING_ABSENCE_TYPE",
   ] as const) {
     it(`menu command during ${sessionState} does not cancel session`, async () => {
-      setupUnitTestEnv();
+      await prepareRouterUnitTest();
       const { whatsappRouterService } = await import("./whatsapp-router.service");
       const { botSessionService } = await import("../bot-session.service");
       const { handlers } = createMockHandlers();
@@ -393,7 +399,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   }
 
   it("cancels an active session when user sends Cancelar", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { botSessionService } = await import("../bot-session.service");
     const { handlers, calls } = createMockHandlers();
@@ -417,7 +423,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("cancels an active session when user sends salir", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { botSessionService } = await import("../bot-session.service");
     const { handlers, calls } = createMockHandlers();
@@ -441,7 +447,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("returns friendly no-active-flow message when Cancelar is sent without active session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -456,7 +462,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("returns friendly no-active-flow message when salir is sent without active session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -471,7 +477,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("returns safe volver message with active session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { botSessionService } = await import("../bot-session.service");
     const { handlers } = createMockHandlers();
@@ -494,7 +500,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("returns menu when volver is sent without active session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
 
@@ -507,7 +513,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes active check-in operation selection to attendance handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -524,7 +530,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes active check-in location wait to attendance handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -541,7 +547,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes active checkout operation selection to checkout handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -558,7 +564,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes active checkout location wait to checkout handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -575,7 +581,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
   });
 
   it("routes active absence session to absence handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { absenceBotService } = await import("../absence-bot.service");
     const { handlers } = createMockHandlers();
@@ -598,7 +604,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(absenceHandled, 1);
   });
   it("returns help with active-flow note during active session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
 
@@ -621,7 +627,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("returns unknown employee message when employeeId is null", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -646,7 +652,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("routes LOCATION without session to direct location attendance", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -671,7 +677,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("routes WAITING_LOCATION to check-in location handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -696,7 +702,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("returns selection prompt for location during check-in operation selection", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -720,7 +726,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("routes WAITING_CHECKOUT_LOCATION to checkout location handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -744,7 +750,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("returns selection prompt for location during checkout operation selection", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -768,7 +774,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("returns invalid coordinates message for check-in location processing errors", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -798,7 +804,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("returns invalid coordinates message for checkout location processing errors", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -828,7 +834,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("rejects Forwarded=true before direct location attendance (P0)", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -855,7 +861,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("rejects Forwarded=true during WAITING_LOCATION before check-in", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -880,7 +886,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("rejects Forwarded=true during WAITING_CHECKOUT_LOCATION before checkout", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -905,7 +911,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("rejects forwarded location even when coordinates are near the site (24m case)", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -931,7 +937,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("allows normal location when Forwarded fields are absent", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -955,7 +961,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("allows Forwarded=false through to direct attendance", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -980,7 +986,7 @@ describe("whatsappRouterService.routeLocationMessage", () => {
   });
 
   it("rejects new MessageSid forwarded location (anti-forward is not MessageSid dedup)", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -1011,7 +1017,7 @@ describe("whatsappRouterService text cannot register attendance via coordinates 
   });
 
   it("does not treat maps URL or lat,lng text as LOCATION attendance", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -1059,7 +1065,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("routes mi jornada to workday handler when modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -1077,7 +1083,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("blocks mi jornada when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
@@ -1093,7 +1099,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("routes mis turnos to upcoming assignments handler", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1109,7 +1115,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("confirms attendance for a single upcoming assignment", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1144,7 +1150,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("handles numeric selection in confirm attendance session", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1178,7 +1184,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("confirms attendance with explicit selection when only one assignment exists", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1202,7 +1208,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("returns invalid selection for explicit out-of-range confirm with one assignment", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1233,7 +1239,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("marks unavailable with explicit selection when only one assignment exists", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1261,7 +1267,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("returns invalid selection for explicit out-of-range unavailability with one assignment", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1292,7 +1298,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("returns invalid selection for explicit out-of-range confirm with multiple assignments", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1324,7 +1330,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("blocks confirm attendance when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1347,7 +1353,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("blocks report unavailability when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1370,7 +1376,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("blocks numeric confirm selection when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1413,7 +1419,7 @@ describe("whatsappRouterService Task 5 workday and assignments", () => {
   });
 
   it("blocks numeric unavailability selection when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1462,7 +1468,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 1 to check-in when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -1476,7 +1482,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 2 to checkout when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -1490,7 +1496,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 3 to absence when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { absenceBotService } = await import("../absence-bot.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1512,7 +1518,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 4 to workday when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1528,7 +1534,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 5 to upcoming assignments when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1544,7 +1550,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 6 to confirm attendance when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1560,7 +1566,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 7 to report unavailability when all modules are enabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1576,7 +1582,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 3 to workday when absences is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1594,7 +1600,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("returns invalid menu message for out-of-range numeric option", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const { INVALID_MENU_SELECTION_PREFIX } = await import("../bot/bot-menu-options");
@@ -1610,7 +1616,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("keeps operation selection during WAITING_OPERATION_SELECTION", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -1628,7 +1634,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("keeps checkout operation selection during WAITING_CHECKOUT_OPERATION_SELECTION", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
 
@@ -1646,7 +1652,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 1 to checkout when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
     const states = enabledStates();
@@ -1663,7 +1669,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 2 to absence when operations is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { absenceBotService } = await import("../absence-bot.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
@@ -1687,7 +1693,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("routes 1 to absence when attendance is disabled", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { absenceBotService } = await import("../absence-bot.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -1713,7 +1719,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("keeps confirm attendance selection during WAITING_CONFIRM_ATTENDANCE_SELECTION", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1747,7 +1753,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("keeps unavailability selection during WAITING_UNAVAILABILITY_SELECTION", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1781,7 +1787,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("confirms exact operation during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { companyOperationalSettingsService } = await import("../company-operational-settings.service");
@@ -1831,7 +1837,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("marks unavailable during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { companyOperationalSettingsService } = await import("../company-operational-settings.service");
@@ -1883,7 +1889,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("uses jornada terminology when assignment is no longer available", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -1917,7 +1923,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("keeps contextual flow for ambiguous reply during WAITING_ATTENDANCE_CONFIRMATION_RESPONSE", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers } = createMockHandlers();
 
@@ -1943,7 +1949,7 @@ describe("whatsappRouterService numeric menu selection", () => {
   });
 
   it("formats contextual confirmation reply using company timezone", async () => {
-    setupUnitTestEnv();
+    await prepareRouterUnitTest();
     const { employeeWorkdayService } = await import("../employee-workday.service");
     const { botSessionService } = await import("../bot-session.service");
     const { companyOperationalSettingsService } = await import("../company-operational-settings.service");

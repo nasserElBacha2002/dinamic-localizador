@@ -18,6 +18,11 @@ export interface CompanySettings {
   absenceAttachmentsEnabled?: boolean;
   absenceOperationalIntegrationEnabled?: boolean;
   adminAlertsEnabled?: boolean;
+  attendanceThresholdAlertsEnabled?: boolean;
+  attendanceAlertThresholdPercent?: number;
+  attendanceAlertWindowDays?: number;
+  attendanceAlertMinimumWorkdays?: number;
+  attendanceAlertCooldownDays?: number;
   createdAt: string;
   updatedAt: string;
 }
@@ -43,6 +48,11 @@ export type UpdateCompanySettingsInput = Partial<
     | "absenceAttachmentsEnabled"
     | "absenceOperationalIntegrationEnabled"
     | "adminAlertsEnabled"
+    | "attendanceThresholdAlertsEnabled"
+    | "attendanceAlertThresholdPercent"
+    | "attendanceAlertWindowDays"
+    | "attendanceAlertMinimumWorkdays"
+    | "attendanceAlertCooldownDays"
   >
 >;
 

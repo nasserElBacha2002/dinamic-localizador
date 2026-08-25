@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { env } from "../config/env";
-import { ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS } from "../constants/admin-alert";
+import { ADMIN_ALERT_CATEGORY_PREFERENCE_COLUMN, ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS } from "../constants/admin-alert";
 import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
 import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
@@ -111,6 +111,25 @@ const processClaimedNotification = async (
       alertType: notification.alertType,
       outboxId: notification.id,
       reason: "RECIPIENT_DISABLED",
+    });
+    return "skipped";
+  }
+
+  const categoryPreferenceKey =
+    ADMIN_ALERT_CATEGORY_PREFERENCE_COLUMN[notification.templateCategory];
+  if (!recipient[categoryPreferenceKey]) {
+    await adminAlertNotificationRepository.markSkipped({
+      companyId: notification.companyId,
+      notificationId: notification.id,
+      errorCode: "CATEGORY_DISABLED",
+      errorMessage: `Recipient disabled ${notification.templateCategory} alerts before send`,
+    });
+    logAdminAlertEvent("ADMIN_ALERT_RECIPIENT_SKIPPED", {
+      companyId: notification.companyId,
+      recipientId: notification.recipientId,
+      alertType: notification.alertType,
+      outboxId: notification.id,
+      reason: "CATEGORY_DISABLED",
     });
     return "skipped";
   }
@@ -261,6 +280,7 @@ const processClaimedNotification = async (
       outboxId: notification.id,
       operationId: notification.operationId,
       employeeId: notification.employeeId,
+      absenceRequestId: notification.absenceRequestId,
       providerMessageSid: messageSid,
     });
     return "sent";

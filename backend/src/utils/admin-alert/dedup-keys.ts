@@ -1,26 +1,35 @@
 import { env } from "../../config/env";
-import { getDateIsoInTimezone } from "../absence-date";
 
-/** Hour bucket for forwarded-location throttle (per employee/company/recipient). */
-export const buildForwardedLocationDedupKey = (
-  employeeId: string,
-  at: Date = new Date(),
-): string => {
-  const timeZone = env.BOT_OPERATION_TIMEZONE;
-  const dateIso = getDateIsoInTimezone(at, timeZone);
-  const hour = new Intl.DateTimeFormat("en-GB", {
-    timeZone,
-    hour: "2-digit",
-    hour12: false,
-  }).format(at);
-  const bucket = `${dateIso.replace(/-/g, "")}${hour}`;
-  return `forwarded:${employeeId}:${bucket}`;
-};
+/** Normalize UUID segment for durable dedup keys (SQL LOWER(CONVERT(...)) match). */
+const normalizeId = (id: string): string => id.trim().toLowerCase();
 
 export const buildUnavailableDedupKey = (
   assignmentId: string,
   scheduleVersion: number,
-): string => `unavailable:${assignmentId}:${scheduleVersion}`;
+): string => `unavailable:${normalizeId(assignmentId)}:${scheduleVersion}`;
 
 export const buildMissingCheckinDedupKey = (employeeWorkdayId: string): string =>
-  `missing-checkin:${employeeWorkdayId}`;
+  `missing-checkin:${normalizeId(employeeWorkdayId)}`;
+
+export const buildAbsencePendingDedupKey = (absenceRequestId: string): string =>
+  `absence-pending:${normalizeId(absenceRequestId)}`;
+
+/**
+ * Throttle key for forwarded-location security alerts.
+ * Bucket = floor(unixMs / (throttleMinutes * 60_000)).
+ */
+export const buildForwardedLocationDedupKey = (
+  employeeId: string,
+  at: Date = new Date(),
+  throttleMinutes = env.ADMIN_ALERT_FORWARDED_THROTTLE_MINUTES,
+): string => {
+  const windowMs = Math.max(1, throttleMinutes) * 60_000;
+  const bucket = Math.floor(at.getTime() / windowMs);
+  return `forwarded:${normalizeId(employeeId)}:${bucket}`;
+};
+
+/** Durable crossing id: allows future alerts after recovery + re-cross. */
+export const buildAttendanceThresholdDedupKey = (
+  employeeId: string,
+  crossingSequence: number,
+): string => `attendance-threshold:${normalizeId(employeeId)}:${crossingSequence}`;

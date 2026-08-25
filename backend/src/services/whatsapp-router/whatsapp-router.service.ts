@@ -5,7 +5,7 @@ import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
 import { employeeRepository } from "../../repositories/employee.repository";
 import { buildForwardedLocationDedupKey } from "../../utils/admin-alert/dedup-keys";
-import { adminAlertService } from "../admin-alert.service";
+import { emitAdminAlertSafely } from "../admin-alert-emit.helpers";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
   FORWARDED_LOCATION_REJECTED_MESSAGE,
@@ -269,15 +269,21 @@ export const whatsappRouterService = {
       });
       const employee = await employeeRepository.findById(companyId, ctx.employeeId);
       if (employee) {
-        void adminAlertService.emit({
-          companyId,
-          type: "FORWARDED_LOCATION_REJECTED",
-          employeeId: ctx.employeeId,
-          deduplicationKey: buildForwardedLocationDedupKey(ctx.employeeId),
-          payload: {
-            employeeName: employee.name,
+        // Option B (V1): best-effort security alert. No durable security-event table;
+        // Twilio redelivery may recover only if the inbound webhook is retried.
+        await emitAdminAlertSafely(
+          {
+            companyId,
+            type: "FORWARDED_LOCATION_REJECTED",
+            employeeId: ctx.employeeId,
+            deduplicationKey: buildForwardedLocationDedupKey(ctx.employeeId),
+            occurredAt: new Date(),
+            payload: {
+              employeeName: employee.name,
+            },
           },
-        });
+          "whatsapp-forwarded-location",
+        );
       }
       return handlers.respond(companyId, {
         message: FORWARDED_LOCATION_REJECTED_MESSAGE,

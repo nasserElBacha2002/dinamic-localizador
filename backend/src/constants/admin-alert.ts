@@ -2,6 +2,8 @@ export const ADMIN_ALERT_TYPES = [
   "EMPLOYEE_UNAVAILABLE",
   "MISSING_CHECKIN_AFTER_OPERATION",
   "FORWARDED_LOCATION_REJECTED",
+  "ABSENCE_REQUEST_PENDING",
+  "ATTENDANCE_THRESHOLD_CROSSED",
 ] as const;
 
 export type AdminAlertType = (typeof ADMIN_ALERT_TYPES)[number];
@@ -58,9 +60,15 @@ export const adminAlertTypeDefaultCategory = (
   switch (alertType) {
     case "FORWARDED_LOCATION_REJECTED":
       return "SECURITY";
+    case "ABSENCE_REQUEST_PENDING":
+      return "REQUEST";
     case "EMPLOYEE_UNAVAILABLE":
     case "MISSING_CHECKIN_AFTER_OPERATION":
+    case "ATTENDANCE_THRESHOLD_CROSSED":
     default:
       return "OPERATIONAL";
   }
 };
+
+/** User-facing status copy for pending absence request admin alerts. */
+export const ABSENCE_REQUEST_PENDING_STATUS_LABEL = "Pendiente de revisión";

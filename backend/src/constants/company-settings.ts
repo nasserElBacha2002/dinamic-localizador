@@ -70,6 +70,10 @@ export const COMPANY_SETTINGS_LIMITS = {
   geofenceReviewMarginMeters: { min: 0, max: 5000 },
   confirmationReminderHoursBefore: { min: 1, max: 168 },
   pendingOperationExpirationHours: { min: 1, max: 168 },
+  attendanceAlertThresholdPercent: { min: 1, max: 100 },
+  attendanceAlertWindowDays: { min: 7, max: 365 },
+  attendanceAlertMinimumWorkdays: { min: 1, max: 100 },
+  attendanceAlertCooldownDays: { min: 1, max: 90 },
   operationTimezoneMaxLength: 80,
 } as const;
 

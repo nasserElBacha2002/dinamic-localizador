@@ -27,6 +27,25 @@
 
 `serviceRef` never contains date/time (code + unit tests).
 
+## Admin alert templates (BOT module)
+
+| Template lógico | ENV | Variables | Eventos |
+| --------------- | --- | --------- | ------- |
+| `admin_operational_alert` | `TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID` | {{1}} título, {{2}} empleado, {{3}} detalle, {{4}} contexto | `EMPLOYEE_UNAVAILABLE`, `MISSING_CHECKIN_AFTER_OPERATION`, `FORWARDED_LOCATION_REJECTED`, `ATTENDANCE_THRESHOLD_CROSSED` |
+| `admin_request_alert` | `TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID` | {{1}} tipo solicitud, {{2}} empleado, {{3}} período, {{4}} estado | `ABSENCE_REQUEST_PENDING` (vacaciones, licencia, estudio, trámite, etc.) |
+
+Vacaciones, licencia médica, día de estudio y demás tipos de ausencia con aprobación manual comparten **`admin_request_alert`**. No hay SID por tipo de ausencia.
+
+### Attendance threshold (Phase D)
+
+- Misma fórmula que estadísticas: `present / (present + absent)` (JUSTIFIED / EXPECTED / CANCELLED fuera del rate).
+- Solo alerta por **crossing** ABOVE→BELOW (no por permanecer BELOW).
+- Feature `attendanceThresholdAlertsEnabled` default **false**; activar hace **baseline**, no backfill.
+- Settings: threshold %, window days, minimum workdays, cooldown days.
+- Template: `admin_operational_alert` (sin SID nuevo).
+
+Startup: cuando `ADMIN_ALERT_WORKER_ENABLED=true`, se exigen **ambos** SIDs operacional y request.
+
 ## Fill when production access is available
 
 | Tipo | Runtime HX… | Body summary (no PII) | {{3}} meaning in body | {{4}} meaning | Collision? |

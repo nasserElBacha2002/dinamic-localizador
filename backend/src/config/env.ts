@@ -362,6 +362,22 @@ const envSchema = z
       });
     }
 
+    const adminAlertRequestSidGate = requireContentSidWhenWorkerEnabled(
+      {
+        workerEnabled: data.ADMIN_ALERT_WORKER_ENABLED,
+        contentSid: data.TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID,
+      },
+      "TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID",
+      "ADMIN_ALERT_WORKER_ENABLED",
+    );
+    if (!adminAlertRequestSidGate.ok) {
+      ctx.addIssue({
+        code: "custom",
+        message: adminAlertRequestSidGate.message,
+        path: ["TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID"],
+      });
+    }
+
     const emailTransport =
       data.EMAIL_TRANSPORT ??
       (data.SMTP_HOST ? "smtp" : data.NODE_ENV === "production" ? "smtp" : "console");

@@ -1,8 +1,13 @@
 import { env } from "../../config/env";
 import type { AdminAlertType, AdminAlertTemplateCategory } from "../../constants/admin-alert";
-import type { AdminAlertTemplatePayload } from "../../types/admin-alert";
+import type {
+  AdminAlertOperationalTemplatePayload,
+  AdminAlertTemplatePayload,
+} from "../../types/admin-alert";
+import { isAdminAlertRequestPayload } from "../../types/admin-alert";
 import { formatLocalTime } from "../attendance-validation";
 import { formatServiceReferenceFromFields } from "../format-service-reference";
+import { buildAdminRequestAlertTemplateVariables } from "./request-template-variables";
 
 const EMPTY_CONTEXT = "—";
 
@@ -14,7 +19,7 @@ const formatLocalDate = (iso: string, timeZone: string): string =>
     year: "numeric",
   }).format(new Date(iso));
 
-const formatOperationContext = (payload: AdminAlertTemplatePayload): string => {
+const formatOperationContext = (payload: AdminAlertOperationalTemplatePayload): string => {
   const timeZone = payload.operationTimezone?.trim() || env.BOT_OPERATION_TIMEZONE;
   const serviceRef = formatServiceReferenceFromFields({
     serviceName: payload.serviceName ?? "",
@@ -35,7 +40,7 @@ const formatOperationContext = (payload: AdminAlertTemplatePayload): string => {
   return `Operación: ${serviceRef} · ${datePart} ${timePart}`;
 };
 
-const formatMissingCheckinContext = (payload: AdminAlertTemplatePayload): string => {
+const formatMissingCheckinContext = (payload: AdminAlertOperationalTemplatePayload): string => {
   const timeZone = payload.operationTimezone?.trim() || env.BOT_OPERATION_TIMEZONE;
   const serviceRef = formatServiceReferenceFromFields({
     serviceName: payload.serviceName ?? "",
@@ -56,9 +61,35 @@ const formatMissingCheckinContext = (payload: AdminAlertTemplatePayload): string
   return `Operación: ${serviceRef} · ${datePart}`;
 };
 
+const formatAttendanceThresholdDetail = (
+  payload: AdminAlertOperationalTemplatePayload,
+): string => {
+  const rate = payload.attendanceRatePercent;
+  const threshold = payload.attendanceThresholdPercent;
+  if (rate == null || threshold == null) {
+    return "La asistencia cruzó por debajo del umbral configurado.";
+  }
+  return `La asistencia actual es ${rate}%, por debajo del umbral configurado de ${threshold}%.`;
+};
+
+const formatAttendanceThresholdContext = (
+  payload: AdminAlertOperationalTemplatePayload,
+): string => {
+  const windowDays = payload.attendanceWindowDays;
+  const evaluated = payload.attendanceEvaluatedWorkdays;
+  if (windowDays == null || evaluated == null) {
+    return EMPTY_CONTEXT;
+  }
+  return `Últimos ${windowDays} días · ${evaluated} jornadas evaluadas`;
+};
+
 const alertCopyByType: Record<
   AdminAlertType,
-  { title: string; detail: (payload: AdminAlertTemplatePayload) => string; context: (payload: AdminAlertTemplatePayload) => string }
+  {
+    title: string;
+    detail: (payload: AdminAlertOperationalTemplatePayload) => string;
+    context: (payload: AdminAlertOperationalTemplatePayload) => string;
+  }
 > = {
   EMPLOYEE_UNAVAILABLE: {
     title: "No asistirá",
@@ -78,6 +109,16 @@ const alertCopyByType: Record<
       return ctx === EMPTY_CONTEXT ? EMPTY_CONTEXT : ctx;
     },
   },
+  ABSENCE_REQUEST_PENDING: {
+    title: "Solicitud pendiente",
+    detail: () => EMPTY_CONTEXT,
+    context: () => EMPTY_CONTEXT,
+  },
+  ATTENDANCE_THRESHOLD_CROSSED: {
+    title: "Asistencia baja",
+    detail: formatAttendanceThresholdDetail,
+    context: formatAttendanceThresholdContext,
+  },
 };
 
 const sanitizeVariable = (value: string): string => {
@@ -91,7 +132,7 @@ const sanitizeVariable = (value: string): string => {
  */
 export const buildAdminOperationalAlertTemplateVariables = (
   alertType: AdminAlertType,
-  payload: AdminAlertTemplatePayload,
+  payload: AdminAlertOperationalTemplatePayload,
 ): Record<string, string> => {
   const copy = alertCopyByType[alertType];
   return {
@@ -106,7 +147,7 @@ export const resolveTemplateCategoryForBuild = (
   alertType: AdminAlertType,
   category: AdminAlertTemplateCategory,
 ): "operational" | "request" => {
-  if (category === "REQUEST") {
+  if (category === "REQUEST" || alertType === "ABSENCE_REQUEST_PENDING") {
     return "request";
   }
   return "operational";
@@ -119,13 +160,15 @@ export const buildAdminAlertTemplateVariables = (
 ): Record<string, string> => {
   const kind = resolveTemplateCategoryForBuild(alertType, category);
   if (kind === "request") {
-    // Prepared for admin_request_alert; not used in Phase A+B emit paths.
-    return {
-      "1": sanitizeVariable(alertType),
-      "2": sanitizeVariable(payload.employeeName),
-      "3": EMPTY_CONTEXT,
-      "4": EMPTY_CONTEXT,
-    };
+    if (!isAdminAlertRequestPayload(payload, category)) {
+      throw new Error(
+        "REQUEST admin alert requires AdminAlertRequestTemplatePayload (employeeName, absenceTypeName, startDate, endDate, statusLabel)",
+      );
+    }
+    return buildAdminRequestAlertTemplateVariables(payload);
   }
-  return buildAdminOperationalAlertTemplateVariables(alertType, payload);
+  return buildAdminOperationalAlertTemplateVariables(
+    alertType,
+    payload as AdminAlertOperationalTemplatePayload,
+  );
 };

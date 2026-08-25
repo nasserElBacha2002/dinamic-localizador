@@ -1,6 +1,6 @@
 # WhatsApp attendance incident audit
 
-> **Superseded (forwarded locations, 2026-08-25):** la mitigación anti-forward descrita abajo fue **retirada**. Payloads productivos normal vs reenviada resultaron indistinguibles. Ver `audit/whatsapp-forwarded-location-audit.md`.
+> **Update (forwarded locations, 2026-08-25):** mitigación anti-forward **reimplementada** en modo best-effort: solo `Forwarded` / `FrequentlyForwarded` top-level. Ver `audit/whatsapp-forwarded-location-audit.md`.
 
 **Mode:** read-only (code + migrations + config). No production DB/logs for the specific incident were available in this session.  
 **Date:** 2026-08-24  

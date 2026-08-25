@@ -2,7 +2,10 @@ import { z } from "zod";
 
 /**
  * Known Twilio inbound fields used by the bot.
- * `.passthrough()` keeps unrelated provider fields (e.g. ChannelMetadata) for raw_payload.
+ * Forwarded / FrequentlyForwarded are the official Twilio WhatsApp forward contract
+ * (optional — normal location messages omit them).
+ * `.passthrough()` keeps unrelated provider fields (e.g. ChannelMetadata) for raw_payload only;
+ * anti-forward enforcement reads only top-level Forwarded / FrequentlyForwarded.
  */
 export const twilioWebhookSchema = z
   .object({
@@ -15,6 +18,8 @@ export const twilioWebhookSchema = z
     Address: z.string().optional(),
     Label: z.string().optional(),
     NumMedia: z.string().optional(),
+    Forwarded: z.string().optional(),
+    FrequentlyForwarded: z.string().optional(),
   })
   .passthrough();
 

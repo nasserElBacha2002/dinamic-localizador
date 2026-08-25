@@ -13,6 +13,8 @@ export type WhatsAppNotificationProducer =
 
 export type WhatsAppAttendanceLocationEvent =
   | "LOCATION_RECEIVED"
+  | "LOCATION_FORWARD_STATUS"
+  | "FORWARDED_LOCATION_REJECTED"
   | "LOCATION_ATTENDANCE_RECORDED"
   | "WHATSAPP_NOTIFICATION_SENT"
   | "WHATSAPP_NOTIFICATION_FAILED";

@@ -30,17 +30,17 @@ describe("buildAdminOperationalAlertTemplateVariables", () => {
     assert.equal(vars["4"], "—");
   });
 
-  it("uses factual missing check-in wording", () => {
-    const vars = buildAdminOperationalAlertTemplateVariables("MISSING_CHECKIN_AFTER_OPERATION", {
+  it("builds FORWARDED_LOCATION_REJECTED security copy", () => {
+    const vars = buildAdminOperationalAlertTemplateVariables("FORWARDED_LOCATION_REJECTED", {
       employeeName: "Juan Pérez",
-      serviceName: "Carrefour Caballito",
-      scheduledStart: "2026-08-24T11:00:00.000Z",
-      operationTimezone: "America/Argentina/Buenos_Aires",
+      forwardedLocationDetail:
+        "Ubicación marcada como reenviada. Flujo: CHECK_IN. MessageSid: SM1. Forwarded=true.",
     });
 
-    assert.equal(vars["1"], "Sin registro de llegada");
-    assert.match(vars["3"], /No existe registro de llegada/i);
-    assert.doesNotMatch(vars["3"], /faltó|nunca llegó|no asistió/i);
+    assert.equal(vars["1"], "Ubicación reenviada");
+    assert.equal(vars["2"], "Juan Pérez");
+    assert.match(vars["3"], /MessageSid: SM1/);
+    assert.equal(vars["4"], "—");
   });
 });
 

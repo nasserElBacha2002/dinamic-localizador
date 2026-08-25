@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import {
   buildAbsencePendingDedupKey,
   buildAttendanceThresholdDedupKey,
+  buildForwardedLocationDedupKey,
   buildMissingCheckinDedupKey,
   buildUnavailableDedupKey,
 } from "./dedup-keys";
@@ -27,6 +28,13 @@ describe("admin alert dedup keys", () => {
     assert.equal(
       buildAttendanceThresholdDedupKey("emp-1", 3),
       "attendance-threshold:emp-1:3",
+    );
+  });
+
+  it("builds forwarded-location key from employee + MessageSid", () => {
+    assert.equal(
+      buildForwardedLocationDedupKey("EMP-1", " SM123 "),
+      "forwarded-location:emp-1:SM123",
     );
   });
 

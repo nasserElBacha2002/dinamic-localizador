@@ -101,6 +101,13 @@ const alertCopyByType: Record<
     detail: () => "No existe registro de llegada al finalizar la jornada.",
     context: formatMissingCheckinContext,
   },
+  FORWARDED_LOCATION_REJECTED: {
+    title: "Ubicación reenviada",
+    detail: (payload) =>
+      payload.forwardedLocationDetail?.trim() ||
+      "Intentó registrar asistencia con una ubicación marcada como reenviada por el proveedor.",
+    context: formatOperationContext,
+  },
   ABSENCE_REQUEST_PENDING: {
     title: "Solicitud pendiente",
     detail: () => EMPTY_CONTEXT,

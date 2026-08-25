@@ -64,6 +64,8 @@ export type AdminAlertOperationalTemplatePayload = {
   attendanceThresholdPercent?: number;
   attendanceWindowDays?: number;
   attendanceEvaluatedWorkdays?: number;
+  /** FORWARDED_LOCATION_REJECTED — sanitized detail (no coordinates / raw payload). */
+  forwardedLocationDetail?: string | null;
 };
 
 /** Request admin alerts (admin_request_alert template). Phase C: absence pending review. */

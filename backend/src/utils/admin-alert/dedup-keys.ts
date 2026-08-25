@@ -17,3 +17,12 @@ export const buildAttendanceThresholdDedupKey = (
   employeeId: string,
   crossingSequence: number,
 ): string => `attendance-threshold:${normalizeId(employeeId)}:${crossingSequence}`;
+
+/**
+ * Dedup key for forwarded-location security alerts.
+ * Bound to MessageSid so Twilio inbound retries do not enqueue a second alert.
+ */
+export const buildForwardedLocationDedupKey = (
+  employeeId: string,
+  messageSid: string,
+): string => `forwarded-location:${normalizeId(employeeId)}:${messageSid.trim()}`;

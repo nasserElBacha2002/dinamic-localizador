@@ -1,6 +1,7 @@
 export const ADMIN_ALERT_TYPES = [
   "EMPLOYEE_UNAVAILABLE",
   "MISSING_CHECKIN_AFTER_OPERATION",
+  "FORWARDED_LOCATION_REJECTED",
   "ABSENCE_REQUEST_PENDING",
   "ATTENDANCE_THRESHOLD_CROSSED",
 ] as const;
@@ -57,6 +58,8 @@ export const adminAlertTypeDefaultCategory = (
   alertType: AdminAlertType,
 ): AdminAlertTemplateCategory => {
   switch (alertType) {
+    case "FORWARDED_LOCATION_REJECTED":
+      return "SECURITY";
     case "ABSENCE_REQUEST_PENDING":
       return "REQUEST";
     case "EMPLOYEE_UNAVAILABLE":

@@ -1,6 +1,6 @@
 # Admin Alerts — WhatsApp Audit & Design
 
-> **Update (2026-08-25):** el tipo `FORWARDED_LOCATION_REJECTED` y su productor fueron **retirados** del código de aplicación. El CHECK SQL histórico puede seguir listando el valor como legacy. Ver `audit/whatsapp-forwarded-location-audit.md`.
+> **Update (2026-08-25):** `FORWARDED_LOCATION_REJECTED` was **reimplemented** as a minimal best-effort gate on Twilio `Forwarded` / `FrequentlyForwarded` only (no `UNKNOWN` / ChannelMetadata enforcement). See `audit/whatsapp-forwarded-location-audit.md`.
 
 **Stage audited:** BOT — Alertas a administradores por compañía  
 **Mode:** Read-only audit (no code changes)  

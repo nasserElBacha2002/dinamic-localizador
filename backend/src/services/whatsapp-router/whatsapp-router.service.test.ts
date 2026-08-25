@@ -832,6 +832,180 @@ describe("whatsappRouterService.routeLocationMessage", () => {
     assert.equal(calls.processLocationCheckout, 1);
     assert.equal(calls.processLocationCheckIn, 0);
   });
+
+  it("rejects Forwarded=true before direct location attendance", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { adminAlertService } = await import("../admin-alert.service");
+    const { handlers, calls } = createMockHandlers();
+    let emitCalls = 0;
+    mock.method(adminAlertService, "emit", async (input) => {
+      emitCalls += 1;
+      assert.equal(input.type, "FORWARDED_LOCATION_REJECTED");
+      assert.match(input.deduplicationKey, /^forwarded-location:/);
+      return { enqueued: 1, dedupSkipped: 0, recipientSkipped: 0 };
+    });
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-FWD-DIRECT",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "true",
+          FrequentlyForwarded: "false",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/i);
+    assert.equal(calls.processDirectLocationAttendance, 0);
+    assert.equal(calls.processLocationCheckIn, 0);
+    assert.equal(calls.processLocationCheckout, 0);
+    assert.equal(emitCalls, 1);
+  });
+
+  it("rejects FrequentlyForwarded=true before check-in session location", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: buildSession("WAITING_LOCATION"),
+        payload: {
+          MessageSid: "SM-FREQ-CHECKIN",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "false",
+          FrequentlyForwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/i);
+    assert.equal(calls.processLocationCheckIn, 0);
+    assert.equal(calls.processDirectLocationAttendance, 0);
+  });
+
+  it("rejects Forwarded=true during WAITING_CHECKOUT_LOCATION before checkout", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: buildSession("WAITING_CHECKOUT_LOCATION"),
+        payload: {
+          MessageSid: "SM-FWD-CHECKOUT",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/i);
+    assert.equal(calls.processLocationCheckout, 0);
+    assert.equal(calls.processLocationCheckIn, 0);
+  });
+
+  it("allows normal location when Forwarded fields are absent (ChannelMetadata only is ignored)", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-NORMAL",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          ChannelMetadata: JSON.stringify({
+            type: "whatsapp",
+            data: { context: { Forwarded: "true", FrequentlyForwarded: "false" } },
+          }),
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /DIRECT_LOCATION_OK/);
+    assert.equal(calls.processDirectLocationAttendance, 1);
+  });
+
+  it("allows Forwarded=false through to direct attendance", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-FALSE",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "false",
+          FrequentlyForwarded: "false",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /DIRECT_LOCATION_OK/);
+    assert.equal(calls.processDirectLocationAttendance, 1);
+  });
+
+  it("keeps employee rejection when admin alert emit fails", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { adminAlertService } = await import("../admin-alert.service");
+    const { handlers, calls } = createMockHandlers();
+    mock.method(adminAlertService, "emit", async () => {
+      throw new Error("forced emit failure");
+    });
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-FWD-ALERT-FAIL",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+          Forwarded: "true",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /ubicación reenviada/i);
+    assert.equal(calls.processDirectLocationAttendance, 0);
+    assert.equal(calls.respond, 1);
+  });
 });
 
 describe("whatsappRouterService text cannot register attendance via coordinates in body", () => {

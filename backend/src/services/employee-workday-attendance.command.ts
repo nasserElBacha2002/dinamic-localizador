@@ -227,6 +227,17 @@ export const employeeWorkdayAttendanceCommand = {
       );
 
       await transaction.commit();
+      try {
+        const { attendanceThresholdAlertService } = await import(
+          "./attendance-threshold-alert.service"
+        );
+        await attendanceThresholdAlertService.markEmployeeDirty(
+          input.companyId,
+          input.employeeId,
+        );
+      } catch {
+        // best-effort dirty mark; durable queue recovery covers misses via other triggers
+      }
       return {
         attendance: created,
         recordedDuringApprovedAbsence: Boolean(duringAbsence),

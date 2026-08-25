@@ -1,7 +1,11 @@
 import { INVALID_SELECTION_MESSAGE } from "./bot/bot-response.builder";
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
+import { employeeRepository } from "../repositories/employee.repository";
+import { adminAlertContextRepository } from "../repositories/admin-alert-context.repository";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
+import { buildUnavailableDedupKey } from "../utils/admin-alert/dedup-keys";
+import { emitAdminAlertSafely } from "./admin-alert-emit.helpers";
 import type { OperationSelectionOption } from "../types/twilio.types";
 import { getBotNow } from "../utils/bot-runtime-context";
 import { getBotOperationTimezone } from "../utils/bot-runtime-settings-scope";
@@ -286,6 +290,38 @@ export const employeeWorkdayService = {
         return { kind: "ok", message: this.buildConfirmedMessage(latest) };
       }
       return { kind: "ok", message: this.buildUnavailableMessage(latest) };
+    }
+
+    const scheduleVersion =
+      (await adminAlertContextRepository.getAssignmentScheduleVersion(
+        companyId,
+        assignment.assignmentId,
+      )) ?? 1;
+    const employee = await employeeRepository.findById(companyId, employeeId);
+    if (employee) {
+      await emitAdminAlertSafely(
+        {
+          companyId,
+          type: "EMPLOYEE_UNAVAILABLE",
+          employeeId,
+          operationId,
+          deduplicationKey: buildUnavailableDedupKey(assignment.assignmentId, scheduleVersion),
+          occurredAt: new Date(),
+          payload: {
+            employeeName: employee.name,
+            serviceName: assignment.serviceName,
+            serviceAddress: assignment.serviceAddress,
+            serviceLocality: assignment.serviceLocality,
+            scheduledStart: assignment.scheduledStart,
+            scheduledEnd: assignment.scheduledEnd,
+          },
+        },
+        "employee-workday-unavailable",
+      );
+      const { attendanceThresholdAlertService } = await import(
+        "./attendance-threshold-alert.service"
+      );
+      await attendanceThresholdAlertService.markEmployeeDirty(companyId, employeeId);
     }
 
     return { kind: "ok", message: this.buildUnavailableMessage(assignment) };

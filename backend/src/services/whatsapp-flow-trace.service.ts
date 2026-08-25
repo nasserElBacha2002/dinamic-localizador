@@ -8,6 +8,7 @@ import {
 } from "../constants/whatsapp-observability";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
 import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
+import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
 import { payrollReceiptNotificationRepository } from "../repositories/payroll-receipt-notification.repository";
 import { whatsappConversationRepository } from "../repositories/whatsapp-conversation.repository";
 import { whatsappFlowExecutionRepository } from "../repositories/whatsapp-flow-execution.repository";
@@ -454,6 +455,10 @@ export const whatsappFlowTraceService = {
       notificationId: message.notificationId,
       providerStatus,
     });
+    await adminAlertNotificationRepository.projectProviderStatusById({
+      notificationId: message.notificationId,
+      providerStatus,
+    });
   },
 
   async projectOutboxProviderStatusByMessageSid(input: {
@@ -466,6 +471,10 @@ export const whatsappFlowTraceService = {
       providerStatus,
     });
     await operationAssignmentNotificationRepository.projectProviderStatusByMessageSid({
+      providerMessageSid: input.providerMessageSid,
+      providerStatus,
+    });
+    await adminAlertNotificationRepository.projectProviderStatusByMessageSid({
       providerMessageSid: input.providerMessageSid,
       providerStatus,
     });

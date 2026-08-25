@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { mockAdminAlertSideEffects } from "../test-helpers/mock-admin-alert-side-effects";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import {
   NO_TODAY_ASSIGNMENTS_MESSAGE,
@@ -386,6 +387,7 @@ describe("employeeWorkdayService", () => {
 
   it("updates confirmation status when marking unavailable after confirmed", async () => {
     setupUnitTestEnv();
+    await mockAdminAlertSideEffects();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );

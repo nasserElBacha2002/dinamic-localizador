@@ -57,7 +57,7 @@ export const logWhatsAppAttendanceEvent = (
   fields: Record<string, unknown>,
 ): void => {
   const payload = { event, ...fields };
-  if (event === "WHATSAPP_NOTIFICATION_FAILED" || event === "FORWARDED_LOCATION_REJECTED") {
+  if (event === "WHATSAPP_NOTIFICATION_FAILED") {
     console.warn("[whatsapp-attendance]", payload);
     return;
   }
@@ -94,6 +94,8 @@ export type TwilioContentSidConfig = {
   NO_CHECKIN?: string | null;
   ATTENDANCE_CONFIRMATION?: string | null;
   EVENTUAL_ASSIGNMENT?: string | null;
+  ADMIN_OPERATIONAL?: string | null;
+  ADMIN_REQUEST?: string | null;
 };
 
 export type ContentSidCollision = {

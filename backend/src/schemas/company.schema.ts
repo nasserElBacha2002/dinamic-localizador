@@ -140,6 +140,56 @@ export const updateCompanySettingsSchema = z
     absenceAdvancedCalendarEnabled: z.boolean().optional(),
     absenceAttachmentsEnabled: z.boolean().optional(),
     absenceOperationalIntegrationEnabled: z.boolean().optional(),
+    adminAlertsEnabled: z.boolean().optional(),
+    attendanceThresholdAlertsEnabled: z.boolean().optional(),
+    attendanceAlertThresholdPercent: z.coerce
+      .number()
+      .int("El umbral de asistencia debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertThresholdPercent.min,
+        "El umbral de asistencia debe ser al menos 1%.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertThresholdPercent.max,
+        "El umbral de asistencia no puede superar 100%.",
+      )
+      .optional(),
+    attendanceAlertWindowDays: z.coerce
+      .number()
+      .int("El período de asistencia debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertWindowDays.min,
+        "El período de asistencia debe ser al menos 7 días.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertWindowDays.max,
+        "El período de asistencia no puede superar 365 días.",
+      )
+      .optional(),
+    attendanceAlertMinimumWorkdays: z.coerce
+      .number()
+      .int("El mínimo de jornadas debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertMinimumWorkdays.min,
+        "El mínimo de jornadas debe ser al menos 1.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertMinimumWorkdays.max,
+        "El mínimo de jornadas no puede superar 100.",
+      )
+      .optional(),
+    attendanceAlertCooldownDays: z.coerce
+      .number()
+      .int("El cooldown debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertCooldownDays.min,
+        "El cooldown debe ser al menos 1 día.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.attendanceAlertCooldownDays.max,
+        "El cooldown no puede superar 90 días.",
+      )
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

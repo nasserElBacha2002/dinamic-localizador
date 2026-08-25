@@ -14,6 +14,7 @@ import type { CompanyUserDto } from "../types/company-user";
 import { buildPaginationMeta } from "../utils/pagination";
 import { logAuditSafe } from "../utils/audit-post-commit";
 import { normalizeEmail } from "../utils/password";
+import { normalizePhoneNumber } from "../utils/phone";
 import { auditService } from "./audit.service";
 import {
   assertCanAssignRoleOnInvitation,
@@ -37,6 +38,7 @@ const mapCompanyUserDto = (
   userId: String(row.user_id),
   name: String(row.name),
   email: String(row.email),
+  phoneNumber: row.phone_number ? String(row.phone_number) : null,
   globalRole: String(row.global_role),
   ...(includePlatformAdminFlag
     ? { isPlatformAdmin: Boolean(row.is_platform_admin) }
@@ -131,8 +133,12 @@ const resolveModificationType = (input: UpdateCompanyUserInput): string => {
   if (input.role !== undefined) parts.push("role");
   if (input.status !== undefined) parts.push("status");
   if (input.isDefault !== undefined) parts.push("isDefault");
+  if (input.phoneNumber !== undefined) parts.push("phoneNumber");
   return parts.length > 0 ? parts.join(",") : "membership_update";
 };
+
+const hasMembershipFields = (input: UpdateCompanyUserInput): boolean =>
+  input.role !== undefined || input.status !== undefined || input.isDefault !== undefined;
 
 /**
  * Administrative self-edit inventory (company users domain):
@@ -247,113 +253,161 @@ export const companyUserService = {
     correlationId?: string | null,
   ): Promise<CompanyUserDto> {
     const modificationType = resolveModificationType(input);
+    const membershipPatch = {
+      ...(input.role !== undefined ? { role: input.role } : {}),
+      ...(input.status !== undefined ? { status: input.status } : {}),
+      ...(input.isDefault !== undefined ? { isDefault: input.isDefault } : {}),
+    };
+    const touchingMembership = hasMembershipFields(input);
+    const touchingPhone = input.phoneNumber !== undefined;
 
-    // Phase 1: absolute self-edit ban (identity only — before writes).
-    try {
-      assertSelfAdministrativeMutationAllowed(userId, requesterUserId);
-    } catch (error) {
-      if (error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED") {
-        // Defer persistent audit until company scope is valid.
+    // Self-edit ban applies to membership/role changes; phone-only is allowed (contact field).
+    if (touchingMembership) {
+      try {
+        assertSelfAdministrativeMutationAllowed(userId, requesterUserId);
+      } catch (error) {
+        if (error instanceof AppError && error.code === "SELF_EDIT_NOT_ALLOWED") {
+          try {
+            await assertActiveCompany(companyId);
+            await logCompanyUserAudit({
+              companyId,
+              actorUserId: requesterUserId,
+              entityType: "company_user_membership",
+              entityId: userId,
+              targetUserId: userId,
+              action: "company_user_self_edit_denied",
+              result: "DENIED",
+              reason: "SELF_EDIT_NOT_ALLOWED",
+              modificationType,
+              previousData: null,
+              newData: {
+                ...sanitizeMembershipAuditSnapshot(input),
+                actorIsPlatformAdmin: requesterIsPlatformAdmin,
+              },
+              correlationId,
+            });
+          } catch {
+            // Company invalid / audit failure must not change the self-edit denial.
+          }
+        }
+        throw error;
+      }
+    }
+
+    await assertActiveCompany(companyId);
+    await assertTargetUserManageable(userId, requesterIsPlatformAdmin);
+
+    let normalizedPhone: string | null | undefined;
+    if (touchingPhone) {
+      const rawPhone = input.phoneNumber;
+      if (rawPhone == null || rawPhone.trim() === "") {
+        normalizedPhone = null;
+      } else {
         try {
-          await assertActiveCompany(companyId);
+          normalizedPhone = normalizePhoneNumber(rawPhone);
+        } catch {
+          throw new AppError(
+            400,
+            "INVALID_PHONE",
+            "El teléfono debe estar en formato E.164 (ej. +5491112345678).",
+          );
+        }
+      }
+    }
+
+    let previousSnapshot: Record<string, unknown> = {};
+    let row: Record<string, unknown>;
+
+    if (touchingMembership) {
+      try {
+        const result = await userCompanyMembershipRepository.applyMembershipUpdateWithGuards(
+          companyId,
+          userId,
+          membershipPatch,
+          (existing) => {
+            previousSnapshot = sanitizeMembershipAuditSnapshot({
+              role: existing.role,
+              status: existing.status,
+              isDefault: existing.isDefault,
+            });
+            assertMembershipMutationAllowed({
+              requesterCompanyRole,
+              requesterIsPlatformAdmin,
+              existing,
+              update: membershipPatch,
+            });
+          },
+          async ({ transaction, row: lockedRow }) => {
+            if (normalizedPhone !== undefined) {
+              await userRepository.updatePhoneNumber(userId, normalizedPhone, transaction);
+            }
+            const dtoPreview = mapCompanyUserDto(
+              {
+                ...lockedRow,
+                ...(normalizedPhone !== undefined ? { phone_number: normalizedPhone } : {}),
+              },
+              requesterIsPlatformAdmin,
+            );
+            await auditService.log(
+              companyId,
+              {
+                entityType: "company_user_membership",
+                entityId: userId,
+                action: "company_user_update_allowed",
+                userId: requesterUserId,
+                reason: null,
+                previousData: previousSnapshot,
+                newData: {
+                  ...sanitizeMembershipAuditSnapshot({
+                    role: dtoPreview.companyRole,
+                    status: dtoPreview.membershipStatus,
+                    isDefault: dtoPreview.isDefault,
+                  }),
+                  ...(normalizedPhone !== undefined ? { phoneNumber: normalizedPhone } : {}),
+                  result: "ALLOWED",
+                  modificationType,
+                  actorUserId: requesterUserId,
+                  targetUserId: userId,
+                  companyId,
+                  ...(correlationId ? { correlationId } : {}),
+                },
+              },
+              transaction,
+            );
+          },
+        );
+        row = result.row;
+        if (normalizedPhone !== undefined) {
+          row = { ...row, phone_number: normalizedPhone };
+        }
+      } catch (error) {
+        if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
           await logCompanyUserAudit({
             companyId,
             actorUserId: requesterUserId,
             entityType: "company_user_membership",
             entityId: userId,
             targetUserId: userId,
-            action: "company_user_self_edit_denied",
+            action: "company_user_update_denied",
             result: "DENIED",
-            reason: "SELF_EDIT_NOT_ALLOWED",
+            reason: error.code,
             modificationType,
-            previousData: null,
-            newData: {
-              ...sanitizeMembershipAuditSnapshot(input),
-              actorIsPlatformAdmin: requesterIsPlatformAdmin,
-            },
+            previousData: previousSnapshot,
+            newData: sanitizeMembershipAuditSnapshot(input),
             correlationId,
           });
-        } catch {
-          // Company invalid / audit failure must not change the self-edit denial.
         }
+        throw error;
       }
-      throw error;
-    }
-
-    await assertActiveCompany(companyId);
-    await assertTargetUserManageable(userId, requesterIsPlatformAdmin);
-
-    let previousSnapshot: Record<string, unknown> = {};
-    let row: Record<string, unknown>;
-
-    try {
-      const result = await userCompanyMembershipRepository.applyMembershipUpdateWithGuards(
-        companyId,
-        userId,
-        input,
-        (existing) => {
-          previousSnapshot = sanitizeMembershipAuditSnapshot({
-            role: existing.role,
-            status: existing.status,
-            isDefault: existing.isDefault,
-          });
-          assertMembershipMutationAllowed({
-            requesterCompanyRole,
-            requesterIsPlatformAdmin,
-            existing,
-            update: input,
-          });
-        },
-        async ({ transaction, row: lockedRow }) => {
-          const dtoPreview = mapCompanyUserDto(lockedRow, requesterIsPlatformAdmin);
-          // CRITICAL_AUDIT: privilege change must not commit without audit_logs.
-          await auditService.log(
-            companyId,
-            {
-              entityType: "company_user_membership",
-              entityId: userId,
-              action: "company_user_update_allowed",
-              userId: requesterUserId,
-              reason: null,
-              previousData: previousSnapshot,
-              newData: {
-                ...sanitizeMembershipAuditSnapshot({
-                  role: dtoPreview.companyRole,
-                  status: dtoPreview.membershipStatus,
-                  isDefault: dtoPreview.isDefault,
-                }),
-                result: "ALLOWED",
-                modificationType,
-                actorUserId: requesterUserId,
-                targetUserId: userId,
-                companyId,
-                ...(correlationId ? { correlationId } : {}),
-              },
-            },
-            transaction,
-          );
-        },
-      );
-      row = result.row;
-    } catch (error) {
-      if (error instanceof AppError && (error.statusCode === 403 || error.statusCode === 409)) {
-        // BEST_EFFORT: denial attempts have no successful business mutation to couple.
-        await logCompanyUserAudit({
-          companyId,
-          actorUserId: requesterUserId,
-          entityType: "company_user_membership",
-          entityId: userId,
-          targetUserId: userId,
-          action: "company_user_update_denied",
-          result: "DENIED",
-          reason: error.code,
-          modificationType,
-          previousData: previousSnapshot,
-          newData: sanitizeMembershipAuditSnapshot(input),
-          correlationId,
-        });
+    } else if (normalizedPhone !== undefined) {
+      await userRepository.updatePhoneNumber(userId, normalizedPhone);
+      const loaded = await userCompanyMembershipRepository.findCompanyUserRow(companyId, userId);
+      if (!loaded) {
+        throw new AppError(404, "COMPANY_USER_NOT_FOUND", "Usuario de empresa no encontrado.");
       }
-      throw error;
+      row = { ...loaded, phone_number: normalizedPhone };
+    } else {
+      throw new AppError(400, "EMPTY_UPDATE", "Debe enviar al menos un campo para actualizar.");
     }
 
     return mapCompanyUserDto(row, requesterIsPlatformAdmin);

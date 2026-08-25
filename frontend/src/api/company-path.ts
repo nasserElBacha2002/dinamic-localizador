@@ -29,6 +29,7 @@ export const OPERATIONAL_API_PREFIXES = [
   "bot-simulator",
   "users",
   "settings",
+  "company-alert-recipients",
   "modules",
   "lookups",
   "work-teams",

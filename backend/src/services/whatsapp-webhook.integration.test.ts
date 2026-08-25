@@ -11,6 +11,7 @@ import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { mockAdminAlertSideEffects } from "../test-helpers/mock-admin-alert-side-effects";
 import {
   AMBIGUOUS_COMPANY_MESSAGE,
   COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
@@ -248,6 +249,9 @@ const runSimulatedWebhook = async (input: {
   setup?: () => Promise<void>;
 }) => {
   setupUnitTestEnv();
+  // This suite is mock-driven (no DB pool). Stub admin-alert side effects that
+  // otherwise call getPool() after unavailable / missing-checkin / absence emits.
+  await mockAdminAlertSideEffects();
   const { whatsappBotService } = await import("./whatsapp-bot.service");
   await setupCommonWebhookMocks({
     companyId: input.inbound?.companyId ?? companyA,
@@ -1022,9 +1026,11 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
   });
 
   const sampleAssignment = () => ({
+    assignmentId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     operationId: operationA,
     serviceName: "Carrefour Palermo",
     serviceAddress: "Av. Santa Fe 1234, Palermo",
+    serviceLocality: "CABA",
     serviceLatitude: -34.6037,
     serviceLongitude: -58.3816,
     scheduledStart: "2026-07-08T23:30:00.000Z",

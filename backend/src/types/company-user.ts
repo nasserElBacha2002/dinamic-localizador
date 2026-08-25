@@ -4,6 +4,8 @@ export interface CompanyUserDto {
   userId: string;
   name: string;
   email: string;
+  /** WhatsApp E.164; null if not configured. */
+  phoneNumber: string | null;
   globalRole: string;
   isPlatformAdmin?: boolean;
   membershipId: string;

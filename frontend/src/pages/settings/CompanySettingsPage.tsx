@@ -22,6 +22,10 @@ import {
   buildOperationalSettingsSummary,
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
+import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
+import {
+  useCompanyAlertRecipients,
+} from "../../hooks/useCompanyAlertRecipients";
 import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
@@ -46,7 +50,8 @@ type DialogKey =
   | "locationTypes"
   | "workSchedule"
   | "employeeCategories"
-  | "locationZones";
+  | "locationZones"
+  | "whatsappAlerts";
 
 const parseTab = (value: string | null): SettingsTab =>
   value === "absences" ? "absences" : "company";
@@ -67,6 +72,7 @@ export function CompanySettingsPage() {
   const absencesTabEnabled = canRead && activeTab === "absences";
 
   const settingsQuery = useCompanySettings(companyTabEnabled || absencesTabEnabled);
+  const alertRecipientsQuery = useCompanyAlertRecipients(companyTabEnabled && canRead);
   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
   const locationTypesQuery = useCompanyLocationTypes(false);
   const employeeCategoriesQuery = useEmployeeCategories(
@@ -168,6 +174,36 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar configuración operativa"
               canEdit={canUpdate}
               onAction={() => setOpenDialog("operational")}
+            />
+
+            <SettingsSummaryCard
+              title="Alertas WhatsApp"
+              description="Destinatarios explícitos y activación de alertas operativas y de seguridad para administradores."
+              summaryItems={[
+                {
+                  label: "Compañía",
+                  value: settingsQuery.data?.adminAlertsEnabled ? "Habilitadas" : "Deshabilitadas",
+                },
+                {
+                  label: "Destinatarios",
+                  value: `${alertRecipientsQuery.data?.filter((r) => r.isEnabled).length ?? 0} activos`,
+                },
+              ]}
+              loading={settingsQuery.isLoading || alertRecipientsQuery.isLoading}
+              error={
+                settingsQuery.isError
+                  ? getApiErrorMessage(settingsQuery.error)
+                  : alertRecipientsQuery.isError
+                    ? getApiErrorMessage(alertRecipientsQuery.error)
+                    : null
+              }
+              onRetry={() => {
+                void settingsQuery.refetch();
+                void alertRecipientsQuery.refetch();
+              }}
+              actionLabel="Gestionar alertas"
+              canEdit={canUpdate && !settingsQuery.isError && !alertRecipientsQuery.isError}
+              onAction={() => setOpenDialog("whatsappAlerts")}
             />
 
             <SettingsSummaryCard
@@ -424,6 +460,16 @@ export function CompanySettingsPage() {
           </SimpleGrid>
         </Tabs.Panel>
       </Tabs>
+
+      {openDialog === "whatsappAlerts" && settingsQuery.data ? (
+        <CompanyWhatsAppAlertsDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          settings={settingsQuery.data}
+          canUpdate={canUpdate}
+          onSaved={handleSaved}
+        />
+      ) : null}
 
       {openDialog === "operational" && settingsQuery.data ? (
         <CompanyOperationalSettingsDialog

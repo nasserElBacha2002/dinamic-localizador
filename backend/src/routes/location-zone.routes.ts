@@ -5,6 +5,7 @@ import { asyncHandler } from "../middleware/async-handler";
 import { validate } from "../middleware/validate";
 import {
   createLocationZoneSchema,
+  geocodeLocationZoneBodySchema,
   listLocationZonesQuerySchema,
   locationZoneIdParamSchema,
   updateLocationZoneSchema,
@@ -17,6 +18,12 @@ locationZoneRouter.get(
   validate(listLocationZonesQuerySchema, "query"),
   requireAnyPermission("employees:manage", "company:settings:update"),
   asyncHandler(locationZoneController.list),
+);
+
+locationZoneRouter.get(
+  "/geocoding-summary",
+  requireAnyPermission("employees:manage", "company:settings:update"),
+  asyncHandler(locationZoneController.geocodingSummary),
 );
 
 locationZoneRouter.post(
@@ -32,4 +39,12 @@ locationZoneRouter.patch(
   validate(updateLocationZoneSchema),
   requireAnyPermission("employees:manage", "company:settings:update"),
   asyncHandler(locationZoneController.update),
+);
+
+locationZoneRouter.post(
+  "/:zoneId/geocode",
+  validate(locationZoneIdParamSchema, "params"),
+  validate(geocodeLocationZoneBodySchema),
+  requireAnyPermission("employees:manage", "company:settings:update"),
+  asyncHandler(locationZoneController.geocode),
 );

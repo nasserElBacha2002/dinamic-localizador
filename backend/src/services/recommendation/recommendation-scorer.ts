@@ -18,12 +18,27 @@ export interface AffinityPairStats {
   older: number;
 }
 
+/**
+ * Explicit proximity outcome for explainability (Phase B).
+ * Score still uses `bucket` only; `distanceMeters` is presentation data.
+ * SAME_ZONE may have null distance (zone-id match without Haversine).
+ */
+export type LocationProximity = {
+  bucket: LocationProximityBucket;
+  distanceMeters: number | null;
+};
+
 export interface CandidateFeatureInput {
   employeeId: string;
   assignedCount: number;
   affinityPairs: AffinityPairStats[];
   serviceWorkdayCount: number;
   locationBucket: LocationProximityBucket;
+  /**
+   * Haversine meters already computed by the caller (do not recalculate for reasons).
+   * null/undefined for SAME_ZONE or when distance was not computable.
+   */
+  distanceMeters?: number | null;
 }
 
 export interface ScoredCandidateFeatures {
@@ -39,6 +54,8 @@ export interface ScoredCandidateFeatures {
   lastSharedAt: string | null;
   serviceWorkdayCount: number;
   locationBucket: LocationProximityBucket;
+  /** Carried through for LOCATION_PROXIMITY reason params only; does not affect score. */
+  distanceMeters: number | null;
   hasRecentCollaboration: boolean;
 }
 
@@ -216,8 +233,36 @@ export const scoreCandidateFeatures = (input: CandidateFeatureInput): ScoredCand
     lastSharedAt: affinity.lastSharedAt,
     serviceWorkdayCount: input.serviceWorkdayCount,
     locationBucket: input.locationBucket,
+    distanceMeters:
+      input.distanceMeters === undefined || input.distanceMeters === null
+        ? null
+        : input.distanceMeters,
     hasRecentCollaboration: affinity.hasRecentCollaboration,
   };
+};
+
+const buildLocationProximityReasonParams = (
+  features: ScoredCandidateFeatures,
+): Record<string, string | number | boolean | null> => {
+  const params: Record<string, string | number | boolean | null> = {
+    bucket: features.locationBucket,
+  };
+
+  // SAME_ZONE is identity-based; never invent 0m from a unused Haversine.
+  if (features.locationBucket === "SAME_ZONE") {
+    params.distanceMeters = null;
+    return params;
+  }
+
+  if (
+    features.distanceMeters !== null &&
+    Number.isFinite(features.distanceMeters) &&
+    features.distanceMeters >= 0
+  ) {
+    params.distanceMeters = Math.round(features.distanceMeters);
+  }
+
+  return params;
 };
 
 export const buildRecommendationReasons = (
@@ -256,9 +301,7 @@ export const buildRecommendationReasons = (
   if (features.locationBucket !== "UNKNOWN") {
     reasons.push({
       code: "LOCATION_PROXIMITY",
-      params: {
-        bucket: features.locationBucket,
-      },
+      params: buildLocationProximityReasonParams(features),
     });
   }
 

@@ -19,6 +19,8 @@
     "seed:services": "tsx src/scripts/seed-services.ts",
     "seed:employees": "tsx src/scripts/seed-employees.ts",
     "reconcile:services": "tsx src/scripts/reconcile-services.ts",
+    "location-zones:geocode": "tsx src/scripts/geocode-location-zones.ts",
+    "location-zones:audit": "tsx src/scripts/audit-location-zones.ts",
     "export:services": "tsx src/scripts/export-database-services.ts",
     "fix:services": "tsx src/scripts/fix-services-from-reconciliation.ts",
     "twilio:signature:verify": "tsx src/scripts/verify-twilio-signature.ts",

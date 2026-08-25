@@ -183,6 +183,8 @@ export const individualRecommendationService = {
           affinityPairs: affinityByCandidate.get(candidate.employeeId) ?? [],
           serviceWorkdayCount: serviceExperienceByCandidate.get(candidate.employeeId) ?? 0,
           locationBucket,
+          // Reuse the single Haversine result for explainability (Phase B); score uses bucket only.
+          distanceMeters,
         });
       });
 

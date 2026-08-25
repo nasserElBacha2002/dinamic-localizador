@@ -8,14 +8,16 @@ import type {
   UpdateLocationZoneInput,
 } from "../schemas/location-zone.schema";
 import type { CompanyMembershipSummary } from "../types/company";
-import type { LocationZone } from "../types/location-zone";
+import type { LocationZone, LocationZoneGeocodingSummary } from "../types/location-zone";
 import {
   canonicalizeLocationZoneDisplayName,
   canonicalizeLocationZoneLocality,
   normalizeLocationZoneLocality,
   normalizeLocationZoneName,
 } from "../utils/normalize-location-zone-name";
+import { resolveCanonicalLocality } from "../utils/geocoding/canonical-locality";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
+import { locationZoneGeocodingService } from "./location-zone-geocoding.service";
 
 const assertActiveCompany = async (companyId: string): Promise<void> => {
   const company = await companyRepository.findById(companyId);
@@ -83,12 +85,26 @@ const assertKeyAvailable = async (
   return resolved;
 };
 
+const hasManualCentroids = (
+  lat: number | null | undefined,
+  lon: number | null | undefined,
+): boolean => typeof lat === "number" && typeof lon === "number";
+
 export const locationZoneService = {
   async list(companyId: string, query: ListLocationZonesQuery): Promise<LocationZone[]> {
     await assertActiveCompany(companyId);
     return locationZoneRepository.listForCompany(companyId, {
       includeInactive: Boolean(query.includeInactive),
     });
+  },
+
+  /**
+   * Coverage of usable centroids among active zones (inactive excluded).
+   * coveragePercent = zones with a valid lat/lng pair / total active.
+   */
+  async geocodingSummary(companyId: string): Promise<LocationZoneGeocodingSummary> {
+    await assertActiveCompany(companyId);
+    return locationZoneRepository.getGeocodingSummaryForCompany(companyId);
   },
 
   /**
@@ -117,11 +133,17 @@ export const locationZoneService = {
     }
 
     try {
-      return await locationZoneRepository.create(companyId, {
+      const created = await locationZoneRepository.create(companyId, {
         ...resolved,
         centroidLatitude: null,
         centroidLongitude: null,
+        geocodingStatus: "PENDING",
+        geocodingSource: null,
+        geocodedAt: null,
+        geocodingLastError: null,
       });
+      locationZoneGeocodingService.scheduleGeocode(created);
+      return created;
     } catch (error) {
       if (isDuplicateKeyError(error)) {
         const raced = await locationZoneRepository.findByNormalizedKey(
@@ -150,13 +172,39 @@ export const locationZoneService = {
       input.centroidLatitude === undefined ? null : input.centroidLatitude;
     const centroidLongitude =
       input.centroidLongitude === undefined ? null : input.centroidLongitude;
+    const manual = hasManualCentroids(centroidLatitude, centroidLongitude);
 
     try {
       const created = await locationZoneRepository.create(companyId, {
         ...resolved,
         centroidLatitude,
         centroidLongitude,
+        geocodingStatus: manual ? "MANUAL" : "PENDING",
+        geocodingSource: manual ? "MANUAL" : null,
+        geocodedAt: manual ? new Date() : null,
+        geocodingLastError: null,
       });
+
+      if (manual) {
+        console.info("[location-zone] LOCATION_ZONE_GEOCODING_MANUAL_OVERRIDE", {
+          event: "LOCATION_ZONE_GEOCODING_MANUAL_OVERRIDE",
+          zoneId: created.id,
+          companyId,
+          context: "create",
+        });
+      } else {
+        const canonical = resolveCanonicalLocality(created.locality);
+        if (canonical.status === "UNKNOWN") {
+          console.info("[location-zone] LOCATION_ZONE_CANONICALIZATION_UNKNOWN", {
+            event: "LOCATION_ZONE_CANONICALIZATION_UNKNOWN",
+            zoneId: created.id,
+            companyId,
+            locality: created.locality,
+          });
+        }
+        locationZoneGeocodingService.scheduleGeocode(created);
+      }
+
       return {
         ...created,
         assignedEmployeesCount: 0,
@@ -194,8 +242,9 @@ export const locationZoneService = {
 
     const nameChanging = input.name !== undefined;
     const localityChanging = input.locality !== undefined;
+    const keyChanging = nameChanging || localityChanging;
 
-    if (nameChanging || localityChanging) {
+    if (keyChanging) {
       const nextName = input.name ?? existing.name;
       const nextLocality = localityChanging ? input.locality : existing.locality;
       const resolved = await assertKeyAvailable(companyId, nextName, nextLocality, zoneId);
@@ -205,18 +254,87 @@ export const locationZoneService = {
       normalizedLocality = resolved.normalizedLocality;
     }
 
+    const centroidsProvided =
+      input.centroidLatitude !== undefined && input.centroidLongitude !== undefined;
+    const clearingCentroids =
+      centroidsProvided &&
+      input.centroidLatitude === null &&
+      input.centroidLongitude === null;
+    const settingManualCentroids =
+      centroidsProvided &&
+      typeof input.centroidLatitude === "number" &&
+      typeof input.centroidLongitude === "number";
+
+    const isManualProtected =
+      existing.geocodingSource === "MANUAL" || existing.geocodingStatus === "MANUAL";
+
+    let geocodingStatus = undefined as
+      | LocationZone["geocodingStatus"]
+      | undefined;
+    let geocodingSource = undefined as LocationZone["geocodingSource"] | undefined;
+    let geocodedAt = undefined as Date | null | undefined;
+    let geocodingLastError = undefined as string | null | undefined;
+    let shouldScheduleGeocode = false;
+
+    if (settingManualCentroids) {
+      geocodingStatus = "MANUAL";
+      geocodingSource = "MANUAL";
+      geocodedAt = new Date();
+      geocodingLastError = null;
+    } else if (clearingCentroids) {
+      geocodingStatus = "PENDING";
+      geocodingSource = null;
+      geocodedAt = null;
+      geocodingLastError = null;
+      shouldScheduleGeocode = true;
+    } else if (keyChanging && !isManualProtected && !centroidsProvided) {
+      // Name/locality changed on AUTO zone → clear stale centroids and re-queue.
+      geocodingStatus = "PENDING";
+      geocodingSource = existing.geocodingSource === "AUTO" ? "AUTO" : null;
+      geocodingLastError = null;
+      geocodedAt = null;
+      shouldScheduleGeocode = true;
+    }
+
     try {
       const updated = await locationZoneRepository.update(companyId, zoneId, {
         name,
         normalizedName,
         locality,
         normalizedLocality,
-        centroidLatitude: input.centroidLatitude,
-        centroidLongitude: input.centroidLongitude,
+        centroidLatitude:
+          settingManualCentroids || clearingCentroids
+            ? input.centroidLatitude
+            : keyChanging && !isManualProtected && !centroidsProvided
+              ? null
+              : input.centroidLatitude,
+        centroidLongitude:
+          settingManualCentroids || clearingCentroids
+            ? input.centroidLongitude
+            : keyChanging && !isManualProtected && !centroidsProvided
+              ? null
+              : input.centroidLongitude,
+        geocodingStatus,
+        geocodingSource,
+        geocodedAt,
+        geocodingLastError,
         isActive: input.isActive,
       });
       if (!updated) {
         throw new AppError(404, "LOCATION_ZONE_NOT_FOUND", "Zona no encontrada.");
+      }
+
+      if (settingManualCentroids) {
+        console.info("[location-zone] LOCATION_ZONE_GEOCODING_MANUAL_OVERRIDE", {
+          event: "LOCATION_ZONE_GEOCODING_MANUAL_OVERRIDE",
+          zoneId,
+          companyId,
+          context: "update",
+        });
+      }
+
+      if (shouldScheduleGeocode) {
+        locationZoneGeocodingService.scheduleGeocode(updated);
       }
 
       const withCount = await locationZoneRepository.findByIdForCompany(companyId, zoneId);
@@ -231,5 +349,81 @@ export const locationZoneService = {
       }
       throw error;
     }
+  },
+
+  /**
+   * Explicit admin action: recalculate coordinates via Google.
+   * force=true allows replacing a MANUAL override.
+   */
+  async geocode(
+    companyId: string,
+    role: CompanyMembershipSummary["role"],
+    zoneId: string,
+    options: { force?: boolean } = {},
+  ): Promise<LocationZone> {
+    assertManagePermission(role);
+    await assertActiveCompany(companyId);
+
+    const existing = await locationZoneRepository.findByIdForCompany(companyId, zoneId);
+    if (!existing) {
+      throw new AppError(404, "LOCATION_ZONE_NOT_FOUND", "Zona no encontrada.");
+    }
+
+    const force = Boolean(options.force);
+    if (
+      !force &&
+      (existing.geocodingSource === "MANUAL" || existing.geocodingStatus === "MANUAL")
+    ) {
+      throw new AppError(
+        409,
+        "LOCATION_ZONE_MANUAL_OVERRIDE",
+        "La zona tiene coordenadas manuales. Use force=true para recalcular automáticamente.",
+      );
+    }
+
+    const attempt = await locationZoneGeocodingService.geocodeZone(existing, { force });
+    if (attempt.outcome === "SKIPPED_NO_API_KEY") {
+      throw new AppError(
+        503,
+        "GEOCODING_UNAVAILABLE",
+        "Geocoding no disponible: falta GOOGLE_MAPS_API_KEY.",
+      );
+    }
+
+    if (attempt.outcome === "SKIPPED_MANUAL") {
+      throw new AppError(
+        409,
+        "LOCATION_ZONE_MANUAL_OVERRIDE",
+        "La zona tiene coordenadas manuales. Use force=true para recalcular automáticamente.",
+      );
+    }
+
+    if (
+      attempt.outcome === "SKIPPED_STALE_INPUT" ||
+      attempt.outcome === "SKIPPED_NOT_FOUND" ||
+      attempt.outcome === "SKIPPED_CONCURRENT_MANUAL"
+    ) {
+      throw new AppError(
+        409,
+        "LOCATION_ZONE_GEOCODING_CONFLICT",
+        "No se aplicó el geocoding: la zona cambió mientras se resolvía (renombre concurrente u override manual).",
+      );
+    }
+
+    const refreshed = await locationZoneRepository.findByIdForCompany(companyId, zoneId);
+    if (!refreshed) {
+      throw new AppError(404, "LOCATION_ZONE_NOT_FOUND", "Zona no encontrada.");
+    }
+
+    if (attempt.outcome === "FAILED") {
+      throw new AppError(
+        422,
+        "LOCATION_ZONE_GEOCODING_FAILED",
+        attempt.errorMessage || "No se pudieron resolver las coordenadas de la zona.",
+      );
+    }
+
+    // RESOLVED or SKIPPED_ALREADY_RESOLVED
+    return refreshed;
   },
 };

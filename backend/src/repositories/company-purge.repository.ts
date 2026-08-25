@@ -83,7 +83,14 @@ export const deleteCompanyOperationalDataSetBased = async (
     -- Provider events are keyed by message_id / SID, not company_id.
     IF OBJECT_ID(N'dbo.whatsapp_provider_events', N'U') IS NOT NULL
       DELETE FROM whatsapp_provider_events
-      WHERE message_id IN (SELECT id FROM whatsapp_messages WHERE company_id = @companyId)
+      WHERE message_id IN (
+          SELECT id FROM whatsapp_messages WHERE company_id = @companyId
+          UNION
+          SELECT m.id
+          FROM whatsapp_messages m
+          INNER JOIN whatsapp_conversations c ON c.id = m.conversation_id
+          WHERE c.company_id = @companyId
+        )
          OR provider_message_sid IN (
            SELECT provider_message_sid
            FROM whatsapp_messages
@@ -91,7 +98,15 @@ export const deleteCompanyOperationalDataSetBased = async (
              AND provider_message_sid IS NOT NULL
          );
 
-    DELETE FROM whatsapp_messages WHERE company_id = @companyId;
+    -- Messages may lack company_id but still FK to conversations of this company.
+    IF OBJECT_ID(N'dbo.whatsapp_conversations', N'U') IS NOT NULL
+      DELETE FROM whatsapp_messages
+      WHERE company_id = @companyId
+         OR conversation_id IN (
+           SELECT id FROM whatsapp_conversations WHERE company_id = @companyId
+         );
+    ELSE
+      DELETE FROM whatsapp_messages WHERE company_id = @companyId;
 
     IF OBJECT_ID(N'dbo.whatsapp_flow_steps', N'U') IS NOT NULL
       DELETE FROM whatsapp_flow_steps

@@ -41,6 +41,14 @@ export type RecommendationReasonCode = (typeof RECOMMENDATION_REASON_CODES)[numb
 /**
  * UI-agnostic explanation atom. Frontend maps `code` + `params` to copy.
  * Backend must not emit localized user-facing sentences in V1+.
+ *
+ * LOCATION_PROXIMITY params (Phase B):
+ * - `bucket`: SAME_ZONE | VERY_CLOSE | CLOSE | MEDIUM | FAR (UNKNOWN omitted)
+ * - `distanceMeters`: optional approximate meters between employee zone centroid
+ *   and service coordinates. null for SAME_ZONE (identity match, no invented 0m).
+ *   Absent when older backends omit it — UI falls back to bucket copy.
+ * Distance is centroid-based approximation, not GPS of the employee.
+ * Recommendations never include centroidLatitude/centroidLongitude.
  */
 export interface RecommendationReason {
   code: RecommendationReasonCode | (string & {});

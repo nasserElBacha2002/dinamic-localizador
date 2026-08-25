@@ -57,7 +57,7 @@ const sampleResponse: IndividualEmployeeRecommendationResponse = {
         },
         {
           code: "LOCATION_PROXIMITY",
-          params: { bucket: "CLOSE" },
+          params: { bucket: "CLOSE", distanceMeters: 2410 },
         },
       ],
     },
@@ -176,7 +176,7 @@ describe("OperationAiRecommendationsPanel", () => {
     await waitFor(() => {
       assert.ok(view.getAllByText(/Trabajó 8 veces con 2 integrantes/).length >= 1);
       assert.ok(view.getByText(/5 jornadas anteriores en esta sucursal/));
-      assert.ok(view.getByText(/cerca de la operación/i));
+      assert.ok(view.getByText(/aprox\.\s*2,4 km del servicio/i));
     });
     assert.equal(view.queryByText(/Caballito|teléfono|documento|latitude/i), null);
   });

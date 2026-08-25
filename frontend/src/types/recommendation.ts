@@ -34,6 +34,12 @@ export const RECOMMENDATION_REASON_CODES = [
 
 export type RecommendationReasonCode = (typeof RECOMMENDATION_REASON_CODES)[number];
 
+/**
+ * LOCATION_PROXIMITY params may include:
+ * - bucket: SAME_ZONE | VERY_CLOSE | CLOSE | MEDIUM | FAR
+ * - distanceMeters: optional centroid→service meters (null for SAME_ZONE; may be absent on older APIs)
+ * Never includes lat/lng. Distance is approximate zone centroid, not employee GPS.
+ */
 export interface RecommendationReason {
   code: RecommendationReasonCode | (string & {});
   params?: Record<string, string | number | boolean | null>;

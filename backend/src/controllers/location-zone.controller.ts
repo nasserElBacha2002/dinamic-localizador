@@ -13,6 +13,12 @@ export const locationZoneController = {
     res.status(200).json({ data: zones });
   },
 
+  async geocodingSummary(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const summary = await locationZoneService.geocodingSummary(companyId);
+    res.status(200).json({ data: summary });
+  },
+
   async create(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const zone = await locationZoneService.create(companyId, req.companyRole!, req.body);
@@ -26,6 +32,18 @@ export const locationZoneController = {
       req.companyRole!,
       String(req.params.zoneId),
       req.body,
+    );
+    res.status(200).json({ data: zone });
+  },
+
+  async geocode(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const force = Boolean(req.body?.force);
+    const zone = await locationZoneService.geocode(
+      companyId,
+      req.companyRole!,
+      String(req.params.zoneId),
+      { force },
     );
     res.status(200).json({ data: zone });
   },

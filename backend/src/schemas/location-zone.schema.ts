@@ -99,6 +99,14 @@ export const listLocationZonesQuerySchema = z.object({
     .transform((value) => value === true || value === "true"),
 });
 
+export const geocodeLocationZoneBodySchema = z.preprocess(
+  (value) => (value === undefined || value === null ? {} : value),
+  z.object({
+    force: z.boolean().optional(),
+  }),
+);
+
 export type CreateLocationZoneInput = z.infer<typeof createLocationZoneSchema>;
 export type UpdateLocationZoneInput = z.infer<typeof updateLocationZoneSchema>;
 export type ListLocationZonesQuery = z.infer<typeof listLocationZonesQuerySchema>;
+export type GeocodeLocationZoneBody = z.infer<typeof geocodeLocationZoneBodySchema>;

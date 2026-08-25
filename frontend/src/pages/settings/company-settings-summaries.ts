@@ -10,6 +10,7 @@ import type { EmployeeCategory } from "../../types/employee-category";
 import type { LocationZone } from "../../types/location-zone";
 import type { CompanyWorkSchedule } from "../../types/schedule";
 import { buildCompanySchedulePreviewLabel } from "../../utils/operation-schedule-display";
+import { summarizeActiveZoneGeocoding } from "../../utils/location-zone-geocoding-ui";
 
 export function formatOperationSchedule(
   startTime: string | null | undefined,
@@ -189,11 +190,16 @@ export function buildLocationZonesSummary(zones: LocationZone[]) {
   const active = zones.filter((zone) => zone.isActive);
   const inactive = zones.filter((zone) => !zone.isActive);
   const chips = active.slice(0, 3).map((zone) => zone.name);
+  const coverage = summarizeActiveZoneGeocoding(zones);
 
   return {
     summaryItems: [
       { label: "Activas", value: `${active.length} zonas` },
       { label: "Inactivas", value: `${inactive.length} zonas` },
+      {
+        label: "Cobertura geográfica",
+        value: `${coverage.withCoordinates} de ${coverage.total} con coordenadas (${coverage.coveragePercent}%)`,
+      },
       {
         label: "Asignaciones",
         value: `${zones.reduce((sum, zone) => sum + (zone.assignedEmployeesCount ?? 0), 0)}`,

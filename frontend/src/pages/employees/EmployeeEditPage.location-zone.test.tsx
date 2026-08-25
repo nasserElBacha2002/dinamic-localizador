@@ -6,7 +6,12 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule, ABSENCES_API_EXPORTS, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
+import {
+  mockApiModule,
+  ABSENCES_API_EXPORTS,
+  EMPLOYEES_API_EXPORTS,
+  LOCATION_ZONES_API_EXPORTS,
+} from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 
@@ -61,15 +66,13 @@ mockApiModule("api/employee-categories.api", {
   },
 });
 
-mockApiModule("api/location-zones.api", {
-  getLocationZones: async () => [],
-  createLocationZone: async () => {
-    throw new Error("not used");
+mockApiModule(
+  "api/location-zones.api",
+  {
+    getLocationZones: async () => [],
   },
-  updateLocationZone: async () => {
-    throw new Error("not used");
-  },
-});
+  LOCATION_ZONES_API_EXPORTS,
+);
 
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({

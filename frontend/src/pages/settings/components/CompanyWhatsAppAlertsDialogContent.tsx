@@ -3,13 +3,14 @@ import {
   Group,
   NumberInput,
   ScrollArea,
+  Select,
   Stack,
   Switch,
   Table,
   Text,
   TextInput,
 } from "@mantine/core";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { FormErrorAlert } from "../../../design-system";
 import {
   useCompanyAlertRecipients,
@@ -17,6 +18,7 @@ import {
   useDeleteCompanyAlertRecipient,
   useUpdateCompanyAlertRecipient,
 } from "../../../hooks/useCompanyAlertRecipients";
+import { useCompanyUsers } from "../../../hooks/useCompanyUsers";
 import { useUpdateCompanySettings } from "../../../hooks/useCompanySettings";
 import type { CompanySettings } from "../../../types/company-settings";
 import { getApiErrorMessage } from "../../../utils/errors";
@@ -33,13 +35,16 @@ export function CompanyWhatsAppAlertsDialogContent({
   onSaved,
 }: CompanyWhatsAppAlertsDialogContentProps) {
   const recipientsQuery = useCompanyAlertRecipients(canUpdate);
+  const usersQuery = useCompanyUsers(
+    { status: "ACTIVE", limit: 200, page: 1 },
+    canUpdate,
+  );
   const createMutation = useCreateCompanyAlertRecipient();
   const updateMutation = useUpdateCompanyAlertRecipient();
   const deleteMutation = useDeleteCompanyAlertRecipient();
   const updateSettings = useUpdateCompanySettings();
 
-  const [displayName, setDisplayName] = useState("");
-  const [phoneNumber, setPhoneNumber] = useState("");
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [editingRecipientId, setEditingRecipientId] = useState<string | null>(null);
   const [editDisplayName, setEditDisplayName] = useState("");
   const [editPhoneNumber, setEditPhoneNumber] = useState("");
@@ -64,6 +69,35 @@ export function CompanyWhatsAppAlertsDialogContent({
     updateMutation.isPending ||
     deleteMutation.isPending ||
     updateSettings.isPending;
+
+  const recipientUserIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const recipient of recipientsQuery.data ?? []) {
+      if (recipient.userId) {
+        ids.add(recipient.userId);
+      }
+    }
+    return ids;
+  }, [recipientsQuery.data]);
+
+  const companyUsers = usersQuery.data?.data ?? [];
+
+  const selectedUser = useMemo(
+    () => companyUsers.find((user) => user.userId === selectedUserId) ?? null,
+    [companyUsers, selectedUserId],
+  );
+
+  const userSelectData = useMemo(() => {
+    return companyUsers
+      .filter((user) => !recipientUserIds.has(user.userId))
+      .map((user) => ({
+        value: user.userId,
+        label: user.phoneNumber
+          ? `${user.name} (${user.email}) — ${user.phoneNumber}`
+          : `${user.name} (${user.email}) — sin teléfono`,
+        disabled: !user.phoneNumber,
+      }));
+  }, [companyUsers, recipientUserIds]);
 
   const handleToggleCompanyAlerts = async (checked: boolean) => {
     if (!canUpdate) {
@@ -98,17 +132,19 @@ export function CompanyWhatsAppAlertsDialogContent({
   };
 
   const handleCreate = async () => {
-    if (!canUpdate || !phoneNumber.trim()) {
+    if (!canUpdate || !selectedUserId) {
+      return;
+    }
+    if (!selectedUser?.phoneNumber?.trim()) {
+      setSubmitError(
+        "El usuario no tiene teléfono. Cargalo en Usuarios de la empresa antes de agregarlo.",
+      );
       return;
     }
     setSubmitError(null);
     try {
-      await createMutation.mutateAsync({
-        displayName: displayName.trim() || null,
-        phoneNumber: phoneNumber.trim(),
-      });
-      setDisplayName("");
-      setPhoneNumber("");
+      await createMutation.mutateAsync({ userId: selectedUserId });
+      setSelectedUserId(null);
       onSaved("Destinatario agregado.");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
@@ -194,8 +230,8 @@ export function CompanyWhatsAppAlertsDialogContent({
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Configurá destinatarios explícitos para alertas WhatsApp operativas y de seguridad. No se
-        suscribe automáticamente por rol.
+        Elegí destinatarios entre los usuarios de la empresa. El teléfono se toma del perfil del
+        usuario (cargalo en Usuarios si falta). No se suscribe automáticamente por rol.
       </Text>
 
       <Switch
@@ -276,27 +312,41 @@ export function CompanyWhatsAppAlertsDialogContent({
       </Stack>
 
       {canUpdate ? (
-        <Group align="flex-end" wrap="wrap">
-          <TextInput
-            label="Nombre"
-            placeholder="Ej. Responsable operaciones"
-            value={displayName}
-            onChange={(event) => setDisplayName(event.currentTarget.value)}
-            disabled={busy}
-            style={{ flex: 1, minWidth: 180 }}
-          />
-          <TextInput
-            label="Teléfono (E.164)"
-            placeholder="+5491112345678"
-            value={phoneNumber}
-            onChange={(event) => setPhoneNumber(event.currentTarget.value)}
-            disabled={busy}
-            style={{ flex: 1, minWidth: 180 }}
-          />
-          <Button onClick={() => void handleCreate()} disabled={busy || !phoneNumber.trim()}>
-            Agregar destinatario
-          </Button>
-        </Group>
+        <Stack gap="xs">
+          <Group align="flex-end" wrap="wrap">
+            <Select
+              label="Usuario de la empresa"
+              placeholder={
+                usersQuery.isLoading ? "Cargando usuarios…" : "Buscar por nombre o email"
+              }
+              searchable
+              clearable
+              data={userSelectData}
+              value={selectedUserId}
+              onChange={(value) => setSelectedUserId(typeof value === "string" ? value : null)}
+              disabled={busy || usersQuery.isLoading}
+              nothingFoundMessage="No hay usuarios disponibles"
+              style={{ flex: 1, minWidth: 260 }}
+            />
+            <Button
+              onClick={() => void handleCreate()}
+              disabled={busy || !selectedUserId || !selectedUser?.phoneNumber?.trim()}
+            >
+              Agregar destinatario
+            </Button>
+          </Group>
+          {selectedUser && !selectedUser.phoneNumber?.trim() ? (
+            <Text size="sm" c="orange">
+              Este usuario no tiene teléfono. Editalo en Usuarios de la empresa (formato E.164, ej.
+              +5491112345678).
+            </Text>
+          ) : null}
+          {selectedUser?.phoneNumber ? (
+            <Text size="sm" c="dimmed">
+              Se enviarán alertas a {selectedUser.phoneNumber}.
+            </Text>
+          ) : null}
+        </Stack>
       ) : null}
 
       {recipientsQuery.isLoading ? (
@@ -328,10 +378,11 @@ export function CompanyWhatsAppAlertsDialogContent({
             <Table.Tbody>
               {recipientsQuery.data.map((recipient) => {
                 const isEditing = editingRecipientId === recipient.id;
+                const linkedToUser = Boolean(recipient.userId);
                 return (
                   <Table.Tr key={recipient.id}>
                     <Table.Td>
-                      {isEditing ? (
+                      {isEditing && !linkedToUser ? (
                         <TextInput
                           value={editDisplayName}
                           onChange={(event) => setEditDisplayName(event.currentTarget.value)}
@@ -343,7 +394,7 @@ export function CompanyWhatsAppAlertsDialogContent({
                       )}
                     </Table.Td>
                     <Table.Td>
-                      {isEditing ? (
+                      {isEditing && !linkedToUser ? (
                         <TextInput
                           value={editPhoneNumber}
                           onChange={(event) => setEditPhoneNumber(event.currentTarget.value)}
@@ -429,20 +480,22 @@ export function CompanyWhatsAppAlertsDialogContent({
                           </Group>
                         ) : (
                           <Group gap="xs">
-                            <Button
-                              variant="subtle"
-                              size="compact-sm"
-                              onClick={() =>
-                                startEditing(
-                                  recipient.id,
-                                  recipient.displayName,
-                                  recipient.phoneNumber,
-                                )
-                              }
-                              disabled={busy}
-                            >
-                              Editar
-                            </Button>
+                            {!linkedToUser ? (
+                              <Button
+                                variant="subtle"
+                                size="compact-sm"
+                                onClick={() =>
+                                  startEditing(
+                                    recipient.id,
+                                    recipient.displayName,
+                                    recipient.phoneNumber,
+                                  )
+                                }
+                                disabled={busy}
+                              >
+                                Editar
+                              </Button>
+                            ) : null}
                             <Button
                               variant="subtle"
                               color="red"

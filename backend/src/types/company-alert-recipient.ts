@@ -14,7 +14,7 @@ export type CompanyAlertRecipient = {
 
 export type CompanyAlertRecipientInput = {
   userId?: string | null;
-  phoneNumber: string;
+  phoneNumber?: string;
   displayName?: string | null;
   isEnabled?: boolean;
   receiveOperationalAlerts?: boolean;

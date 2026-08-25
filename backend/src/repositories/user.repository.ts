@@ -299,6 +299,22 @@ export const userRepository = {
   async updatePasswordHash(id: string, passwordHash: string): Promise<void> {
     await this.updatePasswordAndBumpTokenVersion(id, passwordHash);
   },
+
+  async updatePhoneNumber(
+    id: string,
+    phoneNumber: string | null,
+    transaction?: sql.Transaction,
+  ): Promise<void> {
+    await requestFrom(transaction)
+      .input("id", sql.UniqueIdentifier, id)
+      .input("phoneNumber", sql.NVarChar(20), phoneNumber)
+      .query(`
+        UPDATE users
+        SET phone_number = @phoneNumber,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+      `);
+  },
 };
 
 export const toPublicUser = (user: User): PublicUser => ({

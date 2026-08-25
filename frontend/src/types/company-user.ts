@@ -24,6 +24,8 @@ export interface CompanyUser {
   userId: string;
   name: string;
   email: string;
+  /** WhatsApp E.164; null if not configured. */
+  phoneNumber: string | null;
   globalRole: string;
   isPlatformAdmin?: boolean;
   membershipId: string;
@@ -54,4 +56,5 @@ export interface UpdateCompanyUserInput {
   role?: CompanyRole;
   status?: CompanyMembershipStatus;
   isDefault?: boolean;
+  phoneNumber?: string | null;
 }

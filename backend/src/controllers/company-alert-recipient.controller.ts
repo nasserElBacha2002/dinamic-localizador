@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { AppError } from "../errors/app-error";
 import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
+import { userRepository } from "../repositories/user.repository";
 import type {
   CreateCompanyAlertRecipientInput,
   UpdateCompanyAlertRecipientInput,
@@ -27,6 +28,53 @@ const assertRecipientUserBelongsToCompany = async (
   }
 };
 
+const resolvePhoneForCreate = async (
+  companyId: string,
+  input: CreateCompanyAlertRecipientInput,
+): Promise<{ phoneNumber: string; displayName: string | null | undefined; userId: string | null }> => {
+  if (input.userId) {
+    await assertRecipientUserBelongsToCompany(companyId, input.userId);
+    const user = await userRepository.findById(input.userId);
+    if (!user) {
+      throw new AppError(400, "INVALID_RECIPIENT_USER", "El usuario no existe.");
+    }
+    const fromUser = user.phoneNumber?.trim() || null;
+    const fromInput = input.phoneNumber?.trim() || null;
+    const rawPhone = fromInput || fromUser;
+    if (!rawPhone) {
+      throw new AppError(
+        400,
+        "USER_PHONE_REQUIRED",
+        "El usuario no tiene teléfono configurado. Cargalo en Usuarios de la empresa.",
+      );
+    }
+    let phoneNumber: string;
+    try {
+      phoneNumber = normalizePhoneNumber(rawPhone);
+    } catch {
+      throw new AppError(400, "INVALID_PHONE", "El teléfono debe estar en formato E.164.");
+    }
+    return {
+      phoneNumber,
+      displayName: input.displayName ?? user.name,
+      userId: input.userId,
+    };
+  }
+
+  if (!input.phoneNumber?.trim()) {
+    throw new AppError(400, "INVALID_PHONE", "El teléfono es obligatorio.");
+  }
+  try {
+    return {
+      phoneNumber: normalizePhoneNumber(input.phoneNumber),
+      displayName: input.displayName,
+      userId: null,
+    };
+  } catch {
+    throw new AppError(400, "INVALID_PHONE", "El teléfono debe estar en formato E.164.");
+  }
+};
+
 export const companyAlertRecipientController = {
   async list(req: Request, res: Response): Promise<void> {
     const companyId = requireRequestCompanyId(req);
@@ -37,20 +85,14 @@ export const companyAlertRecipientController = {
   async create(req: Request, res: Response): Promise<void> {
     const companyId = requireRequestCompanyId(req);
     const input = req.body as CreateCompanyAlertRecipientInput;
-
-    let phoneNumber: string;
-    try {
-      phoneNumber = normalizePhoneNumber(input.phoneNumber);
-    } catch {
-      throw new AppError(400, "INVALID_PHONE", "El teléfono debe estar en formato E.164.");
-    }
-
-    await assertRecipientUserBelongsToCompany(companyId, input.userId ?? null);
+    const resolved = await resolvePhoneForCreate(companyId, input);
 
     try {
       const created = await companyAlertRecipientRepository.create(companyId, {
         ...input,
-        phoneNumber,
+        userId: resolved.userId,
+        phoneNumber: resolved.phoneNumber,
+        displayName: resolved.displayName,
       });
       res.status(201).json({ data: created });
     } catch (error) {

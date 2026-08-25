@@ -169,8 +169,26 @@ export const deleteEmployeeCascade = async (
         WHERE company_id = @companyId AND employee_id = @employeeId
       );
 
+      IF OBJECT_ID(N'dbo.absence_request_attachments', N'U') IS NOT NULL
+        DELETE FROM absence_request_attachments
+        WHERE company_id = @companyId
+          AND (
+            absence_request_id IN (
+              SELECT id FROM absence_requests
+              WHERE company_id = @companyId AND employee_id = @employeeId
+            )
+            OR draft_id IN (
+              SELECT id FROM absence_request_drafts
+              WHERE company_id = @companyId AND employee_id = @employeeId
+            )
+          );
+
       DELETE FROM absence_requests
       WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.absence_request_drafts', N'U') IS NOT NULL
+        DELETE FROM absence_request_drafts
+        WHERE company_id = @companyId AND employee_id = @employeeId;
 
       IF OBJECT_ID(N'dbo.payroll_receipts', N'U') IS NOT NULL
       BEGIN
@@ -194,6 +212,13 @@ export const deleteEmployeeCascade = async (
         DELETE FROM payroll_receipts
         WHERE company_id = @companyId AND employee_id = @employeeId;
       END;
+
+      DELETE FROM attendance_reviews
+      WHERE company_id = @companyId
+        AND attendance_id IN (
+          SELECT id FROM attendance_records
+          WHERE company_id = @companyId AND employee_id = @employeeId
+        );
 
       DELETE FROM attendance_records
       WHERE company_id = @companyId AND employee_id = @employeeId;
@@ -251,7 +276,11 @@ export const deleteEmployeeCascade = async (
         WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM whatsapp_messages
-      WHERE employee_id = @employeeId;
+      WHERE employee_id = @employeeId
+         OR conversation_id IN (
+           SELECT id FROM whatsapp_conversations
+           WHERE company_id = @companyId AND employee_id = @employeeId
+         );
 
       IF OBJECT_ID(N'dbo.whatsapp_conversations', N'U') IS NOT NULL
       BEGIN
@@ -271,11 +300,23 @@ export const deleteEmployeeCascade = async (
       DELETE FROM work_team_members
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
+      UPDATE employee_workdays
+      SET operation_assignment_id = NULL
+      WHERE company_id = @companyId AND employee_id = @employeeId;
+
       DELETE FROM employee_workdays
       WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM operation_assignments
       WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.attendance_alert_evaluation_queue', N'U') IS NOT NULL
+        DELETE FROM attendance_alert_evaluation_queue
+        WHERE company_id = @companyId AND employee_id = @employeeId;
+
+      IF OBJECT_ID(N'dbo.employee_attendance_alert_state', N'U') IS NOT NULL
+        DELETE FROM employee_attendance_alert_state
+        WHERE company_id = @companyId AND employee_id = @employeeId;
 
       DELETE FROM employees
       WHERE company_id = @companyId AND id = @employeeId;

@@ -116,6 +116,14 @@ export const EMPLOYEES_API_EXPORTS = [
   "deactivateEmployee",
 ] as const;
 
+export const LOCATION_ZONES_API_EXPORTS = [
+  "getLocationZones",
+  "getLocationZonesGeocodingSummary",
+  "createLocationZone",
+  "updateLocationZone",
+  "geocodeLocationZone",
+] as const;
+
 export const ABSENCES_API_EXPORTS = [
   "getAbsenceTypes",
   "updateAbsenceType",

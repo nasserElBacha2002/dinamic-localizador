@@ -6,11 +6,13 @@ import {
   compareScoredCandidates,
   computeServiceExperience,
   computeTeamAffinity,
+  distanceMetersBetween,
   resolveLocationProximityBucket,
   scoreCandidateFeatures,
   type AffinityPairStats,
   type ScoredCandidateFeatures,
 } from "./recommendation-scorer";
+import { WORKFORCE_RECOMMENDATION_ALGORITHM_VERSION } from "../../types/recommendation";
 
 const pair = (overrides: Partial<AffinityPairStats> = {}): AffinityPairStats => ({
   assignedEmployeeId: "asg-1",
@@ -210,6 +212,27 @@ describe("recommendation-scorer V1", () => {
     assert.equal(resolveLocationProximityBucket(10_000), "MEDIUM");
     assert.equal(resolveLocationProximityBucket(40_000), "FAR");
     assert.equal(resolveLocationProximityBucket(null, true), "SAME_ZONE");
+    assert.equal(resolveLocationProximityBucket(40_000, true), "SAME_ZONE");
+  });
+
+  it("scores SAME_ZONE and omits UNKNOWN without inventing distance", () => {
+    const same = scoreCandidateFeatures({
+      employeeId: "same",
+      assignedCount: 0,
+      affinityPairs: [],
+      serviceWorkdayCount: 0,
+      locationBucket: "SAME_ZONE",
+    });
+    const unknown = scoreCandidateFeatures({
+      employeeId: "unk",
+      assignedCount: 0,
+      affinityPairs: [],
+      serviceWorkdayCount: 0,
+      locationBucket: "UNKNOWN",
+    });
+    assert.equal(same.locationProximity, 1);
+    assert.equal(unknown.locationProximity, null);
+    assert.ok(same.score > unknown.score);
   });
 
   it("saturates service experience", () => {
@@ -231,5 +254,122 @@ describe("recommendation-scorer V1", () => {
     });
     assert.ok(withoutLocation > withLocation);
     assert.equal(withoutLocation, 0.4);
+  });
+
+  it("Phase B: distanceMeters is explainability-only and does not change score or ranking", () => {
+    const baseInputs = [
+      {
+        employeeId: "a",
+        assignedCount: 0 as const,
+        affinityPairs: [] as AffinityPairStats[],
+        serviceWorkdayCount: 2,
+        locationBucket: "CLOSE" as const,
+      },
+      {
+        employeeId: "b",
+        assignedCount: 0 as const,
+        affinityPairs: [] as AffinityPairStats[],
+        serviceWorkdayCount: 2,
+        locationBucket: "FAR" as const,
+      },
+      {
+        employeeId: "c",
+        assignedCount: 0 as const,
+        affinityPairs: [] as AffinityPairStats[],
+        serviceWorkdayCount: 5,
+        locationBucket: "SAME_ZONE" as const,
+      },
+    ];
+
+    const before = baseInputs.map((input) => scoreCandidateFeatures(input));
+    const after = baseInputs.map((input, index) =>
+      scoreCandidateFeatures({
+        ...input,
+        distanceMeters: index === 2 ? null : 1000 + index * 5000,
+      }),
+    );
+
+    assert.deepEqual(
+      before.map((item) => ({
+        employeeId: item.employeeId,
+        score: item.score,
+        locationBucket: item.locationBucket,
+        locationProximity: item.locationProximity,
+      })),
+      after.map((item) => ({
+        employeeId: item.employeeId,
+        score: item.score,
+        locationBucket: item.locationBucket,
+        locationProximity: item.locationProximity,
+      })),
+    );
+
+    const orderBefore = [...before].sort(compareScoredCandidates).map((item) => item.employeeId);
+    const orderAfter = [...after].sort(compareScoredCandidates).map((item) => item.employeeId);
+    assert.deepEqual(orderBefore, orderAfter);
+
+    const closeReason = buildRecommendationReasons(after[0]!).find(
+      (reason) => reason.code === "LOCATION_PROXIMITY",
+    );
+    assert.equal(closeReason?.params?.bucket, "CLOSE");
+    assert.equal(closeReason?.params?.distanceMeters, 1000);
+
+    const sameReason = buildRecommendationReasons(after[2]!).find(
+      (reason) => reason.code === "LOCATION_PROXIMITY",
+    );
+    assert.equal(sameReason?.params?.bucket, "SAME_ZONE");
+    assert.equal(sameReason?.params?.distanceMeters, null);
+  });
+
+  it("Phase C: canonicalization is metadata-only — identical centroids keep distance/bucket/score/ranking", () => {
+    // Same Haversine inputs before/after taxonomy; locality aliases must not touch scoring.
+    const distanceMeters = distanceMetersBetween(-34.62, -58.44, -34.6, -58.4);
+    const bucket = resolveLocationProximityBucket(distanceMeters, false);
+    const scored = scoreCandidateFeatures({
+      employeeId: "phase-c",
+      assignedCount: 0,
+      affinityPairs: [],
+      serviceWorkdayCount: 1,
+      locationBucket: bucket,
+      distanceMeters,
+    });
+    const again = scoreCandidateFeatures({
+      employeeId: "phase-c",
+      assignedCount: 0,
+      affinityPairs: [],
+      serviceWorkdayCount: 1,
+      locationBucket: bucket,
+      distanceMeters,
+    });
+    assert.equal(scored.score, again.score);
+    assert.equal(scored.locationProximity, again.locationProximity);
+    assert.equal(scored.locationBucket, again.locationBucket);
+    assert.equal(scored.distanceMeters, again.distanceMeters);
+    assert.equal(WORKFORCE_RECOMMENDATION_ALGORITHM_VERSION, "workforce-recommendation-v1");
+  });
+
+  it("emits LOCATION_PROXIMITY distanceMeters when distance exists and omits inventing for UNKNOWN", () => {
+    const close = scoreCandidateFeatures({
+      employeeId: "near",
+      assignedCount: 0,
+      affinityPairs: [],
+      serviceWorkdayCount: 0,
+      locationBucket: "CLOSE",
+      distanceMeters: 2410.4,
+    });
+    const unknown = scoreCandidateFeatures({
+      employeeId: "unk",
+      assignedCount: 0,
+      affinityPairs: [],
+      serviceWorkdayCount: 0,
+      locationBucket: "UNKNOWN",
+      distanceMeters: null,
+    });
+
+    const closeReason = buildRecommendationReasons(close)[0];
+    assert.equal(closeReason?.code, "LOCATION_PROXIMITY");
+    assert.deepEqual(closeReason?.params, { bucket: "CLOSE", distanceMeters: 2410 });
+
+    assert.deepEqual(buildRecommendationReasons(unknown), []);
   });
 });

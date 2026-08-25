@@ -1,33 +1,132 @@
-import { Alert, Button, Group, ScrollArea, Stack, Switch, Table, Text, TextInput } from "@mantine/core";
+import {
+  Alert,
+  Autocomplete,
+  Badge,
+  Button,
+  Group,
+  Progress,
+  ScrollArea,
+  Select,
+  Stack,
+  Switch,
+  Table,
+  Text,
+  TextInput,
+} from "@mantine/core";
 import { useMemo, useState } from "react";
 import { FormErrorAlert } from "../../../design-system";
-import { useCreateLocationZone, useUpdateLocationZone } from "../../../hooks/useLocationZones";
+import {
+  useCreateLocationZone,
+  useGeocodeLocationZone,
+  useLocationZonesGeocodingSummary,
+  useUpdateLocationZone,
+} from "../../../hooks/useLocationZones";
 import type { LocationZone } from "../../../types/location-zone";
+import {
+  localityCapitalHint,
+  SUGGESTED_LOCALITY_LABELS,
+} from "../../../utils/canonical-locality";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { friendlyGeocodingErrorMessage } from "../../../utils/geocoding-error-message";
+import {
+  filterZonesByGeocodingStatus,
+  geocodingStatusColor,
+  geocodingStatusLabel,
+  type GeocodingStatusFilter,
+  summarizeActiveZoneGeocoding,
+} from "../../../utils/location-zone-geocoding-ui";
+import { buildLocationZoneEditPayload } from "./location-zone-edit-payload";
 
 interface LocationZonesDialogContentProps {
   zones: LocationZone[];
   canUpdate: boolean;
 }
 
+const formatCoord = (value: number | null): string => {
+  if (value === null || !Number.isFinite(value)) {
+    return "—";
+  }
+  return value.toFixed(5);
+};
+
+const parseOptionalCoord = (raw: string): number | null | undefined => {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return null;
+  }
+  const parsed = Number(trimmed);
+  if (!Number.isFinite(parsed)) {
+    return undefined;
+  }
+  return parsed;
+};
+
+const STATUS_FILTER_OPTIONS: Array<{ value: GeocodingStatusFilter; label: string }> = [
+  { value: "ALL", label: "Todos los estados" },
+  { value: "RESOLVED", label: "Resuelta" },
+  { value: "MANUAL", label: "Manual" },
+  { value: "PENDING", label: "Pendiente" },
+  { value: "FAILED", label: "Error" },
+  { value: "NONE", label: "Sin estado" },
+];
+
 export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDialogContentProps) {
   const createMutation = useCreateLocationZone();
   const updateMutation = useUpdateLocationZone();
+  const geocodeMutation = useGeocodeLocationZone();
+  const geocodingSummaryQuery = useLocationZonesGeocodingSummary(true);
 
   const [newName, setNewName] = useState("");
   const [newLocality, setNewLocality] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingName, setEditingName] = useState("");
   const [editingLocality, setEditingLocality] = useState("");
+  const [editingLat, setEditingLat] = useState("");
+  const [editingLng, setEditingLng] = useState("");
+  const [initialLat, setInitialLat] = useState<number | null>(null);
+  const [initialLng, setInitialLng] = useState<number | null>(null);
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [pendingDeactivate, setPendingDeactivate] = useState<LocationZone | null>(null);
+  const [statusFilter, setStatusFilter] = useState<GeocodingStatusFilter>("ALL");
+
+  const coverageFromApi = geocodingSummaryQuery.data;
+  const coverage = coverageFromApi ?? summarizeActiveZoneGeocoding(zones);
 
   const sortedZones = useMemo(
     () => [...zones].sort((a, b) => a.name.localeCompare(b.name, "es")),
     [zones],
   );
 
-  const disabled = !canUpdate || createMutation.isPending || updateMutation.isPending;
+  const visibleZones = useMemo(
+    () => filterZonesByGeocodingStatus(sortedZones, statusFilter),
+    [sortedZones, statusFilter],
+  );
+
+  const disabled =
+    !canUpdate ||
+    createMutation.isPending ||
+    updateMutation.isPending ||
+    geocodeMutation.isPending;
+
+  const beginEdit = (zone: LocationZone) => {
+    setEditingId(zone.id);
+    setEditingName(zone.name);
+    setEditingLocality(zone.locality ?? "");
+    setEditingLat(zone.centroidLatitude !== null ? String(zone.centroidLatitude) : "");
+    setEditingLng(zone.centroidLongitude !== null ? String(zone.centroidLongitude) : "");
+    setInitialLat(zone.centroidLatitude);
+    setInitialLng(zone.centroidLongitude);
+  };
+
+  const clearEdit = () => {
+    setEditingId(null);
+    setEditingName("");
+    setEditingLocality("");
+    setEditingLat("");
+    setEditingLng("");
+    setInitialLat(null);
+    setInitialLng(null);
+  };
 
   const handleCreate = async () => {
     if (!canUpdate || !newName.trim()) {
@@ -52,18 +151,61 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
       return;
     }
 
+    const lat = parseOptionalCoord(editingLat);
+    const lng = parseOptionalCoord(editingLng);
+    if (lat === undefined || lng === undefined) {
+      setSubmitError("Latitud y longitud deben ser números válidos.");
+      return;
+    }
+    const latEmpty = editingLat.trim() === "";
+    const lngEmpty = editingLng.trim() === "";
+    if (latEmpty !== lngEmpty) {
+      setSubmitError("Latitud y longitud del centroide deben enviarse juntas.");
+      return;
+    }
+    if (lat !== null && (lat < -90 || lat > 90)) {
+      setSubmitError("La latitud del centroide debe estar entre -90 y 90.");
+      return;
+    }
+    if (lng !== null && (lng < -180 || lng > 180)) {
+      setSubmitError("La longitud del centroide debe estar entre -180 y 180.");
+      return;
+    }
+
     setSubmitError(null);
     try {
-      await updateMutation.mutateAsync({
-        zoneId,
-        input: {
-          name: editingName.trim(),
-          locality: editingLocality.trim() ? editingLocality.trim() : null,
-        },
+      const input = buildLocationZoneEditPayload({
+        name: editingName.trim(),
+        locality: editingLocality.trim() ? editingLocality.trim() : null,
+        lat,
+        lng,
+        initialLat,
+        initialLng,
       });
-      setEditingId(null);
-      setEditingName("");
-      setEditingLocality("");
+      await updateMutation.mutateAsync({ zoneId, input });
+      clearEdit();
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    }
+  };
+
+  const handleGeocode = async (zone: LocationZone) => {
+    if (!canUpdate) {
+      return;
+    }
+    const isManual =
+      zone.geocodingStatus === "MANUAL" || zone.geocodingSource === "MANUAL";
+    if (isManual) {
+      const confirmed = window.confirm(
+        "Esta zona tiene coordenadas manuales. Recalcular las reemplazará con el resultado de Google. ¿Continuar?",
+      );
+      if (!confirmed) {
+        return;
+      }
+    }
+    setSubmitError(null);
+    try {
+      await geocodeMutation.mutateAsync({ zoneId: zone.id, force: isManual });
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
     }
@@ -99,8 +241,37 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
     <Stack gap="md">
       <Text size="sm" c="dimmed">
         Catálogo geográfico compartido (barrio + localidad) para colaboradores y servicios. No se
-        almacenan direcciones exactas.
+        almacenan direcciones exactas. Los centroides alimentan la proximidad de recomendaciones.
       </Text>
+
+      <Stack gap={6}>
+        <Text fw={600} size="sm">
+          Cobertura geográfica
+        </Text>
+        <Text size="sm">
+          {coverage.withCoordinates} de {coverage.total} zonas activas con coordenadas (
+          {coverage.coveragePercent}%)
+        </Text>
+        <Progress
+          value={coverage.total > 0 ? coverage.coveragePercent : 0}
+          size="sm"
+          aria-label="Cobertura geográfica de zonas activas"
+        />
+        <Text size="xs" c="dimmed">
+          Resueltas automáticamente: {coverage.resolved} · Manuales: {coverage.manual} · Pendientes:{" "}
+          {coverage.pending} · Con error: {coverage.failed}
+        </Text>
+        {coverageFromApi ? (
+          <Text size="xs" c="dimmed">
+            Localidades canónicas: {coverage.canonicalized} · Sin localidad:{" "}
+            {coverage.missingLocality} · Desconocidas: {coverage.unknownLocality}
+          </Text>
+        ) : null}
+        <Text size="xs" c="dimmed">
+          Tener coordenadas indica cobertura, no precisión GPS del domicilio. Nombre = zona/barrio;
+          localidad = contexto superior para desambiguar (p. ej. CABA, GBA, Córdoba).
+        </Text>
+      </Stack>
 
       <FormErrorAlert message={submitError} />
 
@@ -147,12 +318,14 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
               onChange={(event) => setNewName(event.currentTarget.value)}
               disabled={disabled}
             />
-            <TextInput
+            <Autocomplete
               label="Localidad"
-              placeholder="Ej. Ciudad Autónoma de Buenos Aires"
+              placeholder="Ej. CABA"
+              data={[...SUGGESTED_LOCALITY_LABELS]}
               value={newLocality}
-              onChange={(event) => setNewLocality(event.currentTarget.value)}
+              onChange={setNewLocality}
               disabled={disabled}
+              description={localityCapitalHint(newLocality) ?? undefined}
             />
             <Button onClick={() => void handleCreate()} loading={createMutation.isPending} disabled={disabled}>
               Agregar
@@ -161,20 +334,40 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
         </Stack>
       ) : null}
 
-      <ScrollArea.Autosize mah={360}>
+      <Select
+        label="Filtrar por estado de geocoding"
+        data={STATUS_FILTER_OPTIONS}
+        value={statusFilter}
+        onChange={(value) => setStatusFilter((value as GeocodingStatusFilter) || "ALL")}
+        allowDeselect={false}
+      />
+
+      <ScrollArea.Autosize mah={420}>
         <Table striped highlightOnHover>
           <Table.Thead>
             <Table.Tr>
               <Table.Th>Nombre</Table.Th>
               <Table.Th>Localidad</Table.Th>
+              <Table.Th>Latitud</Table.Th>
+              <Table.Th>Longitud</Table.Th>
+              <Table.Th>Geocoding</Table.Th>
               <Table.Th>Asignados</Table.Th>
               <Table.Th>Activa</Table.Th>
               <Table.Th />
             </Table.Tr>
           </Table.Thead>
           <Table.Tbody>
-            {sortedZones.map((zone) => {
+            {visibleZones.map((zone) => {
               const isEditing = editingId === zone.id;
+              const isManual =
+                zone.geocodingStatus === "MANUAL" || zone.geocodingSource === "MANUAL";
+              const geocodeActionLabel =
+                zone.geocodingStatus === "FAILED"
+                  ? "Reintentar"
+                  : isManual
+                    ? "Recalcular"
+                    : "Recalcular";
+
               return (
                 <Table.Tr key={zone.id}>
                   <Table.Td>
@@ -190,14 +383,61 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
                   </Table.Td>
                   <Table.Td>
                     {isEditing ? (
-                      <TextInput
+                      <Autocomplete
+                        data={[...SUGGESTED_LOCALITY_LABELS]}
                         value={editingLocality}
-                        onChange={(event) => setEditingLocality(event.currentTarget.value)}
+                        onChange={setEditingLocality}
                         disabled={disabled}
+                        description={localityCapitalHint(editingLocality) ?? undefined}
                       />
                     ) : (
                       zone.locality ?? "—"
                     )}
+                  </Table.Td>
+                  <Table.Td>
+                    {isEditing ? (
+                      <TextInput
+                        value={editingLat}
+                        placeholder="-34.62"
+                        onChange={(event) => setEditingLat(event.currentTarget.value)}
+                        disabled={disabled}
+                      />
+                    ) : (
+                      formatCoord(zone.centroidLatitude)
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    {isEditing ? (
+                      <TextInput
+                        value={editingLng}
+                        placeholder="-58.44"
+                        onChange={(event) => setEditingLng(event.currentTarget.value)}
+                        disabled={disabled}
+                      />
+                    ) : (
+                      formatCoord(zone.centroidLongitude)
+                    )}
+                  </Table.Td>
+                  <Table.Td>
+                    <Stack gap={4}>
+                      <Badge
+                        size="sm"
+                        color={geocodingStatusColor(zone.geocodingStatus)}
+                        variant="light"
+                      >
+                        {geocodingStatusLabel(zone.geocodingStatus)}
+                      </Badge>
+                      {zone.geocodingStatus === "FAILED" ? (
+                        <Text size="xs" c="dimmed" lineClamp={2}>
+                          {friendlyGeocodingErrorMessage(zone.geocodingLastError)}
+                        </Text>
+                      ) : null}
+                      {isManual && zone.geocodingStatus === "MANUAL" ? (
+                        <Text size="xs" c="dimmed">
+                          Coordenadas manuales
+                        </Text>
+                      ) : null}
+                    </Stack>
                   </Table.Td>
                   <Table.Td>{zone.assignedEmployeesCount ?? 0}</Table.Td>
                   <Table.Td>
@@ -224,28 +464,34 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
                             size="xs"
                             variant="default"
                             disabled={disabled}
-                            onClick={() => {
-                              setEditingId(null);
-                              setEditingName("");
-                              setEditingLocality("");
-                            }}
+                            onClick={clearEdit}
                           >
                             Cancelar
                           </Button>
                         </Group>
                       ) : (
-                        <Button
-                          size="xs"
-                          variant="light"
-                          disabled={disabled}
-                          onClick={() => {
-                            setEditingId(zone.id);
-                            setEditingName(zone.name);
-                            setEditingLocality(zone.locality ?? "");
-                          }}
-                        >
-                          Editar
-                        </Button>
+                        <Group gap="xs">
+                          <Button
+                            size="xs"
+                            variant="light"
+                            disabled={disabled}
+                            onClick={() => beginEdit(zone)}
+                          >
+                            Editar
+                          </Button>
+                          <Button
+                            size="xs"
+                            variant="subtle"
+                            disabled={disabled}
+                            loading={
+                              geocodeMutation.isPending &&
+                              geocodeMutation.variables?.zoneId === zone.id
+                            }
+                            onClick={() => void handleGeocode(zone)}
+                          >
+                            {geocodeActionLabel}
+                          </Button>
+                        </Group>
                       )
                     ) : null}
                   </Table.Td>

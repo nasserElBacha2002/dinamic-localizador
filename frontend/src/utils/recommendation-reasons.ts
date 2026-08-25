@@ -1,4 +1,5 @@
 import type { RecommendationReason } from "../types/recommendation";
+import { formatApproximateDistance } from "./format-approximate-distance";
 
 /** Compatibility score [0,1] → affinity percentage for display (not probability). */
 export function formatAffinityPercent(score: number): string {
@@ -20,20 +21,55 @@ function asPositiveInt(value: unknown): number | null {
   return Math.floor(value);
 }
 
+function asNonNegativeMeters(value: unknown): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return null;
+  }
+  return value;
+}
+
+/** Bucket-only fallback when distanceMeters is absent (rolling deploy / older API). */
 function proximityBucketCopy(bucket: unknown): string | null {
   switch (bucket) {
     case "SAME_ZONE":
+      return "Misma zona que el servicio";
     case "VERY_CLOSE":
-      return "Su zona está muy cerca de la operación";
+      return "Muy cerca del servicio";
     case "CLOSE":
-      return "Su zona está cerca de la operación";
+      return "Cerca del servicio";
     case "MEDIUM":
-      return "Distancia moderada respecto de la operación";
+      return "Distancia moderada respecto del servicio";
     case "FAR":
-      return "Mayor distancia respecto de la operación";
+      return "Mayor distancia respecto del servicio";
     default:
       return null;
   }
+}
+
+function formatLocationProximityReason(params: Record<string, unknown>): string | null {
+  const bucket = params.bucket;
+
+  if (bucket === "SAME_ZONE") {
+    return "Misma zona que el servicio";
+  }
+
+  // UNKNOWN should not appear as a positive reason.
+  if (bucket === "UNKNOWN") {
+    return null;
+  }
+
+  // Explicit null distanceMeters (SAME_ZONE contract) — already handled above.
+  const meters = asNonNegativeMeters(params.distanceMeters);
+  if (meters !== null) {
+    const approx = formatApproximateDistance(meters);
+    if (approx) {
+      // "Aprox." + strip leading "~" from formatter to avoid "Aprox. ~2,4 km".
+      const distanceLabel = approx.startsWith("~") ? approx.slice(1) : approx;
+      return `Aprox. ${distanceLabel} del servicio`;
+    }
+  }
+
+  return proximityBucketCopy(bucket) ?? "Zona con buena proximidad al servicio";
 }
 
 /**
@@ -65,10 +101,8 @@ export function formatRecommendationReason(reason: RecommendationReason): string
       }
       return "Tiene experiencia previa en esta sucursal";
     }
-    case "LOCATION_PROXIMITY": {
-      const specific = proximityBucketCopy(params.bucket);
-      return specific ?? "Su zona tiene buena proximidad con la operación";
-    }
+    case "LOCATION_PROXIMITY":
+      return formatLocationProximityReason(params);
     case "OPERATION_TYPE_EXPERIENCE":
       return "Tiene experiencia en este tipo de operación";
     case "TEAM_HISTORY_COVERAGE": {
@@ -88,6 +122,7 @@ export function formatRecommendationReason(reason: RecommendationReason): string
       return "Varios integrantes tienen experiencia previa en esta sucursal";
     }
     case "TEAM_LOCATION_PROXIMITY": {
+      // Aggregate member counts — no team-level km (would invent an average).
       const close = asPositiveInt(params.closeMembers);
       const teamSize = asPositiveInt(params.teamSize);
       if (close !== null && teamSize !== null) {

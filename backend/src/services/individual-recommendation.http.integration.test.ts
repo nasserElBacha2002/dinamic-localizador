@@ -135,6 +135,7 @@ describeDatabaseIntegration("individual recommendations HTTP", () => {
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           UPDATE employees SET location_zone_id = NULL WHERE company_id = @companyId;
+          UPDATE operational_locations SET location_zone_id = NULL WHERE company_id = @companyId;
           DELETE FROM location_zones WHERE company_id = @companyId;
         `);
       await deleteCompanyCascade(companyId);
@@ -190,5 +191,122 @@ describeDatabaseIntegration("individual recommendations HTTP", () => {
       token: ownerToken,
     });
     assert.equal(badLimit.status, 400);
+  });
+
+  it("exposes LOCATION_PROXIMITY distanceMeters; SAME_ZONE null; UNKNOWN omitted", async () => {
+    const ownerToken = signTestToken({ userId: ownerUserId, email: ownerEmail, role: "ADMIN" });
+    const { locationZoneService } = await import("./location-zone.service");
+    const { calculateDistanceMeters } = await import("../utils/haversine");
+
+    const nearZone = await locationZoneService.create(companyAId, "OWNER", {
+      name: `Near Zone ${uniqueSuffix()}`,
+      locality: "CABA",
+      centroidLatitude: -34.61,
+      centroidLongitude: -58.41,
+    });
+    const sameZone = await locationZoneService.create(companyAId, "OWNER", {
+      name: `Same Zone ${uniqueSuffix()}`,
+      locality: "CABA",
+      centroidLatitude: -34.62,
+      centroidLongitude: -58.42,
+    });
+
+    const serviceLat = -34.6;
+    const serviceLng = -58.4;
+    const serviceId = await insertOperationalLocationFixture({
+      companyId: companyAId,
+      name: `Rec Dist Svc ${uniqueSuffix()}`,
+      latitude: serviceLat,
+      longitude: serviceLng,
+      locationZoneId: sameZone.id,
+    });
+
+    const start = new Date(Date.now() + 5 * 24 * 60 * 60 * 1000);
+    const end = new Date(start.getTime() + 3 * 60 * 60 * 1000);
+    const op = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyAId)
+      .input("serviceId", sql.UniqueIdentifier, serviceId)
+      .input("scheduledStart", sql.DateTime2, start)
+      .input("scheduledEnd", sql.DateTime2, end)
+      .query(`
+        INSERT INTO scheduled_operations (
+          company_id, service_id, scheduled_start, scheduled_end,
+          early_tolerance_minutes, late_tolerance_minutes, status, operation_kind
+        )
+        OUTPUT INSERTED.id
+        VALUES (@companyId, @serviceId, @scheduledStart, @scheduledEnd, 60, 90, N'SCHEDULED', N'ONE_TIME')
+      `);
+    const distOperationId = String(op.recordset[0].id);
+
+    const nearEmp = await employeeService.create(companyAId, {
+      name: "Near Dist Emp",
+      phoneNumber: uniquePhone(41),
+      employeeType: "fijo",
+      locationZoneId: nearZone.id,
+    });
+    const sameEmp = await employeeService.create(companyAId, {
+      name: "Same Zone Emp",
+      phoneNumber: uniquePhone(42),
+      employeeType: "fijo",
+      locationZoneId: sameZone.id,
+    });
+    const unknownEmp = await employeeService.create(companyAId, {
+      name: "Unknown Zone Emp",
+      phoneNumber: uniquePhone(43),
+      employeeType: "fijo",
+      locationZoneId: null,
+    });
+
+    const expectedMeters = Math.round(
+      calculateDistanceMeters(
+        nearZone.centroidLatitude!,
+        nearZone.centroidLongitude!,
+        serviceLat,
+        serviceLng,
+      ),
+    );
+
+    const res = await apiRequest(
+      baseUrl,
+      `/api/companies/${companyAId}/operations/${distOperationId}/recommendations/employees?limit=20`,
+      { token: ownerToken },
+    );
+    assert.equal(res.status, 200);
+    const recommendations = (
+      res.body.data as {
+        recommendations: Array<{
+          employee: { id: string };
+          reasons: Array<{ code: string; params?: Record<string, unknown> }>;
+        }>;
+      }
+    ).recommendations;
+
+    const nearRec = recommendations.find((row) => row.employee.id === nearEmp.id);
+    assert.ok(nearRec);
+    const nearLoc = nearRec.reasons.find((reason) => reason.code === "LOCATION_PROXIMITY");
+    assert.ok(nearLoc);
+    assert.ok(typeof nearLoc.params?.bucket === "string");
+    assert.notEqual(nearLoc.params?.bucket, "SAME_ZONE");
+    assert.notEqual(nearLoc.params?.bucket, "UNKNOWN");
+    assert.equal(nearLoc.params?.distanceMeters, expectedMeters);
+    assert.equal(
+      Object.prototype.hasOwnProperty.call(nearLoc.params ?? {}, "centroidLatitude"),
+      false,
+    );
+
+    const sameRec = recommendations.find((row) => row.employee.id === sameEmp.id);
+    assert.ok(sameRec);
+    const sameLoc = sameRec.reasons.find((reason) => reason.code === "LOCATION_PROXIMITY");
+    assert.ok(sameLoc);
+    assert.equal(sameLoc.params?.bucket, "SAME_ZONE");
+    assert.equal(sameLoc.params?.distanceMeters, null);
+
+    const unknownRec = recommendations.find((row) => row.employee.id === unknownEmp.id);
+    assert.ok(unknownRec);
+    assert.equal(
+      unknownRec.reasons.some((reason) => reason.code === "LOCATION_PROXIMITY"),
+      false,
+    );
   });
 });

@@ -1,3 +1,6 @@
+export type LocationZoneGeocodingStatus = "PENDING" | "RESOLVED" | "FAILED" | "MANUAL";
+export type LocationZoneGeocodingSource = "AUTO" | "MANUAL";
+
 export interface LocationZone {
   id: string;
   companyId: string;
@@ -7,10 +10,29 @@ export interface LocationZone {
   normalizedLocality: string;
   centroidLatitude: number | null;
   centroidLongitude: number | null;
+  geocodingStatus: LocationZoneGeocodingStatus | null;
+  geocodingSource: LocationZoneGeocodingSource | null;
+  geocodedAt: string | null;
+  geocodingLastError: string | null;
   isActive: boolean;
   assignedEmployeesCount?: number;
   createdAt: string;
   updatedAt: string;
+}
+
+/** Active-zone geocoding coverage (from GET .../geocoding-summary). */
+export interface LocationZoneGeocodingSummary {
+  total: number;
+  resolved: number;
+  manual: number;
+  pending: number;
+  failed: number;
+  withCoordinates: number;
+  withoutCoordinates: number;
+  coveragePercent: number;
+  canonicalized: number;
+  missingLocality: number;
+  unknownLocality: number;
 }
 
 export interface LocationZoneSummary {
@@ -37,4 +59,8 @@ export interface UpdateLocationZoneInput {
 
 export interface ListLocationZonesFilters {
   includeInactive?: boolean;
+}
+
+export interface GeocodeLocationZoneInput {
+  force?: boolean;
 }

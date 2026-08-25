@@ -1,5 +1,14 @@
+/**
+ * Service reconciliation geocoding — thin adapter over shared Google client.
+ * Keeps file-based cache used by reconcile CLI.
+ */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname } from "node:path";
+import {
+  geocodeQuery as sharedGeocodeQuery,
+  isGeocodeSuccess,
+  type GeocodeResult,
+} from "../geocoding/google-geocode";
 import type { GeocodingDiagnostics, OfficialService } from "./types";
 
 export interface GeocodedCoordinates {
@@ -22,19 +31,6 @@ export type GeocodeCacheEntry = GeocodeCacheSuccess | GeocodeCacheFailure;
 
 export type GeocodeCache = Record<string, GeocodeCacheEntry>;
 
-interface GoogleGeocodeResponse {
-  status: string;
-  error_message?: string;
-  results?: Array<{
-    geometry?: {
-      location?: {
-        lat?: number;
-        lng?: number;
-      };
-    };
-  }>;
-}
-
 export const TEST_GEOCODING_ADDRESS = "Av. Rivadavia 3751, Almagro, Buenos Aires, Argentina";
 
 export const buildGeocodeCacheKey = (service: OfficialService): string =>
@@ -47,15 +43,6 @@ export const buildGeocodeQuery = (service: OfficialService): string =>
     .map((part) => part.trim())
     .filter(Boolean)
     .join(", ");
-
-const buildGeocodeUrl = (query: string, apiKey: string): URL => {
-  const url = new URL("https://maps.googleapis.com/maps/api/geocode/json");
-  url.searchParams.set("address", query);
-  url.searchParams.set("key", apiKey);
-  url.searchParams.set("region", "ar");
-  url.searchParams.set("components", "country:AR");
-  return url;
-};
 
 const toFailure = (
   query: string,
@@ -78,57 +65,20 @@ const toSuccess = (
   longitude,
 });
 
+const toCacheEntry = (result: GeocodeResult): GeocodeCacheEntry => {
+  if (isGeocodeSuccess(result)) {
+    return toSuccess(result.query, result.latitude, result.longitude);
+  }
+  return toFailure(result.query, result.status, result.errorMessage);
+};
+
 const isLegacyFailedEntry = (entry: unknown): entry is { failed: true } =>
   Boolean(entry && typeof entry === "object" && "failed" in entry);
 
 export const geocodeQuery = async (
   query: string,
   apiKey: string,
-): Promise<GeocodeCacheEntry> => {
-  const url = buildGeocodeUrl(query, apiKey);
-
-  let response: Response;
-  try {
-    response = await fetch(url);
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return toFailure(query, "HTTP_ERROR", message);
-  }
-
-  if (!response.ok) {
-    return toFailure(
-      query,
-      "HTTP_ERROR",
-      `HTTP ${response.status} ${response.statusText}`.trim(),
-    );
-  }
-
-  let payload: GoogleGeocodeResponse;
-  try {
-    payload = (await response.json()) as GoogleGeocodeResponse;
-  } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    return toFailure(query, "INVALID_JSON", message);
-  }
-
-  if (payload.status !== "OK") {
-    return toFailure(
-      query,
-      payload.status || "UNKNOWN_ERROR",
-      payload.error_message?.trim() || `Google Geocoding API returned status ${payload.status}`,
-    );
-  }
-
-  const location = payload.results?.[0]?.geometry?.location;
-  const latitude = location?.lat;
-  const longitude = location?.lng;
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return toFailure(query, "INVALID_RESPONSE", "Geocoding response did not include coordinates");
-  }
-
-  return toSuccess(query, Number(latitude), Number(longitude));
-};
+): Promise<GeocodeCacheEntry> => toCacheEntry(await sharedGeocodeQuery(query, apiKey));
 
 export const geocodeOfficialService = async (
   service: OfficialService,

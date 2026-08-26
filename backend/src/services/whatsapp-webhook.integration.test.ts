@@ -221,6 +221,9 @@ const setupCommonWebhookMocks = async (options: {
   const { companyModuleService } = await import("./company-module.service");
   const { botSessionService } = await import("./bot-session.service");
   const { employeeRepository } = await import("../repositories/employee.repository");
+  const { attendanceNotificationRepository } = await import(
+    "../repositories/attendance-notification.repository"
+  );
 
   mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () => runtimeSettings(companyId));
   mock.method(companyModuleService, "getModuleStates", async () => options.moduleStates ?? enabledStates());
@@ -229,6 +232,9 @@ const setupCommonWebhookMocks = async (options: {
     "getSessionResolutionByPhone",
     async () => options.sessionResolution ?? { activeSession: null, recentlyExpired: false },
   );
+  // Mock-driven suite has no DB pool; durable confirmation must not hit SQL.
+  mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
+  mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
 
   if (options.employee === null) {
     mock.method(employeeRepository, "findById", async () => null);

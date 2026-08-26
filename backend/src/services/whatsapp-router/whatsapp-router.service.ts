@@ -180,7 +180,19 @@ export const whatsappRouterService = {
       return handleWorkdayIntent(ctx, handlers);
     }
 
-    // Durable confirmation only after globals/intents/active sessions.
+    if (intent === "upcoming_assignments") {
+      return handleUpcomingAssignmentsIntent(ctx, handlers);
+    }
+
+    if (intent === "confirm_attendance") {
+      return handleConfirmAttendanceIntent(ctx, handlers);
+    }
+
+    if (intent === "report_unavailability") {
+      return handleUnavailabilityIntent(ctx, handlers);
+    }
+
+    // Durable confirmation only for bare "1"/"2" after free-text intents.
     // Open-window targets only; expired needs confirmation-session context.
     if (!ctx.session) {
       const durableConfirmation = await handleDurableAttendanceConfirmationReply(ctx, handlers);
@@ -208,18 +220,6 @@ export const whatsappRouterService = {
       if (menuNumberResponse) {
         return menuNumberResponse;
       }
-    }
-
-    if (intent === "upcoming_assignments") {
-      return handleUpcomingAssignmentsIntent(ctx, handlers);
-    }
-
-    if (intent === "confirm_attendance") {
-      return handleConfirmAttendanceIntent(ctx, handlers);
-    }
-
-    if (intent === "report_unavailability") {
-      return handleUnavailabilityIntent(ctx, handlers);
     }
 
     if (intent === "menu") {

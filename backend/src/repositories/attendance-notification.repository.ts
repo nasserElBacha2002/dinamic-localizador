@@ -12,6 +12,11 @@ import type {
   AttendanceNotification,
   AttendanceReminderCandidate,
 } from "../types/attendance-notification";
+import type { AttendanceConfirmationReplyTarget } from "../utils/attendance-confirmation-validity";
+import {
+  isAttendanceConfirmationWindowOpen,
+  mapConfirmationReplyTargetKind,
+} from "../utils/attendance-confirmation-validity";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { monotonicProviderStatusAdvanceSql } from "../utils/whatsapp-observability";
 
@@ -1033,6 +1038,112 @@ export const attendanceNotificationRepository = {
       `);
 
     return Boolean(result.recordset[0]);
+  },
+
+  /**
+   * Resolve which assignment a confirmation reply ("1"/"2") should apply to.
+   *
+   * Correlation (SQL-filtered; no unbounded history):
+   * - SENT ATTENDANCE_CONFIRMATION_REMINDER
+   * - wan.schedule_version = ie.confirmation_schedule_version (current schedule only)
+   * - operation NOT CANCELLED/COMPLETED; assignment not cancelled
+   * - ONE_TIME with scheduled_start
+   *
+   * Open window (default): scheduled_start > @now
+   *   Priority: PENDING → CONFIRMED → UNAVAILABLE; then latest sent_at, earliest start.
+   *
+   * Expired window (onlyExpired=true): scheduled_start <= @now AND PENDING
+   *   Used only when an expired confirmation bot-session context is present —
+   *   never as a catch-all for historical PENDING.
+   */
+  async findConfirmationReplyTarget(
+    companyId: string,
+    employeeId: string,
+    now: Date,
+    options: { onlyExpired?: boolean } = {},
+  ): Promise<AttendanceConfirmationReplyTarget | null> {
+    const pool = getPool();
+    const onlyExpired = options.onlyExpired === true;
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("now", sql.DateTime2, now)
+      .input("onlyExpired", sql.Bit, onlyExpired ? 1 : 0)
+      .query(`
+        SELECT TOP 1
+          wan.id AS notification_id,
+          wan.operation_id,
+          wan.sent_at,
+          wan.schedule_version,
+          ie.id AS assignment_id,
+          ie.employee_id,
+          ie.confirmation_status,
+          i.scheduled_start
+        FROM whatsapp_attendance_notifications wan
+        INNER JOIN operation_assignments ie
+          ON ie.operation_id = wan.operation_id
+          AND ie.employee_id = wan.employee_id
+          AND ie.company_id = wan.company_id
+          AND ie.confirmation_schedule_version = wan.schedule_version
+        INNER JOIN scheduled_operations i
+          ON i.id = wan.operation_id
+          AND i.company_id = wan.company_id
+        WHERE wan.company_id = @companyId
+          AND wan.employee_id = @employeeId
+          AND wan.notification_type = N'ATTENDANCE_CONFIRMATION_REMINDER'
+          AND wan.status = N'SENT'
+          AND ie.cancelled_at IS NULL
+          AND i.operation_kind = N'ONE_TIME'
+          AND i.status NOT IN (N'CANCELLED', N'COMPLETED')
+          AND i.scheduled_start IS NOT NULL
+          AND (
+            (@onlyExpired = 1
+              AND ie.confirmation_status = N'PENDING'
+              AND i.scheduled_start <= @now)
+            OR
+            (@onlyExpired = 0
+              AND i.scheduled_start > @now
+              AND ie.confirmation_status IN (N'PENDING', N'CONFIRMED', N'UNAVAILABLE'))
+          )
+        ORDER BY
+          CASE ie.confirmation_status
+            WHEN N'PENDING' THEN 0
+            WHEN N'CONFIRMED' THEN 1
+            WHEN N'UNAVAILABLE' THEN 2
+            ELSE 3
+          END,
+          CASE WHEN wan.sent_at IS NULL THEN 1 ELSE 0 END,
+          wan.sent_at DESC,
+          i.scheduled_start ASC
+      `);
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      return null;
+    }
+
+    const confirmationStatus = String(
+      row.confirmation_status,
+    ) as AttendanceConfirmationReplyTarget["confirmationStatus"];
+    const scheduledStart = new Date(row.scheduled_start as Date | string).toISOString();
+    const windowOpen = isAttendanceConfirmationWindowOpen(scheduledStart, now);
+    const kind = mapConfirmationReplyTargetKind(confirmationStatus, windowOpen);
+    if (!kind) {
+      return null;
+    }
+
+    return {
+      kind,
+      notificationId: String(row.notification_id),
+      operationId: String(row.operation_id),
+      assignmentId: String(row.assignment_id),
+      employeeId: String(row.employee_id),
+      scheduledStart,
+      scheduleVersion: Number(row.schedule_version ?? 1),
+      confirmationStatus,
+      sentAt: row.sent_at ? new Date(row.sent_at as Date | string).toISOString() : null,
+    };
   },
 
   async projectProviderStatusById(input: {

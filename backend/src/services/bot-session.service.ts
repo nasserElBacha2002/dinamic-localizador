@@ -553,8 +553,19 @@ export const botSessionService = {
       operationId: string;
       notificationId: string;
       scheduleVersion: number;
+      /** Business validity end (exclusive). Stored in context; session TTL stays conversational. */
+      scheduledStart: string | Date;
     },
   ): Promise<BotSession | null> {
+    const validUntil = new Date(input.scheduledStart);
+    if (!Number.isFinite(validUntil.getTime())) {
+      throw new AppError(
+        500,
+        "INVALID_CONFIRMATION_VALID_UNTIL",
+        "scheduledStart inválido para sesión de confirmación de asistencia",
+      );
+    }
+
     try {
       const session = await runInTransaction(async (transaction) => {
         await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
@@ -570,8 +581,10 @@ export const botSessionService = {
                 operationId: input.operationId,
                 notificationId: input.notificationId,
                 scheduleVersion: input.scheduleVersion,
+                validUntil: validUntil.toISOString(),
               },
             }),
+            // Conversational TTL only — business window lives in durable notification+assignment.
             expiresAt: buildExpiresAt(),
           },
           transaction,
@@ -579,10 +592,13 @@ export const botSessionService = {
       });
 
       console.info("[bot-session] attendance confirmation response session created", {
+        event: "ATTENDANCE_CONFIRMATION_RESPONSE_SESSION_CREATED",
         sessionId: session.id,
         employeeId: input.employeeId,
         operationId: input.operationId,
         scheduleVersion: input.scheduleVersion,
+        confirmationValidUntil: validUntil.toISOString(),
+        expiresAt: session.expiresAt,
       });
 
       return session;

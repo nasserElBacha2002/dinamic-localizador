@@ -217,15 +217,19 @@ export const employeeWorkdayService = {
       return { kind: "past", message: PAST_ASSIGNMENT_MESSAGE };
     }
 
+    // Final states: same reply is idempotent; opposite reply does not flip.
     if (assignment.confirmationStatus === "CONFIRMED") {
       return { kind: "ok", message: this.buildConfirmedMessage(assignment) };
+    }
+    if (assignment.confirmationStatus === "UNAVAILABLE") {
+      return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
     }
 
     const updated = await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
       assignment.assignmentId,
       "CONFIRMED",
-      [assignment.confirmationStatus],
+      ["PENDING"],
     );
 
     if (!updated) {
@@ -266,15 +270,19 @@ export const employeeWorkdayService = {
       return { kind: "past", message: PAST_ASSIGNMENT_MESSAGE };
     }
 
+    // Final states: same reply is idempotent; opposite reply does not flip.
     if (assignment.confirmationStatus === "UNAVAILABLE") {
       return { kind: "ok", message: this.buildUnavailableMessage(assignment) };
+    }
+    if (assignment.confirmationStatus === "CONFIRMED") {
+      return { kind: "ok", message: this.buildConfirmedMessage(assignment) };
     }
 
     const updated = await employeeAssignmentQueryRepository.updateConfirmationStatus(
       companyId,
       assignment.assignmentId,
       "UNAVAILABLE",
-      [assignment.confirmationStatus],
+      ["PENDING"],
     );
 
     if (!updated) {

@@ -86,6 +86,8 @@ export interface BotSessionContext {
     inventoryId?: string;
     notificationId?: string;
     scheduleVersion: number;
+    /** ISO scheduledStart — business validity end (exclusive). */
+    validUntil?: string;
   };
   absenceDraft?: {
     absenceTypeId?: string;

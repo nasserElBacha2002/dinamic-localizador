@@ -32,7 +32,7 @@ import {
   handleConfirmAttendanceIntent,
   handleUnavailabilityIntent,
 } from "./assignment-confirmation.handler";
-import { handleActiveAttendanceConfirmationResponseSession } from "./attendance-confirmation-response.handler";
+import { handleActiveAttendanceConfirmationResponseSession, handleDurableAttendanceConfirmationReply } from "./attendance-confirmation-response.handler";
 import {
   handleActiveCheckInTextSession,
   handleArrivalIntent,
@@ -78,20 +78,6 @@ export const whatsappRouterService = {
         phoneTo: ctx.phoneFrom,
         resultCode: WHATSAPP_RESULT_CODES.UNKNOWN_EMPLOYEE,
         flowType: "EMPLOYEE_RESOLUTION",
-      });
-    }
-
-    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
-      console.info("[whatsapp-bot] operation selection after expired session", {
-        phone: maskPhoneNumberForLog(ctx.phoneFrom),
-      });
-      return handlers.respond(companyId, {
-        message: EXPIRED_SESSION_MESSAGE,
-        employeeId: ctx.employeeId,
-        phoneFrom: ctx.phoneTo,
-        phoneTo: ctx.phoneFrom,
-        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
-        flowType: "SESSION_RESOLUTION",
       });
     }
 
@@ -162,6 +148,7 @@ export const whatsappRouterService = {
       }
     }
 
+    // Free-text intents before durable "1"/"2" so Llegué / Me voy never get stolen.
     if (!ctx.body) {
       return handlers.respond(companyId, {
         message: UNPARSEABLE_MESSAGE,
@@ -169,13 +156,6 @@ export const whatsappRouterService = {
         phoneFrom: ctx.phoneTo,
         phoneTo: ctx.phoneFrom,
       });
-    }
-
-    if (!ctx.session) {
-      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
-      if (menuNumberResponse) {
-        return menuNumberResponse;
-      }
     }
 
     const intent = parseBotIntent({ body: ctx.body });
@@ -198,6 +178,36 @@ export const whatsappRouterService = {
 
     if (intent === "workday") {
       return handleWorkdayIntent(ctx, handlers);
+    }
+
+    // Durable confirmation only after globals/intents/active sessions.
+    // Open-window targets only; expired needs confirmation-session context.
+    if (!ctx.session) {
+      const durableConfirmation = await handleDurableAttendanceConfirmationReply(ctx, handlers);
+      if (durableConfirmation) {
+        return durableConfirmation;
+      }
+    }
+
+    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
+      console.info("[whatsapp-bot] operation selection after expired session", {
+        phone: maskPhoneNumberForLog(ctx.phoneFrom),
+      });
+      return handlers.respond(companyId, {
+        message: EXPIRED_SESSION_MESSAGE,
+        employeeId: ctx.employeeId,
+        phoneFrom: ctx.phoneTo,
+        phoneTo: ctx.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+        flowType: "SESSION_RESOLUTION",
+      });
+    }
+
+    if (!ctx.session) {
+      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
+      if (menuNumberResponse) {
+        return menuNumberResponse;
+      }
     }
 
     if (intent === "upcoming_assignments") {

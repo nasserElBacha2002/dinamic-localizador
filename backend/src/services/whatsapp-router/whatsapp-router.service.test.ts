@@ -150,6 +150,14 @@ const createMockHandlers = (): { handlers: WhatsAppRouterHandlers; calls: Handle
 const prepareRouterUnitTest = async (): Promise<void> => {
   setupUnitTestEnv();
   await mockAdminAlertSideEffects();
+  const { attendanceNotificationRepository } = await import(
+    "../../repositories/attendance-notification.repository"
+  );
+  const { botSessionService } = await import("../bot-session.service");
+  // Durable confirmation lookup must not hit SQL in router unit tests.
+  mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
+  // Expired-confirmation path may inspect latest session; keep unit tests offline.
+  mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
 };
 
 describe("whatsappRouterService.routeTextMessage", () => {
@@ -312,6 +320,225 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.match(response, /Marcar llegada/);
     assert.equal(calls.startCheckIn, 0);
     assert.equal(calls.startCheckout, 0);
+  });
+
+  it("routes Llegué even when durable confirmation would otherwise be consulted", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { attendanceNotificationRepository } = await import(
+      "../../repositories/attendance-notification.repository"
+    );
+    const { handlers, calls } = createMockHandlers();
+
+    let durableCalls = 0;
+    mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => {
+      durableCalls += 1;
+      return {
+        kind: "eligible_pending" as const,
+        notificationId: "n1",
+        operationId,
+        assignmentId: "a1",
+        employeeId,
+        scheduledStart: "2099-01-01T00:00:00.000Z",
+        scheduleVersion: 1,
+        confirmationStatus: "PENDING" as const,
+        sentAt: "2026-01-01T00:00:00.000Z",
+      };
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "Llegué" }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKIN_STARTED/);
+    assert.equal(calls.startCheckIn, 1);
+    assert.equal(durableCalls, 0);
+  });
+
+  it("routes durable confirmation for 1 when open target exists", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { attendanceNotificationRepository } = await import(
+      "../../repositories/attendance-notification.repository"
+    );
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => ({
+      kind: "eligible_pending" as const,
+      notificationId: "n1",
+      operationId,
+      assignmentId: "a1",
+      employeeId,
+      scheduledStart: "2099-01-01T00:00:00.000Z",
+      scheduleVersion: 1,
+      confirmationStatus: "PENDING" as const,
+      sentAt: "2026-01-01T00:00:00.000Z",
+    }));
+    mock.method(employeeWorkdayService, "confirmAssignment", async () => ({
+      kind: "ok" as const,
+      message: "ok",
+    }));
+    mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => null);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "1", session: null, recentlyExpired: false }),
+      handlers,
+    );
+
+    assert.match(response, /ok|Participación confirmada/);
+  });
+
+  it("routes durable confirmation for 2 when open target exists", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { attendanceNotificationRepository } = await import(
+      "../../repositories/attendance-notification.repository"
+    );
+    const { employeeWorkdayService } = await import("../employee-workday.service");
+    const { handlers } = createMockHandlers();
+
+    mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => ({
+      kind: "eligible_pending" as const,
+      notificationId: "n1",
+      operationId,
+      assignmentId: "a1",
+      employeeId,
+      scheduledStart: "2099-01-01T00:00:00.000Z",
+      scheduleVersion: 1,
+      confirmationStatus: "PENDING" as const,
+      sentAt: "2026-01-01T00:00:00.000Z",
+    }));
+    mock.method(employeeWorkdayService, "markAssignmentUnavailable", async () => ({
+      kind: "ok" as const,
+      message: "Registramos que no estás disponible",
+    }));
+    mock.method(employeeWorkdayService, "getAssignmentForResponseMessage", async () => null);
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "2", session: null, recentlyExpired: false }),
+      handlers,
+    );
+
+    assert.match(response, /no estás disponible|no vas a poder asistir/i);
+  });
+
+  it("routes Me voy even when durable confirmation target exists", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { attendanceNotificationRepository } = await import(
+      "../../repositories/attendance-notification.repository"
+    );
+    const { handlers, calls } = createMockHandlers();
+
+    let durableCalls = 0;
+    mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => {
+      durableCalls += 1;
+      return {
+        kind: "eligible_pending" as const,
+        notificationId: "n1",
+        operationId,
+        assignmentId: "a1",
+        employeeId,
+        scheduledStart: "2099-01-01T00:00:00.000Z",
+        scheduleVersion: 1,
+        confirmationStatus: "PENDING" as const,
+        sentAt: "2026-01-01T00:00:00.000Z",
+      };
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "Me voy" }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKOUT_STARTED/);
+    assert.equal(calls.startCheckout, 1);
+    assert.equal(durableCalls, 0);
+  });
+
+  it("routes menú even when durable confirmation target exists", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { attendanceNotificationRepository } = await import(
+      "../../repositories/attendance-notification.repository"
+    );
+    const { handlers, calls } = createMockHandlers();
+
+    let durableCalls = 0;
+    mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => {
+      durableCalls += 1;
+      return {
+        kind: "eligible_pending" as const,
+        notificationId: "n1",
+        operationId,
+        assignmentId: "a1",
+        employeeId,
+        scheduledStart: "2099-01-01T00:00:00.000Z",
+        scheduleVersion: 1,
+        confirmationStatus: "PENDING" as const,
+        sentAt: "2026-01-01T00:00:00.000Z",
+      };
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "menú" }),
+      handlers,
+    );
+
+    assert.match(response, /Marcar llegada/);
+    assert.equal(calls.startCheckIn, 0);
+    assert.equal(durableCalls, 0);
+  });
+
+  it("does not durable-capture 1 when findConfirmationReplyTarget returns null (historical PENDING)", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "1", session: null, recentlyExpired: false }),
+      handlers,
+    );
+
+    // Without an open confirmation target, "1" is the numeric menu (llegada), not CONFIRMATION_EXPIRED.
+    assert.doesNotMatch(response, /ventana para confirmar/i);
+    assert.equal(calls.startCheckIn, 1);
+  });
+
+  it("routeLocationMessage does not consult durable confirmation correlation", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { attendanceNotificationRepository } = await import(
+      "../../repositories/attendance-notification.repository"
+    );
+    const { handlers, calls } = createMockHandlers();
+
+    let durableCalls = 0;
+    mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => {
+      durableCalls += 1;
+      return null;
+    });
+
+    const response = await whatsappRouterService.routeLocationMessage(
+      baseContext({
+        messageType: "LOCATION",
+        session: null,
+        payload: {
+          MessageSid: "SM-LOC-1",
+          From: "whatsapp:+5491111111111",
+          To: "whatsapp:+10000000000",
+          Latitude: "-34.6",
+          Longitude: "-58.4",
+        },
+      }),
+      handlers,
+    );
+
+    assert.match(response, /DIRECT_LOCATION_OK/);
+    assert.equal(calls.processDirectLocationAttendance, 1);
+    assert.equal(durableCalls, 0);
   });
 
   it("returns expired session message for numeric selection after expired session", async () => {

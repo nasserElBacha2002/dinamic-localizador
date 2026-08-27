@@ -77,6 +77,24 @@ export const WORKDAY_NO_LONGER_AVAILABLE_MESSAGE =
 export const LOCATION_WITHOUT_SESSION_MESSAGE =
   "No pudimos registrar asistencia con esa ubicación. Compartí tu ubicación nuevamente o escribí \"Llegué\" / \"Me voy\".";
 
+/** Bare LOCATION after check-in — checkout requires explicit "Me voy". */
+export const buildCheckedInNeedsCheckoutIntentMessage = (
+  candidates: EmployeeWorkdayCheckoutCandidate[],
+): string => {
+  if (candidates.length === 1) {
+    const reference = formatAssignmentServiceReference(candidates[0]);
+    return (
+      `Tu llegada ya está registrada${reference ? ` para ${reference}` : ""}.\n` +
+      `Para registrar tu salida escribí "Me voy" y luego compartí tu ubicación.`
+    );
+  }
+
+  return (
+    'Tu llegada ya está registrada.\n' +
+    'Para registrar tu salida escribí "Me voy" y luego compartí tu ubicación.'
+  );
+};
+
 export const buildMixedAttendanceActionPrompt = (input: {
   checkInCandidates: EmployeeWorkdayCheckInCandidate[];
   checkoutCandidates: EmployeeWorkdayCheckoutCandidate[];

@@ -39,5 +39,9 @@ export const isAttendanceConfirmationResponseSessionState = (
   state: BotSessionState,
 ): boolean => state === "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE";
 
+/** Physical attendance flows that must not be cancelled by confirmation reminders. */
+export const isPhysicalAttendanceSessionState = (state: BotSessionState): boolean =>
+  isCheckInSessionState(state) || isCheckoutSessionState(state);
+
 export const isPayrollReceiptSessionState = (state: BotSessionState): boolean =>
   state === "WAITING_PAYROLL_RECEIPT_PERIOD";

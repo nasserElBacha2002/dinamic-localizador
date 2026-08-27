@@ -75,7 +75,7 @@ describe("applyCompanyModulesToLocationIntent", () => {
     assert.equal(gated.blockedMessage, MODULE_DISABLED_MESSAGE);
   });
 
-  it("keeps checkout when OPERATIONS is disabled on AMBIGUOUS_MIXED", () => {
+  it("keeps checkout intent prompt when OPERATIONS is disabled on AMBIGUOUS_MIXED", () => {
     const checkout = baseCheckout({
       employeeWorkdayId: "ew-out",
       attendanceRecordId: "att-1",
@@ -94,9 +94,9 @@ describe("applyCompanyModulesToLocationIntent", () => {
       hasJustifiedWorkdayInWindow: false,
     });
     assert.equal(gated.blockedMessage, null);
-    assert.equal(gated.intent.kind, "CHECK_OUT");
-    if (gated.intent.kind === "CHECK_OUT") {
-      assert.equal(gated.intent.candidate.attendanceRecordId, "att-1");
+    assert.equal(gated.intent.kind, "NEEDS_CHECKOUT_INTENT");
+    if (gated.intent.kind === "NEEDS_CHECKOUT_INTENT") {
+      assert.equal(gated.intent.candidates[0]?.attendanceRecordId, "att-1");
     }
   });
 
@@ -114,7 +114,7 @@ describe("applyCompanyModulesToLocationIntent", () => {
     assert.equal(gated.blockedMessage, MODULE_DISABLED_MESSAGE);
   });
 
-  it("allows checkout-only LOCATION when OPERATIONS is disabled", () => {
+  it("does not auto-checkout when only open checkout exists (OPERATIONS disabled)", () => {
     const intent = resolveAttendanceLocationIntent({
       checkInCandidates: [],
       checkoutCandidates: [
@@ -128,7 +128,61 @@ describe("applyCompanyModulesToLocationIntent", () => {
       hasJustifiedWorkdayInWindow: false,
     });
     assert.equal(gated.blockedMessage, null);
-    assert.equal(gated.intent.kind, "CHECK_OUT");
+    assert.equal(gated.intent.kind, "NEEDS_CHECKOUT_INTENT");
+  });
+});
+
+describe("processDirectLocationAttendance checkout guard", () => {
+  it("A1/A4: second LOCATION with open checkout does not call processLocationCheckout", async () => {
+    const { mock } = await import("node:test");
+    const { WHATSAPP_RESULT_CODES } = await import("../../constants/whatsapp-observability");
+    const { employeeWorkdayAvailabilityService } = await import(
+      "../employee-workday-availability.service"
+    );
+    const { processDirectLocationAttendance } = await import("./direct-attendance-location.service");
+
+    mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+      candidates: [],
+      hasJustifiedWorkdayInWindow: false,
+    }));
+    mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => [
+      baseCheckout({ employeeWorkdayId: "ew-1", attendanceRecordId: "att-1" }),
+    ]);
+
+    let checkInCalls = 0;
+    let respondResultCode: string | undefined;
+
+    try {
+      const response = await processDirectLocationAttendance(
+        {
+          companyId: "company-1",
+          employeeId: "employee-1",
+          latitude: -34.6,
+          longitude: -58.4,
+          messageSid: "SM_SECOND_LOCATION",
+          phoneFrom: "whatsapp:+5491111111111",
+          phoneTo: "whatsapp:+5491100000000",
+          moduleStates: moduleStates({}),
+        },
+        {
+          processLocationCheckIn: async () => {
+            checkInCalls += 1;
+            return "checkin";
+          },
+          respond: async (_companyId, input) => {
+            respondResultCode = input.resultCode;
+            return input.message;
+          },
+        },
+      );
+
+      assert.equal(checkInCalls, 0);
+      assert.equal(respondResultCode, WHATSAPP_RESULT_CODES.LOCATION_WITHOUT_ATTENDANCE_INTENT);
+      assert.match(response, /Me voy/);
+      assert.match(response, /llegada ya está registrada/i);
+    } finally {
+      mock.restoreAll();
+    }
   });
 });
 

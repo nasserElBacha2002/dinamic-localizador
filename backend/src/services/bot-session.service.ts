@@ -2,18 +2,35 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { botSessionRepository } from "../repositories/bot-session.repository";
-import type { BotSession, BotSessionContext, OperationSelectionOption, WorkdaySessionSelectionOption } from "../types/twilio.types";
+import type {
+  BotSession,
+  BotSessionContext,
+  BotSessionState,
+  OperationSelectionOption,
+  WorkdaySessionSelectionOption,
+} from "../types/twilio.types";
 import {
   buildSessionExpiresAt,
   isSessionActive,
   isSessionExpiredByTime,
 } from "../utils/bot-session-expiration";
 import { getSessionTtlMinutes } from "../utils/bot-runtime-settings-scope";
+import { isPhysicalAttendanceSessionState } from "../utils/bot-session-states";
 
 export type SessionSelectionResult =
   | { kind: "ok"; session: BotSession }
   | { kind: "expired" }
   | { kind: "invalid" };
+
+/** Distinct outcomes for confirmation-response session creation (never collapse to null). */
+export type AttendanceConfirmationSessionCreateResult =
+  | { status: "CREATED"; session: BotSession }
+  | {
+      status: "BLOCKED_BY_PHYSICAL_ATTENDANCE";
+      activeSessionId: string;
+      activeState: BotSessionState;
+    }
+  | { status: "ACTIVE_SESSION_CONFLICT" };
 
 const buildExpiresAt = (): Date => buildSessionExpiresAt(getSessionTtlMinutes());
 
@@ -556,7 +573,7 @@ export const botSessionService = {
       /** Business validity end (exclusive). Stored in context; session TTL stays conversational. */
       scheduledStart: string | Date;
     },
-  ): Promise<BotSession | null> {
+  ): Promise<AttendanceConfirmationSessionCreateResult> {
     const validUntil = new Date(input.scheduledStart);
     if (!Number.isFinite(validUntil.getTime())) {
       throw new AppError(
@@ -567,9 +584,31 @@ export const botSessionService = {
     }
 
     try {
-      const session = await runInTransaction(async (transaction) => {
+      const result = await runInTransaction(async (transaction) => {
+        const active = await botSessionRepository.findValidActiveByPhone(
+          companyId,
+          input.phoneNumber,
+          transaction,
+        );
+        if (active && isPhysicalAttendanceSessionState(active.state)) {
+          console.info(
+            "[bot-session] skipped confirmation response session — physical attendance session active",
+            {
+              employeeId: input.employeeId,
+              operationId: input.operationId,
+              activeSessionId: active.id,
+              activeState: active.state,
+            },
+          );
+          return {
+            status: "BLOCKED_BY_PHYSICAL_ATTENDANCE" as const,
+            activeSessionId: active.id,
+            activeState: active.state,
+          };
+        }
+
         await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
-        return botSessionRepository.create(
+        const session = await botSessionRepository.create(
           {
             companyId,
             employeeId: input.employeeId,
@@ -589,26 +628,33 @@ export const botSessionService = {
           },
           transaction,
         );
+        return { status: "CREATED" as const, session };
       });
 
-      console.info("[bot-session] attendance confirmation response session created", {
-        event: "ATTENDANCE_CONFIRMATION_RESPONSE_SESSION_CREATED",
-        sessionId: session.id,
-        employeeId: input.employeeId,
-        operationId: input.operationId,
-        scheduleVersion: input.scheduleVersion,
-        confirmationValidUntil: validUntil.toISOString(),
-        expiresAt: session.expiresAt,
-      });
-
-      return session;
-    } catch (error) {
-      if (botSessionRepository.isUniqueConstraintError(error)) {
-        console.info("[bot-session] skipped confirmation response session because active session exists", {
+      if (result.status === "CREATED") {
+        console.info("[bot-session] attendance confirmation response session created", {
+          event: "ATTENDANCE_CONFIRMATION_RESPONSE_SESSION_CREATED",
+          sessionId: result.session.id,
           employeeId: input.employeeId,
           operationId: input.operationId,
+          scheduleVersion: input.scheduleVersion,
+          confirmationValidUntil: validUntil.toISOString(),
+          expiresAt: result.session.expiresAt,
         });
-        return null;
+      }
+
+      return result;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        console.info(
+          "[bot-session] skipped confirmation response session because active session conflict",
+          {
+            employeeId: input.employeeId,
+            operationId: input.operationId,
+            reason: "ACTIVE_SESSION_CONFLICT",
+          },
+        );
+        return { status: "ACTIVE_SESSION_CONFLICT" };
       }
 
       throw error;

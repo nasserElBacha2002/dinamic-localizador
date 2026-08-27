@@ -29,6 +29,33 @@ export const isWithinArgentinaBounds = (latitude: number, longitude: number): bo
   longitude >= ARGENTINA_LNG_MIN &&
   longitude <= ARGENTINA_LNG_MAX;
 
+/** Approximate Ciudad Autónoma de Buenos Aires (barrio-level geocodes often lack CABA admin1). */
+export const CABA_LAT_MIN = -34.71;
+export const CABA_LAT_MAX = -34.52;
+export const CABA_LNG_MIN = -58.54;
+export const CABA_LNG_MAX = -58.33;
+
+export const isWithinCabaBounds = (latitude: number, longitude: number): boolean =>
+  isWithinArgentinaBounds(latitude, longitude) &&
+  latitude >= CABA_LAT_MIN &&
+  latitude <= CABA_LAT_MAX &&
+  longitude >= CABA_LNG_MIN &&
+  longitude <= CABA_LNG_MAX;
+
+/** Approximate AMBA / GBA (province of Buenos Aires metro, excluding CABA proper). */
+export const GBA_LAT_MIN = -34.92;
+export const GBA_LAT_MAX = -34.18;
+export const GBA_LNG_MIN = -59.12;
+export const GBA_LNG_MAX = -58.04;
+
+export const isWithinGbaBounds = (latitude: number, longitude: number): boolean =>
+  isWithinArgentinaBounds(latitude, longitude) &&
+  latitude >= GBA_LAT_MIN &&
+  latitude <= GBA_LAT_MAX &&
+  longitude >= GBA_LNG_MIN &&
+  longitude <= GBA_LNG_MAX &&
+  !isWithinCabaBounds(latitude, longitude);
+
 const normalizeKey = (value: string): string =>
   value
     .normalize("NFD")
@@ -67,6 +94,37 @@ const componentBlob = (components: GeocodeAddressComponent[]): string =>
     .replace(/\p{M}/gu, "")
     .toLowerCase();
 
+const looksLikeCabaAdmin1 = (components: GeocodeAddressComponent[]): boolean =>
+  matchesAdminLevel1(components, [
+    (longKey, shortKey) =>
+      longKey.includes("ciudad autonoma") ||
+      longKey.includes("autonomous city") ||
+      shortKey === "caba" ||
+      shortKey === "c",
+  ]);
+
+const looksLikeBuenosAiresProvinceAdmin1 = (components: GeocodeAddressComponent[]): boolean =>
+  matchesAdminLevel1(components, [
+    (longKey, shortKey) =>
+      shortKey === "b" ||
+      longKey === "buenos aires" ||
+      longKey.includes("provincia de buenos aires") ||
+      (longKey.includes("buenos aires") &&
+        !longKey.includes("ciudad autonoma") &&
+        !longKey.includes("autonomous city")),
+  ]);
+
+const blobMentionsOtherProvince = (blob: string): boolean =>
+  blob.includes("cordoba") ||
+  blob.includes("santa fe") ||
+  blob.includes("salta") ||
+  blob.includes("mendoza");
+
+const blobMentionsBuenosAiresProvince = (blob: string): boolean =>
+  blob.includes("buenos aires") &&
+  !blob.includes("ciudad autonoma") &&
+  !blob.includes("autonomous city");
+
 /**
  * Prefer structured address_components; fall back to formatted_address only when needed.
  */
@@ -94,12 +152,10 @@ export const validateGeocodeAgainstLocality = (
 
   if (strong === "CABA") {
     const looksCaba =
-      matchesAdminLevel1(result.addressComponents, [
-        (longKey, shortKey) =>
-          longKey.includes("ciudad autonoma") || shortKey === "caba" || shortKey === "c",
-      ]) ||
+      looksLikeCabaAdmin1(result.addressComponents) ||
       blob.includes("ciudad autonoma de buenos aires") ||
-      blob.includes("autonomous city of buenos aires");
+      blob.includes("autonomous city of buenos aires") ||
+      isWithinCabaBounds(result.latitude, result.longitude);
     if (!looksCaba) {
       return toGeocodeFailure(
         result.query,
@@ -113,36 +169,25 @@ export const validateGeocodeAgainstLocality = (
   if (strong === "BUENOS_AIRES_PROVINCE") {
     // GBA / Provincia BA: accept province BA; reject CABA and other provinces.
     // Do not require a specific municipality.
-    const looksCaba = matchesAdminLevel1(result.addressComponents, [
-      (longKey, shortKey) =>
-        longKey.includes("ciudad autonoma") || shortKey === "caba" || shortKey === "c",
-    ]);
-    const looksBuenosAiresProvince = matchesAdminLevel1(result.addressComponents, [
-      (longKey, shortKey) =>
-        shortKey === "b" ||
-        longKey === "buenos aires" ||
-        longKey.includes("provincia de buenos aires"),
-    ]);
-    if (looksCaba || !looksBuenosAiresProvince) {
-      // Fallback only when components are missing for admin_level_1.
-      if (
-        !adminLevel1(result.addressComponents) &&
-        blob.includes("buenos aires") &&
-        !blob.includes("ciudad autonoma") &&
-        !blob.includes("cordoba") &&
-        !blob.includes("santa fe") &&
-        !blob.includes("salta") &&
-        !blob.includes("mendoza")
-      ) {
-        return result;
-      }
-      return toGeocodeFailure(
-        result.query,
-        "REJECTED_REGION",
-        "Geocoder result does not match Provincia de Buenos Aires",
-      );
+    const looksCaba = looksLikeCabaAdmin1(result.addressComponents);
+    const looksBuenosAiresProvince = looksLikeBuenosAiresProvinceAdmin1(result.addressComponents);
+    if (!looksCaba && looksBuenosAiresProvince) {
+      return result;
     }
-    return result;
+    if (
+      !looksCaba &&
+      (isWithinGbaBounds(result.latitude, result.longitude) ||
+        (!adminLevel1(result.addressComponents) &&
+          blobMentionsBuenosAiresProvince(blob) &&
+          !blobMentionsOtherProvince(blob)))
+    ) {
+      return result;
+    }
+    return toGeocodeFailure(
+      result.query,
+      "REJECTED_REGION",
+      "Geocoder result does not match Provincia de Buenos Aires",
+    );
   }
 
   if (strong === "CORDOBA") {

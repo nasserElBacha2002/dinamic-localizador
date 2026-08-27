@@ -4,6 +4,8 @@ import {
   buildLocationZoneGeocodingQuery,
   expandLocalityForGeocoding,
   isWithinArgentinaBounds,
+  isWithinCabaBounds,
+  isWithinGbaBounds,
   selectCompatibleGeocodeCandidate,
   validateGeocodeAgainstLocality,
 } from "./location-zone-query";
@@ -80,6 +82,15 @@ describe("isWithinArgentinaBounds", () => {
   it("accepts Caballito-ish coordinates and rejects foreign ones", () => {
     assert.equal(isWithinArgentinaBounds(-34.62, -58.44), true);
     assert.equal(isWithinArgentinaBounds(40.71, -74.0), false);
+  });
+});
+
+describe("regional bounding boxes", () => {
+  it("classifies CABA vs GBA sample coordinates", () => {
+    assert.equal(isWithinCabaBounds(-34.62, -58.44), true); // Caballito
+    assert.equal(isWithinGbaBounds(-34.62, -58.44), false);
+    assert.equal(isWithinGbaBounds(-34.583, -58.317), true); // Wilde
+    assert.equal(isWithinCabaBounds(-34.583, -58.317), false);
   });
 });
 
@@ -214,6 +225,56 @@ describe("validateGeocodeAgainstLocality", () => {
       "GBA",
     );
     assert.equal(caba.status, "REJECTED_REGION");
+  });
+
+  it("accepts CABA barrio coords when Google returns province BA admin1", () => {
+    const almagro = validateGeocodeAgainstLocality(
+      success({
+        formattedAddress: "Almagro, Buenos Aires, Argentina",
+        addressComponents: [
+          { longName: "Buenos Aires", shortName: "B", types: ["administrative_area_level_1"] },
+          { longName: "Almagro", shortName: "Almagro", types: ["sublocality_level_1"] },
+        ],
+      }),
+      "CABA",
+    );
+    assert.equal(almagro.status, "OK");
+  });
+
+  it("accepts GBA coords when admin1 is missing but formatted address mentions Buenos Aires", () => {
+    const wilde = validateGeocodeAgainstLocality(
+      {
+        status: "OK",
+        query: "Wilde, Buenos Aires, Argentina",
+        latitude: -34.583,
+        longitude: -58.317,
+        countryCode: "AR",
+        formattedAddress: "Wilde, Avellaneda, Buenos Aires, Argentina",
+        addressComponents: [
+          { longName: "Wilde", shortName: "Wilde", types: ["locality"] },
+          { longName: "Avellaneda", shortName: "Avellaneda", types: ["administrative_area_level_2"] },
+        ],
+      },
+      "GBA",
+    );
+    assert.equal(wilde.status, "OK");
+  });
+
+  it("accepts Buenos Aires Province admin1 with English long name", () => {
+    const bernal = validateGeocodeAgainstLocality(
+      success({
+        formattedAddress: "Bernal, Buenos Aires Province, Argentina",
+        addressComponents: [
+          {
+            longName: "Buenos Aires Province",
+            shortName: "B",
+            types: ["administrative_area_level_1"],
+          },
+        ],
+      }),
+      "GBA",
+    );
+    assert.equal(bernal.status, "OK");
   });
 });
 

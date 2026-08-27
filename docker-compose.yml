@@ -186,6 +186,8 @@ services:
       BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES: ${BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES:-15}
       BOT_DEFAULT_COMPANY_ID: ${BOT_DEFAULT_COMPANY_ID:-}
       BOT_DEFAULT_COMPANY_NAME: ${BOT_DEFAULT_COMPANY_NAME:-Dinamic Systems}
+      # Server-side Geocoding API (location-zones / reconcile). Host .env alone is not enough.
+      GOOGLE_MAPS_API_KEY: ${GOOGLE_MAPS_API_KEY:-}
       GOOGLE_APPLICATION_CREDENTIALS: ${GOOGLE_APPLICATION_CREDENTIALS:-/app/secrets/gcp-service-account.json}
       GCS_PROJECT_ID: ${GCS_PROJECT_ID:-}
       GCS_BUCKET_NAME: ${GCS_BUCKET_NAME:-}

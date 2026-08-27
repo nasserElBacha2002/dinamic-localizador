@@ -415,13 +415,15 @@ const sendReminderForCandidate = async (
     }
 
     if (sessionResult.status === "ACTIVE_SESSION_CONFLICT") {
-      await attendanceNotificationRepository.markSuperseded(companyId, {
+      // Retryable: unique/active race is not proven physical; another attempt may succeed
+      // once the conflicting session ends. Do not label as physical attendance.
+      await attendanceNotificationRepository.markFailed(companyId, {
         notificationId: claimed.id,
         errorMessage: CONFIRMATION_BLOCKED_BY_ACTIVE_SESSION_CONFLICT,
       });
 
       console.info(
-        "[attendance-reminder] skipped confirmation reminder — active session conflict (not physical)",
+        "[attendance-reminder] deferred confirmation reminder — active session conflict (not physical)",
         {
           notificationType,
           operationId: candidate.operationId,
@@ -429,12 +431,12 @@ const sendReminderForCandidate = async (
           notificationId: claimed.id,
           scheduleVersion,
           reason: CONFIRMATION_BLOCKED_BY_ACTIVE_SESSION_CONFLICT,
-          result: "superseded",
-          resultCode: WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_ACTIVE_SESSION_CONFLICT,
+          result: "failed",
+          resultCode: WHATSAPP_RESULT_CODES.REMINDER_FAILED,
         },
       );
 
-      return "skipped";
+      return "failed";
     }
 
     preparedSession = sessionResult.session;
@@ -449,66 +451,6 @@ const sendReminderForCandidate = async (
       confirmationValidUntil: candidate.scheduledStart,
       sessionId: preparedSession.id,
     });
-
-    // TOCTOU control point: after early gate + session create, before Twilio.
-    if (confirmationReminderPreSendBarrierForTests) {
-      await confirmationReminderPreSendBarrierForTests();
-    }
-
-    const finalGate = await attendanceNotificationRepository.getConfirmationReminderSendGate(
-      companyId,
-      candidate.operationId,
-      candidate.employeeId,
-      scheduleVersion,
-    );
-
-    if (finalGate !== "ELIGIBLE") {
-      try {
-        await botSessionService.cancelSession(companyId, preparedSession.id);
-      } catch (cleanupError) {
-        const cleanupErrorMessage =
-          cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";
-        console.error("[attendance-reminder] prepared session cleanup failed after final gate", {
-          notificationType,
-          operationId: candidate.operationId,
-          employeeId: candidate.employeeId,
-          notificationId: claimed.id,
-          sessionId: preparedSession.id,
-          errorMessage: cleanupErrorMessage,
-        });
-      }
-
-      const errorMessage =
-        finalGate === "ALREADY_CHECKED_IN"
-          ? NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_ALREADY_CHECKED_IN
-          : NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER;
-      const resultCode =
-        finalGate === "ALREADY_CHECKED_IN"
-          ? WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_ALREADY_CHECKED_IN
-          : WHATSAPP_RESULT_CODES.REMINDER_SKIPPED;
-
-      await attendanceNotificationRepository.markSuperseded(companyId, {
-        notificationId: claimed.id,
-        errorMessage,
-      });
-
-      console.info(
-        "[attendance-reminder] skipped confirmation reminder after final pre-send revalidation",
-        {
-          notificationType,
-          evaluatedAt: new Date().toISOString(),
-          eligible: false,
-          rejectionReasons: [errorMessage],
-          existingReminderId: claimed.id,
-          result: "superseded",
-          resultCode,
-          finalGate,
-          ...reminderCandidateLogFields(candidate),
-        },
-      );
-
-      return "skipped";
-    }
   }
 
   let activeReminderTrace: Awaited<ReturnType<typeof whatsappFlowTraceService.startExecution>> =
@@ -553,6 +495,87 @@ const sendReminderForCandidate = async (
         status: "SUCCESS",
         output: { contentSid, notificationType },
       });
+    }
+
+    // Critical TOCTOU control: revalidate as late as possible before irreversible Twilio send.
+    // Residual race: only the Twilio HTTP round-trip itself (external I/O cannot hold SQL locks).
+    if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
+      if (confirmationReminderPreSendBarrierForTests) {
+        await confirmationReminderPreSendBarrierForTests();
+      }
+
+      const finalGate = await attendanceNotificationRepository.getConfirmationReminderSendGate(
+        companyId,
+        candidate.operationId,
+        candidate.employeeId,
+        scheduleVersion,
+      );
+
+      if (finalGate !== "ELIGIBLE") {
+        if (preparedSession) {
+          try {
+            await botSessionService.cancelSession(companyId, preparedSession.id);
+          } catch (cleanupError) {
+            const cleanupErrorMessage =
+              cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";
+            console.error("[attendance-reminder] prepared session cleanup failed after final gate", {
+              notificationType,
+              operationId: candidate.operationId,
+              employeeId: candidate.employeeId,
+              notificationId: claimed.id,
+              sessionId: preparedSession.id,
+              errorMessage: cleanupErrorMessage,
+            });
+          }
+        }
+
+        const errorMessage =
+          finalGate === "ALREADY_CHECKED_IN"
+            ? NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_ALREADY_CHECKED_IN
+            : NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER;
+        const resultCode =
+          finalGate === "ALREADY_CHECKED_IN"
+            ? WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_ALREADY_CHECKED_IN
+            : WHATSAPP_RESULT_CODES.REMINDER_SKIPPED;
+
+        await attendanceNotificationRepository.markSuperseded(companyId, {
+          notificationId: claimed.id,
+          errorMessage,
+        });
+
+        if (activeReminderTrace) {
+          // Twilio was never invoked — record a business skip, not a provider failure.
+          await activeReminderTrace.addStep({
+            stepType: "FLOW_COMPLETED",
+            status: "SKIPPED",
+            output: { finalGate, notificationStatus: "SUPERSEDED" },
+            reasonCode: resultCode,
+            errorMessage,
+          });
+          await activeReminderTrace.complete({
+            status: "COMPLETED",
+            resultCode,
+            errorMessage,
+          });
+        }
+
+        console.info(
+          "[attendance-reminder] skipped confirmation reminder after final pre-send revalidation",
+          {
+            notificationType,
+            evaluatedAt: new Date().toISOString(),
+            eligible: false,
+            rejectionReasons: [errorMessage],
+            existingReminderId: claimed.id,
+            result: "superseded",
+            resultCode,
+            finalGate,
+            ...reminderCandidateLogFields(candidate),
+          },
+        );
+
+        return "skipped";
+      }
     }
 
     const result = await twilioOutboundService.sendWhatsAppTemplate({

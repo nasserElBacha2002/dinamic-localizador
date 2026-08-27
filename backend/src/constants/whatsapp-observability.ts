@@ -103,8 +103,6 @@ export const WHATSAPP_RESULT_CODES = {
   /** Confirmation skipped — physical attendance session must not be cancelled. */
   REMINDER_SKIPPED_PHYSICAL_ATTENDANCE_SESSION:
     "REMINDER_SKIPPED_PHYSICAL_ATTENDANCE_SESSION",
-  /** Confirmation skipped — active session conflict (not proven physical attendance). */
-  REMINDER_SKIPPED_ACTIVE_SESSION_CONFLICT: "REMINDER_SKIPPED_ACTIVE_SESSION_CONFLICT",
   PROVIDER_STATUS_RECORDED: "PROVIDER_STATUS_RECORDED",
   GENERIC_ERROR: "GENERIC_ERROR",
   FLOW_COMPLETED: "FLOW_COMPLETED",

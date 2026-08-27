@@ -80,7 +80,6 @@ describe("resolveAttendanceLocationIntent", () => {
     const candidates = [
       baseCheckIn({ employeeWorkdayId: "ew-1", operationId: "op-1" }),
       baseCheckIn({ employeeWorkdayId: "ew-2", operationId: "op-2" }),
-      baseCheckIn({ employeeWorkdayId: "ew-3", operationId: "op-3" }),
     ];
     const intent = resolveAttendanceLocationIntent({
       checkInCandidates: candidates,
@@ -90,9 +89,28 @@ describe("resolveAttendanceLocationIntent", () => {
     assert.equal(intent.kind, "AMBIGUOUS_CHECK_IN");
     assert.notEqual(intent.kind, "CHECK_IN");
     if (intent.kind === "AMBIGUOUS_CHECK_IN") {
+      assert.equal(intent.candidates.length, 2);
+      assert.deepEqual(
+        intent.candidates.map((c) => c.employeeWorkdayId),
+        ["ew-1", "ew-2"],
+      );
+    }
+  });
+
+  it("preserves all check-in candidates when more than two are ambiguous", () => {
+    const candidates = [
+      baseCheckIn({ employeeWorkdayId: "ew-1", operationId: "op-1" }),
+      baseCheckIn({ employeeWorkdayId: "ew-2", operationId: "op-2" }),
+      baseCheckIn({ employeeWorkdayId: "ew-3", operationId: "op-3" }),
+    ];
+    const intent = resolveAttendanceLocationIntent({
+      checkInCandidates: candidates,
+      checkoutCandidates: [],
+      hasJustifiedWorkdayInWindow: false,
+    });
+    assert.equal(intent.kind, "AMBIGUOUS_CHECK_IN");
+    if (intent.kind === "AMBIGUOUS_CHECK_IN") {
       assert.equal(intent.candidates.length, 3);
-      assert.equal(intent.candidates[0]?.employeeWorkdayId, "ew-1");
-      assert.equal(intent.candidates[2]?.employeeWorkdayId, "ew-3");
     }
   });
 

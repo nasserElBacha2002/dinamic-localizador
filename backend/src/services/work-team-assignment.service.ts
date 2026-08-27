@@ -646,11 +646,20 @@ export const workTeamAssignmentService = {
       }
 
       try {
-        await workTeamAssignmentBatchRepository.markFailed(companyId, input.previewToken);
+        const markedFailed = await workTeamAssignmentBatchRepository.markFailed(
+          companyId,
+          input.previewToken,
+        );
+        if (!markedFailed) {
+          console.error(
+            "[work-team-assignment] failed to mark batch as FAILED after rollback: no matching PREVIEWED batch",
+            { companyId, batchId: input.previewToken },
+          );
+        }
       } catch (markFailedError) {
         console.error(
           "[work-team-assignment] failed to mark batch as FAILED after rollback",
-          markFailedError,
+          markFailedError instanceof Error ? markFailedError.message : markFailedError,
         );
       }
 

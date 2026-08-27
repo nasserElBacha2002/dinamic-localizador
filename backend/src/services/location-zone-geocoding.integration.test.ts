@@ -487,7 +487,9 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
       ),
     );
 
-    const resolved = await locationZoneGeocodingService.geocodeZone(zone, {
+    // Reload after the failed attempt so optimistic concurrency uses the DB snapshot
+    // (create-time updatedAt can diverge from DATETIME2(7) by sub-ms truncation).
+    const resolved = await locationZoneGeocodingService.geocodeZone(afterFail, {
       apiKey: "test-key",
       force: true,
     });

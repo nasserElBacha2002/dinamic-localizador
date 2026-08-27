@@ -387,6 +387,9 @@ export const locationZoneRepository = {
    * Persist an external geocode result only when the row snapshot still matches.
    * Concurrency: normalized name/locality + updated_at (ms). `allowManualOverride`
    * (force) may replace MANUAL but never skips the snapshot check.
+   *
+   * updated_at uses a 1ms window: DATETIME2(7) → JS Date truncates sub-ms, while
+   * CAST(... AS DATETIME2(3)) rounds — exact equality fails on otherwise-fresh rows.
    */
   async applyGeocodeResult(
     companyId: string,
@@ -442,7 +445,7 @@ export const locationZoneRepository = {
           AND company_id = @companyId
           AND normalized_name = @expectedNormalizedName
           AND normalized_locality = @expectedNormalizedLocality
-          AND CAST(updated_at AS DATETIME2(3)) = CAST(@expectedUpdatedAt AS DATETIME2(3))
+          AND ABS(DATEDIFF_BIG(MILLISECOND, updated_at, @expectedUpdatedAt)) <= 1
           AND (
             @allowManualOverride = 1
             OR (

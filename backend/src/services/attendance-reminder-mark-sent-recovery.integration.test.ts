@@ -207,16 +207,19 @@ describeDatabaseIntegration("attendance reminder markSent recovery integration",
       throw new Error("markSent failed");
     });
     mock.method(botSessionService, "createAttendanceConfirmationResponseSession", async () => ({
-      id: "session-recovery",
-      companyId,
-      employeeId,
-      operationId,
-      phoneNumber: "+5491100000000",
-      state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
-      contextJson: null,
-      expiresAt: "2099-01-01T00:00:00.000Z",
-      createdAt: referenceAt.toISOString(),
-      updatedAt: referenceAt.toISOString(),
+      status: "CREATED" as const,
+      session: {
+        id: "session-recovery",
+        companyId,
+        employeeId,
+        operationId,
+        phoneNumber: "+5491100000000",
+        state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
+        contextJson: null,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        createdAt: referenceAt.toISOString(),
+        updatedAt: referenceAt.toISOString(),
+      },
     }));
 
     const { attendanceReminderService } = await import("./attendance-reminder.service");

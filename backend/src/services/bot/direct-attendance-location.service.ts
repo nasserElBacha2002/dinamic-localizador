@@ -2,7 +2,6 @@ import type { CompanyModuleKey } from "../../constants/company-modules";
 import { COMPANY_MODULE_KEYS } from "../../constants/company-modules";
 import type { BotSession } from "../../types/twilio.types";
 import { getBotNow } from "../../utils/bot-runtime-context";
-import { getRequireCheckoutLocation } from "../../utils/bot-runtime-settings-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { botSessionService } from "../bot-session.service";
 import {
@@ -10,7 +9,7 @@ import {
   isModuleEnabledInStates,
 } from "../whatsapp-module-gate";
 import {
-  buildCheckoutWorkdaySelectionPrompt,
+  buildCheckedInNeedsCheckoutIntentMessage,
   buildMixedAttendanceActionPrompt,
   buildWorkdaySelectionPrompt,
   MODULE_DISABLED_MESSAGE,
@@ -21,7 +20,6 @@ import {
   listAvailableCheckInWorkdays,
   listOpenCheckoutWorkdays,
   mapCheckInCandidatesToSessionOptions,
-  mapCheckoutCandidatesToSessionOptions,
   mapMixedAttendanceActionToSessionOptions,
 } from "./bot-workday.selector";
 import {
@@ -42,31 +40,6 @@ export type DirectLocationAttendanceHandlers = {
     phoneFrom: string;
     phoneTo: string;
     eventAt?: Date;
-  }) => Promise<string>;
-  processLocationCheckout: (input: {
-    companyId: string;
-    session: BotSession;
-    employeeId: string;
-    employeeWorkdayId: string;
-    attendanceRecordId: string;
-    operationId: string;
-    latitude: number;
-    longitude: number;
-    messageSid: string;
-    phoneFrom: string;
-    phoneTo: string;
-    eventAt?: Date;
-  }) => Promise<string>;
-  processCheckoutWithoutLocation: (input: {
-    companyId: string;
-    employeeId: string;
-    employeeWorkdayId: string;
-    attendanceRecordId: string;
-    operationId: string;
-    phoneFrom: string;
-    phoneTo: string;
-    messageSid: string;
-    sessionId?: string;
   }) => Promise<string>;
   respond: (
     companyId: string,
@@ -113,6 +86,7 @@ export const applyCompanyModulesToLocationIntent = (input: {
     return { intent: input.intent, blockedMessage: null };
   }
 
+  // OPERATIONS off: drop check-in options; remaining open checkout still needs "Me voy".
   const refined = resolveAttendanceLocationIntent({
     checkInCandidates: [],
     checkoutCandidates: input.intent.checkoutCandidates,
@@ -237,75 +211,32 @@ export const processDirectLocationAttendance = async (
     });
   }
 
-  if (intent.kind === "AMBIGUOUS_CHECK_OUT") {
-    const options = mapCheckoutCandidatesToSessionOptions(intent.candidates);
-    await botSessionService.createCheckoutOperationSelectionSession(companyId, {
-      employeeId: input.employeeId,
-      phoneNumber: input.phoneFrom,
-      options,
-      pendingLocation,
-    });
+  if (intent.kind === "NEEDS_CHECKOUT_INTENT") {
+    // Bare LOCATION after check-in must not close the shift (different MessageSid still OK).
     return handlers.respond(companyId, {
-      message: buildCheckoutWorkdaySelectionPrompt(intent.candidates),
+      message: buildCheckedInNeedsCheckoutIntentMessage(intent.candidates),
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.LOCATION_WITHOUT_ATTENDANCE_INTENT,
+      flowType: "CHECKOUT",
     });
   }
 
-  if (intent.kind === "CHECK_IN") {
-    const workday = intent.candidate;
-    const session = await botSessionService.createWaitingLocationSession(companyId, {
-      employeeId: input.employeeId,
-      phoneNumber: input.phoneFrom,
-      operationId: workday.operationId,
-      employeeWorkdayId: workday.employeeWorkdayId,
-    });
-    return handlers.processLocationCheckIn({
-      companyId,
-      session,
-      employeeId: input.employeeId,
-      employeeWorkdayId: workday.employeeWorkdayId,
-      operationId: workday.operationId,
-      latitude: input.latitude,
-      longitude: input.longitude,
-      messageSid: input.messageSid,
-      phoneFrom: input.phoneFrom,
-      phoneTo: input.phoneTo,
-      eventAt,
-    });
-  }
-
-  // CHECK_OUT
-  const candidate = intent.candidate;
-  if (!getRequireCheckoutLocation()) {
-    return handlers.processCheckoutWithoutLocation({
-      companyId,
-      employeeId: input.employeeId,
-      employeeWorkdayId: candidate.employeeWorkdayId,
-      attendanceRecordId: candidate.attendanceRecordId,
-      operationId: candidate.operationId,
-      phoneFrom: input.phoneFrom,
-      phoneTo: input.phoneTo,
-      messageSid: input.messageSid,
-    });
-  }
-
-  const session = await botSessionService.createWaitingCheckoutLocationSession(companyId, {
+  // CHECK_IN
+  const workday = intent.candidate;
+  const session = await botSessionService.createWaitingLocationSession(companyId, {
     employeeId: input.employeeId,
     phoneNumber: input.phoneFrom,
-    operationId: candidate.operationId,
-    employeeWorkdayId: candidate.employeeWorkdayId,
-    attendanceRecordId: candidate.attendanceRecordId,
+    operationId: workday.operationId,
+    employeeWorkdayId: workday.employeeWorkdayId,
   });
-
-  return handlers.processLocationCheckout({
+  return handlers.processLocationCheckIn({
     companyId,
     session,
     employeeId: input.employeeId,
-    employeeWorkdayId: candidate.employeeWorkdayId,
-    attendanceRecordId: candidate.attendanceRecordId,
-    operationId: candidate.operationId,
+    employeeWorkdayId: workday.employeeWorkdayId,
+    operationId: workday.operationId,
     latitude: input.latitude,
     longitude: input.longitude,
     messageSid: input.messageSid,

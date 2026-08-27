@@ -187,16 +187,19 @@ describeDatabaseIntegration("attendance confirmation schedule cycle integration"
       messageSid: "SM_V2_CYCLE",
     }));
     mock.method(botSessionService, "createAttendanceConfirmationResponseSession", async () => ({
-      id: "session-cycle-v2",
-      companyId,
-      employeeId,
-      operationId,
-      phoneNumber: "+5491100000000",
-      state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
-      contextJson: null,
-      expiresAt: "2099-01-01T00:00:00.000Z",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+      status: "CREATED" as const,
+      session: {
+        id: "session-cycle-v2",
+        companyId,
+        employeeId,
+        operationId,
+        phoneNumber: "+5491100000000",
+        state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE" as const,
+        contextJson: null,
+        expiresAt: "2099-01-01T00:00:00.000Z",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      },
     }));
 
     const referenceAt = new Date(rescheduledStart.getTime() - 24 * 60 * 60 * 1000);

@@ -10,6 +10,7 @@ import {
   isSessionExpiredByTime,
   isSessionTimeValid,
 } from "./bot-session-expiration";
+import { isPhysicalAttendanceSessionState } from "./bot-session-states";
 
 const session = (state: BotSessionState, expiresAt: string) => ({ state, expiresAt });
 
@@ -58,6 +59,15 @@ describe("bot session expiration helpers", () => {
     assert.equal(isActiveSessionState(terminal.state), false);
     assert.equal(isSessionActive(terminal, now), false);
     assert.equal(isSessionExpiredByTime(terminal, now), false);
+  });
+
+  it("marks physical attendance states for confirmation-reminder protection", () => {
+    assert.equal(isPhysicalAttendanceSessionState("WAITING_LOCATION"), true);
+    assert.equal(isPhysicalAttendanceSessionState("WAITING_OPERATION_SELECTION"), true);
+    assert.equal(isPhysicalAttendanceSessionState("WAITING_CHECKOUT_LOCATION"), true);
+    assert.equal(isPhysicalAttendanceSessionState("WAITING_CHECKOUT_OPERATION_SELECTION"), true);
+    assert.equal(isPhysicalAttendanceSessionState("WAITING_ATTENDANCE_CONFIRMATION_RESPONSE"), false);
+    assert.equal(isPhysicalAttendanceSessionState("WAITING_ABSENCE_TYPE"), false);
   });
 
   it("does not allow EXPIRED to be considered revivable", () => {

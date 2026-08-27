@@ -99,6 +99,8 @@ describe("adminAlertService", () => {
       companyId: "company-1",
       adminAlertsEnabled: true,
     }));
+    // Fixed past createdAt: emit() captures occurredAt before loading recipients.
+    // Using `new Date().toISOString()` here races and can skip as CREATED_AFTER_EVENT on CI.
     mock.method(companyAlertRecipientRepository, "findEnabledRecipients", async () => [
       {
         id: "r1",
@@ -110,8 +112,8 @@ describe("adminAlertService", () => {
         receiveOperationalAlerts: true,
         receiveRequestAlerts: false,
         receiveSecurityAlerts: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
       },
       {
         id: "r2",
@@ -123,8 +125,8 @@ describe("adminAlertService", () => {
         receiveOperationalAlerts: true,
         receiveRequestAlerts: false,
         receiveSecurityAlerts: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
 
@@ -180,8 +182,8 @@ describe("adminAlertService", () => {
         receiveOperationalAlerts: true,
         receiveRequestAlerts: false,
         receiveSecurityAlerts: true,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
       },
     ]);
     mock.method(adminAlertNotificationRepository, "enqueue", async () => ({

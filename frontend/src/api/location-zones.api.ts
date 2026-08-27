@@ -3,6 +3,7 @@ import type {
   CreateLocationZoneInput,
   ListLocationZonesFilters,
   LocationZone,
+  LocationZoneGeocodingSummary,
   UpdateLocationZoneInput,
 } from "../types/location-zone";
 import { buildParams } from "./client";
@@ -19,6 +20,13 @@ export async function getLocationZones(
   return data.data;
 }
 
+export async function getLocationZonesGeocodingSummary(): Promise<LocationZoneGeocodingSummary> {
+  const { data } = await scopedApiClient.get<SingleResponse<LocationZoneGeocodingSummary>>(
+    "location-zones/geocoding-summary",
+  );
+  return data.data;
+}
+
 export async function createLocationZone(input: CreateLocationZoneInput): Promise<LocationZone> {
   const { data } = await scopedApiClient.post<SingleResponse<LocationZone>>("location-zones", input);
   return data.data;
@@ -30,6 +38,17 @@ export async function updateLocationZone(
 ): Promise<LocationZone> {
   const { data } = await scopedApiClient.patch<SingleResponse<LocationZone>>(
     `location-zones/${zoneId}`,
+    input,
+  );
+  return data.data;
+}
+
+export async function geocodeLocationZone(
+  zoneId: string,
+  input: { force?: boolean } = {},
+): Promise<LocationZone> {
+  const { data } = await scopedApiClient.post<SingleResponse<LocationZone>>(
+    `location-zones/${zoneId}/geocode`,
     input,
   );
   return data.data;

@@ -9,6 +9,8 @@ export interface User {
   isPlatformAdmin: boolean;
   active: boolean;
   tokenVersion: number;
+  /** WhatsApp E.164 contact for admin alerts; null until configured. */
+  phoneNumber: string | null;
   twoFactorEnabled: boolean;
   twoFactorSecretEncrypted: string | null;
   twoFactorConfirmedAt: string | null;
@@ -21,6 +23,7 @@ export interface User {
 }
 
 export const TWO_FACTOR_USER_DEFAULTS = {
+  phoneNumber: null as string | null,
   twoFactorEnabled: false,
   twoFactorSecretEncrypted: null as string | null,
   twoFactorConfirmedAt: null as string | null,

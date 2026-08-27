@@ -55,4 +55,11 @@ describe("company user schemas", () => {
     const parsed = updateCompanyUserSchema.safeParse({});
     assert.equal(parsed.success, false);
   });
+
+  it("accepts phone-only update and clearing phone", () => {
+    const withPhone = updateCompanyUserSchema.safeParse({ phoneNumber: "+5491112345678" });
+    const clearPhone = updateCompanyUserSchema.safeParse({ phoneNumber: null });
+    assert.equal(withPhone.success, true);
+    assert.equal(clearPhone.success, true);
+  });
 });

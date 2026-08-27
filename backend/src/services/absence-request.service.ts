@@ -36,6 +36,7 @@ import { absenceWorkdaySyncService } from "./absence-workday-sync.service";
 import { employeeWorkdayAbsenceReconciliationService } from "./employee-workday-absence-reconciliation.service";
 import { resolveAttachmentPolicy } from "../domain/absence-attachment-policy";
 import { absenceAttachmentService } from "./absence-attachment.service";
+import { adminAlertAbsencePendingService } from "./admin-alert-absence-pending.service";
 
 const resolveCompanyTimezone = (companyId: string) =>
   absenceOperationImpactService.getOperationTimezone(companyId);
@@ -172,7 +173,7 @@ const createRequest = async (
   },
 ): Promise<AbsenceRequestDetail> => {
   const timezone = await resolveCompanyTimezone(companyId);
-  await validateEmployee(companyId, input.employeeId);
+  const employee = await validateEmployee(companyId, input.employeeId);
   const absenceType = await validateAbsenceType(companyId, input.absenceTypeId, {
     blockIfRequiresAttachment: input.requestedVia === "WHATSAPP",
   });
@@ -395,6 +396,18 @@ const createRequest = async (
         ),
       "auto-approve-on-create",
     );
+  }
+
+  if (input.requestedVia === "WHATSAPP") {
+    await adminAlertAbsencePendingService.emitForPendingWhatsappRequest({
+      companyId,
+      requestId,
+      employeeId: input.employeeId,
+      employeeName: employee.name,
+      absenceTypeName: absenceType.name,
+      startDate: input.startDate,
+      endDate: input.endDate,
+    });
   }
 
   return absenceRequestService.getById(companyId, requestId);

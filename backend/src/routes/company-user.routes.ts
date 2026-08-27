@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { companyUserController } from "../controllers/company-user.controller";
 import { asyncHandler } from "../middleware/async-handler";
-import { requirePermission } from "../middleware/company-context";
+import { requireAnyPermission, requirePermission } from "../middleware/company-context";
 import { validate } from "../middleware/validate";
 import {
   companyUserIdParamSchema,
@@ -14,7 +14,7 @@ export const companyUserRouter = Router();
 
 companyUserRouter.get(
   "/",
-  requirePermission("users:manage"),
+  requireAnyPermission("users:manage", "company:settings:update"),
   validate(listCompanyUsersQuerySchema, "query"),
   asyncHandler(companyUserController.list),
 );
@@ -28,7 +28,7 @@ companyUserRouter.post(
 
 companyUserRouter.get(
   "/:userId",
-  requirePermission("users:manage"),
+  requireAnyPermission("users:manage", "company:settings:update"),
   validate(companyUserIdParamSchema, "params"),
   asyncHandler(companyUserController.getById),
 );

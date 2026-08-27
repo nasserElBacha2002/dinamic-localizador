@@ -103,6 +103,16 @@ export interface CompanySettings {
   absenceBalanceLedgerEnabled: boolean;
   absenceAttachmentsEnabled: boolean;
   absenceOperationalIntegrationEnabled: boolean;
+  adminAlertsEnabled: boolean;
+  /** UTC frontier: reconciler only considers domain events at/after this instant. */
+  adminAlertsEnabledAt: string | null;
+  attendanceThresholdAlertsEnabled: boolean;
+  attendanceAlertThresholdPercent: number;
+  attendanceAlertWindowDays: number;
+  attendanceAlertMinimumWorkdays: number;
+  attendanceAlertCooldownDays: number;
+  /** Bumped on threshold feature/config changes to force rebaseline. */
+  attendanceAlertConfigVersion: number;
   createdAt: string;
   updatedAt: string;
 }

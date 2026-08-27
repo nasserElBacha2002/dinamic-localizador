@@ -1,12 +1,12 @@
 /**
  * Normalize Twilio WhatsApp inbound webhook forward flags for attendance security.
  *
- * Twilio contract (confirmed by Twilio docs for WhatsApp inbound webhooks):
- * - `Forwarded` = "true" when the message was forwarded
- * - `FrequentlyForwarded` = "true" when frequently forwarded
+ * Authoritative fields only (Twilio contract):
+ * - `Forwarded`
+ * - `FrequentlyForwarded`
  *
- * Absent fields → false (normal non-forwarded message).
- * Invalid values → false (never invent true).
+ * ChannelMetadata must never drive enforcement.
+ * Absent / invalid values → false (do not invent true). Best-effort protection.
  */
 
 export interface LocationMessageMetadata {
@@ -16,7 +16,7 @@ export interface LocationMessageMetadata {
 }
 
 const TRUE_VALUES = new Set(["true", "1"]);
-const FALSE_VALUES = new Set(["false", "0"]);
+const FALSE_VALUES = new Set(["false", "0", ""]);
 
 /**
  * Parse Twilio form / boolean-ish values.
@@ -29,7 +29,13 @@ export const parseTwilioFlag = (value: unknown): boolean => {
   if (typeof value === "number") {
     return value === 1;
   }
+  if (value == null) {
+    return false;
+  }
   if (typeof value !== "string") {
+    console.warn("[location-message-metadata] unexpected Forwarded flag type", {
+      valueType: typeof value,
+    });
     return false;
   }
   const normalized = value.trim().toLowerCase();
@@ -39,6 +45,9 @@ export const parseTwilioFlag = (value: unknown): boolean => {
   if (FALSE_VALUES.has(normalized)) {
     return false;
   }
+  console.warn("[location-message-metadata] unexpected Forwarded flag value", {
+    valuePreview: normalized.slice(0, 32),
+  });
   return false;
 };
 

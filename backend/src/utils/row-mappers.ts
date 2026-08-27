@@ -350,6 +350,7 @@ export const mapUserRow = (row: Record<string, unknown>): User => ({
   isPlatformAdmin: Boolean(row.is_platform_admin),
   active: Boolean(row.active),
   tokenVersion: Number(row.token_version ?? 0),
+  phoneNumber: row.phone_number ? String(row.phone_number) : null,
   twoFactorEnabled: Boolean(row.two_factor_enabled),
   twoFactorSecretEncrypted: row.two_factor_secret_encrypted
     ? String(row.two_factor_secret_encrypted)

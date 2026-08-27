@@ -21,7 +21,7 @@ export function LocationZonesDialog({
       opened={opened}
       onClose={onClose}
       title="Barrios y localidades"
-      size="lg"
+      size="xl"
       bodyMode="scroll"
       footer={
         <Group justify="flex-end">

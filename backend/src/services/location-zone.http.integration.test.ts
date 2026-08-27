@@ -217,4 +217,57 @@ describeDatabaseIntegration("location zones HTTP API + residence privacy", () =>
     assert.equal((supGet.body.data as { locationZoneId: string | null }).locationZoneId, null);
     assert.equal((supGet.body.data as { locationZone: unknown }).locationZone, null);
   });
+
+  it("returns geocoding coverage summary for active zones only", async () => {
+    const suffix = uniqueSuffix();
+    const resolved = await locationZoneService.create(companyAId, "OWNER", {
+      name: `Summary Resolved ${suffix}`,
+      locality: "CABA",
+      centroidLatitude: -34.61,
+      centroidLongitude: -58.44,
+    });
+    await locationZoneService.update(companyAId, "OWNER", resolved.id, {
+      centroidLatitude: -34.61,
+      centroidLongitude: -58.44,
+    });
+
+    await locationZoneService.create(companyAId, "OWNER", {
+      name: `Summary Pending ${suffix}`,
+      locality: "CABA",
+    });
+
+    const inactive = await locationZoneService.create(companyAId, "OWNER", {
+      name: `Summary Inactive ${suffix}`,
+      locality: "CABA",
+      centroidLatitude: -34.5,
+      centroidLongitude: -58.5,
+    });
+    await locationZoneService.update(companyAId, "OWNER", inactive.id, { isActive: false });
+
+    const summaryRes = await apiRequest(baseUrl, pathFor(companyAId, "/geocoding-summary"), {
+      token: ownerToken(),
+    });
+    assert.equal(summaryRes.status, 200);
+    const summary = summaryRes.body.data as {
+      total: number;
+      withCoordinates: number;
+      pending: number;
+      coveragePercent: number;
+      canonicalized: number;
+      missingLocality: number;
+      unknownLocality: number;
+    };
+    assert.ok(summary.total >= 2);
+    assert.ok(summary.withCoordinates >= 1);
+    assert.ok(summary.pending >= 1);
+    assert.ok(summary.coveragePercent >= 0 && summary.coveragePercent <= 100);
+    assert.ok(typeof summary.canonicalized === "number");
+    assert.ok(typeof summary.missingLocality === "number");
+    assert.ok(typeof summary.unknownLocality === "number");
+
+    const denied = await apiRequest(baseUrl, pathFor(companyAId, "/geocoding-summary"), {
+      token: supervisorToken(),
+    });
+    assert.equal(denied.status, 403);
+  });
 });

@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import { operationRepository } from "../repositories/operation.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { mockAdminAlertSideEffects } from "../test-helpers/mock-admin-alert-side-effects";
 import type { Operation } from "../types/domain";
 
 const COMPANY_ID = "11111111-1111-1111-1111-111111111111";
@@ -30,13 +31,18 @@ const dueRow = (operation: Operation, companyId = COMPANY_ID) => ({
 const paddedId = (index: number): string =>
   `aaaaaaaa-aaaa-aaaa-aaaa-${String(index).padStart(12, "0")}`;
 
+const prepareLifecycleTest = async (): Promise<void> => {
+  setupUnitTestEnv();
+  await mockAdminAlertSideEffects();
+};
+
 describe("operationLifecycleService", () => {
   afterEach(() => {
     mock.restoreAll();
   });
 
   it("case 1: never consulted SCHEDULED becomes COMPLETED after scheduledEnd", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const operation = makeOperation();
     const promotions: string[] = [];
@@ -56,7 +62,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 2: SCHEDULED → IN_PROGRESS → COMPLETED across the clock", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     let current = makeOperation();
     mock.method(operationRepository, "promoteLifecycleStatus", async (_c, id, from, to) => {
@@ -80,7 +86,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 3: downtime backlog SCHEDULED from 48h ago becomes COMPLETED", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const stale = makeOperation({
       scheduledStart: "2026-08-05T23:50:00.000Z",
@@ -106,7 +112,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 4: already COMPLETED is not updated", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const completed = makeOperation({ status: "COMPLETED" });
     let promotions = 0;
@@ -125,7 +131,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 5: CANCELLED stays CANCELLED", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const cancelled = makeOperation({ status: "CANCELLED" });
     let promotions = 0;
@@ -144,7 +150,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 6: RECURRING is not auto-completed", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const recurring = makeOperation({
       operationKind: "RECURRING",
@@ -167,7 +173,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 7: concurrent promote converges to COMPLETED after CAS miss + reread", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const operation = makeOperation();
     let promotions = 0;
@@ -195,7 +201,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("read-path CAS miss re-reads persisted status without a second write", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const operation = makeOperation();
     let promotions = 0;
@@ -221,7 +227,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 8: a failed row does not block the rest of the batch", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const a = makeOperation({ id: paddedId(1) });
     const b = makeOperation({ id: paddedId(2) });
@@ -249,7 +255,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("case 9: backlog larger than batch is drained across ticks of the same run", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const all = Array.from({ length: 6 }, (_, index) =>
       makeOperation({ id: paddedId(index) }),
@@ -278,7 +284,7 @@ describe("operationLifecycleService", () => {
   });
 
   it("more than 500 poison rows do not starve later processable operations", async () => {
-    setupUnitTestEnv();
+    await prepareLifecycleTest();
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const poisons = Array.from({ length: 520 }, (_, index) =>
       makeOperation({

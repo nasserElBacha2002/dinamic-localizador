@@ -11,6 +11,7 @@ import { EXPIRED_SESSION_USER_MESSAGE } from "../utils/bot-session-expiration";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import { extractMessageFromTwiml } from "../utils/twiml-message";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { mockAdminAlertSideEffects } from "../test-helpers/mock-admin-alert-side-effects";
 import {
   AMBIGUOUS_COMPANY_MESSAGE,
   COMPANY_CONTEXT_UNAVAILABLE_MESSAGE,
@@ -220,6 +221,9 @@ const setupCommonWebhookMocks = async (options: {
   const { companyModuleService } = await import("./company-module.service");
   const { botSessionService } = await import("./bot-session.service");
   const { employeeRepository } = await import("../repositories/employee.repository");
+  const { attendanceNotificationRepository } = await import(
+    "../repositories/attendance-notification.repository"
+  );
 
   mock.method(botRuntimeSettingsService, "getBotRuntimeSettings", async () => runtimeSettings(companyId));
   mock.method(companyModuleService, "getModuleStates", async () => options.moduleStates ?? enabledStates());
@@ -228,6 +232,9 @@ const setupCommonWebhookMocks = async (options: {
     "getSessionResolutionByPhone",
     async () => options.sessionResolution ?? { activeSession: null, recentlyExpired: false },
   );
+  // Mock-driven suite has no DB pool; durable confirmation must not hit SQL.
+  mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
+  mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
 
   if (options.employee === null) {
     mock.method(employeeRepository, "findById", async () => null);
@@ -248,6 +255,9 @@ const runSimulatedWebhook = async (input: {
   setup?: () => Promise<void>;
 }) => {
   setupUnitTestEnv();
+  // This suite is mock-driven (no DB pool). Stub admin-alert side effects that
+  // otherwise call getPool() after unavailable / missing-checkin / absence emits.
+  await mockAdminAlertSideEffects();
   const { whatsappBotService } = await import("./whatsapp-bot.service");
   await setupCommonWebhookMocks({
     companyId: input.inbound?.companyId ?? companyA,
@@ -1022,9 +1032,11 @@ describe("whatsapp webhook Task 5 workday and assignments", () => {
   });
 
   const sampleAssignment = () => ({
+    assignmentId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
     operationId: operationA,
     serviceName: "Carrefour Palermo",
     serviceAddress: "Av. Santa Fe 1234, Palermo",
+    serviceLocality: "CABA",
     serviceLatitude: -34.6037,
     serviceLongitude: -58.3816,
     scheduledStart: "2026-07-08T23:30:00.000Z",

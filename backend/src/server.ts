@@ -29,6 +29,10 @@ import {
   stopOperationAssignmentNotificationJob,
 } from "./jobs/operation-assignment-notification.job";
 import {
+  startAdminAlertJob,
+  stopAdminAlertJob,
+} from "./jobs/admin-alert.job";
+import {
   startOperationLifecycleJob,
   stopOperationLifecycleJob,
 } from "./jobs/operation-lifecycle.job";
@@ -41,6 +45,8 @@ const startServer = async (): Promise<void> => {
     NO_CHECKIN: env.TWILIO_TEMPLATE_NO_CHECKIN_SID,
     ATTENDANCE_CONFIRMATION: env.TWILIO_ATTENDANCE_CONFIRMATION_CONTENT_SID,
     EVENTUAL_ASSIGNMENT: env.TWILIO_EVENTUAL_OPERATION_ASSIGNED_CONTENT_SID,
+    ADMIN_OPERATIONAL: env.TWILIO_ADMIN_OPERATIONAL_ALERT_CONTENT_SID,
+    ADMIN_REQUEST: env.TWILIO_ADMIN_REQUEST_ALERT_CONTENT_SID,
   });
   startAttendanceReminderJob();
   startRecurringWorkdayMaterializationJob();
@@ -51,6 +57,7 @@ const startServer = async (): Promise<void> => {
   startPayrollReceiptNotificationJob();
   startOperationAssignmentNotificationJob();
   startOperationLifecycleJob();
+  startAdminAlertJob();
 
   app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`API listening on 0.0.0.0:${env.PORT}`);
@@ -67,6 +74,7 @@ const shutdown = async (): Promise<void> => {
   stopPayrollReceiptNotificationJob();
   stopOperationAssignmentNotificationJob();
   stopOperationLifecycleJob();
+  stopAdminAlertJob();
   await closeDatabase();
   process.exit(0);
 };

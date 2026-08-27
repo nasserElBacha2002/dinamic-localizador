@@ -117,6 +117,17 @@ export const employeeWorkdayCheckoutCommand = {
 
       await transaction.commit();
       committed = true;
+      try {
+        const { attendanceThresholdAlertService } = await import(
+          "./attendance-threshold-alert.service"
+        );
+        await attendanceThresholdAlertService.markEmployeeDirty(
+          input.companyId,
+          updated.employeeId,
+        );
+      } catch {
+        // best-effort dirty mark
+      }
       return updated;
     } catch (error) {
       await rollbackIfActive(transaction, committed);
@@ -192,6 +203,17 @@ export const employeeWorkdayCheckoutCommand = {
 
       await transaction.commit();
       committed = true;
+      try {
+        const { attendanceThresholdAlertService } = await import(
+          "./attendance-threshold-alert.service"
+        );
+        await attendanceThresholdAlertService.markEmployeeDirty(
+          input.companyId,
+          input.employeeId,
+        );
+      } catch {
+        // best-effort dirty mark
+      }
       return updated;
     } catch (error) {
       await rollbackIfActive(transaction, committed);

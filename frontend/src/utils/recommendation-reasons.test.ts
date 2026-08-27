@@ -40,12 +40,70 @@ describe("recommendation-reasons", () => {
         code: "LOCATION_PROXIMITY",
         params: { bucket: "CLOSE" },
       }),
-      "Su zona está cerca de la operación",
+      "Cerca del servicio",
     );
     const lines = formatRecommendationReasons([
       { code: "LOCATION_PROXIMITY", params: { bucket: "VERY_CLOSE" } },
     ]);
     assert.equal(lines.some((line) => /Caballito|vive|barrio/i.test(line)), false);
+  });
+
+  it("formats LOCATION_PROXIMITY with approximate distance when present", () => {
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "CLOSE", distanceMeters: 2410 },
+      }),
+      "Aprox. 2,4 km del servicio",
+    );
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "VERY_CLOSE", distanceMeters: 1200 },
+      }),
+      "Aprox. 1,2 km del servicio",
+    );
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "MEDIUM", distanceMeters: 9800 },
+      }),
+      "Aprox. 9,8 km del servicio",
+    );
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "FAR", distanceMeters: 28300 },
+      }),
+      "Aprox. 28 km del servicio",
+    );
+  });
+
+  it("does not invent 0 km for SAME_ZONE and omits UNKNOWN", () => {
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "SAME_ZONE", distanceMeters: null },
+      }),
+      "Misma zona que el servicio",
+    );
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "UNKNOWN" },
+      }),
+      null,
+    );
+  });
+
+  it("falls back to bucket copy when distanceMeters is absent", () => {
+    assert.equal(
+      formatRecommendationReason({
+        code: "LOCATION_PROXIMITY",
+        params: { bucket: "CLOSE" },
+      }),
+      "Cerca del servicio",
+    );
   });
 
   it("maps RECENT_COLLABORATION", () => {

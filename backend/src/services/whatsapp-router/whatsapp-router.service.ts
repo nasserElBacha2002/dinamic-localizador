@@ -3,6 +3,14 @@ import { isCheckoutSessionState } from "../../utils/bot-session-states";
 import { InvalidCoordinatesError } from "../../utils/haversine";
 import { parseOperationSelection } from "../../utils/intent";
 import { maskPhoneNumberForLog } from "../../utils/phone";
+import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
+import { employeeRepository } from "../../repositories/employee.repository";
+import { buildForwardedLocationDedupKey } from "../../utils/admin-alert/dedup-keys";
+import {
+  extractLocationMessageMetadata,
+  isExplicitlyForwardedLocation,
+} from "../../utils/location-message-metadata";
+import { emitAdminAlertSafely } from "../admin-alert-emit.helpers";
 import { parseBotIntent } from "../bot/bot-intent.parser";
 import {
   FORWARDED_LOCATION_REJECTED_MESSAGE,
@@ -13,10 +21,6 @@ import {
   UNPARSEABLE_MESSAGE,
   UNKNOWN_EMPLOYEE_MESSAGE,
 } from "../bot/bot-response.builder";
-import {
-  extractLocationMessageMetadata,
-  isExplicitlyForwardedLocation,
-} from "../../utils/location-message-metadata";
 import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
 import {
   handleActiveAbsenceSession,
@@ -28,7 +32,7 @@ import {
   handleConfirmAttendanceIntent,
   handleUnavailabilityIntent,
 } from "./assignment-confirmation.handler";
-import { handleActiveAttendanceConfirmationResponseSession } from "./attendance-confirmation-response.handler";
+import { handleActiveAttendanceConfirmationResponseSession, handleDurableAttendanceConfirmationReply } from "./attendance-confirmation-response.handler";
 import {
   handleActiveCheckInTextSession,
   handleArrivalIntent,
@@ -53,7 +57,6 @@ import {
   isAssignmentSelectionSessionState,
   isPayrollReceiptSessionState,
 } from "../../utils/bot-session-states";
-import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
 
@@ -75,20 +78,6 @@ export const whatsappRouterService = {
         phoneTo: ctx.phoneFrom,
         resultCode: WHATSAPP_RESULT_CODES.UNKNOWN_EMPLOYEE,
         flowType: "EMPLOYEE_RESOLUTION",
-      });
-    }
-
-    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
-      console.info("[whatsapp-bot] operation selection after expired session", {
-        phone: maskPhoneNumberForLog(ctx.phoneFrom),
-      });
-      return handlers.respond(companyId, {
-        message: EXPIRED_SESSION_MESSAGE,
-        employeeId: ctx.employeeId,
-        phoneFrom: ctx.phoneTo,
-        phoneTo: ctx.phoneFrom,
-        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
-        flowType: "SESSION_RESOLUTION",
       });
     }
 
@@ -159,6 +148,7 @@ export const whatsappRouterService = {
       }
     }
 
+    // Free-text intents before durable "1"/"2" so Llegué / Me voy never get stolen.
     if (!ctx.body) {
       return handlers.respond(companyId, {
         message: UNPARSEABLE_MESSAGE,
@@ -166,13 +156,6 @@ export const whatsappRouterService = {
         phoneFrom: ctx.phoneTo,
         phoneTo: ctx.phoneFrom,
       });
-    }
-
-    if (!ctx.session) {
-      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
-      if (menuNumberResponse) {
-        return menuNumberResponse;
-      }
     }
 
     const intent = parseBotIntent({ body: ctx.body });
@@ -209,6 +192,36 @@ export const whatsappRouterService = {
       return handleUnavailabilityIntent(ctx, handlers);
     }
 
+    // Durable confirmation only for bare "1"/"2" after free-text intents.
+    // Open-window targets only; expired needs confirmation-session context.
+    if (!ctx.session) {
+      const durableConfirmation = await handleDurableAttendanceConfirmationReply(ctx, handlers);
+      if (durableConfirmation) {
+        return durableConfirmation;
+      }
+    }
+
+    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
+      console.info("[whatsapp-bot] operation selection after expired session", {
+        phone: maskPhoneNumberForLog(ctx.phoneFrom),
+      });
+      return handlers.respond(companyId, {
+        message: EXPIRED_SESSION_MESSAGE,
+        employeeId: ctx.employeeId,
+        phoneFrom: ctx.phoneTo,
+        phoneTo: ctx.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+        flowType: "SESSION_RESOLUTION",
+      });
+    }
+
+    if (!ctx.session) {
+      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
+      if (menuNumberResponse) {
+        return menuNumberResponse;
+      }
+    }
+
     if (intent === "menu") {
       return handleMenuFallback(ctx, handlers);
     }
@@ -231,11 +244,19 @@ export const whatsappRouterService = {
       });
     }
 
-    // P0 anti-forward: apply before geofence / check-in / check-out / direct location.
+    // Best-effort anti-forward: Twilio Forwarded / FrequentlyForwarded only, before geofence/attendance.
     const locationMetadata = extractLocationMessageMetadata(
       ctx.payload as unknown as Record<string, unknown>,
     );
     const hasCoordinates = Boolean(ctx.payload.Latitude && ctx.payload.Longitude);
+    const flowHint = !ctx.session
+      ? "DIRECT"
+      : isCheckoutSessionState(ctx.session.state)
+        ? "CHECK_OUT"
+        : ctx.session.state === "WAITING_LOCATION" || ctx.session.state === "WAITING_OPERATION_SELECTION"
+          ? "CHECK_IN"
+          : "LOCATION";
+
     logWhatsAppAttendanceEvent("LOCATION_RECEIVED", {
       companyId,
       employeeId: ctx.employeeId,
@@ -259,11 +280,39 @@ export const whatsappRouterService = {
         employeeId: ctx.employeeId,
         messageSid: locationMetadata.sourceMessageSid,
         resultCode: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
-        reason: WHATSAPP_RESULT_CODES.FORWARDED_LOCATION_REJECTED,
         sessionState: ctx.session?.state ?? null,
         isForwarded: locationMetadata.isForwarded,
         isFrequentlyForwarded: locationMetadata.isFrequentlyForwarded,
       });
+      const employee = await employeeRepository.findById(companyId, ctx.employeeId);
+      if (employee) {
+        const occurredAt = new Date();
+        await emitAdminAlertSafely(
+          {
+            companyId,
+            type: "FORWARDED_LOCATION_REJECTED",
+            employeeId: ctx.employeeId,
+            operationId: ctx.session?.operationId ?? null,
+            deduplicationKey: buildForwardedLocationDedupKey(
+              ctx.employeeId,
+              locationMetadata.sourceMessageSid || `missing-sid:${occurredAt.toISOString()}`,
+            ),
+            occurredAt,
+            payload: {
+              employeeName: employee.name,
+              forwardedLocationDetail: [
+                "Ubicación marcada como reenviada por el proveedor.",
+                `Flujo: ${flowHint}.`,
+                `MessageSid: ${locationMetadata.sourceMessageSid || "—"}.`,
+                `Forwarded=${locationMetadata.isForwarded}.`,
+                `FrequentlyForwarded=${locationMetadata.isFrequentlyForwarded}.`,
+                `Fecha/hora UTC: ${occurredAt.toISOString()}.`,
+              ].join(" "),
+            },
+          },
+          "whatsapp-forwarded-location",
+        );
+      }
       return handlers.respond(companyId, {
         message: FORWARDED_LOCATION_REJECTED_MESSAGE,
         employeeId: ctx.employeeId,

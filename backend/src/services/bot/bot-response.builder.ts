@@ -50,7 +50,7 @@ export const LOCATION_WITHOUT_CHECKOUT_SESSION_MESSAGE =
 export const WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE =
   "Todavía necesitamos tu ubicación actual para registrar la salida. Usá Adjuntar → Ubicación → Enviar tu ubicación actual.";
 
-/** P0 — forwarded / historical location must not register physical attendance. */
+/** Best-effort — Twilio Forwarded / FrequentlyForwarded marked locations must not register attendance. */
 export const FORWARDED_LOCATION_REJECTED_MESSAGE =
   "No podemos usar una ubicación reenviada para registrar asistencia.\n\nCompartí tu ubicación actual directamente desde WhatsApp.";
 

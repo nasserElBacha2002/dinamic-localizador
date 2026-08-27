@@ -324,6 +324,18 @@ const sendReminderForCandidate = async (
         operationId: candidate.operationId,
         notificationId: claimed.id,
         scheduleVersion,
+        scheduledStart: candidate.scheduledStart,
+      });
+      console.info("[attendance-reminder] confirmation context prepared", {
+        event: "ATTENDANCE_CONFIRMATION_CONTEXT_PREPARED",
+        companyId,
+        employeeId: candidate.employeeId,
+        operationId: candidate.operationId,
+        notificationId: claimed.id,
+        scheduleVersion,
+        scheduledStart: candidate.scheduledStart,
+        confirmationValidUntil: candidate.scheduledStart,
+        sessionId: preparedSession?.id ?? null,
       });
     } catch (error) {
       const errorMessage =
@@ -539,6 +551,14 @@ const sendReminderForCandidate = async (
       providerMessageSid: result.messageSid,
       existingReminderId: claimed.id,
       ...reminderCandidateLogFields(candidate),
+      ...(notificationType === "ATTENDANCE_CONFIRMATION_REMINDER"
+        ? {
+            event: "ATTENDANCE_CONFIRMATION_REMINDER_SENT",
+            companyId,
+            scheduledStart: candidate.scheduledStart,
+            confirmationValidUntil: candidate.scheduledStart,
+          }
+        : {}),
     });
     logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_SENT",

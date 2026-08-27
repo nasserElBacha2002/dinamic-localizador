@@ -22,7 +22,12 @@ interface CompanyUserDialogProps {
   onSubmit: (
     input:
       | CreateCompanyInvitationInput
-      | { role: CompanyRole; status: CompanyUser["membershipStatus"]; isDefault: boolean },
+      | {
+          role: CompanyRole;
+          status: CompanyUser["membershipStatus"];
+          isDefault: boolean;
+          phoneNumber: string | null;
+        },
   ) => void;
 }
 
@@ -65,6 +70,9 @@ function CompanyUserDialogForm({
   );
   const [isDefault, setIsDefault] = useState(() =>
     mode === "edit" && initialUser ? initialUser.isDefault : false,
+  );
+  const [phoneNumber, setPhoneNumber] = useState(() =>
+    mode === "edit" && initialUser ? (initialUser.phoneNumber ?? "") : "",
   );
 
   const roleOptions = useMemo(
@@ -109,7 +117,12 @@ function CompanyUserDialogForm({
       return;
     }
 
-    onSubmit({ role, status, isDefault });
+    onSubmit({
+      role,
+      status,
+      isDefault,
+      phoneNumber: phoneNumber.trim() ? phoneNumber.trim() : null,
+    });
   };
 
   return (
@@ -153,6 +166,13 @@ function CompanyUserDialogForm({
 
       {mode === "edit" ? (
         <>
+          <TextInput
+            label="Teléfono WhatsApp (E.164)"
+            placeholder="+5491112345678"
+            description="Usado para alertas administrativas de la empresa."
+            value={phoneNumber}
+            onChange={(event) => setPhoneNumber(event.currentTarget.value)}
+          />
           <Select
             label="Estado"
             data={[

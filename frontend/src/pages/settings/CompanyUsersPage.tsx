@@ -174,7 +174,12 @@ export function CompanyUsersPage() {
   const handleDialogSubmit = async (
     input:
       | CreateCompanyInvitationInput
-      | { role: CompanyUser["companyRole"]; status: CompanyUser["membershipStatus"]; isDefault: boolean },
+      | {
+          role: CompanyUser["companyRole"];
+          status: CompanyUser["membershipStatus"];
+          isDefault: boolean;
+          phoneNumber: string | null;
+        },
   ) => {
     setDialogError(null);
 
@@ -252,6 +257,11 @@ export function CompanyUsersPage() {
     () => [
       { key: "name", header: "Nombre", getValue: (row) => row.name },
       { key: "email", header: "Email", getValue: (row) => row.email },
+      {
+        key: "phoneNumber",
+        header: "Teléfono",
+        getValue: (row) => row.phoneNumber ?? "—",
+      },
       {
         key: "role",
         header: "Rol",

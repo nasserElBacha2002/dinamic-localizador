@@ -243,6 +243,54 @@ describe("workTeamAssignmentService.confirm rollback", () => {
       throw new AppError(500, "ORIGINAL_FAILURE", "Error original");
     });
 
+    // markFailed returns boolean (rows updated). Simulate a soft failure without
+    // throwing so the confirm catch path rethrows the original AppError cleanly.
+    const consoleErrorMock = mock.method(console, "error", () => undefined);
+    mock.method(workTeamAssignmentBatchRepository, "markFailed", async () => {
+      return false;
+    });
+
+    await assert.rejects(
+      () =>
+        workTeamAssignmentService.confirm("company-1", "operation-1", "user-1", {
+          previewToken: "batch-1",
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "ORIGINAL_FAILURE",
+    );
+
+    assert.equal(consoleErrorMock.mock.callCount(), 1);
+    assert.match(
+      String(consoleErrorMock.mock.calls[0]?.arguments[0] ?? ""),
+      /no matching PREVIEWED batch/,
+    );
+  });
+
+  it("preserves the original error when markFailed throws after rollback", async () => {
+    setupUnitTestEnv();
+
+    useTestPool();
+    patchTransaction();
+
+    const { workTeamAssignmentBatchRepository } = await import(
+      "../repositories/work-team-assignment-batch.repository"
+    );
+    const { operationRepository } = await import("../repositories/operation.repository");
+    const { workTeamAssignmentService } = await import("./work-team-assignment.service");
+
+    const consoleErrorMock = mock.method(console, "error", () => undefined);
+
+    mock.method(workTeamAssignmentBatchRepository, "expireStalePreviews", async () => undefined);
+    mock.method(operationRepository, "findById", async () => ({
+      id: "operation-1",
+      companyId: "company-1",
+      status: "SCHEDULED",
+      operationKind: "RECURRING",
+    }));
+
+    mock.method(workTeamAssignmentBatchRepository, "findByIdForUpdate", async () => {
+      throw new AppError(500, "ORIGINAL_FAILURE", "Error original");
+    });
+
     mock.method(workTeamAssignmentBatchRepository, "markFailed", async () => {
       throw new Error("mark failed secondary");
     });
@@ -253,6 +301,12 @@ describe("workTeamAssignmentService.confirm rollback", () => {
           previewToken: "batch-1",
         }),
       (error: unknown) => error instanceof AppError && error.code === "ORIGINAL_FAILURE",
+    );
+
+    assert.equal(consoleErrorMock.mock.callCount(), 1);
+    assert.match(
+      String(consoleErrorMock.mock.calls[0]?.arguments[0] ?? ""),
+      /failed to mark batch as FAILED after rollback/,
     );
   });
 });

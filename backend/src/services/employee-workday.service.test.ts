@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { afterEach, describe, it, mock } from "node:test";
 import type { EmployeeAssignedOperation } from "../types/employee-assignment-query";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
+import { mockAdminAlertSideEffects } from "../test-helpers/mock-admin-alert-side-effects";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 import {
   NO_TODAY_ASSIGNMENTS_MESSAGE,
@@ -354,24 +355,73 @@ describe("employeeWorkdayService", () => {
     assert.equal(updateCalls, 0);
   });
 
-  it("updates confirmation status when confirming after unavailable", async () => {
+  it("keeps UNAVAILABLE final when confirm reply arrives (no flip)", async () => {
     setupUnitTestEnv();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
-    let updatedStatus: string | null = null;
+    let updateCalls = 0;
     mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
       assignment({ confirmationStatus: "UNAVAILABLE" }),
+    );
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      updateCalls += 1;
+      return true;
+    });
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.match(result.message, /no estás disponible/i);
+    assert.equal(updateCalls, 0);
+  });
+
+  it("keeps CONFIRMED final when unavailable reply arrives (no flip)", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let updateCalls = 0;
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
+      assignment({ confirmationStatus: "CONFIRMED" }),
+    );
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => {
+      updateCalls += 1;
+      return true;
+    });
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.match(result.message, /confirmamos tu asistencia/i);
+    assert.equal(updateCalls, 0);
+  });
+
+  it("CAS confirm transitions only from PENDING", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
+      assignment({ confirmationStatus: "PENDING" }),
     );
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
       async (_companyId, assignmentId, status, onlyIfStatusIn) => {
-        updatedStatus = status;
         assert.equal(assignmentId, "assignment-1");
-        assert.deepEqual(onlyIfStatusIn, ["UNAVAILABLE"]);
+        assert.equal(status, "CONFIRMED");
+        assert.deepEqual(onlyIfStatusIn, ["PENDING"]);
         return true;
       },
     );
@@ -381,27 +431,26 @@ describe("employeeWorkdayService", () => {
     );
 
     assert.equal(result.kind, "ok");
-    assert.equal(updatedStatus, "CONFIRMED");
   });
 
-  it("updates confirmation status when marking unavailable after confirmed", async () => {
+  it("CAS unavailable transitions only from PENDING", async () => {
     setupUnitTestEnv();
+    await mockAdminAlertSideEffects();
     const { employeeAssignmentQueryRepository } = await import(
       "../repositories/employee-assignment-query.repository"
     );
     const { employeeWorkdayService } = await import("./employee-workday.service");
 
-    let updatedStatus: string | null = null;
     mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () =>
-      assignment({ confirmationStatus: "CONFIRMED" }),
+      assignment({ confirmationStatus: "PENDING" }),
     );
     mock.method(
       employeeAssignmentQueryRepository,
       "updateConfirmationStatus",
       async (_companyId, assignmentId, status, onlyIfStatusIn) => {
-        updatedStatus = status;
         assert.equal(assignmentId, "assignment-1");
-        assert.deepEqual(onlyIfStatusIn, ["CONFIRMED"]);
+        assert.equal(status, "UNAVAILABLE");
+        assert.deepEqual(onlyIfStatusIn, ["PENDING"]);
         return true;
       },
     );
@@ -411,7 +460,79 @@ describe("employeeWorkdayService", () => {
     );
 
     assert.equal(result.kind, "ok");
-    assert.equal(updatedStatus, "UNAVAILABLE");
-    assert.match(result.message, /podrá revisar esta respuesta desde el panel/i);
+    assert.match(result.message, /no estás disponible/i);
+  });
+
+  it("concurrent 1 vs 2: confirm CAS loss surfaces UNAVAILABLE winner", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let findCalls = 0;
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => {
+      findCalls += 1;
+      return assignment({
+        confirmationStatus: findCalls === 1 ? "PENDING" : "UNAVAILABLE",
+      });
+    });
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => false);
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.match(result.message, /no estás disponible/i);
+  });
+
+  it("concurrent 2 vs 1: unavailable CAS loss surfaces CONFIRMED winner", async () => {
+    setupUnitTestEnv();
+    await mockAdminAlertSideEffects();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let findCalls = 0;
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => {
+      findCalls += 1;
+      return assignment({
+        confirmationStatus: findCalls === 1 ? "PENDING" : "CONFIRMED",
+      });
+    });
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => false);
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.markAssignmentUnavailable(companyId, employeeId, operationId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.match(result.message, /confirmamos tu asistencia/i);
+  });
+
+  it("concurrent 1 vs 1: confirm CAS loss still reports CONFIRMED", async () => {
+    setupUnitTestEnv();
+    const { employeeAssignmentQueryRepository } = await import(
+      "../repositories/employee-assignment-query.repository"
+    );
+    const { employeeWorkdayService } = await import("./employee-workday.service");
+
+    let findCalls = 0;
+    mock.method(employeeAssignmentQueryRepository, "findByOperationForEmployee", async () => {
+      findCalls += 1;
+      return assignment({
+        confirmationStatus: findCalls === 1 ? "PENDING" : "CONFIRMED",
+      });
+    });
+    mock.method(employeeAssignmentQueryRepository, "updateConfirmationStatus", async () => false);
+
+    const result = await runWithNow("2026-07-08T12:00:00.000Z", () =>
+      employeeWorkdayService.confirmAssignment(companyId, employeeId, operationId),
+    );
+
+    assert.equal(result.kind, "ok");
+    assert.match(result.message, /confirmamos tu asistencia/i);
   });
 });

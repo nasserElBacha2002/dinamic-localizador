@@ -28,6 +28,8 @@ export const updateCompanyUserSchema = z
     role: z.enum(COMPANY_ROLES, { message: "Rol de empresa inválido" }).optional(),
     status: z.enum(COMPANY_MEMBERSHIP_STATUSES).optional(),
     isDefault: z.boolean().optional(),
+    /** E.164 WhatsApp; null clears the number. */
+    phoneNumber: z.string().trim().min(8).max(20).nullable().optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Debe enviar al menos un campo para actualizar.",

@@ -278,6 +278,8 @@ export const buildTeamReasons = (
     });
   }
 
+  // Team proximity is member-count based (close vs known), not an averaged km.
+  // Phase B keeps bucket/count semantics — do not invent a team-level distanceMeters.
   if (breakdown.location !== null && breakdown.closeMembers > 0) {
     reasons.push({
       code: "TEAM_LOCATION_PROXIMITY",

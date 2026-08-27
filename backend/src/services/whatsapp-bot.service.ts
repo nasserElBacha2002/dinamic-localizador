@@ -36,7 +36,6 @@ import {
 } from "./bot/check-in-attendance.flow";
 import {
   handleCheckoutOperationSelection as handleCheckoutOperationSelectionFlow,
-  processCheckoutWithoutLocation as processCheckoutWithoutLocationFlow,
   processLocationCheckout as processLocationCheckoutFlow,
   startCheckout as startCheckoutFlow,
 } from "./bot/checkout-attendance.flow";
@@ -483,8 +482,6 @@ export const whatsappBotService = {
   }): Promise<string> {
     return runDirectLocationAttendance(input, {
       processLocationCheckIn: processLocationCheckInFlow,
-      processLocationCheckout: processLocationCheckoutFlow,
-      processCheckoutWithoutLocation: processCheckoutWithoutLocationFlow,
       respond,
     });
   },

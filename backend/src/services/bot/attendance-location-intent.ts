@@ -4,18 +4,24 @@ import type {
 } from "../../types/employee-workday-availability";
 
 /**
- * Resolves whether a bare LOCATION WhatsApp message should check in, check out,
- * ask for disambiguation, or no-op — without picking an arbitrary "first" row.
+ * Resolves whether a bare LOCATION WhatsApp message should check in, ask for
+ * disambiguation, prompt for an explicit checkout command, or no-op.
+ *
+ * Checkout is never auto-inferred from open attendance alone: the employee must
+ * say "Me voy" (or pick a mixed-action option) so LOCATION cannot close a shift.
  */
 export type AttendanceLocationIntent =
   | { kind: "CHECK_IN"; candidate: EmployeeWorkdayCheckInCandidate }
-  | { kind: "CHECK_OUT"; candidate: EmployeeWorkdayCheckoutCandidate }
   | { kind: "AMBIGUOUS_CHECK_IN"; candidates: EmployeeWorkdayCheckInCandidate[] }
-  | { kind: "AMBIGUOUS_CHECK_OUT"; candidates: EmployeeWorkdayCheckoutCandidate[] }
   | {
       kind: "AMBIGUOUS_MIXED";
       checkInCandidates: EmployeeWorkdayCheckInCandidate[];
       checkoutCandidates: EmployeeWorkdayCheckoutCandidate[];
+    }
+  | {
+      /** Open checkout exists but bare LOCATION must not close it. */
+      kind: "NEEDS_CHECKOUT_INTENT";
+      candidates: EmployeeWorkdayCheckoutCandidate[];
     }
   | { kind: "NONE"; hasJustifiedWorkdayInWindow: boolean };
 
@@ -43,12 +49,9 @@ export const resolveAttendanceLocationIntent = (input: {
     };
   }
 
-  if (checkout.length === 1) {
-    return { kind: "CHECK_OUT", candidate: checkout[0] };
-  }
-
-  if (checkout.length > 1) {
-    return { kind: "AMBIGUOUS_CHECK_OUT", candidates: checkout };
+  // Checked-in with open checkout: require explicit "Me voy" (or mixed selection).
+  if (checkout.length > 0) {
+    return { kind: "NEEDS_CHECKOUT_INTENT", candidates: checkout };
   }
 
   if (checkIn.length === 1) {

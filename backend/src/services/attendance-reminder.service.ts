@@ -1,7 +1,10 @@
 import { env } from "../config/env";
 import type { AttendanceNotificationType } from "../constants/attendance-notification";
 import {
+  CONFIRMATION_BLOCKED_BY_ACTIVE_ATTENDANCE_SESSION,
+  CONFIRMATION_BLOCKED_BY_ACTIVE_SESSION_CONFLICT,
   NO_LONGER_ELIGIBLE_FOR_ARRIVAL_REMINDER,
+  NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_ALREADY_CHECKED_IN,
   NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER,
   NO_LONGER_ELIGIBLE_FOR_EXIT_REMINDER,
   NO_LONGER_ELIGIBLE_FOR_NO_CHECKIN_AT_START,
@@ -15,7 +18,10 @@ import type { AttendanceReminderCandidate } from "../types/attendance-notificati
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
 import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
 import { countCandidatesByOperationKind } from "../utils/workday-reminder-eligibility";
-import { botSessionService } from "./bot-session.service";
+import {
+  botSessionService,
+  type AttendanceConfirmationSessionCreateResult,
+} from "./bot-session.service";
 import { twilioOutboundService } from "./twilio-outbound.service";
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
@@ -30,6 +36,19 @@ export type ReminderSendOutcome =
   | "skipped"
   | "sent_context_failed"
   | "sent_persistence_unknown";
+
+/**
+ * Deterministic concurrency hook: runs after confirmation session prep / early gate,
+ * immediately before the final send-time eligibility revalidation.
+ * Residual race: only the Twilio HTTP call itself (external I/O cannot hold SQL locks).
+ */
+let confirmationReminderPreSendBarrierForTests: (() => Promise<void>) | null = null;
+
+export const __setConfirmationReminderPreSendBarrierForTests = (
+  barrier: (() => Promise<void>) | null,
+): void => {
+  confirmationReminderPreSendBarrierForTests = barrier;
+};
 
 export interface ReminderKindCounts {
   ONE_TIME: number;
@@ -285,14 +304,37 @@ const sendReminderForCandidate = async (
   }
 
   if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
-    const stillEligible = await attendanceNotificationRepository.isConfirmationReminderEligible(
+    const earlyGate = await attendanceNotificationRepository.getConfirmationReminderSendGate(
       companyId,
       candidate.operationId,
       candidate.employeeId,
       scheduleVersion,
     );
 
-    if (!stillEligible) {
+    if (earlyGate === "ALREADY_CHECKED_IN") {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
+        notificationId: claimed.id,
+        errorMessage: NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_ALREADY_CHECKED_IN,
+      });
+
+      console.info(
+        "[attendance-reminder] skipped confirmation reminder because employee already checked in",
+        {
+          notificationType,
+          evaluatedAt: new Date().toISOString(),
+          eligible: false,
+          rejectionReasons: [NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_ALREADY_CHECKED_IN],
+          existingReminderId: claimed.id,
+          result: "superseded",
+          resultCode: WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_ALREADY_CHECKED_IN,
+          ...reminderCandidateLogFields(candidate),
+        },
+      );
+
+      return "skipped";
+    }
+
+    if (earlyGate !== "ELIGIBLE") {
       await attendanceNotificationRepository.markSuperseded(companyId, {
         notificationId: claimed.id,
         errorMessage: NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER,
@@ -317,25 +359,15 @@ const sendReminderForCandidate = async (
 
   let preparedSession: BotSession | null = null;
   if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER") {
+    let sessionResult: AttendanceConfirmationSessionCreateResult;
     try {
-      preparedSession = await botSessionService.createAttendanceConfirmationResponseSession(companyId, {
+      sessionResult = await botSessionService.createAttendanceConfirmationResponseSession(companyId, {
         employeeId: candidate.employeeId,
         phoneNumber: candidate.employeePhoneNumber,
         operationId: candidate.operationId,
         notificationId: claimed.id,
         scheduleVersion,
         scheduledStart: candidate.scheduledStart,
-      });
-      console.info("[attendance-reminder] confirmation context prepared", {
-        event: "ATTENDANCE_CONFIRMATION_CONTEXT_PREPARED",
-        companyId,
-        employeeId: candidate.employeeId,
-        operationId: candidate.operationId,
-        notificationId: claimed.id,
-        scheduleVersion,
-        scheduledStart: candidate.scheduledStart,
-        confirmationValidUntil: candidate.scheduledStart,
-        sessionId: preparedSession?.id ?? null,
       });
     } catch (error) {
       const errorMessage =
@@ -357,15 +389,125 @@ const sendReminderForCandidate = async (
       return "failed";
     }
 
-    if (!preparedSession) {
-      console.warn("[attendance-reminder] confirmation context unavailable before send", {
-        notificationType,
-        operationId: candidate.operationId,
-        employeeId: candidate.employeeId,
+    if (sessionResult.status === "BLOCKED_BY_PHYSICAL_ATTENDANCE") {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
         notificationId: claimed.id,
-        scheduleVersion,
-        reason: "ACTIVE_SESSION_CONFLICT",
+        errorMessage: CONFIRMATION_BLOCKED_BY_ACTIVE_ATTENDANCE_SESSION,
       });
+
+      console.info(
+        "[attendance-reminder] skipped confirmation reminder — physical attendance session preserved",
+        {
+          notificationType,
+          operationId: candidate.operationId,
+          employeeId: candidate.employeeId,
+          notificationId: claimed.id,
+          scheduleVersion,
+          reason: CONFIRMATION_BLOCKED_BY_ACTIVE_ATTENDANCE_SESSION,
+          activeSessionId: sessionResult.activeSessionId,
+          activeState: sessionResult.activeState,
+          result: "superseded",
+          resultCode: WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_PHYSICAL_ATTENDANCE_SESSION,
+        },
+      );
+
+      return "skipped";
+    }
+
+    if (sessionResult.status === "ACTIVE_SESSION_CONFLICT") {
+      await attendanceNotificationRepository.markSuperseded(companyId, {
+        notificationId: claimed.id,
+        errorMessage: CONFIRMATION_BLOCKED_BY_ACTIVE_SESSION_CONFLICT,
+      });
+
+      console.info(
+        "[attendance-reminder] skipped confirmation reminder — active session conflict (not physical)",
+        {
+          notificationType,
+          operationId: candidate.operationId,
+          employeeId: candidate.employeeId,
+          notificationId: claimed.id,
+          scheduleVersion,
+          reason: CONFIRMATION_BLOCKED_BY_ACTIVE_SESSION_CONFLICT,
+          result: "superseded",
+          resultCode: WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_ACTIVE_SESSION_CONFLICT,
+        },
+      );
+
+      return "skipped";
+    }
+
+    preparedSession = sessionResult.session;
+    console.info("[attendance-reminder] confirmation context prepared", {
+      event: "ATTENDANCE_CONFIRMATION_CONTEXT_PREPARED",
+      companyId,
+      employeeId: candidate.employeeId,
+      operationId: candidate.operationId,
+      notificationId: claimed.id,
+      scheduleVersion,
+      scheduledStart: candidate.scheduledStart,
+      confirmationValidUntil: candidate.scheduledStart,
+      sessionId: preparedSession.id,
+    });
+
+    // TOCTOU control point: after early gate + session create, before Twilio.
+    if (confirmationReminderPreSendBarrierForTests) {
+      await confirmationReminderPreSendBarrierForTests();
+    }
+
+    const finalGate = await attendanceNotificationRepository.getConfirmationReminderSendGate(
+      companyId,
+      candidate.operationId,
+      candidate.employeeId,
+      scheduleVersion,
+    );
+
+    if (finalGate !== "ELIGIBLE") {
+      try {
+        await botSessionService.cancelSession(companyId, preparedSession.id);
+      } catch (cleanupError) {
+        const cleanupErrorMessage =
+          cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";
+        console.error("[attendance-reminder] prepared session cleanup failed after final gate", {
+          notificationType,
+          operationId: candidate.operationId,
+          employeeId: candidate.employeeId,
+          notificationId: claimed.id,
+          sessionId: preparedSession.id,
+          errorMessage: cleanupErrorMessage,
+        });
+      }
+
+      const errorMessage =
+        finalGate === "ALREADY_CHECKED_IN"
+          ? NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_ALREADY_CHECKED_IN
+          : NO_LONGER_ELIGIBLE_FOR_CONFIRMATION_REMINDER;
+      const resultCode =
+        finalGate === "ALREADY_CHECKED_IN"
+          ? WHATSAPP_RESULT_CODES.REMINDER_SKIPPED_ALREADY_CHECKED_IN
+          : WHATSAPP_RESULT_CODES.REMINDER_SKIPPED;
+
+      await attendanceNotificationRepository.markSuperseded(companyId, {
+        notificationId: claimed.id,
+        errorMessage,
+      });
+
+      console.info(
+        "[attendance-reminder] skipped confirmation reminder after final pre-send revalidation",
+        {
+          notificationType,
+          evaluatedAt: new Date().toISOString(),
+          eligible: false,
+          rejectionReasons: [errorMessage],
+          existingReminderId: claimed.id,
+          result: "superseded",
+          resultCode,
+          finalGate,
+          ...reminderCandidateLogFields(candidate),
+        },
+      );
+
+      return "skipped";
     }
   }
 

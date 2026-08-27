@@ -54,7 +54,7 @@ describe("resolveAttendanceLocationIntent", () => {
     assert.deepEqual(intent, { kind: "CHECK_IN", candidate });
   });
 
-  it("resolves single checkout candidate as CHECK_OUT", () => {
+  it("does not auto-checkout for a single open checkout (needs Me voy)", () => {
     const candidate = baseCheckout({
       employeeWorkdayId: "ew-1",
       attendanceRecordId: "att-1",
@@ -64,7 +64,7 @@ describe("resolveAttendanceLocationIntent", () => {
       checkoutCandidates: [candidate],
       hasJustifiedWorkdayInWindow: false,
     });
-    assert.deepEqual(intent, { kind: "CHECK_OUT", candidate });
+    assert.deepEqual(intent, { kind: "NEEDS_CHECKOUT_INTENT", candidates: [candidate] });
   });
 
   it("returns NONE when no candidates", () => {
@@ -76,10 +76,11 @@ describe("resolveAttendanceLocationIntent", () => {
     assert.deepEqual(intent, { kind: "NONE", hasJustifiedWorkdayInWindow: true });
   });
 
-  it("returns AMBIGUOUS_CHECK_IN for multiple check-in candidates", () => {
+  it("returns AMBIGUOUS_CHECK_IN for multiple check-in candidates and never picks first", () => {
     const candidates = [
       baseCheckIn({ employeeWorkdayId: "ew-1", operationId: "op-1" }),
-      baseCheckIn({ employeeWorkdayId: "ew-2", operationId: "op-2", serviceName: "Other" }),
+      baseCheckIn({ employeeWorkdayId: "ew-2", operationId: "op-2" }),
+      baseCheckIn({ employeeWorkdayId: "ew-3", operationId: "op-3" }),
     ];
     const intent = resolveAttendanceLocationIntent({
       checkInCandidates: candidates,
@@ -87,44 +88,38 @@ describe("resolveAttendanceLocationIntent", () => {
       hasJustifiedWorkdayInWindow: false,
     });
     assert.equal(intent.kind, "AMBIGUOUS_CHECK_IN");
+    assert.notEqual(intent.kind, "CHECK_IN");
     if (intent.kind === "AMBIGUOUS_CHECK_IN") {
-      assert.equal(intent.candidates.length, 2);
+      assert.equal(intent.candidates.length, 3);
+      assert.equal(intent.candidates[0]?.employeeWorkdayId, "ew-1");
+      assert.equal(intent.candidates[2]?.employeeWorkdayId, "ew-3");
     }
   });
 
-  it("returns AMBIGUOUS_CHECK_OUT for multiple checkout candidates", () => {
+  it("returns NEEDS_CHECKOUT_INTENT for multiple checkout candidates", () => {
     const candidates = [
-      baseCheckout({ employeeWorkdayId: "ew-1", attendanceRecordId: "a1" }),
-      baseCheckout({ employeeWorkdayId: "ew-2", attendanceRecordId: "a2", operationId: "op-2" }),
+      baseCheckout({ employeeWorkdayId: "ew-1", attendanceRecordId: "att-1" }),
+      baseCheckout({ employeeWorkdayId: "ew-2", attendanceRecordId: "att-2", operationId: "op-2" }),
     ];
     const intent = resolveAttendanceLocationIntent({
       checkInCandidates: [],
       checkoutCandidates: candidates,
       hasJustifiedWorkdayInWindow: false,
     });
-    assert.equal(intent.kind, "AMBIGUOUS_CHECK_OUT");
+    assert.equal(intent.kind, "NEEDS_CHECKOUT_INTENT");
+    if (intent.kind === "NEEDS_CHECKOUT_INTENT") {
+      assert.equal(intent.candidates.length, 2);
+    }
   });
 
   it("returns AMBIGUOUS_MIXED when both check-in and checkout exist", () => {
     const intent = resolveAttendanceLocationIntent({
-      checkInCandidates: [baseCheckIn({ employeeWorkdayId: "ew-new" })],
+      checkInCandidates: [baseCheckIn({ employeeWorkdayId: "ew-in" })],
       checkoutCandidates: [
-        baseCheckout({ employeeWorkdayId: "ew-open", attendanceRecordId: "att-open" }),
+        baseCheckout({ employeeWorkdayId: "ew-out", attendanceRecordId: "att-1" }),
       ],
       hasJustifiedWorkdayInWindow: false,
     });
     assert.equal(intent.kind, "AMBIGUOUS_MIXED");
-  });
-
-  it("never picks first() when multiple check-ins exist", () => {
-    const intent = resolveAttendanceLocationIntent({
-      checkInCandidates: [
-        baseCheckIn({ employeeWorkdayId: "ew-1" }),
-        baseCheckIn({ employeeWorkdayId: "ew-2", operationId: "op-2" }),
-      ],
-      checkoutCandidates: [],
-      hasJustifiedWorkdayInWindow: false,
-    });
-    assert.notEqual(intent.kind, "CHECK_IN");
   });
 });

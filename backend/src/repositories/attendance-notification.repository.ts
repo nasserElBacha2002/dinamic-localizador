@@ -64,6 +64,33 @@ const PHONE_FILTER_SQL = `
 `;
 
 /**
+ * Shared attendance presence predicate for confirmation reminder gates.
+ * employeeExpr / operationExpr: `@employeeId`/`@operationId` or correlated `e.id`/`i.id`.
+ */
+const buildValidAttendanceExistsSql = (employeeExpr: string, operationExpr: string): string => `
+  EXISTS (
+    SELECT 1
+    FROM attendance_records ar
+    INNER JOIN employee_workdays ew
+      ON ew.id = ar.employee_workday_id
+     AND ew.company_id = ar.company_id
+    INNER JOIN operation_workdays ow
+      ON ow.id = ew.operation_workday_id
+     AND ow.company_id = ew.company_id
+    WHERE ar.company_id = @companyId
+      AND ar.employee_id = ${employeeExpr}
+      AND ow.operation_id = ${operationExpr}
+      AND ar.validation_status IN (N'VALID', N'PENDING_REVIEW')
+      AND ar.is_simulation = 0
+  )
+`;
+
+const VALID_ATTENDANCE_FOR_OPERATION_EXISTS_SQL = buildValidAttendanceExistsSql(
+  "@employeeId",
+  "@operationId",
+);
+
+/**
  * Workday-based reminder discovery (ONE_TIME + RECURRING).
  *
  * Source of truth is the materialized workday snapshot:
@@ -1000,6 +1027,7 @@ export const attendanceNotificationRepository = {
           AND i.scheduled_start > @referenceAt
           AND DATEADD(HOUR, -cs.confirmation_reminder_hours_before, i.scheduled_start) <= @referenceAt
           ${PHONE_FILTER_SQL}
+          AND NOT (${buildValidAttendanceExistsSql("e.id", "i.id")})
           ${buildNotificationEligibilitySql()}
       `);
 
@@ -1012,6 +1040,26 @@ export const attendanceNotificationRepository = {
     employeeId: string,
     scheduleVersion: number,
   ): Promise<boolean> {
+    const gate = await this.getConfirmationReminderSendGate(
+      companyId,
+      operationId,
+      employeeId,
+      scheduleVersion,
+    );
+    return gate === "ELIGIBLE";
+  },
+
+  /**
+   * Shared send-time gate for confirmation reminders.
+   * Attendance definition matches hasValidAttendanceForOperation exactly
+   * (company/employee/operation + VALID|PENDING_REVIEW + non-simulation).
+   */
+  async getConfirmationReminderSendGate(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+    scheduleVersion: number,
+  ): Promise<"ELIGIBLE" | "ALREADY_CHECKED_IN" | "NOT_ELIGIBLE"> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -1020,21 +1068,58 @@ export const attendanceNotificationRepository = {
       .input("employeeId", sql.UniqueIdentifier, employeeId)
       .input("scheduleVersion", sql.Int, scheduleVersion)
       .query(`
-        SELECT TOP 1 1 AS eligible
-        FROM operation_assignments ie
-        INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = @companyId
-        INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
-        INNER JOIN company_settings cs ON cs.company_id = @companyId
-        WHERE ie.company_id = @companyId
-          AND ie.operation_id = @operationId
-          AND ie.employee_id = @employeeId
-          AND ie.confirmation_status = 'PENDING'
-          AND ie.confirmation_schedule_version = @scheduleVersion
-          AND e.active = 1
-          AND e.phone_number IS NOT NULL
-          AND LTRIM(RTRIM(e.phone_number)) <> ''
-          AND i.status NOT IN ('CANCELLED', 'COMPLETED')
-          AND cs.confirmation_reminder_enabled = 1
+        SELECT
+          CASE WHEN ${VALID_ATTENDANCE_FOR_OPERATION_EXISTS_SQL} THEN 1 ELSE 0 END AS already_checked_in,
+          CASE
+            WHEN EXISTS (
+              SELECT 1
+              FROM operation_assignments ie
+              INNER JOIN scheduled_operations i ON i.id = ie.operation_id AND i.company_id = @companyId
+              INNER JOIN employees e ON e.id = ie.employee_id AND e.company_id = @companyId
+              INNER JOIN company_settings cs ON cs.company_id = @companyId
+              WHERE ie.company_id = @companyId
+                AND ie.operation_id = @operationId
+                AND ie.employee_id = @employeeId
+                AND ie.confirmation_status = 'PENDING'
+                AND ie.confirmation_schedule_version = @scheduleVersion
+                AND e.active = 1
+                AND e.phone_number IS NOT NULL
+                AND LTRIM(RTRIM(e.phone_number)) <> ''
+                AND i.status NOT IN ('CANCELLED', 'COMPLETED')
+                AND cs.confirmation_reminder_enabled = 1
+                AND NOT (${VALID_ATTENDANCE_FOR_OPERATION_EXISTS_SQL})
+            ) THEN 1
+            ELSE 0
+          END AS eligible
+      `);
+
+    const row = result.recordset[0] as
+      | { already_checked_in: number; eligible: number }
+      | undefined;
+    if (Number(row?.already_checked_in) === 1) {
+      return "ALREADY_CHECKED_IN";
+    }
+    if (Number(row?.eligible) === 1) {
+      return "ELIGIBLE";
+    }
+    return "NOT_ELIGIBLE";
+  },
+
+  /** True when employee already registered a valid/pending check-in for the operation. */
+  async hasValidAttendanceForOperation(
+    companyId: string,
+    operationId: string,
+    employeeId: string,
+  ): Promise<boolean> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .query(`
+        SELECT TOP 1 1 AS present
+        WHERE ${VALID_ATTENDANCE_FOR_OPERATION_EXISTS_SQL}
       `);
 
     return Boolean(result.recordset[0]);

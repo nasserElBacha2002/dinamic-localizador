@@ -23,34 +23,12 @@ export const WHATSAPP_RETENTION_TABLE_KEYS = [
 
 export type WhatsappRetentionTableKey = (typeof WHATSAPP_RETENTION_TABLE_KEYS)[number];
 
-export const BOT_SESSION_TERMINAL_STATES = ["COMPLETED", "CANCELLED", "EXPIRED"] as const;
-
-export const WHATSAPP_CONVERSATION_ACTIVE_STATUS = "ACTIVE";
-
-export const ATTENDANCE_NOTIFICATION_TERMINAL_STATUSES = [
-  "SENT",
+/** Whitelist used in retention SQL — unknown statuses are never purged. */
+export const FLOW_EXECUTION_TERMINAL_STATUSES = [
+  "COMPLETED",
   "FAILED",
-  "SENT_RECOVERY_REQUIRED",
-  "SUPERSEDED",
+  "PARTIALLY_RECORDED",
 ] as const;
 
-/** Outbox pattern (admin alerts, operation assignment). */
-export const WHATSAPP_OUTBOX_TERMINAL_STATUSES = [
-  "SEND_ACCEPTED",
-  "FAILED",
-  "CANCELLED",
-  "SKIPPED",
-  "RECONCILIATION_REQUIRED",
-  "SENT_RECOVERY_REQUIRED",
-] as const;
-
-export const WHATSAPP_OUTBOX_PENDING_STATUSES = ["PENDING", "PROCESSING", "SEND_STARTED"] as const;
-
-export const PAYROLL_NOTIFICATION_TERMINAL_STATUSES = [
-  "SENT",
-  "FAILED",
-  "CANCELLED",
-  "SENT_RECOVERY_REQUIRED",
-] as const;
-
-export const FLOW_EXECUTION_TERMINAL_STATUSES = ["COMPLETED", "FAILED", "PARTIALLY_RECORDED"] as const;
+export const flowExecutionTerminalStatusesSqlInList = (): string =>
+  FLOW_EXECUTION_TERMINAL_STATUSES.map((status) => `N'${status}'`).join(", ");

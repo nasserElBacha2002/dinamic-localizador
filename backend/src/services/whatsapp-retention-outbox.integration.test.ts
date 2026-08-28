@@ -9,6 +9,7 @@ import sql from "mssql";
 import { ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS } from "../constants/admin-alert";
 import { ATTENDANCE_REMINDER_MAX_ATTEMPTS } from "../constants/attendance-notification";
 import { OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS } from "../constants/operation-assignment-notification";
+import { env } from "../config/env";
 import { getPool } from "../database/connection";
 import {
   createIntegrationFixtureTracker,
@@ -446,6 +447,68 @@ describeDatabaseIntegration("whatsapp retention outbox terminality (SQL)", () =>
       });
       await runRetention();
       assert.equal(await countRow("whatsapp_admin_alert_notifications", id), 1);
+    });
+
+    describe("runtime ADMIN_ALERT_MAX_ATTEMPTS differs from default constant", () => {
+      const runtimeMaxAttempts = 10;
+      let originalMaxAttempts: number;
+
+      before(() => {
+        originalMaxAttempts = env.ADMIN_ALERT_MAX_ATTEMPTS;
+        env.ADMIN_ALERT_MAX_ATTEMPTS = runtimeMaxAttempts;
+      });
+
+      after(() => {
+        env.ADMIN_ALERT_MAX_ATTEMPTS = originalMaxAttempts;
+      });
+
+      it("FAILED below runtime max is kept even when above ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS", async () => {
+        assert.ok(ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS < runtimeMaxAttempts);
+
+        const retryableId = await insertAdminAlertNotification({
+          status: "FAILED",
+          attemptCount: ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
+          nextAttemptAt: daysAgo(1),
+          createdAt: daysAgo(31),
+        });
+        const belowMaxId = await insertAdminAlertNotification({
+          status: "FAILED",
+          attemptCount: runtimeMaxAttempts - 1,
+          nextAttemptAt: daysAgo(1),
+          createdAt: daysAgo(31),
+        });
+
+        await runRetention();
+
+        assert.equal(await countRow("whatsapp_admin_alert_notifications", retryableId), 1);
+        assert.equal(await countRow("whatsapp_admin_alert_notifications", belowMaxId), 1);
+      });
+
+      it("FAILED at runtime max is deleted when terminal guards pass", async () => {
+        const id = await insertAdminAlertNotification({
+          status: "FAILED",
+          attemptCount: runtimeMaxAttempts,
+          createdAt: daysAgo(31),
+          sentAt: daysAgo(31),
+        });
+
+        await runRetention();
+
+        assert.equal(await countRow("whatsapp_admin_alert_notifications", id), 0);
+      });
+
+      it("FAILED at runtime max with active lease is kept", async () => {
+        const id = await insertAdminAlertNotification({
+          status: "FAILED",
+          attemptCount: runtimeMaxAttempts,
+          activeLease: true,
+          createdAt: daysAgo(31),
+        });
+
+        await runRetention();
+
+        assert.equal(await countRow("whatsapp_admin_alert_notifications", id), 1);
+      });
     });
   });
 

@@ -25,7 +25,8 @@ export const defaultWhatsappRetentionPolicyParams = (
   cutoff,
   batchSize,
   attendanceMaxAttempts: ATTENDANCE_REMINDER_MAX_ATTEMPTS,
-  adminAlertMaxAttempts: ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
+  adminAlertMaxAttempts:
+    env.ADMIN_ALERT_MAX_ATTEMPTS ?? ADMIN_ALERT_DEFAULT_MAX_ATTEMPTS,
   operationAssignmentMaxAttempts:
     env.OPERATION_ASSIGNMENT_NOTIFICATION_MAX_ATTEMPTS ??
     OPERATION_ASSIGNMENT_NOTIFICATION_DEFAULT_MAX_ATTEMPTS,

@@ -161,6 +161,16 @@ const envSchema = z
       .positive()
       .default(90),
     WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
+    WHATSAPP_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
+    WHATSAPP_RETENTION_DRY_RUN: z.stringbool().default(false),
+    WHATSAPP_RETENTION_BATCH_SIZE: z.coerce.number().int().min(1).max(5000).default(500),
+    WHATSAPP_RETENTION_MAX_BATCHES_PER_TABLE: z.coerce.number().int().min(1).max(10_000).default(100),
+    WHATSAPP_RETENTION_CLEANUP_JOB_ENABLED: z.stringbool().default(true),
+    WHATSAPP_RETENTION_CLEANUP_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(6 * 60 * 60 * 1000),
     WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET: z.string().min(16).optional(),
     /**
      * Retention for template variable JSON only (not full message bodies).

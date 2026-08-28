@@ -102,5 +102,43 @@ export const acquireTransactionAppLock = async (
   await acquireTransactionAppLockWithRequest(new sql.Request(transaction), input);
 };
 
+const SESSION_LOCK_SQL = `
+      DECLARE @result INT;
+      EXEC @result = sp_getapplock
+        @Resource = @resource,
+        @LockMode = N'Exclusive',
+        @LockOwner = N'Session',
+        @LockTimeout = @lockTimeout;
+      SELECT @result AS lockResult;
+    `;
+
+const SESSION_RELEASE_SQL = `
+      EXEC sp_releaseapplock
+        @Resource = @resource,
+        @LockOwner = N'Session';
+    `;
+
+/** Session-scoped app lock for long-running batch jobs (must call releaseSessionAppLock). */
+export const tryAcquireSessionAppLock = async (
+  request: sql.Request,
+  input: { resource: string; lockTimeoutMs?: number },
+): Promise<boolean> => {
+  const lockTimeoutMs = input.lockTimeoutMs ?? 0;
+  const result = await request
+    .input("resource", sql.NVarChar(255), input.resource)
+    .input("lockTimeout", sql.Int, lockTimeoutMs)
+    .query(SESSION_LOCK_SQL);
+
+  const lockResult = Number(result.recordset[0]?.lockResult ?? -999);
+  return lockResult >= 0;
+};
+
+export const releaseSessionAppLock = async (
+  request: sql.Request,
+  resource: string,
+): Promise<void> => {
+  await request.input("resource", sql.NVarChar(255), resource).query(SESSION_RELEASE_SQL);
+};
+
 export const absenceEmployeeLockResource = (companyId: string, employeeId: string): string =>
   `absence:${companyId}:${employeeId}`.toLowerCase();

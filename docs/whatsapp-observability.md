@@ -33,11 +33,14 @@ Platform observability panel (/platform/observability/whatsapp)
 | `WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED` | true | Accept status callbacks |
 | `TWILIO_STATUS_CALLBACK_URL` | required in prod when callbacks on | Exact public URL Twilio signs |
 | `WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET` | required in prod when obs on | Dedicated phone hash/encrypt secret (not JWT) |
-| `WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS` | falls back to MESSAGE_RETENTION | Clears `template_variables_json` only |
-| `WHATSAPP_OBSERVABILITY_FLOW_RETENTION_DAYS` | 90 | Deletes old executions/steps |
-| `WHATSAPP_OBSERVABILITY_CANDIDATE_RETENTION_DAYS` | 90 | Deletes old candidates |
-| `WHATSAPP_OBSERVABILITY_PROVIDER_EVENT_RETENTION_DAYS` | 90 | Deletes old provider events |
-| `WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED` | true | Periodic cleanup (single-process lock; run on one replica) |
+| `WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS` | falls back to MESSAGE_RETENTION | Legacy env (superseded by `WHATSAPP_RETENTION_DAYS`) |
+| `WHATSAPP_OBSERVABILITY_FLOW_RETENTION_DAYS` | 90 | Legacy env (superseded) |
+| `WHATSAPP_OBSERVABILITY_CANDIDATE_RETENTION_DAYS` | 90 | Legacy env (superseded) |
+| `WHATSAPP_OBSERVABILITY_PROVIDER_EVENT_RETENTION_DAYS` | 90 | Legacy env (superseded) |
+| `WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED` | false | **Deprecated** — use `WHATSAPP_RETENTION_CLEANUP_JOB_ENABLED` |
+| `WHATSAPP_RETENTION_DAYS` | 30 | Full row purge for WhatsApp technical data — see [whatsapp-retention.md](./whatsapp-retention.md) |
+| `WHATSAPP_RETENTION_DRY_RUN` | true (example) | Report candidates without DELETE |
+| `WHATSAPP_RETENTION_CLEANUP_JOB_ENABLED` | true | Periodic cleanup (6h default) |
 
 **Do not infer** status callback URL from the inbound webhook URL. Signature validation uses distinct validators for `TWILIO_WEBHOOK_URL` and `TWILIO_STATUS_CALLBACK_URL`.
 

@@ -13,9 +13,9 @@ import {
   stopRecurringWorkdayMaterializationJob,
 } from "./jobs/recurring-workday-materialization.job";
 import {
-  startWhatsappObservabilityCleanupJob,
-  stopWhatsappObservabilityCleanupJob,
-} from "./jobs/whatsapp-observability-cleanup.job";
+  startWhatsappRetentionCleanupJob,
+  stopWhatsappRetentionCleanupJob,
+} from "./jobs/whatsapp-retention-cleanup.job";
 import {
   startCompanyDeletionJob,
   stopCompanyDeletionJob,
@@ -52,7 +52,7 @@ const startServer = async (): Promise<void> => {
   startRecurringWorkdayMaterializationJob();
   startAbsenceWorkdaySyncJob();
   startAbsenceAttachmentCleanupJob();
-  startWhatsappObservabilityCleanupJob();
+  startWhatsappRetentionCleanupJob();
   startCompanyDeletionJob();
   startPayrollReceiptNotificationJob();
   startOperationAssignmentNotificationJob();
@@ -69,7 +69,7 @@ const shutdown = async (): Promise<void> => {
   stopRecurringWorkdayMaterializationJob();
   stopAbsenceWorkdaySyncJob();
   stopAbsenceAttachmentCleanupJob();
-  stopWhatsappObservabilityCleanupJob();
+  stopWhatsappRetentionCleanupJob();
   stopCompanyDeletionJob();
   stopPayrollReceiptNotificationJob();
   stopOperationAssignmentNotificationJob();

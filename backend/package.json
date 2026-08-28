@@ -27,6 +27,7 @@
     "backfill:absence-balances": "tsx src/scripts/backfill-employee-absence-balances.ts",
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
+    "job:whatsapp-retention": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/run-whatsapp-retention.ts",
     "audit:statistics-grain": "tsx src/scripts/audit-statistics-grain.ts",
     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
     "diagnose:operation-reassignment": "tsx scripts/diagnose-operation-reassignment.ts",

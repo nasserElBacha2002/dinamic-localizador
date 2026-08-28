@@ -253,16 +253,4 @@ export const whatsappObservabilityService = {
     return detail;
   },
 
-  async runCleanupBatch(): Promise<Record<string, number>> {
-    if (!env.WHATSAPP_OBSERVABILITY_CLEANUP_JOB_ENABLED) {
-      return { skipped: 1 };
-    }
-    return whatsappObservabilityRepository.cleanupObservabilityBatches({
-      messageRetentionDays: env.WHATSAPP_OBSERVABILITY_TEMPLATE_VARS_RETENTION_DAYS,
-      flowRetentionDays: env.WHATSAPP_OBSERVABILITY_FLOW_RETENTION_DAYS,
-      candidateRetentionDays: env.WHATSAPP_OBSERVABILITY_CANDIDATE_RETENTION_DAYS,
-      providerEventRetentionDays: env.WHATSAPP_OBSERVABILITY_PROVIDER_EVENT_RETENTION_DAYS,
-      batchSize: 200,
-    });
-  },
 };

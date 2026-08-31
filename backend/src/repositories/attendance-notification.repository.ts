@@ -246,7 +246,7 @@ export const attendanceNotificationRepository = {
           AND e.active = 1
           ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
-          AND ar.id IS NULL
+          AND (ar.id IS NULL OR ar.received_at IS NULL)
           AND ow.expected_start_at >= @windowStart
           AND ow.expected_start_at <= @windowEnd
           ${buildNotificationEligibilitySql()}
@@ -292,7 +292,7 @@ export const attendanceNotificationRepository = {
           AND e.active = 1
           ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
-          AND ar.id IS NULL
+          AND (ar.id IS NULL OR ar.received_at IS NULL)
           ${employeeWorkdayId ? "AND ew.id = @employeeWorkdayId" : ""}
       `);
 
@@ -339,7 +339,7 @@ export const attendanceNotificationRepository = {
           AND s.active = 1
           AND e.active = 1
           ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
-          AND ar.id IS NULL
+          AND (ar.id IS NULL OR ar.received_at IS NULL)
           AND ow.expected_start_at >= @windowStart
           AND ow.expected_start_at <= @windowEnd
           ${PHONE_FILTER_SQL}
@@ -386,7 +386,7 @@ export const attendanceNotificationRepository = {
           AND e.active = 1
           ${WORKDAY_ASSIGNMENT_COVERAGE_SQL}
           ${PHONE_FILTER_SQL}
-          AND ar.id IS NULL
+          AND (ar.id IS NULL OR ar.received_at IS NULL)
           ${employeeWorkdayId ? "AND ew.id = @employeeWorkdayId" : ""}
       `);
 
@@ -421,6 +421,7 @@ export const attendanceNotificationRepository = {
           ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND ar.received_at IS NOT NULL
           AND ar.checkout_at IS NULL
         LEFT JOIN whatsapp_attendance_notifications wan
           ON wan.operation_id = i.id
@@ -473,6 +474,7 @@ export const attendanceNotificationRepository = {
           ON ar.employee_workday_id = ew.id
           AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+          AND ar.received_at IS NOT NULL
           AND ar.checkout_at IS NULL
         WHERE i.id = @operationId
           AND i.company_id = @companyId

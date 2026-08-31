@@ -53,6 +53,12 @@ export const WHATSAPP_RESULT_CODES = {
   CHECKIN_COMPLETED: "CHECKIN_COMPLETED",
   CHECKOUT_COMPLETED: "CHECKOUT_COMPLETED",
   NO_AVAILABLE_EMPLOYEE_WORKDAY: "NO_AVAILABLE_EMPLOYEE_WORKDAY",
+  /** No assignment / workday eligible for the requested attendance action. */
+  NO_OPERATION_ASSIGNED: "NO_OPERATION_ASSIGNED",
+  /** Open check-in attendance missing; assignment may still exist for exit-without-arrival. */
+  NO_OPEN_ATTENDANCE: "NO_OPEN_ATTENDANCE",
+  /** Checkout persisted without a prior check-in (arrival NOT_RECORDED). */
+  CHECKOUT_WITHOUT_ARRIVAL: "CHECKOUT_WITHOUT_ARRIVAL",
   UNKNOWN_EMPLOYEE: "UNKNOWN_EMPLOYEE",
   AMBIGUOUS_COMPANY: "AMBIGUOUS_COMPANY",
   COMPANY_CONTEXT_UNAVAILABLE: "COMPANY_CONTEXT_UNAVAILABLE",

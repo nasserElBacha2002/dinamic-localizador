@@ -328,6 +328,7 @@ export const adminAlertContextRepository = {
             FROM attendance_records ar
             WHERE ar.employee_workday_id = ew.id
               AND ar.validation_status IN (N'VALID', N'PENDING_REVIEW')
+              AND ar.received_at IS NOT NULL
           )
           AND NOT EXISTS (
             SELECT 1

@@ -49,16 +49,17 @@ export interface WorkdaySessionSelectionOption {
   employeeWorkdayId: string;
   operationWorkdayId: string;
   operationId: string;
-  attendanceRecordId?: string;
+  attendanceRecordId?: string | null;
   /** Mixed llegada/salida selection (location-first). */
   attendanceAction?: "CHECK_IN" | "CHECK_OUT";
+  checkoutWithoutArrival?: boolean;
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;
   expectedStartAt: string;
   expectedEndAt: string | null;
   workDate: string;
-  checkInAt?: string;
+  checkInAt?: string | null;
 }
 
 /** Location captured before workday disambiguation (location-first attendance). */
@@ -79,6 +80,8 @@ export interface BotSessionContext {
    * reuse these coordinates after selection instead of asking again.
    */
   pendingLocation?: PendingBotLocation;
+  /** WAITING_CHECKOUT_LOCATION without prior check-in attendance. */
+  checkoutWithoutArrival?: boolean;
   flow?: "ABSENCE_REQUEST";
   attendanceConfirmation?: {
     operationId: string;

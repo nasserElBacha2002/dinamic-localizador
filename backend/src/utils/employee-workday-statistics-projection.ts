@@ -6,11 +6,17 @@ import { normalizeStatisticsFilters } from "../utils/statistics-display-labels";
 import { applySqlFilters, type SqlFilter } from "./sql-list-query";
 import { createUuidInFilter } from "./sql-uuid-in-filter";
 
+/**
+ * Presence requires an operationally accepted attendance (VALID / PENDING_REVIEW).
+ * REJECTED-only rows (e.g. exit-only geofence reject) must not inflate PRESENT / attendanceRate.
+ * Historical VALID/PENDING_REVIEW check-ins are unchanged.
+ */
 export const EFFECTIVE_STATE_SQL = `
   CASE
     WHEN ew.expectation_status = N'CANCELLED' THEN N'CANCELLED'
     WHEN ew.expectation_status = N'JUSTIFIED' THEN N'JUSTIFIED'
-    WHEN ar.id IS NOT NULL THEN N'PRESENT'
+    WHEN ar.id IS NOT NULL
+     AND ar.validation_status IN (N'VALID', N'PENDING_REVIEW') THEN N'PRESENT'
     WHEN @referenceAt <= DATEADD(
       MINUTE,
       ow.late_tolerance_minutes,
@@ -20,9 +26,12 @@ export const EFFECTIVE_STATE_SQL = `
   END
 `;
 
+/** Never invent worked minutes when arrival was not recorded. */
 export const WORKED_MINUTES_SQL = `
   CASE
-    WHEN ar.id IS NOT NULL AND ar.checkout_at IS NOT NULL
+    WHEN ar.id IS NOT NULL
+     AND ar.received_at IS NOT NULL
+     AND ar.checkout_at IS NOT NULL
       THEN DATEDIFF(MINUTE, ar.received_at, ar.checkout_at)
     ELSE 0
   END
@@ -32,21 +41,27 @@ export const OVERTIME_MINUTES_SQL = "COALESCE(ar.extra_worked_minutes, 0)";
 
 export const ON_TIME_WORKDAY_SQL = `
   CASE
-    WHEN ar.id IS NOT NULL AND ar.punctuality_status IN (N'ON_TIME', N'EARLY') THEN 1
+    WHEN ar.id IS NOT NULL
+     AND ar.received_at IS NOT NULL
+     AND ar.punctuality_status IN (N'ON_TIME', N'EARLY') THEN 1
     ELSE 0
   END
 `;
 
 export const LATE_WORKDAY_SQL = `
   CASE
-    WHEN ar.id IS NOT NULL AND ar.punctuality_status = N'LATE' THEN 1
+    WHEN ar.id IS NOT NULL
+     AND ar.received_at IS NOT NULL
+     AND ar.punctuality_status = N'LATE' THEN 1
     ELSE 0
   END
 `;
 
 export const PUNCTUALITY_ELIGIBLE_SQL = `
   CASE
-    WHEN ar.id IS NOT NULL AND ar.punctuality_status IN (N'ON_TIME', N'EARLY', N'LATE') THEN 1
+    WHEN ar.id IS NOT NULL
+     AND ar.received_at IS NOT NULL
+     AND ar.punctuality_status IN (N'ON_TIME', N'EARLY', N'LATE') THEN 1
     ELSE 0
   END
 `;
@@ -62,6 +77,7 @@ export const EARLY_DEPARTURE_WORKDAY_SQL = `
 export const OPEN_ATTENDANCE_WORKDAY_SQL = `
   CASE
     WHEN ar.id IS NOT NULL
+     AND ar.received_at IS NOT NULL
      AND ar.checkout_at IS NULL
      AND @referenceAt > COALESCE(ow.expected_end_at, ow.expected_start_at)
     THEN 1

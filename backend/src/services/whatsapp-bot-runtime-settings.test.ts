@@ -45,6 +45,10 @@ const checkoutCandidate = {
   scheduleTimezone: "America/Argentina/Buenos_Aires",
   attendanceRecordId,
   checkInAt: "2026-07-05T15:00:00.000Z",
+  checkoutWithoutArrival: false,
+  expectationStatus: "EXPECTED" as const,
+  absenceRequestId: null,
+  operationAssignmentId: null,
 };
 
 describe("whatsapp bot runtime settings integration", () => {

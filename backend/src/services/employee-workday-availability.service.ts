@@ -1,3 +1,4 @@
+import sql from "mssql";
 import { operationRepository } from "../repositories/operation.repository";
 import { employeeWorkdayAvailabilityRepository } from "../repositories/employee-workday-availability.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
@@ -101,9 +102,22 @@ const sortCheckoutCandidates = (
   candidates: EmployeeWorkdayCheckoutCandidate[],
 ): EmployeeWorkdayCheckoutCandidate[] =>
   [...candidates].sort((left, right) => {
-    const checkInCompare = left.checkInAt.localeCompare(right.checkInAt);
-    if (checkInCompare !== 0) {
-      return checkInCompare;
+    if (left.checkoutWithoutArrival !== right.checkoutWithoutArrival) {
+      // Open attendance (with arrival) before exit-without-arrival when mixed.
+      return left.checkoutWithoutArrival ? 1 : -1;
+    }
+
+    if (left.checkInAt && right.checkInAt) {
+      const checkInCompare = left.checkInAt.localeCompare(right.checkInAt);
+      if (checkInCompare !== 0) {
+        return checkInCompare;
+      }
+    } else if (left.checkoutWithoutArrival && right.checkoutWithoutArrival) {
+      // Most recently started assignment first (O2 over O1 at 17:00).
+      const startCompare = right.expectedStartAt.localeCompare(left.expectedStartAt);
+      if (startCompare !== 0) {
+        return startCompare;
+      }
     }
 
     const descriptorCompare = formatServiceReferenceFromFields(left).localeCompare(
@@ -140,6 +154,7 @@ const mapCheckoutToSelectionOption = (
   ...mapCheckInToSelectionOption(candidate, attendanceAction),
   attendanceRecordId: candidate.attendanceRecordId,
   checkInAt: candidate.checkInAt,
+  checkoutWithoutArrival: candidate.checkoutWithoutArrival,
 });
 
 const loadOneTimeFallbackCandidates = async (
@@ -483,6 +498,80 @@ export const employeeWorkdayAvailabilityService = {
         isCheckoutCandidateStillEligible(candidate, at, pendingOperationExpirationHours),
       ),
     );
+  },
+
+  async listEligibleForCheckoutWithoutArrival(
+    companyId: string,
+    employeeId: string,
+    at: Date,
+    options?: {
+      simulationSessionId?: string | null;
+      pendingOperationExpirationHours?: number;
+    },
+  ): Promise<EmployeeWorkdayCheckoutCandidate[]> {
+    const simulationSessionId = options?.simulationSessionId ?? getSimulationSessionId();
+    const pendingOperationExpirationHours = resolvePendingExpirationHours(
+      options?.pendingOperationExpirationHours,
+    );
+    const candidates =
+      await employeeWorkdayAvailabilityRepository.listExitWithoutArrivalCandidates(
+        companyId,
+        employeeId,
+        {
+          now: at,
+          pendingOperationExpirationHours,
+          simulationSessionId,
+        },
+      );
+    return sortCheckoutCandidates(
+      candidates.filter((candidate) =>
+        isCheckoutCandidateStillEligible(candidate, at, pendingOperationExpirationHours),
+      ),
+    );
+  },
+
+  async revalidateExitWithoutArrivalCandidate(
+    companyId: string,
+    employeeId: string,
+    employeeWorkdayId: string,
+    at: Date,
+    options?: {
+      simulationSessionId?: string | null;
+      pendingOperationExpirationHours?: number;
+      transaction?: sql.Transaction;
+    },
+  ): Promise<
+    | { kind: "eligible"; candidate: EmployeeWorkdayCheckoutCandidate }
+    | { kind: "expired" }
+    | { kind: "not_available" }
+  > {
+    const simulationSessionId = options?.simulationSessionId ?? getSimulationSessionId();
+    const pendingOperationExpirationHours = resolvePendingExpirationHours(
+      options?.pendingOperationExpirationHours,
+    );
+
+    const eligible =
+      await employeeWorkdayAvailabilityRepository.findExitWithoutArrivalCandidateByWorkdayId(
+        companyId,
+        employeeId,
+        employeeWorkdayId,
+        {
+          now: at,
+          pendingOperationExpirationHours,
+          simulationSessionId,
+        },
+        options?.transaction,
+      );
+
+    if (!eligible) {
+      return { kind: "not_available" };
+    }
+
+    if (!isCheckoutCandidateStillEligible(eligible, at, pendingOperationExpirationHours)) {
+      return { kind: "expired" };
+    }
+
+    return { kind: "eligible", candidate: eligible };
   },
 
   async revalidateCheckoutCandidate(

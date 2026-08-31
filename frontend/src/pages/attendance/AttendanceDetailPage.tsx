@@ -29,6 +29,7 @@ import { usePaginationState } from "../../hooks/usePaginationState";
 // Reviews sub-table on detail page: local pagination only; parent list state lives in /attendance URL.
 import type { AttendanceReview } from "../../types/attendance";
 import { formatDateTime } from "../../utils/dates";
+import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -135,7 +136,7 @@ export function AttendanceDetailPage() {
     <Stack gap="md">
       <PageHeader
         title="Detalle de asistencia"
-        description={`${record.employee.name} · Llegada ${formatDateTime(record.receivedAt)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
+        description={`${record.employee.name} · Llegada ${formatAttendanceArrivalLabel(record.receivedAt, formatDateTime)}${record.checkoutAt ? ` · Salida ${formatDateTime(record.checkoutAt)}` : ""}`}
         action={
           <ActionMenu
             primary={
@@ -193,7 +194,7 @@ export function AttendanceDetailPage() {
                 />
               ),
             },
-            { label: "Llegada", value: formatDateTime(record.receivedAt) },
+            { label: "Llegada", value: formatAttendanceArrivalLabel(record.receivedAt, formatDateTime) },
             { label: "Salida", value: formatDateTime(record.checkoutAt) },
             {
               label: "Coordenadas llegada",

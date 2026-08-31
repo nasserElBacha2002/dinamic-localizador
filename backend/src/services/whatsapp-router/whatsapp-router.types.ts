@@ -78,7 +78,7 @@ export interface WhatsAppRouterHandlers {
     session: BotSession;
     employeeId: string;
     employeeWorkdayId: string;
-    attendanceRecordId: string;
+    attendanceRecordId?: string | null;
     operationId: string;
     latitude: number;
     longitude: number;
@@ -87,6 +87,7 @@ export interface WhatsAppRouterHandlers {
     phoneTo: string;
     /** Instant of the LOCATION WhatsApp event (defaults to now). */
     eventAt?: Date;
+    checkoutWithoutArrival?: boolean;
   }) => Promise<string>;
   /** LOCATION without an active session — infer check-in vs check-out. */
   processDirectLocationAttendance: (input: {

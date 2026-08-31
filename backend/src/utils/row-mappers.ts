@@ -214,9 +214,18 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
   employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
-  receivedLatitude: Number(row.received_latitude),
-  receivedLongitude: Number(row.received_longitude),
-  distanceMeters: Number(row.distance_meters),
+  receivedLatitude:
+    row.received_latitude !== null && row.received_latitude !== undefined
+      ? Number(row.received_latitude)
+      : null,
+  receivedLongitude:
+    row.received_longitude !== null && row.received_longitude !== undefined
+      ? Number(row.received_longitude)
+      : null,
+  distanceMeters:
+    row.distance_meters !== null && row.distance_meters !== undefined
+      ? Number(row.distance_meters)
+      : null,
   validationStatus: String(row.validation_status) as AttendanceRecord["validationStatus"],
   locationStatus: String(row.location_status) as AttendanceRecord["locationStatus"],
   punctualityStatus: String(row.punctuality_status) as AttendanceRecord["punctualityStatus"],
@@ -225,7 +234,7 @@ export const mapAttendanceRow = (row: Record<string, unknown>): AttendanceRecord
   reviewedBy: row.reviewed_by ? String(row.reviewed_by) : null,
   reviewedAt: row.reviewed_at ? toIsoString(row.reviewed_at as Date | string) : null,
   reviewReason: row.review_reason ? String(row.review_reason) : null,
-  receivedAt: toIsoString(row.received_at as Date | string),
+  receivedAt: row.received_at ? toIsoString(row.received_at as Date | string) : null,
   checkoutAt: row.checkout_at ? toIsoString(row.checkout_at as Date | string) : null,
   checkoutLatitude:
     row.checkout_latitude !== null && row.checkout_latitude !== undefined

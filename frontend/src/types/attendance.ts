@@ -1,8 +1,17 @@
 import type { OperationStatus } from "./operation-status";
 
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
-export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
-export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
+export type LocationStatus =
+  | "INSIDE_GEOFENCE"
+  | "OUTSIDE_GEOFENCE"
+  | "INVALID_LOCATION"
+  | "NOT_RECORDED";
+export type PunctualityStatus =
+  | "EARLY"
+  | "ON_TIME"
+  | "LATE"
+  | "OUTSIDE_TIME_WINDOW"
+  | "NOT_RECORDED";
 export type CheckoutStatus =
   | "CHECKOUT_VALID"
   | "CHECKOUT_EARLY_WITHIN_TOLERANCE"
@@ -17,9 +26,9 @@ export interface AttendanceRecord {
   id: string;
   operationId: string;
   employeeId: string;
-  receivedLatitude: number;
-  receivedLongitude: number;
-  distanceMeters: number;
+  receivedLatitude: number | null;
+  receivedLongitude: number | null;
+  distanceMeters: number | null;
   validationStatus: ValidationStatus;
   locationStatus: LocationStatus;
   punctualityStatus: PunctualityStatus;
@@ -28,7 +37,8 @@ export interface AttendanceRecord {
   reviewedBy: string | null;
   reviewedAt: string | null;
   reviewReason: string | null;
-  receivedAt: string;
+  /** Null when checkout was recorded without a prior check-in. */
+  receivedAt: string | null;
   checkoutAt: string | null;
   checkoutLatitude: number | null;
   checkoutLongitude: number | null;

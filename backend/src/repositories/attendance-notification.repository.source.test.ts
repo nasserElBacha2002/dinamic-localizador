@@ -51,7 +51,8 @@ describe("attendance-notification.repository workday reminder SQL", () => {
       source.indexOf("findNoCheckInAtStartCandidates"),
     );
     assert.match(arrivalBlock, /LEFT JOIN attendance_records ar/);
-    assert.match(arrivalBlock, /AND ar\.id IS NULL/);
+    // Exit-only rows (received_at NULL) remain eligible for arrival reminders / missing check-in.
+    assert.match(arrivalBlock, /AND \(ar\.id IS NULL OR ar\.received_at IS NULL\)/);
   });
 
   it("requires EXPECTED employee_workday and ACTIVE operation_workday", () => {

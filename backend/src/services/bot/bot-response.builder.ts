@@ -38,6 +38,9 @@ export const ACTIVE_ATTENDANCE_FLOW_MESSAGE =
 export const NO_CHECK_IN_FOR_CHECKOUT_MESSAGE =
   "No encontré una llegada registrada para este trabajo. Primero tenés que registrar tu llegada compartiendo tu ubicación.";
 
+export const NO_CHECKOUT_ASSIGNMENT_MESSAGE =
+  "No encontramos una jornada asignada disponible para registrar la salida.";
+
 export const NO_CHECKOUT_OPERATION_MESSAGE =
   "No encontramos un trabajo con llegada registrada pendiente de salida. Verificá con administración.";
 
@@ -95,6 +98,24 @@ export const buildCheckedInNeedsCheckoutIntentMessage = (
   );
 };
 
+/** Bare LOCATION with assignment but no check-in — keep requiring "Me voy"; never claim no jornada. */
+export const buildExitWithoutArrivalNeedsCheckoutIntentMessage = (
+  candidates: EmployeeWorkdayCheckoutCandidate[],
+): string => {
+  if (candidates.length === 1) {
+    const reference = formatAssignmentServiceReference(candidates[0]);
+    return (
+      `Tenés una jornada asignada${reference ? ` en ${reference}` : ""} sin llegada registrada.\n` +
+      `Para registrar tu salida escribí "Me voy" y luego compartí tu ubicación.`
+    );
+  }
+
+  return (
+    "Tenés jornadas asignadas sin llegada registrada.\n" +
+    'Para registrar tu salida escribí "Me voy" y luego compartí tu ubicación.'
+  );
+};
+
 export const buildMixedAttendanceActionPrompt = (input: {
   checkInCandidates: EmployeeWorkdayCheckInCandidate[];
   checkoutCandidates: EmployeeWorkdayCheckoutCandidate[];
@@ -108,7 +129,7 @@ export const buildMixedAttendanceActionPrompt = (input: {
       index,
       workday,
       timeZone,
-      workday.checkInAt,
+      workday.checkInAt ?? undefined,
     );
     lines.push(title.replace(/^\d+\./, `${index}. Registrar salida —`), ...rest);
     index += 1;
@@ -200,10 +221,15 @@ export const buildCheckoutWorkdaySelectionPrompt = (
 ): string => {
   const timeZone = getBotOperationTimezone();
   const lines = workdays.flatMap((workday, index) =>
-    formatBotWorkdaySelectionLines(index + 1, workday, timeZone, workday.checkInAt),
+    formatBotWorkdaySelectionLines(index + 1, workday, timeZone, workday.checkInAt ?? undefined),
   );
 
-  return `Encontramos más de una jornada con llegada registrada:\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
+  const withoutArrival = workdays.every((workday) => workday.checkoutWithoutArrival);
+  const header = withoutArrival
+    ? "Encontramos más de una jornada asignada disponible para registrar la salida:"
+    : "Encontramos más de una jornada con llegada registrada:";
+
+  return `${header}\n\n${lines.join("\n")}\n\nRespondé con el número correspondiente para registrar la salida.`;
 };
 
 export const buildArrivalRegisteredMessage = (input: {
@@ -240,14 +266,16 @@ export const buildArrivalRegisteredMessage = (input: {
 
 export const buildCheckoutRegisteredMessage = (input: {
   eligible: EmployeeWorkdayCheckoutCandidate | CheckoutEligibleOperation;
-  checkInAt: string;
+  checkInAt: string | null;
   checkoutAt: Date;
   distanceMeters: number | null;
   checkoutStatus: CheckoutStatus;
   extraWorkedMinutes: number;
   locationProvided?: boolean;
 }): string => {
-  const arrivalTime = formatLocalTime(input.checkInAt, getBotOperationTimezone());
+  const arrivalTime = input.checkInAt
+    ? formatLocalTime(input.checkInAt, getBotOperationTimezone())
+    : "Sin registrar";
   const departureTime = formatLocalTime(input.checkoutAt.toISOString(), getBotOperationTimezone());
   const locationProvided = input.locationProvided ?? input.distanceMeters !== null;
   const distanceLine = locationProvided

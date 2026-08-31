@@ -23,6 +23,7 @@ import type {
 import { terminology } from "../../../domain/terminology";
 import { getDefaultStatisticsDateRange, getDateRangeQueryValue } from "../../../utils/date-range";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../../utils/dates";
+import { formatAttendanceArrivalLabel } from "../../../utils/attendance-display";
 import { formatDistanceMeters, getRelatedName } from "../../../utils/display-safe";
 import { getApiErrorMessage } from "../../../utils/errors";
 import {
@@ -87,7 +88,7 @@ export function EmployeeAttendanceTab({ employeeId }: EmployeeAttendanceTabProps
           />
         ),
       },
-      { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
+      { key: "receivedAt", header: "Llegada", getValue: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime) },
       { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
       {
         key: "distance",
@@ -134,7 +135,7 @@ export function EmployeeAttendanceTab({ employeeId }: EmployeeAttendanceTabProps
 
   const mobileCard = useMemo<DataTableMobileCardConfig<AttendanceRecordWithRelations>>(
     () => ({
-      title: (row) => formatDateTime(row.receivedAt),
+      title: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime),
       status: (row) => (
         <StatusBadge label={validationStatusLabels[row.validationStatus]} tone="neutral" />
       ),

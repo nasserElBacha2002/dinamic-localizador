@@ -374,7 +374,7 @@ export function useStatisticsPageData() {
         row.expectedStartAt ? formatDateTime(row.expectedStartAt) : "",
         row.expectedEndAt ? formatDateTime(row.expectedEndAt) : "",
         employeeWorkdayEffectiveStateLabels[row.effectiveState] ?? row.effectiveState,
-        row.checkInAt ? formatDateTime(row.checkInAt) : "",
+        row.checkInAt ? formatDateTime(row.checkInAt) : "Sin registrar",
         row.arrivalStatus ? (punctualityStatusLabels[row.arrivalStatus] ?? row.arrivalStatus) : "",
         row.checkOutAt ? formatDateTime(row.checkOutAt) : "",
         row.checkoutStatus ? (checkoutStatusLabels[row.checkoutStatus] ?? row.checkoutStatus) : "",

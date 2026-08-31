@@ -69,6 +69,7 @@ const checkoutWorkdayCandidate = (
   ...checkInWorkdayCandidate(operationId, employeeWorkdayId, serviceName),
   attendanceRecordId,
   checkInAt: "2026-07-05T15:00:00.000Z",
+  checkoutWithoutArrival: false,
 });
 
 const defaultEmployee = (companyId: string, id: string) => ({
@@ -762,6 +763,11 @@ describe("whatsapp webhook check-in regression", () => {
           hasJustifiedWorkdayInWindow: false,
         }));
         mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
+        mock.method(
+          employeeWorkdayAvailabilityService,
+          "listEligibleForCheckoutWithoutArrival",
+          async () => [],
+        );
       },
     });
     assert.match(message, /No tenés una jornada disponible/i);

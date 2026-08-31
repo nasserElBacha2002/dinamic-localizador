@@ -34,6 +34,7 @@ import { isModuleEnabled } from "../../utils/company-modules";
 import { getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../utils/date-range-url";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
+import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
 import { formatDistanceMeters, getRelatedName } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -156,7 +157,7 @@ export function AttendanceListPage() {
           />
         ),
       },
-      { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
+      { key: "receivedAt", header: "Llegada", getValue: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime) },
       { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
       {
         key: "distance",
@@ -228,7 +229,7 @@ export function AttendanceListPage() {
         {
           key: "receivedAt",
           label: "Llegada",
-          getValue: (row) => formatDateTime(row.receivedAt),
+          getValue: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime),
           visibility: "always",
         },
         {

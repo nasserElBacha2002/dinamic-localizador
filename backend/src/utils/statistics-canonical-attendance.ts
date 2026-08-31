@@ -50,7 +50,7 @@ const validationStatusRank = (status: string): number => {
 export interface CanonicalAttendanceCandidate {
   id: string;
   validationStatus: string;
-  receivedAt: Date;
+  receivedAt: Date | null;
   isSimulation: boolean;
 }
 
@@ -69,7 +69,9 @@ export const selectCanonicalProductionAttendance = <T extends CanonicalAttendanc
       return rankDiff;
     }
 
-    const receivedDiff = right.receivedAt.getTime() - left.receivedAt.getTime();
+    const leftReceived = left.receivedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+    const rightReceived = right.receivedAt?.getTime() ?? Number.NEGATIVE_INFINITY;
+    const receivedDiff = rightReceived - leftReceived;
     if (receivedDiff !== 0) {
       return receivedDiff;
     }

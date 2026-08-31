@@ -239,7 +239,7 @@ export const attendanceRepository = {
       INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
       ${whereClause}
-      ORDER BY ar.received_at DESC
+      ORDER BY COALESCE(ar.received_at, ar.checkout_at) DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
@@ -416,6 +416,76 @@ export const attendanceRepository = {
     return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
   },
 
+  /**
+   * Atomic insert of exit-only attendance (arrival NOT_RECORDED) with checkout fields.
+   * Uniqueness: UX_attendance_records_employee_workday_active_real.
+   */
+  async createExitOnlyWithCheckoutInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    input: {
+      operationId: string;
+      employeeId: string;
+      employeeWorkdayId: string;
+      validationStatus: "VALID" | "PENDING_REVIEW" | "REJECTED";
+      checkoutLatitude: number | null;
+      checkoutLongitude: number | null;
+      checkoutDistanceMeters: number | null;
+      checkoutStatus: CheckoutStatus;
+      checkoutReviewReason: string | null;
+      earlyDepartureMinutes: number;
+      extraWorkedMinutes: number;
+      checkoutMessageSid: string;
+      checkoutAt: string;
+      isSimulation?: boolean;
+      simulationSessionId?: string | null;
+    },
+  ): Promise<AttendanceRecord> {
+    const request = new sql.Request(transaction);
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, input.operationId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
+      .input("validationStatus", sql.NVarChar(30), input.validationStatus)
+      .input("checkoutLatitude", sql.Decimal(10, 7), input.checkoutLatitude)
+      .input("checkoutLongitude", sql.Decimal(10, 7), input.checkoutLongitude)
+      .input("checkoutDistanceMeters", sql.Decimal(10, 2), input.checkoutDistanceMeters)
+      .input("checkoutStatus", sql.NVarChar(40), input.checkoutStatus)
+      .input("checkoutReviewReason", sql.NVarChar(500), input.checkoutReviewReason)
+      .input("earlyDepartureMinutes", sql.Int, input.earlyDepartureMinutes)
+      .input("extraWorkedMinutes", sql.Int, input.extraWorkedMinutes)
+      .input("checkoutMessageSid", sql.NVarChar(100), input.checkoutMessageSid)
+      .input("checkoutAt", sql.DateTime2, new Date(input.checkoutAt))
+      .input("isSimulation", sql.Bit, input.isSimulation ? 1 : 0)
+      .input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId ?? null)
+      .query(`
+        INSERT INTO attendance_records (
+          company_id, operation_id, employee_id, employee_workday_id,
+          received_latitude, received_longitude, distance_meters,
+          validation_status, location_status, punctuality_status,
+          source_message_sid, validation_reason, received_at,
+          checkout_at, checkout_latitude, checkout_longitude, checkout_distance_meters,
+          checkout_status, checkout_review_reason,
+          early_departure_minutes, extra_worked_minutes, checkout_message_sid,
+          is_simulation, simulation_session_id
+        )
+        OUTPUT INSERTED.*
+        VALUES (
+          @companyId, @operationId, @employeeId, @employeeWorkdayId,
+          NULL, NULL, NULL,
+          @validationStatus, N'NOT_RECORDED', N'NOT_RECORDED',
+          NULL, N'Checkout without prior check-in', NULL,
+          @checkoutAt, @checkoutLatitude, @checkoutLongitude, @checkoutDistanceMeters,
+          @checkoutStatus, @checkoutReviewReason,
+          @earlyDepartureMinutes, @extraWorkedMinutes, @checkoutMessageSid,
+          @isSimulation, @simulationSessionId
+        )
+      `);
+
+    return mapAttendanceRow(result.recordset[0] as Record<string, unknown>);
+  },
+
   async listForExport(
     companyId: string,
     query: ListAttendanceQuery,
@@ -443,7 +513,7 @@ export const attendanceRepository = {
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
       LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
       ${whereClause}
-      ORDER BY ar.received_at DESC
+      ORDER BY COALESCE(ar.received_at, ar.checkout_at) DESC
     `);
 
     return result.recordset as Record<string, unknown>[];
@@ -595,7 +665,7 @@ export const attendanceRepository = {
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
           AND ar.checkout_at IS NULL
           ${simulationFilter}
-        ORDER BY ar.received_at DESC
+        ORDER BY COALESCE(ar.received_at, ar.checkout_at) DESC
       `);
 
     if (!result.recordset[0]) {

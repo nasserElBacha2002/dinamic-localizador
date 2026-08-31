@@ -46,6 +46,7 @@ const baseCheckout = (
   ...baseCheckIn(overrides),
   attendanceRecordId: overrides.attendanceRecordId,
   checkInAt: overrides.checkInAt ?? "2026-08-11T12:05:00.000Z",
+  checkoutWithoutArrival: overrides.checkoutWithoutArrival ?? false,
 });
 
 const moduleStates = (input: {

@@ -56,7 +56,10 @@ describe("employee-workday-statistics-projection contract", () => {
   it("documents SQL precedence aligned with deriveEmployeeWorkdayState", () => {
     assert.match(EFFECTIVE_STATE_SQL, /WHEN ew\.expectation_status = N'CANCELLED'/);
     assert.match(EFFECTIVE_STATE_SQL, /WHEN ew\.expectation_status = N'JUSTIFIED'/);
-    assert.match(EFFECTIVE_STATE_SQL, /WHEN ar\.id IS NOT NULL/);
+    assert.match(
+      EFFECTIVE_STATE_SQL,
+      /ar\.validation_status IN \(N'VALID', N'PENDING_REVIEW'\) THEN N'PRESENT'/,
+    );
     assert.match(EFFECTIVE_STATE_SQL, /THEN N'EXPECTED'/);
     assert.match(EFFECTIVE_STATE_SQL, /ELSE N'ABSENT'/);
   });

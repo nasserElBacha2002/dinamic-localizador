@@ -153,6 +153,7 @@ export const punctualityLabel = (status: PunctualityStatus): string => {
     ON_TIME: "A tiempo",
     LATE: "Tarde",
     OUTSIDE_TIME_WINDOW: "Fuera de horario",
+    NOT_RECORDED: "Sin registrar",
   };
   return labels[status];
 };

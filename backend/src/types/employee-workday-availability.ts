@@ -26,22 +26,31 @@ export type EmployeeWorkdayAttendanceContext = {
 export type EmployeeWorkdayCheckInCandidate = EmployeeWorkdayAttendanceContext;
 
 export type EmployeeWorkdayCheckoutCandidate = EmployeeWorkdayAttendanceContext & {
-  attendanceRecordId: string;
-  checkInAt: string;
+  /**
+   * Open check-in attendance id when checking out after arrival.
+   * Null for exit-without-arrival candidates (no attendance yet).
+   */
+  attendanceRecordId: string | null;
+  /** Null when arrival was never recorded. */
+  checkInAt: string | null;
+  /** True when resolving checkout from assignment without prior check-in. */
+  checkoutWithoutArrival: boolean;
 };
 
 export type WorkdaySelectionOption = {
   employeeWorkdayId: string;
   operationWorkdayId: string;
   operationId: string;
-  attendanceRecordId?: string;
+  attendanceRecordId?: string | null;
   /** Present on mixed llegada/salida action lists (location-first). */
   attendanceAction?: "CHECK_IN" | "CHECK_OUT";
+  /** True when the option is exit-without-arrival (no attendance yet). */
+  checkoutWithoutArrival?: boolean;
   serviceName: string;
   serviceAddress: string | null;
   serviceLocality: string | null;
   expectedStartAt: string;
   expectedEndAt: string | null;
   workDate: string;
-  checkInAt?: string;
+  checkInAt?: string | null;
 };

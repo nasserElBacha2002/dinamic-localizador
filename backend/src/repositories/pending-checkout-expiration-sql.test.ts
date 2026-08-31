@@ -13,7 +13,8 @@ describe("pending checkout expiration SQL alignment", () => {
     const predicate =
       /@now <= DATEADD\(\s*HOUR,\s*@pendingOperationExpirationHours,\s*COALESCE\(ow\.expected_end_at, ow\.expected_start_at\)\s*\)/g;
     const matches = source.match(predicate);
-    assert.equal(matches?.length, 2);
+    // Open checkout list + revalidate, plus exit-without-arrival list + revalidate.
+    assert.equal(matches?.length, 4);
   });
 
   it("legacy findCheckoutEligibleOperations also applies pending expiration", () => {

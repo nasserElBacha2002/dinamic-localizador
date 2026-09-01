@@ -52,17 +52,4 @@ describe("requirePermission middleware", () => {
     requirePermission("employees:manage")(req, res, next);
     assert.equal(nextCalled, true);
   });
-
-  it("requireAnyPermission grants bot simulator read with bot_simulator:use", () => {
-    const supervisorPermissions = resolvePermissionsForRole("SUPERVISOR");
-    const req = { permissions: supervisorPermissions } as Request;
-    const res = createMockResponse();
-    let nextCalled = false;
-    const next: NextFunction = () => {
-      nextCalled = true;
-    };
-
-    requirePermission("bot_simulator:use")(req, res, next);
-    assert.equal(nextCalled, true);
-  });
 });

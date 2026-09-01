@@ -15,8 +15,7 @@ export type PermissionModuleKey =
   | "attendance"
   | "absences"
   | "payroll_receipts"
-  | "reports"
-  | "bot_simulator";
+  | "reports";
 
 export type RoleRestrictionCode =
   | "MODULE_MUST_BE_ENABLED"
@@ -66,7 +65,6 @@ const MODULE_LABELS: Record<PermissionModuleKey, string> = {
   absences: "Ausencias",
   payroll_receipts: "Recibos de sueldo",
   reports: "Reportes",
-  bot_simulator: "Simulador de bot",
 };
 
 const ROLE_NAMES: Record<CompanyRole, string> = {
@@ -84,8 +82,7 @@ const ROLE_DESCRIPTIONS: Record<CompanyRole, string> = {
   ADMIN:
     "Administra la operación diaria y la configuración. No gestiona usuarios de la empresa.",
   HR: "Gestiona colaboradores, ausencias y recibos de sueldo, con lectura de asistencias y reportes.",
-  SUPERVISOR:
-    "Consulta la operación y revisa asistencias. Puede usar el simulador de bot cuando el módulo está habilitado.",
+  SUPERVISOR: "Consulta la operación y revisa asistencias.",
   OPERATOR: "Consulta operaciones y asistencias. Acceso operativo limitado a lectura.",
   READ_ONLY: "Consulta información operativa en modo solo lectura.",
 };
@@ -239,12 +236,6 @@ export const PERMISSION_CATALOG = {
     moduleLabel: MODULE_LABELS.reports,
     label: "Exportar reportes",
     description: "Permite exportar información de reportes y estadísticas.",
-  },
-  "bot_simulator:use": {
-    module: "bot_simulator",
-    moduleLabel: MODULE_LABELS.bot_simulator,
-    label: "Usar simulador de bot",
-    description: "Permite probar flujos conversacionales del bot.",
   },
 } as const satisfies Record<CompanyPermission, PermissionCatalogMetadata>;
 

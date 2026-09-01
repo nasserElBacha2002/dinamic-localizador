@@ -19,6 +19,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
+import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
@@ -56,13 +57,14 @@ const ATTENDANCE_LIST_PATH = "/attendance";
 export function AttendanceListPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const permissionsQuery = useCompanyPermissions();
   const modulesQuery = useCompanyModules();
   const permissions = permissionsQuery.data?.permissions;
   const canExport = hasPermission(permissions, "attendance:export");
   const canUseBotSimulator =
-    isModuleEnabled(modulesQuery.data, "bot_simulator") &&
-    hasPermission(permissions, "bot_simulator:use");
+    Boolean(user?.isPlatformAdmin) &&
+    isModuleEnabled(modulesQuery.data, "bot_simulator");
 
   const table = useTableUrlState({
     defaults: ATTENDANCE_TABLE_DEFAULTS,

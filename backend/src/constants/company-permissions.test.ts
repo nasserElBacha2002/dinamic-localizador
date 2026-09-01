@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
+import type { CompanyRole } from "../types/company";
+import { COMPANY_ROLES } from "../types/company";
 import { resolvePermissionsForRole, roleHasPermission } from "./company-permissions";
 import type { CompanyPermission } from "../types/company";
 
@@ -8,8 +10,18 @@ describe("company permissions", () => {
     const permissions = resolvePermissionsForRole("OWNER");
     assert.ok(roleHasPermission("OWNER", "company:settings:update"));
     assert.ok(roleHasPermission("OWNER", "users:manage"));
-    assert.ok(roleHasPermission("OWNER", "bot_simulator:use"));
     assert.ok(permissions.has("reports:export"));
+  });
+
+  it("does not grant bot simulator permission to any company role", () => {
+    for (const role of COMPANY_ROLES as readonly CompanyRole[]) {
+      const permissions = resolvePermissionsForRole(role);
+      assert.equal(
+        [...permissions].some((permission) => permission.includes("bot_simulator")),
+        false,
+        `role ${role} must not include bot simulator permissions`,
+      );
+    }
   });
 
   it("limits READ_ONLY to read permissions", () => {
@@ -29,25 +41,18 @@ describe("company permissions", () => {
 
     assert.ok(!roleHasPermission("READ_ONLY", "company:settings:update"));
     assert.ok(!roleHasPermission("READ_ONLY", "employees:manage"));
-    assert.ok(!roleHasPermission("READ_ONLY", "bot_simulator:use"));
   });
 
   it("denies ADMIN users:manage", () => {
     assert.ok(!roleHasPermission("ADMIN", "users:manage"));
     assert.ok(roleHasPermission("ADMIN", "employees:manage"));
-    assert.ok(roleHasPermission("ADMIN", "bot_simulator:use"));
   });
 
-  it("denies OPERATOR bot simulator and full read modules", () => {
+  it("denies OPERATOR full read modules", () => {
     assert.ok(!roleHasPermission("OPERATOR", "employees:read"));
     assert.ok(!roleHasPermission("OPERATOR", "services:read"));
-    assert.ok(!roleHasPermission("OPERATOR", "bot_simulator:use"));
     assert.ok(roleHasPermission("OPERATOR", "attendance:read"));
     assert.ok(roleHasPermission("OPERATOR", "operations:read"));
-  });
-
-  it("grants SUPERVISOR bot simulator access", () => {
-    assert.ok(roleHasPermission("SUPERVISOR", "bot_simulator:use"));
   });
 
   it("scopes payroll receipts: HR full, SUPERVISOR/READ_ONLY/OPERATOR none", () => {

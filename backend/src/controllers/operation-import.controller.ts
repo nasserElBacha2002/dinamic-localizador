@@ -27,11 +27,7 @@ export const operationImportController = {
   async confirm(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
     const body = req.body as OperationImportConfirmInput;
-    const rows = body.rows.map((row) => ({
-      ...row,
-      notes: row.notes ?? null,
-    }));
-    const result = await operationImportService.confirm(companyId, rows);
+    const result = await operationImportService.confirm(companyId, body.rows);
     res.status(201).json(result);
   },
 };

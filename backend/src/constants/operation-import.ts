@@ -11,7 +11,6 @@ export const CLIENT_IMPORT_IGNORED_HEADERS = ["local", "proveedor"] as const;
 export const LEGACY_IMPORT_OPTIONAL_HEADERS = [
   "tolerancia_temprana",
   "tolerancia_tardia",
-  "notas",
 ] as const;
 
 export const LEGACY_IMPORT_TEMPLATE_HEADERS = [

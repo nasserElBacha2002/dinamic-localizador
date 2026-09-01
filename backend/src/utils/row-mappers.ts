@@ -131,7 +131,6 @@ export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
   lateToleranceMinutes: Number(row.late_tolerance_minutes),
   status: String(row.status) as Operation["status"],
-  notes: row.notes ? String(row.notes) : null,
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

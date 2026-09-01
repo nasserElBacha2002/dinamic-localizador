@@ -17,7 +17,6 @@ const operationBaseFields = {
   serviceId: z.string().uuid("UUID de servicio inválido"),
   earlyToleranceMinutes: z.number().int().min(0).optional(),
   lateToleranceMinutes: z.number().int().min(0).optional(),
-  notes: z.string().trim().max(1000).optional().nullable(),
 };
 
 export const createOneTimeOperationSchema = z
@@ -87,7 +86,6 @@ export const updateOperationSchema = z
     scheduledEnd: z.string().datetime({ offset: true }).nullable().optional(),
     earlyToleranceMinutes: z.number().int().min(0).optional(),
     lateToleranceMinutes: z.number().int().min(0).optional(),
-    notes: z.string().trim().max(1000).nullable().optional(),
     status: operationStatusSchema.optional(),
     operationKind: z.never().optional(),
     validFrom: dateOnlySchema.optional(),

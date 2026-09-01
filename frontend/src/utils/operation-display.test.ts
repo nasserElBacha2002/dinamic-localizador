@@ -13,7 +13,6 @@ const listBase = {
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 15,
   status: "SCHEDULED" as const,
-  notes: null,
   createdAt: "2026-06-23T10:00:00.000Z",
   updatedAt: "2026-06-23T10:00:00.000Z",
 };

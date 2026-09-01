@@ -10,9 +10,7 @@ import {
   getOperationAttendanceSummary,
   getOperationById,
   getOperationEmployees,
-  getOperationWorkdayDetail,
   getOperationWorkdays,
-  materializeOperationWorkdays,
   reactivateOperation,
   updateOperation,
 } from "../api/operations.api";
@@ -49,9 +47,6 @@ export async function invalidateOperationScopedQueries(
       queryKey: operationAttendanceKeys.summary(companyId, operationId),
     }),
     queryClient.invalidateQueries({ queryKey: operationWorkdayKeys.list(companyId, operationId) }),
-    queryClient.invalidateQueries({
-      queryKey: operationWorkdayKeys.detail(companyId, operationId, undefined),
-    }),
     queryClient.invalidateQueries({
       queryKey: [
         ...operationRecommendationKeys.company(companyId),
@@ -257,33 +252,5 @@ export function useOperationWorkdays(operationId?: string, filters: OperationWor
     queryKey: operationWorkdayKeys.list(companyId, operationId, filters),
     queryFn: () => getOperationWorkdays(operationId!, filters),
     enabled,
-  });
-}
-
-export function useOperationWorkdayDetail(
-  operationId?: string,
-  workdayId?: string,
-  extraEnabled = true,
-) {
-  const { companyId, enabled } = useOperationalQueryEnabled(
-    Boolean(operationId && workdayId && extraEnabled),
-  );
-
-  return useQuery({
-    queryKey: operationWorkdayKeys.detail(companyId, operationId, workdayId),
-    queryFn: () => getOperationWorkdayDetail(operationId!, workdayId!),
-    enabled,
-  });
-}
-
-export function useMaterializeOperationWorkdays(operationId: string) {
-  const queryClient = useQueryClient();
-  const { companyId } = useOperationalQueryEnabled();
-
-  return useMutation({
-    mutationFn: () => materializeOperationWorkdays(operationId),
-    onSuccess: () => {
-      void invalidateOperationScopedQueries(queryClient, companyId, operationId);
-    },
   });
 }

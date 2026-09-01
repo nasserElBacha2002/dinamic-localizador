@@ -3,6 +3,7 @@ import { describe, it } from "node:test";
 import {
   buildAttendanceExceptionHref,
   buildEmployeeAttendanceHref,
+  buildOperationAttendanceHref,
   buildOperationDetailHref,
 } from "./statistics-deep-links";
 
@@ -49,12 +50,17 @@ describe("statistics deep links", () => {
     assert.match(href, /opSortBy=coverageRate/);
   });
 
-  it("builds employee and operation detail links", () => {
+  it("builds employee, operation detail, and operation attendance links", () => {
     assert.equal(
       buildOperationDetailHref("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"),
       "/operations/aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee",
     );
     const emp = buildEmployeeAttendanceHref("11111111-1111-4111-8111-111111111111", ctx);
     assert.match(emp, /employeeIds=11111111-1111-4111-8111-111111111111/);
+
+    const attendance = buildOperationAttendanceHref("22222222-2222-4222-8222-222222222222", ctx);
+    assert.match(attendance, /\/attendance\?/);
+    assert.match(attendance, /operationIds=22222222-2222-4222-8222-222222222222/);
+    assert.match(attendance, /dateFrom=2026-08-01/);
   });
 });

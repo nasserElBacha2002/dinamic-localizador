@@ -16,7 +16,6 @@ const cancelledOperation = {
   earlyToleranceMinutes: 60,
   lateToleranceMinutes: 15,
   status: "CANCELLED" as const,
-  notes: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

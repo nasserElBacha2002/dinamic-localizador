@@ -23,6 +23,5 @@ export function buildOperationCreateDefaultValues(
     ),
     earlyToleranceMinutes: settings.defaultEarlyArrivalToleranceMinutes,
     lateToleranceMinutes: settings.defaultLateArrivalToleranceMinutes,
-    notes: "",
   };
 }

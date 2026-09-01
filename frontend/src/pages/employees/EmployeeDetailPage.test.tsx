@@ -380,7 +380,6 @@ describe("EmployeeDetailPage", () => {
         cancelledDays: 0,
         availableDays: 10,
         projectedAvailableDays: 10,
-        notes: null,
       },
     ];
     const view = renderPage(
@@ -417,7 +416,6 @@ describe("EmployeeDetailPage", () => {
         cancelledDays: 0,
         availableDays: 10,
         projectedAvailableDays: 10,
-        notes: null,
       },
     ];
     const view = renderPage(

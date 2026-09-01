@@ -153,7 +153,6 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
       absenceTypeId: vacation.id,
       year,
       totalDays: 30,
-      notes: null,
     });
 
     return { companyId, vacation, employeeA };

@@ -20,7 +20,6 @@ const operationSharedFields = {
   serviceId: z.string().uuid("Seleccioná un servicio"),
   earlyToleranceMinutes: z.number().int().min(0, "No puede ser negativa"),
   lateToleranceMinutes: z.number().int().min(0, "No puede ser negativa"),
-  notes: z.string().optional().or(z.literal("")),
   status: operationStatusSchema.optional(),
 };
 

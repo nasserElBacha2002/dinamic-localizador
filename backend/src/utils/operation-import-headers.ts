@@ -35,7 +35,6 @@ const LOCATION_TYPE_ALIASES = new Set(
 const OPTIONAL_HEADER_ALIASES = new Set([
   "tolerancia_temprana",
   "tolerancia_tardia",
-  "notas",
   ...CLIENT_IMPORT_IGNORED_HEADERS,
 ]);
 

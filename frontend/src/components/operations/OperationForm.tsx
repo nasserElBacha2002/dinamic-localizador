@@ -13,7 +13,6 @@ import {
   RHFDateTimeInput,
   RHFNumberInput,
   RHFSelect,
-  RHFTextarea,
 } from "../../design-system";
 import {
   createOperationFormSchema,
@@ -446,12 +445,6 @@ export function OperationForm({
           min={0}
           step={1}
         />
-      </FormGrid>
-
-      <FormGrid>
-        <FormGrid.Full>
-          <RHFTextarea control={control} name="notes" label="Notas" minRows={3} />
-        </FormGrid.Full>
       </FormGrid>
 
       {mode === "edit" && statusOptions.length > 0 ? (

@@ -1,34 +1,6 @@
-import type {
-  DerivedEmployeeWorkdayState,
-  MaterializationResult,
-  OperationWorkdaySummary,
-} from "../../types/operation-workday";
+import type { OperationWorkdaySummary } from "../../types/operation-workday";
 import { formatDateOnlyWithWeekday } from "../../utils/date-only";
 import { formatTime } from "../../utils/dates";
-
-export const workdayStatusLabels: Record<OperationWorkdaySummary["status"], string> = {
-  ACTIVE: "Programada",
-  CANCELLED: "Cancelada",
-};
-
-export const employeeWorkdayStateLabels: Record<DerivedEmployeeWorkdayState, string> = {
-  EXPECTED: "Esperado",
-  JUSTIFIED: "Justificado",
-  PRESENT: "Con asistencia",
-  ABSENT: "Ausente",
-  CANCELLED: "Cancelado",
-};
-
-export const employeeWorkdayStateTones: Record<
-  DerivedEmployeeWorkdayState,
-  "info" | "success" | "warning" | "danger" | "neutral"
-> = {
-  EXPECTED: "info",
-  JUSTIFIED: "warning",
-  PRESENT: "success",
-  ABSENT: "danger",
-  CANCELLED: "neutral",
-};
 
 export function formatWorkdayDate(workDate: string): string {
   return formatDateOnlyWithWeekday(workDate);
@@ -38,26 +10,6 @@ export function formatExpectedTimeRange(workday: OperationWorkdaySummary): strin
   const start = formatTime(workday.expectedStartAt);
   const end = workday.expectedEndAt ? formatTime(workday.expectedEndAt) : "—";
   return `${start}–${end}`;
-}
-
-export function buildMaterializationSuccessMessage(result: MaterializationResult): string {
-  const parts: string[] = [];
-  if (result.operationWorkdaysCreated > 0) {
-    parts.push(`${result.operationWorkdaysCreated} jornadas generadas`);
-  }
-  if (result.employeeWorkdaysCreated > 0) {
-    parts.push(`${result.employeeWorkdaysCreated} colaboradores incorporados`);
-  }
-  if (result.employeeWorkdaysReactivated > 0) {
-    parts.push(`${result.employeeWorkdaysReactivated} expectativas reactivadas`);
-  }
-  if (result.absenceReconciliation?.justified) {
-    parts.push(`${result.absenceReconciliation.justified} jornadas justificadas`);
-  }
-
-  return parts.length > 0
-    ? `Jornadas actualizadas correctamente. ${parts.join(" · ")}.`
-    : "Jornadas actualizadas correctamente.";
 }
 
 export function buildAbsenceApprovalSuccessMessage(input: {

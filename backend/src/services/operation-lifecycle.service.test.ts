@@ -16,7 +16,6 @@ const makeOperation = (overrides: Partial<Operation> = {}): Operation => ({
   earlyToleranceMinutes: 60,
   lateToleranceMinutes: 30,
   status: "SCHEDULED",
-  notes: null,
   createdAt: "2026-08-13T12:00:00.000Z",
   updatedAt: "2026-08-13T12:00:00.000Z",
   ...overrides,

@@ -21,7 +21,6 @@ const operationDetail = {
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 10,
   status: "SCHEDULED",
-  notes: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   service: {
@@ -58,7 +57,7 @@ mockApiModule("api/company-users.api", {
     companyName: "Empresa Test",
     role: "ADMIN",
     isPlatformAdmin: false,
-    permissions: ["operations:manage", "operations:read"],
+    permissions: ["operations:manage", "operations:read", "attendance:read"],
   }),
   getCompanyUsers: async () => ({ data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } }),
   getCompanyUserById: async () => {
@@ -100,6 +99,14 @@ mockApiModule("api/company-settings.api", {
     throw new Error("not used");
   },
   normalizeCompanySettings: (raw: unknown) => raw,
+});
+
+mockApiModule("api/company-modules.api", {
+  getCompanyModules: async () => [
+    { moduleKey: "attendance", isEnabled: true },
+    { moduleKey: "operations", isEnabled: true },
+  ],
+  updateCompanyModules: async () => [],
 });
 
 mockApiModule("api/company-work-schedule.api", {
@@ -148,9 +155,12 @@ describe("OperationDetailPage entity identity", () => {
     const avatar = view.container.querySelector("[data-entity-avatar='operation']");
     assert.equal(avatar?.textContent, "S");
     assert.ok(view.getByRole("button", { name: "Volver al listado" }));
+    assert.ok(view.getByRole("link", { name: "Ver asistencias" }));
+    assert.match(view.getByRole("link", { name: "Ver asistencias" }).getAttribute("href") ?? "", /\/attendance\?operationIds=op-1/);
     assert.equal(view.queryByRole("button", { name: "Más acciones de la operación" }), null);
     assert.ok(view.getByRole("button", { name: /^Editar$/i }));
     assert.ok(view.getByRole("button", { name: /Editar operación/i }));
     assert.match(view.container.textContent ?? "", /Detalle de la operación/i);
+    assert.equal(view.queryByText("Configuración"), null);
   });
 });

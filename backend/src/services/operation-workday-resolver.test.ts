@@ -14,7 +14,6 @@ const baseOperation = (overrides: Partial<Operation> = {}): Operation => ({
   earlyToleranceMinutes: 30,
   lateToleranceMinutes: 45,
   status: "SCHEDULED",
-  notes: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   ...overrides,

@@ -36,7 +36,6 @@ const createdOperation = {
   earlyToleranceMinutes: 45,
   lateToleranceMinutes: 75,
   status: "SCHEDULED" as const,
-  notes: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

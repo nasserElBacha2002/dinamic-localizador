@@ -68,8 +68,6 @@ export const OPERATIONS_API_EXPORTS = [
   "endOperationAssignment",
   "getOperationAttendanceSummary",
   "getOperationWorkdays",
-  "getOperationWorkdayDetail",
-  "materializeOperationWorkdays",
   "previewOperationImport",
   "confirmOperationImport",
 ] as const;

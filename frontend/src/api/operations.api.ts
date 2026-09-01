@@ -18,8 +18,6 @@ import type {
   OperationImportPreviewResult,
 } from "../types/operation-import";
 import type {
-  MaterializationResult,
-  OperationWorkdayDetail,
   OperationWorkdayFilters,
   OperationWorkdaySummary,
 } from "../types/operation-workday";
@@ -29,10 +27,8 @@ import {
   operationAssignmentCancelPath,
   operationAssignmentEndPath,
   operationAssignmentPath,
-  operationMaterializeWorkdaysPath,
   operationPath,
   operationReactivatePath,
-  operationWorkdayPath,
   operationWorkdaysPath,
 } from "./endpoints";
 import { scopedApiClient } from "./scoped-client";
@@ -182,25 +178,6 @@ export async function getOperationWorkdays(
     },
   );
   return data;
-}
-
-export async function getOperationWorkdayDetail(
-  operationId: string,
-  workdayId: string,
-): Promise<OperationWorkdayDetail> {
-  const { data } = await scopedApiClient.get<SingleResponse<OperationWorkdayDetail>>(
-    operationWorkdayPath(operationId, workdayId),
-  );
-  return data.data;
-}
-
-export async function materializeOperationWorkdays(
-  operationId: string,
-): Promise<MaterializationResult> {
-  const { data } = await scopedApiClient.post<SingleResponse<MaterializationResult>>(
-    operationMaterializeWorkdaysPath(operationId),
-  );
-  return data.data;
 }
 
 const IMPORT_PREVIEW_TIMEOUT_MS = 60_000;

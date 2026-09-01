@@ -26,7 +26,6 @@ const baseOperation = {
   earlyToleranceMinutes: 60,
   lateToleranceMinutes: 90,
   status: "SCHEDULED" as const,
-  notes: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };
@@ -268,54 +267,5 @@ describe("SUPERSEDED notification retry policy", () => {
       ),
       false,
     );
-  });
-});
-
-describe("operationService.updateOneTime notes-only", () => {
-  afterEach(() => {
-    mock.restoreAll();
-  });
-
-  it("does not open a reconciliation transaction for notes-only updates", async () => {
-    setupUnitTestEnv();
-    const { operationService } = await import("./operation.service");
-    const { auditService } = await import("./audit.service");
-    const { oneTimeScheduleReconciliationCommand } = await import(
-      "./one-time-operation-schedule-reconciliation.service"
-    );
-
-    const futureOperation = {
-      ...baseOperation,
-      scheduledStart: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-      scheduledEnd: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
-    };
-    let reconcileCalls = 0;
-    mock.method(operationRepository, "findById", async () => futureOperation);
-    mock.method(operationRepository, "update", async (_companyId, _id, input) => ({
-      ...futureOperation,
-      notes: input.notes ?? futureOperation.notes,
-    }));
-    mock.method(
-      oneTimeScheduleReconciliationCommand,
-      "reconcileInTransaction",
-      async () => {
-        reconcileCalls += 1;
-        return {
-          operationWorkdayId: null,
-          workDate: null,
-          scheduleVersion: null,
-          assignmentsUpdated: 0,
-          confirmationsReset: 0,
-          notificationsSuperseded: 0,
-          notificationsInvalidated: 0,
-          employeeWorkdaysEnsured: 0,
-          workdayAction: "none" as const,
-        };
-      },
-    );
-    mock.method(auditService, "log", async () => undefined);
-
-    await operationService.update(COMPANY_ID, OPERATION_ID, { notes: "solo notas" });
-    assert.equal(reconcileCalls, 0);
   });
 });

@@ -7,7 +7,6 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { employeeAssignmentQueryRepository } from "../repositories/employee-assignment-query.repository";
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
-import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";

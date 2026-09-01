@@ -17,7 +17,6 @@ export function buildOperationEditDefaultValues(operation: OperationDetail): Ope
     scheduleDays: schedule?.days ?? createDefaultWeeklySchedule(),
     earlyToleranceMinutes: operation.earlyToleranceMinutes,
     lateToleranceMinutes: operation.lateToleranceMinutes,
-    notes: operation.notes ?? "",
     status: operation.status,
   };
 }
@@ -30,7 +29,6 @@ export function toOperationUpdatePayload(
     serviceId: values.serviceId,
     earlyToleranceMinutes: values.earlyToleranceMinutes,
     lateToleranceMinutes: values.lateToleranceMinutes,
-    notes: values.notes?.trim() ? values.notes.trim() : null,
     status: values.status,
   };
 

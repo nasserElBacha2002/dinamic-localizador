@@ -184,7 +184,6 @@ const validateClientRow = (
   const rawFecha = getCell(row, headers, "fecha").trim();
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
-  const notas = getCell(row, headers, "notas").trim();
   const locationTypeRaw = getCell(row, headers, "location_type");
 
   const errors: string[] = [];
@@ -271,7 +270,6 @@ const validateClientRow = (
     lateToleranceMinutes: isValid ? lateTolerance.value : null,
     earlyToleranceDisplay: earlyTolerance.display,
     lateToleranceDisplay: lateTolerance.display,
-    notas,
     status: isValid ? "valid" : "invalid",
     errors,
   };
@@ -290,7 +288,6 @@ const validateLegacyRow = (
   const fechaFin = getCell(row, headers, "fecha_fin").trim();
   const toleranciaTempranaRaw = getCell(row, headers, "tolerancia_temprana");
   const toleranciaTardiaRaw = getCell(row, headers, "tolerancia_tardia");
-  const notas = getCell(row, headers, "notas").trim();
   const locationTypeRaw = getCell(row, headers, "location_type");
 
   const errors: string[] = [];
@@ -385,7 +382,6 @@ const validateLegacyRow = (
     lateToleranceMinutes: isValid ? lateTolerance.value : null,
     earlyToleranceDisplay: earlyTolerance.display,
     lateToleranceDisplay: lateTolerance.display,
-    notas,
     status: isValid ? "valid" : "invalid",
     errors,
   };
@@ -398,7 +394,6 @@ const toCreateInput = (row: OperationImportConfirmRow): CreateOneTimeOperationIn
   scheduledEnd: row.scheduledEnd,
   earlyToleranceMinutes: row.earlyToleranceMinutes,
   lateToleranceMinutes: row.lateToleranceMinutes,
-  notes: row.notes,
 });
 
 const emptyPreview = (

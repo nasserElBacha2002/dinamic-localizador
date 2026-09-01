@@ -200,19 +200,9 @@ describe("employee deactivation release plan", () => {
     );
   });
 
-  it("separates operation display name from location name", () => {
+  it("builds operation display name from location and date", () => {
     assert.equal(
       resolveOperationDisplayName({
-        notes: "Inventario Palermo",
-        locationName: "Sucursal Palermo",
-        date: "2026-07-25",
-        scheduledStart: null,
-      }),
-      "Inventario Palermo",
-    );
-    assert.equal(
-      resolveOperationDisplayName({
-        notes: null,
         locationName: "Sucursal Palermo",
         date: "2026-07-25",
         scheduledStart: null,

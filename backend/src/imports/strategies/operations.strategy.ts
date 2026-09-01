@@ -25,7 +25,6 @@ type OperationConfirmPayload = {
   scheduledEnd: string;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
-  notes: string | null;
 };
 
 const toRowErrors = (messages: string[]): ImportRowError[] =>
@@ -53,7 +52,6 @@ const buildOperationsPrepared = async (
       fechaFin: row.fechaFin,
       scheduledStartDisplay: row.scheduledStartDisplay,
       scheduledEndDisplay: row.scheduledEndDisplay,
-      notas: row.notas,
     };
     const errors = toRowErrors(row.errors);
     const payload: OperationConfirmPayload | null =
@@ -69,7 +67,6 @@ const buildOperationsPrepared = async (
             scheduledEnd: row.scheduledEnd,
             earlyToleranceMinutes: row.earlyToleranceMinutes,
             lateToleranceMinutes: row.lateToleranceMinutes,
-            notes: row.notas.trim() ? row.notas.trim() : null,
           }
         : null;
 
@@ -95,7 +92,6 @@ const buildOperationsPrepared = async (
       { key: "rawFecha", header: result.format === "client" ? "Fecha original" : "Inicio original" },
       { key: "scheduledStartDisplay", header: "Inicio" },
       { key: "scheduledEndDisplay", header: "Fin" },
-      { key: "notas", header: "Notas" },
     ],
     fileErrors: result.fileErrors,
     rows,

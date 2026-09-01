@@ -115,14 +115,12 @@ describeDatabaseIntegration("database integrity phase0a H1 H2", () => {
       absenceTypeId: vacation.id,
       year,
       totalDays: 30,
-      notes: null,
     });
     await absenceBalanceRepository.upsert(companyId, {
       employeeId: employeeB.id,
       absenceTypeId: vacation.id,
       year,
       totalDays: 30,
-      notes: null,
     });
 
     return { companyId, vacation, employeeA, employeeB };

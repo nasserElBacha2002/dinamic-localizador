@@ -57,7 +57,6 @@ describe("operation assignment invalidation keys", () => {
       operationEmployeeKeys.list(companyId, operationId),
       operationAttendanceKeys.summary(companyId, operationId),
       operationWorkdayKeys.list(companyId, operationId),
-      operationWorkdayKeys.detail(companyId, operationId, undefined),
     ];
 
     for (const key of scopedKeys) {

@@ -410,7 +410,6 @@ describe("operationImportService confirm", () => {
         scheduledEnd: row.scheduledEnd!,
         earlyToleranceMinutes: row.earlyToleranceMinutes!,
         lateToleranceMinutes: row.lateToleranceMinutes!,
-        notes: null,
       }));
 
     assert.equal(confirmRows[0]?.earlyToleranceMinutes, 55);

@@ -34,12 +34,6 @@ export const operationPath = (operationId: string): string =>
 export const operationWorkdaysPath = (operationId: string): string =>
   `${operationPath(operationId)}/workdays`;
 
-export const operationWorkdayPath = (operationId: string, workdayId: string): string =>
-  `${operationWorkdaysPath(operationId)}/${workdayId}`;
-
-export const operationMaterializeWorkdaysPath = (operationId: string): string =>
-  `${operationPath(operationId)}/materialize-workdays`;
-
 export const operationReactivatePath = (operationId: string): string =>
   `${operationPath(operationId)}/reactivate`;
 

@@ -128,7 +128,6 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
       absenceTypeId: vacation.id,
       year,
       totalDays: 20,
-      notes: null,
     });
 
     return { companyId, vacation, personal, employee };

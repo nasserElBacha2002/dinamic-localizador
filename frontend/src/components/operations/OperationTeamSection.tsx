@@ -337,7 +337,7 @@ export function OperationTeamSection({
         }
         emptyDescription={
           noWorkdayForToday
-            ? "Seleccioná otra jornada materializada o actualizá las jornadas programadas."
+            ? "Seleccioná otra jornada materializada."
             : canAssign
               ? "Usá Administrar equipo para incorporar colaboradores."
               : `No hay ${terminology.worker.plural.toLowerCase()} asignados a esta jornada.`

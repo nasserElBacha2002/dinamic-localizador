@@ -115,7 +115,6 @@ describeDatabaseIntegration("absence phase0 hardening integration", () => {
       absenceTypeId: vacation.id,
       year: Number((await resolveCompanyTodayIso(companyId)).slice(0, 4)),
       totalDays: 20,
-      notes: null,
     });
 
     return { companyId, vacation, personal, employee };

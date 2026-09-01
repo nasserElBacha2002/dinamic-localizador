@@ -47,9 +47,4 @@ export const operationWorkdayKeys = {
     filters === undefined
       ? (["operation-workdays", companyId, operationId] as const)
       : (["operation-workdays", companyId, operationId, filters] as const),
-  detail: (
-    companyId: string | undefined,
-    operationId: string | undefined,
-    workdayId: string | undefined,
-  ) => ["operation-workday-detail", companyId, operationId, workdayId] as const,
 };

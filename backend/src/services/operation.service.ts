@@ -200,7 +200,6 @@ export const operationService = {
           serviceId: input.serviceId,
           earlyToleranceMinutes: tolerances.earlyToleranceMinutes,
           lateToleranceMinutes: tolerances.lateToleranceMinutes,
-          notes: input.notes ?? null,
         },
         transaction,
       );

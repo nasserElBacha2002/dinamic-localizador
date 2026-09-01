@@ -71,7 +71,6 @@ export interface Operation {
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   status: OperationStatus;
-  notes: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -22,7 +22,6 @@ export interface OperationImportPreviewRow {
   lateToleranceMinutes: number | null;
   earlyToleranceDisplay: string;
   lateToleranceDisplay: string;
-  notas: string;
   status: OperationImportRowStatus;
   errors: string[];
 }
@@ -48,5 +47,4 @@ export interface OperationImportConfirmRow {
   scheduledEnd: string;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
-  notes: string | null;
 }

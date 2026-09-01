@@ -13,6 +13,8 @@ import { employeeService } from "./employee.service";
 import { operationAssignmentService } from "./operation-assignment.service";
 import { AppError } from "../errors/app-error";
 import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
+import { resolveOperationDisplayName } from "../utils/employee-deactivation-impact";
+import { operationWorkDateService } from "./operation-work-date.service";
 
 const uniquePhone = (suffix: number): string =>
   `+54911${Date.now().toString().slice(-7)}${suffix}`;
@@ -72,12 +74,14 @@ describeDatabaseIntegration("employee assisted deactivation integration", () => 
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
-        SELECT TOP 1 id FROM operational_locations
+        SELECT TOP 1 id, name FROM operational_locations
         WHERE company_id = @companyId AND active = 1
         ORDER BY created_at ASC
       `);
     const serviceId = String(serviceResult.recordset[0]?.id ?? "");
+    const locationName = String(serviceResult.recordset[0]?.name ?? "");
     assert.ok(serviceId);
+    assert.ok(locationName);
 
     const futureStart = new Date(Date.now() + 10 * 24 * 60 * 60 * 1000);
     const operationInsert = await pool
@@ -85,14 +89,13 @@ describeDatabaseIntegration("employee assisted deactivation integration", () => 
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("serviceId", sql.UniqueIdentifier, serviceId)
       .input("scheduledStart", sql.DateTime2, futureStart)
-      .input("notes", sql.NVarChar(200), "Inventario futuro")
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, scheduled_start, early_tolerance_minutes,
           late_tolerance_minutes, status, operation_kind, notes
         )
         OUTPUT INSERTED.id
-        VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME', @notes)
+        VALUES (@companyId, @serviceId, @scheduledStart, 60, 90, 'SCHEDULED', 'ONE_TIME', NULL)
       `);
     const operationId = String(operationInsert.recordset[0].id);
     fixtures.trackOperation(companyId, operationId);
@@ -123,7 +126,15 @@ describeDatabaseIntegration("employee assisted deactivation integration", () => 
     const impact = await employeeDeactivationService.getDeactivationImpact(companyId, employeeId);
     assert.equal(impact.requiresConfirmation, true);
     assert.ok(impact.affectedAssignmentsCount >= 1);
-    assert.equal(impact.affectedAssignments[0]?.operationName, "Inventario futuro");
+    const workDate = await operationWorkDateService.resolveOperationWorkDate(companyId, operationId);
+    assert.equal(
+      impact.affectedAssignments[0]?.operationName,
+      resolveOperationDisplayName({
+        locationName,
+        date: workDate,
+        scheduledStart: futureStart.toISOString(),
+      }),
+    );
 
     await assert.rejects(
       () => employeeDeactivationService.deactivate(companyId, employeeId, {

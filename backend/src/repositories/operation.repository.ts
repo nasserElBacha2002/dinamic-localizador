@@ -44,7 +44,7 @@ export const operationRepository = {
       .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
-      .input("notes", sql.NVarChar(1000), input.notes ?? null)
+      .input("notes", sql.NVarChar(1000), null)
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
@@ -66,7 +66,6 @@ export const operationRepository = {
       serviceId: string;
       earlyToleranceMinutes: number;
       lateToleranceMinutes: number;
-      notes: string | null;
     },
     transaction?: sql.Transaction,
   ): Promise<Operation> {
@@ -76,7 +75,7 @@ export const operationRepository = {
       .input("serviceId", sql.UniqueIdentifier, input.serviceId)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
-      .input("notes", sql.NVarChar(1000), input.notes ?? null)
+      .input("notes", sql.NVarChar(1000), null)
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
@@ -105,7 +104,7 @@ export const operationRepository = {
       .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
-      .input("notes", sql.NVarChar(1000), input.notes ?? null)
+      .input("notes", sql.NVarChar(1000), null)
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
@@ -200,7 +199,7 @@ export const operationRepository = {
         );
         request.input(`earlyToleranceMinutes${index}`, sql.Int, input.earlyToleranceMinutes);
         request.input(`lateToleranceMinutes${index}`, sql.Int, input.lateToleranceMinutes);
-        request.input(`notes${index}`, sql.NVarChar(1000), input.notes ?? null);
+        request.input(`notes${index}`, sql.NVarChar(1000), null);
         valueRows.push(
           `(@companyId, @serviceId${index}, N'ONE_TIME', @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
         );
@@ -518,11 +517,6 @@ export const operationRepository = {
     if (input.lateToleranceMinutes !== undefined) {
       request.input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes);
       fields.push("late_tolerance_minutes = @lateToleranceMinutes");
-    }
-
-    if (input.notes !== undefined) {
-      request.input("notes", sql.NVarChar(1000), input.notes);
-      fields.push("notes = @notes");
     }
 
     if (input.status !== undefined) {

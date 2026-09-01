@@ -36,8 +36,8 @@ mockApiModule("api/company-users.api", {
     companyId: "co-1",
     companyName: "Empresa Test",
     role: "ADMIN",
-    isPlatformAdmin: false,
-    permissions: ["bot_simulator:use"],
+    isPlatformAdmin: true,
+    permissions: ["company:read", "attendance:read"],
   }),
   getCompanyUsers: async () => ({ data: [], meta: { page: 1, pageSize: 10, totalItems: 0, totalPages: 0 } }),
   getCompanyUserById: async () => {

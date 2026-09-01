@@ -41,9 +41,9 @@ export function evaluateEntityLinkAccess(
     if (context.authLoading) {
       return { status: "loading" };
     }
-    return context.isPlatformAdmin
-      ? { status: "allowed" }
-      : { status: "denied", reason: "platform_admin" };
+    if (!context.isPlatformAdmin) {
+      return { status: "denied", reason: "platform_admin" };
+    }
   }
 
   const needsModules = Boolean(definition.moduleKey || definition.anyModuleOf?.length);

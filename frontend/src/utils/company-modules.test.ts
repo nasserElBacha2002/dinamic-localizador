@@ -141,7 +141,6 @@ describe("company modules frontend module", () => {
         "attendance:read",
         "absences:read",
         "reports:read",
-        "bot_simulator:use",
         "company:settings:update",
         "users:manage",
       ],
@@ -155,6 +154,30 @@ describe("company modules frontend module", () => {
     assert.ok(labels.includes(terminology.attendance.plural));
     assert.ok(labels.includes("Estado de servidores"));
     assert.ok(items.some((item) => item.path === "/platform/servers"));
+  });
+
+  it("shows Simulador de Bot only for platform superadmin when module is enabled", () => {
+    const asSuperAdmin = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:settings:update"],
+      isPlatformAdmin: true,
+      modulesLoading: false,
+    });
+    assert.equal(
+      asSuperAdmin.some((item) => item.path === "/bot-simulator"),
+      true,
+    );
+
+    const asOwner = getAdminNavItems({
+      modules: allEnabledModules,
+      permissions: ["company:settings:update", "users:manage"],
+      isPlatformAdmin: false,
+      modulesLoading: false,
+    });
+    assert.equal(
+      asOwner.some((item) => item.path === "/bot-simulator"),
+      false,
+    );
   });
 
   it("shows Estado de servidores only for platform Super Admin", () => {

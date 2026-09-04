@@ -1,9 +1,8 @@
 export type LocationZoneGeocodingStatus = "PENDING" | "RESOLVED" | "FAILED" | "MANUAL";
 export type LocationZoneGeocodingSource = "AUTO" | "MANUAL";
 
-export interface LocationZone {
+export interface GlobalLocationZone {
   id: string;
-  companyId: string;
   name: string;
   normalizedName: string;
   locality: string | null;
@@ -14,11 +13,33 @@ export interface LocationZone {
   geocodingSource: LocationZoneGeocodingSource | null;
   geocodedAt: string | null;
   geocodingLastError: string | null;
+  /** Global catalog active flag */
   isActive: boolean;
-  assignedEmployeesCount?: number;
   createdAt: string;
   updatedAt: string;
 }
+
+export interface CompanyLocationZoneView extends GlobalLocationZone {
+  companyId: string;
+  associationId: string;
+  associationActive: boolean;
+  /** Global catalog flag (same as isActive on base, kept explicit for clarity) */
+  globalIsActive: boolean;
+  alreadyAssociated?: boolean;
+  assignedEmployeesCount?: number;
+}
+
+/** @deprecated Prefer GlobalLocationZone | CompanyLocationZoneView. Alias for gradual migration. */
+export type LocationZone =
+  | CompanyLocationZoneView
+  | (GlobalLocationZone & {
+      companyId?: string | null;
+      associationId?: string | null;
+      associationActive?: boolean | null;
+      alreadyAssociated?: boolean;
+      globalIsActive?: boolean;
+      assignedEmployeesCount?: number;
+    });
 
 /** Active-zone geocoding coverage (from GET .../geocoding-summary). */
 export interface LocationZoneGeocodingSummary {
@@ -59,6 +80,12 @@ export interface UpdateLocationZoneInput {
 
 export interface ListLocationZonesFilters {
   includeInactive?: boolean;
+}
+
+export interface SearchLocationZonesFilters {
+  q: string;
+  locality?: string;
+  limit?: number;
 }
 
 export interface GeocodeLocationZoneInput {

@@ -185,7 +185,7 @@ describeDatabaseIntegration("historical operation synthetic seed", () => {
         .query(`
           UPDATE employees SET location_zone_id = NULL WHERE company_id = @companyId;
           UPDATE operational_locations SET location_zone_id = NULL WHERE company_id = @companyId;
-          DELETE FROM location_zones WHERE company_id = @companyId;
+          DELETE FROM company_location_zones WHERE company_id = @companyId;
         `);
       await deleteCompanyCascade(companyId);
     }

@@ -2,11 +2,21 @@ import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { UpdateLocationZoneInput } from "../schemas/location-zone.schema";
 import type {
+  CompanyLocationZoneView,
+  GlobalLocationZone,
   LocationZone,
   LocationZoneGeocodingSource,
   LocationZoneGeocodingStatus,
 } from "../types/location-zone";
-import { buildGeocodingCoverageSummary, summarizeCanonicalLocalities } from "../utils/location-zone-geocoding-summary";
+import {
+  buildGeocodingCoverageSummary,
+  summarizeCanonicalLocalities,
+} from "../utils/location-zone-geocoding-summary";
+import {
+  normalizeLocationZoneLocality,
+  normalizeLocationZoneName,
+} from "../utils/normalize-location-zone-name";
+import { isDuplicateKeyError } from "../utils/sql-server-errors";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -53,27 +63,69 @@ const toGeocodingSource = (value: unknown): LocationZoneGeocodingSource | null =
   return null;
 };
 
-export const mapLocationZoneRow = (row: Record<string, unknown>): LocationZone => ({
-  id: String(row.id),
-  companyId: String(row.company_id),
-  name: String(row.name),
-  normalizedName: String(row.normalized_name),
-  locality: row.locality ? String(row.locality) : null,
-  normalizedLocality: String(row.normalized_locality ?? ""),
-  centroidLatitude: toNullableNumber(row.centroid_latitude),
-  centroidLongitude: toNullableNumber(row.centroid_longitude),
-  geocodingStatus: toGeocodingStatus(row.geocoding_status),
-  geocodingSource: toGeocodingSource(row.geocoding_source),
-  geocodedAt: toNullableIsoString(row.geocoded_at),
-  geocodingLastError: row.geocoding_last_error ? String(row.geocoding_last_error) : null,
-  isActive: Boolean(row.is_active),
-  assignedEmployeesCount:
-    row.assigned_employees_count !== undefined && row.assigned_employees_count !== null
-      ? Number(row.assigned_employees_count)
-      : undefined,
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+const mapGlobalLocationZoneFields = (row: Record<string, unknown>): GlobalLocationZone => {
+  const zoneActive = Boolean(row.is_active);
+  return {
+    id: String(row.id),
+    name: String(row.name),
+    normalizedName: String(row.normalized_name),
+    locality: row.locality ? String(row.locality) : null,
+    normalizedLocality: String(row.normalized_locality ?? ""),
+    centroidLatitude: toNullableNumber(row.centroid_latitude),
+    centroidLongitude: toNullableNumber(row.centroid_longitude),
+    geocodingStatus: toGeocodingStatus(row.geocoding_status),
+    geocodingSource: toGeocodingSource(row.geocoding_source),
+    geocodedAt: toNullableIsoString(row.geocoded_at),
+    geocodingLastError: row.geocoding_last_error ? String(row.geocoding_last_error) : null,
+    /** Always the global catalog flag */
+    isActive: zoneActive,
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};
+
+export const mapLocationZoneRow = (
+  row: Record<string, unknown>,
+  companyContextId: string | null = null,
+): LocationZone => {
+  const global = mapGlobalLocationZoneFields(row);
+  const hasAssociationContext =
+    companyContextId !== null ||
+    (row.association_id !== undefined && row.association_id !== null) ||
+    (row.association_is_active !== undefined && row.association_is_active !== null);
+
+  if (!hasAssociationContext) {
+    return global;
+  }
+
+  const companyId =
+    companyContextId ??
+    (row.company_id !== undefined && row.company_id !== null ? String(row.company_id) : "");
+  const associationActive =
+    row.association_is_active === undefined || row.association_is_active === null
+      ? false
+      : Boolean(row.association_is_active);
+
+  const view: CompanyLocationZoneView = {
+    ...global,
+    companyId,
+    associationId:
+      row.association_id !== undefined && row.association_id !== null
+        ? String(row.association_id)
+        : "",
+    associationActive,
+    globalIsActive: global.isActive,
+    alreadyAssociated:
+      row.already_associated !== undefined && row.already_associated !== null
+        ? Boolean(row.already_associated)
+        : undefined,
+    assignedEmployeesCount:
+      row.assigned_employees_count !== undefined && row.assigned_employees_count !== null
+        ? Number(row.assigned_employees_count)
+        : undefined,
+  };
+  return view;
+};
 
 export type LocationZoneCreateInput = {
   name: string;
@@ -97,11 +149,29 @@ export type LocationZoneGeocodingWrite = {
   geocodingLastError: string | null;
 };
 
+export type CompanyLocationZoneAssociation = {
+  id: string;
+  companyId: string;
+  locationZoneId: string;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+const mapAssociationRow = (row: Record<string, unknown>): CompanyLocationZoneAssociation => ({
+  id: String(row.id),
+  companyId: String(row.company_id),
+  locationZoneId: String(row.location_zone_id),
+  isActive: Boolean(row.is_active),
+  createdAt: toIsoString(row.created_at as Date | string),
+  updatedAt: toIsoString(row.updated_at as Date | string),
+});
+
 export const locationZoneRepository = {
   async listForCompany(
     companyId: string,
     options: { includeInactive: boolean },
-  ): Promise<LocationZone[]> {
+  ): Promise<CompanyLocationZoneView[]> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -109,8 +179,11 @@ export const locationZoneRepository = {
       .query(`
         SELECT
           lz.*,
+          clz.id AS association_id,
+          clz.is_active AS association_is_active,
           COALESCE(counts.assigned_employees_count, 0) AS assigned_employees_count
-        FROM location_zones lz
+        FROM company_location_zones clz
+        INNER JOIN location_zones lz ON lz.id = clz.location_zone_id
         LEFT JOIN (
           SELECT location_zone_id, COUNT(*) AS assigned_employees_count
           FROM employees
@@ -118,15 +191,90 @@ export const locationZoneRepository = {
             AND location_zone_id IS NOT NULL
           GROUP BY location_zone_id
         ) counts ON counts.location_zone_id = lz.id
-        WHERE lz.company_id = @companyId
-          ${options.includeInactive ? "" : "AND lz.is_active = 1"}
+        WHERE clz.company_id = @companyId
+          ${options.includeInactive ? "" : "AND clz.is_active = 1 AND lz.is_active = 1"}
         ORDER BY lz.name ASC, lz.locality ASC
       `);
 
-    return result.recordset.map((row) => mapLocationZoneRow(row as Record<string, unknown>));
+    return result.recordset.map((row) =>
+      mapLocationZoneRow(row as Record<string, unknown>, companyId),
+    ) as CompanyLocationZoneView[];
   },
 
-  async findByIdForCompany(companyId: string, zoneId: string): Promise<LocationZone | null> {
+  async searchGlobal(
+    companyId: string,
+    query: { q: string; locality?: string | null; limit: number },
+  ): Promise<CompanyLocationZoneView[]> {
+    const pool = getPool();
+    const normalizedQ = normalizeLocationZoneName(query.q);
+    const localityFilter =
+      query.locality !== undefined && query.locality !== null && query.locality.trim() !== ""
+        ? normalizeLocationZoneLocality(query.locality)
+        : null;
+
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("q", sql.NVarChar(120), normalizedQ)
+      .input("limit", sql.Int, query.limit);
+
+    const localityClause = localityFilter
+      ? "AND lz.normalized_locality = @normalizedLocality"
+      : "";
+    if (localityFilter) {
+      request.input("normalizedLocality", sql.NVarChar(120), localityFilter);
+    }
+
+    const result = await request.query(`
+      SELECT TOP (@limit)
+        lz.*,
+        clz.id AS association_id,
+        clz.is_active AS association_is_active,
+        CASE WHEN clz.id IS NULL THEN 0 ELSE 1 END AS already_associated
+      FROM location_zones lz
+      LEFT JOIN company_location_zones clz
+        ON clz.location_zone_id = lz.id
+       AND clz.company_id = @companyId
+      WHERE lz.is_active = 1
+        AND (
+          lz.normalized_name LIKE @q + N'%'
+          OR lz.name LIKE @q + N'%'
+          OR lz.normalized_locality LIKE @q + N'%'
+        )
+        ${localityClause}
+      ORDER BY
+        CASE WHEN clz.id IS NULL THEN 0 ELSE 1 END ASC,
+        lz.name ASC,
+        lz.locality ASC
+    `);
+
+    return result.recordset.map((row) =>
+      mapLocationZoneRow(row as Record<string, unknown>, companyId),
+    ) as CompanyLocationZoneView[];
+  },
+
+  async findById(zoneId: string): Promise<GlobalLocationZone | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("zoneId", sql.UniqueIdentifier, zoneId)
+      .query(`
+        SELECT TOP 1 *
+        FROM location_zones
+        WHERE id = @zoneId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>, null);
+  },
+
+  async findByIdForCompany(
+    companyId: string,
+    zoneId: string,
+  ): Promise<CompanyLocationZoneView | null> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -135,8 +283,11 @@ export const locationZoneRepository = {
       .query(`
         SELECT
           lz.*,
+          clz.id AS association_id,
+          clz.is_active AS association_is_active,
           COALESCE(counts.assigned_employees_count, 0) AS assigned_employees_count
-        FROM location_zones lz
+        FROM company_location_zones clz
+        INNER JOIN location_zones lz ON lz.id = clz.location_zone_id
         LEFT JOIN (
           SELECT location_zone_id, COUNT(*) AS assigned_employees_count
           FROM employees
@@ -144,54 +295,65 @@ export const locationZoneRepository = {
             AND location_zone_id = @zoneId
           GROUP BY location_zone_id
         ) counts ON counts.location_zone_id = lz.id
-        WHERE lz.id = @zoneId
-          AND lz.company_id = @companyId
+        WHERE clz.company_id = @companyId
+          AND lz.id = @zoneId
       `);
 
     if (!result.recordset[0]) {
       return null;
     }
 
-    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>);
+    return mapLocationZoneRow(
+      result.recordset[0] as Record<string, unknown>,
+      companyId,
+    ) as CompanyLocationZoneView;
   },
 
-  async findAssignableById(companyId: string, zoneId: string): Promise<LocationZone | null> {
+  async findAssignableById(
+    companyId: string,
+    zoneId: string,
+  ): Promise<CompanyLocationZoneView | null> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("zoneId", sql.UniqueIdentifier, zoneId)
       .query(`
-        SELECT TOP 1 *
-        FROM location_zones
-        WHERE id = @zoneId
-          AND company_id = @companyId
-          AND is_active = 1
+        SELECT TOP 1
+          lz.*,
+          clz.id AS association_id,
+          clz.is_active AS association_is_active
+        FROM company_location_zones clz
+        INNER JOIN location_zones lz ON lz.id = clz.location_zone_id
+        WHERE clz.company_id = @companyId
+          AND lz.id = @zoneId
+          AND clz.is_active = 1
+          AND lz.is_active = 1
       `);
 
     if (!result.recordset[0]) {
       return null;
     }
 
-    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>);
+    return mapLocationZoneRow(
+      result.recordset[0] as Record<string, unknown>,
+      companyId,
+    ) as CompanyLocationZoneView;
   },
 
   async findByNormalizedKey(
-    companyId: string,
     normalizedName: string,
     normalizedLocality: string,
-  ): Promise<LocationZone | null> {
+  ): Promise<GlobalLocationZone | null> {
     const pool = getPool();
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("normalizedName", sql.NVarChar(120), normalizedName)
       .input("normalizedLocality", sql.NVarChar(120), normalizedLocality)
       .query(`
         SELECT TOP 1 *
         FROM location_zones
-        WHERE company_id = @companyId
-          AND normalized_name = @normalizedName
+        WHERE normalized_name = @normalizedName
           AND normalized_locality = @normalizedLocality
       `);
 
@@ -199,57 +361,36 @@ export const locationZoneRepository = {
       return null;
     }
 
-    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>);
+    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>, null);
   },
 
-  /**
-   * Zones eligible for automatic geocoding backfill:
-   * - not MANUAL
-   * - missing centroids OR FAILED/PENDING status
-   * Already RESOLVED with both centroids are excluded.
-   */
-  async listEligibleForGeocoding(options: {
-    companyId?: string;
-    includeFailed?: boolean;
-  }): Promise<LocationZone[]> {
-    const pool = getPool();
-    const includeFailed = options.includeFailed !== false;
-    const request = pool.request();
-
-    const companyFilter = options.companyId
-      ? "AND company_id = @companyId"
-      : "";
-    if (options.companyId) {
-      request.input("companyId", sql.UniqueIdentifier, options.companyId);
-    }
-
-    const failedClause = includeFailed
-      ? "OR geocoding_status = N'FAILED'"
-      : "";
-
-    const result = await request.query(`
-      SELECT *
-      FROM location_zones
-      WHERE (geocoding_source IS NULL OR geocoding_source <> N'MANUAL')
-        AND (geocoding_status IS NULL OR geocoding_status <> N'MANUAL')
-        AND (
-          centroid_latitude IS NULL
-          OR centroid_longitude IS NULL
-          OR geocoding_status = N'PENDING'
-          ${failedClause}
-        )
-        ${companyFilter}
-      ORDER BY company_id ASC, name ASC, locality ASC
-    `);
-
-    return result.recordset.map((row) => mapLocationZoneRow(row as Record<string, unknown>));
-  },
-
-  async create(companyId: string, input: LocationZoneCreateInput): Promise<LocationZone> {
+  async findAssociation(
+    companyId: string,
+    zoneId: string,
+  ): Promise<CompanyLocationZoneAssociation | null> {
     const pool = getPool();
     const result = await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("zoneId", sql.UniqueIdentifier, zoneId)
+      .query(`
+        SELECT TOP 1 *
+        FROM company_location_zones
+        WHERE company_id = @companyId
+          AND location_zone_id = @zoneId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssociationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async createGlobal(input: LocationZoneCreateInput): Promise<GlobalLocationZone> {
+    const pool = getPool();
+    const result = await pool
+      .request()
       .input("name", sql.NVarChar(120), input.name)
       .input("normalizedName", sql.NVarChar(120), input.normalizedName)
       .input("locality", sql.NVarChar(120), input.locality)
@@ -262,7 +403,6 @@ export const locationZoneRepository = {
       .input("geocodingLastError", sql.NVarChar(500), input.geocodingLastError ?? null)
       .query(`
         INSERT INTO location_zones (
-          company_id,
           name,
           normalized_name,
           locality,
@@ -277,7 +417,6 @@ export const locationZoneRepository = {
         )
         OUTPUT INSERTED.*
         VALUES (
-          @companyId,
           @name,
           @normalizedName,
           @locality,
@@ -292,11 +431,296 @@ export const locationZoneRepository = {
         )
       `);
 
-    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>);
+    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>, null);
   },
 
-  async update(
+  /**
+   * Find or insert a global zone by normalized key, then ensure company association.
+   * Runs in a transaction; UNIQUE constraints remain the authority on races.
+   */
+  async resolveOrCreateGlobalAndAssociate(
     companyId: string,
+    input: LocationZoneCreateInput,
+    options: { reactivateAssociation?: boolean } = {},
+  ): Promise<CompanyLocationZoneView> {
+    const reactivateAssociation = options.reactivateAssociation !== false;
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
+    let zoneId: string;
+    try {
+      const existingResult = await new sql.Request(transaction)
+        .input("normalizedName", sql.NVarChar(120), input.normalizedName)
+        .input("normalizedLocality", sql.NVarChar(120), input.normalizedLocality)
+        .query(`
+          SELECT TOP 1 id
+          FROM location_zones
+          WHERE normalized_name = @normalizedName
+            AND normalized_locality = @normalizedLocality
+        `);
+
+      if (existingResult.recordset[0]) {
+        zoneId = String(existingResult.recordset[0].id);
+      } else {
+        try {
+          const insertResult = await new sql.Request(transaction)
+            .input("name", sql.NVarChar(120), input.name)
+            .input("normalizedName", sql.NVarChar(120), input.normalizedName)
+            .input("locality", sql.NVarChar(120), input.locality)
+            .input("normalizedLocality", sql.NVarChar(120), input.normalizedLocality)
+            .input("centroidLatitude", sql.Decimal(10, 7), input.centroidLatitude)
+            .input("centroidLongitude", sql.Decimal(10, 7), input.centroidLongitude)
+            .input("geocodingStatus", sql.NVarChar(20), input.geocodingStatus ?? null)
+            .input("geocodingSource", sql.NVarChar(20), input.geocodingSource ?? null)
+            .input("geocodedAt", sql.DateTime2, input.geocodedAt ?? null)
+            .input("geocodingLastError", sql.NVarChar(500), input.geocodingLastError ?? null)
+            .query(`
+              INSERT INTO location_zones (
+                name,
+                normalized_name,
+                locality,
+                normalized_locality,
+                centroid_latitude,
+                centroid_longitude,
+                geocoding_status,
+                geocoding_source,
+                geocoded_at,
+                geocoding_last_error,
+                is_active
+              )
+              OUTPUT INSERTED.id
+              VALUES (
+                @name,
+                @normalizedName,
+                @locality,
+                @normalizedLocality,
+                @centroidLatitude,
+                @centroidLongitude,
+                @geocodingStatus,
+                @geocodingSource,
+                @geocodedAt,
+                @geocodingLastError,
+                1
+              )
+            `);
+          zoneId = String(insertResult.recordset[0].id);
+        } catch (error) {
+          if (!isDuplicateKeyError(error)) {
+            throw error;
+          }
+          const raced = await new sql.Request(transaction)
+            .input("normalizedName", sql.NVarChar(120), input.normalizedName)
+            .input("normalizedLocality", sql.NVarChar(120), input.normalizedLocality)
+            .query(`
+              SELECT TOP 1 id
+              FROM location_zones
+              WHERE normalized_name = @normalizedName
+                AND normalized_locality = @normalizedLocality
+            `);
+          if (!raced.recordset[0]) {
+            throw error;
+          }
+          zoneId = String(raced.recordset[0].id);
+        }
+      }
+
+      const associationResult = await new sql.Request(transaction)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("zoneId", sql.UniqueIdentifier, zoneId)
+        .query(`
+          SELECT TOP 1 id, is_active
+          FROM company_location_zones
+          WHERE company_id = @companyId
+            AND location_zone_id = @zoneId
+        `);
+
+      if (associationResult.recordset[0]) {
+        const isActive = Boolean(associationResult.recordset[0].is_active);
+        if (!isActive) {
+          if (!reactivateAssociation) {
+            throw Object.assign(new Error("LOCATION_ZONE_ASSOCIATION_INACTIVE"), {
+              code: "LOCATION_ZONE_ASSOCIATION_INACTIVE",
+            });
+          }
+          await new sql.Request(transaction)
+            .input("companyId", sql.UniqueIdentifier, companyId)
+            .input("zoneId", sql.UniqueIdentifier, zoneId)
+            .query(`
+              UPDATE company_location_zones
+              SET is_active = 1,
+                  updated_at = SYSUTCDATETIME()
+              WHERE company_id = @companyId
+                AND location_zone_id = @zoneId
+            `);
+        }
+      } else {
+        try {
+          await new sql.Request(transaction)
+            .input("companyId", sql.UniqueIdentifier, companyId)
+            .input("zoneId", sql.UniqueIdentifier, zoneId)
+            .query(`
+              INSERT INTO company_location_zones (company_id, location_zone_id, is_active)
+              VALUES (@companyId, @zoneId, 1)
+            `);
+        } catch (error) {
+          if (!isDuplicateKeyError(error)) {
+            throw error;
+          }
+          if (reactivateAssociation) {
+            await new sql.Request(transaction)
+              .input("companyId", sql.UniqueIdentifier, companyId)
+              .input("zoneId", sql.UniqueIdentifier, zoneId)
+              .query(`
+                UPDATE company_location_zones
+                SET is_active = 1,
+                    updated_at = SYSUTCDATETIME()
+                WHERE company_id = @companyId
+                  AND location_zone_id = @zoneId
+                  AND is_active = 0
+              `);
+          }
+        }
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      try {
+        await transaction.rollback();
+      } catch {
+        // ignore rollback errors
+      }
+      throw error;
+    }
+
+    const view = await this.findByIdForCompany(companyId, zoneId);
+    if (!view) {
+      throw new Error("Failed to load company location zone after resolveOrCreate");
+    }
+    return view;
+  },
+
+  async ensureAssociation(
+    companyId: string,
+    zoneId: string,
+    options: { reactivate?: boolean } = {},
+  ): Promise<CompanyLocationZoneAssociation> {
+    const reactivate = options.reactivate !== false;
+    const existing = await this.findAssociation(companyId, zoneId);
+    if (existing) {
+      if (existing.isActive) {
+        return existing;
+      }
+      if (!reactivate) {
+        return existing;
+      }
+      const reactivated = await this.setAssociationActive(companyId, zoneId, true);
+      if (!reactivated) {
+        throw new Error("Failed to reactivate company location zone association");
+      }
+      return reactivated;
+    }
+
+    const pool = getPool();
+    try {
+      const result = await pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("zoneId", sql.UniqueIdentifier, zoneId)
+        .query(`
+          INSERT INTO company_location_zones (company_id, location_zone_id, is_active)
+          OUTPUT INSERTED.*
+          VALUES (@companyId, @zoneId, 1)
+        `);
+      return mapAssociationRow(result.recordset[0] as Record<string, unknown>);
+    } catch (error) {
+      // Concurrent insert: re-read.
+      const raced = await this.findAssociation(companyId, zoneId);
+      if (raced) {
+        if (!raced.isActive) {
+          const reactivated = await this.setAssociationActive(companyId, zoneId, true);
+          if (reactivated) {
+            return reactivated;
+          }
+        }
+        return raced;
+      }
+      throw error;
+    }
+  },
+
+  async setAssociationActive(
+    companyId: string,
+    zoneId: string,
+    isActive: boolean,
+  ): Promise<CompanyLocationZoneAssociation | null> {
+    const pool = getPool();
+    const result = await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("zoneId", sql.UniqueIdentifier, zoneId)
+      .input("isActive", sql.Bit, isActive ? 1 : 0)
+      .query(`
+        UPDATE company_location_zones
+        SET is_active = @isActive,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND location_zone_id = @zoneId
+      `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapAssociationRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  /**
+   * Zones eligible for automatic geocoding backfill (global catalog).
+   */
+  async listEligibleForGeocoding(options: {
+    companyId?: string;
+    includeFailed?: boolean;
+  }): Promise<GlobalLocationZone[]> {
+    const pool = getPool();
+    const includeFailed = options.includeFailed !== false;
+    const request = pool.request();
+
+    const companyFilter = options.companyId
+      ? `AND EXISTS (
+           SELECT 1 FROM company_location_zones clz
+           WHERE clz.location_zone_id = location_zones.id
+             AND clz.company_id = @companyId
+         )`
+      : "";
+    if (options.companyId) {
+      request.input("companyId", sql.UniqueIdentifier, options.companyId);
+    }
+
+    const failedClause = includeFailed ? "OR geocoding_status = N'FAILED'" : "";
+
+    const result = await request.query(`
+      SELECT *
+      FROM location_zones
+      WHERE (geocoding_source IS NULL OR geocoding_source <> N'MANUAL')
+        AND (geocoding_status IS NULL OR geocoding_status <> N'MANUAL')
+        AND (
+          centroid_latitude IS NULL
+          OR centroid_longitude IS NULL
+          OR geocoding_status = N'PENDING'
+          ${failedClause}
+        )
+        ${companyFilter}
+      ORDER BY name ASC, locality ASC
+    `);
+
+    return result.recordset.map((row) =>
+      mapLocationZoneRow(row as Record<string, unknown>, null),
+    );
+  },
+
+  async updateGlobal(
     zoneId: string,
     input: UpdateLocationZoneInput & {
       name?: string;
@@ -308,13 +732,10 @@ export const locationZoneRepository = {
       geocodedAt?: Date | null;
       geocodingLastError?: string | null;
     },
-  ): Promise<LocationZone | null> {
+  ): Promise<GlobalLocationZone | null> {
     const pool = getPool();
     const fields: string[] = [];
-    const request = pool
-      .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
-      .input("zoneId", sql.UniqueIdentifier, zoneId);
+    const request = pool.request().input("zoneId", sql.UniqueIdentifier, zoneId);
 
     if (input.name !== undefined && input.normalizedName !== undefined) {
       request.input("name", sql.NVarChar(120), input.name);
@@ -363,7 +784,7 @@ export const locationZoneRepository = {
     }
 
     if (fields.length === 0) {
-      return this.findByIdForCompany(companyId, zoneId);
+      return this.findById(zoneId);
     }
 
     fields.push("updated_at = SYSUTCDATETIME()");
@@ -373,26 +794,16 @@ export const locationZoneRepository = {
       SET ${fields.join(", ")}
       OUTPUT INSERTED.*
       WHERE id = @zoneId
-        AND company_id = @companyId
     `);
 
     if (!result.recordset[0]) {
       return null;
     }
 
-    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>);
+    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>, null);
   },
 
-  /**
-   * Persist an external geocode result only when the row snapshot still matches.
-   * Concurrency: normalized name/locality + updated_at (ms). `allowManualOverride`
-   * (force) may replace MANUAL but never skips the snapshot check.
-   *
-   * updated_at uses a 1ms window: DATETIME2(7) → JS Date truncates sub-ms, while
-   * CAST(... AS DATETIME2(3)) rounds — exact equality fails on otherwise-fresh rows.
-   */
   async applyGeocodeResult(
-    companyId: string,
     zoneId: string,
     write: LocationZoneGeocodingWrite,
     expected: {
@@ -401,7 +812,7 @@ export const locationZoneRepository = {
       expectedUpdatedAt: string | Date;
       allowManualOverride?: boolean;
     },
-  ): Promise<LocationZone | null> {
+  ): Promise<GlobalLocationZone | null> {
     const pool = getPool();
     const allowManualOverride = Boolean(expected.allowManualOverride);
     const expectedUpdatedAt =
@@ -414,7 +825,6 @@ export const locationZoneRepository = {
 
     const result = await pool
       .request()
-      .input("companyId", sql.UniqueIdentifier, companyId)
       .input("zoneId", sql.UniqueIdentifier, zoneId)
       .input("centroidLatitude", sql.Decimal(10, 7), write.centroidLatitude)
       .input("centroidLongitude", sql.Decimal(10, 7), write.centroidLongitude)
@@ -442,7 +852,6 @@ export const locationZoneRepository = {
           updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE id = @zoneId
-          AND company_id = @companyId
           AND normalized_name = @expectedNormalizedName
           AND normalized_locality = @expectedNormalizedLocality
           AND ABS(DATEDIFF_BIG(MILLISECOND, updated_at, @expectedUpdatedAt)) <= 1
@@ -459,14 +868,9 @@ export const locationZoneRepository = {
       return null;
     }
 
-    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>);
+    return mapLocationZoneRow(result.recordset[0] as Record<string, unknown>, null);
   },
 
-  /**
-   * Aggregated geocoding coverage for active zones only (inactive excluded).
-   * coveragePercent = withCoordinates / total * 100 (0 when total is 0).
-   * Canonical locality counts are derived in Node from the alias table (no schema column).
-   */
   async getGeocodingSummaryForCompany(companyId: string): Promise<{
     total: number;
     resolved: number;
@@ -481,44 +885,50 @@ export const locationZoneRepository = {
     unknownLocality: number;
   }> {
     const pool = getPool();
-    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
     const [countsResult, localitiesResult] = await Promise.all([
-      request.query(`
-        SELECT
-          COUNT(*) AS total,
-          SUM(CASE WHEN geocoding_status = N'RESOLVED' THEN 1 ELSE 0 END) AS resolved,
-          SUM(CASE WHEN geocoding_status = N'MANUAL' THEN 1 ELSE 0 END) AS manual,
-          SUM(
-            CASE
-              WHEN geocoding_status = N'PENDING' OR geocoding_status IS NULL THEN 1
-              ELSE 0
-            END
-          ) AS pending,
-          SUM(CASE WHEN geocoding_status = N'FAILED' THEN 1 ELSE 0 END) AS failed,
-          SUM(
-            CASE
-              WHEN centroid_latitude IS NOT NULL AND centroid_longitude IS NOT NULL THEN 1
-              ELSE 0
-            END
-          ) AS with_coordinates,
-          SUM(
-            CASE
-              WHEN centroid_latitude IS NULL OR centroid_longitude IS NULL THEN 1
-              ELSE 0
-            END
-          ) AS without_coordinates
-        FROM location_zones
-        WHERE company_id = @companyId
-          AND is_active = 1
-      `),
       pool
         .request()
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
-          SELECT locality
-          FROM location_zones
-          WHERE company_id = @companyId
-            AND is_active = 1
+          SELECT
+            COUNT(*) AS total,
+            SUM(CASE WHEN lz.geocoding_status = N'RESOLVED' THEN 1 ELSE 0 END) AS resolved,
+            SUM(CASE WHEN lz.geocoding_status = N'MANUAL' THEN 1 ELSE 0 END) AS manual,
+            SUM(
+              CASE
+                WHEN lz.geocoding_status = N'PENDING' OR lz.geocoding_status IS NULL THEN 1
+                ELSE 0
+              END
+            ) AS pending,
+            SUM(CASE WHEN lz.geocoding_status = N'FAILED' THEN 1 ELSE 0 END) AS failed,
+            SUM(
+              CASE
+                WHEN lz.centroid_latitude IS NOT NULL AND lz.centroid_longitude IS NOT NULL THEN 1
+                ELSE 0
+              END
+            ) AS with_coordinates,
+            SUM(
+              CASE
+                WHEN lz.centroid_latitude IS NULL OR lz.centroid_longitude IS NULL THEN 1
+                ELSE 0
+              END
+            ) AS without_coordinates
+          FROM company_location_zones clz
+          INNER JOIN location_zones lz ON lz.id = clz.location_zone_id
+          WHERE clz.company_id = @companyId
+            AND clz.is_active = 1
+            AND lz.is_active = 1
+        `),
+      pool
+        .request()
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .query(`
+          SELECT lz.locality
+          FROM company_location_zones clz
+          INNER JOIN location_zones lz ON lz.id = clz.location_zone_id
+          WHERE clz.company_id = @companyId
+            AND clz.is_active = 1
+            AND lz.is_active = 1
         `),
     ]);
 

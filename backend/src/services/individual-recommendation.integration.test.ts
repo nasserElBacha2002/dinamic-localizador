@@ -177,7 +177,7 @@ describeDatabaseIntegration("individual employee recommendations phase1", () => 
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           UPDATE employees SET location_zone_id = NULL WHERE company_id = @companyId;
-          DELETE FROM location_zones WHERE company_id = @companyId;
+          DELETE FROM company_location_zones WHERE company_id = @companyId;
         `);
       await deleteCompanyCascade(companyId);
     }

@@ -157,9 +157,9 @@ export const deleteCompanyIdentityAndConfigSetBased = async (
     DELETE FROM company_work_calendars WHERE company_id = @companyId;
 
     DELETE FROM operational_locations WHERE company_id = @companyId;
-    -- Zones are referenced by employees + operational_locations (already cleared above).
-    IF OBJECT_ID(N'dbo.location_zones', N'U') IS NOT NULL
-      DELETE FROM location_zones WHERE company_id = @companyId;
+    -- Global location_zones are shared; only remove this company's associations.
+    IF OBJECT_ID(N'dbo.company_location_zones', N'U') IS NOT NULL
+      DELETE FROM company_location_zones WHERE company_id = @companyId;
     DELETE FROM employee_categories WHERE company_id = @companyId;
     DELETE FROM company_absence_settings WHERE company_id = @companyId;
     DELETE FROM absence_types WHERE company_id = @companyId;
@@ -189,7 +189,7 @@ export const deleteCompanyIdentityAndConfigSetBased = async (
 export const COMPANY_RESIDUE_CHECKS: Array<{ name: string; sql: string }> = [
   { name: "scheduled_operations", sql: "SELECT COUNT(1) AS c FROM scheduled_operations WHERE company_id = @companyId" },
   { name: "employees", sql: "SELECT COUNT(1) AS c FROM employees WHERE company_id = @companyId" },
-  { name: "location_zones", sql: "SELECT COUNT(1) AS c FROM location_zones WHERE company_id = @companyId" },
+  { name: "company_location_zones", sql: "SELECT COUNT(1) AS c FROM company_location_zones WHERE company_id = @companyId" },
   { name: "attendance_records", sql: "SELECT COUNT(1) AS c FROM attendance_records WHERE company_id = @companyId" },
   { name: "absence_requests", sql: "SELECT COUNT(1) AS c FROM absence_requests WHERE company_id = @companyId" },
   { name: "user_company_memberships", sql: "SELECT COUNT(1) AS c FROM user_company_memberships WHERE company_id = @companyId" },

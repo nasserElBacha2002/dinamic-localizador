@@ -115,7 +115,7 @@ describeDatabaseIntegration("location zones HTTP API + residence privacy", () =>
     for (const companyId of createdCompanyIds.splice(0)) {
       await pool.request().input("companyId", sql.UniqueIdentifier, companyId).query(`
         UPDATE employees SET location_zone_id = NULL WHERE company_id = @companyId;
-        DELETE FROM location_zones WHERE company_id = @companyId;
+        DELETE FROM company_location_zones WHERE company_id = @companyId;
       `);
       await deleteCompanyCascade(companyId);
     }
@@ -142,10 +142,11 @@ describeDatabaseIntegration("location zones HTTP API + residence privacy", () =>
     signTestToken({ userId: readOnlyUserId, email: readOnlyEmail, role: "ADMIN" });
 
   it("allows OWNER to CRUD zones and denies READ_ONLY/SUPERVISOR list", async () => {
+    const suffix = uniqueSuffix();
     const createRes = await apiRequest(baseUrl, pathFor(companyAId), {
       method: "POST",
       token: ownerToken(),
-      body: { name: "Caballito", locality: "CABA" },
+      body: { name: `HTTP Caballito ${suffix}`, locality: "CABA" },
     });
     assert.equal(createRes.status, 201);
     const zoneId = (createRes.body.data as { id: string }).id;
@@ -162,7 +163,11 @@ describeDatabaseIntegration("location zones HTTP API + residence privacy", () =>
       body: { isActive: false },
     });
     assert.equal(patchRes.status, 200);
-    assert.equal((patchRes.body.data as { isActive: boolean }).isActive, false);
+    assert.equal((patchRes.body.data as { isActive: boolean }).isActive, true);
+    assert.equal(
+      (patchRes.body.data as { associationActive: boolean }).associationActive,
+      false,
+    );
 
     const listSup = await apiRequest(baseUrl, pathFor(companyAId), { token: supervisorToken() });
     assert.equal(listSup.status, 403);
@@ -173,7 +178,7 @@ describeDatabaseIntegration("location zones HTTP API + residence privacy", () =>
     const postRo = await apiRequest(baseUrl, pathFor(companyAId), {
       method: "POST",
       token: readOnlyToken(),
-      body: { name: "Flores" },
+      body: { name: `HTTP Flores ${suffix}` },
     });
     assert.equal(postRo.status, 403);
   });
@@ -220,13 +225,9 @@ describeDatabaseIntegration("location zones HTTP API + residence privacy", () =>
 
   it("returns geocoding coverage summary for active zones only", async () => {
     const suffix = uniqueSuffix();
-    const resolved = await locationZoneService.create(companyAId, "OWNER", {
+    await locationZoneService.create(companyAId, "OWNER", {
       name: `Summary Resolved ${suffix}`,
       locality: "CABA",
-      centroidLatitude: -34.61,
-      centroidLongitude: -58.44,
-    });
-    await locationZoneService.update(companyAId, "OWNER", resolved.id, {
       centroidLatitude: -34.61,
       centroidLongitude: -58.44,
     });

@@ -11,6 +11,7 @@ import { useCompanyWorkSchedule } from "../../hooks/useCompanyWorkSchedule";
 import { useEmployeeCategories } from "../../hooks/useEmployeeCategories";
 import { useLocationZones } from "../../hooks/useLocationZones";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { useAuth } from "../../hooks/useAuth";
 import { companyRoleLabels } from "../../utils/labels";
 import { getApiErrorMessage } from "../../utils/errors";
 import { hasPermission } from "../../utils/permissions";
@@ -60,6 +61,8 @@ export function CompanySettingsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const activeTab = parseTab(searchParams.get("tab"));
   const { companyId: activeCompanyId } = useOperationalQueryEnabled();
+  const { user } = useAuth();
+  const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
 
   const permissionsQuery = useCompanyPermissions();
   const canRead = permissionsQuery.data?.permissions.includes("company:read") ?? false;
@@ -543,6 +546,7 @@ export function CompanySettingsPage() {
           onClose={() => setOpenDialog(null)}
           zones={locationZonesQuery.data}
           canUpdate={canManageLocationZones}
+          canEditGlobal={isPlatformAdmin}
         />
       ) : null}
 

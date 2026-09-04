@@ -37,7 +37,7 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           UPDATE employees SET location_zone_id = NULL WHERE company_id = @companyId;
-          DELETE FROM location_zones WHERE company_id = @companyId;
+          DELETE FROM company_location_zones WHERE company_id = @companyId;
         `);
       await deleteCompanyCascade(companyId);
     }
@@ -72,10 +72,23 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
 
     const uq = await pool.request().query(`
       SELECT 1 AS ok FROM sys.indexes
-      WHERE name = N'UQ_location_zones_company_normalized_name_locality'
+      WHERE name = N'UQ_location_zones_normalized_name_locality'
         AND object_id = OBJECT_ID(N'dbo.location_zones')
     `);
     assert.equal(uq.recordset.length, 1);
+
+    const assoc = await pool.request().query(`
+      SELECT 1 AS ok FROM sys.tables
+      WHERE name = N'company_location_zones' AND schema_id = SCHEMA_ID(N'dbo')
+    `);
+    assert.equal(assoc.recordset.length, 1);
+
+    const assocUq = await pool.request().query(`
+      SELECT 1 AS ok FROM sys.indexes
+      WHERE name = N'UQ_company_location_zones_company_zone'
+        AND object_id = OBJECT_ID(N'dbo.company_location_zones')
+    `);
+    assert.equal(assocUq.recordset.length, 1);
 
     const checks = await pool.request().query(`
       SELECT name FROM sys.check_constraints
@@ -108,11 +121,11 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
     createdCompanyIds.push(companyId);
 
     const zoneA = await locationZoneService.create(companyId, "OWNER", {
-      name: "Caballito",
+      name: `Hist Zone A ${suffix}`,
       locality: "CABA",
     });
     const zoneB = await locationZoneService.create(companyId, "OWNER", {
-      name: "Flores",
+      name: `Hist Zone B ${suffix}`,
       locality: "CABA",
     });
 
@@ -180,17 +193,16 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
         error instanceof AppError && error.code === "EMPLOYEE_LOCATION_ZONE_INVALID",
     );
 
+    // Preferred: assign while association is active, then deactivate (trigger blocks NULL→inactive).
+    await locationZoneService.update(companyId, "OWNER", zoneA.id, { isActive: true });
     const withA = await employeeService.create(companyId, {
-      name: "Con A inactive",
+      name: "Con A then inactive",
       phoneNumber: uniquePhone(4),
       employeeType: "fijo",
+      locationZoneId: zoneA.id,
     });
-    // Direct SQL assign historical inactive then try switch to different inactive
-    await getPool()
-      .request()
-      .input("employeeId", sql.UniqueIdentifier, withA.id)
-      .input("zoneId", sql.UniqueIdentifier, zoneA.id)
-      .query(`UPDATE employees SET location_zone_id = @zoneId WHERE id = @employeeId`);
+    assert.equal(withA.locationZoneId, zoneA.id);
+    await locationZoneService.update(companyId, "OWNER", zoneA.id, { isActive: false });
 
     await assert.rejects(
       () =>
@@ -221,7 +233,7 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
     createdCompanyIds.push(companyA.data.company.id, companyB.data.company.id);
 
     const zoneB = await locationZoneService.create(companyB.data.company.id, "OWNER", {
-      name: "Palermo",
+      name: `Cross Zone ${suffix}`,
     });
 
     await assert.rejects(
@@ -261,7 +273,9 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
     const companyId = company.data.company.id;
     createdCompanyIds.push(companyId);
 
-    const zone = await locationZoneService.create(companyId, "OWNER", { name: "Almagro" });
+    const zone = await locationZoneService.create(companyId, "OWNER", {
+      name: `Err Zone ${suffix}`,
+    });
     const foreignCategoryId = "00000000-0000-4000-8000-000000000099";
 
     await assert.rejects(
@@ -335,7 +349,7 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
     assert.equal(viaRepo[0]?.locationZoneId, null);
   });
 
-  it("rejects duplicate normalized zone keys", async () => {
+  it("idempotently reuses the same global zone for duplicate normalized keys", async () => {
     const suffix = uniqueSuffix();
     const email = `zones-dup-${suffix}@integration.test`;
     createdUserEmails.push(email);
@@ -347,19 +361,15 @@ describeDatabaseIntegration("location zones phase0 corrections", () => {
     const companyId = company.data.company.id;
     createdCompanyIds.push(companyId);
 
-    await locationZoneService.create(companyId, "OWNER", {
-      name: "Villa Urquiza",
+    const first = await locationZoneService.create(companyId, "OWNER", {
+      name: `Villa Urquiza ${suffix}`,
       locality: "CABA",
     });
-    await assert.rejects(
-      () =>
-        locationZoneService.create(companyId, "OWNER", {
-          name: "  villa urquiza ",
-          locality: "caba",
-        }),
-      (error: unknown) =>
-        error instanceof AppError && error.code === "LOCATION_ZONE_NAME_ALREADY_EXISTS",
-    );
+    const second = await locationZoneService.create(companyId, "OWNER", {
+      name: `  villa urquiza ${suffix} `,
+      locality: "caba",
+    });
+    assert.equal(second.id, first.id);
   });
 
   it("keeps recommendation contracts as types only", () => {

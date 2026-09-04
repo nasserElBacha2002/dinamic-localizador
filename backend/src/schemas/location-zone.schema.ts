@@ -99,6 +99,12 @@ export const listLocationZonesQuerySchema = z.object({
     .transform((value) => value === true || value === "true"),
 });
 
+export const searchLocationZonesQuerySchema = z.object({
+  q: z.string().trim().min(1, "Indique un término de búsqueda").max(120),
+  locality: z.string().trim().max(120).optional(),
+  limit: z.coerce.number().int().min(1).max(50).optional(),
+});
+
 export const geocodeLocationZoneBodySchema = z.preprocess(
   (value) => (value === undefined || value === null ? {} : value),
   z.object({
@@ -109,4 +115,5 @@ export const geocodeLocationZoneBodySchema = z.preprocess(
 export type CreateLocationZoneInput = z.infer<typeof createLocationZoneSchema>;
 export type UpdateLocationZoneInput = z.infer<typeof updateLocationZoneSchema>;
 export type ListLocationZonesQuery = z.infer<typeof listLocationZonesQuerySchema>;
+export type SearchLocationZonesQuery = z.infer<typeof searchLocationZonesQuerySchema>;
 export type GeocodeLocationZoneBody = z.infer<typeof geocodeLocationZoneBodySchema>;

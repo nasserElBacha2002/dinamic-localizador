@@ -33,7 +33,7 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           UPDATE employees SET location_zone_id = NULL WHERE company_id = @companyId;
-          DELETE FROM location_zones WHERE company_id = @companyId;
+          DELETE FROM company_location_zones WHERE company_id = @companyId;
         `);
       await deleteCompanyCascade(companyId);
     }
@@ -96,10 +96,10 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           INSERT INTO location_zones (
-            company_id, name, normalized_name, locality, normalized_locality,
+name, normalized_name, locality, normalized_locality,
             geocoding_status, geocoding_source, is_active
           ) VALUES (
-            @companyId, N'NoCentroid', N'nocentroid', N'CABA', N'caba',
+            N'NoCentroid', N'nocentroid', N'CABA', N'caba',
             N'RESOLVED', N'AUTO', 1
           )
         `);
@@ -111,11 +111,11 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           INSERT INTO location_zones (
-            company_id, name, normalized_name, locality, normalized_locality,
+name, normalized_name, locality, normalized_locality,
             centroid_latitude, centroid_longitude,
             geocoding_status, geocoding_source, is_active
           ) VALUES (
-            @companyId, N'BadManual', N'badmanual', N'CABA', N'caba',
+            N'BadManual', N'badmanual', N'CABA', N'caba',
             -34.6, -58.4, N'MANUAL', N'AUTO', 1
           )
         `);
@@ -141,10 +141,10 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           INSERT INTO location_zones (
-            company_id, name, normalized_name, locality, normalized_locality,
+name, normalized_name, locality, normalized_locality,
             geocoding_status, is_active
           ) VALUES (
-            @companyId, N'BadStatus', N'badstatus', N'CABA', N'caba',
+            N'BadStatus', N'badstatus', N'CABA', N'caba',
             N'WEIRD', 1
           )
         `);
@@ -156,10 +156,10 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           INSERT INTO location_zones (
-            company_id, name, normalized_name, locality, normalized_locality,
+name, normalized_name, locality, normalized_locality,
             geocoding_source, is_active
           ) VALUES (
-            @companyId, N'BadSource', N'badsource', N'CABA', N'caba',
+            N'BadSource', N'badsource', N'CABA', N'caba',
             N'WEIRD', 1
           )
         `);
@@ -179,7 +179,7 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     createdCompanyIds.push(companyId);
 
     const zone = await locationZoneService.create(companyId, "OWNER", {
-      name: "Caballito",
+      name: `Manual Caballito ${suffix}`,
       locality: "CABA",
       centroidLatitude: -34.62,
       centroidLongitude: -58.44,
@@ -187,7 +187,6 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     assert.equal(zone.geocodingStatus, "MANUAL");
 
     const applied = await locationZoneRepository.applyGeocodeResult(
-      companyId,
       zone.id,
       {
         centroidLatitude: -34.5,
@@ -226,19 +225,22 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     createdCompanyIds.push(companyId);
 
     const zone = await locationZoneService.create(companyId, "OWNER", {
-      name: "Caballito",
+      name: `Stale Caballito ${suffix}`,
       locality: "CABA",
     });
 
-    const renamed = await locationZoneService.update(companyId, "OWNER", zone.id, {
-      name: "Boedo",
-    });
-    assert.equal(renamed.normalizedName, "boedo");
+    const renamed = await locationZoneService.update(
+      companyId,
+      "OWNER",
+      zone.id,
+      { name: `Stale Boedo ${suffix}` },
+      { isPlatformAdmin: true },
+    );
+    assert.equal(renamed.normalizedName, `stale boedo ${suffix}`.toLowerCase());
     assert.equal(renamed.centroidLatitude, null);
     assert.equal(renamed.geocodingStatus, "PENDING");
 
     const applied = await locationZoneRepository.applyGeocodeResult(
-      companyId,
       zone.id,
       {
         centroidLatitude: -34.62,
@@ -249,8 +251,8 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         geocodingLastError: null,
       },
       {
-        expectedNormalizedName: "caballito",
-        expectedNormalizedLocality: "caba",
+        expectedNormalizedName: zone.normalizedName,
+        expectedNormalizedLocality: zone.normalizedLocality,
         expectedUpdatedAt: zone.updatedAt,
         allowManualOverride: false,
       },
@@ -259,7 +261,7 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
 
     const refreshed = await locationZoneRepository.findByIdForCompany(companyId, zone.id);
     assert.ok(refreshed);
-    assert.equal(refreshed.normalizedName, "boedo");
+    assert.equal(refreshed.normalizedName, renamed.normalizedName);
     assert.equal(refreshed.centroidLatitude, null);
     assert.equal(refreshed.geocodingStatus, "PENDING");
   });
@@ -277,17 +279,29 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     const companyId = fixture.data.company.id;
     createdCompanyIds.push(companyId);
 
+    const normalizedName = `hist ${suffix}`;
+    const normalizedLocality = "caba";
+
     await pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("name", sql.NVarChar(120), `Hist ${suffix}`)
+      .input("normalizedName", sql.NVarChar(120), normalizedName)
+      .input("locality", sql.NVarChar(120), "CABA")
+      .input("normalizedLocality", sql.NVarChar(120), normalizedLocality)
       .query(`
+        DECLARE @zoneId UNIQUEIDENTIFIER = NEWID();
+
         INSERT INTO location_zones (
-          company_id, name, normalized_name, locality, normalized_locality,
+          id, name, normalized_name, locality, normalized_locality,
           centroid_latitude, centroid_longitude, geocoding_status, geocoding_source, is_active
         ) VALUES (
-          @companyId, N'Hist', N'hist', N'CABA', N'caba',
+          @zoneId, @name, @normalizedName, @locality, @normalizedLocality,
           -34.6000000, -58.3800000, NULL, NULL, 1
         );
+
+        INSERT INTO company_location_zones (company_id, location_zone_id, is_active)
+        VALUES (@companyId, @zoneId, 1);
 
         UPDATE dbo.location_zones
         SET
@@ -295,14 +309,14 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
           geocoding_source = N'MANUAL',
           geocoded_at = COALESCE(geocoded_at, updated_at),
           geocoding_last_error = NULL
-        WHERE company_id = @companyId
-          AND normalized_name = N'hist'
+        WHERE id = @zoneId
+          AND normalized_name = @normalizedName
           AND centroid_latitude IS NOT NULL
           AND centroid_longitude IS NOT NULL
           AND geocoding_status IS NULL;
       `);
 
-    const zone = await locationZoneRepository.findByNormalizedKey(companyId, "hist", "caba");
+    const zone = await locationZoneRepository.findByNormalizedKey(normalizedName, normalizedLocality);
     assert.ok(zone);
     assert.equal(zone.geocodingStatus, "MANUAL");
     assert.equal(zone.geocodingSource, "MANUAL");
@@ -322,24 +336,27 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     createdCompanyIds.push(companyId);
 
     const zone = await locationZoneService.create(companyId, "OWNER", {
-      name: "Boedo",
+      name: `Force Stale Boedo ${suffix}`,
       locality: "CABA",
       centroidLatitude: -34.63,
       centroidLongitude: -58.41,
     });
     assert.equal(zone.geocodingStatus, "MANUAL");
-    assert.equal(zone.normalizedName, "boedo");
+    assert.equal(zone.normalizedName, `force stale boedo ${suffix}`.toLowerCase());
 
-    const renamed = await locationZoneService.update(companyId, "OWNER", zone.id, {
-      name: "Caballito",
-    });
-    assert.equal(renamed.normalizedName, "caballito");
+    const renamed = await locationZoneService.update(
+      companyId,
+      "OWNER",
+      zone.id,
+      { name: `Force Stale Caballito ${suffix}` },
+      { isPlatformAdmin: true },
+    );
+    assert.equal(renamed.normalizedName, `force stale caballito ${suffix}`.toLowerCase());
     // MANUAL rename preserves centroids
     assert.equal(renamed.centroidLatitude, -34.63);
     assert.equal(renamed.geocodingStatus, "MANUAL");
 
     const applied = await locationZoneRepository.applyGeocodeResult(
-      companyId,
       zone.id,
       {
         centroidLatitude: -34.5,
@@ -350,8 +367,8 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         geocodingLastError: null,
       },
       {
-        expectedNormalizedName: "boedo",
-        expectedNormalizedLocality: "caba",
+        expectedNormalizedName: zone.normalizedName,
+        expectedNormalizedLocality: zone.normalizedLocality,
         expectedUpdatedAt: zone.updatedAt,
         allowManualOverride: true,
       },
@@ -360,7 +377,7 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
 
     const refreshed = await locationZoneRepository.findByIdForCompany(companyId, zone.id);
     assert.ok(refreshed);
-    assert.equal(refreshed.normalizedName, "caballito");
+    assert.equal(refreshed.normalizedName, renamed.normalizedName);
     assert.equal(refreshed.geocodingStatus, "MANUAL");
     assert.equal(refreshed.centroidLatitude, -34.63);
     assert.equal(refreshed.centroidLongitude, -58.41);
@@ -379,7 +396,7 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     createdCompanyIds.push(companyId);
 
     const zone = await locationZoneService.create(companyId, "OWNER", {
-      name: "Boedo",
+      name: `Force Conc Boedo ${suffix}`,
       locality: "CABA",
       centroidLatitude: -34.63,
       centroidLongitude: -58.41,
@@ -388,16 +405,21 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     const snapshotUpdatedAt = zone.updatedAt;
 
     // Concurrent admin B updates MANUAL coordinates (same name/locality).
-    const concurrent = await locationZoneService.update(companyId, "OWNER", zone.id, {
-      centroidLatitude: -34.7,
-      centroidLongitude: -58.5,
-    });
+    const concurrent = await locationZoneService.update(
+      companyId,
+      "OWNER",
+      zone.id,
+      {
+        centroidLatitude: -34.7,
+        centroidLongitude: -58.5,
+      },
+      { isPlatformAdmin: true },
+    );
     assert.equal(concurrent.geocodingStatus, "MANUAL");
     assert.equal(concurrent.centroidLatitude, -34.7);
     assert.notEqual(concurrent.updatedAt, snapshotUpdatedAt);
 
     const applied = await locationZoneRepository.applyGeocodeResult(
-      companyId,
       zone.id,
       {
         centroidLatitude: -34.5,
@@ -437,11 +459,12 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
     createdCompanyIds.push(companyId);
 
     const zone = await locationZoneService.create(companyId, "OWNER", {
-      name: "Boedo",
+      name: `Force Fail Boedo ${suffix}`,
       locality: "CABA",
       centroidLatitude: -34.63,
       centroidLongitude: -58.41,
     });
+    assert.equal(zone.geocodingStatus, "MANUAL");
 
     mock.method(globalThis, "fetch", async () =>
       new Response(JSON.stringify({ status: "ZERO_RESULTS", results: [] }), {
@@ -470,7 +493,7 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
           status: "OK",
           results: [
             {
-              formatted_address: "Boedo, CABA",
+              formatted_address: `Force Fail Boedo ${suffix}, CABA`,
               address_components: [
                 { long_name: "Argentina", short_name: "AR", types: ["country"] },
                 {
@@ -562,10 +585,10 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           INSERT INTO location_zones (
-            company_id, name, normalized_name, locality, normalized_locality,
+name, normalized_name, locality, normalized_locality,
             geocoding_status, geocoding_source, is_active
           ) VALUES (
-            @companyId, N'ResolvedNull', N'resolvednull', N'CABA', N'caba',
+            N'ResolvedNull', N'resolvednull', N'CABA', N'caba',
             N'RESOLVED', N'AUTO', 1
           )
         `);
@@ -577,11 +600,11 @@ describeDatabaseIntegration("location zone geocoding phase A corrections", () =>
         .input("companyId", sql.UniqueIdentifier, companyId)
         .query(`
           INSERT INTO location_zones (
-            company_id, name, normalized_name, locality, normalized_locality,
+name, normalized_name, locality, normalized_locality,
             centroid_latitude, centroid_longitude,
             geocoding_status, geocoding_source, is_active
           ) VALUES (
-            @companyId, N'ManualBadSrc', N'manualbadsrc', N'CABA', N'caba',
+            N'ManualBadSrc', N'manualbadsrc', N'CABA', N'caba',
             -34.6, -58.4, N'MANUAL', N'AUTO', 1
           )
         `);

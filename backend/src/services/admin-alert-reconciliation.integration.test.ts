@@ -118,7 +118,6 @@ describeDatabaseIntegration("admin alert reconciliation corrections", () => {
       absenceTypeId: vacation.id,
       year,
       totalDays: 120,
-      notes: null,
     });
 
     return { companyId, vacation, employee };

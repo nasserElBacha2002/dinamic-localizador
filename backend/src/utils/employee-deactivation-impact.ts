@@ -129,16 +129,10 @@ export const formatClockInTimezone = (
 };
 
 export const resolveOperationDisplayName = (input: {
-  notes: string | null;
   locationName: string;
   date: string | null;
   scheduledStart: string | null;
 }): string => {
-  const notes = input.notes?.trim();
-  if (notes) {
-    return notes;
-  }
-
   const dateLabel =
     input.date ??
     (input.scheduledStart ? input.scheduledStart.slice(0, 10) : null);
@@ -281,7 +275,6 @@ export const buildDeactivationReleasePlan = (input: {
         assignmentId: assignment.assignmentId,
         operationId: assignment.operationId,
         operationName: resolveOperationDisplayName({
-          notes: assignment.operationNotes,
           locationName: assignment.locationName,
           date: workday.workDate,
           scheduledStart: assignment.scheduledStart,
@@ -304,7 +297,6 @@ export const buildDeactivationReleasePlan = (input: {
         assignmentId: assignment.assignmentId,
         operationId: assignment.operationId,
         operationName: resolveOperationDisplayName({
-          notes: assignment.operationNotes,
           locationName: assignment.locationName,
           date: assignment.validFrom,
           scheduledStart: assignment.scheduledStart,

@@ -122,4 +122,61 @@ describe("evaluateEntityLinkAccess", () => {
     );
     assert.equal(decision.status, "loading");
   });
+
+  it("denies non-platform user for bot simulator even when module is enabled", () => {
+    const decision = evaluateEntityLinkAccess(
+      { requirePlatformAdmin: true, moduleKey: "bot_simulator" },
+      baseContext({
+        isPlatformAdmin: false,
+        modules: [
+          {
+            companyId: "co-1",
+            moduleKey: "bot_simulator",
+            isEnabled: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    assert.deepEqual(decision, { status: "denied", reason: "platform_admin" });
+  });
+
+  it("allows platform admin for bot simulator when module is enabled", () => {
+    const decision = evaluateEntityLinkAccess(
+      { requirePlatformAdmin: true, moduleKey: "bot_simulator" },
+      baseContext({
+        isPlatformAdmin: true,
+        modules: [
+          {
+            companyId: "co-1",
+            moduleKey: "bot_simulator",
+            isEnabled: true,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    assert.equal(decision.status, "allowed");
+  });
+
+  it("denies platform admin for bot simulator when module is disabled", () => {
+    const decision = evaluateEntityLinkAccess(
+      { requirePlatformAdmin: true, moduleKey: "bot_simulator" },
+      baseContext({
+        isPlatformAdmin: true,
+        modules: [
+          {
+            companyId: "co-1",
+            moduleKey: "bot_simulator",
+            isEnabled: false,
+            createdAt: "2026-01-01T00:00:00.000Z",
+            updatedAt: "2026-01-01T00:00:00.000Z",
+          },
+        ],
+      }),
+    );
+    assert.deepEqual(decision, { status: "denied", reason: "module" });
+  });
 });

@@ -4,6 +4,7 @@ import type {
   ListLocationZonesFilters,
   LocationZone,
   LocationZoneGeocodingSummary,
+  SearchLocationZonesFilters,
   UpdateLocationZoneInput,
 } from "../types/location-zone";
 import { buildParams } from "./client";
@@ -17,6 +18,22 @@ export async function getLocationZones(
       includeInactive: filters.includeInactive ? "true" : undefined,
     }),
   });
+  return data.data;
+}
+
+export async function searchLocationZones(
+  filters: SearchLocationZonesFilters,
+): Promise<LocationZone[]> {
+  const { data } = await scopedApiClient.get<SingleResponse<LocationZone[]>>(
+    "location-zones/search",
+    {
+      params: buildParams({
+        q: filters.q,
+        locality: filters.locality,
+        limit: filters.limit,
+      }),
+    },
+  );
   return data.data;
 }
 

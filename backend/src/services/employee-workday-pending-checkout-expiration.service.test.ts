@@ -25,6 +25,10 @@ const baseCandidate = (
   scheduleTimezone: "America/Argentina/Buenos_Aires",
   attendanceRecordId: "ar-1",
   checkInAt: "2026-07-06T23:45:00.000Z",
+  checkoutWithoutArrival: false,
+  expectationStatus: "EXPECTED",
+  absenceRequestId: null,
+  operationAssignmentId: null,
   ...overrides,
 });
 

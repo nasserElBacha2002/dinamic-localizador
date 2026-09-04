@@ -18,7 +18,6 @@ const previewResult = {
     { key: "name", header: "Nombre" },
     { key: "date", header: "Fecha" },
     { key: "service", header: "Servicio" },
-    { key: "notes", header: "Notas" },
   ],
   rows: [
     {
@@ -28,7 +27,6 @@ const previewResult = {
         name: "Op Centro",
         date: "2026-08-01",
         service: "Sucursal 1",
-        notes: "ok",
       },
       errors: [],
     },
@@ -39,7 +37,6 @@ const previewResult = {
         name: "",
         date: "bad",
         service: "",
-        notes: "",
       },
       errors: [{ field: "name", message: "Nombre obligatorio" }],
     },

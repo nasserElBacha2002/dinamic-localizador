@@ -7,12 +7,14 @@ const locationStatusSchema = z.enum([
   "INSIDE_GEOFENCE",
   "OUTSIDE_GEOFENCE",
   "INVALID_LOCATION",
+  "NOT_RECORDED",
 ]);
 const punctualityStatusSchema = z.enum([
   "EARLY",
   "ON_TIME",
   "LATE",
   "OUTSIDE_TIME_WINDOW",
+  "NOT_RECORDED",
 ]);
 
 export const createAttendanceSchema = z.object({

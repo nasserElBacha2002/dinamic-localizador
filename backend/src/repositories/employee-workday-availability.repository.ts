@@ -10,6 +10,9 @@ import { toDateOnlyString } from "../utils/row-mappers";
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
+const requestFrom = (transaction?: sql.Transaction): sql.Request =>
+  transaction ? new sql.Request(transaction) : getPool().request();
+
 const mapCheckInCandidateRow = (row: Record<string, unknown>): EmployeeWorkdayCheckInCandidate => ({
   employeeWorkdayId: String(row.employee_workday_id),
   operationWorkdayId: String(row.operation_workday_id),
@@ -42,8 +45,9 @@ const mapCheckInCandidateRow = (row: Record<string, unknown>): EmployeeWorkdayCh
 
 const mapCheckoutCandidateRow = (row: Record<string, unknown>): EmployeeWorkdayCheckoutCandidate => ({
   ...mapCheckInCandidateRow(row),
-  attendanceRecordId: String(row.attendance_record_id),
-  checkInAt: toIsoString(row.check_in_at as Date | string),
+  attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
+  checkInAt: row.check_in_at ? toIsoString(row.check_in_at as Date | string) : null,
+  checkoutWithoutArrival: Number(row.checkout_without_arrival ?? 0) === 1,
 });
 
 const simulationAttendanceFilter = (simulationSessionId: string | null): string => {
@@ -623,6 +627,7 @@ export const employeeWorkdayAvailabilityRepository = {
         AND ar.employee_workday_id IS NOT NULL
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         AND ar.checkout_at IS NULL
+        AND ar.received_at IS NOT NULL
         AND i.status <> 'CANCELLED'
         AND s.active = 1
         AND @now <= DATEADD(
@@ -635,8 +640,155 @@ export const employeeWorkdayAvailabilityRepository = {
     `);
 
     return result.recordset.map((row) =>
+      mapCheckoutCandidateRow({
+        ...(row as Record<string, unknown>),
+        checkout_without_arrival: 0,
+      }),
+    );
+  },
+
+  /**
+   * Assignments eligible for checkout when no attendance (check-in) exists yet.
+   * Sourced from employee_workdays — not from open attendance_records.
+   */
+  async listExitWithoutArrivalCandidates(
+    companyId: string,
+    employeeId: string,
+    input: {
+      now: Date;
+      pendingOperationExpirationHours: number;
+      simulationSessionId?: string | null;
+    },
+  ): Promise<EmployeeWorkdayCheckoutCandidate[]> {
+    const pool = getPool();
+    const request = pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("now", sql.DateTime2, input.now)
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      );
+
+    const attendanceFilter = simulationAttendanceFilter(input.simulationSessionId ?? null);
+    if (input.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId);
+    }
+
+    const result = await request.query(`
+      SELECT
+        CAST(NULL AS UNIQUEIDENTIFIER) AS attendance_record_id,
+        CAST(NULL AS DATETIME2) AS check_in_at,
+        CAST(1 AS BIT) AS checkout_without_arrival,
+        ${CHECK_IN_CANDIDATE_SELECT}
+      FROM employee_workdays ew
+      INNER JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id
+       AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ew.company_id
+      INNER JOIN operational_locations s
+        ON s.id = i.service_id
+       AND s.company_id = ew.company_id
+      LEFT JOIN attendance_records ar
+        ON ar.employee_workday_id = ew.id
+       AND ar.company_id = ew.company_id
+       AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+       ${attendanceFilter}
+      WHERE ew.company_id = @companyId
+        AND ew.employee_id = @employeeId
+        ${CHECK_IN_EXPECTATION_FILTER}
+        AND i.status <> 'CANCELLED'
+        AND s.active = 1
+        AND ar.id IS NULL
+        AND ow.expected_start_at <= @now
+        AND @now <= DATEADD(
+          HOUR,
+          @pendingOperationExpirationHours,
+          COALESCE(ow.expected_end_at, ow.expected_start_at)
+        )
+      ORDER BY ow.expected_start_at DESC, s.name ASC, ew.id ASC
+    `);
+
+    return result.recordset.map((row) =>
       mapCheckoutCandidateRow(row as Record<string, unknown>),
     );
+  },
+
+  async findExitWithoutArrivalCandidateByWorkdayId(
+    companyId: string,
+    employeeId: string,
+    employeeWorkdayId: string,
+    input: {
+      now: Date;
+      pendingOperationExpirationHours: number;
+      simulationSessionId?: string | null;
+    },
+    transaction?: sql.Transaction,
+  ): Promise<EmployeeWorkdayCheckoutCandidate | null> {
+    const request = requestFrom(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
+      .input("now", sql.DateTime2, input.now)
+      .input(
+        "pendingOperationExpirationHours",
+        sql.Int,
+        input.pendingOperationExpirationHours,
+      );
+
+    const attendanceFilter = simulationAttendanceFilter(input.simulationSessionId ?? null);
+    if (input.simulationSessionId) {
+      request.input("simulationSessionId", sql.UniqueIdentifier, input.simulationSessionId);
+    }
+
+    // Serialize concurrent exit-only commits for the same workday when inside a TX.
+    const workdayLockHint = transaction ? "WITH (UPDLOCK, ROWLOCK, HOLDLOCK)" : "";
+
+    const result = await request.query(`
+      SELECT
+        CAST(NULL AS UNIQUEIDENTIFIER) AS attendance_record_id,
+        CAST(NULL AS DATETIME2) AS check_in_at,
+        CAST(1 AS BIT) AS checkout_without_arrival,
+        ${CHECK_IN_CANDIDATE_SELECT}
+      FROM employee_workdays ew ${workdayLockHint}
+      INNER JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id
+       AND ow.company_id = ew.company_id
+      INNER JOIN scheduled_operations i
+        ON i.id = ow.operation_id
+       AND i.company_id = ew.company_id
+      INNER JOIN operational_locations s
+        ON s.id = i.service_id
+       AND s.company_id = ew.company_id
+      LEFT JOIN attendance_records ar
+        ON ar.employee_workday_id = ew.id
+       AND ar.company_id = ew.company_id
+       AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
+       ${attendanceFilter}
+      WHERE ew.company_id = @companyId
+        AND ew.employee_id = @employeeId
+        AND ew.id = @employeeWorkdayId
+        ${CHECK_IN_EXPECTATION_FILTER}
+        AND i.status <> 'CANCELLED'
+        AND s.active = 1
+        AND ar.id IS NULL
+        AND ow.expected_start_at <= @now
+        AND @now <= DATEADD(
+          HOUR,
+          @pendingOperationExpirationHours,
+          COALESCE(ow.expected_end_at, ow.expected_start_at)
+        )
+    `);
+
+    if (!result.recordset[0]) {
+      return null;
+    }
+
+    return mapCheckoutCandidateRow(result.recordset[0] as Record<string, unknown>);
   },
 
   async findCheckoutCandidateByAttendanceId(
@@ -694,6 +846,7 @@ export const employeeWorkdayAvailabilityRepository = {
         AND ar.employee_workday_id IS NOT NULL
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         AND ar.checkout_at IS NULL
+        AND ar.received_at IS NOT NULL
         AND i.status <> 'CANCELLED'
         AND s.active = 1
         AND @now <= DATEADD(
@@ -708,7 +861,10 @@ export const employeeWorkdayAvailabilityRepository = {
       return null;
     }
 
-    return mapCheckoutCandidateRow(result.recordset[0] as Record<string, unknown>);
+    return mapCheckoutCandidateRow({
+      ...(result.recordset[0] as Record<string, unknown>),
+      checkout_without_arrival: 0,
+    });
   },
 
   /**
@@ -760,6 +916,7 @@ export const employeeWorkdayAvailabilityRepository = {
         AND ar.employee_workday_id IS NOT NULL
         AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         AND ar.checkout_at IS NULL
+        AND ar.received_at IS NOT NULL
         AND i.status <> 'CANCELLED'
         AND s.active = 1
         ${simulationFilter}
@@ -769,6 +926,9 @@ export const employeeWorkdayAvailabilityRepository = {
       return null;
     }
 
-    return mapCheckoutCandidateRow(result.recordset[0] as Record<string, unknown>);
+    return mapCheckoutCandidateRow({
+      ...(result.recordset[0] as Record<string, unknown>),
+      checkout_without_arrival: 0,
+    });
   },
 };

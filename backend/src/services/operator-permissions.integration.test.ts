@@ -155,7 +155,7 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
     assert.equal(operationsLookup.status, 200);
   });
 
-  it("denies OPERATOR bot simulator and statistics APIs", async () => {
+  it("denies OPERATOR and company OWNER bot simulator APIs", async () => {
     const token = operatorToken();
 
     const statisticsResponse = await apiRequest(
@@ -171,6 +171,10 @@ describeDatabaseIntegration("OPERATOR permissions and lookups integration", () =
       { token },
     );
     assert.equal(botSessionResponse.status, 403);
+    assert.equal(
+      (botSessionResponse.body.error as { code?: string })?.code,
+      "PLATFORM_ADMIN_REQUIRED",
+    );
     assert.notEqual((botSessionResponse.body.error as { code?: string })?.code, "MODULE_DISABLED");
   });
 });

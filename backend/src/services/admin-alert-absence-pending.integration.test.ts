@@ -16,6 +16,8 @@ import {
 } from "../test-helpers/integration-test";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 import { buildAbsencePendingDedupKey } from "../utils/admin-alert/dedup-keys";
+import { formatAbsenceRequestPeriodDisplay } from "../utils/admin-alert/request-template-variables";
+import { addDaysToDateIso } from "../utils/recurring-workday-instant";
 
 const uniqueCompanyName = (): string =>
   `Admin Alert Absence ${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
@@ -128,7 +130,6 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
       absenceTypeId: vacation.id,
       year,
       totalDays: 20,
-      notes: null,
     });
 
     return { companyId, vacation, personal, employee };
@@ -152,8 +153,9 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
     const { companyId, vacation, employee } = await seedCompany();
     await createRequestRecipient(companyId);
 
-    const start = "2026-09-01";
-    const end = "2026-09-07";
+    const today = await resolveCompanyTodayIso(companyId);
+    const start = addDaysToDateIso(today, 14);
+    const end = addDaysToDateIso(today, 20);
     const messageSid = uniqueMessageSid();
 
     const { detail, isExisting } = await absenceRequestService.createFromWhatsapp(companyId, {
@@ -191,7 +193,7 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
     const vars = JSON.parse(String(record.content_variables_json)) as Record<string, string>;
     assert.equal(vars["1"], "Solicitud de vacaciones");
     assert.equal(vars["2"], "Juan Pérez");
-    assert.equal(vars["3"], "01/09/2026 – 07/09/2026");
+    assert.equal(vars["3"], formatAbsenceRequestPeriodDisplay(start, end));
     assert.equal(vars["4"], "Pendiente de revisión");
     assert.doesNotMatch(JSON.stringify(vars), /Motivo privado|certificado|attachment/i);
   });
@@ -201,7 +203,8 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
     const { companyId, personal, employee } = await seedCompany();
     await createRequestRecipient(companyId);
 
-    const day = "2026-09-03";
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 15);
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: personal.id,
@@ -223,12 +226,14 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
     const { companyId, vacation, employee } = await seedCompany();
     await createRequestRecipient(companyId);
 
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 16);
     const messageSid = uniqueMessageSid();
     const input = {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-09-01",
-      endDate: "2026-09-01",
+      startDate: day,
+      endDate: day,
       startPeriod: "FULL_DAY" as const,
       endPeriod: "FULL_DAY" as const,
       reason: "Vacaciones",
@@ -260,11 +265,13 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
       receiveSecurityAlerts: false,
     });
 
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 17);
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-09-03",
-      endDate: "2026-09-03",
+      startDate: day,
+      endDate: day,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Estudio",
@@ -280,11 +287,13 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
     const { companyId, vacation, employee } = await seedCompany({ adminAlertsEnabled: false });
     await createRequestRecipient(companyId);
 
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 18);
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-09-04",
-      endDate: "2026-09-04",
+      startDate: day,
+      endDate: day,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Vacaciones",
@@ -315,11 +324,13 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
       return originalEmit(...args);
     });
 
+    const today = await resolveCompanyTodayIso(companyId);
+    const day = addDaysToDateIso(today, 19);
     const { detail } = await absenceRequestService.createFromWhatsapp(companyId, {
       employeeId: employee.id,
       absenceTypeId: vacation.id,
-      startDate: "2026-09-05",
-      endDate: "2026-09-05",
+      startDate: day,
+      endDate: day,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "Vacaciones",
@@ -343,11 +354,13 @@ describeDatabaseIntegration("admin alert absence pending integration", () => {
     await createRequestRecipient(companyA.companyId);
     await createRequestRecipient(companyB.companyId);
 
+    const todayA = await resolveCompanyTodayIso(companyA.companyId);
+    const day = addDaysToDateIso(todayA, 20);
     const createdA = await absenceRequestService.createFromWhatsapp(companyA.companyId, {
       employeeId: companyA.employee.id,
       absenceTypeId: companyA.vacation.id,
-      startDate: "2026-09-06",
-      endDate: "2026-09-06",
+      startDate: day,
+      endDate: day,
       startPeriod: "FULL_DAY",
       endPeriod: "FULL_DAY",
       reason: "A",

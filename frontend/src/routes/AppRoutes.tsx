@@ -362,10 +362,7 @@ export function AppRoutes() {
         <Route
           path="/bot-simulator"
           element={
-            <FeatureRouteGuard
-              moduleKey="bot_simulator"
-              requiredAnyPermission={["bot_simulator:use"]}
-            >
+            <FeatureRouteGuard requirePlatformAdmin moduleKey="bot_simulator">
               <LazyPage component={BotSimulatorPage} message="Cargando simulador..." />
             </FeatureRouteGuard>
           }

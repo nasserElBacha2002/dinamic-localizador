@@ -68,8 +68,6 @@ export const OPERATIONS_API_EXPORTS = [
   "endOperationAssignment",
   "getOperationAttendanceSummary",
   "getOperationWorkdays",
-  "getOperationWorkdayDetail",
-  "materializeOperationWorkdays",
   "previewOperationImport",
   "confirmOperationImport",
 ] as const;
@@ -118,6 +116,7 @@ export const EMPLOYEES_API_EXPORTS = [
 
 export const LOCATION_ZONES_API_EXPORTS = [
   "getLocationZones",
+  "searchLocationZones",
   "getLocationZonesGeocodingSummary",
   "createLocationZone",
   "updateLocationZone",

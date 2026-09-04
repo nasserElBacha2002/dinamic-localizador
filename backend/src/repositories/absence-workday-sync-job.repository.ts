@@ -257,60 +257,43 @@ export const absenceWorkdaySyncJobRepository = {
   ): Promise<AbsenceWorkdaySyncJob | null> {
     const leaseOwner = options?.leaseOwner ?? `worker-${process.pid}`;
     const leaseSeconds = options?.leaseSeconds ?? 120;
-    // Concurrent workers can lose a SELECT→UPDATE race; retry a few times.
-    // Prefer a single atomic CTE UPDATE so two workers claim distinct rows.
+    // Concurrent workers: UPDLOCK+READPAST on the CTE, then UPDATE the CTE itself
+    // (not a JOIN back to the base table). Updating via JOIN+WHERE status=PENDING
+    // can yield empty OUTPUT under contention even when another PENDING row exists.
+    // Retry a few times when the queue still has claimable work.
     const maxClaimAttempts = 5;
     const pool = getPool();
 
     for (let attempt = 0; attempt < maxClaimAttempts; attempt += 1) {
-      const transaction = new sql.Transaction(pool);
-      await transaction.begin();
-      try {
-        const claimed = await new sql.Request(transaction)
-          .input("maxAttempts", sql.Int, maxAttempts)
-          .input("leaseOwner", sql.NVarChar(80), leaseOwner)
-          .input("leaseSeconds", sql.Int, leaseSeconds)
-          .query(`
-            ;WITH next_job AS (
-              SELECT TOP (1) id, company_id
-              FROM absence_workday_sync_jobs WITH (UPDLOCK, READPAST, ROWLOCK)
-              WHERE status = N'PENDING'
-                AND attempt_count < @maxAttempts
-                AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
-              ORDER BY updated_at ASC, created_at ASC
-            )
-            UPDATE j
-            SET status = N'PROCESSING',
-                lease_owner = @leaseOwner,
-                lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
-                lease_version = lease_version + 1,
-                updated_at = SYSUTCDATETIME()
-            OUTPUT INSERTED.*
-            FROM absence_workday_sync_jobs j
-            INNER JOIN next_job n ON n.id = j.id AND n.company_id = j.company_id
-            WHERE j.status = N'PENDING'
-          `);
+      const claimed = await pool
+        .request()
+        .input("maxAttempts", sql.Int, maxAttempts)
+        .input("leaseOwner", sql.NVarChar(80), leaseOwner)
+        .input("leaseSeconds", sql.Int, leaseSeconds)
+        .query(`
+          ;WITH next_job AS (
+            SELECT TOP (1) *
+            FROM absence_workday_sync_jobs WITH (UPDLOCK, READPAST, ROWLOCK)
+            WHERE status = N'PENDING'
+              AND attempt_count < @maxAttempts
+              AND (lease_expires_at IS NULL OR lease_expires_at < SYSUTCDATETIME())
+            ORDER BY updated_at ASC, created_at ASC, id ASC
+          )
+          UPDATE next_job
+          SET status = N'PROCESSING',
+              lease_owner = @leaseOwner,
+              lease_expires_at = DATEADD(SECOND, @leaseSeconds, SYSUTCDATETIME()),
+              lease_version = lease_version + 1,
+              updated_at = SYSUTCDATETIME()
+          OUTPUT INSERTED.*
+        `);
 
-        if (!claimed.recordset[0]) {
-          await transaction.commit();
-          // Another worker may have taken the only visible row between attempts.
-          if (attempt + 1 < maxClaimAttempts) {
-            continue;
-          }
-          return null;
-        }
-
-        await transaction.commit();
+      if (claimed.recordset[0]) {
         return mapRow(claimed.recordset[0] as Record<string, unknown>);
-      } catch (error) {
-        try {
-          await transaction.rollback();
-        } catch (rollbackError) {
-          console.error("[absence-workday-sync-job] claim rollback failed", {
-            error: rollbackError instanceof Error ? rollbackError.message : String(rollbackError),
-          });
-        }
-        throw error;
+      }
+      // Another worker may have taken the only visible row between attempts.
+      if (attempt + 1 < maxClaimAttempts) {
+        continue;
       }
     }
 

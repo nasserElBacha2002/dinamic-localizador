@@ -32,6 +32,7 @@ export const locationStatusLabels: Record<LocationStatus, string> = {
   INSIDE_GEOFENCE: "Dentro del radio",
   OUTSIDE_GEOFENCE: "Fuera del radio",
   INVALID_LOCATION: "Ubicación inválida",
+  NOT_RECORDED: "Sin registrar",
 };
 
 export const punctualityStatusLabels: Record<PunctualityStatus, string> = {
@@ -39,6 +40,7 @@ export const punctualityStatusLabels: Record<PunctualityStatus, string> = {
   ON_TIME: "A tiempo",
   LATE: "Tarde",
   OUTSIDE_TIME_WINDOW: "Fuera de horario",
+  NOT_RECORDED: "Sin registrar",
 };
 
 export const activeStatusLabel = (active: boolean): string => (active ? "Activo" : "Inactivo");

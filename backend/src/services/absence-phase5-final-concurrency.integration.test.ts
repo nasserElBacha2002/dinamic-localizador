@@ -233,6 +233,17 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
       enqueueCommandId: `enq-b-${randomUUID()}`,
     });
 
+    const pendingBefore = await getPool()
+      .request()
+      .input("jobA", sql.UniqueIdentifier, jobA.id)
+      .input("jobB", sql.UniqueIdentifier, jobB.id)
+      .query<{ n: number }>(`
+        SELECT COUNT(*) AS n
+        FROM absence_workday_sync_jobs
+        WHERE id IN (@jobA, @jobB) AND status = N'PENDING'
+      `);
+    assert.equal(Number(pendingBefore.recordset[0]?.n ?? 0), 2);
+
     const [c1, c2] = await Promise.all([
       absenceWorkdaySyncJobRepository.claimNextPending(8, {
         leaseOwner: `w1-${randomUUID()}`,
@@ -243,8 +254,8 @@ describeDatabaseIntegration("phase5 final SQL concurrency suite", () => {
         leaseSeconds: 60,
       }),
     ]);
-    assert.ok(c1);
-    assert.ok(c2);
+    assert.ok(c1, "first concurrent claim should return a job");
+    assert.ok(c2, "second concurrent claim should return a distinct job");
     assert.notEqual(c1.id, c2.id);
     assert.ok([jobA.id, jobB.id].includes(c1.id));
     assert.ok([jobA.id, jobB.id].includes(c2.id));

@@ -7,6 +7,7 @@ import {
 import { isAbsenceSessionState } from "../../utils/bot-session-states";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import { getAttendanceModuleBlockedMessage } from "../whatsapp-module-gate";
+import { botSessionService } from "../bot-session.service";
 import { logModuleBlocked } from "./module-session-gate";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../types/twilio.types";
@@ -100,11 +101,14 @@ export const handleCheckoutLocation = async (
   if (
     session.state !== "WAITING_CHECKOUT_LOCATION" ||
     !session.employeeWorkdayId ||
-    !session.attendanceRecordId ||
     !session.operationId
   ) {
     return null;
   }
+
+  const context = botSessionService.parseContext(session.contextJson);
+  const checkoutWithoutArrival =
+    Boolean(context.checkoutWithoutArrival) || !session.attendanceRecordId;
 
   return handlers.processLocationCheckout({
     companyId: ctx.companyId,
@@ -118,5 +122,6 @@ export const handleCheckoutLocation = async (
     messageSid: ctx.payload.MessageSid,
     phoneFrom: ctx.phoneFrom,
     phoneTo: ctx.phoneTo,
+    checkoutWithoutArrival,
   });
 };

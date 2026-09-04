@@ -11,9 +11,8 @@ export const LOCATION_ZONE_GEOCODING_SOURCES = ["AUTO", "MANUAL"] as const;
 
 export type LocationZoneGeocodingSource = (typeof LOCATION_ZONE_GEOCODING_SOURCES)[number];
 
-export interface LocationZone {
+export interface GlobalLocationZone {
   id: string;
-  companyId: string;
   name: string;
   normalizedName: string;
   locality: string | null;
@@ -24,14 +23,36 @@ export interface LocationZone {
   geocodingSource: LocationZoneGeocodingSource | null;
   geocodedAt: string | null;
   geocodingLastError: string | null;
+  /** Global catalog active flag */
   isActive: boolean;
-  assignedEmployeesCount?: number;
   createdAt: string;
   updatedAt: string;
 }
 
+export interface CompanyLocationZoneView extends GlobalLocationZone {
+  companyId: string;
+  associationId: string;
+  associationActive: boolean;
+  /** Global catalog flag (same as isActive on base, kept explicit for clarity) */
+  globalIsActive: boolean;
+  alreadyAssociated?: boolean;
+  assignedEmployeesCount?: number;
+}
+
+/** @deprecated Prefer GlobalLocationZone | CompanyLocationZoneView. Alias for gradual migration. */
+export type LocationZone =
+  | CompanyLocationZoneView
+  | (GlobalLocationZone & {
+      companyId?: string | null;
+      associationId?: string | null;
+      associationActive?: boolean | null;
+      alreadyAssociated?: boolean;
+      globalIsActive?: boolean;
+      assignedEmployeesCount?: number;
+    });
+
 export interface LocationZoneGeocodingSummary {
-  /** Active zones only. */
+  /** Active company associations only. */
   total: number;
   resolved: number;
   manual: number;
@@ -39,7 +60,7 @@ export interface LocationZoneGeocodingSummary {
   failed: number;
   withCoordinates: number;
   withoutCoordinates: number;
-  /** withCoordinates / total * 100 (active zones). Not a quality/precision score. */
+  /** withCoordinates / total * 100 (active associations). Not a quality/precision score. */
   coveragePercent: number;
   /** Active zones whose locality maps to a known canonical code. */
   canonicalized: number;

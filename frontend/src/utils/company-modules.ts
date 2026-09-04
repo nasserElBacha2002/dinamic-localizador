@@ -208,7 +208,7 @@ export function getAdminNavItems({
       items.push({ label: "Estadísticas", path: "/statistics", section: "operation" });
     }
 
-    if (canShowNavItem(modules, permissions, ["bot_simulator"], ["bot_simulator:use"])) {
+    if (isPlatformAdmin && isModuleEnabled(modules, "bot_simulator")) {
       items.push({ label: "Simulador de Bot", path: "/bot-simulator", section: "tools" });
     }
 

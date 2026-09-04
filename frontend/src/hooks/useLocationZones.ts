@@ -4,11 +4,13 @@ import {
   geocodeLocationZone,
   getLocationZones,
   getLocationZonesGeocodingSummary,
+  searchLocationZones,
   updateLocationZone,
 } from "../api/location-zones.api";
 import type {
   CreateLocationZoneInput,
   ListLocationZonesFilters,
+  SearchLocationZonesFilters,
   UpdateLocationZoneInput,
 } from "../types/location-zone";
 import { employeeKeys } from "../queryKeys/employees";
@@ -25,6 +27,21 @@ export function useLocationZones(
     queryKey: locationZoneKeys.list(companyId, filters),
     queryFn: () => getLocationZones(filters),
     enabled,
+    retry: 1,
+  });
+}
+
+export function useSearchLocationZones(
+  filters: SearchLocationZonesFilters,
+  extraEnabled = true,
+) {
+  const { companyId, enabled } = useOperationalQueryEnabled(extraEnabled);
+  const q = filters.q.trim();
+
+  return useQuery({
+    queryKey: locationZoneKeys.search(companyId, { ...filters, q }),
+    queryFn: () => searchLocationZones({ ...filters, q }),
+    enabled: enabled && q.length >= 1,
     retry: 1,
   });
 }
@@ -49,6 +66,7 @@ export function useCreateLocationZone() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: locationZoneKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: locationZoneKeys.searches(companyId) }),
         queryClient.invalidateQueries({
           queryKey: locationZoneKeys.geocodingSummary(companyId),
         }),
@@ -72,6 +90,7 @@ export function useUpdateLocationZone() {
     onSuccess: async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey: locationZoneKeys.lists(companyId) }),
+        queryClient.invalidateQueries({ queryKey: locationZoneKeys.searches(companyId) }),
         queryClient.invalidateQueries({
           queryKey: locationZoneKeys.geocodingSummary(companyId),
         }),

@@ -19,6 +19,7 @@ import {
   type DataTableMobileCardConfig,
 } from "../../design-system";
 import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAttendance";
+import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
@@ -34,6 +35,7 @@ import { isModuleEnabled } from "../../utils/company-modules";
 import { getDateRangeQueryValue, isInvalidCustomDateRange } from "../../utils/date-range";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../utils/date-range-url";
 import { dateInputToIsoEnd, dateInputToIsoStart, formatDateTime } from "../../utils/dates";
+import { formatAttendanceArrivalLabel } from "../../utils/attendance-display";
 import { formatDistanceMeters, getRelatedName } from "../../utils/display-safe";
 import { getApiErrorMessage } from "../../utils/errors";
 import {
@@ -55,13 +57,14 @@ const ATTENDANCE_LIST_PATH = "/attendance";
 export function AttendanceListPage() {
   const navigate = useNavigate();
   const location = useLocation();
+  const { user } = useAuth();
   const permissionsQuery = useCompanyPermissions();
   const modulesQuery = useCompanyModules();
   const permissions = permissionsQuery.data?.permissions;
   const canExport = hasPermission(permissions, "attendance:export");
   const canUseBotSimulator =
-    isModuleEnabled(modulesQuery.data, "bot_simulator") &&
-    hasPermission(permissions, "bot_simulator:use");
+    Boolean(user?.isPlatformAdmin) &&
+    isModuleEnabled(modulesQuery.data, "bot_simulator");
 
   const table = useTableUrlState({
     defaults: ATTENDANCE_TABLE_DEFAULTS,
@@ -156,7 +159,7 @@ export function AttendanceListPage() {
           />
         ),
       },
-      { key: "receivedAt", header: "Llegada", getValue: (row) => formatDateTime(row.receivedAt) },
+      { key: "receivedAt", header: "Llegada", getValue: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime) },
       { key: "checkoutAt", header: "Salida", getValue: (row) => formatDateTime(row.checkoutAt) },
       {
         key: "distance",
@@ -228,7 +231,7 @@ export function AttendanceListPage() {
         {
           key: "receivedAt",
           label: "Llegada",
-          getValue: (row) => formatDateTime(row.receivedAt),
+          getValue: (row) => formatAttendanceArrivalLabel(row.receivedAt, formatDateTime),
           visibility: "always",
         },
         {

@@ -30,17 +30,20 @@ import {
   GENERIC_ERROR_MESSAGE,
   INVALID_SELECTION_MESSAGE,
   NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+  NO_CHECKOUT_ASSIGNMENT_MESSAGE,
   NO_CHECKOUT_OPERATION_MESSAGE,
   PENDING_CHECKOUT_EXPIRED_MESSAGE,
 } from "./bot-response.builder";
 import {
   isValidWorkdaySelection,
+  listExitWithoutArrivalCheckoutWorkdays,
   listOpenCheckoutWorkdays,
   mapCheckoutCandidatesToSessionOptions,
   parseWorkdaySelectionIndex,
   resolvePendingLocationEventAt,
   resolveWorkdayOptionFromSession,
   revalidateCheckoutCandidateByAttendanceId,
+  revalidateExitWithoutArrivalCandidateByWorkdayId,
   type CheckoutCandidateRevalidationResult,
 } from "./bot-workday.selector";
 import { resolveWorkdayOptionsFromSessionContext } from "../../utils/legacy-operation-session-context";
@@ -65,6 +68,71 @@ const messageForCheckoutRevalidationFailure = (
   result.kind === "expired"
     ? PENDING_CHECKOUT_EXPIRED_MESSAGE
     : NO_CHECKOUT_OPERATION_MESSAGE;
+
+/**
+ * Canonical exit-without-arrival signal: no open attendance id.
+ * Session/candidate `checkoutWithoutArrival` must stay aligned:
+ *   checkoutWithoutArrival === true  ⇒  attendanceRecordId == null
+ */
+const isExitWithoutArrivalCheckout = (input: {
+  attendanceRecordId?: string | null;
+  checkoutWithoutArrival?: boolean;
+}): boolean => {
+  if (input.checkoutWithoutArrival) {
+    return true;
+  }
+  return !input.attendanceRecordId;
+};
+
+const respondCheckoutCommandError = async (input: {
+  companyId: string;
+  employeeId: string;
+  phoneFrom: string;
+  phoneTo: string;
+  error: CheckoutCommandError;
+  sessionId?: string;
+  /** Copy when candidate is unavailable (exit-without-arrival vs open attendance). */
+  unavailableMessage?: string;
+}): Promise<string | null> => {
+  const { error } = input;
+  if (error.code === "BOT_SESSION_STALE") {
+    return respond(input.companyId, {
+      message: EXPIRED_SESSION_MESSAGE,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  }
+  if (
+    error.code === "CHECKOUT_CANDIDATE_EXPIRED" ||
+    error.code === "CHECKOUT_CANDIDATE_UNAVAILABLE"
+  ) {
+    return respond(input.companyId, {
+      message:
+        error.code === "CHECKOUT_CANDIDATE_EXPIRED"
+          ? PENDING_CHECKOUT_EXPIRED_MESSAGE
+          : (input.unavailableMessage ?? NO_CHECKOUT_OPERATION_MESSAGE),
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  }
+  if (
+    error.code === "CHECKOUT_DUPLICATE" ||
+    error.code === "CHECKOUT_MESSAGE_SID_DUPLICATE"
+  ) {
+    if (input.sessionId) {
+      await botSessionService.completeSession(input.companyId, input.sessionId);
+    }
+    return respond(input.companyId, {
+      message: DUPLICATE_CHECKOUT_MESSAGE,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+    });
+  }
+  return null;
+};
 
 export async function processCheckoutWithoutLocation(input: {
     companyId: string;
@@ -288,12 +356,184 @@ export async function processCheckoutWithoutLocation(input: {
     });
 }
 
+async function processLocationCheckoutWithoutArrival(input: {
+  companyId: string;
+  session: BotSession;
+  employeeId: string;
+  employeeWorkdayId: string;
+  operationId: string;
+  latitude: number;
+  longitude: number;
+  messageSid: string;
+  phoneFrom: string;
+  phoneTo: string;
+  eventAt: Date;
+  eligibilityAt: Date;
+}): Promise<string> {
+  const { companyId } = input;
+  const revalidation = await revalidateExitWithoutArrivalCandidateByWorkdayId(
+    companyId,
+    input.employeeId,
+    input.employeeWorkdayId,
+    input.eligibilityAt,
+  );
+
+  if (
+    revalidation.kind !== "eligible" ||
+    revalidation.candidate.operationId !== input.operationId
+  ) {
+    const message =
+      revalidation.kind === "expired"
+        ? PENDING_CHECKOUT_EXPIRED_MESSAGE
+        : NO_CHECKOUT_ASSIGNMENT_MESSAGE;
+    return respond(companyId, {
+      message,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.NO_OPERATION_ASSIGNED,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  const eligible = revalidation.candidate;
+  const runtimeSettings = getBotRuntimeSettings();
+  if (!runtimeSettings) {
+    throw new Error("Bot runtime settings are not loaded");
+  }
+
+  const { validation, distanceMeters: checkoutDistance, effectiveRadiusMeters } =
+    buildCheckoutValidation({
+      employeeLatitude: input.latitude,
+      employeeLongitude: input.longitude,
+      serviceLatitude: eligible.serviceLatitude,
+      serviceLongitude: eligible.serviceLongitude,
+      serviceAllowedRadiusMeters: eligible.allowedRadiusMeters,
+      checkoutAt: input.eventAt,
+      scheduledEnd: eligible.expectedEndAt ? new Date(eligible.expectedEndAt) : null,
+      runtimeSettings,
+    });
+
+  setTechnicalDetail("employeeWorkdayId", input.employeeWorkdayId);
+  setTechnicalDetail("operationId", input.operationId);
+  setTechnicalDetail("checkoutWithoutArrival", true);
+  setTechnicalDetail("checkoutDistanceMeters", Math.round(checkoutDistance * 100) / 100);
+  setTechnicalDetail("allowedRadiusMeters", effectiveRadiusMeters);
+  setTechnicalDetail("checkoutValidation", validation);
+  setTechnicalDetail("locationEventAt", input.eventAt.toISOString());
+
+  if (isSimulationDryRun()) {
+    const responseMessage = buildCheckoutRegisteredMessage({
+      eligible,
+      checkInAt: null,
+      checkoutAt: input.eventAt,
+      distanceMeters: checkoutDistance,
+      checkoutStatus: validation.checkoutStatus,
+      extraWorkedMinutes: validation.extraWorkedMinutes,
+    });
+    await botSessionService.completeSession(companyId, input.session.id);
+    return respond(companyId, {
+      message: `${responseMessage}\n\n[Simulación] Se habría registrado el check-out sin llegada previa.`,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.CHECKOUT_WITHOUT_ARRIVAL,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  let created: AttendanceRecord;
+  try {
+    created = await employeeWorkdayCheckoutCommand.registerExitWithoutArrival({
+      companyId,
+      employeeId: input.employeeId,
+      operationId: input.operationId,
+      employeeWorkdayId: input.employeeWorkdayId,
+      sessionId: input.session.id,
+      eligibilityAt: input.eligibilityAt,
+      expectedSessionState: "WAITING_CHECKOUT_LOCATION",
+      fields: {
+        checkoutLatitude: input.latitude,
+        checkoutLongitude: input.longitude,
+        checkoutDistanceMeters: Math.round(checkoutDistance * 100) / 100,
+        checkoutStatus: validation.checkoutStatus,
+        checkoutReviewReason: validation.checkoutReviewReason,
+        earlyDepartureMinutes: validation.earlyDepartureMinutes,
+        extraWorkedMinutes: validation.extraWorkedMinutes,
+        checkoutMessageSid: input.messageSid,
+        checkoutAt: input.eventAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof CheckoutCommandError) {
+      const mapped = await respondCheckoutCommandError({
+        companyId,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        error,
+        sessionId: input.session.id,
+        unavailableMessage: NO_CHECKOUT_ASSIGNMENT_MESSAGE,
+      });
+      if (mapped) {
+        return mapped;
+      }
+    }
+
+    console.error("[whatsapp-bot] exit-without-arrival checkout failed", error);
+    return respond(companyId, {
+      message: GENERIC_ERROR_MESSAGE,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  const responseMessage = buildCheckoutRegisteredMessage({
+    eligible,
+    checkInAt: null,
+    checkoutAt: input.eventAt,
+    distanceMeters: created.checkoutDistanceMeters ?? 0,
+    checkoutStatus: validation.checkoutStatus,
+    extraWorkedMinutes: validation.extraWorkedMinutes,
+  });
+
+  logWhatsAppAttendanceEvent("LOCATION_ATTENDANCE_RECORDED", {
+    producer: "BOT_CHECK_OUT",
+    companyId: input.companyId,
+    employeeId: input.employeeId,
+    operationId: input.operationId,
+    messageSid: input.messageSid,
+    checkoutStatus: validation.checkoutStatus,
+    checkoutWithoutArrival: true,
+    attendanceId: created.id,
+    resultCode:
+      validation.checkoutStatus === "CHECKOUT_REJECTED"
+        ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
+        : WHATSAPP_RESULT_CODES.CHECKOUT_WITHOUT_ARRIVAL,
+  });
+
+  return respond(companyId, {
+    message: responseMessage,
+    employeeId: input.employeeId,
+    phoneFrom: input.phoneTo,
+    phoneTo: input.phoneFrom,
+    resultCode:
+      validation.checkoutStatus === "CHECKOUT_REJECTED"
+        ? WHATSAPP_RESULT_CODES.LOCATION_OUTSIDE_ALLOWED_RADIUS
+        : WHATSAPP_RESULT_CODES.CHECKOUT_WITHOUT_ARRIVAL,
+    flowType: "CHECKOUT",
+  });
+}
+
 export async function processLocationCheckout(input: {
     companyId: string;
     session: BotSession;
     employeeId: string;
     employeeWorkdayId: string;
-    attendanceRecordId: string;
+    attendanceRecordId?: string | null;
     operationId: string;
     latitude: number;
     longitude: number;
@@ -302,14 +542,28 @@ export async function processLocationCheckout(input: {
     phoneTo: string;
     /** Instant of the LOCATION WhatsApp event (defaults to now). */
     eventAt?: Date;
+    checkoutWithoutArrival?: boolean;
   }): Promise<string> {
     const { companyId } = input;
     const eventAt = input.eventAt ?? getBotNow();
     const eligibilityAt = getBotNow();
+    const exitWithoutArrival = isExitWithoutArrivalCheckout({
+      attendanceRecordId: input.attendanceRecordId,
+      checkoutWithoutArrival: input.checkoutWithoutArrival,
+    });
+
+    if (exitWithoutArrival) {
+      return processLocationCheckoutWithoutArrival({
+        ...input,
+        eventAt,
+        eligibilityAt,
+      });
+    }
+
     const revalidation = await revalidateCheckoutCandidateByAttendanceId(
       companyId,
       input.employeeId,
-      input.attendanceRecordId,
+      input.attendanceRecordId!,
       eligibilityAt,
     );
 
@@ -469,7 +723,7 @@ export async function processLocationCheckout(input: {
         attendanceId: attendance.id,
         sessionId: input.session.id,
         employeeWorkdayId: input.employeeWorkdayId,
-        attendanceRecordId: input.attendanceRecordId,
+        attendanceRecordId: input.attendanceRecordId!,
         eligibilityAt,
         expectedSessionState: "WAITING_CHECKOUT_LOCATION",
         fields: {
@@ -486,39 +740,16 @@ export async function processLocationCheckout(input: {
       });
     } catch (error) {
       if (error instanceof CheckoutCommandError) {
-        if (error.code === "BOT_SESSION_STALE") {
-          return respond(companyId, {
-            message: EXPIRED_SESSION_MESSAGE,
-            employeeId: input.employeeId,
-            phoneFrom: input.phoneTo,
-            phoneTo: input.phoneFrom,
-          });
-        }
-        if (
-          error.code === "CHECKOUT_CANDIDATE_EXPIRED" ||
-          error.code === "CHECKOUT_CANDIDATE_UNAVAILABLE"
-        ) {
-          return respond(companyId, {
-            message:
-              error.code === "CHECKOUT_CANDIDATE_EXPIRED"
-                ? PENDING_CHECKOUT_EXPIRED_MESSAGE
-                : NO_CHECKOUT_OPERATION_MESSAGE,
-            employeeId: input.employeeId,
-            phoneFrom: input.phoneTo,
-            phoneTo: input.phoneFrom,
-          });
-        }
-        if (
-          error.code === "CHECKOUT_DUPLICATE" ||
-          error.code === "CHECKOUT_MESSAGE_SID_DUPLICATE"
-        ) {
-          await botSessionService.completeSession(companyId, input.session.id);
-          return respond(companyId, {
-            message: DUPLICATE_CHECKOUT_MESSAGE,
-            employeeId: input.employeeId,
-            phoneFrom: input.phoneTo,
-            phoneTo: input.phoneFrom,
-          });
+        const mapped = await respondCheckoutCommandError({
+          companyId,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneFrom,
+          phoneTo: input.phoneTo,
+          error,
+          sessionId: input.session.id,
+        });
+        if (mapped) {
+          return mapped;
         }
       }
 
@@ -589,34 +820,54 @@ export async function startCheckout(input: {
     messageSid: string;
   }): Promise<string> {
     const { companyId } = input;
-    const eligible = await listOpenCheckoutWorkdays(
-      companyId,
-      input.employeeId,
-      getBotNow(),
-    );
+    const now = getBotNow();
+    let eligible = await listOpenCheckoutWorkdays(companyId, input.employeeId, now);
+    let withoutArrival = false;
+
+    if (eligible.length === 0) {
+      eligible = await listExitWithoutArrivalCheckoutWorkdays(
+        companyId,
+        input.employeeId,
+        now,
+      );
+      withoutArrival = eligible.length > 0;
+    }
 
     if (eligible.length === 0) {
       return respond(companyId, {
-        message: NO_CHECK_IN_FOR_CHECKOUT_MESSAGE,
+        message: NO_CHECKOUT_ASSIGNMENT_MESSAGE,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,
-        resultCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
+        resultCode: WHATSAPP_RESULT_CODES.NO_OPERATION_ASSIGNED,
         flowType: "CHECKOUT",
       });
     }
 
-    const finalizeWithoutLocation = async (candidate: (typeof eligible)[number]) =>
-      processCheckoutWithoutLocation({
+    const finalizeWithoutLocation = async (candidate: (typeof eligible)[number]) => {
+      if (candidate.checkoutWithoutArrival || withoutArrival) {
+        return processCheckoutWithoutArrivalWithoutLocation({
+          companyId,
+          employeeId: input.employeeId,
+          employeeWorkdayId: candidate.employeeWorkdayId,
+          operationId: candidate.operationId,
+          phoneFrom: input.phoneFrom,
+          phoneTo: input.phoneTo,
+          messageSid: input.messageSid,
+        });
+      }
+
+      return processCheckoutWithoutLocation({
         companyId,
         employeeId: input.employeeId,
         employeeWorkdayId: candidate.employeeWorkdayId,
-        attendanceRecordId: candidate.attendanceRecordId,
+        attendanceRecordId: candidate.attendanceRecordId!,
         operationId: candidate.operationId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,
         messageSid: input.messageSid,
       });
+    };
 
     if (eligible.length === 1) {
       const candidate = eligible[0];
@@ -630,6 +881,7 @@ export async function startCheckout(input: {
         operationId: candidate.operationId,
         employeeWorkdayId: candidate.employeeWorkdayId,
         attendanceRecordId: candidate.attendanceRecordId,
+        checkoutWithoutArrival: candidate.checkoutWithoutArrival || withoutArrival,
       });
 
       return respond(companyId, {
@@ -674,6 +926,123 @@ export async function startCheckout(input: {
     });
 }
 
+async function processCheckoutWithoutArrivalWithoutLocation(input: {
+  companyId: string;
+  employeeId: string;
+  employeeWorkdayId: string;
+  operationId: string;
+  phoneFrom: string;
+  phoneTo: string;
+  messageSid: string;
+  sessionId?: string;
+}): Promise<string> {
+  const { companyId } = input;
+  const checkoutAt = getBotNow();
+  const revalidation = await revalidateExitWithoutArrivalCandidateByWorkdayId(
+    companyId,
+    input.employeeId,
+    input.employeeWorkdayId,
+    checkoutAt,
+  );
+
+  if (
+    revalidation.kind !== "eligible" ||
+    revalidation.candidate.operationId !== input.operationId
+  ) {
+    if (input.sessionId) {
+      await botSessionService.completeSession(companyId, input.sessionId);
+    }
+    return respond(companyId, {
+      message:
+        revalidation.kind === "expired"
+          ? PENDING_CHECKOUT_EXPIRED_MESSAGE
+          : NO_CHECKOUT_ASSIGNMENT_MESSAGE,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.NO_OPERATION_ASSIGNED,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  const eligible = revalidation.candidate;
+  const runtimeSettings = getBotRuntimeSettings();
+  if (!runtimeSettings) {
+    throw new Error("Bot runtime settings are not loaded");
+  }
+
+  const validation = buildCheckoutValidationWithoutLocation({
+    checkoutAt,
+    scheduledEnd: eligible.expectedEndAt ? new Date(eligible.expectedEndAt) : null,
+    runtimeSettings,
+  });
+
+  try {
+    await employeeWorkdayCheckoutCommand.registerExitWithoutArrival({
+      companyId,
+      employeeId: input.employeeId,
+      operationId: input.operationId,
+      employeeWorkdayId: input.employeeWorkdayId,
+      sessionId: input.sessionId,
+      eligibilityAt: checkoutAt,
+      fields: {
+        checkoutLatitude: null,
+        checkoutLongitude: null,
+        checkoutDistanceMeters: null,
+        checkoutStatus: validation.checkoutStatus,
+        checkoutReviewReason: validation.checkoutReviewReason,
+        earlyDepartureMinutes: validation.earlyDepartureMinutes,
+        extraWorkedMinutes: validation.extraWorkedMinutes,
+        checkoutMessageSid: input.messageSid,
+        checkoutAt: checkoutAt.toISOString(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof CheckoutCommandError) {
+      const mapped = await respondCheckoutCommandError({
+        companyId,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneFrom,
+        phoneTo: input.phoneTo,
+        error,
+        sessionId: input.sessionId,
+        unavailableMessage: NO_CHECKOUT_ASSIGNMENT_MESSAGE,
+      });
+      if (mapped) {
+        return mapped;
+      }
+    }
+    console.error("[whatsapp-bot] exit-without-arrival without location failed", error);
+    return respond(companyId, {
+      message: GENERIC_ERROR_MESSAGE,
+      employeeId: input.employeeId,
+      phoneFrom: input.phoneTo,
+      phoneTo: input.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+      flowType: "CHECKOUT",
+    });
+  }
+
+  const responseMessage = buildCheckoutRegisteredMessage({
+    eligible,
+    checkInAt: null,
+    checkoutAt,
+    distanceMeters: null,
+    checkoutStatus: validation.checkoutStatus,
+    extraWorkedMinutes: validation.extraWorkedMinutes,
+    locationProvided: false,
+  });
+
+  return respond(companyId, {
+    message: responseMessage,
+    employeeId: input.employeeId,
+    phoneFrom: input.phoneTo,
+    phoneTo: input.phoneFrom,
+    resultCode: WHATSAPP_RESULT_CODES.CHECKOUT_WITHOUT_ARRIVAL,
+    flowType: "CHECKOUT",
+  });
+}
+
 export async function handleCheckoutOperationSelection(input: {
     companyId: string;
     session: BotSession;
@@ -700,7 +1069,115 @@ export async function handleCheckoutOperationSelection(input: {
     }
 
     const selected = resolveWorkdayOptionFromSession(options, selection);
-    if (!selected?.attendanceRecordId) {
+    if (!selected) {
+      return respond(companyId, {
+        message: NO_CHECKOUT_OPERATION_MESSAGE,
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+      });
+    }
+
+    const exitWithoutArrival = isExitWithoutArrivalCheckout({
+      attendanceRecordId: selected.attendanceRecordId,
+      checkoutWithoutArrival: selected.checkoutWithoutArrival,
+    });
+
+    if (exitWithoutArrival) {
+      const revalidation = await revalidateExitWithoutArrivalCandidateByWorkdayId(
+        companyId,
+        input.employeeId,
+        selected.employeeWorkdayId,
+        getBotNow(),
+      );
+
+      if (revalidation.kind !== "eligible") {
+        return respond(companyId, {
+          message: messageForCheckoutRevalidationFailure(revalidation),
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+        });
+      }
+
+      const eligible = revalidation.candidate;
+
+      if (!getRequireCheckoutLocation()) {
+        return processCheckoutWithoutArrivalWithoutLocation({
+          companyId,
+          employeeId: input.employeeId,
+          employeeWorkdayId: eligible.employeeWorkdayId,
+          operationId: eligible.operationId,
+          phoneFrom: input.phoneFrom,
+          phoneTo: input.phoneTo,
+          messageSid: input.messageSid,
+          sessionId: input.session.id,
+        });
+      }
+
+      const selectionResult = await botSessionService.selectCheckoutOperationAndRenewExpiration(
+        companyId,
+        input.session.id,
+        {
+          operationId: eligible.operationId,
+          employeeWorkdayId: eligible.employeeWorkdayId,
+          attendanceRecordId: null,
+          checkoutWithoutArrival: true,
+        },
+      );
+
+      if (selectionResult.kind === "expired") {
+        return respond(companyId, {
+          message: EXPIRED_SESSION_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+          resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+          flowType: "CHECKOUT",
+        });
+      }
+
+      if (selectionResult.kind !== "ok") {
+        return respond(companyId, {
+          message: INVALID_SELECTION_MESSAGE,
+          employeeId: input.employeeId,
+          phoneFrom: input.phoneTo,
+          phoneTo: input.phoneFrom,
+          resultCode: WHATSAPP_RESULT_CODES.INVALID_SELECTION,
+          flowType: "CHECKOUT",
+        });
+      }
+
+      const pendingLocation = context.pendingLocation;
+      if (pendingLocation) {
+        return processLocationCheckout({
+          companyId,
+          session: selectionResult.session,
+          employeeId: input.employeeId,
+          employeeWorkdayId: eligible.employeeWorkdayId,
+          attendanceRecordId: null,
+          operationId: eligible.operationId,
+          latitude: pendingLocation.latitude,
+          longitude: pendingLocation.longitude,
+          messageSid: pendingLocation.messageSid,
+          phoneFrom: input.phoneFrom,
+          phoneTo: input.phoneTo,
+          eventAt: resolvePendingLocationEventAt(pendingLocation),
+          checkoutWithoutArrival: true,
+        });
+      }
+
+      return respond(companyId, {
+        message: buildCheckoutLocationRequestMessage(eligible),
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.LOCATION_REQUIRED,
+        flowType: "CHECKOUT",
+      });
+    }
+
+    if (!selected.attendanceRecordId) {
       return respond(companyId, {
         message: NO_CHECKOUT_OPERATION_MESSAGE,
         employeeId: input.employeeId,
@@ -732,7 +1209,7 @@ export async function handleCheckoutOperationSelection(input: {
         companyId,
         employeeId: input.employeeId,
         employeeWorkdayId: eligible.employeeWorkdayId,
-        attendanceRecordId: eligible.attendanceRecordId,
+        attendanceRecordId: eligible.attendanceRecordId!,
         operationId: eligible.operationId,
         phoneFrom: input.phoneFrom,
         phoneTo: input.phoneTo,

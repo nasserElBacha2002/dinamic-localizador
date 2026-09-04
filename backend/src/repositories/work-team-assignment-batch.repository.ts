@@ -410,7 +410,7 @@ export const workTeamAssignmentBatchRepository = {
         SELECT
           b.id AS batch_id,
           b.operation_id,
-          o.notes AS operation_name,
+          s.name AS operation_name,
           o.service_id,
           s.name AS service_name,
           o.operation_kind,

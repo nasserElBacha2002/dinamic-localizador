@@ -1,5 +1,8 @@
 import type { Request, Response } from "express";
-import type { ListLocationZonesQuery } from "../schemas/location-zone.schema";
+import type {
+  ListLocationZonesQuery,
+  SearchLocationZonesQuery,
+} from "../schemas/location-zone.schema";
 import { locationZoneService } from "../services/location-zone.service";
 import { requireRequestCompanyId } from "../utils/request-company";
 
@@ -9,6 +12,15 @@ export const locationZoneController = {
     const zones = await locationZoneService.list(
       companyId,
       (req.validatedQuery ?? { includeInactive: false }) as ListLocationZonesQuery,
+    );
+    res.status(200).json({ data: zones });
+  },
+
+  async search(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const zones = await locationZoneService.search(
+      companyId,
+      (req.validatedQuery ?? { q: "" }) as SearchLocationZonesQuery,
     );
     res.status(200).json({ data: zones });
   },
@@ -32,6 +44,7 @@ export const locationZoneController = {
       req.companyRole!,
       String(req.params.zoneId),
       req.body,
+      { isPlatformAdmin: Boolean(req.isPlatformAdmin) },
     );
     res.status(200).json({ data: zone });
   },
@@ -43,7 +56,7 @@ export const locationZoneController = {
       companyId,
       req.companyRole!,
       String(req.params.zoneId),
-      { force },
+      { force, isPlatformAdmin: Boolean(req.isPlatformAdmin) },
     );
     res.status(200).json({ data: zone });
   },

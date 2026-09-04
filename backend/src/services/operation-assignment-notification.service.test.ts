@@ -49,7 +49,6 @@ const oneTimeOperation = {
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 15,
   status: "SCHEDULED" as const,
-  notes: null,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
 };

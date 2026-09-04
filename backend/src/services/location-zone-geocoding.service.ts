@@ -27,7 +27,7 @@ export type LocationZoneGeocodeOutcome =
 
 export interface LocationZoneGeocodeAttemptResult {
   zoneId: string;
-  companyId: string;
+  companyId: string | null;
   query: string | null;
   outcome: LocationZoneGeocodeOutcome;
   errorMessage?: string;
@@ -47,6 +47,14 @@ export interface LocationZoneGeocodeBatchSummary {
 
 const truncateError = (message: string, max = 500): string =>
   message.length <= max ? message : `${message.slice(0, max - 1)}…`;
+
+const zoneCompanyId = (zone: LocationZone): string | null => {
+  if (!("companyId" in zone)) {
+    return null;
+  }
+  const value = zone.companyId;
+  return value == null ? null : value;
+};
 
 const hasResolvedCentroids = (zone: LocationZone): boolean =>
   zone.centroidLatitude !== null &&
@@ -71,7 +79,10 @@ const classifySkippedWrite = async (
 ): Promise<
   "SKIPPED_CONCURRENT_MANUAL" | "SKIPPED_STALE_INPUT" | "SKIPPED_NOT_FOUND"
 > => {
-  const current = await locationZoneRepository.findByIdForCompany(zone.companyId, zone.id);
+  const companyId = zoneCompanyId(zone);
+  const current = companyId
+    ? await locationZoneRepository.findByIdForCompany(companyId, zone.id)
+    : await locationZoneRepository.findById(zone.id);
   if (!current) {
     return "SKIPPED_NOT_FOUND";
   }
@@ -122,11 +133,11 @@ export const locationZoneGeocodingService = {
         event: "LOCATION_ZONE_GEOCODING_SKIPPED",
         reason: "MANUAL",
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
       });
       return {
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         query,
         outcome: "SKIPPED_MANUAL",
       };
@@ -142,11 +153,11 @@ export const locationZoneGeocodingService = {
         event: "LOCATION_ZONE_GEOCODING_SKIPPED",
         reason: "ALREADY_RESOLVED",
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
       });
       return {
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         query,
         outcome: "SKIPPED_ALREADY_RESOLVED",
       };
@@ -159,11 +170,11 @@ export const locationZoneGeocodingService = {
         event: "LOCATION_ZONE_GEOCODING_SKIPPED",
         reason: "NO_API_KEY",
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
       });
       return {
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         query,
         outcome: "SKIPPED_NO_API_KEY",
         errorMessage: "GOOGLE_MAPS_API_KEY is not configured",
@@ -173,7 +184,7 @@ export const locationZoneGeocodingService = {
     console.info(`${LOG_PREFIX} LOCATION_ZONE_GEOCODING_STARTED`, {
       event: "LOCATION_ZONE_GEOCODING_STARTED",
       zoneId: zone.id,
-      companyId: zone.companyId,
+      companyId: zoneCompanyId(zone),
       query,
       force,
     });
@@ -192,7 +203,7 @@ export const locationZoneGeocodingService = {
     const persistGeocode = async (
       write: LocationZoneGeocodingWrite,
     ): Promise<LocationZone | null> =>
-      locationZoneRepository.applyGeocodeResult(zone.companyId, zone.id, write, {
+      locationZoneRepository.applyGeocodeResult(zone.id, write, {
         expectedNormalizedName,
         expectedNormalizedLocality,
         expectedUpdatedAt,
@@ -211,12 +222,12 @@ export const locationZoneGeocodingService = {
         event: "LOCATION_ZONE_GEOCODING_SKIPPED",
         reason: outcome,
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         force,
       });
       return {
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         query,
         outcome,
       };
@@ -230,7 +241,7 @@ export const locationZoneGeocodingService = {
         console.info(`${LOG_PREFIX} LOCATION_ZONE_GEOCODING_FAILED`, {
           event: "LOCATION_ZONE_GEOCODING_FAILED",
           zoneId: zone.id,
-          companyId: zone.companyId,
+          companyId: zoneCompanyId(zone),
           query,
           status: result.status,
           errorMessage,
@@ -238,7 +249,7 @@ export const locationZoneGeocodingService = {
         });
         return {
           zoneId: zone.id,
-          companyId: zone.companyId,
+          companyId: zoneCompanyId(zone),
           query,
           outcome: "FAILED",
           errorMessage,
@@ -261,7 +272,7 @@ export const locationZoneGeocodingService = {
       console.info(`${LOG_PREFIX} LOCATION_ZONE_GEOCODING_FAILED`, {
         event: "LOCATION_ZONE_GEOCODING_FAILED",
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         query,
         status: result.status,
         errorMessage,
@@ -269,7 +280,7 @@ export const locationZoneGeocodingService = {
 
       return {
         zoneId: zone.id,
-        companyId: zone.companyId,
+        companyId: zoneCompanyId(zone),
         query,
         outcome: "FAILED",
         errorMessage,
@@ -293,13 +304,13 @@ export const locationZoneGeocodingService = {
     console.info(`${LOG_PREFIX} LOCATION_ZONE_GEOCODING_RESOLVED`, {
       event: "LOCATION_ZONE_GEOCODING_RESOLVED",
       zoneId: zone.id,
-      companyId: zone.companyId,
+      companyId: zoneCompanyId(zone),
       query,
     });
 
     return {
       zoneId: zone.id,
-      companyId: zone.companyId,
+      companyId: zoneCompanyId(zone),
       query,
       outcome: "RESOLVED",
       zone: updated,
@@ -317,7 +328,7 @@ export const locationZoneGeocodingService = {
         console.error(`${LOG_PREFIX} LOCATION_ZONE_GEOCODING_FAILED`, {
           event: "LOCATION_ZONE_GEOCODING_FAILED",
           zoneId: zone.id,
-          companyId: zone.companyId,
+          companyId: zoneCompanyId(zone),
           errorMessage: truncateError(message),
         });
       });
@@ -395,7 +406,7 @@ export const locationZoneGeocodingService = {
           event: "LOCATION_ZONE_GEOCODING_FAILED",
           reason: "UNEXPECTED",
           zoneId: zone.id,
-          companyId: zone.companyId,
+          companyId: zoneCompanyId(zone),
           errorMessage: truncateError(message),
         });
         summary.failed += 1;

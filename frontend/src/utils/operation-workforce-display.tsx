@@ -23,6 +23,10 @@ export function formatOperationalCheckInCell(attendance: AttendanceRecord | null
     return "—";
   }
 
+  if (attendance.receivedAt == null) {
+    return "Sin registrar";
+  }
+
   const time = formatTime(attendance.receivedAt);
 
   if (

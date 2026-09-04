@@ -175,8 +175,7 @@ export type CompanyPermission =
   | "payroll_receipts:delete"
   | "payroll_receipts:download"
   | "reports:read"
-  | "reports:export"
-  | "bot_simulator:use";
+  | "reports:export";
 
 export type CompanyScope = {
   companyId: string;

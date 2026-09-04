@@ -14,7 +14,6 @@ const baseOperation = {
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 10,
   status: "SCHEDULED",
-  notes: null,
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
   service: {
@@ -47,20 +46,12 @@ function values(overrides: Partial<OperationFormValues> = {}): OperationFormValu
     scheduleDays: [],
     earlyToleranceMinutes: 15,
     lateToleranceMinutes: 10,
-    notes: "",
     status: "SCHEDULED",
     ...overrides,
   };
 }
 
 describe("doesOperationUpdateResetConfirmations", () => {
-  it("is false when only notes change", () => {
-    assert.equal(
-      doesOperationUpdateResetConfirmations(baseOperation, values({ notes: "hola" })),
-      false,
-    );
-  });
-
   it("is true when scheduledStart changes for ONE_TIME", () => {
     assert.equal(
       doesOperationUpdateResetConfirmations(

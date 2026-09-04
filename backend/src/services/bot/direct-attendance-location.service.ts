@@ -10,6 +10,7 @@ import {
 } from "../whatsapp-module-gate";
 import {
   buildCheckedInNeedsCheckoutIntentMessage,
+  buildExitWithoutArrivalNeedsCheckoutIntentMessage,
   buildMixedAttendanceActionPrompt,
   buildWorkdaySelectionPrompt,
   MODULE_DISABLED_MESSAGE,
@@ -18,6 +19,7 @@ import {
 } from "./bot-response.builder";
 import {
   listAvailableCheckInWorkdays,
+  listExitWithoutArrivalCheckoutWorkdays,
   listOpenCheckoutWorkdays,
   mapCheckInCandidatesToSessionOptions,
   mapMixedAttendanceActionToSessionOptions,
@@ -161,6 +163,23 @@ export const processDirectLocationAttendance = async (
   };
 
   if (intent.kind === "NONE") {
+    // Assignment may still allow exit-without-arrival; never claim "no jornada" incorrectly.
+    const exitWithoutArrival = await listExitWithoutArrivalCheckoutWorkdays(
+      companyId,
+      input.employeeId,
+      eventAt,
+    );
+    if (exitWithoutArrival.length > 0) {
+      return handlers.respond(companyId, {
+        message: buildExitWithoutArrivalNeedsCheckoutIntentMessage(exitWithoutArrival),
+        employeeId: input.employeeId,
+        phoneFrom: input.phoneTo,
+        phoneTo: input.phoneFrom,
+        resultCode: WHATSAPP_RESULT_CODES.LOCATION_WITHOUT_ATTENDANCE_INTENT,
+        flowType: "CHECKOUT",
+      });
+    }
+
     return handlers.respond(companyId, {
       message: intent.hasJustifiedWorkdayInWindow
         ? NO_JUSTIFIED_ONLY_MESSAGE
@@ -168,7 +187,7 @@ export const processDirectLocationAttendance = async (
       employeeId: input.employeeId,
       phoneFrom: input.phoneTo,
       phoneTo: input.phoneFrom,
-      resultCode: WHATSAPP_RESULT_CODES.NO_AVAILABLE_EMPLOYEE_WORKDAY,
+      resultCode: WHATSAPP_RESULT_CODES.NO_OPERATION_ASSIGNED,
       flowType: "CHECKIN",
     });
   }

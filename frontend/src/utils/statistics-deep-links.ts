@@ -109,6 +109,15 @@ export function buildOperationDetailHref(operationId: string): string {
   return `/operations/${operationId}`;
 }
 
+export function buildOperationAttendanceHref(
+  operationId: string,
+  ctx: StatisticsDeepLinkContext = {},
+): string {
+  const params = new URLSearchParams();
+  appendSharedFilters(params, { ...ctx, operationIds: [operationId] });
+  return `/attendance?${params.toString()}`;
+}
+
 export function buildServiceAttendanceHref(
   serviceId: string,
   ctx: StatisticsDeepLinkContext,

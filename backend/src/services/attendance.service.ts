@@ -160,9 +160,9 @@ export const attendanceService = {
       id: string;
       employeeId: string;
       sourceMessageSid: string | null;
-      receivedLatitude: number;
-      receivedLongitude: number;
-      distanceMeters: number;
+      receivedLatitude: number | null;
+      receivedLongitude: number | null;
+      distanceMeters: number | null;
       validationReason: string | null;
     },
   ) {

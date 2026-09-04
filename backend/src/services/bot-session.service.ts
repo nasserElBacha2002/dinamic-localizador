@@ -324,7 +324,8 @@ export const botSessionService = {
     phoneNumber: string;
     operationId: string;
     employeeWorkdayId: string;
-    attendanceRecordId: string;
+    attendanceRecordId?: string | null;
+    checkoutWithoutArrival?: boolean;
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -335,10 +336,12 @@ export const botSessionService = {
             employeeId: input.employeeId,
             operationId: input.operationId,
             employeeWorkdayId: input.employeeWorkdayId,
-            attendanceRecordId: input.attendanceRecordId,
+            attendanceRecordId: input.attendanceRecordId ?? null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_LOCATION",
-            contextJson: null,
+            contextJson: input.checkoutWithoutArrival
+              ? JSON.stringify({ checkoutWithoutArrival: true })
+              : null,
             expiresAt: buildExpiresAt(),
           },
           transaction,
@@ -350,7 +353,8 @@ export const botSessionService = {
         employeeId: input.employeeId,
         operationId: input.operationId,
         employeeWorkdayId: input.employeeWorkdayId,
-        attendanceRecordId: input.attendanceRecordId,
+        attendanceRecordId: input.attendanceRecordId ?? null,
+        checkoutWithoutArrival: Boolean(input.checkoutWithoutArrival),
         expiresAt: session.expiresAt,
       });
 
@@ -426,7 +430,8 @@ export const botSessionService = {
     input: {
       operationId: string;
       employeeWorkdayId: string;
-      attendanceRecordId: string;
+      attendanceRecordId?: string | null;
+      checkoutWithoutArrival?: boolean;
     },
   ): Promise<SessionSelectionResult> {
     return runInTransaction(async (transaction) => {
@@ -454,9 +459,11 @@ export const botSessionService = {
         {
           operationId: input.operationId,
           employeeWorkdayId: input.employeeWorkdayId,
-          attendanceRecordId: input.attendanceRecordId,
+          attendanceRecordId: input.attendanceRecordId ?? null,
           state: "WAITING_CHECKOUT_LOCATION",
-          contextJson: null,
+          contextJson: input.checkoutWithoutArrival
+            ? JSON.stringify({ checkoutWithoutArrival: true })
+            : null,
           expiresAt: renewedExpiresAt,
         },
         transaction,

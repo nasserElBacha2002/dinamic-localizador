@@ -92,7 +92,7 @@ describe("locationZoneGeocodingService", () => {
 
   it("marks FAILED on ZERO_RESULTS without inventing coordinates", async () => {
     mockGoogleStatus("ZERO_RESULTS");
-    mock.method(locationZoneRepository, "applyGeocodeResult", async (_c, _z, write) => {
+    mock.method(locationZoneRepository, "applyGeocodeResult", async (_zoneId, write) => {
       assert.equal(write.geocodingStatus, "FAILED");
       assert.equal(write.centroidLatitude, null);
       return baseZone({ geocodingStatus: "FAILED", geocodingLastError: write.geocodingLastError });
@@ -107,7 +107,7 @@ describe("locationZoneGeocodingService", () => {
 
   it("rejects coordinates outside Argentina bounds", async () => {
     mockGoogleOk(40.7, -74.0, { country: "US", formattedAddress: "NY", components: [] });
-    mock.method(locationZoneRepository, "applyGeocodeResult", async (_c, _z, write) => {
+    mock.method(locationZoneRepository, "applyGeocodeResult", async (_zoneId, write) => {
       assert.equal(write.geocodingStatus, "FAILED");
       return baseZone({ geocodingStatus: "FAILED" });
     });
@@ -162,7 +162,7 @@ describe("locationZoneGeocodingService", () => {
     mockGoogleOk(-34.61, -58.43);
     let sawAllowManual = false;
     let sawExpectedUpdatedAt: string | undefined;
-    mock.method(locationZoneRepository, "applyGeocodeResult", async (_c, _z, write, expected) => {
+    mock.method(locationZoneRepository, "applyGeocodeResult", async (_zoneId, write, expected) => {
       sawAllowManual = Boolean(expected.allowManualOverride);
       sawExpectedUpdatedAt = String(expected.expectedUpdatedAt);
       assert.equal(write.geocodingStatus, "RESOLVED");
@@ -174,8 +174,8 @@ describe("locationZoneGeocodingService", () => {
         geocodingSource: "AUTO",
       });
     });
-    mock.method(locationZoneRepository, "update", async () => {
-      throw new Error("force must not use generic update()");
+    mock.method(locationZoneRepository, "updateGlobal", async () => {
+      throw new Error("force must not use generic updateGlobal()");
     });
 
     const zone = baseZone({
@@ -235,8 +235,8 @@ describe("locationZoneGeocodingService", () => {
       persistCalls += 1;
       return null;
     });
-    mock.method(locationZoneRepository, "update", async () => {
-      throw new Error("force failure must not use generic update()");
+    mock.method(locationZoneRepository, "updateGlobal", async () => {
+      throw new Error("force failure must not use generic updateGlobal()");
     });
 
     const result = await locationZoneGeocodingService.geocodeZone(

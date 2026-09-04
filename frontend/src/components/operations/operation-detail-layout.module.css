@@ -4,12 +4,7 @@
   grid-template-columns: minmax(0, 1fr);
   grid-template-areas:
     "operational"
-    "data"
     "edit";
-}
-
-.dataSection {
-  grid-area: data;
 }
 
 .operationalSection {
@@ -19,14 +14,4 @@
 
 .editSection {
   grid-area: edit;
-}
-
-@media (min-width: $mantine-breakpoint-md) {
-  .operationDetailLayout {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-    grid-template-areas:
-      "operational data"
-      "edit edit";
-    align-items: start;
-  }
 }

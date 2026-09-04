@@ -21,7 +21,7 @@ export interface AnalyticalWorkdayInput {
   attendanceRecords?: Array<{
     id: string;
     validationStatus: string;
-    receivedAt: Date;
+    receivedAt: Date | null;
     checkoutAt?: Date | null;
     punctualityStatus?: string | null;
     extraWorkedMinutes?: number;
@@ -40,8 +40,11 @@ export interface AnalyticalProjectionRow {
   operationKind?: "ONE_TIME" | "RECURRING";
 }
 
-const calculateWorkedMinutes = (receivedAt: Date, checkoutAt: Date | null | undefined): number => {
-  if (!checkoutAt) {
+const calculateWorkedMinutes = (
+  receivedAt: Date | null | undefined,
+  checkoutAt: Date | null | undefined,
+): number => {
+  if (!receivedAt || !checkoutAt) {
     return 0;
   }
 
@@ -65,9 +68,14 @@ export const buildAnalyticalProjectionRow = (
     ? (input.attendanceRecords ?? []).find((record) => record.id === canonical.id)
     : undefined;
 
+  const countsAsPresent =
+    matchedAttendance != null &&
+    (matchedAttendance.validationStatus === "VALID" ||
+      matchedAttendance.validationStatus === "PENDING_REVIEW");
+
   const effectiveState = deriveEmployeeWorkdayState({
     employeeWorkday: { expectationStatus: input.expectationStatus },
-    hasAttendance: Boolean(matchedAttendance),
+    hasAttendance: countsAsPresent,
     expectedStartAt: input.expectedStartAt,
     expectedEndAt: input.expectedEndAt,
     earlyToleranceMinutes: input.earlyToleranceMinutes,
@@ -76,11 +84,12 @@ export const buildAnalyticalProjectionRow = (
   });
 
   const workedMinutes =
-    matchedAttendance && matchedAttendance.checkoutAt
+    matchedAttendance && matchedAttendance.receivedAt && matchedAttendance.checkoutAt
       ? calculateWorkedMinutes(matchedAttendance.receivedAt, matchedAttendance.checkoutAt)
       : 0;
   const overtimeMinutes = matchedAttendance?.extraWorkedMinutes ?? 0;
-  const punctualityStatus = matchedAttendance?.punctualityStatus ?? null;
+  const punctualityStatus =
+    matchedAttendance?.receivedAt != null ? (matchedAttendance.punctualityStatus ?? null) : null;
 
   return {
     employeeWorkdayId: input.employeeWorkdayId,

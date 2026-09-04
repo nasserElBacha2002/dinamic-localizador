@@ -8,6 +8,7 @@ import {
   geocodeLocationZoneBodySchema,
   listLocationZonesQuerySchema,
   locationZoneIdParamSchema,
+  searchLocationZonesQuerySchema,
   updateLocationZoneSchema,
 } from "../schemas/location-zone.schema";
 
@@ -18,6 +19,13 @@ locationZoneRouter.get(
   validate(listLocationZonesQuerySchema, "query"),
   requireAnyPermission("employees:manage", "company:settings:update"),
   asyncHandler(locationZoneController.list),
+);
+
+locationZoneRouter.get(
+  "/search",
+  validate(searchLocationZonesQuerySchema, "query"),
+  requireAnyPermission("employees:manage", "company:settings:update"),
+  asyncHandler(locationZoneController.search),
 );
 
 locationZoneRouter.get(

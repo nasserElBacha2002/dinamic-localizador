@@ -13,7 +13,7 @@ describe("detectOneTimeScheduleAffectingChanges", () => {
     lateToleranceMinutes: 90,
   };
 
-  it("ignores notes-only style empty inputs", () => {
+  it("ignores empty update inputs", () => {
     const flags = detectOneTimeScheduleAffectingChanges(base, {});
     assert.equal(flags.scheduleAffecting, false);
     assert.equal(flags.timingChanged, false);

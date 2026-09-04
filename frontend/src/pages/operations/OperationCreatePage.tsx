@@ -24,7 +24,6 @@ function toCreatePayload(values: OperationFormValues, settingsLoaded: boolean): 
           lateToleranceMinutes: values.lateToleranceMinutes,
         }
       : {}),
-    notes: values.notes?.trim() ? values.notes.trim() : null,
   };
 
   if (values.operationKind === "RECURRING") {

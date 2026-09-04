@@ -83,7 +83,6 @@ const CANDIDATE_SELECT = `
    AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
   LEFT JOIN location_zones lz
     ON lz.id = e.location_zone_id
-   AND lz.company_id = e.company_id
 `;
 
 

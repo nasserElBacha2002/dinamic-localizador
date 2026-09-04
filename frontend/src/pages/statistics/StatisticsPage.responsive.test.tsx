@@ -114,8 +114,6 @@ mockApiModule("api/operations.api", {
   "endOperationAssignment",
   "getOperationAttendanceSummary",
   "getOperationWorkdays",
-  "getOperationWorkdayDetail",
-  "materializeOperationWorkdays",
   "previewOperationImport",
   "confirmOperationImport",
 ]);

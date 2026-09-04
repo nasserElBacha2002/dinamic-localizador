@@ -62,6 +62,30 @@ export const listOpenCheckoutWorkdays = async (
 ): Promise<EmployeeWorkdayCheckoutCandidate[]> =>
   employeeWorkdayAvailabilityService.listOpenForCheckout(companyId, employeeId, at);
 
+export const listExitWithoutArrivalCheckoutWorkdays = async (
+  companyId: string,
+  employeeId: string,
+  at: Date,
+): Promise<EmployeeWorkdayCheckoutCandidate[]> =>
+  employeeWorkdayAvailabilityService.listEligibleForCheckoutWithoutArrival(
+    companyId,
+    employeeId,
+    at,
+  );
+
+export const revalidateExitWithoutArrivalCandidateByWorkdayId = async (
+  companyId: string,
+  employeeId: string,
+  employeeWorkdayId: string,
+  at: Date,
+): Promise<CheckoutCandidateRevalidationResult> =>
+  employeeWorkdayAvailabilityService.revalidateExitWithoutArrivalCandidate(
+    companyId,
+    employeeId,
+    employeeWorkdayId,
+    at,
+  );
+
 export const mapCheckInCandidatesToSessionOptions = (
   candidates: EmployeeWorkdayCheckInCandidate[],
 ): WorkdaySelectionOption[] =>

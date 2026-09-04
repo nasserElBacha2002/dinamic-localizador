@@ -16,7 +16,6 @@ export interface Operation {
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   status: OperationStatus;
-  notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -83,7 +82,6 @@ export interface CreateOneTimeOperationInput {
   scheduledEnd?: string | null;
   earlyToleranceMinutes?: number;
   lateToleranceMinutes?: number;
-  notes?: string | null;
 }
 
 export interface CreateRecurringOperationInput {
@@ -95,7 +93,6 @@ export interface CreateRecurringOperationInput {
   scheduleDays?: import("./schedule").WeeklyScheduleDay[];
   earlyToleranceMinutes?: number;
   lateToleranceMinutes?: number;
-  notes?: string | null;
 }
 
 export type CreateOperationInput = CreateOneTimeOperationInput | CreateRecurringOperationInput;
@@ -110,6 +107,5 @@ export interface UpdateOperationInput {
   scheduleDays?: import("./schedule").WeeklyScheduleDay[];
   earlyToleranceMinutes?: number;
   lateToleranceMinutes?: number;
-  notes?: string | null;
   status?: OperationStatus;
 }

@@ -542,7 +542,7 @@ export async function handleOperationSelection(input: {
           companyId,
           employeeId: input.employeeId,
           employeeWorkdayId: eligible.employeeWorkdayId,
-          attendanceRecordId: eligible.attendanceRecordId,
+          attendanceRecordId: eligible.attendanceRecordId!,
           operationId: eligible.operationId,
           phoneFrom: input.phoneFrom,
           phoneTo: input.phoneTo,

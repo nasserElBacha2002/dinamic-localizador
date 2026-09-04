@@ -10,8 +10,17 @@ export type ServiceFormat = string;
 
 export type OperationStatus = "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED";
 export type ValidationStatus = "VALID" | "PENDING_REVIEW" | "REJECTED";
-export type LocationStatus = "INSIDE_GEOFENCE" | "OUTSIDE_GEOFENCE" | "INVALID_LOCATION";
-export type PunctualityStatus = "EARLY" | "ON_TIME" | "LATE" | "OUTSIDE_TIME_WINDOW";
+export type LocationStatus =
+  | "INSIDE_GEOFENCE"
+  | "OUTSIDE_GEOFENCE"
+  | "INVALID_LOCATION"
+  | "NOT_RECORDED";
+export type PunctualityStatus =
+  | "EARLY"
+  | "ON_TIME"
+  | "LATE"
+  | "OUTSIDE_TIME_WINDOW"
+  | "NOT_RECORDED";
 
 /** Embedded category on employee responses (scoped join). */
 export type EmployeeCategoryRef = EmployeeCategorySummary;
@@ -62,7 +71,6 @@ export interface Operation {
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
   status: OperationStatus;
-  notes: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -117,9 +125,10 @@ export interface AttendanceRecord {
   operationId: string;
   employeeId: string;
   employeeWorkdayId: string | null;
-  receivedLatitude: number;
-  receivedLongitude: number;
-  distanceMeters: number;
+  /** Null when checkout was recorded without a prior check-in (arrival NOT_RECORDED). */
+  receivedLatitude: number | null;
+  receivedLongitude: number | null;
+  distanceMeters: number | null;
   validationStatus: ValidationStatus;
   locationStatus: LocationStatus;
   punctualityStatus: PunctualityStatus;
@@ -128,7 +137,8 @@ export interface AttendanceRecord {
   reviewedBy: string | null;
   reviewedAt: string | null;
   reviewReason: string | null;
-  receivedAt: string;
+  /** Null when arrival was never recorded (exit-only attendance). */
+  receivedAt: string | null;
   checkoutAt: string | null;
   checkoutLatitude: number | null;
   checkoutLongitude: number | null;

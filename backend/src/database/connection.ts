@@ -18,6 +18,16 @@ const config: sql.config = {
   },
 };
 
+/** Dedicated single-connection pool for session-scoped sp_getapplock ownership. */
+export const createDedicatedDatabaseConnection = async (): Promise<sql.ConnectionPool> => {
+  const dedicated = new sql.ConnectionPool({
+    ...config,
+    pool: { max: 1, min: 1, idleTimeoutMillis: 30000 },
+  });
+  await dedicated.connect();
+  return dedicated;
+};
+
 let pool: sql.ConnectionPool | null = null;
 let testPoolOverride: sql.ConnectionPool | null = null;
 

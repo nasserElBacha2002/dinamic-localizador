@@ -208,8 +208,8 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
       {
         employeeId: employee.id,
         absenceTypeId: vacation.id,
-        startDate: "2026-09-01",
-        endDate: "2026-09-02",
+        startDate: futureAbsenceDateIso(14),
+        endDate: addDaysToDateIso(futureAbsenceDateIso(14), 1),
         startPeriod: "FULL_DAY",
         endPeriod: "FULL_DAY",
         reason: "First claim",
@@ -224,8 +224,8 @@ describeDatabaseIntegration("absence balance ledger phase 3", () => {
           {
             employeeId: employee.id,
             absenceTypeId: vacation.id,
-            startDate: "2026-09-08",
-            endDate: "2026-09-09",
+            startDate: futureAbsenceDateIso(21),
+            endDate: addDaysToDateIso(futureAbsenceDateIso(21), 1),
             startPeriod: "FULL_DAY",
             endPeriod: "FULL_DAY",
             reason: "Second claim over budget",

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * READ-ONLY audit of location_zones geographic quality.
+ * READ-ONLY audit of the global location_zones catalog.
+ * Optional --company-id filters to zones associated via company_location_zones.
  *
  * Usage:
  *   npm run location-zones:audit
@@ -23,7 +24,6 @@ const LOG_PREFIX = "[location-zones:audit]";
 
 type ZoneRow = {
   id: string;
-  company_id: string;
   name: string;
   normalized_name: string;
   locality: string | null;
@@ -33,6 +33,7 @@ type ZoneRow = {
   centroid_latitude: number | null;
   centroid_longitude: number | null;
   is_active: boolean;
+  associated_companies: number;
 };
 
 async function main() {
@@ -49,30 +50,38 @@ async function main() {
   let where = "1=1";
   if (options.companyId) {
     request.input("companyId", sql.UniqueIdentifier, options.companyId);
-    where = "company_id = @companyId";
+    where = `EXISTS (
+      SELECT 1 FROM company_location_zones clz
+      WHERE clz.location_zone_id = lz.id
+        AND clz.company_id = @companyId
+    )`;
   }
 
   const result = await request.query(`
     SELECT
-      id,
-      company_id,
-      name,
-      normalized_name,
-      locality,
-      normalized_locality,
-      geocoding_status,
-      geocoding_source,
-      centroid_latitude,
-      centroid_longitude,
-      is_active
-    FROM location_zones
+      lz.id,
+      lz.name,
+      lz.normalized_name,
+      lz.locality,
+      lz.normalized_locality,
+      lz.geocoding_status,
+      lz.geocoding_source,
+      lz.centroid_latitude,
+      lz.centroid_longitude,
+      lz.is_active,
+      (
+        SELECT COUNT(*)
+        FROM company_location_zones clz
+        WHERE clz.location_zone_id = lz.id
+      ) AS associated_companies
+    FROM location_zones lz
     WHERE ${where}
   `);
 
   const rows = result.recordset as ZoneRow[];
   const localityBuckets = new Map<
     string,
-    { count: number; companies: Set<string>; canonical: string; status: string }
+    { count: number; associatedCompanies: number; canonical: string; status: string }
   >();
 
   let canonicalized = 0;
@@ -89,7 +98,7 @@ async function main() {
     rightCode: string | null;
   }> = [];
 
-  /** company_id + normalized_name + canonical code → zones (possible semantic duplicates). */
+  /** normalized_name + canonical locality code → zones (possible semantic duplicates). */
   const byNormalizedCanonical = new Map<string, ZoneRow[]>();
 
   for (const row of rows) {
@@ -97,12 +106,12 @@ async function main() {
     const localityKey = resolved.displayLocality ?? "(empty)";
     const bucket = localityBuckets.get(localityKey) ?? {
       count: 0,
-      companies: new Set<string>(),
+      associatedCompanies: 0,
       canonical: resolved.code ?? "UNKNOWN",
       status: resolved.status,
     };
     bucket.count += 1;
-    bucket.companies.add(String(row.company_id));
+    bucket.associatedCompanies += Number(row.associated_companies ?? 0);
     localityBuckets.set(localityKey, bucket);
 
     if (!resolved.displayLocality) {
@@ -121,7 +130,7 @@ async function main() {
     }
 
     if (resolved.status === "RESOLVED" && resolved.code) {
-      const key = `${row.company_id}::${row.normalized_name}::${resolved.code}`;
+      const key = `${row.normalized_name}::${resolved.code}`;
       const list = byNormalizedCanonical.get(key) ?? [];
       list.push(row);
       byNormalizedCanonical.set(key, list);
@@ -162,7 +171,7 @@ async function main() {
       .map(([locality, data]) => ({
         locality,
         count: data.count,
-        companiesAffected: data.companies.size,
+        associationLinks: data.associatedCompanies,
         canonical: data.canonical,
         status: data.status,
       }))
@@ -182,21 +191,13 @@ async function main() {
       manual: summary.manual,
       possibleDuplicatePairs: summary.possibleDuplicatePairs,
     });
-    console.info(`${LOG_PREFIX} localities`);
-    for (const row of summary.localities) {
+    for (const row of summary.localities.slice(0, 20)) {
       console.info(
-        `  ${row.locality}: count=${row.count} companies=${row.companiesAffected} canonical=${row.canonical} status=${row.status}`,
+        `${LOG_PREFIX} locality=${row.locality} count=${row.count} associations=${row.associationLinks} canonical=${row.canonical}`,
       );
     }
     if (summary.possibleDuplicates.length > 0) {
-      console.info(
-        `${LOG_PREFIX} possible duplicates (same normalized_name + same canonical code)`,
-      );
-      for (const dup of summary.possibleDuplicates) {
-        console.info(
-          `  ${dup.normalizedName}: "${dup.leftLocality}" (${dup.leftCode}) vs "${dup.rightLocality}" (${dup.rightCode})`,
-        );
-      }
+      console.info(`${LOG_PREFIX} possibleDuplicates (sample)`, summary.possibleDuplicates);
     }
   }
 
@@ -204,11 +205,11 @@ async function main() {
 }
 
 main().catch(async (error) => {
-  console.error(LOG_PREFIX, error instanceof Error ? error.message : error);
+  console.error(LOG_PREFIX, error);
   try {
     await closeDatabase();
   } catch {
     // ignore
   }
-  process.exit(1);
+  process.exitCode = 1;
 });

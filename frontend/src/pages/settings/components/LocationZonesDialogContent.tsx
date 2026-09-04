@@ -13,12 +13,13 @@ import {
   Text,
   TextInput,
 } from "@mantine/core";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { FormErrorAlert } from "../../../design-system";
 import {
   useCreateLocationZone,
   useGeocodeLocationZone,
   useLocationZonesGeocodingSummary,
+  useSearchLocationZones,
   useUpdateLocationZone,
 } from "../../../hooks/useLocationZones";
 import type { LocationZone } from "../../../types/location-zone";
@@ -35,11 +36,14 @@ import {
   type GeocodingStatusFilter,
   summarizeActiveZoneGeocoding,
 } from "../../../utils/location-zone-geocoding-ui";
+import { normalizeLocationZoneName } from "../../../utils/normalize-location-zone-name";
 import { buildLocationZoneEditPayload } from "./location-zone-edit-payload";
 
 interface LocationZonesDialogContentProps {
   zones: LocationZone[];
   canUpdate: boolean;
+  /** Platform admin may edit global catalog fields / geocode. */
+  canEditGlobal?: boolean;
 }
 
 const formatCoord = (value: number | null): string => {
@@ -70,11 +74,27 @@ const STATUS_FILTER_OPTIONS: Array<{ value: GeocodingStatusFilter; label: string
   { value: "NONE", label: "Sin estado" },
 ];
 
-export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDialogContentProps) {
+export function LocationZonesDialogContent({
+  zones,
+  canUpdate,
+  canEditGlobal = false,
+}: LocationZonesDialogContentProps) {
   const createMutation = useCreateLocationZone();
   const updateMutation = useUpdateLocationZone();
   const geocodeMutation = useGeocodeLocationZone();
   const geocodingSummaryQuery = useLocationZonesGeocodingSummary(true);
+
+  const [searchQ, setSearchQ] = useState("");
+  const [searchLocality, setSearchLocality] = useState("");
+  const deferredQ = useDeferredValue(searchQ.trim());
+  const searchQuery = useSearchLocationZones(
+    {
+      q: deferredQ,
+      locality: searchLocality.trim() || undefined,
+      limit: 15,
+    },
+    canUpdate && deferredQ.length >= 1,
+  );
 
   const [newName, setNewName] = useState("");
   const [newLocality, setNewLocality] = useState("");
@@ -102,6 +122,22 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
     [sortedZones, statusFilter],
   );
 
+  const searchHits = useMemo(() => searchQuery.data ?? [], [searchQuery.data]);
+  const exactMatch = useMemo(() => {
+    if (!deferredQ) {
+      return null;
+    }
+    const nq = normalizeLocationZoneName(deferredQ);
+    const nl = normalizeLocationZoneName(searchLocality);
+    return (
+      searchHits.find(
+        (zone) =>
+          zone.normalizedName === nq &&
+          zone.normalizedLocality === nl,
+      ) ?? null
+    );
+  }, [deferredQ, searchLocality, searchHits]);
+
   const disabled =
     !canUpdate ||
     createMutation.isPending ||
@@ -128,26 +164,48 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
     setInitialLng(null);
   };
 
-  const handleCreate = async () => {
-    if (!canUpdate || !newName.trim()) {
-      return;
+  const handleAssociate = async (
+    name: string,
+    locality: string | null,
+  ): Promise<boolean> => {
+    if (!canUpdate || !name.trim()) {
+      return false;
     }
-
     setSubmitError(null);
     try {
       await createMutation.mutateAsync({
-        name: newName.trim(),
-        locality: newLocality.trim() ? newLocality.trim() : null,
+        name: name.trim(),
+        locality: locality?.trim() ? locality.trim() : null,
       });
-      setNewName("");
-      setNewLocality("");
+      return true;
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
+      return false;
     }
   };
 
+  const handleCreateFromSearch = async () => {
+    const name = deferredQ || newName;
+    const ok = await handleAssociate(name, searchLocality || newLocality || null);
+    if (!ok) {
+      return;
+    }
+    setSearchQ("");
+    setNewName("");
+    setNewLocality("");
+  };
+
+  const handleCreate = async () => {
+    const ok = await handleAssociate(newName, newLocality || null);
+    if (!ok) {
+      return;
+    }
+    setNewName("");
+    setNewLocality("");
+  };
+
   const handleSaveEdit = async (zoneId: string) => {
-    if (!canUpdate || !editingName.trim()) {
+    if (!canEditGlobal || !editingName.trim()) {
       return;
     }
 
@@ -190,7 +248,7 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
   };
 
   const handleGeocode = async (zone: LocationZone) => {
-    if (!canUpdate) {
+    if (!canEditGlobal) {
       return;
     }
     const isManual =
@@ -240,8 +298,9 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
   return (
     <Stack gap="md">
       <Text size="sm" c="dimmed">
-        Catálogo geográfico compartido (barrio + localidad) para colaboradores y servicios. No se
-        almacenan direcciones exactas. Los centroides alimentan la proximidad de recomendaciones.
+        Catálogo geográfico global (barrio + localidad). Cada empresa habilita las zonas que usa.
+        No se almacenan direcciones exactas. Los centroides alimentan la proximidad de
+        recomendaciones.
       </Text>
 
       <Stack gap={6}>
@@ -267,21 +326,17 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
             {coverage.missingLocality} · Desconocidas: {coverage.unknownLocality}
           </Text>
         ) : null}
-        <Text size="xs" c="dimmed">
-          Tener coordenadas indica cobertura, no precisión GPS del domicilio. Nombre = zona/barrio;
-          localidad = contexto superior para desambiguar (p. ej. CABA, GBA, Córdoba).
-        </Text>
       </Stack>
 
       <FormErrorAlert message={submitError} />
 
       {pendingDeactivate ? (
-        <Alert color="yellow" title="Desactivar zona">
+        <Alert color="yellow" title="Desactivar zona en la empresa">
           <Stack gap="sm">
             <Text size="sm">
               Esta zona está asignada a {pendingDeactivate.assignedEmployeesCount ?? 0}{" "}
               colaborador{(pendingDeactivate.assignedEmployeesCount ?? 0) === 1 ? "" : "es"}.
-              Los colaboradores conservarán la zona, pero no podrá asignarse a nuevos registros.
+              Se deshabilita solo para esta empresa; el catálogo global no se elimina.
             </Text>
             <Group gap="xs">
               <Button
@@ -308,29 +363,110 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
       {canUpdate ? (
         <Stack gap="xs">
           <Text fw={600} size="sm">
-            Nueva zona
+            Buscar locación
           </Text>
           <Group align="flex-end" grow>
             <TextInput
               label="Nombre"
               placeholder="Ej. Caballito"
-              value={newName}
-              onChange={(event) => setNewName(event.currentTarget.value)}
+              value={searchQ}
+              onChange={(event) => setSearchQ(event.currentTarget.value)}
               disabled={disabled}
             />
             <Autocomplete
               label="Localidad"
               placeholder="Ej. CABA"
               data={[...SUGGESTED_LOCALITY_LABELS]}
-              value={newLocality}
-              onChange={setNewLocality}
+              value={searchLocality}
+              onChange={setSearchLocality}
               disabled={disabled}
-              description={localityCapitalHint(newLocality) ?? undefined}
+              description={localityCapitalHint(searchLocality) ?? undefined}
             />
-            <Button onClick={() => void handleCreate()} loading={createMutation.isPending} disabled={disabled}>
-              Agregar
-            </Button>
           </Group>
+
+          {deferredQ.length >= 1 ? (
+            <Stack gap={6}>
+              {searchQuery.isFetching ? (
+                <Text size="sm" c="dimmed">
+                  Buscando…
+                </Text>
+              ) : null}
+              {searchHits.length > 0 ? (
+                searchHits.map((hit) => {
+                  const associated = Boolean(hit.alreadyAssociated);
+                  return (
+                    <Group key={hit.id} justify="space-between" wrap="nowrap">
+                      <div>
+                        <Text size="sm" fw={500}>
+                          {hit.name}
+                        </Text>
+                        <Text size="xs" c="dimmed">
+                          {hit.locality ?? "Sin localidad"}
+                        </Text>
+                      </div>
+                      {associated ? (
+                        <Badge color="gray" variant="light">
+                          Agregada
+                        </Badge>
+                      ) : (
+                        <Button
+                          size="xs"
+                          loading={createMutation.isPending}
+                          disabled={disabled}
+                          onClick={() => void handleAssociate(hit.name, hit.locality)}
+                        >
+                          Agregar
+                        </Button>
+                      )}
+                    </Group>
+                  );
+                })
+              ) : !searchQuery.isFetching ? (
+                <Alert color="blue" title="No encontramos esta locación">
+                  <Stack gap="sm">
+                    <Text size="sm">
+                      Podés crear &quot;{deferredQ}
+                      {searchLocality.trim() ? ` · ${searchLocality.trim()}` : ""}&quot; en el
+                      catálogo global y habilitarla para esta empresa.
+                    </Text>
+                    <Button
+                      size="xs"
+                      loading={createMutation.isPending}
+                      disabled={disabled || Boolean(exactMatch?.alreadyAssociated)}
+                      onClick={() => void handleCreateFromSearch()}
+                    >
+                      + Crear &quot;{deferredQ}&quot;
+                    </Button>
+                  </Stack>
+                </Alert>
+              ) : null}
+            </Stack>
+          ) : (
+            <Group align="flex-end" grow>
+              <TextInput
+                label="Crear nueva"
+                placeholder="Nombre de la zona"
+                value={newName}
+                onChange={(event) => setNewName(event.currentTarget.value)}
+                disabled={disabled}
+              />
+              <Autocomplete
+                label="Localidad"
+                placeholder="Ej. CABA"
+                data={[...SUGGESTED_LOCALITY_LABELS]}
+                value={newLocality}
+                onChange={setNewLocality}
+                disabled={disabled}
+              />
+              <Button
+                onClick={() => void handleCreate()}
+                loading={createMutation.isPending}
+                disabled={disabled || !newName.trim()}
+              >
+                Crear y agregar
+              </Button>
+            </Group>
+          )}
         </Stack>
       ) : null}
 
@@ -358,7 +494,7 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
           </Table.Thead>
           <Table.Tbody>
             {visibleZones.map((zone) => {
-              const isEditing = editingId === zone.id;
+              const isEditing = editingId === zone.id && canEditGlobal;
               const isManual =
                 zone.geocodingStatus === "MANUAL" || zone.geocodingSource === "MANUAL";
               const geocodeActionLabel =
@@ -432,17 +568,12 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
                           {friendlyGeocodingErrorMessage(zone.geocodingLastError)}
                         </Text>
                       ) : null}
-                      {isManual && zone.geocodingStatus === "MANUAL" ? (
-                        <Text size="xs" c="dimmed">
-                          Coordenadas manuales
-                        </Text>
-                      ) : null}
                     </Stack>
                   </Table.Td>
                   <Table.Td>{zone.assignedEmployeesCount ?? 0}</Table.Td>
                   <Table.Td>
                     <Switch
-                      checked={zone.isActive}
+                      checked={zone.associationActive ?? zone.isActive}
                       disabled={disabled}
                       onChange={(event) =>
                         handleToggleActive(zone, event.currentTarget.checked)
@@ -450,7 +581,7 @@ export function LocationZonesDialogContent({ zones, canUpdate }: LocationZonesDi
                     />
                   </Table.Td>
                   <Table.Td>
-                    {canUpdate ? (
+                    {canEditGlobal ? (
                       isEditing ? (
                         <Group gap="xs">
                           <Button

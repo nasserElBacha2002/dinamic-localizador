@@ -34,11 +34,10 @@ const buildEmployeeCategoryJoin = () => `
    AND (ec.company_id IS NULL OR ec.company_id = e.company_id)
 `;
 
-/** Scoped zone join: same-company zones only. */
+/** Zone join: location_zones are global; company scope is enforced on write. */
 const buildEmployeeLocationZoneJoin = () => `
   LEFT JOIN location_zones lz
     ON lz.id = e.location_zone_id
-   AND lz.company_id = e.company_id
 `;
 
 const buildEmployeeLastWorkedJoin = (companyIdParam = "@companyId") => `
@@ -139,10 +138,13 @@ export const employeeRepository = {
           WHEN @locationZoneId IS NULL THEN 1
           WHEN EXISTS (
             SELECT 1
-            FROM location_zones lz WITH (UPDLOCK, HOLDLOCK)
-            WHERE lz.id = @locationZoneId
+            FROM company_location_zones clz WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN location_zones lz WITH (UPDLOCK, HOLDLOCK)
+              ON lz.id = clz.location_zone_id
+            WHERE clz.location_zone_id = @locationZoneId
+              AND clz.company_id = @companyId
+              AND clz.is_active = 1
               AND lz.is_active = 1
-              AND lz.company_id = @companyId
           ) THEN 1
           ELSE 0
         END;
@@ -570,11 +572,13 @@ export const employeeRepository = {
           WHEN @locationZoneId IS NULL THEN 1
           WHEN EXISTS (
             SELECT 1
-            FROM location_zones lz WITH (UPDLOCK, HOLDLOCK)
-            WHERE lz.id = @locationZoneId
-              AND lz.company_id = @companyId
+            FROM company_location_zones clz WITH (UPDLOCK, HOLDLOCK)
+            INNER JOIN location_zones lz WITH (UPDLOCK, HOLDLOCK)
+              ON lz.id = clz.location_zone_id
+            WHERE clz.location_zone_id = @locationZoneId
+              AND clz.company_id = @companyId
               AND (
-                lz.is_active = 1
+                (clz.is_active = 1 AND lz.is_active = 1)
                 OR lz.id = employees.location_zone_id
               )
           ) THEN 1

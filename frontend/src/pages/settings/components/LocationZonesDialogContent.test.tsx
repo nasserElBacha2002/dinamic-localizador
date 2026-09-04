@@ -100,6 +100,11 @@ mock.module("../../../hooks/useLocationZones", {
       isPending: false,
       variables: undefined,
     }),
+    useSearchLocationZones: () => ({
+      data: [],
+      isFetching: false,
+      isError: false,
+    }),
     useLocationZonesGeocodingSummary: () => ({
       data: {
         total: 4,
@@ -143,7 +148,7 @@ describe("LocationZonesDialogContent Phase B", () => {
   it("shows coverage summary, status badges, friendly FAILED error and Reintentar", () => {
     const view = render(
       <MantineProvider>
-        <LocationZonesDialogContent zones={zones} canUpdate />
+        <LocationZonesDialogContent zones={zones} canUpdate canEditGlobal />
       </MantineProvider>,
     );
 
@@ -162,7 +167,6 @@ describe("LocationZonesDialogContent Phase B", () => {
     assert.ok(within(table).getByText("Manual"));
     assert.ok(within(table).getByText("Pendiente"));
     assert.ok(within(table).getByText("Error"));
-    assert.ok(within(table).getByText("Coordenadas manuales"));
 
     const confirmCalls: string[] = [];
     const originalConfirm = window.confirm;

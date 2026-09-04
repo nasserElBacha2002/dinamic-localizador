@@ -116,6 +116,7 @@ export const EMPLOYEES_API_EXPORTS = [
 
 export const LOCATION_ZONES_API_EXPORTS = [
   "getLocationZones",
+  "searchLocationZones",
   "getLocationZonesGeocodingSummary",
   "createLocationZone",
   "updateLocationZone",

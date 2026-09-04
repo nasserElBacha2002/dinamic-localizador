@@ -8,6 +8,7 @@ interface LocationZonesDialogProps {
   onClose: () => void;
   zones: LocationZone[];
   canUpdate: boolean;
+  canEditGlobal?: boolean;
 }
 
 export function LocationZonesDialog({
@@ -15,6 +16,7 @@ export function LocationZonesDialog({
   onClose,
   zones,
   canUpdate,
+  canEditGlobal = false,
 }: LocationZonesDialogProps) {
   return (
     <ResponsiveModal
@@ -31,7 +33,11 @@ export function LocationZonesDialog({
         </Group>
       }
     >
-      <LocationZonesDialogContent zones={zones} canUpdate={canUpdate} />
+      <LocationZonesDialogContent
+        zones={zones}
+        canUpdate={canUpdate}
+        canEditGlobal={canEditGlobal}
+      />
     </ResponsiveModal>
   );
 }

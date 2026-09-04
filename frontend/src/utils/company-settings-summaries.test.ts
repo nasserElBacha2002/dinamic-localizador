@@ -62,8 +62,9 @@ describe("company settings page UX structure", () => {
     assert.match(dialogFile, /Guardar configuración/);
     assert.match(pageFile, /SettingsSummaryCard/);
     assert.match(pageFile, /CompanyAbsenceSettingsDialog/);
+    assert.match(pageFile, /LocationZonesDialog/);
+    assert.match(pageFile, /canEditGlobal=\{isPlatformAdmin\}/);
     assert.doesNotMatch(pageFile, /CompanyOperationalSettingsSection/);
     assert.doesNotMatch(pageFile, /Módulos habilitados/);
-    assert.doesNotMatch(pageFile, /isPlatformAdmin/);
   });
 });

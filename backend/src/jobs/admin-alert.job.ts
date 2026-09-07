@@ -41,9 +41,7 @@ const runJobSafely = async (): Promise<void> => {
     }
 
     const result = await adminAlertDeliveryService.processPendingBatch(8);
-    if (result.processed > 0) {
-      console.info("[admin-alert-job] tick complete", result);
-    }
+    console.info("[admin-alert-job] tick complete", result);
   } catch (error) {
     console.error("[admin-alert-job] unexpected job error", {
       error: error instanceof Error ? error.message : String(error),

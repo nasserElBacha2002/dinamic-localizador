@@ -77,7 +77,7 @@ export const adminAlertContextRepository = {
           ON e.id = ew.employee_id AND e.company_id = @companyId
         INNER JOIN operation_assignments oa
           ON oa.id = ew.operation_assignment_id AND oa.company_id = @companyId
-        INNER JOIN services s
+        INNER JOIN operational_locations s
           ON s.id = i.service_id AND s.company_id = @companyId
         INNER JOIN company_settings cs
           ON cs.company_id = @companyId
@@ -157,7 +157,7 @@ export const adminAlertContextRepository = {
           ON i.id = oa.operation_id AND i.company_id = oa.company_id
         INNER JOIN employees e
           ON e.id = oa.employee_id AND e.company_id = oa.company_id
-        INNER JOIN services s
+        INNER JOIN operational_locations s
           ON s.id = i.service_id AND s.company_id = oa.company_id
         WHERE oa.confirmation_status = N'UNAVAILABLE'
           AND oa.cancelled_at IS NULL
@@ -313,7 +313,7 @@ export const adminAlertContextRepository = {
           AND oa.confirmation_status <> N'UNAVAILABLE'
         INNER JOIN employees e
           ON e.id = ew.employee_id AND e.company_id = i.company_id
-        INNER JOIN services s
+        INNER JOIN operational_locations s
           ON s.id = i.service_id AND s.company_id = i.company_id
         INNER JOIN company_alert_recipients car
           ON car.company_id = i.company_id

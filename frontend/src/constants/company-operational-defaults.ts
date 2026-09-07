@@ -3,7 +3,6 @@ import { DEFAULT_OPERATION_TIMEZONE } from "./operation-timezones";
 export const DEFAULT_COMPANY_OPERATIONAL_DEFAULTS = {
   operationTimezone: DEFAULT_OPERATION_TIMEZONE,
   defaultRadiusMeters: 150,
-  lateGraceMinutes: 15,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,

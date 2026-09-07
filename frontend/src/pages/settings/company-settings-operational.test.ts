@@ -48,10 +48,10 @@ describe("OperationalSettingsForm", () => {
     assert.match(formFile, /Radio permitido por defecto \(m\)/);
     assert.match(formFile, /Horario de inicio por defecto/);
     assert.match(formFile, /Horario de fin por defecto/);
-    assert.match(formFile, /Tolerancia de llegada temprana para operaciones \(min\)/);
-    assert.match(formFile, /Tolerancia de llegada tardía para operaciones \(min\)/);
-    assert.match(formFile, /Tolerancia de puntualidad WhatsApp \(min\)/);
-    assert.match(formFile, /Tolerancia de salida anticipada WhatsApp \(min\)/);
+    assert.match(formFile, /Tolerancia de llegada temprana \(min\)/);
+    assert.match(formFile, /Tolerancia de llegada tardía \(min\)/);
+    assert.match(formFile, /Tolerancia de salida anticipada \(min\)/);
+    assert.doesNotMatch(formFile, /Tolerancia de puntualidad WhatsApp/);
     assert.doesNotMatch(formFile, /Modal/);
     assert.doesNotMatch(formFile, /SettingsDialog/);
     assert.doesNotMatch(formFile, /Guardar configuración/);
@@ -64,14 +64,16 @@ describe("OperationalSettingsForm", () => {
     );
     const activeSection = formFile.replace(/{\/\*[\s\S]*?\*\/}/g, "");
 
-    assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 10);
+    assert.equal((activeSection.match(/<SettingsFormField/g) ?? []).length, 9);
     assert.match(activeSection, /description="Zona horaria usada por operaciones y reportes\."/);
     assert.match(
       activeSection,
       /description="Ventana configurable por empresa antes del inicio de la operación\."/,
     );
-    assert.match(formFile, /description="Validación del mensaje “Llegué”\."/);
-    assert.match(formFile, /description="Validación del mensaje “Terminé”\."/);
+    assert.match(
+      formFile,
+      /description="Cantidad de minutos antes del fin en los que se permite registrar la salida\."/,
+    );
     assert.match(
       formFile,
       /description="Cantidad de horas después del fin de una operación durante las que un empleado todavía puede registrar su salida\."/,
@@ -103,10 +105,7 @@ describe("CompanyOperationalSettingsDialog", () => {
 describe("Operational settings mapping", () => {
   it("builds PATCH payload with only operational fields", () => {
     const formValues = toOperationalSettingsFormValues(createMockSettings());
-    const payload = toOperationalSettingsUpdateInput({
-      ...formValues,
-      lateGraceMinutes: "20",
-    });
+    const payload = toOperationalSettingsUpdateInput(formValues);
 
     assert.deepEqual(Object.keys(payload).sort(), [
       "confirmationReminderEnabled",
@@ -117,17 +116,16 @@ describe("Operational settings mapping", () => {
       "defaultOperationStartTime",
       "defaultRadiusMeters",
       "earlyLeaveToleranceMinutes",
-      "lateGraceMinutes",
       "operationTimezone",
       "pendingOperationExpirationHours",
     ]);
-    assert.equal(payload.lateGraceMinutes, 20);
+    assert.equal("lateGraceMinutes" in payload, false);
     assert.equal(payload.pendingOperationExpirationHours, 12);
     assert.equal("requireCheckoutLocation" in payload, false);
     assert.equal("allowManualAttendanceCorrections" in payload, false);
   });
 
-  it("tracks dirty state across operation and WhatsApp fields", () => {
+  it("tracks dirty state across unified operational fields", () => {
     const baseline = toOperationalSettingsFormValues(createMockSettings());
     const changed = { ...baseline, defaultLateArrivalToleranceMinutes: "30" };
     assert.equal(operationalSettingsEqual(baseline, changed), false);
@@ -145,6 +143,12 @@ describe("Operational settings mapping", () => {
     assert.ok(
       summary.summaryItems.some(
         (item) => item.label === "Horario predeterminado" && item.value === "21:07 a 02:00",
+      ),
+    );
+    assert.ok(
+      summary.summaryItems.some(
+        (item) =>
+          item.label === "Tolerancia de salida anticipada" && item.value === "15 min",
       ),
     );
     assert.ok(summary.summaryItems.some((item) => item.value === "180 m"));

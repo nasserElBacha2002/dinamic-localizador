@@ -87,6 +87,50 @@ const resolveCreateTolerances = async (
     earlyToleranceMinutes:
       input.earlyToleranceMinutes ?? operationDefaults.earlyToleranceMinutes,
     lateToleranceMinutes: input.lateToleranceMinutes ?? operationDefaults.lateToleranceMinutes,
+    earlyToleranceSource:
+      input.earlyToleranceMinutes == null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+    lateToleranceSource:
+      input.lateToleranceMinutes == null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+  };
+};
+
+const resolveUpdateTolerances = async (
+  companyId: string,
+  input: UpdateOperationInput,
+): Promise<
+  Omit<UpdateOperationInput, "earlyToleranceMinutes" | "lateToleranceMinutes"> & {
+    earlyToleranceMinutes?: number;
+    lateToleranceMinutes?: number;
+    earlyToleranceSource?: "COMPANY_DEFAULT" | "CUSTOM";
+    lateToleranceSource?: "COMPANY_DEFAULT" | "CUSTOM";
+  }
+> => {
+  const { earlyToleranceMinutes, lateToleranceMinutes, ...otherInput } = input;
+  const clearsEarlyOverride = earlyToleranceMinutes === null;
+  const clearsLateOverride = lateToleranceMinutes === null;
+  const defaults =
+    clearsEarlyOverride || clearsLateOverride
+      ? await companyOperationalDefaultsResolver.getOperationDefaults(companyId)
+      : null;
+
+  return {
+    ...otherInput,
+    ...(earlyToleranceMinutes !== undefined
+      ? {
+          earlyToleranceMinutes:
+            earlyToleranceMinutes ?? defaults!.earlyToleranceMinutes,
+          earlyToleranceSource:
+            earlyToleranceMinutes === null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+        }
+      : {}),
+    ...(lateToleranceMinutes !== undefined
+      ? {
+          lateToleranceMinutes:
+            lateToleranceMinutes ?? defaults!.lateToleranceMinutes,
+          lateToleranceSource:
+            lateToleranceMinutes === null ? "COMPANY_DEFAULT" as const : "CUSTOM" as const,
+        }
+      : {}),
   };
 };
 
@@ -147,7 +191,12 @@ export const operationService = {
   async createOneTime(
     companyId: string,
     input: CreateOneTimeOperationInput,
-    tolerances: { earlyToleranceMinutes: number; lateToleranceMinutes: number },
+    tolerances: {
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+    },
   ) {
     validateOneTimeDates(input.scheduledStart, input.scheduledEnd);
     validateOperationStartNotInPast(input.scheduledStart);
@@ -172,7 +221,12 @@ export const operationService = {
   async createRecurring(
     companyId: string,
     input: CreateRecurringOperationInput,
-    tolerances: { earlyToleranceMinutes: number; lateToleranceMinutes: number },
+    tolerances: {
+      earlyToleranceMinutes: number;
+      lateToleranceMinutes: number;
+      earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+      lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+    },
   ) {
     if (input.scheduleSource === "COMPANY") {
       assertCompanyWorkScheduleExists(await companyWorkScheduleRepository.findByCompanyId(companyId));
@@ -200,6 +254,8 @@ export const operationService = {
           serviceId: input.serviceId,
           earlyToleranceMinutes: tolerances.earlyToleranceMinutes,
           lateToleranceMinutes: tolerances.lateToleranceMinutes,
+          earlyToleranceSource: tolerances.earlyToleranceSource,
+          lateToleranceSource: tolerances.lateToleranceSource,
         },
         transaction,
       );
@@ -342,6 +398,8 @@ export const operationService = {
     current: OperationRecord,
     input: UpdateOperationInput,
   ) {
+    const persistenceInput = await resolveUpdateTolerances(companyId, input);
+
     if (input.serviceId) {
       const service = await serviceRepository.findById(companyId, input.serviceId);
       if (!service) {
@@ -374,7 +432,7 @@ export const operationService = {
       validateOperationStartNotInPast(input.scheduledStart);
     }
 
-    const scheduleFlags = detectOneTimeScheduleAffectingChanges(current, input);
+    const scheduleFlags = detectOneTimeScheduleAffectingChanges(current, persistenceInput);
 
     let updated: OperationRecord | null;
     let reconcileResult: Awaited<
@@ -392,8 +450,13 @@ export const operationService = {
           throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
         }
 
-        const lockedFlags = detectOneTimeScheduleAffectingChanges(locked, input);
-        updated = await operationRepository.update(companyId, id, input, transaction);
+        const lockedFlags = detectOneTimeScheduleAffectingChanges(locked, persistenceInput);
+        updated = await operationRepository.update(
+          companyId,
+          id,
+          persistenceInput,
+          transaction,
+        );
         if (!updated) {
           throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
         }
@@ -437,7 +500,7 @@ export const operationService = {
         throw error;
       }
     } else {
-      updated = await operationRepository.update(companyId, id, input);
+      updated = await operationRepository.update(companyId, id, persistenceInput);
       if (!updated) {
         throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
@@ -474,6 +537,7 @@ export const operationService = {
     current: OperationRecord,
     input: UpdateOperationInput,
   ) {
+    const persistenceInput = await resolveUpdateTolerances(companyId, input);
     const schedule = await operationScheduleRepository.findByOperationId(companyId, id);
     if (!schedule) {
       throw new AppError(404, "OPERATION_SCHEDULE_NOT_FOUND", "La operación no tiene horario configurado");
@@ -515,12 +579,21 @@ export const operationService = {
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
+    let updatedOperation: OperationRecord;
+    let scheduleChanged: boolean;
+    let toleranceChanged: boolean;
 
     try {
-      const updatedOperation = await operationRepository.update(companyId, id, input, transaction);
-      if (!updatedOperation) {
+      const persistedOperation = await operationRepository.update(
+        companyId,
+        id,
+        persistenceInput,
+        transaction,
+      );
+      if (!persistedOperation) {
         throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
       }
+      updatedOperation = persistedOperation;
 
       const resolvedNextSource = input.scheduleSource ?? schedule.scheduleSource;
       const settings = await companySettingsRepository.findByCompanyId(companyId);
@@ -533,13 +606,20 @@ export const operationService = {
             )
           : undefined;
 
-      const scheduleChanged =
+      scheduleChanged =
         resolvedNextSource !== schedule.scheduleSource ||
         nextValidFrom !== schedule.validFrom ||
         nextValidUntil !== schedule.validUntil ||
-        (resolvedNextSource === "CUSTOM" &&
-          nextDays &&
-          !weeklySchedulesEqual(nextDays, schedule.days));
+        Boolean(
+          resolvedNextSource === "CUSTOM" &&
+            nextDays &&
+            !weeklySchedulesEqual(nextDays, schedule.days),
+        );
+      toleranceChanged =
+        (persistenceInput.earlyToleranceMinutes !== undefined &&
+          persistenceInput.earlyToleranceMinutes !== current.earlyToleranceMinutes) ||
+        (persistenceInput.lateToleranceMinutes !== undefined &&
+          persistenceInput.lateToleranceMinutes !== current.lateToleranceMinutes);
 
       if (
         input.scheduleSource !== undefined ||
@@ -558,21 +638,21 @@ export const operationService = {
       }
 
       await transaction.commit();
-
-      if (scheduleChanged) {
-        await recurringWorkdaySyncService.runOperationSync(
-          companyId,
-          id,
-          () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id),
-          "recurring schedule update",
-        );
-      }
-
-      return updatedOperation;
     } catch (error) {
       await transaction.rollback();
       throw error;
     }
+
+    if (scheduleChanged || toleranceChanged) {
+      await recurringWorkdaySyncService.runOperationSync(
+        companyId,
+        id,
+        () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id),
+        toleranceChanged ? "recurring tolerance update" : "recurring schedule update",
+      );
+    }
+
+    return updatedOperation;
   },
 
   async cancel(companyId: string, id: string, userId?: string | null) {

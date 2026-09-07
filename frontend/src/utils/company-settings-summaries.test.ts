@@ -16,7 +16,6 @@ describe("validateOperationalSettingsForm", () => {
       defaultOperationEndTime: "03:00",
       defaultEarlyArrivalToleranceMinutes: "60",
       defaultLateArrivalToleranceMinutes: "15",
-      lateGraceMinutes: "15",
       earlyLeaveToleranceMinutes: "15",
       pendingOperationExpirationHours: "12",
       confirmationReminderEnabled: true,
@@ -33,7 +32,6 @@ describe("validateOperationalSettingsForm", () => {
       defaultOperationEndTime: "03:00",
       defaultEarlyArrivalToleranceMinutes: "60",
       defaultLateArrivalToleranceMinutes: "15",
-      lateGraceMinutes: "15",
       earlyLeaveToleranceMinutes: "15",
       pendingOperationExpirationHours: "12",
       confirmationReminderEnabled: true,
@@ -43,6 +41,7 @@ describe("validateOperationalSettingsForm", () => {
     assert.equal("requireCheckoutLocation" in payload, false);
     assert.equal("allowManualAttendanceCorrections" in payload, false);
     assert.equal("geofenceReviewMarginMeters" in payload, false);
+    assert.equal("lateGraceMinutes" in payload, false);
   });
 });
 

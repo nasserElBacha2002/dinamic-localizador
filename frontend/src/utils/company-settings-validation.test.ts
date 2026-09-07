@@ -11,7 +11,6 @@ const validForm = (): CompanySettingsFormValues => ({
   defaultOperationEndTime: "03:00",
   defaultEarlyArrivalToleranceMinutes: "60",
   defaultLateArrivalToleranceMinutes: "90",
-  lateGraceMinutes: "15",
   earlyLeaveToleranceMinutes: "15",
   pendingOperationExpirationHours: "12",
   requireCheckoutLocation: true,
@@ -122,52 +121,12 @@ describe("validateCompanySettingsForm", () => {
     assert.ok(errors.some((error) => error.includes("llegada tardía para operaciones")));
   });
 
-  it("rejects empty lateGraceMinutes", () => {
-    const errors = validateCompanySettingsForm({
-      ...validForm(),
-      lateGraceMinutes: "",
-    });
-    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
-  });
-
-  it("rejects non-numeric lateGraceMinutes", () => {
-    const errors = validateCompanySettingsForm({
-      ...validForm(),
-      lateGraceMinutes: "abc",
-    });
-    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
-  });
-
-  it("rejects lateGraceMinutes below 0", () => {
-    const errors = validateCompanySettingsForm({
-      ...validForm(),
-      lateGraceMinutes: "-1",
-    });
-    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
-  });
-
-  it("rejects lateGraceMinutes above 240", () => {
-    const errors = validateCompanySettingsForm({
-      ...validForm(),
-      lateGraceMinutes: "241",
-    });
-    assert.ok(errors.some((error) => error.includes("puntualidad WhatsApp")));
-  });
-
-  it("accepts valid lateGraceMinutes", () => {
-    const errors = validateCompanySettingsForm({
-      ...validForm(),
-      lateGraceMinutes: "240",
-    });
-    assert.equal(errors.some((error) => error.includes("puntualidad WhatsApp")), false);
-  });
-
   it("rejects empty earlyLeaveToleranceMinutes", () => {
     const errors = validateCompanySettingsForm({
       ...validForm(),
       earlyLeaveToleranceMinutes: "",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada")));
   });
 
   it("rejects non-numeric earlyLeaveToleranceMinutes", () => {
@@ -175,7 +134,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "abc",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada")));
   });
 
   it("rejects earlyLeaveToleranceMinutes below 0", () => {
@@ -183,7 +142,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "-1",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada")));
   });
 
   it("rejects earlyLeaveToleranceMinutes above 240", () => {
@@ -191,7 +150,7 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "241",
     });
-    assert.ok(errors.some((error) => error.includes("salida anticipada WhatsApp")));
+    assert.ok(errors.some((error) => error.includes("salida anticipada")));
   });
 
   it("accepts valid earlyLeaveToleranceMinutes", () => {
@@ -199,6 +158,6 @@ describe("validateCompanySettingsForm", () => {
       ...validForm(),
       earlyLeaveToleranceMinutes: "0",
     });
-    assert.equal(errors.some((error) => error.includes("salida anticipada WhatsApp")), false);
+    assert.equal(errors.some((error) => error.includes("salida anticipada")), false);
   });
 });

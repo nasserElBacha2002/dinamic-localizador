@@ -9,7 +9,6 @@ const buildRuntimeSettings = (
   operational: {
     operationTimezone: string;
     defaultRadiusMeters: number;
-    lateGraceMinutes: number;
     earlyLeaveToleranceMinutes: number;
     requireCheckoutLocation: boolean;
     allowManualAttendanceCorrections: boolean;
@@ -26,14 +25,10 @@ const buildRuntimeSettings = (
       ? operational.defaultRadiusMeters
       : env.BOT_DEFAULT_RADIUS_METERS,
   geofenceReviewMarginMeters: env.BOT_GEOFENCE_REVIEW_MARGIN_METERS,
-  lateGraceMinutes:
-    operational.lateGraceMinutes >= 0
-      ? operational.lateGraceMinutes
-      : env.BOT_ON_TIME_GRACE_MINUTES,
   earlyLeaveToleranceMinutes:
     operational.earlyLeaveToleranceMinutes >= 0
       ? operational.earlyLeaveToleranceMinutes
-      : env.BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES,
+      : DEFAULT_COMPANY_OPERATIONAL_SETTINGS.earlyLeaveToleranceMinutes,
   requireCheckoutLocation: operational.requireCheckoutLocation,
   allowManualAttendanceCorrections: operational.allowManualAttendanceCorrections,
   pendingOperationExpirationHours:

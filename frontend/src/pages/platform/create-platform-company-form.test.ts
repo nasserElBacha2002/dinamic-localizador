@@ -75,9 +75,8 @@ describe("validateCreatePlatformCompanyForm", () => {
     assert.equal(getFirstCreatePlatformCompanyErrorField(result), null);
   });
 
-  it("accepts zero WhatsApp tolerances", () => {
+  it("accepts zero early-exit tolerance", () => {
     const state = validState();
-    state.settings.lateGraceMinutes = "0";
     state.settings.earlyLeaveToleranceMinutes = "0";
     const result = validateCreatePlatformCompanyForm(state);
     assert.equal(isCreateCompanyValidationValid(result), true);
@@ -97,14 +96,14 @@ describe("validateCompanySettingsFields", () => {
     values.operationTimezone = "";
     values.defaultRadiusMeters = "1";
     values.defaultOperationStartTime = "bad";
-    values.lateGraceMinutes = "999";
+    values.earlyLeaveToleranceMinutes = "999";
     values.pendingOperationExpirationHours = "0";
 
     const errors = validateCompanySettingsFields(values);
     assert.ok(errors.operationTimezone);
     assert.ok(errors.defaultRadiusMeters);
     assert.ok(errors.defaultOperationStartTime);
-    assert.ok(errors.lateGraceMinutes);
+    assert.ok(errors.earlyLeaveToleranceMinutes);
     assert.ok(errors.pendingOperationExpirationHours);
   });
 });

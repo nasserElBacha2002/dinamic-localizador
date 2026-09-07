@@ -21,6 +21,7 @@ export type PunctualityStatus =
   | "LATE"
   | "OUTSIDE_TIME_WINDOW"
   | "NOT_RECORDED";
+export type OperationToleranceSource = "COMPANY_DEFAULT" | "CUSTOM";
 
 /** Embedded category on employee responses (scoped join). */
 export type EmployeeCategoryRef = EmployeeCategorySummary;
@@ -70,6 +71,8 @@ export interface Operation {
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
+  earlyToleranceSource: OperationToleranceSource;
+  lateToleranceSource: OperationToleranceSource;
   status: OperationStatus;
   createdAt: string;
   updatedAt: string;

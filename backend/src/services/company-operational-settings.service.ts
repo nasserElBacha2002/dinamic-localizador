@@ -7,7 +7,6 @@ export type CompanyOperationalSettings = Pick<
   | "companyId"
   | "operationTimezone"
   | "defaultRadiusMeters"
-  | "lateGraceMinutes"
   | "earlyLeaveToleranceMinutes"
   | "requireCheckoutLocation"
   | "allowManualAttendanceCorrections"
@@ -20,7 +19,6 @@ const toOperationalSettings = (settings: CompanySettings): CompanyOperationalSet
   companyId: settings.companyId,
   operationTimezone: settings.operationTimezone,
   defaultRadiusMeters: settings.defaultRadiusMeters,
-  lateGraceMinutes: settings.lateGraceMinutes,
   earlyLeaveToleranceMinutes: settings.earlyLeaveToleranceMinutes,
   requireCheckoutLocation: settings.requireCheckoutLocation,
   allowManualAttendanceCorrections: settings.allowManualAttendanceCorrections,

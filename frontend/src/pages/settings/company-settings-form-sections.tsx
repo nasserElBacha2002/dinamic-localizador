@@ -59,7 +59,7 @@ export function CompanyOperationOperationSettingsFields({
         disabled={disabled}
       />
       <NumberInput
-        label="Tolerancia de llegada temprana para operaciones"
+        label="Tolerancia de llegada temprana"
         value={
           formValues.defaultEarlyArrivalToleranceMinutes === ""
             ? ""
@@ -77,7 +77,7 @@ export function CompanyOperationOperationSettingsFields({
         disabled={disabled}
       />
       <NumberInput
-        label="Tolerancia de llegada tardía para operaciones"
+        label="Tolerancia de llegada tardía"
         value={
           formValues.defaultLateArrivalToleranceMinutes === ""
             ? ""
@@ -130,48 +130,6 @@ export function CompanyOperationOperationSettingsFields({
   );
 }
 
-export function CompanyAttendanceWhatsAppSettingsFields({
-  formValues,
-  setFormValues,
-  disabled,
-}: FieldProps) {
-  return (
-    <Stack gap="md">
-      <NumberInput
-        label="Tolerancia de puntualidad WhatsApp"
-        description="Estos valores aplican al flujo de WhatsApp cuando el empleado envía “Llegué” o “Terminé”."
-        value={formValues.lateGraceMinutes === "" ? "" : Number(formValues.lateGraceMinutes)}
-        onChange={(value) =>
-          setFormValues((current) => ({
-            ...current,
-            lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
-          }))
-        }
-        min={0}
-        max={240}
-        disabled={disabled}
-      />
-      <NumberInput
-        label="Tolerancia de salida anticipada WhatsApp"
-        value={
-          formValues.earlyLeaveToleranceMinutes === ""
-            ? ""
-            : Number(formValues.earlyLeaveToleranceMinutes)
-        }
-        onChange={(value) =>
-          setFormValues((current) => ({
-            ...current,
-            earlyLeaveToleranceMinutes: value === "" || value === undefined ? "" : String(value),
-          }))
-        }
-        min={0}
-        max={240}
-        disabled={disabled}
-      />
-    </Stack>
-  );
-}
-
 export function CompanySettingsCheckoutFields({
   formValues,
   setFormValues,
@@ -217,7 +175,6 @@ export function CompanySettingsCorrectionsFields({
 // Backward-compatible exports for existing section tests
 export {
   CompanyOperationOperationSettingsFields as CompanyOperationOperationSettingsSection,
-  CompanyAttendanceWhatsAppSettingsFields as CompanyAttendanceWhatsAppSettingsSection,
   CompanySettingsCheckoutFields as CompanySettingsCheckoutSection,
   CompanySettingsCorrectionsFields as CompanySettingsCorrectionsSection,
 };

@@ -123,6 +123,8 @@ describe("operationImportService preview", () => {
     assert.equal(row.serviceId, sampleService.id);
     assert.equal(row.earlyToleranceMinutes, early);
     assert.equal(row.lateToleranceMinutes, late);
+    assert.equal(row.earlyToleranceSource, "COMPANY_DEFAULT");
+    assert.equal(row.lateToleranceSource, "COMPANY_DEFAULT");
     assert.match(row.scheduledStartDisplay, startPattern);
     assert.match(row.scheduledEndDisplay, endPattern);
     assert.ok(new Date(row.scheduledEnd!) > new Date(row.scheduledStart!));
@@ -211,6 +213,21 @@ describe("operationImportService preview", () => {
 
     assert.equal(result.rows[0]?.earlyToleranceMinutes, 12);
     assert.equal(result.rows[0]?.lateToleranceMinutes, 18);
+    assert.equal(result.rows[0]?.earlyToleranceSource, "CUSTOM");
+    assert.equal(result.rows[0]?.lateToleranceSource, "CUSTOM");
+  });
+
+  it("keeps explicit zero spreadsheet tolerances as custom overrides", async () => {
+    mockServices();
+    mockImportDefaults();
+
+    const result = await previewCsv(
+      ["PUNTO", "Fecha", "tolerancia_temprana", "tolerancia_tardia"],
+      ["213", FUTURE_DATE, "0", "0"],
+    );
+
+    assert.equal(result.rows[0]?.earlyToleranceSource, "CUSTOM");
+    assert.equal(result.rows[0]?.lateToleranceSource, "CUSTOM");
   });
 
   it("imports Sucursal + Fecha with the same result as PUNTO", async () => {
@@ -390,7 +407,7 @@ describe("operationImportService confirm", () => {
     });
   };
 
-  it("preview output matches confirm payload tolerances without a second defaults resolution", async () => {
+  it("preview output carries inherited provenance into the confirm payload", async () => {
     mockServices();
     mockImportDefaults({
       earlyToleranceMinutes: 55,
@@ -410,10 +427,14 @@ describe("operationImportService confirm", () => {
         scheduledEnd: row.scheduledEnd!,
         earlyToleranceMinutes: row.earlyToleranceMinutes!,
         lateToleranceMinutes: row.lateToleranceMinutes!,
+        earlyToleranceSource: row.earlyToleranceSource,
+        lateToleranceSource: row.lateToleranceSource,
       }));
 
     assert.equal(confirmRows[0]?.earlyToleranceMinutes, 55);
     assert.equal(confirmRows[0]?.lateToleranceMinutes, 85);
+    assert.equal(confirmRows[0]?.earlyToleranceSource, "COMPANY_DEFAULT");
+    assert.equal(confirmRows[0]?.lateToleranceSource, "COMPANY_DEFAULT");
     assert.match(preview.rows[0]?.scheduledStartDisplay ?? "", /\(default\)/);
   });
 });

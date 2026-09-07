@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { DateTime } from "luxon";
 import sql from "mssql";
-import { env } from "../../config/env";
 import { getPool } from "../../database/connection";
 import { companyOperationalDefaultsResolver } from "../../services/company-operational-defaults.resolver";
 import {
@@ -28,7 +27,6 @@ export interface CatalogLoadResult {
   companyName: string;
   timezone: string;
   geofenceReviewMarginMeters: number;
-  onTimeGraceMinutes: number;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
 }
@@ -117,7 +115,6 @@ export const loadSeedCatalog = async (companyId: string): Promise<CatalogLoadRes
     companyName: String(company.recordset[0].company_name),
     timezone: importDefaults.operationTimezone,
     geofenceReviewMarginMeters: importDefaults.geofenceReviewMarginMeters,
-    onTimeGraceMinutes: env.BOT_ON_TIME_GRACE_MINUTES,
     earlyToleranceMinutes: importDefaults.earlyToleranceMinutes,
     lateToleranceMinutes: importDefaults.lateToleranceMinutes,
   };
@@ -222,7 +219,6 @@ export const executeHistoricalSeed = async (
   const earlyTol = catalog.earlyToleranceMinutes;
   const lateTol = catalog.lateToleranceMinutes;
   const reviewMargin = catalog.geofenceReviewMarginMeters;
-  const onTimeGrace = catalog.onTimeGraceMinutes;
 
   const workTeamIds = await createSyntheticWorkTeams(plan);
 
@@ -376,7 +372,6 @@ export const executeHistoricalSeed = async (
           scheduledStart,
           earlyTol,
           lateTol,
-          onTimeGrace,
         );
         const combined = combineAttendanceValidation(geo, punctuality);
 

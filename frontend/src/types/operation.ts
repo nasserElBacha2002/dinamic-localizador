@@ -15,6 +15,8 @@ export interface Operation {
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
+  earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+  lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
   status: OperationStatus;
   createdAt: string;
   updatedAt: string;
@@ -80,8 +82,8 @@ export interface CreateOneTimeOperationInput {
   serviceId: string;
   scheduledStart: string;
   scheduledEnd?: string | null;
-  earlyToleranceMinutes?: number;
-  lateToleranceMinutes?: number;
+  earlyToleranceMinutes?: number | null;
+  lateToleranceMinutes?: number | null;
 }
 
 export interface CreateRecurringOperationInput {
@@ -91,8 +93,8 @@ export interface CreateRecurringOperationInput {
   validUntil?: string | null;
   scheduleSource: "COMPANY" | "CUSTOM";
   scheduleDays?: import("./schedule").WeeklyScheduleDay[];
-  earlyToleranceMinutes?: number;
-  lateToleranceMinutes?: number;
+  earlyToleranceMinutes?: number | null;
+  lateToleranceMinutes?: number | null;
 }
 
 export type CreateOperationInput = CreateOneTimeOperationInput | CreateRecurringOperationInput;
@@ -105,7 +107,7 @@ export interface UpdateOperationInput {
   validUntil?: string | null;
   scheduleSource?: "COMPANY" | "CUSTOM";
   scheduleDays?: import("./schedule").WeeklyScheduleDay[];
-  earlyToleranceMinutes?: number;
-  lateToleranceMinutes?: number;
+  earlyToleranceMinutes?: number | null;
+  lateToleranceMinutes?: number | null;
   status?: OperationStatus;
 }

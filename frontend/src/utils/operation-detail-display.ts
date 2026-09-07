@@ -17,6 +17,10 @@ export function buildOperationEditDefaultValues(operation: OperationDetail): Ope
     scheduleDays: schedule?.days ?? createDefaultWeeklySchedule(),
     earlyToleranceMinutes: operation.earlyToleranceMinutes,
     lateToleranceMinutes: operation.lateToleranceMinutes,
+    earlyToleranceSource:
+      operation.earlyToleranceSource === "COMPANY_DEFAULT" ? "COMPANY_DEFAULT" : "CUSTOM",
+    lateToleranceSource:
+      operation.lateToleranceSource === "COMPANY_DEFAULT" ? "COMPANY_DEFAULT" : "CUSTOM",
     status: operation.status,
   };
 }
@@ -27,8 +31,10 @@ export function toOperationUpdatePayload(
 ): UpdateOperationInput {
   const shared = {
     serviceId: values.serviceId,
-    earlyToleranceMinutes: values.earlyToleranceMinutes,
-    lateToleranceMinutes: values.lateToleranceMinutes,
+    earlyToleranceMinutes:
+      values.earlyToleranceSource === "CUSTOM" ? values.earlyToleranceMinutes : null,
+    lateToleranceMinutes:
+      values.lateToleranceSource === "CUSTOM" ? values.lateToleranceMinutes : null,
     status: values.status,
   };
 

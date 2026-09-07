@@ -11,6 +11,7 @@ const optionalHHmmField = () =>
 const companySettingsInputSchema = z.object({
   operationTimezone: z.string().trim().min(1).optional(),
   defaultRadiusMeters: z.coerce.number().int().positive().optional(),
+  // Deprecated compatibility input for older platform clients.
   lateGraceMinutes: z.coerce.number().int().nonnegative().optional(),
   earlyLeaveToleranceMinutes: z.coerce.number().int().nonnegative().optional(),
   requireCheckoutLocation: z.boolean().optional(),

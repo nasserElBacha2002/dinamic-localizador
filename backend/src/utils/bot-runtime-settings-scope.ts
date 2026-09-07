@@ -28,13 +28,10 @@ export function getGeofenceReviewMarginMeters(): number {
   return getBotRuntimeSettings()?.geofenceReviewMarginMeters ?? env.BOT_GEOFENCE_REVIEW_MARGIN_METERS;
 }
 
-export function getLateGraceMinutes(): number {
-  return getBotRuntimeSettings()?.lateGraceMinutes ?? env.BOT_ON_TIME_GRACE_MINUTES;
-}
-
 export function getEarlyLeaveToleranceMinutes(): number {
   return (
-    getBotRuntimeSettings()?.earlyLeaveToleranceMinutes ?? env.BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES
+    getBotRuntimeSettings()?.earlyLeaveToleranceMinutes ??
+    DEFAULT_COMPANY_OPERATIONAL_SETTINGS.earlyLeaveToleranceMinutes
   );
 }
 

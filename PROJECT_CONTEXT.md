@@ -129,7 +129,7 @@ Terminología dual documentada en `backend/src/types/operational-domain.ts` y `d
 
 ### 6. Modelo de datos
 
-- **Migraciones:** ~109 archivos SQL en `database/migrations/`; runner `backend/src/database/run-migrations.ts` registra en `system_migrations`.
+- **Migraciones:** 111 migraciones SQL versionadas en `database/migrations/`; runner `backend/src/database/run-migrations.ts` registra en `system_migrations`.
 - **PK:** `UNIQUEIDENTIFIER` (NEWID) en entidades de negocio.
 - **Tenant:** `company_id` en tablas operativas; FKs compuestas reforzadas en fases posteriores (087+).
 - **Estados clave:**
@@ -144,6 +144,11 @@ Terminología dual documentada en `backend/src/types/operational-domain.ts` y `d
 - **Auditoría:** `audit_logs` + servicios de audit; WhatsApp observability tables.
 - **Índices importantes:** uniqueness MessageSid en attendance; phone per company; workday `(operation_id, work_date)`; outbox dedup constraints (103).
 - **Compatibilidad legacy:** vistas `stores`, `inventories`, `inventory_employees` sobre tablas renombradas (021) — **no** usar vistas para DML nuevo.
+- **Tolerancias de llegada:** `scheduled_operations.*_tolerance_source`
+  conserva provenance (`COMPANY_DEFAULT` hereda empresa; `CUSTOM` usa el valor
+  efectivo de la operación, incluido `0`). Las columnas no-null existentes
+  conservan el valor efectivo para rolling deploys;
+  `operation_workdays` persiste snapshots efectivos.
 
 ---
 
@@ -159,14 +164,17 @@ Terminología dual documentada en `backend/src/types/operational-domain.ts` y `d
 6. Sesión bot (`BOT_SESSION_TTL_MINUTES`); selección de workday si hay múltiples.
 7. Ubicación real requerida; rechazo de forwarded location (alert admin posible).
 8. Geofence Haversine + radio servicio + `BOT_GEOFENCE_REVIEW_MARGIN_METERS` → VALID / PENDING_REVIEW / reject path.
-9. Insert `attendance_records` transaccional; unique `source_message_sid`.
-10. Respuesta TwiML al colaborador; panel lee vía API attendance.
+9. Ventana temporal común a todos los canales: abre en inicio menos tolerancia
+   temprana y cierra inclusivamente en inicio más tolerancia tardía. Antes del
+   inicio es `EARLY`, exactamente al inicio `ON_TIME` y después `LATE`.
+10. Insert `attendance_records` transaccional; unique `source_message_sid`.
+11. Respuesta TwiML al colaborador; panel lee vía API attendance.
 
 #### 7.2 Check-out (“Terminé”)
 
 1. Intent checkout → requiere check-in previo / attendance abierta.
 2. Ubicación según `require_checkout_location` (company settings).
-3. Early leave / overtime según tolerancias de workday/company.
+3. Early leave / overtime según `company_settings.early_leave_tolerance_minutes`.
 4. Update checkout fields + `checkout_message_sid`.
 
 #### 7.3 Panel: CRUD operaciones / servicios / empleados
@@ -409,13 +417,14 @@ Antes de modificar, leer con cuidado:
 ```text
 BOT_DEFAULT_RADIUS_METERS=150
 BOT_GEOFENCE_REVIEW_MARGIN_METERS=30
-BOT_ON_TIME_GRACE_MINUTES=15
-BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES=15
 BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires
 BOT_SESSION_TTL_MINUTES=15
 ```
 
-(Overrides por `company_settings` donde aplique.)
+(Las tolerancias de llegada efectivas provienen del override explícito de la
+operación o del default actual de `company_settings`; el workday conserva el
+snapshot materializado. `late_grace_minutes` sigue persistido y aceptado por API
+sólo para rolling compatibility: no participa del runtime.)
 
 ## Apéndice C — Estado Git al auditar
 

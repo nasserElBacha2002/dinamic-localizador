@@ -20,6 +20,8 @@ export interface OperationImportPreviewRow {
   toleranciaTardia: string;
   earlyToleranceMinutes: number | null;
   lateToleranceMinutes: number | null;
+  earlyToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
+  lateToleranceSource: "COMPANY_DEFAULT" | "CUSTOM";
   earlyToleranceDisplay: string;
   lateToleranceDisplay: string;
   status: OperationImportRowStatus;
@@ -47,4 +49,6 @@ export interface OperationImportConfirmRow {
   scheduledEnd: string;
   earlyToleranceMinutes: number;
   lateToleranceMinutes: number;
+  earlyToleranceSource?: "COMPANY_DEFAULT" | "CUSTOM";
+  lateToleranceSource?: "COMPANY_DEFAULT" | "CUSTOM";
 }

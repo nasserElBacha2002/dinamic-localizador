@@ -40,8 +40,6 @@ const envSchema = z
     BOT_OPERATION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
     BOT_DEFAULT_RADIUS_METERS: z.coerce.number().int().positive().default(150),
     BOT_GEOFENCE_REVIEW_MARGIN_METERS: z.coerce.number().int().nonnegative().default(30),
-    BOT_ON_TIME_GRACE_MINUTES: z.coerce.number().int().nonnegative().default(15),
-    BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES: z.coerce.number().int().nonnegative().default(15),
     BOT_DEFAULT_COMPANY_ID: z.string().uuid().optional(),
     BOT_DEFAULT_COMPANY_NAME: z.string().min(1).optional(),
     JWT_SECRET: z.string().min(16),

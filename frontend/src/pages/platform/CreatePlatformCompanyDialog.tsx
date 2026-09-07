@@ -381,8 +381,8 @@ export function CreatePlatformCompanyDialog({
 
             <div {...fieldAnchor("defaultEarlyArrivalToleranceMinutes")}>
               <SettingsFormField
-                label="Tolerancia de llegada temprana para operaciones (min)"
-                description="Default para operaciones e importaciones."
+                label="Tolerancia de llegada temprana (min)"
+                description="Cantidad de minutos antes del inicio en los que se permite registrar la llegada."
               >
                 <NumberInput
                   value={
@@ -399,7 +399,7 @@ export function CreatePlatformCompanyDialog({
                   {...numberInputProps}
                   disabled={busy}
                   error={visibleErrors.defaultEarlyArrivalToleranceMinutes}
-                  aria-label="Tolerancia de llegada temprana para operaciones"
+                  aria-label="Tolerancia de llegada temprana"
                   aria-invalid={Boolean(visibleErrors.defaultEarlyArrivalToleranceMinutes)}
                 />
               </SettingsFormField>
@@ -407,8 +407,8 @@ export function CreatePlatformCompanyDialog({
 
             <div {...fieldAnchor("defaultLateArrivalToleranceMinutes")}>
               <SettingsFormField
-                label="Tolerancia de llegada tardía para operaciones (min)"
-                description="Default para operaciones e importaciones."
+                label="Tolerancia de llegada tardía (min)"
+                description="Cantidad de minutos después del inicio en los que se permite registrar la llegada."
               >
                 <NumberInput
                   value={
@@ -425,37 +425,16 @@ export function CreatePlatformCompanyDialog({
                   {...numberInputProps}
                   disabled={busy}
                   error={visibleErrors.defaultLateArrivalToleranceMinutes}
-                  aria-label="Tolerancia de llegada tardía para operaciones"
+                  aria-label="Tolerancia de llegada tardía"
                   aria-invalid={Boolean(visibleErrors.defaultLateArrivalToleranceMinutes)}
-                />
-              </SettingsFormField>
-            </div>
-
-            <div {...fieldAnchor("lateGraceMinutes")}>
-              <SettingsFormField
-                label="Tolerancia de puntualidad WhatsApp (min)"
-                description="Validación del mensaje “Llegué”."
-              >
-                <NumberInput
-                  value={settings.lateGraceMinutes === "" ? "" : Number(settings.lateGraceMinutes)}
-                  onChange={(value) =>
-                    updateSettings({
-                      lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
-                    })
-                  }
-                  {...numberInputProps}
-                  disabled={busy}
-                  error={visibleErrors.lateGraceMinutes}
-                  aria-label="Tolerancia de puntualidad WhatsApp"
-                  aria-invalid={Boolean(visibleErrors.lateGraceMinutes)}
                 />
               </SettingsFormField>
             </div>
 
             <div {...fieldAnchor("earlyLeaveToleranceMinutes")}>
               <SettingsFormField
-                label="Tolerancia de salida anticipada WhatsApp (min)"
-                description="Validación del mensaje “Terminé”."
+                label="Tolerancia de salida anticipada (min)"
+                description="Cantidad de minutos antes del fin en los que se permite registrar la salida."
               >
                 <NumberInput
                   value={
@@ -472,7 +451,7 @@ export function CreatePlatformCompanyDialog({
                   {...numberInputProps}
                   disabled={busy}
                   error={visibleErrors.earlyLeaveToleranceMinutes}
-                  aria-label="Tolerancia de salida anticipada WhatsApp"
+                  aria-label="Tolerancia de salida anticipada"
                   aria-invalid={Boolean(visibleErrors.earlyLeaveToleranceMinutes)}
                 />
               </SettingsFormField>

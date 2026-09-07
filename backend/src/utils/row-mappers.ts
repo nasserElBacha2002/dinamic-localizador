@@ -130,6 +130,8 @@ export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   scheduledEnd: row.scheduled_end ? toIsoString(row.scheduled_end as Date | string) : null,
   earlyToleranceMinutes: Number(row.early_tolerance_minutes),
   lateToleranceMinutes: Number(row.late_tolerance_minutes),
+  earlyToleranceSource: String(row.early_tolerance_source ?? "CUSTOM") as Operation["earlyToleranceSource"],
+  lateToleranceSource: String(row.late_tolerance_source ?? "CUSTOM") as Operation["lateToleranceSource"],
   status: String(row.status) as Operation["status"],
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),

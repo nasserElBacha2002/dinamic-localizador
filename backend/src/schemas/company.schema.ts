@@ -47,6 +47,7 @@ export const updateCompanySettingsSchema = z
         "El radio predeterminado no puede superar 5000 metros.",
       )
       .optional(),
+    // Deprecated compatibility input; runtime arrival policy uses operation/workday tolerances.
     lateGraceMinutes: z.coerce
       .number()
       .int("La tolerancia de llegada debe ser un número entero.")

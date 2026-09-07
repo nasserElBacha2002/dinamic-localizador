@@ -229,10 +229,14 @@ export const companySettingsRepository = {
         | "attendanceAlertCooldownDays"
       >
     >,
+    transaction?: sql.Transaction,
   ): Promise<CompanySettings | null> {
-    const pool = getPool();
     const fields: string[] = [];
-    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const request = (transaction ? new sql.Request(transaction) : getPool().request()).input(
+      "companyId",
+      sql.UniqueIdentifier,
+      companyId,
+    );
     let bumpAttendanceConfigVersion = false;
 
     if (input.operationTimezone !== undefined) {

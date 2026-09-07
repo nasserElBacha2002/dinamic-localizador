@@ -67,23 +67,18 @@ export const evaluateGeofence = (
 /**
  * Shared check-in punctuality / availability.
  *
- * `onTimeGraceMinutes` is retained for call-site compatibility but is unused:
- * ON_TIME extends through `scheduledStart + lateToleranceMinutes` per product policy.
- * Availability closes at `expectedEndAt` (exclusive); when omitted, falls back to
- * `scheduledStart + lateToleranceMinutes`.
+ * The arrival window is inclusive from `scheduledStart - earlyToleranceMinutes`
+ * through `scheduledStart + lateToleranceMinutes`.
  */
 export const evaluatePunctuality = (
   receivedAt: Date,
   scheduledStart: Date,
   earlyToleranceMinutes: number,
   lateToleranceMinutes: number,
-  _onTimeGraceMinutes: number,
-  expectedEndAt?: Date | null,
 ): PunctualityEvaluation => {
   const evaluation = evaluateCheckInWindow(
     {
       expectedStartAt: scheduledStart,
-      expectedEndAt: expectedEndAt ?? null,
       earlyToleranceMinutes,
       lateToleranceMinutes,
     },
@@ -110,12 +105,10 @@ export const isWithinOperationWindow = (
   scheduledStart: Date,
   earlyToleranceMinutes: number,
   lateToleranceMinutes: number,
-  expectedEndAt?: Date | null,
 ): boolean =>
   evaluateCheckInWindow(
     {
       expectedStartAt: scheduledStart,
-      expectedEndAt: expectedEndAt ?? null,
       earlyToleranceMinutes,
       lateToleranceMinutes,
     },

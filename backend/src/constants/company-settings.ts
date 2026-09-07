@@ -1,6 +1,7 @@
 export const DEFAULT_COMPANY_OPERATIONAL_SETTINGS = {
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: 150,
+  /** @deprecated Persisted only for compatibility with older deployments. */
   lateGraceMinutes: 15,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,

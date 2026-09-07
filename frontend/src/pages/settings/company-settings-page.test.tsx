@@ -11,7 +11,6 @@ import {
   buildAbsenceSummary,
   buildOperationalSettingsSummary,
   buildLocationTypesSummary,
-  buildWhatsAppSummary,
 } from "./company-settings-summaries";
 
 function createMockSettings(overrides: Partial<CompanySettings> = {}): CompanySettings {
@@ -44,15 +43,17 @@ describe("Company settings summaries", () => {
     assert.equal(schedule?.value, "20:30 a 03:00");
   });
 
-  it("builds WhatsApp summary separately from operation tolerances", () => {
+  it("includes early-exit tolerance in the unified operational summary", () => {
     const settings = createMockSettings({
-      lateGraceMinutes: 15,
       earlyLeaveToleranceMinutes: 20,
       defaultLateArrivalToleranceMinutes: 90,
     });
-    const summary = buildWhatsAppSummary(settings);
-    assert.ok(summary.some((item) => item.value === "15 min"));
-    assert.ok(summary.some((item) => item.value === "20 min"));
+    const summary = buildOperationalSettingsSummary(settings);
+    assert.ok(
+      summary.summaryItems.some(
+        (item) => item.label === "Tolerancia de salida anticipada" && item.value === "20 min",
+      ),
+    );
   });
 
   it("builds absence summary with configured and auto-assigned counts", () => {

@@ -39,7 +39,7 @@ describe("botRuntimeSettingsService", () => {
     assert.equal(readCount, 1);
     assert.equal(settings.companyId, "company-1");
     assert.equal(settings.defaultRadiusMeters, 175);
-    assert.equal(settings.lateGraceMinutes, 20);
+    assert.equal("lateGraceMinutes" in settings, false);
     assert.equal(settings.requireCheckoutLocation, false);
     assert.equal(settings.geofenceReviewMarginMeters, 30);
     assert.equal(settings.sessionTtlMinutes, 15);

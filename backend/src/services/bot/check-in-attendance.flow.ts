@@ -132,7 +132,6 @@ export async function processLocationCheckIn(input: {
       serviceAllowedRadiusMeters: workday.allowedRadiusMeters,
       receivedAt: eventAt,
       scheduledStart: new Date(workday.expectedStartAt),
-      expectedEndAt: workday.expectedEndAt ? new Date(workday.expectedEndAt) : null,
       earlyToleranceMinutes: workday.earlyToleranceMinutes,
       lateToleranceMinutes: workday.lateToleranceMinutes,
       runtimeSettings,

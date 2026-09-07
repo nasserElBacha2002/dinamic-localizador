@@ -180,7 +180,12 @@ describeDatabaseIntegration("operation attendance confirmation summary integrati
         scheduleSource: "CUSTOM",
         scheduleDays: allDaysSchedule,
       },
-      { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
+      {
+        earlyToleranceMinutes: 60,
+        lateToleranceMinutes: 90,
+        earlyToleranceSource: "CUSTOM",
+        lateToleranceSource: "CUSTOM",
+      },
     );
     fixtures.trackOperation(companyId, operation.id);
 

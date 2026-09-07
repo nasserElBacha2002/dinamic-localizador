@@ -613,7 +613,6 @@ describeDatabaseIntegration("database integrity phase0a corrections H1 H3 H4", (
     operationTimezone: "America/Argentina/Buenos_Aires",
     defaultRadiusMeters: 150,
     geofenceReviewMarginMeters: 30,
-    lateGraceMinutes: 15,
     earlyLeaveToleranceMinutes: 15,
     requireCheckoutLocation: false,
     allowManualAttendanceCorrections: true,

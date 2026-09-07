@@ -74,6 +74,8 @@ describe("buildOperationCreateDefaultValues", () => {
 
     assert.equal(defaults.earlyToleranceMinutes, 15);
     assert.equal(defaults.lateToleranceMinutes, 20);
+    assert.equal(defaults.earlyToleranceSource, "COMPANY_DEFAULT");
+    assert.equal(defaults.lateToleranceSource, "COMPANY_DEFAULT");
     assert.notEqual(defaults.earlyToleranceMinutes, settings.lateGraceMinutes);
     assert.notEqual(defaults.lateToleranceMinutes, settings.earlyLeaveToleranceMinutes);
   });

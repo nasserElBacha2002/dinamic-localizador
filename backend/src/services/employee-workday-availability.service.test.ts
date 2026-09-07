@@ -150,7 +150,7 @@ describe("employeeWorkdayAvailabilityService", () => {
     assert.equal(result.hasJustifiedWorkdayInWindow, true);
   });
 
-  it("diagnoses AFTER_EXPECTED_END from the real candidate without ONE_TIME pollution", async () => {
+  it("diagnoses AFTER_CHECK_IN_WINDOW from the real candidate without ONE_TIME pollution", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
       "../repositories/employee-workday-availability.repository"
@@ -211,11 +211,11 @@ describe("employeeWorkdayAvailabilityService", () => {
       },
     );
 
-    assert.ok(diagnosis.reasonCodes.includes("AFTER_EXPECTED_END"));
+    assert.ok(diagnosis.reasonCodes.includes("AFTER_CHECK_IN_WINDOW"));
     assert.ok(!diagnosis.reasonCodes.includes("OPERATION_COMPLETED_OR_CANCELLED"));
     const today = diagnosis.candidateEvaluations.find((row) => row.employeeWorkdayId === "ew-today");
     assert.ok(today);
-    assert.deepEqual(today?.rejectionReasons, ["AFTER_EXPECTED_END"]);
+    assert.deepEqual(today?.rejectionReasons, ["AFTER_CHECK_IN_WINDOW"]);
   });
 
   it("diagnoses PRIOR_ATTENDANCE with the matching attendance id", async () => {

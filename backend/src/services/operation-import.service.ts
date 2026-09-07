@@ -10,7 +10,6 @@ import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { operationRepository } from "../repositories/operation.repository";
 import { serviceRepository } from "../repositories/service.repository";
-import type { CreateOneTimeOperationInput } from "../schemas/operation.schema";
 import type { Service } from "../types/domain";
 import type {
   OperationImportConfirmRow,
@@ -83,6 +82,7 @@ const parseTolerance = (
   defaultValue: number,
 ): {
   value: number;
+  source: "COMPANY_DEFAULT" | "CUSTOM";
   display: string;
   errors: string[];
 } => {
@@ -90,6 +90,7 @@ const parseTolerance = (
   if (!trimmed) {
     return {
       value: defaultValue,
+      source: "COMPANY_DEFAULT",
       display: `${defaultValue} min (default)`,
       errors: [],
     };
@@ -98,6 +99,7 @@ const parseTolerance = (
   if (!/^\d+$/.test(trimmed)) {
     return {
       value: defaultValue,
+      source: "COMPANY_DEFAULT",
       display: trimmed,
       errors: [`${label} debe ser un entero mayor o igual a 0`],
     };
@@ -107,6 +109,7 @@ const parseTolerance = (
   if (parsed < 0) {
     return {
       value: defaultValue,
+      source: "COMPANY_DEFAULT",
       display: trimmed,
       errors: [`${label} no puede ser negativa`],
     };
@@ -114,6 +117,7 @@ const parseTolerance = (
 
   return {
     value: parsed,
+    source: "CUSTOM",
     display: `${parsed} min`,
     errors: [],
   };
@@ -145,6 +149,8 @@ const markExistingOperationConflicts = (
       row.status = "invalid";
       row.earlyToleranceMinutes = null;
       row.lateToleranceMinutes = null;
+      row.earlyToleranceSource = "COMPANY_DEFAULT";
+      row.lateToleranceSource = "COMPANY_DEFAULT";
     }
   }
 };
@@ -268,6 +274,8 @@ const validateClientRow = (
     toleranciaTardia: toleranciaTardiaRaw,
     earlyToleranceMinutes: isValid ? earlyTolerance.value : null,
     lateToleranceMinutes: isValid ? lateTolerance.value : null,
+    earlyToleranceSource: earlyTolerance.source,
+    lateToleranceSource: lateTolerance.source,
     earlyToleranceDisplay: earlyTolerance.display,
     lateToleranceDisplay: lateTolerance.display,
     status: isValid ? "valid" : "invalid",
@@ -380,6 +388,8 @@ const validateLegacyRow = (
     toleranciaTardia: toleranciaTardiaRaw,
     earlyToleranceMinutes: isValid ? earlyTolerance.value : null,
     lateToleranceMinutes: isValid ? lateTolerance.value : null,
+    earlyToleranceSource: earlyTolerance.source,
+    lateToleranceSource: lateTolerance.source,
     earlyToleranceDisplay: earlyTolerance.display,
     lateToleranceDisplay: lateTolerance.display,
     status: isValid ? "valid" : "invalid",
@@ -387,14 +397,30 @@ const validateLegacyRow = (
   };
 };
 
-const toCreateInput = (row: OperationImportConfirmRow): CreateOneTimeOperationInput => ({
-  operationKind: "ONE_TIME",
-  serviceId: row.serviceId,
-  scheduledStart: row.scheduledStart,
-  scheduledEnd: row.scheduledEnd,
-  earlyToleranceMinutes: row.earlyToleranceMinutes,
-  lateToleranceMinutes: row.lateToleranceMinutes,
-});
+const toCreateInput = (
+  row: OperationImportConfirmRow,
+  defaults: ImportOperationalDefaults,
+) => {
+  const earlySource = row.earlyToleranceSource ?? "CUSTOM";
+  const lateSource = row.lateToleranceSource ?? "CUSTOM";
+
+  return {
+    operationKind: "ONE_TIME" as const,
+    serviceId: row.serviceId,
+    scheduledStart: row.scheduledStart,
+    scheduledEnd: row.scheduledEnd,
+    earlyToleranceMinutes:
+      earlySource === "COMPANY_DEFAULT"
+        ? defaults.earlyToleranceMinutes
+        : row.earlyToleranceMinutes,
+    lateToleranceMinutes:
+      lateSource === "COMPANY_DEFAULT"
+        ? defaults.lateToleranceMinutes
+        : row.lateToleranceMinutes,
+    earlyToleranceSource: earlySource,
+    lateToleranceSource: lateSource,
+  };
+};
 
 const emptyPreview = (
   fileErrors: string[],
@@ -509,6 +535,7 @@ export const operationImportService = {
   },
 
   async confirm(companyId: string, rows: OperationImportConfirmRow[]) {
+    const importDefaults = await companyOperationalDefaultsResolver.getImportDefaults(companyId);
     const services = await serviceRepository.listAllActive(companyId);
     const serviceById = new Map(services.map((service) => [service.id, service]));
     const seenKeys = new Set<string>();
@@ -577,7 +604,7 @@ export const operationImportService = {
       const created = await operationRepository.createManyInTransaction(
         companyId,
         transaction,
-        rows.map(toCreateInput),
+        rows.map((row) => toCreateInput(row, importDefaults)),
       );
 
       await transaction.commit();

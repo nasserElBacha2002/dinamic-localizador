@@ -27,6 +27,43 @@ describe("recurringWorkdaySyncService", () => {
     assert.equal(result.operationWorkdaysCreated, 2);
   });
 
+  it("allows a later idempotent retry to converge after post-commit materialization fails", async () => {
+    const persistedOperationTolerance = 45;
+    let workdaySnapshotTolerance = 60;
+    let attempts = 0;
+
+    const materialize = async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw new Error("transient materialization failure");
+      }
+      workdaySnapshotTolerance = persistedOperationTolerance;
+      return { operationWorkdaysUpdated: 1 };
+    };
+
+    await assert.rejects(
+      () =>
+        recurringWorkdaySyncService.runOperationSync(
+          "company-1",
+          "op-1",
+          materialize,
+          "post-commit tolerance update",
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "RECURRING_WORKDAY_SYNC_FAILED",
+    );
+    assert.equal(workdaySnapshotTolerance, 60);
+
+    const retry = await recurringWorkdaySyncService.runOperationSync(
+      "company-1",
+      "op-1",
+      materialize,
+      "periodic retry",
+    );
+    assert.equal(retry.operationWorkdaysUpdated, 1);
+    assert.equal(workdaySnapshotTolerance, persistedOperationTolerance);
+  });
+
   it("throws when company reconciliation reports failures", () => {
     assert.throws(
       () =>

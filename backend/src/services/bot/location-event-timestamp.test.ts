@@ -29,7 +29,6 @@ describe("location event timestamp for punctuality", () => {
       serviceAllowedRadiusMeters: 150,
       receivedAt: locationAt,
       scheduledStart,
-      expectedEndAt: new Date("2026-08-11T20:00:00.000Z"),
       earlyToleranceMinutes: 30,
       lateToleranceMinutes: 15,
       runtimeSettings,
@@ -43,16 +42,14 @@ describe("location event timestamp for punctuality", () => {
       serviceAllowedRadiusMeters: 150,
       receivedAt: selectionAt,
       scheduledStart,
-      expectedEndAt: new Date("2026-08-11T20:00:00.000Z"),
       earlyToleranceMinutes: 30,
       lateToleranceMinutes: 15,
       runtimeSettings,
     });
 
     assert.equal(atLocation.validation.punctualityStatus, "ON_TIME");
-    // 7 minutes after start with 15 late tolerance may still be ON_TIME; ensure event time is the driver:
+    assert.equal(atSelection.validation.punctualityStatus, "LATE");
     assert.notEqual(locationAt.toISOString(), selectionAt.toISOString());
-    assert.equal(atLocation.validation.punctualityStatus, atSelection.validation.punctualityStatus);
   });
 
   it("rejects LOCATION received after the operation arrival window", () => {
@@ -67,7 +64,6 @@ describe("location event timestamp for punctuality", () => {
       serviceAllowedRadiusMeters: 150,
       receivedAt: locationAt,
       scheduledStart,
-      expectedEndAt: new Date("2026-08-11T20:00:00.000Z"),
       earlyToleranceMinutes: 30,
       lateToleranceMinutes: 15,
       runtimeSettings,

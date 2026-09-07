@@ -68,20 +68,17 @@ export const evaluateGeofence = (
  * Shared check-in punctuality / availability.
  *
  * The arrival window is inclusive from `scheduledStart - earlyToleranceMinutes`
- * through `scheduledStart + lateToleranceMinutes`. `expectedEndAt` remains in the
- * input shape for schedule compatibility but does not extend the arrival window.
+ * through `scheduledStart + lateToleranceMinutes`.
  */
 export const evaluatePunctuality = (
   receivedAt: Date,
   scheduledStart: Date,
   earlyToleranceMinutes: number,
   lateToleranceMinutes: number,
-  expectedEndAt?: Date | null,
 ): PunctualityEvaluation => {
   const evaluation = evaluateCheckInWindow(
     {
       expectedStartAt: scheduledStart,
-      expectedEndAt: expectedEndAt ?? null,
       earlyToleranceMinutes,
       lateToleranceMinutes,
     },
@@ -108,12 +105,10 @@ export const isWithinOperationWindow = (
   scheduledStart: Date,
   earlyToleranceMinutes: number,
   lateToleranceMinutes: number,
-  expectedEndAt?: Date | null,
 ): boolean =>
   evaluateCheckInWindow(
     {
       expectedStartAt: scheduledStart,
-      expectedEndAt: expectedEndAt ?? null,
       earlyToleranceMinutes,
       lateToleranceMinutes,
     },

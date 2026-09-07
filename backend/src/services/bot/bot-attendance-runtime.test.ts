@@ -35,7 +35,6 @@ describe("bot attendance runtime", () => {
       serviceAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
-      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings: baseRuntimeSettings(),
@@ -43,7 +42,7 @@ describe("bot attendance runtime", () => {
 
     assert.equal(result.effectiveRadiusMeters, 150);
     assert.equal(result.validation.validationStatus, "VALID");
-    assert.equal(result.validation.punctualityStatus, "ON_TIME");
+    assert.equal(result.validation.punctualityStatus, "LATE");
   });
 
   it("rejects check-in outside tighter company radius", () => {
@@ -56,7 +55,6 @@ describe("bot attendance runtime", () => {
       serviceAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:05:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
-      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings,
@@ -76,7 +74,6 @@ describe("bot attendance runtime", () => {
       serviceAllowedRadiusMeters: 150,
       receivedAt: new Date("2026-07-05T15:31:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
-      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings,
@@ -89,14 +86,7 @@ describe("bot attendance runtime", () => {
   it("matches the channel-neutral policy for the same operation and timestamp", () => {
     const receivedAt = new Date("2026-07-05T15:30:00.000Z");
     const scheduledStart = new Date("2026-07-05T15:00:00.000Z");
-    const expectedEndAt = new Date("2026-07-05T23:00:00.000Z");
-    const internal = evaluatePunctuality(
-      receivedAt,
-      scheduledStart,
-      15,
-      30,
-      expectedEndAt,
-    );
+    const internal = evaluatePunctuality(receivedAt, scheduledStart, 15, 30);
     const viaWhatsApp = buildCheckInValidation({
       employeeLatitude: serviceCoords.latitude,
       employeeLongitude: serviceCoords.longitude,
@@ -105,7 +95,6 @@ describe("bot attendance runtime", () => {
       serviceAllowedRadiusMeters: 150,
       receivedAt,
       scheduledStart,
-      expectedEndAt,
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings: baseRuntimeSettings(),

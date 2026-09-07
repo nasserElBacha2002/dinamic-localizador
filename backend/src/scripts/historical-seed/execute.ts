@@ -372,7 +372,6 @@ export const executeHistoricalSeed = async (
           scheduledStart,
           earlyTol,
           lateTol,
-          scheduledEnd,
         );
         const combined = combineAttendanceValidation(geo, punctuality);
 

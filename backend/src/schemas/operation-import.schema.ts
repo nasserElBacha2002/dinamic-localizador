@@ -17,6 +17,8 @@ export const operationImportConfirmRowSchema = z.object({
   scheduledEnd: z.string().datetime({ offset: true }),
   earlyToleranceMinutes: z.number().int().min(0),
   lateToleranceMinutes: z.number().int().min(0),
+  earlyToleranceSource: z.enum(["COMPANY_DEFAULT", "CUSTOM"]).optional(),
+  lateToleranceSource: z.enum(["COMPANY_DEFAULT", "CUSTOM"]).optional(),
 });
 
 export const operationImportConfirmSchema = z.object({

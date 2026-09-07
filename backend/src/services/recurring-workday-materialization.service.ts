@@ -565,6 +565,43 @@ export const recurringWorkdayMaterializationService = {
     return summary;
   },
 
+  async reconcileCompanyToleranceOperations(
+    companyId: string,
+    changed: { early: boolean; late: boolean },
+  ): Promise<CompanyMaterializationSummary> {
+    const operations = await operationRepository.listRecurringIdsDependingOnCompanyTolerances(
+      companyId,
+      changed,
+    );
+    const summary: CompanyMaterializationSummary = {
+      operationsProcessed: 0,
+      operationsFailed: 0,
+      results: [],
+      failures: [],
+    };
+
+    for (const operationId of operations) {
+      try {
+        const result = await this.materializeOperationHorizon(companyId, operationId);
+        summary.operationsProcessed += 1;
+        summary.results.push(result);
+      } catch (error) {
+        summary.operationsFailed += 1;
+        summary.failures.push({
+          operationId,
+          message: error instanceof Error ? error.message : "Error desconocido",
+        });
+        console.error("[recurring-workday-materialization] company tolerance sync failed", {
+          companyId,
+          operationId,
+          error,
+        });
+      }
+    }
+
+    return summary;
+  },
+
   async materializeAllCompaniesHorizon(): Promise<CompanyMaterializationSummary> {
     const companies = await companyRepository.listActive();
     const aggregate: CompanyMaterializationSummary = {

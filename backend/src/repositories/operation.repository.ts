@@ -23,6 +23,29 @@ import type {
   UpdateOperationInput,
 } from "../schemas/operation.schema";
 
+type PersistedOperationTolerances = {
+  earlyToleranceMinutes: number;
+  lateToleranceMinutes: number;
+  earlyToleranceSource: Operation["earlyToleranceSource"];
+  lateToleranceSource: Operation["lateToleranceSource"];
+};
+
+type PersistedOneTimeOperationInput = Omit<
+  CreateOneTimeOperationInput,
+  "earlyToleranceMinutes" | "lateToleranceMinutes"
+> &
+  PersistedOperationTolerances;
+
+type PersistedOperationUpdateInput = Omit<
+  UpdateOperationInput,
+  "earlyToleranceMinutes" | "lateToleranceMinutes"
+> & {
+  earlyToleranceMinutes?: number;
+  lateToleranceMinutes?: number;
+  earlyToleranceSource?: Operation["earlyToleranceSource"];
+  lateToleranceSource?: Operation["lateToleranceSource"];
+};
+
 const OPERATION_LIST_SORT_FIELDS: Record<string, string> = {
   serviceName: "s.name",
   serviceAddress: "s.address",
@@ -34,7 +57,7 @@ const OPERATION_LIST_SORT_FIELDS: Record<string, string> = {
 };
 
 export const operationRepository = {
-  async create(companyId: string, input: CreateOneTimeOperationInput): Promise<Operation> {
+  async create(companyId: string, input: PersistedOneTimeOperationInput): Promise<Operation> {
     const pool = getPool();
     const result = await pool
       .request()
@@ -44,16 +67,20 @@ export const operationRepository = {
       .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("earlyToleranceSource", sql.NVarChar(20), input.earlyToleranceSource)
+      .input("lateToleranceSource", sql.NVarChar(20), input.lateToleranceSource)
       .input("notes", sql.NVarChar(1000), null)
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
-          early_tolerance_minutes, late_tolerance_minutes, notes
+          early_tolerance_minutes, late_tolerance_minutes,
+          early_tolerance_source, late_tolerance_source, notes
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @serviceId, N'ONE_TIME', @scheduledStart, @scheduledEnd,
-          @earlyToleranceMinutes, @lateToleranceMinutes, @notes
+          @earlyToleranceMinutes, @lateToleranceMinutes,
+          @earlyToleranceSource, @lateToleranceSource, @notes
         )
       `);
 
@@ -66,6 +93,8 @@ export const operationRepository = {
       serviceId: string;
       earlyToleranceMinutes: number;
       lateToleranceMinutes: number;
+      earlyToleranceSource: Operation["earlyToleranceSource"];
+      lateToleranceSource: Operation["lateToleranceSource"];
     },
     transaction?: sql.Transaction,
   ): Promise<Operation> {
@@ -75,16 +104,20 @@ export const operationRepository = {
       .input("serviceId", sql.UniqueIdentifier, input.serviceId)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("earlyToleranceSource", sql.NVarChar(20), input.earlyToleranceSource)
+      .input("lateToleranceSource", sql.NVarChar(20), input.lateToleranceSource)
       .input("notes", sql.NVarChar(1000), null)
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
-          early_tolerance_minutes, late_tolerance_minutes, notes
+          early_tolerance_minutes, late_tolerance_minutes,
+          early_tolerance_source, late_tolerance_source, notes
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @serviceId, N'RECURRING', NULL, NULL,
-          @earlyToleranceMinutes, @lateToleranceMinutes, @notes
+          @earlyToleranceMinutes, @lateToleranceMinutes,
+          @earlyToleranceSource, @lateToleranceSource, @notes
         )
       `);
 
@@ -94,7 +127,7 @@ export const operationRepository = {
   async createInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    input: CreateOneTimeOperationInput,
+    input: PersistedOneTimeOperationInput,
   ): Promise<Operation> {
     const request = new sql.Request(transaction);
     const result = await request
@@ -104,16 +137,20 @@ export const operationRepository = {
       .input("scheduledEnd", sql.DateTime2, input.scheduledEnd ? new Date(input.scheduledEnd) : null)
       .input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes)
       .input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes)
+      .input("earlyToleranceSource", sql.NVarChar(20), input.earlyToleranceSource)
+      .input("lateToleranceSource", sql.NVarChar(20), input.lateToleranceSource)
       .input("notes", sql.NVarChar(1000), null)
       .query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
-          early_tolerance_minutes, late_tolerance_minutes, notes
+          early_tolerance_minutes, late_tolerance_minutes,
+          early_tolerance_source, late_tolerance_source, notes
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @serviceId, N'ONE_TIME', @scheduledStart, @scheduledEnd,
-          @earlyToleranceMinutes, @lateToleranceMinutes, @notes
+          @earlyToleranceMinutes, @lateToleranceMinutes,
+          @earlyToleranceSource, @lateToleranceSource, @notes
         )
       `);
 
@@ -175,7 +212,7 @@ export const operationRepository = {
   async createManyInTransaction(
     companyId: string,
     transaction: sql.Transaction,
-    inputs: CreateOneTimeOperationInput[],
+    inputs: PersistedOneTimeOperationInput[],
   ): Promise<Operation[]> {
     if (inputs.length === 0) {
       return [];
@@ -199,16 +236,27 @@ export const operationRepository = {
         );
         request.input(`earlyToleranceMinutes${index}`, sql.Int, input.earlyToleranceMinutes);
         request.input(`lateToleranceMinutes${index}`, sql.Int, input.lateToleranceMinutes);
+        request.input(
+          `earlyToleranceSource${index}`,
+          sql.NVarChar(20),
+          input.earlyToleranceSource,
+        );
+        request.input(
+          `lateToleranceSource${index}`,
+          sql.NVarChar(20),
+          input.lateToleranceSource,
+        );
         request.input(`notes${index}`, sql.NVarChar(1000), null);
         valueRows.push(
-          `(@companyId, @serviceId${index}, N'ONE_TIME', @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @notes${index})`,
+          `(@companyId, @serviceId${index}, N'ONE_TIME', @scheduledStart${index}, @scheduledEnd${index}, @earlyToleranceMinutes${index}, @lateToleranceMinutes${index}, @earlyToleranceSource${index}, @lateToleranceSource${index}, @notes${index})`,
         );
       });
 
       const result = await request.query(`
         INSERT INTO scheduled_operations (
           company_id, service_id, operation_kind, scheduled_start, scheduled_end,
-          early_tolerance_minutes, late_tolerance_minutes, notes
+          early_tolerance_minutes, late_tolerance_minutes,
+          early_tolerance_source, late_tolerance_source, notes
         )
         OUTPUT INSERTED.*
         VALUES ${valueRows.join(", ")}
@@ -220,6 +268,81 @@ export const operationRepository = {
     }
 
     return created;
+  },
+
+  async applyCompanyToleranceDefaultsInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    defaults: {
+      earlyToleranceMinutes?: number;
+      lateToleranceMinutes?: number;
+    },
+  ): Promise<void> {
+    const request = new sql.Request(transaction).input(
+      "companyId",
+      sql.UniqueIdentifier,
+      companyId,
+    );
+    const assignments: string[] = [];
+    const predicates: string[] = [];
+
+    if (defaults.earlyToleranceMinutes !== undefined) {
+      request.input("earlyToleranceMinutes", sql.Int, defaults.earlyToleranceMinutes);
+      assignments.push(
+        "early_tolerance_minutes = CASE WHEN early_tolerance_source = N'COMPANY_DEFAULT' THEN @earlyToleranceMinutes ELSE early_tolerance_minutes END",
+      );
+      predicates.push("early_tolerance_source = N'COMPANY_DEFAULT'");
+    }
+    if (defaults.lateToleranceMinutes !== undefined) {
+      request.input("lateToleranceMinutes", sql.Int, defaults.lateToleranceMinutes);
+      assignments.push(
+        "late_tolerance_minutes = CASE WHEN late_tolerance_source = N'COMPANY_DEFAULT' THEN @lateToleranceMinutes ELSE late_tolerance_minutes END",
+      );
+      predicates.push("late_tolerance_source = N'COMPANY_DEFAULT'");
+    }
+
+    if (assignments.length === 0) {
+      return;
+    }
+
+    await request.query(`
+      UPDATE scheduled_operations
+      SET ${assignments.join(", ")}, updated_at = SYSUTCDATETIME()
+      WHERE company_id = @companyId
+        AND (${predicates.join(" OR ")})
+    `);
+  },
+
+  async listRecurringIdsDependingOnCompanyTolerances(
+    companyId: string,
+    changed: { early: boolean; late: boolean },
+  ): Promise<string[]> {
+    if (!changed.early && !changed.late) {
+      return [];
+    }
+
+    const dependencyPredicates: string[] = [];
+    if (changed.early) {
+      dependencyPredicates.push("early_tolerance_source = N'COMPANY_DEFAULT'");
+    }
+    if (changed.late) {
+      dependencyPredicates.push("late_tolerance_source = N'COMPANY_DEFAULT'");
+    }
+
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT id
+        FROM scheduled_operations
+        WHERE company_id = @companyId
+          AND operation_kind = N'RECURRING'
+          AND status IN (N'SCHEDULED', N'IN_PROGRESS')
+          AND (${dependencyPredicates.join(" OR ")})
+        ORDER BY id
+      `);
+
+    return result.recordset.map((row) => String(row.id));
   },
 
   async findById(companyId: string, id: string): Promise<Operation | null> {
@@ -483,7 +606,7 @@ export const operationRepository = {
   async update(
     companyId: string,
     id: string,
-    input: UpdateOperationInput,
+    input: PersistedOperationUpdateInput,
     transaction?: sql.Transaction,
   ): Promise<Operation | null> {
     const request = transaction
@@ -513,10 +636,26 @@ export const operationRepository = {
       request.input("earlyToleranceMinutes", sql.Int, input.earlyToleranceMinutes);
       fields.push("early_tolerance_minutes = @earlyToleranceMinutes");
     }
+    if (input.earlyToleranceSource !== undefined) {
+      request.input(
+        "earlyToleranceSource",
+        sql.NVarChar(20),
+        input.earlyToleranceSource,
+      );
+      fields.push("early_tolerance_source = @earlyToleranceSource");
+    }
 
     if (input.lateToleranceMinutes !== undefined) {
       request.input("lateToleranceMinutes", sql.Int, input.lateToleranceMinutes);
       fields.push("late_tolerance_minutes = @lateToleranceMinutes");
+    }
+    if (input.lateToleranceSource !== undefined) {
+      request.input(
+        "lateToleranceSource",
+        sql.NVarChar(20),
+        input.lateToleranceSource,
+      );
+      fields.push("late_tolerance_source = @lateToleranceSource");
     }
 
     if (input.status !== undefined) {
@@ -736,10 +875,10 @@ export const operationRepository = {
         SELECT
           i.id,
           i.service_id,
-          i.scheduled_start,
-          i.scheduled_end,
-          i.early_tolerance_minutes,
-          i.late_tolerance_minutes,
+          ow.expected_start_at AS scheduled_start,
+          ow.expected_end_at AS scheduled_end,
+          ow.early_tolerance_minutes,
+          ow.late_tolerance_minutes,
           i.status,
           s.name AS service_name,
           s.address AS service_address,
@@ -753,10 +892,10 @@ export const operationRepository = {
          AND ie.cancelled_at IS NULL
         INNER JOIN operation_workdays ow
           ON ow.operation_id = i.id AND ow.company_id = i.company_id
-         AND @at >= DATEADD(MINUTE, -i.early_tolerance_minutes, ow.expected_start_at)
+         AND @at >= DATEADD(MINUTE, -ow.early_tolerance_minutes, ow.expected_start_at)
          AND @at < COALESCE(
            ow.expected_end_at,
-           DATEADD(MINUTE, i.late_tolerance_minutes, ow.expected_start_at)
+           DATEADD(MINUTE, ow.late_tolerance_minutes, ow.expected_start_at)
          )
          AND ow.work_date >= ie.valid_from
          AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
@@ -765,7 +904,7 @@ export const operationRepository = {
           AND i.operation_kind = N'ONE_TIME'
           AND i.status NOT IN ('COMPLETED', 'CANCELLED')
           AND s.active = 1
-        ORDER BY i.scheduled_start ASC
+        ORDER BY ow.expected_start_at ASC
       `);
 
     return result.recordset.map((row) => ({

@@ -5,6 +5,7 @@ import { datetimeLocalToIso } from "../utils/dates";
 const operationStatusSchema = z.enum(["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]);
 const operationKindSchema = z.enum(["ONE_TIME", "RECURRING"]);
 const scheduleSourceSchema = z.enum(["COMPANY", "CUSTOM"]);
+const toleranceSourceSchema = z.enum(["COMPANY_DEFAULT", "CUSTOM"]);
 
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -20,6 +21,8 @@ const operationSharedFields = {
   serviceId: z.string().uuid("Seleccioná un servicio"),
   earlyToleranceMinutes: z.number().int().min(0, "No puede ser negativa"),
   lateToleranceMinutes: z.number().int().min(0, "No puede ser negativa"),
+  earlyToleranceSource: toleranceSourceSchema,
+  lateToleranceSource: toleranceSourceSchema,
   status: operationStatusSchema.optional(),
 };
 

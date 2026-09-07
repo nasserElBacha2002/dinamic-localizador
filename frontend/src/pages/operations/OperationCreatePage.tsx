@@ -15,15 +15,13 @@ import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage } from "../../utils/errors";
 import { buildOperationCreateDefaultValues } from "../../utils/operation-create-defaults";
 
-function toCreatePayload(values: OperationFormValues, settingsLoaded: boolean): CreateOperationInput {
+function toCreatePayload(values: OperationFormValues): CreateOperationInput {
   const shared = {
     serviceId: values.serviceId,
-    ...(settingsLoaded
-      ? {
-          earlyToleranceMinutes: values.earlyToleranceMinutes,
-          lateToleranceMinutes: values.lateToleranceMinutes,
-        }
-      : {}),
+    earlyToleranceMinutes:
+      values.earlyToleranceSource === "CUSTOM" ? values.earlyToleranceMinutes : null,
+    lateToleranceMinutes:
+      values.lateToleranceSource === "CUSTOM" ? values.lateToleranceMinutes : null,
   };
 
   if (values.operationKind === "RECURRING") {
@@ -79,7 +77,7 @@ export function OperationCreatePage() {
     setErrorMessage(null);
 
     try {
-      await createMutation.mutateAsync(toCreatePayload(values, settingsLoaded));
+      await createMutation.mutateAsync(toCreatePayload(values));
       goBackToList();
     } catch (error) {
       setErrorMessage(getApiErrorMessage(error));

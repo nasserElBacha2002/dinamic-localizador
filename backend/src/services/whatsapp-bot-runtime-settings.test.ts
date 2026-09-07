@@ -116,7 +116,6 @@ describe("whatsapp bot runtime settings integration", () => {
       serviceAllowedRadiusMeters: 0,
       receivedAt: new Date("2026-07-05T15:31:00.000Z"),
       scheduledStart: new Date("2026-07-05T15:00:00.000Z"),
-      expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
       runtimeSettings: runtimeSettings(),

@@ -353,8 +353,8 @@ Para evitar que toda la evaluación dependa de un único estado, el resultado se
 | Estado | Descripción |
 |--------|-------------|
 | `EARLY` | Check-in antes del horario esperado (si aplica) |
-| `ON_TIME` | Check-in dentro de la ventana horaria configurada |
-| `LATE` | Check-in dentro de tolerancia de llegada tardía |
+| `ON_TIME` | Check-in exactamente en el horario esperado |
+| `LATE` | Check-in posterior al inicio, dentro de la tolerancia tardía |
 | `OUTSIDE_TIME_WINDOW` | Fuera de la franja horaria configurada |
 
 Errores operativos (no determinan ubicación/puntualidad):
@@ -928,9 +928,15 @@ Clasificación de puntualidad al recibir ubicación:
 | Estado | Regla |
 |--------|-------|
 | `EARLY` | Antes de `scheduled_start`, dentro de tolerancia previa |
-| `ON_TIME` | Desde `scheduled_start` hasta `scheduled_start + late_tolerance_minutes` de la operación |
-| `LATE` | Después del margen de puntualidad, dentro de tolerancia tardía |
+| `ON_TIME` | Exactamente en `scheduled_start` |
+| `LATE` | Después de `scheduled_start` y hasta `scheduled_start + late_tolerance_minutes`, inclusive |
 | `OUTSIDE_TIME_WINDOW` | Fuera de la ventana total |
+
+Las tolerancias efectivas de una operación usan source `CUSTOM` (incluido `0`)
+o `COMPANY_DEFAULT` para heredar los defaults actuales de la empresa. Los
+workdays guardan un snapshot efectivo al materializarse.
+`company_settings.late_grace_minutes` permanece sólo como contrato legacy para
+rolling deployments y no interviene en ninguna decisión temporal.
 
 ### Tipos de mensaje relevantes
 

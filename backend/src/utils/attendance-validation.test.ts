@@ -48,22 +48,22 @@ describe("evaluatePunctuality", () => {
 
   it("classifies early arrival", () => {
     const receivedAt = new Date("2026-07-31T11:50:00.000Z");
-    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, 15, expectedEnd);
+    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, expectedEnd);
     assert.equal(result.punctualityStatus, "EARLY");
     assert.equal(result.timeValidationStatus, "VALID");
   });
 
   it("classifies on time within late tolerance", () => {
     const receivedAt = new Date("2026-07-31T12:10:00.000Z");
-    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, 0, expectedEnd);
+    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, expectedEnd);
     assert.equal(result.punctualityStatus, "ON_TIME");
   });
 
-  it("classifies late after late tolerance and before end", () => {
-    const receivedAt = new Date("2026-07-31T14:41:51.000Z");
-    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, 15, expectedEnd);
-    assert.equal(result.punctualityStatus, "LATE");
-    assert.equal(result.timeValidationStatus, "VALID");
+  it("rejects arrival after late tolerance even before operation end", () => {
+    const receivedAt = new Date("2026-07-31T12:16:00.000Z");
+    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, expectedEnd);
+    assert.equal(result.punctualityStatus, "OUTSIDE_TIME_WINDOW");
+    assert.equal(result.timeValidationStatus, "REJECTED");
   });
 
   it("rejects at and after expected end", () => {
@@ -72,26 +72,20 @@ describe("evaluatePunctuality", () => {
       scheduledStart,
       15,
       15,
-      15,
       expectedEnd,
     );
     assert.equal(result.punctualityStatus, "OUTSIDE_TIME_WINDOW");
     assert.equal(result.timeValidationStatus, "REJECTED");
   });
 
-  it("ignores onTimeGraceMinutes in favor of lateTolerance for ON_TIME boundary", () => {
-    const receivedAt = new Date("2026-07-31T12:01:00.000Z");
-    const result = evaluatePunctuality(receivedAt, scheduledStart, 15, 15, 0, expectedEnd);
-    assert.equal(result.punctualityStatus, "ON_TIME");
-  });
 });
 
 describe("isWithinOperationWindow", () => {
-  it("accepts mid-shift when expected end is provided", () => {
+  it("rejects mid-shift after the arrival window", () => {
     const scheduledStart = new Date("2026-07-31T12:00:00.000Z");
     const expectedEnd = new Date("2026-07-31T20:00:00.000Z");
     const at = new Date("2026-07-31T14:41:51.000Z");
-    assert.equal(isWithinOperationWindow(at, scheduledStart, 15, 15, expectedEnd), true);
+    assert.equal(isWithinOperationWindow(at, scheduledStart, 15, 15, expectedEnd), false);
   });
 
   it("rejects too early timestamp", () => {
@@ -107,7 +101,6 @@ describe("combineAttendanceValidation", () => {
     const time = evaluatePunctuality(
       new Date("2026-07-31T20:00:00.000Z"),
       new Date("2026-07-31T12:00:00.000Z"),
-      15,
       15,
       15,
       new Date("2026-07-31T20:00:00.000Z"),

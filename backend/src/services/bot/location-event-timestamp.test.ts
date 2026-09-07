@@ -7,7 +7,6 @@ const runtimeSettings: BotRuntimeSettings = {
   companyId: "co-1",
   defaultRadiusMeters: 150,
   geofenceReviewMarginMeters: 30,
-  lateGraceMinutes: 15,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: false,
@@ -56,7 +55,7 @@ describe("location event timestamp for punctuality", () => {
     assert.equal(atLocation.validation.punctualityStatus, atSelection.validation.punctualityStatus);
   });
 
-  it("marks LATE when LOCATION arrives after late tolerance even if selection is later", () => {
+  it("rejects LOCATION received after the operation arrival window", () => {
     const scheduledStart = new Date("2026-08-11T12:00:00.000Z");
     const locationAt = new Date("2026-08-11T12:30:00.000Z"); // 30m late, tolerance 15
 
@@ -74,6 +73,7 @@ describe("location event timestamp for punctuality", () => {
       runtimeSettings,
     });
 
-    assert.equal(result.validation.punctualityStatus, "LATE");
+    assert.equal(result.validation.punctualityStatus, "OUTSIDE_TIME_WINDOW");
+    assert.equal(result.validation.validationStatus, "REJECTED");
   });
 });

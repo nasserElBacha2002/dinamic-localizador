@@ -138,6 +138,92 @@ describe("recurringWorkdayMaterializationService orchestration", () => {
     assert.ok([today, tomorrow].includes(first.rangeStart) || first.rangeEnd >= today);
   });
 
+  it("updates future workday snapshots from recurring operation tolerance overrides", async () => {
+    setupUnitTestEnv();
+    process.env.RECURRING_WORKDAY_HORIZON_DAYS = "8";
+
+    const today = getDateIsoInTimezone(new Date(), TIMEZONE);
+    const targetWorkDate = addDaysToDateIso(today, 7);
+    const jsDay = new Date(`${targetWorkDate}T12:00:00.000Z`).getUTCDay();
+    const enabledDay = WEEKDAYS[jsDay === 0 ? 6 : jsDay - 1]!;
+    const expectedStartAt = new Date(`${targetWorkDate}T12:00:00.000Z`);
+    const existing: OperationWorkday = {
+      id: "ow-existing",
+      companyId: COMPANY_ID,
+      operationId: OPERATION_ID,
+      workDate: targetWorkDate,
+      expectedStartAt: expectedStartAt.toISOString(),
+      expectedEndAt: new Date(expectedStartAt.getTime() + 9 * 60 * 60_000).toISOString(),
+      earlyToleranceMinutes: 60,
+      lateToleranceMinutes: 90,
+      scheduleVersion: 1,
+      scheduleSourceSnapshot: "CUSTOM",
+      scheduleTimezoneSnapshot: TIMEZONE,
+      status: "ACTIVE",
+      cancellationReason: null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    let updatedPayload: { earlyToleranceMinutes: number; lateToleranceMinutes: number } | null =
+      null;
+
+    mock.method(operationRepository, "findById", async () => ({
+      ...recurringOperation,
+      earlyToleranceMinutes: 10,
+      lateToleranceMinutes: 20,
+    }));
+    mock.method(operationScheduleRepository, "findByOperationId", async () => ({
+      ...operationSchedule,
+      days: buildWeekdays(enabledDay),
+    }));
+    mock.method(companyWorkScheduleRepository, "findByCompanyId", async () => null);
+    mock.method(operationWorkdayRepository, "listByOperationAndDateRange", async () => [existing]);
+    mock.method(operationWorkdayRepository, "isDuplicateKeyError", () => false);
+    mock.method(operationWorkdayRepository, "insert", async (_companyId, payload) => ({
+      ...existing,
+      id: `ow-${payload.workDate}`,
+      workDate: payload.workDate,
+      expectedStartAt: payload.expectedStartAt.toISOString(),
+      expectedEndAt: payload.expectedEndAt.toISOString(),
+      earlyToleranceMinutes: payload.earlyToleranceMinutes,
+      lateToleranceMinutes: payload.lateToleranceMinutes,
+    }));
+    mock.method(operationWorkdayRepository, "updateSnapshot", async (_companyId, _id, payload) => {
+      updatedPayload = {
+        earlyToleranceMinutes: payload.earlyToleranceMinutes,
+        lateToleranceMinutes: payload.lateToleranceMinutes,
+      };
+      return {
+        ...existing,
+        expectedStartAt: payload.expectedStartAt.toISOString(),
+        expectedEndAt: payload.expectedEndAt.toISOString(),
+        earlyToleranceMinutes: payload.earlyToleranceMinutes,
+        lateToleranceMinutes: payload.lateToleranceMinutes,
+      };
+    });
+    mock.method(operationEmployeeRepository, "listOverlappingForOperationInDateRange", async () => []);
+    mock.method(employeeWorkdayRepository, "listByOperationWorkdayIds", async () => []);
+    mock.method(employeeWorkdayRepository, "listAttendancePresenceForEmployeeWorkdayIds", async () => new Set());
+    mock.method(
+      employeeWorkdayAbsenceReconciliationService,
+      "reconcileEmployeeWorkdays",
+      emptyAbsenceReconciliation,
+    );
+
+    const { recurringWorkdayMaterializationService } = await import(
+      "./recurring-workday-materialization.service"
+    );
+    await recurringWorkdayMaterializationService.materializeOperationHorizon(
+      COMPANY_ID,
+      OPERATION_ID,
+    );
+
+    assert.deepEqual(updatedPayload, {
+      earlyToleranceMinutes: 10,
+      lateToleranceMinutes: 20,
+    });
+  });
+
   it("does not call findByWorkdayAndEmployee for each assignment/workday pair", async () => {
     setupUnitTestEnv();
     process.env.RECURRING_WORKDAY_HORIZON_DAYS = "1";

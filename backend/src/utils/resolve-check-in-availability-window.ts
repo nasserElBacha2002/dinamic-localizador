@@ -1,19 +1,18 @@
 import type { PunctualityStatus } from "../types/domain";
 
 /**
- * Check-in temporal policy (inclusive/exclusive edges):
+ * Channel-neutral check-in temporal policy (inclusive edges):
  *
  *   opensAt  = expectedStartAt - earlyToleranceMinutes
- *   closesAt = expectedEndAt   (or start + lateTolerance when end is missing)
+ *   closesAt = expectedStartAt + lateToleranceMinutes
  *
  *   now < opensAt              → unavailable (BEFORE_CHECK_IN_WINDOW)
- *   opensAt <= now < closesAt  → available
- *   now >= closesAt            → unavailable (AFTER_EXPECTED_END)
+ *   opensAt <= now <= closesAt → available
+ *   now > closesAt             → unavailable (AFTER_EXPECTED_END, legacy reason code)
  *
  * Punctuality when available:
- *   now < expectedStartAt                         → EARLY
- *   expectedStartAt <= now <= start + lateTol     → ON_TIME
- *   start + lateTol < now < closesAt              → LATE
+ *   now < expectedStartAt                     → EARLY
+ *   expectedStartAt <= now <= closesAt        → ON_TIME
  */
 
 export type CheckInWindowInput = {
@@ -27,7 +26,7 @@ export type CheckInWindowRejectionReason = "BEFORE_CHECK_IN_WINDOW" | "AFTER_EXP
 
 export type CheckInWindowEvaluation = {
   available: boolean;
-  punctuality: Extract<PunctualityStatus, "EARLY" | "ON_TIME" | "LATE"> | null;
+  punctuality: Extract<PunctualityStatus, "EARLY" | "ON_TIME"> | null;
   opensAt: Date;
   closesAt: Date;
   onTimeUntil: Date;
@@ -49,11 +48,7 @@ export const resolveCheckInWindowBounds = (
     expectedStartAt.getTime() + schedule.lateToleranceMinutes * 60_000,
   );
 
-  const endRaw = schedule.expectedEndAt;
-  const closesAt =
-    endRaw != null && String(endRaw).trim() !== ""
-      ? toDate(endRaw)
-      : onTimeUntil;
+  const closesAt = onTimeUntil;
 
   return { opensAt, closesAt, expectedStartAt, onTimeUntil };
 };
@@ -77,7 +72,7 @@ export const evaluateCheckInWindow = (
     };
   }
 
-  if (at >= closesAt) {
+  if (at > closesAt) {
     return {
       available: false,
       punctuality: null,
@@ -92,10 +87,8 @@ export const evaluateCheckInWindow = (
   let punctuality: CheckInWindowEvaluation["punctuality"];
   if (at < expectedStartAt) {
     punctuality = "EARLY";
-  } else if (at <= onTimeUntil) {
-    punctuality = "ON_TIME";
   } else {
-    punctuality = "LATE";
+    punctuality = "ON_TIME";
   }
 
   return {
@@ -110,7 +103,7 @@ export const evaluateCheckInWindow = (
 
 /**
  * Centralized check-in availability for bot listing and command revalidation.
- * Uses operation workday snapshot tolerances and expected end (not live schedule).
+ * Uses operation workday snapshot tolerances (not live company defaults).
  */
 export const isWithinCheckInAvailabilityWindow = (
   schedule: CheckInWindowInput,

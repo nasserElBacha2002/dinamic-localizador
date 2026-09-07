@@ -409,13 +409,12 @@ Antes de modificar, leer con cuidado:
 ```text
 BOT_DEFAULT_RADIUS_METERS=150
 BOT_GEOFENCE_REVIEW_MARGIN_METERS=30
-BOT_ON_TIME_GRACE_MINUTES=15
-BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES=15
 BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires
 BOT_SESSION_TTL_MINUTES=15
 ```
 
-(Overrides por `company_settings` donde aplique.)
+(Las tolerancias de llegada provienen de la operación/workday; overrides por
+`company_settings` donde aplique al resto de la configuración.)
 
 ## Apéndice C — Estado Git al auditar
 

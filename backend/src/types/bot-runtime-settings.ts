@@ -3,7 +3,6 @@ export interface BotRuntimeSettings {
   operationTimezone: string;
   defaultRadiusMeters: number;
   geofenceReviewMarginMeters: number;
-  lateGraceMinutes: number;
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
   /** Used by admin/manual correction flows; not applied to WhatsApp check-in/check-out validation yet. */

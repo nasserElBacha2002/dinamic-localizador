@@ -81,7 +81,7 @@ describe("operationService.create", () => {
     assert.equal(result.lateToleranceMinutes, 75);
   });
 
-  it("keeps explicit tolerances when provided", async () => {
+  it("keeps explicit zero tolerances over company defaults", async () => {
     setupUnitTestEnv();
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
@@ -110,13 +110,13 @@ describe("operationService.create", () => {
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
-      earlyToleranceMinutes: 10,
-      lateToleranceMinutes: 20,
+      earlyToleranceMinutes: 0,
+      lateToleranceMinutes: 0,
     });
 
     assert.equal(resolverCalls, 1);
-    assert.equal(result.earlyToleranceMinutes, 10);
-    assert.equal(result.lateToleranceMinutes, 20);
+    assert.equal(result.earlyToleranceMinutes, 0);
+    assert.equal(result.lateToleranceMinutes, 0);
   });
 
   it("rejects negative tolerances at schema validation layer", async () => {

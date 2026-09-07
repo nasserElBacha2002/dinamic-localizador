@@ -130,7 +130,6 @@ describe("companyOperationalDefaultsResolver", () => {
           companyId,
           defaultRadiusMeters: 180,
           operationTimezone: "America/Argentina/Buenos_Aires",
-          lateGraceMinutes: 15,
           earlyLeaveToleranceMinutes: 15,
           requireCheckoutLocation: true,
           allowManualAttendanceCorrections: true,

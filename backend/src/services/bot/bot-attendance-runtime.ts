@@ -48,7 +48,6 @@ export function buildCheckInValidation(input: {
     input.scheduledStart,
     input.earlyToleranceMinutes,
     input.lateToleranceMinutes,
-    input.runtimeSettings.lateGraceMinutes,
     input.expectedEndAt ?? null,
   );
 

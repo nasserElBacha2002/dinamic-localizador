@@ -5,6 +5,7 @@ import {
   isWithinCheckInAvailabilityWindow,
   resolveCheckInCandidateRange,
 } from "./resolve-check-in-availability-window";
+import { buildRecurringExpectedInstants } from "./recurring-workday-instant";
 
 describe("evaluateCheckInWindow policy", () => {
   const schedule = {
@@ -21,7 +22,7 @@ describe("evaluateCheckInWindow policy", () => {
     reason?: "BEFORE_CHECK_IN_WINDOW" | "AFTER_EXPECTED_END";
   }> = [
     {
-      at: "2026-07-31T11:44:59.999Z",
+      at: "2026-07-31T11:44:00.000Z",
       available: false,
       punctuality: null,
       reason: "BEFORE_CHECK_IN_WINDOW",
@@ -30,17 +31,14 @@ describe("evaluateCheckInWindow policy", () => {
     { at: "2026-07-31T11:59:59.999Z", available: true, punctuality: "EARLY" },
     { at: "2026-07-31T12:00:00.000Z", available: true, punctuality: "ON_TIME" },
     { at: "2026-07-31T12:15:00.000Z", available: true, punctuality: "ON_TIME" },
-    { at: "2026-07-31T12:15:00.001Z", available: true, punctuality: "LATE" },
-    { at: "2026-07-31T14:41:51.000Z", available: true, punctuality: "LATE" },
-    { at: "2026-07-31T19:59:59.999Z", available: true, punctuality: "LATE" },
     {
-      at: "2026-07-31T20:00:00.000Z",
+      at: "2026-07-31T12:16:00.000Z",
       available: false,
       punctuality: null,
       reason: "AFTER_EXPECTED_END",
     },
     {
-      at: "2026-07-31T20:00:00.001Z",
+      at: "2026-07-31T20:00:00.000Z",
       available: false,
       punctuality: null,
       reason: "AFTER_EXPECTED_END",
@@ -57,7 +55,7 @@ describe("evaluateCheckInWindow policy", () => {
     });
   }
 
-  it("falls back to start+lateTolerance when expectedEndAt is missing", () => {
+  it("uses start+lateTolerance when expectedEndAt is missing", () => {
     const evaluation = evaluateCheckInWindow(
       {
         expectedStartAt: "2026-07-31T12:00:00.000Z",
@@ -69,6 +67,76 @@ describe("evaluateCheckInWindow policy", () => {
     );
     assert.equal(evaluation.available, false);
     assert.equal(evaluation.rejectionReason, "AFTER_EXPECTED_END");
+  });
+
+  it("supports zero tolerances", () => {
+    const zeroSchedule = {
+      expectedStartAt: "2026-07-31T12:00:00.000Z",
+      expectedEndAt: "2026-07-31T20:00:00.000Z",
+      earlyToleranceMinutes: 0,
+      lateToleranceMinutes: 0,
+    };
+    assert.equal(
+      evaluateCheckInWindow(zeroSchedule, new Date("2026-07-31T12:00:00.000Z")).available,
+      true,
+    );
+    assert.equal(
+      evaluateCheckInWindow(zeroSchedule, new Date("2026-07-31T12:01:00.000Z")).available,
+      false,
+    );
+  });
+
+  it("handles an arrival window that crosses UTC midnight", () => {
+    const overnightSchedule = {
+      expectedStartAt: "2026-08-01T00:10:00.000Z",
+      expectedEndAt: "2026-08-01T08:00:00.000Z",
+      earlyToleranceMinutes: 20,
+      lateToleranceMinutes: 15,
+    };
+    assert.equal(
+      evaluateCheckInWindow(
+        overnightSchedule,
+        new Date("2026-07-31T23:50:00.000Z"),
+      ).punctuality,
+      "EARLY",
+    );
+    assert.equal(
+      evaluateCheckInWindow(
+        overnightSchedule,
+        new Date("2026-08-01T00:25:00.000Z"),
+      ).punctuality,
+      "ON_TIME",
+    );
+  });
+
+  it("applies the same tolerance to company-timezone instants", () => {
+    const { expectedStartAt, expectedEndAt } = buildRecurringExpectedInstants({
+      workDate: "2026-07-31",
+      startTime: "20:30",
+      endTime: "03:00",
+      timezone: "America/Argentina/Buenos_Aires",
+    });
+    const scheduleInCompanyTimezone = {
+      expectedStartAt,
+      expectedEndAt,
+      earlyToleranceMinutes: 30,
+      lateToleranceMinutes: 15,
+    };
+
+    assert.equal(
+      evaluateCheckInWindow(
+        scheduleInCompanyTimezone,
+        new Date(expectedStartAt.getTime() - 30 * 60_000),
+      ).available,
+      true,
+    );
+    assert.equal(
+      evaluateCheckInWindow(
+        scheduleInCompanyTimezone,
+        new Date(expectedStartAt.getTime() + 16 * 60_000),
+      ).available,
+      false,
+    );
   });
 });
 

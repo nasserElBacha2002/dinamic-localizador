@@ -99,7 +99,6 @@ const runtimeSettings = (companyId: string): BotRuntimeSettings => ({
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: 150,
   geofenceReviewMarginMeters: 30,
-  lateGraceMinutes: 15,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,

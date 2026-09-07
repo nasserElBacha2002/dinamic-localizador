@@ -14,7 +14,6 @@ export type CreateCompanyVisibleFieldKey =
   | "defaultOperationEndTime"
   | "defaultEarlyArrivalToleranceMinutes"
   | "defaultLateArrivalToleranceMinutes"
-  | "lateGraceMinutes"
   | "earlyLeaveToleranceMinutes"
   | "modules"
   | "ownerName"
@@ -31,7 +30,6 @@ export const CREATE_PLATFORM_COMPANY_FIELD_ORDER: CreateCompanyVisibleFieldKey[]
   "defaultOperationEndTime",
   "defaultEarlyArrivalToleranceMinutes",
   "defaultLateArrivalToleranceMinutes",
-  "lateGraceMinutes",
   "earlyLeaveToleranceMinutes",
   "modules",
   "ownerName",
@@ -45,7 +43,6 @@ const VISIBLE_SETTINGS_FIELDS = new Set<CompanySettingsFieldKey>([
   "defaultOperationEndTime",
   "defaultEarlyArrivalToleranceMinutes",
   "defaultLateArrivalToleranceMinutes",
-  "lateGraceMinutes",
   "earlyLeaveToleranceMinutes",
 ]);
 

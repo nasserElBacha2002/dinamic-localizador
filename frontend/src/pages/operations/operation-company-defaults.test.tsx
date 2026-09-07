@@ -62,7 +62,7 @@ afterEach(() => {
 });
 
 describe("buildOperationCreateDefaultValues", () => {
-  it("uses operation tolerances instead of WhatsApp tolerances", () => {
+  it("uses operation tolerances independently of the legacy grace field", () => {
     const settings = createMockCompanySettings({
       defaultEarlyArrivalToleranceMinutes: 15,
       defaultLateArrivalToleranceMinutes: 20,

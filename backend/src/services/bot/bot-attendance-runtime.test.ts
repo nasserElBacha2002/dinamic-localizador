@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { BotRuntimeSettings } from "../../types/bot-runtime-settings";
+import { evaluatePunctuality } from "../../utils/attendance-validation";
 import {
   buildCheckInValidation,
   buildCheckoutValidation,
@@ -12,7 +13,6 @@ const baseRuntimeSettings = (): BotRuntimeSettings => ({
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: 150,
   geofenceReviewMarginMeters: 30,
-  lateGraceMinutes: 15,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
@@ -66,8 +66,8 @@ describe("bot attendance runtime", () => {
     assert.equal(result.validation.validationStatus, "REJECTED");
   });
 
-  it("classifies late after lateTolerance regardless of lateGraceMinutes", () => {
-    const runtimeSettings = { ...baseRuntimeSettings(), lateGraceMinutes: 0 };
+  it("rejects check-in after the operation late tolerance", () => {
+    const runtimeSettings = baseRuntimeSettings();
     const result = buildCheckInValidation({
       employeeLatitude: serviceCoords.latitude,
       employeeLongitude: serviceCoords.longitude,
@@ -82,7 +82,37 @@ describe("bot attendance runtime", () => {
       runtimeSettings,
     });
 
-    assert.equal(result.validation.punctualityStatus, "LATE");
+    assert.equal(result.validation.punctualityStatus, "OUTSIDE_TIME_WINDOW");
+    assert.equal(result.validation.validationStatus, "REJECTED");
+  });
+
+  it("matches the channel-neutral policy for the same operation and timestamp", () => {
+    const receivedAt = new Date("2026-07-05T15:30:00.000Z");
+    const scheduledStart = new Date("2026-07-05T15:00:00.000Z");
+    const expectedEndAt = new Date("2026-07-05T23:00:00.000Z");
+    const internal = evaluatePunctuality(
+      receivedAt,
+      scheduledStart,
+      15,
+      30,
+      expectedEndAt,
+    );
+    const viaWhatsApp = buildCheckInValidation({
+      employeeLatitude: serviceCoords.latitude,
+      employeeLongitude: serviceCoords.longitude,
+      serviceLatitude: serviceCoords.latitude,
+      serviceLongitude: serviceCoords.longitude,
+      serviceAllowedRadiusMeters: 150,
+      receivedAt,
+      scheduledStart,
+      expectedEndAt,
+      earlyToleranceMinutes: 15,
+      lateToleranceMinutes: 30,
+      runtimeSettings: baseRuntimeSettings(),
+    });
+
+    assert.equal(viaWhatsApp.validation.punctualityStatus, internal.punctualityStatus);
+    assert.equal(viaWhatsApp.validation.validationStatus, internal.timeValidationStatus);
   });
 
   it("uses early leave tolerance for checkout classification", () => {

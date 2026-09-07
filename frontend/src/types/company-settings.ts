@@ -2,6 +2,7 @@ export interface CompanySettings {
   companyId: string;
   operationTimezone: string;
   defaultRadiusMeters: number;
+  /** @deprecated Compatibility field; arrival uses operation/workday tolerances. */
   lateGraceMinutes: number;
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
@@ -64,7 +65,6 @@ export interface CompanySettingsFormValues {
   defaultOperationEndTime: string;
   defaultEarlyArrivalToleranceMinutes: string;
   defaultLateArrivalToleranceMinutes: string;
-  lateGraceMinutes: string;
   earlyLeaveToleranceMinutes: string;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;

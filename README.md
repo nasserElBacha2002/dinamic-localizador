@@ -928,7 +928,7 @@ Clasificación de puntualidad al recibir ubicación:
 | Estado | Regla |
 |--------|-------|
 | `EARLY` | Antes de `scheduled_start`, dentro de tolerancia previa |
-| `ON_TIME` | Desde `scheduled_start` hasta `scheduled_start + BOT_ON_TIME_GRACE_MINUTES` (default 15 min) |
+| `ON_TIME` | Desde `scheduled_start` hasta `scheduled_start + late_tolerance_minutes` de la operación |
 | `LATE` | Después del margen de puntualidad, dentro de tolerancia tardía |
 | `OUTSIDE_TIME_WINDOW` | Fuera de la ventana total |
 

@@ -13,7 +13,6 @@ const runtimeSettings = (overrides: Partial<BotRuntimeSettings> = {}): BotRuntim
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: 50,
   geofenceReviewMarginMeters: 30,
-  lateGraceMinutes: 0,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
@@ -105,7 +104,7 @@ describe("whatsapp bot runtime settings integration", () => {
     assert.equal(loadCount, 1);
   });
 
-  it("marks check-in late after lateTolerance when lateGraceMinutes is zero", async () => {
+  it("rejects check-in after the operation late tolerance", async () => {
     setupUnitTestEnv();
     const { buildCheckInValidation } = await import("./bot/bot-attendance-runtime");
 
@@ -120,10 +119,11 @@ describe("whatsapp bot runtime settings integration", () => {
       expectedEndAt: new Date("2026-07-05T23:00:00.000Z"),
       earlyToleranceMinutes: 15,
       lateToleranceMinutes: 30,
-      runtimeSettings: runtimeSettings({ lateGraceMinutes: 0 }),
+      runtimeSettings: runtimeSettings(),
     });
 
-    assert.equal(result.validation.punctualityStatus, "LATE");
+    assert.equal(result.validation.punctualityStatus, "OUTSIDE_TIME_WINDOW");
+    assert.equal(result.validation.validationStatus, "REJECTED");
     assert.equal(result.effectiveRadiusMeters, 50);
   });
 

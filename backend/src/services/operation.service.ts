@@ -540,6 +540,11 @@ export const operationService = {
         (resolvedNextSource === "CUSTOM" &&
           nextDays &&
           !weeklySchedulesEqual(nextDays, schedule.days));
+      const toleranceChanged =
+        (input.earlyToleranceMinutes !== undefined &&
+          input.earlyToleranceMinutes !== current.earlyToleranceMinutes) ||
+        (input.lateToleranceMinutes !== undefined &&
+          input.lateToleranceMinutes !== current.lateToleranceMinutes);
 
       if (
         input.scheduleSource !== undefined ||
@@ -559,12 +564,12 @@ export const operationService = {
 
       await transaction.commit();
 
-      if (scheduleChanged) {
+      if (scheduleChanged || toleranceChanged) {
         await recurringWorkdaySyncService.runOperationSync(
           companyId,
           id,
           () => recurringWorkdayMaterializationService.materializeOperationHorizon(companyId, id),
-          "recurring schedule update",
+          toleranceChanged ? "recurring tolerance update" : "recurring schedule update",
         );
       }
 

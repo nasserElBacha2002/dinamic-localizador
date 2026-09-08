@@ -1,7 +1,9 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { BotSession, BotSessionState } from "../types/twilio.types";
-import { ACTIVE_BOT_SESSION_STATES_SQL } from "../utils/bot-session-states";
+import {
+  ACTIVE_BOT_SESSION_STATES_SQL,
+} from "../utils/bot-session-states";
 import {
   applyBotSessionScope,
   getBotSessionCreateFlags,
@@ -23,6 +25,12 @@ const isUniqueConstraintError = (error: unknown): boolean =>
   (error.message.includes("UX_bot_sessions_active_employee") ||
     error.message.includes("UX_bot_sessions_active_simulation") ||
     error.message.includes("unique index"));
+
+export type RecordFailedAttemptPersistenceResult =
+  | { kind: "applied"; session: BotSession }
+  | { kind: "idempotent_replay"; session: BotSession }
+  | { kind: "cas_conflict"; session: BotSession }
+  | { kind: "missing" };
 
 export const botSessionRepository = {
   async findValidActiveByPhone(
@@ -148,6 +156,26 @@ export const botSessionRepository = {
     return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
   },
 
+  async findById(
+    companyId: string,
+    sessionId: string,
+    scope?: BotSessionScope,
+  ): Promise<BotSession | null> {
+    const resolvedScope = resolveBotSessionScope(scope);
+    const request = getPool().request();
+    request.input("companyId", sql.UniqueIdentifier, companyId);
+    request.input("sessionId", sql.UniqueIdentifier, sessionId);
+    const scopeSql = applyBotSessionScope(request, resolvedScope);
+    const result = await request.query(`
+      SELECT TOP 1 *
+      FROM bot_sessions
+      WHERE id = @sessionId
+        AND company_id = @companyId
+        ${scopeSql}
+    `);
+    return mapRow(result.recordset[0] as Record<string, unknown> | undefined);
+  },
+
   async findLatestByPhone(
     companyId: string,
     phoneNumber: string,
@@ -183,7 +211,11 @@ export const botSessionRepository = {
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       UPDATE bot_sessions
-      SET state = 'EXPIRED', updated_at = SYSUTCDATETIME()
+      SET state = N'EXPIRED',
+          intent = NULL,
+          context_json = NULL,
+          session_version = session_version + 1,
+          updated_at = SYSUTCDATETIME()
       WHERE id = @sessionId
         AND company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
@@ -209,7 +241,11 @@ export const botSessionRepository = {
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       UPDATE bot_sessions
-      SET state = 'EXPIRED', updated_at = SYSUTCDATETIME()
+      SET state = N'EXPIRED',
+          intent = NULL,
+          context_json = NULL,
+          session_version = session_version + 1,
+          updated_at = SYSUTCDATETIME()
       WHERE company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at <= SYSUTCDATETIME()
@@ -236,7 +272,11 @@ export const botSessionRepository = {
     const scopeSql = applyBotSessionScope(request, resolvedScope);
     const result = await request.query(`
       UPDATE bot_sessions
-      SET state = 'CANCELLED', updated_at = SYSUTCDATETIME()
+      SET state = N'CANCELLED',
+          intent = NULL,
+          context_json = NULL,
+          session_version = session_version + 1,
+          updated_at = SYSUTCDATETIME()
       WHERE company_id = @companyId
         AND state IN ${ACTIVE_STATE_SQL}
         AND expires_at > SYSUTCDATETIME()
@@ -256,6 +296,7 @@ export const botSessionRepository = {
       attendanceRecordId?: string | null;
       phoneNumber: string;
       state: BotSessionState;
+      intent?: import("../types/twilio.types").BotSessionIntent | null;
       contextJson: string | null;
       expiresAt: Date;
     },
@@ -273,6 +314,7 @@ export const botSessionRepository = {
       .input("attendanceRecordId", sql.UniqueIdentifier, input.attendanceRecordId ?? null)
       .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
       .input("state", sql.NVarChar(40), input.state)
+      .input("intent", sql.NVarChar(40), input.intent ?? null)
       .input("contextJson", sql.NVarChar(sql.MAX), input.contextJson)
       .input("expiresAt", sql.DateTime2, input.expiresAt)
       .input("isSimulation", sql.Bit, createFlags.isSimulation ? 1 : 0)
@@ -280,13 +322,13 @@ export const botSessionRepository = {
       .query(`
         INSERT INTO bot_sessions (
           company_id, employee_id, operation_id, employee_workday_id, attendance_record_id,
-          phone_number, state, context_json, expires_at,
+          phone_number, state, intent, context_json, expires_at,
           is_simulation, simulation_session_id
         )
         OUTPUT INSERTED.*
         VALUES (
           @companyId, @employeeId, @operationId, @employeeWorkdayId, @attendanceRecordId,
-          @phoneNumber, @state, @contextJson, @expiresAt,
+          @phoneNumber, @state, @intent, @contextJson, @expiresAt,
           @isSimulation, @simulationSessionId
         )
       `);
@@ -302,8 +344,12 @@ export const botSessionRepository = {
       employeeWorkdayId?: string | null;
       attendanceRecordId?: string | null;
       state?: BotSessionState;
+      intent?: import("../types/twilio.types").BotSessionIntent | null;
       contextJson?: string | null;
+      failedAttempts?: number;
       expiresAt?: Date;
+      expectedVersion?: number;
+      expectedState?: BotSessionState;
     },
     transaction?: sql.Transaction,
     scope?: BotSessionScope,
@@ -335,9 +381,25 @@ export const botSessionRepository = {
       fields.push("state = @state");
     }
 
-    if (input.contextJson !== undefined) {
+    const terminalState =
+      input.state === "COMPLETED" ||
+      input.state === "CANCELLED" ||
+      input.state === "EXPIRED";
+    if (terminalState) {
+      fields.push("intent = NULL", "context_json = NULL");
+    } else if (input.intent !== undefined) {
+      request.input("intent", sql.NVarChar(40), input.intent);
+      fields.push("intent = @intent");
+    }
+
+    if (!terminalState && input.contextJson !== undefined) {
       request.input("contextJson", sql.NVarChar(sql.MAX), input.contextJson);
       fields.push("context_json = @contextJson");
+    }
+
+    if (input.failedAttempts !== undefined) {
+      request.input("failedAttempts", sql.Int, input.failedAttempts);
+      fields.push("failed_attempts = @failedAttempts");
     }
 
     if (input.expiresAt !== undefined) {
@@ -349,20 +411,23 @@ export const botSessionRepository = {
       return null;
     }
 
-    fields.push("updated_at = SYSUTCDATETIME()");
+    fields.push(
+      "session_version = session_version + 1",
+      "updated_at = SYSUTCDATETIME()",
+    );
 
     const activeStateGuard =
-      input.state === "WAITING_LOCATION" ||
-      input.state === "WAITING_OPERATION_SELECTION" ||
-      input.state === "WAITING_CHECKOUT_LOCATION" ||
-      input.state === "WAITING_CHECKOUT_OPERATION_SELECTION" ||
-      input.state === "WAITING_ABSENCE_TYPE" ||
-      input.state === "WAITING_ABSENCE_START_DATE" ||
-      input.state === "WAITING_ABSENCE_END_DATE" ||
-      input.state === "WAITING_ABSENCE_REASON" ||
-      input.state === "WAITING_ABSENCE_CONFIRMATION"
-        ? `AND state IN ${ACTIVE_STATE_SQL}`
-        : "";
+      input.state ? `AND state IN ${ACTIVE_STATE_SQL}` : "";
+    const expectedVersionGuard =
+      input.expectedVersion === undefined ? "" : "AND session_version = @expectedVersion";
+    const expectedStateGuard =
+      input.expectedState === undefined ? "" : "AND state = @expectedState";
+    if (input.expectedVersion !== undefined) {
+      request.input("expectedVersion", sql.BigInt, input.expectedVersion);
+    }
+    if (input.expectedState !== undefined) {
+      request.input("expectedState", sql.NVarChar(40), input.expectedState);
+    }
 
     const result = await request.query(`
       UPDATE bot_sessions
@@ -371,6 +436,8 @@ export const botSessionRepository = {
       WHERE id = @id
         AND company_id = @companyId
         ${activeStateGuard}
+        ${expectedVersionGuard}
+        ${expectedStateGuard}
         ${scopeSql}
     `);
 
@@ -379,6 +446,86 @@ export const botSessionRepository = {
     }
 
     return mapBotSessionRow(result.recordset[0] as Record<string, unknown>);
+  },
+
+  async recordFailedAttempt(input: {
+    companyId: string;
+    sessionId: string;
+    expectedVersion: number;
+    messageSid: string;
+    maxFailedAttempts: number;
+    expiresAt: Date;
+    scope?: BotSessionScope;
+  }): Promise<RecordFailedAttemptPersistenceResult> {
+    const scope = resolveBotSessionScope(input.scope);
+    const request = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("sessionId", sql.UniqueIdentifier, input.sessionId)
+      .input("expectedVersion", sql.BigInt, input.expectedVersion)
+      .input("messageSid", sql.NVarChar(100), input.messageSid)
+      .input("maxFailedAttempts", sql.Int, input.maxFailedAttempts)
+      .input("expiresAt", sql.DateTime2, input.expiresAt);
+    const scopeSql = applyBotSessionScope(request, scope);
+    const result = await request.query(`
+        UPDATE bot_sessions
+        SET failed_attempts = failed_attempts + 1,
+            state = CASE
+              WHEN failed_attempts + 1 >= @maxFailedAttempts THEN N'CANCELLED'
+              ELSE state
+            END,
+            intent = CASE
+              WHEN failed_attempts + 1 >= @maxFailedAttempts THEN NULL
+              ELSE intent
+            END,
+            context_json = CASE
+              WHEN failed_attempts + 1 >= @maxFailedAttempts THEN NULL
+              ELSE context_json
+            END,
+            expires_at = CASE
+              WHEN failed_attempts + 1 >= @maxFailedAttempts THEN expires_at
+              ELSE @expiresAt
+            END,
+            last_message_sid = @messageSid,
+            session_version = session_version + 1,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @sessionId
+          AND company_id = @companyId
+          AND state IN ${ACTIVE_STATE_SQL}
+          AND expires_at > SYSUTCDATETIME()
+          AND session_version = @expectedVersion
+          AND (last_message_sid IS NULL OR last_message_sid <> @messageSid)
+          ${scopeSql}
+      `);
+
+    const updated = mapRow(result.recordset[0] as Record<string, unknown> | undefined);
+    if (updated) {
+      return { kind: "applied", session: updated };
+    }
+
+    const currentRequest = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("sessionId", sql.UniqueIdentifier, input.sessionId)
+      .input("messageSid", sql.NVarChar(100), input.messageSid);
+    const currentScopeSql = applyBotSessionScope(currentRequest, scope);
+    const currentResult = await currentRequest.query(`
+        SELECT TOP 1 *
+        FROM bot_sessions
+        WHERE id = @sessionId
+          AND company_id = @companyId
+          ${currentScopeSql}
+      `);
+    const current = mapRow(
+      currentResult.recordset[0] as Record<string, unknown> | undefined,
+    );
+    if (!current) {
+      return { kind: "missing" };
+    }
+    return current.lastMessageSid === input.messageSid
+      ? { kind: "idempotent_replay", session: current }
+      : { kind: "cas_conflict", session: current };
   },
 
   isUniqueConstraintError,

@@ -1,4 +1,5 @@
 import type { CompanyModuleKey } from "../../constants/company-modules";
+import type { BotSessionMenuOptionKey } from "../../types/twilio.types";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,
@@ -10,15 +11,7 @@ import {
 } from "../whatsapp-module-gate";
 import { parseOperationSelection } from "../../utils/intent";
 
-export type BotMenuOptionKey =
-  | "check_in"
-  | "checkout"
-  | "absence"
-  | "workday"
-  | "upcoming_assignments"
-  | "confirm_attendance"
-  | "report_unavailability"
-  | "payroll_receipt";
+export type BotMenuOptionKey = BotSessionMenuOptionKey;
 
 export interface BotMenuOption {
   key: BotMenuOptionKey;
@@ -59,6 +52,21 @@ const MENU_OPTION_DEFINITIONS: Record<BotMenuOptionKey, Omit<BotMenuOption, "key
     label: "Consultar recibo de sueldo",
     hint: 'escribí "Mi recibo"',
   },
+};
+
+const MENU_OPTION_KEYS = Object.keys(MENU_OPTION_DEFINITIONS) as BotMenuOptionKey[];
+
+export const isBotMenuOptionKey = (value: unknown): value is BotMenuOptionKey =>
+  typeof value === "string" && MENU_OPTION_KEYS.includes(value as BotMenuOptionKey);
+
+export const resolveMenuSnapshot = (value: unknown): BotMenuOption[] | null => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+  if (!value.every(isBotMenuOptionKey) || new Set(value).size !== value.length) {
+    return null;
+  }
+  return value.map((key) => ({ key, ...MENU_OPTION_DEFINITIONS[key] }));
 };
 
 export const buildAvailableMenuOptions = (
@@ -117,15 +125,23 @@ export const resolveMenuNumberSelection = (
   return selected?.key ?? null;
 };
 
+export const resolveMenuSnapshotSelection = (
+  body: string,
+  options: readonly BotMenuOptionKey[],
+): BotMenuOptionKey | null => {
+  const selection = parseMenuNumberInput(body);
+  return selection === null ? null : (options[selection - 1] ?? null);
+};
+
 export const isNumericMenuInput = (body: string): boolean =>
   parseMenuNumberInput(body?.trim() ?? "") !== null;
 
 export const INVALID_MENU_SELECTION_PREFIX = "No encontré una opción con ese número.";
 
 export const buildInvalidMenuSelectionMessage = (
-  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+  snapshot: readonly BotMenuOptionKey[],
 ): string => {
-  const options = buildAvailableMenuOptions(moduleStates);
+  const options = resolveMenuSnapshot(snapshot) ?? [];
   const lines = formatMenuOptionsLines(options);
   return [INVALID_MENU_SELECTION_PREFIX, "", ...lines].join("\n");
 };

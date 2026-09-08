@@ -117,7 +117,7 @@ Conceptos centrales (producto actual):
 | Asistencia | `attendance_records` (+ reviews, checkout fields) |
 | Equipos | `work_teams`, `work_team_members`, batches de asignación |
 | Ausencias | `absence_requests`, balances, ledger, calendarios, adjuntos GCS |
-| Recibos | `payroll_receipts` / batches + notificaciones WhatsApp |
+| Recibos | `payroll_receipts` / batches + notificaciones, claims y reconciliación WhatsApp |
 | Bot session | `bot_sessions` (TTL configurable) |
 | Observabilidad WA | `whatsapp_*` (messages, flows, provider events, conversations) |
 | Alertas admin | outbox `whatsapp_admin_alert_notifications` + recipients |
@@ -161,7 +161,8 @@ Terminología dual documentada en `backend/src/types/operational-domain.ts` y `d
 3. Parse Zod body → `whatsappCompanyContextService.resolve` (empresa + empleado por teléfono).
 4. Claim idempotente inbound MessageSid (`whatsappWebhookEventRepository`).
 5. `whatsappBotService` → `whatsappRouterService.routeTextMessage` / location handlers.
-6. Sesión bot (`BOT_SESSION_TTL_MINUTES`); selección de workday si hay múltiples.
+6. Estado persistente en `bot_sessions` (`BOT_SESSION_TTL_MINUTES`), con menú
+   versionado, reintentos contextuales y selección de workday si hay múltiples.
 7. Ubicación real requerida; rechazo de forwarded location (alert admin posible).
 8. Geofence Haversine + radio servicio + `BOT_GEOFENCE_REVIEW_MARGIN_METERS` → VALID / PENDING_REVIEW / reject path.
 9. Ventana temporal común a todos los canales: abre en inicio menos tolerancia
@@ -419,7 +420,13 @@ BOT_DEFAULT_RADIUS_METERS=150
 BOT_GEOFENCE_REVIEW_MARGIN_METERS=30
 BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires
 BOT_SESSION_TTL_MINUTES=15
+CONVERSATION_MAX_FAILED_ATTEMPTS=3
 ```
+
+`bot_sessions.session_version` y `last_message_sid` cercan transiciones
+concurrentes entre instancias. Los intentos inválidos conservan el paso hasta el
+máximo configurado; el TTL conversacional es independiente de la retención
+histórica de mensajes WhatsApp.
 
 (Las tolerancias de llegada efectivas provienen del override explícito de la
 operación o del default actual de `company_settings`; el workday conserva el

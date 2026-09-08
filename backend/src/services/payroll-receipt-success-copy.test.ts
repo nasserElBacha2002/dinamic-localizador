@@ -17,7 +17,11 @@ const baseSession = {
   employeeId: "employee-1",
   phoneNumber: "+5491100000000",
   state: "WAITING_PAYROLL_RECEIPT_PERIOD",
+  intent: "PAYROLL_RECEIPT",
   contextJson: null,
+  failedAttempts: 0,
+  sessionVersion: 0,
+  lastMessageSid: null,
   expiresAt: new Date(Date.now() + 60_000).toISOString(),
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -60,7 +64,6 @@ describe("payroll receipt WhatsApp success copy", () => {
       message: "SHOULD_NOT_BE_SHOWN",
       deliveredCount: 2,
       totalCount: 2,
-      introSent: false,
     }));
 
     let respondedMessage: string | null = null;
@@ -98,7 +101,6 @@ describe("payroll receipt WhatsApp success copy", () => {
     mock.method(payrollReceiptPeriodQueryService, "deliverForPeriod", async () => ({
       kind: "not_found" as const,
       message: "No encontramos recibos de sueldo para el período 07/26.",
-      introSent: false,
     }));
 
     let respondedMessage: string | null = null;
@@ -114,9 +116,15 @@ describe("payroll receipt WhatsApp success copy", () => {
   });
 
   it("on invalid period: keeps validation message", async () => {
+    const { botSessionService } = await import("./bot-session.service");
     const { handleActivePayrollReceiptSession } = await import(
       "./whatsapp-router/payroll-receipt.handler"
     );
+    mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
+      kind: "retry" as const,
+      session: { ...session, failedAttempts: 1 },
+      attempt: 1,
+    }));
 
     let respondedMessage: string | null = null;
     const handlers = {

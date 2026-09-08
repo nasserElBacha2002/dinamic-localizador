@@ -10,6 +10,7 @@ import { getCheckInModuleBlockedMessage } from "../whatsapp-module-gate";
 import { logModuleBlocked } from "./module-session-gate";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../types/twilio.types";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 
 export const handleActiveCheckInTextSession = async (
   ctx: WhatsAppRouterContext,
@@ -29,8 +30,14 @@ export const handleActiveCheckInTextSession = async (
   }
 
   if (session.state === "WAITING_LOCATION") {
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: WAITING_LOCATION_TEXT_MESSAGE,
+    });
     return handlers.respond(ctx.companyId, {
-      message: WAITING_LOCATION_TEXT_MESSAGE,
+      message: retry.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,

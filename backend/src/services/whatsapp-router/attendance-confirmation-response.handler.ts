@@ -241,7 +241,7 @@ export const handleActiveAttendanceConfirmationResponseSession = async (
   const context = botSessionService.parseContext(session.contextJson);
   const operationId = resolveOperationIdFromSessionContext(context);
   if (!operationId || !ctx.employeeId) {
-    await botSessionService.completeSession(ctx.companyId, session.id);
+    await botSessionService.completeSession(ctx.companyId, session.id, undefined, session);
     return respond(ctx, handlers, AMBIGUOUS_REPLY_MESSAGE);
   }
 

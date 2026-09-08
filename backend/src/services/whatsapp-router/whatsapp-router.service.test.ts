@@ -16,9 +16,9 @@ import {
   WAITING_LOCATION_TEXT_MESSAGE,
 } from "../bot/bot-response.builder";
 import {
+  buildAvailableMenuOptions,
   buildGreetingMessage,
   NO_ACTIVE_FLOW_CANCEL_PREFIX,
-  VOLVER_ACTIVE_SESSION_MESSAGE,
 } from "../bot/bot-menu.builder";
 import { EXPIRED_SESSION_USER_MESSAGE } from "../../utils/bot-session-expiration";
 import { InvalidCoordinatesError } from "../../utils/haversine";
@@ -35,6 +35,7 @@ const enabledStates = () =>
     [COMPANY_MODULE_KEYS.ATTENDANCE, true],
     [COMPANY_MODULE_KEYS.OPERATIONS, true],
     [COMPANY_MODULE_KEYS.ABSENCES, true],
+    [COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, true],
     [COMPANY_MODULE_KEYS.REPORTS, true],
     [COMPANY_MODULE_KEYS.BOT_SIMULATOR, true],
   ]);
@@ -55,10 +56,12 @@ const buildSession = (
   attendanceRecordId: state === "WAITING_CHECKOUT_LOCATION" ? attendanceRecordId : null,
   phoneNumber: "+5491111111111",
   state,
+  intent: null,
   contextJson:
     state === "WAITING_CHECKOUT_OPERATION_SELECTION" || state === "WAITING_OPERATION_SELECTION"
       ? JSON.stringify({ operationOptions: [] })
       : null,
+  failedAttempts: 0,
   expiresAt: "2099-01-01T00:00:00.000Z",
   createdAt: "2026-01-01T00:00:00.000Z",
   updatedAt: "2026-01-01T00:00:00.000Z",
@@ -66,6 +69,16 @@ const buildSession = (
   lastMessageSid: null,
   ...overrides,
 });
+
+const buildMenuSession = (
+  moduleStates: ReturnType<typeof enabledStates> = enabledStates(),
+): BotSession =>
+  buildSession("WAITING_MENU_SELECTION", {
+    intent: "MENU",
+    contextJson: JSON.stringify({
+      menuOptions: buildAvailableMenuOptions(moduleStates).map((option) => option.key),
+    }),
+  });
 
 const baseContext = (overrides: Partial<WhatsAppRouterContext> = {}): WhatsAppRouterContext => ({
   companyId,
@@ -158,6 +171,21 @@ const prepareRouterUnitTest = async (): Promise<void> => {
   mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
   // Expired-confirmation path may inspect latest session; keep unit tests offline.
   mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
+  mock.method(botSessionService, "createMenuSelectionSession", async (company, input) =>
+    buildSession("WAITING_MENU_SELECTION", {
+      companyId: company,
+      employeeId: input.employeeId,
+      phoneNumber: input.phoneNumber,
+      intent: "MENU",
+      contextJson: JSON.stringify({ menuOptions: input.options }),
+    }),
+  );
+  mock.method(botSessionService, "cancelSession", async () => true);
+  mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
+    kind: "retry" as const,
+    session: { ...session, failedAttempts: session.failedAttempts + 1 },
+    attempt: session.failedAttempts + 1,
+  }));
 };
 
 describe("whatsappRouterService.routeTextMessage", () => {
@@ -492,7 +520,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(durableCalls, 0);
   });
 
-  it("does not durable-capture 1 when findConfirmationReplyTarget returns null (historical PENDING)", async () => {
+  it("does not execute an isolated number without menu context", async () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { handlers, calls } = createMockHandlers();
@@ -502,9 +530,10 @@ describe("whatsappRouterService.routeTextMessage", () => {
       handlers,
     );
 
-    // Without an open confirmation target, "1" is the numeric menu (llegada), not CONFIRMATION_EXPIRED.
+    // No active menu snapshot means a bare number cannot trigger attendance.
     assert.doesNotMatch(response, /ventana para confirmar/i);
-    assert.equal(calls.startCheckIn, 1);
+    assert.match(response, /Qué querés hacer/);
+    assert.equal(calls.startCheckIn, 0);
   });
 
   it("routeLocationMessage does not consult durable confirmation correlation", async () => {
@@ -600,7 +629,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     "WAITING_CHECKOUT_LOCATION",
     "WAITING_ABSENCE_TYPE",
   ] as const) {
-    it(`menu command during ${sessionState} does not cancel session`, async () => {
+    it(`menu command during ${sessionState} cancels the pending flow`, async () => {
       await prepareRouterUnitTest();
       const { whatsappRouterService } = await import("./whatsapp-router.service");
       const { botSessionService } = await import("../bot-session.service");
@@ -609,6 +638,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
       mock.method(botSessionService, "cancelSession", async () => {
         cancelled += 1;
+        return true;
       });
 
       const response = await whatsappRouterService.routeTextMessage(
@@ -619,9 +649,8 @@ describe("whatsappRouterService.routeTextMessage", () => {
         handlers,
       );
 
-      assert.match(response, /Tenés un flujo activo/);
       assert.match(response, /Marcar llegada/);
-      assert.equal(cancelled, 0);
+      assert.equal(cancelled, 1);
     });
   }
 
@@ -634,6 +663,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     mock.method(botSessionService, "cancelSession", async () => {
       cancelled += 1;
+      return true;
     });
 
     const response = await whatsappRouterService.routeTextMessage(
@@ -658,6 +688,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     mock.method(botSessionService, "cancelSession", async () => {
       cancelled += 1;
+      return true;
     });
 
     const response = await whatsappRouterService.routeTextMessage(
@@ -703,7 +734,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(calls.startCheckout, 0);
   });
 
-  it("returns safe volver message with active session", async () => {
+  it("cancels the active flow and returns the menu on volver", async () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
     const { botSessionService } = await import("../bot-session.service");
@@ -712,6 +743,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     mock.method(botSessionService, "cancelSession", async () => {
       cancelled += 1;
+      return true;
     });
 
     const response = await whatsappRouterService.routeTextMessage(
@@ -722,8 +754,8 @@ describe("whatsappRouterService.routeTextMessage", () => {
       handlers,
     );
 
-    assert.match(response, new RegExp(VOLVER_ACTIVE_SESSION_MESSAGE));
-    assert.equal(cancelled, 0);
+    assert.match(response, /Marcar llegada/);
+    assert.equal(cancelled, 1);
   });
 
   it("returns menu when volver is sent without active session", async () => {
@@ -773,6 +805,47 @@ describe("whatsappRouterService.routeTextMessage", () => {
     assert.equal(calls.startCheckIn, 0);
   });
 
+  it("switches explicitly from payroll period to arrival", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "quiero marcar llegada",
+        session: buildSession("WAITING_PAYROLL_RECEIPT_PERIOD", {
+          intent: "PAYROLL_RECEIPT",
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKIN_STARTED/);
+    assert.equal(calls.startCheckIn, 1);
+  });
+
+  it("cancels a location wait after the configured failed-attempt limit", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { botSessionService } = await import("../bot-session.service");
+    const { handlers } = createMockHandlers();
+    mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
+      kind: "max_attempts" as const,
+      session: { ...session, state: "CANCELLED" as const, failedAttempts: 3 },
+      attempt: 3,
+    }));
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "esto no es una ubicación",
+        session: buildSession("WAITING_LOCATION"),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /máximo de intentos/);
+  });
+
   it("routes active checkout operation selection to checkout handler", async () => {
     await prepareRouterUnitTest();
     const { whatsappRouterService } = await import("./whatsapp-router.service");
@@ -805,6 +878,35 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     assert.match(response, new RegExp(WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE));
     assert.equal(calls.startCheckout, 0);
+  });
+
+  it("uses a safely pending direct location after explicit checkout intent", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "terminé",
+        session: buildSession("WAITING_CHECKOUT_LOCATION", {
+          attendanceRecordId: null,
+          intent: "CHECK_OUT",
+          contextJson: JSON.stringify({
+            checkoutWithoutArrival: true,
+            pendingLocation: {
+              latitude: -34.6,
+              longitude: -58.4,
+              messageSid: "SM-PENDING-LOCATION",
+              receivedAt: "2026-09-08T18:00:00.000Z",
+            },
+          }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKOUT_LOCATION_OK/);
+    assert.equal(calls.processLocationCheckout, 1);
   });
 
   it("routes active absence session to absence handler", async () => {
@@ -1697,7 +1799,21 @@ describe("whatsappRouterService numeric menu selection", () => {
     const { handlers, calls } = createMockHandlers();
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "1" }),
+      baseContext({ body: "1", session: buildMenuSession() }),
+      handlers,
+    );
+
+    assert.match(response, /CHECKIN_STARTED/);
+    assert.equal(calls.startCheckIn, 1);
+  });
+
+  it("routes opción 1 against the active menu snapshot", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers, calls } = createMockHandlers();
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "opción 1", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1711,7 +1827,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     const { handlers, calls } = createMockHandlers();
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "2" }),
+      baseContext({ body: "2", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1733,7 +1849,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "3" }),
+      baseContext({ body: "3", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1750,7 +1866,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(employeeWorkdayService, "buildTodayWorkdayMessage", async () => "WORKDAY_OK");
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "4" }),
+      baseContext({ body: "4", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1766,7 +1882,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(employeeWorkdayService, "buildUpcomingAssignmentsMessage", async () => "UPCOMING_OK");
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "5" }),
+      baseContext({ body: "5", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1782,7 +1898,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(employeeWorkdayService, "listConfirmableAssignments", async () => []);
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "6" }),
+      baseContext({ body: "6", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1798,7 +1914,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(employeeWorkdayService, "listUnavailabilityAssignments", async () => []);
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "7" }),
+      baseContext({ body: "7", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1816,7 +1932,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(employeeWorkdayService, "buildTodayWorkdayMessage", async () => "WORKDAY_OK");
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "3", moduleStates: states }),
+      baseContext({ body: "3", moduleStates: states, session: buildMenuSession(states) }),
       handlers,
     );
 
@@ -1830,7 +1946,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     const { INVALID_MENU_SELECTION_PREFIX } = await import("../bot/bot-menu-options");
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "9" }),
+      baseContext({ body: "9", session: buildMenuSession() }),
       handlers,
     );
 
@@ -1883,7 +1999,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     states.set(COMPANY_MODULE_KEYS.OPERATIONS, false);
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "1", moduleStates: states }),
+      baseContext({ body: "1", moduleStates: states, session: buildMenuSession(states) }),
       handlers,
     );
 
@@ -1908,7 +2024,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "2", moduleStates: states }),
+      baseContext({ body: "2", moduleStates: states, session: buildMenuSession(states) }),
       handlers,
     );
 
@@ -1932,7 +2048,7 @@ describe("whatsappRouterService numeric menu selection", () => {
     mock.method(absenceBotService, "hasActiveAttendanceSession", () => false);
 
     const response = await whatsappRouterService.routeTextMessage(
-      baseContext({ body: "1", moduleStates: states }),
+      baseContext({ body: "1", moduleStates: states, session: buildMenuSession(states) }),
       handlers,
     );
 
@@ -1940,6 +2056,77 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.equal(absenceStarted, 1);
     assert.equal(calls.startCheckIn, 0);
     assert.equal(calls.startCheckout, 0);
+  });
+
+  it("replaces the snapshot instead of routing an option disabled after display", async () => {
+    await prepareRouterUnitTest();
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, false);
+    let replacementOptions: string[] = [];
+    mock.method(botSessionService, "createMenuSelectionSession", async (company, input) => {
+      replacementOptions = input.options;
+      return buildSession("WAITING_MENU_SELECTION", {
+        companyId: company,
+        intent: "MENU",
+        contextJson: JSON.stringify({ menuOptions: input.options }),
+      });
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "8", moduleStates: states, session: buildMenuSession() }),
+      handlers,
+    );
+
+    assert.doesNotMatch(response, /Consultar recibo de sueldo/);
+    assert.equal(replacementOptions.includes("payroll_receipt"), false);
+  });
+
+  it("keeps displayed numbering when modules are enabled after the snapshot", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const session = buildSession("WAITING_MENU_SELECTION", {
+      intent: "MENU",
+      contextJson: JSON.stringify({ menuOptions: ["check_in", "absence"] }),
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "9", session }),
+      handlers,
+    );
+
+    assert.match(response, /1\. Marcar llegada/);
+    assert.match(response, /2\. Pedir ausencia/);
+    assert.doesNotMatch(response, /Marcar salida/);
+  });
+
+  it("repairs an invalid snapshot without consuming a failed attempt", async () => {
+    await prepareRouterUnitTest();
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let failedAttempts = 0;
+    mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => {
+      failedAttempts += 1;
+      return { kind: "retry" as const, session, attempt: 1 };
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_MENU_SELECTION", {
+          intent: "MENU",
+          contextJson: JSON.stringify({ menuOptions: ["unknown", "unknown"] }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /¿Qué querés hacer\?/);
+    assert.equal(failedAttempts, 0);
   });
 
   it("keeps confirm attendance selection during WAITING_CONFIRM_ATTENDANCE_SELECTION", async () => {

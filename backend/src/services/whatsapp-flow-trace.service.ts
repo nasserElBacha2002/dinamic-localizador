@@ -10,6 +10,7 @@ import { attendanceNotificationRepository } from "../repositories/attendance-not
 import { operationAssignmentNotificationRepository } from "../repositories/operation-assignment-notification.repository";
 import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
 import { payrollReceiptNotificationRepository } from "../repositories/payroll-receipt-notification.repository";
+import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
 import { whatsappConversationRepository } from "../repositories/whatsapp-conversation.repository";
 import { whatsappFlowExecutionRepository } from "../repositories/whatsapp-flow-execution.repository";
 import { whatsappMessageRepository } from "../repositories/whatsapp-message.repository";
@@ -478,6 +479,9 @@ export const whatsappFlowTraceService = {
       providerMessageSid: input.providerMessageSid,
       providerStatus,
     });
+    await payrollReceiptQueryDeliveryRepository.confirmAcceptedByProviderMessageSid(
+      input.providerMessageSid,
+    );
   },
 
   async recordProviderStatus(input: {
@@ -518,16 +522,17 @@ export const whatsappFlowTraceService = {
       providerCreatedAt: input.providerTimestamp ?? null,
     });
 
-    if (!insertResult.created) {
-      return { created: false, messageId: message?.id ?? null };
-    }
-
     // Durable fallback: outbox rows store provider_message_sid even when
-    // whatsapp_messages.create failed after Twilio accepted the send.
+    // whatsapp_messages.create failed after Twilio accepted the send. Re-run
+    // idempotent projections even for duplicate provider events.
     await this.projectOutboxProviderStatusByMessageSid({
       providerMessageSid: input.providerMessageSid,
       providerStatus: input.providerStatus,
     });
+
+    if (!insertResult.created) {
+      return { created: false, messageId: message?.id ?? null };
+    }
 
     if (!message) {
       return { created: true, messageId: null };

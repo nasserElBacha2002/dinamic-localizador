@@ -18,6 +18,7 @@ import {
   buildCheckoutValidationWithoutLocation,
 } from "./bot-attendance-runtime";
 import { botSessionService } from "../bot-session.service";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 import {
   CheckoutCommandError,
   employeeWorkdayCheckoutCommand,
@@ -431,7 +432,12 @@ async function processLocationCheckoutWithoutArrival(input: {
       checkoutStatus: validation.checkoutStatus,
       extraWorkedMinutes: validation.extraWorkedMinutes,
     });
-    await botSessionService.completeSession(companyId, input.session.id);
+    await botSessionService.completeSession(
+      companyId,
+      input.session.id,
+      undefined,
+      input.session,
+    );
     return respond(companyId, {
       message: `${responseMessage}\n\n[Simulación] Se habría registrado el check-out sin llegada previa.`,
       employeeId: input.employeeId,
@@ -646,7 +652,12 @@ export async function processLocationCheckout(input: {
     }
 
     if (attendance.checkoutAt) {
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
       const checkoutTime = formatLocalTime(attendance.checkoutAt, getBotOperationTimezone());
       return respond(companyId, {
         message: `${DUPLICATE_CHECKOUT_MESSAGE}\nHora registrada: ${checkoutTime}.`,
@@ -705,7 +716,12 @@ export async function processLocationCheckout(input: {
         checkoutAt: eventAt.toISOString(),
       });
 
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
 
       return respond(companyId, {
         message: `${responseMessage}\n\n[Simulación] Se habría registrado el check-out.`,
@@ -1058,8 +1074,14 @@ export async function handleCheckoutOperationSelection(input: {
     const options = resolveWorkdayOptionsFromSessionContext(context) ?? [];
 
     if (!isValidWorkdaySelection(selection, options.length)) {
+      const retry = await recordInvalidContextualInput({
+        companyId,
+        session: input.session,
+        messageSid: input.messageSid,
+        retryMessage: INVALID_SELECTION_MESSAGE,
+      });
       return respond(companyId, {
-        message: INVALID_SELECTION_MESSAGE,
+        message: retry.message,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,

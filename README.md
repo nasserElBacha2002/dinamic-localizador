@@ -877,17 +877,24 @@ Duración configurable con:
 
 ```env
 BOT_SESSION_TTL_MINUTES=15
+CONVERSATION_MAX_FAILED_ATTEMPTS=3
 ```
 
 Reglas actuales:
 
 - `expires_at` se calcula en UTC al crear la sesión: `now UTC + BOT_SESSION_TTL_MINUTES`.
-- Una sesión es activa solo si `state` es `WAITING_LOCATION` o `WAITING_INVENTORY_SELECTION` y `expires_at > SYSUTCDATETIME()`.
+- `bot_sessions` es la única persistencia de estado conversacional y sobrevive reinicios y múltiples instancias.
+- Los estados activos incluyen menú, selección de jornada, ubicación de llegada/salida, ausencias, confirmaciones y período de recibo.
 - No existe cron en esta fase: la expiración es **perezosa** al consultar la sesión.
 - Si la sesión ya venció, se marca `EXPIRED`, no se devuelve como activa y no se reactiva.
-- Al seleccionar un inventario válido (`WAITING_INVENTORY_SELECTION` → `WAITING_LOCATION`) se renueva `expires_at`.
-- Mensajes inválidos, saludos o texto durante `WAITING_LOCATION` **no** renuevan el TTL.
+- Al seleccionar una jornada válida (`WAITING_OPERATION_SELECTION` → `WAITING_LOCATION`) se renueva `expires_at`.
+- Una entrada inválida conserva el paso, incrementa `failed_attempts` mediante compare-and-swap y renueva el TTL. Al alcanzar `CONVERSATION_MAX_FAILED_ATTEMPTS`, el flujo se cancela.
+- `session_version` y `last_message_sid` evitan aplicar dos veces una transición concurrente o reintentada.
+- Las opciones numéricas se resuelven contra el snapshot `menuOptions` de `WAITING_MENU_SELECTION`; un número aislado no ejecuta una acción.
+- `Cancelar`, `Volver`, `Menú`, `Empezar de nuevo` y `Reiniciar` abandonan el flujo pendiente de forma controlada.
 - Al iniciar un nuevo "Llegué", las sesiones vigentes previas pasan a `CANCELLED` y las vencidas pero aún activas por estado pasan a `EXPIRED`.
+- La entrega on-demand de recibos reclama cada documento antes de invocar Twilio. `PAYROLL_RECEIPT_QUERY_DELIVERY_LEASE_MS` permite recuperar únicamente claims vencidos que todavía no llegaron a `SEND_STARTED`; los envíos ambiguos quedan en `RECONCILIATION_REQUIRED` y no se reenvían automáticamente.
+- Un administrador de plataforma puede listar esos envíos por empresa en `GET /api/platform/companies/:companyId/whatsapp/payroll-query-deliveries/reconciliation-required` y resolverlos mediante `POST .../:deliveryId/reconcile`. La resolución exige versión esperada, `commandId`, motivo y evidencia del proveedor para `CONFIRMED_ACCEPTED`; `CONFIRMED_NOT_SENT` es la única acción que vuelve a habilitar un claim. La decisión y su auditoría se confirman en la misma transacción.
 - Solo puede existir una sesión activa por empleado (índice único filtrado en SQL Server).
 
 Mensaje al usuario cuando la sesión venció:
@@ -906,7 +913,7 @@ Escribí "Llegué" para comenzar nuevamente.
 UPDATE bot_sessions
 SET expires_at = DATEADD(MINUTE, -1, SYSUTCDATETIME())
 WHERE phone_number = '+5491112345678'
-  AND state IN ('WAITING_LOCATION', 'WAITING_INVENTORY_SELECTION');
+  AND state IN ('WAITING_LOCATION', 'WAITING_OPERATION_SELECTION');
 ```
 
 3. Enviar ubicación o selección: debe responder con el mensaje de vencimiento.

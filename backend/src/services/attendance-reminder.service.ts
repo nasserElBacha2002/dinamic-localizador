@@ -514,7 +514,11 @@ const sendReminderForCandidate = async (
       if (finalGate !== "ELIGIBLE") {
         if (preparedSession) {
           try {
-            await botSessionService.cancelSession(companyId, preparedSession.id);
+            await botSessionService.cancelSession(
+              companyId,
+              preparedSession.id,
+              preparedSession,
+            );
           } catch (cleanupError) {
             const cleanupErrorMessage =
               cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";
@@ -757,7 +761,11 @@ const sendReminderForCandidate = async (
   } catch (error) {
     if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && preparedSession) {
       try {
-        await botSessionService.cancelSession(companyId, preparedSession.id);
+        await botSessionService.cancelSession(
+          companyId,
+          preparedSession.id,
+          preparedSession,
+        );
       } catch (cleanupError) {
         const cleanupErrorMessage =
           cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";

@@ -124,7 +124,9 @@ describe("resolveMenuNumberSelection", () => {
 
 describe("buildInvalidMenuSelectionMessage", () => {
   it("includes prefix and dynamic numbered options", () => {
-    const message = buildInvalidMenuSelectionMessage(allEnabled());
+    const message = buildInvalidMenuSelectionMessage(
+      buildAvailableMenuOptions(allEnabled()).map((option) => option.key),
+    );
     assert.match(message, new RegExp(INVALID_MENU_SELECTION_PREFIX));
     assert.match(message, /1\. Marcar llegada/);
     assert.match(message, /8\. Consultar recibo de sueldo/);

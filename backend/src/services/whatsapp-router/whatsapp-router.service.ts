@@ -44,7 +44,7 @@ import {
   handleCheckoutLocation,
 } from "./checkout.handler";
 import { tryHandleGlobalCommand } from "./global-command.handler";
-import { handleMenuFallback, handleNumericMenuSelection } from "./menu.handler";
+import { handleActiveMenuSelection, handleMenuFallback } from "./menu.handler";
 import { respondIfActiveSessionModuleBlocked } from "./module-session-gate";
 import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler";
 import { handleWorkdayIntent } from "./workday.handler";
@@ -55,10 +55,24 @@ import {
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import {
   isAssignmentSelectionSessionState,
+  isMenuSessionState,
   isPayrollReceiptSessionState,
 } from "../../utils/bot-session-states";
+import { botSessionService } from "../bot-session.service";
+import type { BotIntent } from "../bot/bot-intent.parser";
+import { isExplicitIntentCompatibleWithSession } from "../../utils/bot-session-intent";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
+
+const isExplicitSwitchIntent = (intent: BotIntent): boolean =>
+  intent === "arrival" ||
+  intent === "checkout" ||
+  intent === "absence" ||
+  intent === "payroll_receipt" ||
+  intent === "workday" ||
+  intent === "upcoming_assignments" ||
+  intent === "confirm_attendance" ||
+  intent === "report_unavailability";
 
 export const whatsappRouterService = {
   async routeTextMessage(
@@ -102,6 +116,33 @@ export const whatsappRouterService = {
     }
 
     if (ctx.session) {
+      const explicitIntent = parseBotIntent({ body: ctx.body });
+      if (
+        isExplicitSwitchIntent(explicitIntent) &&
+        !isExplicitIntentCompatibleWithSession(explicitIntent, ctx.session.intent)
+      ) {
+        console.info("[whatsapp-bot] explicit conversation intent switch", {
+          companyId,
+          employeeId: ctx.employeeId,
+          sessionId: ctx.session.id,
+          previousState: ctx.session.state,
+          nextIntent: explicitIntent,
+          messageSid: ctx.payload.MessageSid,
+        });
+        await botSessionService.cancelSession(companyId, ctx.session.id, ctx.session);
+        return this.routeTextMessage(
+          { ...ctx, session: null, recentlyExpired: false },
+          handlers,
+        );
+      }
+
+      if (isMenuSessionState(ctx.session.state)) {
+        const menuResponse = await handleActiveMenuSelection(ctx, ctx.session, handlers);
+        if (menuResponse) {
+          return menuResponse;
+        }
+      }
+
       const checkInResponse = await handleActiveCheckInTextSession(ctx, ctx.session, handlers);
       if (checkInResponse) {
         return checkInResponse;
@@ -213,13 +254,6 @@ export const whatsappRouterService = {
         resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
         flowType: "SESSION_RESOLUTION",
       });
-    }
-
-    if (!ctx.session) {
-      const menuNumberResponse = await handleNumericMenuSelection(ctx, handlers);
-      if (menuNumberResponse) {
-        return menuNumberResponse;
-      }
     }
 
     if (intent === "menu") {

@@ -84,7 +84,13 @@ describe("phase6 bot flow behavioral characterization", () => {
   it("invalid checkout selection returns INVALID_SELECTION (I)", async () => {
     setupUnitTestEnv();
     const { handleCheckoutOperationSelection } = await import("./bot/checkout-attendance.flow");
+    const { botSessionService } = await import("./bot-session.service");
     const { runWithBotRuntimeContext } = await import("../utils/bot-runtime-context");
+    mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
+      kind: "retry" as const,
+      session: { ...session, failedAttempts: 1 },
+      attempt: 1,
+    }));
 
     const twiml = await runWithBotRuntimeContext(simulationContext, async () =>
       runWithBotRuntimeSettings(runtimeSettings(), async () =>
@@ -99,7 +105,11 @@ describe("phase6 bot flow behavioral characterization", () => {
             attendanceRecordId: null,
             phoneNumber: "+5491111111111",
             state: "WAITING_CHECKOUT_OPERATION_SELECTION",
+            intent: "CHECK_OUT",
             contextJson: JSON.stringify({ workdayOptions: [] }),
+            failedAttempts: 0,
+            sessionVersion: 0,
+            lastMessageSid: null,
             expiresAt: "2099-01-01T00:00:00.000Z",
             createdAt: "2026-07-05T15:00:00.000Z",
             updatedAt: "2026-07-05T15:00:00.000Z",

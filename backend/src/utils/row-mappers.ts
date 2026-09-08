@@ -304,7 +304,11 @@ export const mapBotSessionRow = (row: Record<string, unknown>) => ({
   attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
   phoneNumber: String(row.phone_number),
   state: String(row.state) as import("../types/twilio.types").BotSessionState,
+  intent: row.intent
+    ? (String(row.intent) as import("../types/twilio.types").BotSessionIntent)
+    : null,
   contextJson: row.context_json ? String(row.context_json) : null,
+  failedAttempts: Number(row.failed_attempts ?? 0),
   sessionVersion: Number(row.session_version ?? 0),
   lastMessageSid: row.last_message_sid ? String(row.last_message_sid) : null,
   expiresAt: toIsoString(row.expires_at as Date | string),

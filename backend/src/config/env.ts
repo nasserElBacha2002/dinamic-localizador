@@ -37,6 +37,7 @@ const envSchema = z
     RECURRING_WORKDAY_HORIZON_DAYS: z.coerce.number().int().positive().default(60),
     RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED: z.stringbool().default(true),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+    CONVERSATION_MAX_FAILED_ATTEMPTS: z.coerce.number().int().positive().max(20).default(3),
     BOT_OPERATION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
     BOT_DEFAULT_RADIUS_METERS: z.coerce.number().int().positive().default(150),
     BOT_GEOFENCE_REVIEW_MARGIN_METERS: z.coerce.number().int().nonnegative().default(30),
@@ -97,6 +98,7 @@ const envSchema = z
     PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(true),
     PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    PAYROLL_RECEIPT_QUERY_DELIVERY_LEASE_MS: z.coerce.number().int().positive().default(120_000),
     PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
     /** ONE_TIME assignment WhatsApp outbox worker (default off until Content SID is configured). */

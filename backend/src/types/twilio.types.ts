@@ -1,4 +1,5 @@
 export type BotSessionState =
+  | "WAITING_MENU_SELECTION"
   | "WAITING_LOCATION"
   | "WAITING_OPERATION_SELECTION"
   | "WAITING_CHECKOUT_LOCATION"
@@ -16,6 +17,24 @@ export type BotSessionState =
   | "CANCELLED"
   | "EXPIRED";
 
+export type BotSessionIntent =
+  | "MENU"
+  | "CHECK_IN"
+  | "CHECK_OUT"
+  | "PAYROLL_RECEIPT"
+  | "ABSENCE"
+  | "ASSIGNMENT_CONFIRMATION";
+
+export type BotSessionMenuOptionKey =
+  | "check_in"
+  | "checkout"
+  | "absence"
+  | "workday"
+  | "upcoming_assignments"
+  | "confirm_attendance"
+  | "report_unavailability"
+  | "payroll_receipt";
+
 export type WhatsAppMessageDirection = "INBOUND" | "OUTBOUND";
 export type WhatsAppMessageType = "TEXT" | "LOCATION" | "UNKNOWN" | "DOCUMENT";
 
@@ -28,7 +47,9 @@ export interface BotSession {
   attendanceRecordId: string | null;
   phoneNumber: string;
   state: BotSessionState;
+  intent: BotSessionIntent | null;
   contextJson: string | null;
+  failedAttempts: number;
   /** Optimistic fencing token (Phase 6.1); defaults to 0 when column absent in older DBs. */
   sessionVersion: number;
   lastMessageSid: string | null;
@@ -71,6 +92,8 @@ export interface PendingBotLocation {
 }
 
 export interface BotSessionContext {
+  /** Stable snapshot used to resolve numeric menu responses contextually. */
+  menuOptions?: BotSessionMenuOptionKey[];
   workdayOptions?: WorkdaySessionSelectionOption[];
   operationOptions?: OperationSelectionOption[];
   /** @deprecated Read compat — see legacy-operation-session-context.ts */

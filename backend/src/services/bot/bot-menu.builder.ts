@@ -27,6 +27,7 @@ export {
   isNumericMenuInput,
   parseMenuNumberInput,
   resolveMenuNumberSelection,
+  resolveMenuSnapshotSelection,
 } from "./bot-menu-options";
 export type { BotMenuOption, BotMenuOptionKey } from "./bot-menu-options";
 

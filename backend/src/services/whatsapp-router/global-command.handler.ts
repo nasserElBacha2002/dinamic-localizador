@@ -1,10 +1,9 @@
 import { botSessionService } from "../bot-session.service";
 import { GLOBAL_CANCEL_MESSAGE } from "../bot/bot-response.builder";
 import {
-  buildGreetingMessage,
+  buildAvailableMenuOptions,
   buildHelpMessage,
   buildNoActiveFlowCancelMessage,
-  buildVolverMessage,
 } from "../bot/bot-menu.builder";
 import {
   isGlobalBackCommand,
@@ -14,6 +13,7 @@ import {
 } from "../../utils/intent";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
+import { handleMenuFallback } from "./menu.handler";
 
 export const tryHandleGlobalCommand = async (
   ctx: WhatsAppRouterContext,
@@ -39,22 +39,40 @@ export const tryHandleGlobalCommand = async (
     }
 
     setLastDetectedIntent("greeting");
+    await botSessionService.createMenuSelectionSession(companyId, {
+      employeeId,
+      phoneNumber: phoneFrom,
+      options: buildAvailableMenuOptions(moduleStates).map((option) => option.key),
+    });
     return respond(buildNoActiveFlowCancelMessage(moduleStates));
   }
 
   if (isGlobalBackCommand(body)) {
+    if (session) {
+      await botSessionService.cancelSession(companyId, session.id);
+    }
     setLastDetectedIntent("greeting");
-    return respond(buildVolverMessage(moduleStates, Boolean(session)));
+    return handleMenuFallback({ ...ctx, session: null }, handlers);
   }
 
   if (isGlobalHelpCommand(body)) {
     setLastDetectedIntent("greeting");
+    if (!session) {
+      await botSessionService.createMenuSelectionSession(companyId, {
+        employeeId,
+        phoneNumber: phoneFrom,
+        options: buildAvailableMenuOptions(moduleStates).map((option) => option.key),
+      });
+    }
     return respond(buildHelpMessage(moduleStates, { hasActiveSession: Boolean(session) }));
   }
 
   if (isGlobalMenuCommand(body)) {
+    if (session) {
+      await botSessionService.cancelSession(companyId, session.id);
+    }
     setLastDetectedIntent("greeting");
-    return respond(buildGreetingMessage(moduleStates, { hasActiveSession: Boolean(session) }));
+    return handleMenuFallback({ ...ctx, session: null }, handlers);
   }
 
   return null;

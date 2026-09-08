@@ -1,12 +1,14 @@
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import {
+  buildAvailableMenuOptions,
   buildGreetingMessage,
   buildInvalidMenuSelectionMessage,
-  isNumericMenuInput,
-  resolveMenuNumberSelection,
+  resolveMenuSnapshotSelection,
   type BotMenuOptionKey,
 } from "../bot/bot-menu.builder";
+import { botSessionService } from "../bot-session.service";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
+import type { BotSession } from "../../types/twilio.types";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import { handleAbsenceIntent } from "./absence.handler";
 import {
@@ -18,12 +20,21 @@ import { handleCheckoutIntent } from "./checkout.handler";
 import { handleUpcomingAssignmentsIntent } from "./upcoming-assignments.handler";
 import { handleWorkdayIntent } from "./workday.handler";
 import { handlePayrollReceiptIntent } from "./payroll-receipt.handler";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 
 export const handleMenuFallback = async (
   ctx: WhatsAppRouterContext,
   handlers: WhatsAppRouterHandlers,
 ): Promise<string> => {
   setLastDetectedIntent("greeting");
+  const options = buildAvailableMenuOptions(ctx.moduleStates);
+  if (ctx.employeeId && options.length > 0) {
+    await botSessionService.createMenuSelectionSession(ctx.companyId, {
+      employeeId: ctx.employeeId,
+      phoneNumber: ctx.phoneFrom,
+      options: options.map((option) => option.key),
+    });
+  }
   return handlers.respond(ctx.companyId, {
     message: buildGreetingMessage(ctx.moduleStates),
     employeeId: ctx.employeeId,
@@ -59,18 +70,29 @@ const routeMenuOptionByKey = async (
   }
 };
 
-export const handleNumericMenuSelection = async (
+export const handleActiveMenuSelection = async (
   ctx: WhatsAppRouterContext,
+  session: BotSession,
   handlers: WhatsAppRouterHandlers,
 ): Promise<string | null> => {
-  if (!ctx.body || !isNumericMenuInput(ctx.body)) {
+  if (session.state !== "WAITING_MENU_SELECTION") {
     return null;
   }
 
-  const optionKey = resolveMenuNumberSelection(ctx.body, ctx.moduleStates);
+  const context = botSessionService.parseContext(session.contextJson);
+  const optionKey =
+    ctx.body && context.menuOptions
+      ? resolveMenuSnapshotSelection(ctx.body, context.menuOptions)
+      : null;
   if (!optionKey) {
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: buildInvalidMenuSelectionMessage(ctx.moduleStates),
+    });
     return handlers.respond(ctx.companyId, {
-      message: buildInvalidMenuSelectionMessage(ctx.moduleStates),
+      message: retry.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
@@ -79,5 +101,6 @@ export const handleNumericMenuSelection = async (
     });
   }
 
+  await botSessionService.cancelSession(ctx.companyId, session.id);
   return routeMenuOptionByKey(ctx, handlers, optionKey);
 };

@@ -1,7 +1,9 @@
+import { env } from "../config/env";
 import { formatPayrollReceiptPeriod } from "../utils/payroll-receipts/period-format";
 import { payrollReceiptRepository } from "../repositories/payroll-receipt.repository";
 import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
+import { payrollReceiptQueryAuthorizationService } from "./payroll-receipt-query-authorization.service";
 
 export type PayrollReceiptPeriodQueryResult =
   | {
@@ -31,6 +33,10 @@ export type PayrollReceiptPeriodQueryResult =
       message: string;
       deliveredCount: number;
       totalCount: number;
+    }
+  | {
+      kind: "unauthorized";
+      message: string;
     };
 
 const notFoundMessage = (year: number, month: number): string =>
@@ -66,6 +72,20 @@ export const payrollReceiptPeriodQueryService = {
     introAlreadySent?: boolean;
   }): Promise<PayrollReceiptPeriodQueryResult & { introSent: boolean }> {
     void input.introAlreadySent;
+    const authorizationInput = {
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      botSessionId: input.botSessionId,
+      phoneNumber: input.toPhoneNumber,
+    };
+    if (!(await payrollReceiptQueryAuthorizationService.isAuthorized(authorizationInput))) {
+      return {
+        kind: "unauthorized",
+        message: "No pudimos autorizar la consulta del recibo.",
+        introSent: false,
+      };
+    }
+
     const receipts = await payrollReceiptRepository.listActiveAssociated(
       input.companyId,
       input.employeeId,
@@ -107,6 +127,48 @@ export const payrollReceiptPeriodQueryService = {
         continue;
       }
 
+      const claim = await payrollReceiptQueryDeliveryRepository.claimForSend({
+        ...queryKey,
+        payrollReceiptId: receipt.id,
+        leaseMs: env.PAYROLL_RECEIPT_QUERY_DELIVERY_LEASE_MS,
+      });
+      if (!claim) {
+        console.info("[payroll-receipt-query] delivery claim not acquired", {
+          companyId: input.companyId,
+          botSessionId: input.botSessionId,
+          payrollReceiptId: receipt.id,
+          observedStatus: existing?.status ?? null,
+        });
+        if (
+          existing?.status === "SEND_STARTED" ||
+          existing?.status === "RECONCILIATION_REQUIRED"
+        ) {
+          sawPermanentFailure = true;
+        } else {
+          sawTemporaryFailure = true;
+        }
+        continue;
+      }
+
+      if (!(await payrollReceiptQueryAuthorizationService.isAuthorized(authorizationInput))) {
+        console.warn("[payroll-receipt-query] authorization revoked before send", {
+          companyId: input.companyId,
+          botSessionId: input.botSessionId,
+          payrollReceiptId: receipt.id,
+        });
+        await payrollReceiptQueryDeliveryRepository.markFailedBeforeSend({
+          ...queryKey,
+          payrollReceiptId: receipt.id,
+          processingToken: claim.processingToken,
+          processingVersion: claim.processingVersion,
+          errorCode: "AUTHORIZATION_REVOKED",
+          errorMessage: "Authorization changed before document send.",
+        });
+        sawPermanentFailure = true;
+        continue;
+      }
+
+      let sendStarted = false;
       const delivery = await payrollReceiptWhatsappDeliveryService.deliverReceipt({
         toPhoneNumber: input.toPhoneNumber,
         receipt,
@@ -114,32 +176,84 @@ export const payrollReceiptPeriodQueryService = {
         employeeId: input.employeeId,
         inboundMessageSid: input.inboundMessageSid ?? null,
         payrollReceiptId: receipt.id,
+        onSendStarted: async () => {
+          const marked = await payrollReceiptQueryDeliveryRepository.markSendStarted({
+            ...queryKey,
+            payrollReceiptId: receipt.id,
+            processingToken: claim.processingToken,
+            processingVersion: claim.processingVersion,
+          });
+          if (!marked) {
+            throw new Error("PAYROLL_QUERY_DELIVERY_CLAIM_LOST");
+          }
+          sendStarted = true;
+        },
       });
 
       if (delivery.kind === "send_accepted" || delivery.kind === "text_only") {
-        await payrollReceiptQueryDeliveryRepository.markAccepted({
+        const accepted = await payrollReceiptQueryDeliveryRepository.markAccepted({
           ...queryKey,
           payrollReceiptId: receipt.id,
+          processingToken: claim.processingToken,
+          processingVersion: claim.processingVersion,
           providerMessageSid: delivery.kind === "send_accepted" ? delivery.messageSid : null,
         });
-        deliveredCount += 1;
+        if (accepted) {
+          deliveredCount += 1;
+        } else {
+          console.error("[payroll-receipt-query] accepted send requires reconciliation", {
+            companyId: input.companyId,
+            botSessionId: input.botSessionId,
+            payrollReceiptId: receipt.id,
+          });
+          await payrollReceiptQueryDeliveryRepository.markReconciliationRequired({
+            ...queryKey,
+            payrollReceiptId: receipt.id,
+            processingToken: claim.processingToken,
+            processingVersion: claim.processingVersion,
+            errorCode: "ACCEPTANCE_PERSIST_FAILED",
+            errorMessage: "Provider accepted the send but the ledger could not be finalized.",
+          });
+          sawPermanentFailure = true;
+        }
         continue;
       }
 
-      await payrollReceiptQueryDeliveryRepository.markFailed({
-        ...queryKey,
-        payrollReceiptId: receipt.id,
-        errorCode: delivery.kind,
-        errorMessage: delivery.message,
-      });
+      if (sendStarted) {
+        console.warn("[payroll-receipt-query] ambiguous send requires reconciliation", {
+          companyId: input.companyId,
+          botSessionId: input.botSessionId,
+          payrollReceiptId: receipt.id,
+          errorCode: delivery.kind,
+        });
+        await payrollReceiptQueryDeliveryRepository.markReconciliationRequired({
+          ...queryKey,
+          payrollReceiptId: receipt.id,
+          processingToken: claim.processingToken,
+          processingVersion: claim.processingVersion,
+          errorCode: delivery.kind,
+          errorMessage: delivery.message,
+        });
+      } else {
+        await payrollReceiptQueryDeliveryRepository.markFailedBeforeSend({
+          ...queryKey,
+          payrollReceiptId: receipt.id,
+          processingToken: claim.processingToken,
+          processingVersion: claim.processingVersion,
+          errorCode: delivery.kind,
+          errorMessage: delivery.message,
+        });
+      }
 
-      if (delivery.kind === "unavailable_temporary") {
+      if (delivery.kind === "unavailable_temporary" && !sendStarted) {
         sawTemporaryFailure = true;
       } else {
         sawPermanentFailure = true;
       }
     }
 
+    const finalDeliveries = await payrollReceiptQueryDeliveryRepository.listForQuery(queryKey);
+    deliveredCount = finalDeliveries.filter((delivery) => delivery.status === "ACCEPTED").length;
     const totalCount = receipts.length;
 
     if (deliveredCount === totalCount) {

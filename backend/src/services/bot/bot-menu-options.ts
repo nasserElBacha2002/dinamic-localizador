@@ -1,4 +1,5 @@
 import type { CompanyModuleKey } from "../../constants/company-modules";
+import type { BotSessionMenuOptionKey } from "../../types/twilio.types";
 import {
   getAbsenceModuleBlockedMessage,
   getAssignmentConfirmationModuleBlockedMessage,
@@ -10,15 +11,7 @@ import {
 } from "../whatsapp-module-gate";
 import { parseOperationSelection } from "../../utils/intent";
 
-export type BotMenuOptionKey =
-  | "check_in"
-  | "checkout"
-  | "absence"
-  | "workday"
-  | "upcoming_assignments"
-  | "confirm_attendance"
-  | "report_unavailability"
-  | "payroll_receipt";
+export type BotMenuOptionKey = BotSessionMenuOptionKey;
 
 export interface BotMenuOption {
   key: BotMenuOptionKey;
@@ -115,6 +108,14 @@ export const resolveMenuNumberSelection = (
   const options = buildAvailableMenuOptions(moduleStates);
   const selected = options[selection - 1];
   return selected?.key ?? null;
+};
+
+export const resolveMenuSnapshotSelection = (
+  body: string,
+  options: readonly BotMenuOptionKey[],
+): BotMenuOptionKey | null => {
+  const selection = parseMenuNumberInput(body);
+  return selection === null ? null : (options[selection - 1] ?? null);
 };
 
 export const isNumericMenuInput = (body: string): boolean =>

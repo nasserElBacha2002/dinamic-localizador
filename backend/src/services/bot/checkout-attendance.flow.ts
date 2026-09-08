@@ -18,6 +18,7 @@ import {
   buildCheckoutValidationWithoutLocation,
 } from "./bot-attendance-runtime";
 import { botSessionService } from "../bot-session.service";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 import {
   CheckoutCommandError,
   employeeWorkdayCheckoutCommand,
@@ -1058,8 +1059,14 @@ export async function handleCheckoutOperationSelection(input: {
     const options = resolveWorkdayOptionsFromSessionContext(context) ?? [];
 
     if (!isValidWorkdaySelection(selection, options.length)) {
+      const retry = await recordInvalidContextualInput({
+        companyId,
+        session: input.session,
+        messageSid: input.messageSid,
+        retryMessage: INVALID_SELECTION_MESSAGE,
+      });
       return respond(companyId, {
-        message: INVALID_SELECTION_MESSAGE,
+        message: retry.message,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,

@@ -4,15 +4,34 @@ import { parseBotIntent } from "./bot-intent.parser";
 
 describe("parseBotIntent", () => {
   it("detects arrival intents", () => {
-    assert.equal(parseBotIntent({ body: "Llegué" }), "arrival");
-    assert.equal(parseBotIntent({ body: "llegue" }), "arrival");
-    assert.equal(parseBotIntent({ body: "Llegue" }), "arrival");
+    for (const body of [
+      "Llegué",
+      "llegue",
+      "ya llegué",
+      "estoy acá",
+      "estoy en el lugar",
+      "quiero marcar llegada",
+      "marcar ingreso",
+      "ingresé",
+    ]) {
+      assert.equal(parseBotIntent({ body }), "arrival", body);
+    }
   });
 
   it("detects checkout intents", () => {
-    assert.equal(parseBotIntent({ body: "Terminé" }), "checkout");
-    assert.equal(parseBotIntent({ body: "termine" }), "checkout");
-    assert.equal(parseBotIntent({ body: "Me voy" }), "checkout");
+    for (const body of [
+      "Terminé",
+      "termine",
+      "Me voy",
+      "salí",
+      "ya salí",
+      "ya me fui",
+      "quiero marcar salida",
+      "marcar salida",
+      "finalicé",
+    ]) {
+      assert.equal(parseBotIntent({ body }), "checkout", body);
+    }
   });
 
   it("detects absence intents", () => {
@@ -55,7 +74,9 @@ describe("parseBotIntent", () => {
   });
 
   it("detects operation numeric selection", () => {
-    assert.equal(parseBotIntent({ body: "2" }), "operation_selection");
+    for (const body of ["2", "2.", "opción 2", "la segunda"]) {
+      assert.equal(parseBotIntent({ body }), "operation_selection", body);
+    }
   });
 
   it("detects cancel intent", () => {
@@ -65,6 +86,7 @@ describe("parseBotIntent", () => {
 
   it("returns unknown for unsupported text", () => {
     assert.equal(parseBotIntent({ body: "texto random" }), "unknown");
+    assert.equal(parseBotIntent({ body: "no llegué" }), "unknown");
     assert.equal(parseBotIntent({ body: "" }), "unknown");
   });
 });

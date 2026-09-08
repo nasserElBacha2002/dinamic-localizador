@@ -15,6 +15,7 @@ import {
 } from "../whatsapp-module-gate";
 import { buildCheckInValidation } from "./bot-attendance-runtime";
 import { botSessionService } from "../bot-session.service";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 import { employeeWorkdayAttendanceCommand } from "../employee-workday-attendance.command";
 import { employeeWorkdayAvailabilityService } from "../employee-workday-availability.service";
 import {
@@ -469,8 +470,16 @@ export async function handleOperationSelection(input: {
     const options = resolveWorkdayOptionsFromSessionContext(context) ?? [];
 
     if (!isValidWorkdaySelection(selection, options.length)) {
+      const retry = input.messageSid
+        ? await recordInvalidContextualInput({
+            companyId,
+            session: input.session,
+            messageSid: input.messageSid,
+            retryMessage: INVALID_SELECTION_MESSAGE,
+          })
+        : { message: INVALID_SELECTION_MESSAGE };
       return respond(companyId, {
-        message: INVALID_SELECTION_MESSAGE,
+        message: retry.message,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,

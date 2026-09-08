@@ -1,6 +1,7 @@
 import type { BotSessionState } from "../types/twilio.types";
 
 export const ACTIVE_BOT_SESSION_STATES = [
+  "WAITING_MENU_SELECTION",
   "WAITING_LOCATION",
   "WAITING_OPERATION_SELECTION",
   "WAITING_CHECKOUT_LOCATION",
@@ -45,3 +46,6 @@ export const isPhysicalAttendanceSessionState = (state: BotSessionState): boolea
 
 export const isPayrollReceiptSessionState = (state: BotSessionState): boolean =>
   state === "WAITING_PAYROLL_RECEIPT_PERIOD";
+
+export const isMenuSessionState = (state: BotSessionState): boolean =>
+  state === "WAITING_MENU_SELECTION";

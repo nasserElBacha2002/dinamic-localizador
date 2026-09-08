@@ -10,6 +10,7 @@ import { isPayrollReceiptSessionState } from "../../utils/bot-session-states";
 import { logModuleBlocked } from "./module-session-gate";
 import type { BotSession, BotSessionContext } from "../../types/twilio.types";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 
 const ASK_PERIOD_MESSAGE =
   'Indicá el período del recibo que querés consultar en formato MM/YY.\n\nPor ejemplo: 07/26\n\nSi querés cancelar, escribí "Cancelar".';
@@ -115,8 +116,14 @@ export const handleActivePayrollReceiptSession = async (
   const parsed = parsePayrollReceiptPeriodMessage(ctx.body);
   if (parsed.kind === "not_a_period" || parsed.kind === "invalid_month" || parsed.kind === "invalid_year") {
     payrollReceiptMetrics.queryInvalidPeriod({ status: parsed.kind });
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: INVALID_PERIOD_MESSAGE,
+    });
     return handlers.respond(ctx.companyId, {
-      message: INVALID_PERIOD_MESSAGE,
+      message: retry.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
@@ -127,8 +134,14 @@ export const handleActivePayrollReceiptSession = async (
 
   if (parsed.kind === "ambiguous") {
     payrollReceiptMetrics.queryInvalidPeriod({ status: "ambiguous" });
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: INVALID_PERIOD_MESSAGE,
+    });
     return handlers.respond(ctx.companyId, {
-      message: "El período no es válido. Indicá mes y año en formato MM/YY, por ejemplo 07/26.",
+      message: retry.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,
@@ -163,6 +176,18 @@ export const handleActivePayrollReceiptSession = async (
     inboundMessageSid: ctx.payload.MessageSid ?? null,
     introAlreadySent: Boolean(samePeriodRetry && priorContext?.introSent),
   });
+
+  if (result.kind === "unauthorized") {
+    await botSessionService.cancelSession(ctx.companyId, session.id);
+    return handlers.respond(ctx.companyId, {
+      message: SAFE_ERROR_MESSAGE,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
+      flowType: "PAYROLL_RECEIPT_QUERY",
+    });
+  }
 
   if (result.kind === "not_found") {
     payrollReceiptMetrics.queryNotFound({

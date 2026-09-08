@@ -162,7 +162,7 @@ describeDatabaseIntegration("payroll multiple receipts sql", () => {
           id, company_id, employee_id, phone_number, state, expires_at
         )
         VALUES (
-          @id, @companyId, @employeeId, N'+5491100000099', N'WAITING_PAYROLL_RECEIPT_PERIOD',
+          @id, @companyId, @employeeId, N'+5491100000099', N'COMPLETED',
           DATEADD(hour, 1, SYSUTCDATETIME())
         )
       `);
@@ -293,6 +293,65 @@ describeDatabaseIntegration("payroll multiple receipts sql", () => {
           AND month = @month
       `);
     assert.equal(Number(count.recordset[0].c), 1);
+  });
+
+  it("allows only one concurrent send claim and fences its transitions", async () => {
+    const receiptId = await insertAssociated(checksumFor(`claim-${randomUUID()}`));
+    const sessionId = await insertBotSession();
+    const key = {
+      companyId,
+      botSessionId: sessionId,
+      employeeId,
+      year,
+      month,
+      payrollReceiptId: receiptId,
+    };
+    await payrollReceiptQueryDeliveryRepository.ensurePendingDeliveries({
+      ...key,
+      payrollReceiptIds: [receiptId],
+    });
+
+    const claims = await Promise.all([
+      payrollReceiptQueryDeliveryRepository.claimForSend({ ...key, leaseMs: 120_000 }),
+      payrollReceiptQueryDeliveryRepository.claimForSend({ ...key, leaseMs: 120_000 }),
+    ]);
+    const granted = claims.filter((claim) => claim !== null);
+    assert.equal(granted.length, 1);
+    const claim = granted[0]!;
+
+    assert.equal(
+      await payrollReceiptQueryDeliveryRepository.markSendStarted({
+        ...key,
+        processingToken: randomUUID(),
+        processingVersion: claim.processingVersion,
+      }),
+      false,
+    );
+    assert.equal(
+      await payrollReceiptQueryDeliveryRepository.markSendStarted({
+        ...key,
+        processingToken: claim.processingToken,
+        processingVersion: claim.processingVersion,
+      }),
+      true,
+    );
+    assert.equal(
+      await payrollReceiptQueryDeliveryRepository.claimForSend({ ...key, leaseMs: 120_000 }),
+      null,
+    );
+    assert.equal(
+      await payrollReceiptQueryDeliveryRepository.markReconciliationRequired({
+        ...key,
+        processingToken: claim.processingToken,
+        processingVersion: claim.processingVersion,
+        errorCode: "AMBIGUOUS_SEND",
+      }),
+      true,
+    );
+    assert.equal(
+      await payrollReceiptQueryDeliveryRepository.claimForSend({ ...key, leaseMs: 120_000 }),
+      null,
+    );
   });
 
   it("listForQuery isolates periods within the same bot session", async () => {

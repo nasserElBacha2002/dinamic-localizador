@@ -5,6 +5,13 @@ const CHECK_IN_INTENTS = [
   "check-in",
   "asistencia",
   "registrar llegada",
+  "ya llegue",
+  "estoy aca",
+  "estoy en el lugar",
+  "quiero marcar llegada",
+  "marcar llegada",
+  "marcar ingreso",
+  "ingrese",
 ] as const;
 
 const SIMPLE_GREETINGS = ["hola", "buen dia", "buenos dias", "buenas tardes", "buenas noches"] as const;
@@ -23,14 +30,18 @@ export const normalizeIntentText = (text: string): string =>
 // In-app bot copy prefers location-first attendance (share location without a prior command).
 const CHECKOUT_INTENTS = [
   "me voy",
+  "sali",
+  "ya sali",
+  "ya me fui",
+  "quiero marcar salida",
+  "marcar salida",
   "termine",
-  "terminé",
+  "ya termine",
   "finalice",
-  "finalicé",
   "salida",
 ] as const;
 
-const GLOBAL_MENU_COMMANDS = ["menu", "inicio"] as const;
+const GLOBAL_MENU_COMMANDS = ["menu", "inicio", "empezar de nuevo", "reiniciar"] as const;
 const GLOBAL_HELP_COMMANDS = ["ayuda", "help"] as const;
 // "salir" is a global cancel command (exits the active flow).
 // For checkout/departure, employees should use "Me voy", "Terminé", "Finalicé", or "Salida".
@@ -46,16 +57,12 @@ const matchesCommand = (body: string, commands: readonly string[]): boolean => {
 
 export const isCheckoutIntent = (body: string): boolean => {
   const normalized = normalizeIntentText(body);
-  return CHECKOUT_INTENTS.some(
-    (intent) => normalized === intent || normalized.includes(intent),
-  );
+  return CHECKOUT_INTENTS.some((intent) => normalized === intent);
 };
 
 export const isCheckInIntent = (body: string): boolean => {
   const normalized = normalizeIntentText(body);
-  return CHECK_IN_INTENTS.some(
-    (intent) => normalized === intent || normalized.includes(intent),
-  );
+  return CHECK_IN_INTENTS.some((intent) => normalized === intent);
 };
 
 export const isSimpleGreeting = (body: string): boolean => {
@@ -76,10 +83,17 @@ export const isGlobalBackCommand = (body: string): boolean => matchesCommand(bod
 
 export const parseOperationSelection = (body: string): number | null => {
   const normalized = normalizeIntentText(body);
-  if (!/^\d+$/.test(normalized)) {
-    return null;
+  if (normalized === "la primera" || normalized === "primera") {
+    return 1;
+  }
+  if (normalized === "la segunda" || normalized === "segunda") {
+    return 2;
   }
 
-  const value = Number.parseInt(normalized, 10);
+  const match = normalized.match(/^(?:opcion\s+)?(\d+)$/);
+  if (!match) {
+    return null;
+  }
+  const value = Number.parseInt(match[1]!, 10);
   return Number.isFinite(value) && value > 0 ? value : null;
 };

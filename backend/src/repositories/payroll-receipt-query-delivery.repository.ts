@@ -1,4 +1,5 @@
 import sql from "mssql";
+import { randomUUID } from "node:crypto";
 import { getPool } from "../database/connection";
 import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../utils/sql-server-errors";
 
@@ -6,7 +7,13 @@ import { getDuplicateKeyConstraint, isDuplicateKeyError } from "../utils/sql-ser
  * ACCEPTED = Twilio accepted messages.create for this receipt in this query.
  * Not a provider delivery-receipt callback. Retry skips ACCEPTED only.
  */
-export type PayrollReceiptQueryDeliveryStatus = "PENDING" | "ACCEPTED" | "FAILED";
+export type PayrollReceiptQueryDeliveryStatus =
+  | "PENDING"
+  | "PROCESSING"
+  | "SEND_STARTED"
+  | "ACCEPTED"
+  | "FAILED"
+  | "RECONCILIATION_REQUIRED";
 
 export type PayrollReceiptQueryDelivery = {
   id: string;
@@ -21,6 +28,11 @@ export type PayrollReceiptQueryDelivery = {
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   acceptedAt: string | null;
+  processingToken?: string | null;
+  processingVersion?: number;
+  processingExpiresAt?: string | null;
+  sendStartedAt?: string | null;
+  reconciliationRequiredAt?: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -31,6 +43,11 @@ export type PayrollReceiptQueryKey = {
   employeeId: string;
   year: number;
   month: number;
+};
+
+export type PayrollReceiptQueryDeliveryClaim = PayrollReceiptQueryDelivery & {
+  processingToken: string;
+  processingVersion: number;
 };
 
 const mapRow = (row: Record<string, unknown>): PayrollReceiptQueryDelivery => ({
@@ -46,6 +63,15 @@ const mapRow = (row: Record<string, unknown>): PayrollReceiptQueryDelivery => ({
   lastErrorCode: row.last_error_code ? String(row.last_error_code) : null,
   lastErrorMessage: row.last_error_message ? String(row.last_error_message) : null,
   acceptedAt: row.accepted_at ? new Date(String(row.accepted_at)).toISOString() : null,
+  processingToken: row.processing_token ? String(row.processing_token) : null,
+  processingVersion: Number(row.processing_version ?? 0),
+  processingExpiresAt: row.processing_expires_at
+    ? new Date(String(row.processing_expires_at)).toISOString()
+    : null,
+  sendStartedAt: row.send_started_at ? new Date(String(row.send_started_at)).toISOString() : null,
+  reconciliationRequiredAt: row.reconciliation_required_at
+    ? new Date(String(row.reconciliation_required_at)).toISOString()
+    : null,
   createdAt: new Date(String(row.created_at)).toISOString(),
   updatedAt: new Date(String(row.updated_at)).toISOString(),
 });
@@ -143,16 +169,12 @@ export const payrollReceiptQueryDeliveryRepository = {
     return (result.recordset as Record<string, unknown>[]).map(mapRow);
   },
 
-  async markAccepted(input: {
-    companyId: string;
-    botSessionId: string;
-    employeeId: string;
-    year: number;
-    month: number;
+  async claimForSend(input: PayrollReceiptQueryKey & {
     payrollReceiptId: string;
-    providerMessageSid?: string | null;
-  }): Promise<void> {
-    await getPool()
+    leaseMs: number;
+  }): Promise<PayrollReceiptQueryDeliveryClaim | null> {
+    const processingToken = randomUUID();
+    const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("botSessionId", sql.UniqueIdentifier, input.botSessionId)
@@ -160,6 +182,99 @@ export const payrollReceiptQueryDeliveryRepository = {
       .input("year", sql.Int, input.year)
       .input("month", sql.Int, input.month)
       .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
+      .input("processingToken", sql.UniqueIdentifier, processingToken)
+      .input("leaseMs", sql.Int, input.leaseMs)
+      .query(`
+        UPDATE whatsapp_payroll_receipt_query_deliveries WITH (UPDLOCK, ROWLOCK)
+        SET status = N'PROCESSING',
+            processing_token = @processingToken,
+            processing_version = processing_version + 1,
+            processing_expires_at = DATEADD(millisecond, @leaseMs, SYSUTCDATETIME()),
+            send_started_at = NULL,
+            reconciliation_required_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE company_id = @companyId
+          AND bot_session_id = @botSessionId
+          AND employee_id = @employeeId
+          AND year = @year
+          AND month = @month
+          AND payroll_receipt_id = @payrollReceiptId
+          AND (
+            status IN (N'PENDING', N'FAILED')
+            OR (
+              status = N'PROCESSING'
+              AND processing_expires_at < SYSUTCDATETIME()
+            )
+          )
+      `);
+
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) {
+      return null;
+    }
+    const mapped = mapRow(row);
+    if (!mapped.processingToken || mapped.processingVersion == null) {
+      throw new Error("PAYROLL_QUERY_DELIVERY_CLAIM_INVALID");
+    }
+    return mapped as PayrollReceiptQueryDeliveryClaim;
+  },
+
+  async markSendStarted(input: PayrollReceiptQueryKey & {
+    payrollReceiptId: string;
+    processingToken: string;
+    processingVersion: number;
+  }): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("botSessionId", sql.UniqueIdentifier, input.botSessionId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("year", sql.Int, input.year)
+      .input("month", sql.Int, input.month)
+      .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
+      .input("processingToken", sql.UniqueIdentifier, input.processingToken)
+      .input("processingVersion", sql.Int, input.processingVersion)
+      .query(`
+        UPDATE whatsapp_payroll_receipt_query_deliveries
+        SET status = N'SEND_STARTED',
+            send_started_at = SYSUTCDATETIME(),
+            processing_expires_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND bot_session_id = @botSessionId
+          AND employee_id = @employeeId
+          AND year = @year
+          AND month = @month
+          AND payroll_receipt_id = @payrollReceiptId
+          AND status = N'PROCESSING'
+          AND processing_token = @processingToken
+          AND processing_version = @processingVersion
+      `);
+    return Number(result.rowsAffected[0] ?? 0) === 1;
+  },
+
+  async markAccepted(input: {
+    companyId: string;
+    botSessionId: string;
+    employeeId: string;
+    year: number;
+    month: number;
+    payrollReceiptId: string;
+    processingToken: string;
+    processingVersion: number;
+    providerMessageSid?: string | null;
+  }): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("botSessionId", sql.UniqueIdentifier, input.botSessionId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("year", sql.Int, input.year)
+      .input("month", sql.Int, input.month)
+      .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
+      .input("processingToken", sql.UniqueIdentifier, input.processingToken)
+      .input("processingVersion", sql.Int, input.processingVersion)
       .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid ?? null)
       .query(`
         UPDATE whatsapp_payroll_receipt_query_deliveries
@@ -168,6 +283,7 @@ export const payrollReceiptQueryDeliveryRepository = {
             last_error_code = NULL,
             last_error_message = NULL,
             accepted_at = SYSUTCDATETIME(),
+            processing_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
           AND bot_session_id = @botSessionId
@@ -175,20 +291,26 @@ export const payrollReceiptQueryDeliveryRepository = {
           AND year = @year
           AND month = @month
           AND payroll_receipt_id = @payrollReceiptId
+          AND status = N'SEND_STARTED'
+          AND processing_token = @processingToken
+          AND processing_version = @processingVersion
       `);
+    return Number(result.rowsAffected[0] ?? 0) === 1;
   },
 
-  async markFailed(input: {
+  async markFailedBeforeSend(input: {
     companyId: string;
     botSessionId: string;
     employeeId: string;
     year: number;
     month: number;
     payrollReceiptId: string;
+    processingToken: string;
+    processingVersion: number;
     errorCode?: string | null;
     errorMessage?: string | null;
-  }): Promise<void> {
-    await getPool()
+  }): Promise<boolean> {
+    const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
       .input("botSessionId", sql.UniqueIdentifier, input.botSessionId)
@@ -196,6 +318,8 @@ export const payrollReceiptQueryDeliveryRepository = {
       .input("year", sql.Int, input.year)
       .input("month", sql.Int, input.month)
       .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
+      .input("processingToken", sql.UniqueIdentifier, input.processingToken)
+      .input("processingVersion", sql.Int, input.processingVersion)
       .input("errorCode", sql.NVarChar(80), input.errorCode ?? null)
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
       .query(`
@@ -203,6 +327,7 @@ export const payrollReceiptQueryDeliveryRepository = {
         SET status = N'FAILED',
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
+            processing_expires_at = NULL,
             updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
           AND bot_session_id = @botSessionId
@@ -210,7 +335,50 @@ export const payrollReceiptQueryDeliveryRepository = {
           AND year = @year
           AND month = @month
           AND payroll_receipt_id = @payrollReceiptId
-          AND status <> N'ACCEPTED'
+          AND status = N'PROCESSING'
+          AND processing_token = @processingToken
+          AND processing_version = @processingVersion
       `);
+    return Number(result.rowsAffected[0] ?? 0) === 1;
+  },
+
+  async markReconciliationRequired(input: PayrollReceiptQueryKey & {
+    payrollReceiptId: string;
+    processingToken: string;
+    processingVersion: number;
+    errorCode?: string | null;
+    errorMessage?: string | null;
+  }): Promise<boolean> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("botSessionId", sql.UniqueIdentifier, input.botSessionId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("year", sql.Int, input.year)
+      .input("month", sql.Int, input.month)
+      .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
+      .input("processingToken", sql.UniqueIdentifier, input.processingToken)
+      .input("processingVersion", sql.Int, input.processingVersion)
+      .input("errorCode", sql.NVarChar(80), input.errorCode ?? null)
+      .input("errorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
+      .query(`
+        UPDATE whatsapp_payroll_receipt_query_deliveries
+        SET status = N'RECONCILIATION_REQUIRED',
+            last_error_code = @errorCode,
+            last_error_message = @errorMessage,
+            reconciliation_required_at = SYSUTCDATETIME(),
+            processing_expires_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE company_id = @companyId
+          AND bot_session_id = @botSessionId
+          AND employee_id = @employeeId
+          AND year = @year
+          AND month = @month
+          AND payroll_receipt_id = @payrollReceiptId
+          AND status = N'SEND_STARTED'
+          AND processing_token = @processingToken
+          AND processing_version = @processingVersion
+      `);
+    return Number(result.rowsAffected[0] ?? 0) === 1;
   },
 };

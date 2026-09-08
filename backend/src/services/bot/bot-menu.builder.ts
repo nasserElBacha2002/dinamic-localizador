@@ -17,7 +17,9 @@ import {
 import {
   buildAvailableMenuOptions,
   formatMenuOptionsLines,
+  resolveMenuSnapshot,
 } from "./bot-menu-options";
+import type { BotSessionMenuOptionKey } from "../../types/twilio.types";
 
 export {
   buildAvailableMenuOptions,
@@ -27,6 +29,7 @@ export {
   isNumericMenuInput,
   parseMenuNumberInput,
   resolveMenuNumberSelection,
+  resolveMenuSnapshot,
   resolveMenuSnapshotSelection,
 } from "./bot-menu-options";
 export type { BotMenuOption, BotMenuOptionKey } from "./bot-menu-options";
@@ -44,7 +47,17 @@ export function buildGreetingMessage(
   options?: { hasActiveSession?: boolean },
 ): string {
   const menuOptions = buildAvailableMenuOptions(moduleStates);
+  return buildGreetingMessageFromSnapshot(
+    menuOptions.map((option) => option.key),
+    options,
+  );
+}
 
+export function buildGreetingMessageFromSnapshot(
+  snapshot: readonly BotSessionMenuOptionKey[],
+  options?: { hasActiveSession?: boolean },
+): string {
+  const menuOptions = resolveMenuSnapshot(snapshot) ?? [];
   if (menuOptions.length === 0) {
     return NO_WHATSAPP_OPTIONS_MESSAGE;
   }

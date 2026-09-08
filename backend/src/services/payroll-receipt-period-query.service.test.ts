@@ -5,7 +5,6 @@ import { payrollReceiptRepository } from "../repositories/payroll-receipt.reposi
 import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
 import { payrollReceiptPeriodQueryService } from "./payroll-receipt-period-query.service";
-import { payrollReceiptQueryAuthorizationService } from "./payroll-receipt-query-authorization.service";
 import { runWithBotRuntimeContext } from "../utils/bot-runtime-context";
 
 const COMPANY_ID = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -77,7 +76,9 @@ describe("payrollReceiptPeriodQueryService", () => {
 
   beforeEach(() => {
     restores.push(
-      stub(payrollReceiptQueryAuthorizationService, "isAuthorized", async () => true),
+      stub(payrollReceiptRepository, "findAuthorizedActiveAssociatedForSend", async (input) =>
+        receipt(input.payrollReceiptId, "2026-07-01T00:00:00.000Z", input.year, input.month),
+      ),
       stub(payrollReceiptQueryDeliveryRepository, "claimForSend", async (input) => ({
         id: input.payrollReceiptId,
         companyId: input.companyId,
@@ -276,15 +277,29 @@ describe("payrollReceiptPeriodQueryService", () => {
     assert.equal(second.kind, "failed");
   });
 
-  it("does not query or send when sensitive-flow authorization fails", async () => {
-    let receiptQueries = 0;
+  it("does not send when per-receipt authorization fails", async () => {
+    const a = receipt("13111111-1111-4111-8111-111111111111", "2026-07-01T10:00:00.000Z");
     let sends = 0;
     restores.push(
-      stub(payrollReceiptQueryAuthorizationService, "isAuthorized", async () => false),
-      stub(payrollReceiptRepository, "listActiveAssociated", async () => {
-        receiptQueries += 1;
-        return [];
-      }),
+      stub(payrollReceiptRepository, "listActiveAssociated", async () => [a]),
+      stub(payrollReceiptRepository, "findAuthorizedActiveAssociatedForSend", async () => null),
+      stub(payrollReceiptQueryDeliveryRepository, "ensurePendingDeliveries", async () => undefined),
+      stub(payrollReceiptQueryDeliveryRepository, "listForQuery", async () => [{
+        id: a.id,
+        companyId: COMPANY_ID,
+        botSessionId: SESSION_ID,
+        payrollReceiptId: a.id,
+        employeeId: EMPLOYEE_ID,
+        year: 2026,
+        month: 7,
+        status: "PENDING",
+        providerMessageSid: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        acceptedAt: null,
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+      }]),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async () => {
         sends += 1;
         return { kind: "text_only" as const, message: "unexpected" };
@@ -300,8 +315,7 @@ describe("payrollReceiptPeriodQueryService", () => {
       month: 7,
     });
 
-    assert.equal(result.kind, "unauthorized");
-    assert.equal(receiptQueries, 0);
+    assert.equal(result.kind, "failed");
     assert.equal(sends, 0);
   });
 
@@ -361,6 +375,69 @@ describe("payrollReceiptPeriodQueryService", () => {
       assert.equal(result.totalCount, 3);
       assert.equal(result.message, "");
       assert.deepEqual(sendOrder, [a.id, b.id, c.id]);
+    });
+  });
+
+  it("stops before a later receipt when authorization is revoked between sends", async () => {
+    const a = receipt("14111111-1111-4111-8111-111111111111", "2026-07-01T10:00:00.000Z");
+    const b = receipt("15111111-1111-4111-8111-111111111111", "2026-07-01T11:00:00.000Z");
+    const deliveryState = new Map<string, "PENDING" | "ACCEPTED" | "FAILED">([
+      [a.id, "PENDING"],
+      [b.id, "PENDING"],
+    ]);
+    const sendOrder: string[] = [];
+    let authorizationChecks = 0;
+
+    restores.push(
+      stub(payrollReceiptRepository, "listActiveAssociated", async () => [a, b]),
+      stub(payrollReceiptRepository, "findAuthorizedActiveAssociatedForSend", async () => {
+        authorizationChecks += 1;
+        return authorizationChecks === 1 ? a : null;
+      }),
+      stub(payrollReceiptQueryDeliveryRepository, "ensurePendingDeliveries", async () => undefined),
+      stub(payrollReceiptQueryDeliveryRepository, "listForQuery", async () =>
+        [a, b].map((item) => ({
+          id: item.id,
+          companyId: COMPANY_ID,
+          botSessionId: SESSION_ID,
+          payrollReceiptId: item.id,
+          employeeId: EMPLOYEE_ID,
+          year: 2026,
+          month: 7,
+          status: deliveryState.get(item.id)!,
+          providerMessageSid: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          acceptedAt: null,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        })),
+      ),
+      stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async (input) => {
+        deliveryState.set(input.payrollReceiptId, "ACCEPTED");
+        return true;
+      }),
+      stub(payrollReceiptQueryDeliveryRepository, "markFailedBeforeSend", async (input) => {
+        deliveryState.set(input.payrollReceiptId, "FAILED");
+        return true;
+      }),
+      stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
+        sendOrder.push(input.receipt.id);
+        return { kind: "text_only" as const, message: "ok" };
+      }),
+    );
+
+    await runWithBotRuntimeContext(simContext, async () => {
+      const result = await payrollReceiptPeriodQueryService.deliverForPeriod({
+        companyId: COMPANY_ID,
+        employeeId: EMPLOYEE_ID,
+        botSessionId: SESSION_ID,
+        toPhoneNumber: "+5491100000000",
+        year: 2026,
+        month: 7,
+      });
+      assert.equal(result.kind, "partial_failed");
+      assert.deepEqual(sendOrder, [a.id]);
     });
   });
 
@@ -644,7 +721,6 @@ describe("payrollReceiptPeriodQueryService", () => {
         toPhoneNumber: "+5491100000000",
         year: 2026,
         month: 7,
-        introAlreadySent: true,
       });
       assert.equal(retry.kind, "completed");
       assert.equal(retry.deliveredCount, 3);

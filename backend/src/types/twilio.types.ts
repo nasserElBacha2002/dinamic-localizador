@@ -23,7 +23,9 @@ export type BotSessionIntent =
   | "CHECK_OUT"
   | "PAYROLL_RECEIPT"
   | "ABSENCE"
-  | "ASSIGNMENT_CONFIRMATION";
+  | "CONFIRM_ATTENDANCE"
+  | "REPORT_UNAVAILABILITY"
+  | "ATTENDANCE_CONFIRMATION_RESPONSE";
 
 export type BotSessionMenuOptionKey =
   | "check_in"
@@ -139,7 +141,6 @@ export interface BotSessionContext {
   payrollReceiptQuery?: {
     year: number;
     month: number;
-    introSent?: boolean;
   };
 }
 

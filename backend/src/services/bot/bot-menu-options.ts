@@ -54,6 +54,21 @@ const MENU_OPTION_DEFINITIONS: Record<BotMenuOptionKey, Omit<BotMenuOption, "key
   },
 };
 
+const MENU_OPTION_KEYS = Object.keys(MENU_OPTION_DEFINITIONS) as BotMenuOptionKey[];
+
+export const isBotMenuOptionKey = (value: unknown): value is BotMenuOptionKey =>
+  typeof value === "string" && MENU_OPTION_KEYS.includes(value as BotMenuOptionKey);
+
+export const resolveMenuSnapshot = (value: unknown): BotMenuOption[] | null => {
+  if (!Array.isArray(value) || value.length === 0) {
+    return null;
+  }
+  if (!value.every(isBotMenuOptionKey) || new Set(value).size !== value.length) {
+    return null;
+  }
+  return value.map((key) => ({ key, ...MENU_OPTION_DEFINITIONS[key] }));
+};
+
 export const buildAvailableMenuOptions = (
   moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
 ): BotMenuOption[] => {
@@ -124,9 +139,9 @@ export const isNumericMenuInput = (body: string): boolean =>
 export const INVALID_MENU_SELECTION_PREFIX = "No encontré una opción con ese número.";
 
 export const buildInvalidMenuSelectionMessage = (
-  moduleStates: ReadonlyMap<CompanyModuleKey, boolean>,
+  snapshot: readonly BotMenuOptionKey[],
 ): string => {
-  const options = buildAvailableMenuOptions(moduleStates);
+  const options = resolveMenuSnapshot(snapshot) ?? [];
   const lines = formatMenuOptionsLines(options);
   return [INVALID_MENU_SELECTION_PREFIX, "", ...lines].join("\n");
 };

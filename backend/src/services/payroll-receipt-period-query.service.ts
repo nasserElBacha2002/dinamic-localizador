@@ -3,7 +3,8 @@ import { formatPayrollReceiptPeriod } from "../utils/payroll-receipts/period-for
 import { payrollReceiptRepository } from "../repositories/payroll-receipt.repository";
 import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
 import { payrollReceiptWhatsappDeliveryService } from "./payroll-receipt-whatsapp-delivery.service";
-import { payrollReceiptQueryAuthorizationService } from "./payroll-receipt-query-authorization.service";
+import { resolveBotSessionScope } from "../utils/bot-session-scope";
+import { normalizePhoneNumber } from "../utils/phone";
 
 export type PayrollReceiptPeriodQueryResult =
   | {
@@ -33,10 +34,6 @@ export type PayrollReceiptPeriodQueryResult =
       message: string;
       deliveredCount: number;
       totalCount: number;
-    }
-  | {
-      kind: "unauthorized";
-      message: string;
     };
 
 const notFoundMessage = (year: number, month: number): string =>
@@ -68,24 +65,7 @@ export const payrollReceiptPeriodQueryService = {
     year: number;
     month: number;
     inboundMessageSid?: string | null;
-    /** @deprecated Intro text before multi-receipt send was removed; ignored. */
-    introAlreadySent?: boolean;
-  }): Promise<PayrollReceiptPeriodQueryResult & { introSent: boolean }> {
-    void input.introAlreadySent;
-    const authorizationInput = {
-      companyId: input.companyId,
-      employeeId: input.employeeId,
-      botSessionId: input.botSessionId,
-      phoneNumber: input.toPhoneNumber,
-    };
-    if (!(await payrollReceiptQueryAuthorizationService.isAuthorized(authorizationInput))) {
-      return {
-        kind: "unauthorized",
-        message: "No pudimos autorizar la consulta del recibo.",
-        introSent: false,
-      };
-    }
-
+  }): Promise<PayrollReceiptPeriodQueryResult> {
     const receipts = await payrollReceiptRepository.listActiveAssociated(
       input.companyId,
       input.employeeId,
@@ -97,7 +77,6 @@ export const payrollReceiptPeriodQueryService = {
       return {
         kind: "not_found",
         message: notFoundMessage(input.year, input.month),
-        introSent: false,
       };
     }
 
@@ -150,7 +129,17 @@ export const payrollReceiptPeriodQueryService = {
         continue;
       }
 
-      if (!(await payrollReceiptQueryAuthorizationService.isAuthorized(authorizationInput))) {
+      const authorizedReceipt = await payrollReceiptRepository.findAuthorizedActiveAssociatedForSend({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        botSessionId: input.botSessionId,
+        payrollReceiptId: receipt.id,
+        phoneNumber: normalizePhoneNumber(input.toPhoneNumber),
+        year: input.year,
+        month: input.month,
+        scope: resolveBotSessionScope(),
+      });
+      if (!authorizedReceipt) {
         console.warn("[payroll-receipt-query] authorization revoked before send", {
           companyId: input.companyId,
           botSessionId: input.botSessionId,
@@ -171,7 +160,7 @@ export const payrollReceiptPeriodQueryService = {
       let sendStarted = false;
       const delivery = await payrollReceiptWhatsappDeliveryService.deliverReceipt({
         toPhoneNumber: input.toPhoneNumber,
-        receipt,
+        receipt: authorizedReceipt,
         companyId: input.companyId,
         employeeId: input.employeeId,
         inboundMessageSid: input.inboundMessageSid ?? null,
@@ -191,13 +180,24 @@ export const payrollReceiptPeriodQueryService = {
       });
 
       if (delivery.kind === "send_accepted" || delivery.kind === "text_only") {
-        const accepted = await payrollReceiptQueryDeliveryRepository.markAccepted({
-          ...queryKey,
-          payrollReceiptId: receipt.id,
-          processingToken: claim.processingToken,
-          processingVersion: claim.processingVersion,
-          providerMessageSid: delivery.kind === "send_accepted" ? delivery.messageSid : null,
-        });
+        let accepted = false;
+        try {
+          accepted = await payrollReceiptQueryDeliveryRepository.markAccepted({
+            ...queryKey,
+            payrollReceiptId: receipt.id,
+            processingToken: claim.processingToken,
+            processingVersion: claim.processingVersion,
+            providerMessageSid:
+              delivery.kind === "send_accepted" ? delivery.messageSid : null,
+          });
+        } catch (error) {
+          console.error("[payroll-receipt-query] accepted send ledger update failed", {
+            companyId: input.companyId,
+            botSessionId: input.botSessionId,
+            payrollReceiptId: receipt.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        }
         if (accepted) {
           deliveredCount += 1;
         } else {
@@ -211,6 +211,8 @@ export const payrollReceiptPeriodQueryService = {
             payrollReceiptId: receipt.id,
             processingToken: claim.processingToken,
             processingVersion: claim.processingVersion,
+            providerMessageSid:
+              delivery.kind === "send_accepted" ? delivery.messageSid : null,
             errorCode: "ACCEPTANCE_PERSIST_FAILED",
             errorMessage: "Provider accepted the send but the ledger could not be finalized.",
           });
@@ -263,7 +265,6 @@ export const payrollReceiptPeriodQueryService = {
         message: "",
         deliveredCount,
         totalCount,
-        introSent: false,
       };
     }
 
@@ -274,7 +275,6 @@ export const payrollReceiptPeriodQueryService = {
         message: partialMessage(deliveredCount, totalCount, input.year, input.month),
         deliveredCount,
         totalCount,
-        introSent: false,
       };
     }
 
@@ -284,7 +284,6 @@ export const payrollReceiptPeriodQueryService = {
         message: partialMessage(deliveredCount, totalCount, input.year, input.month),
         deliveredCount,
         totalCount,
-        introSent: false,
       };
     }
 
@@ -293,7 +292,6 @@ export const payrollReceiptPeriodQueryService = {
       message: partialMessage(deliveredCount, totalCount, input.year, input.month),
       deliveredCount,
       totalCount,
-      introSent: false,
     };
   },
 };

@@ -38,7 +38,8 @@ const buildExpiresAt = (): Date => buildSessionExpiresAt(getSessionTtlMinutes())
 export type FailedSessionAttemptResult =
   | { kind: "retry"; session: BotSession; attempt: number }
   | { kind: "max_attempts"; session: BotSession; attempt: number }
-  | { kind: "conflict" };
+  | { kind: "completed" | "cancelled" | "expired"; session: BotSession }
+  | { kind: "conflict"; session: BotSession | null };
 
 const parseContext = (contextJson: string | null): BotSessionContext => {
   if (!contextJson) {
@@ -518,7 +519,7 @@ export const botSessionService = {
             operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CONFIRM_ATTENDANCE_SELECTION",
-            intent: "ASSIGNMENT_CONFIRMATION",
+            intent: "CONFIRM_ATTENDANCE",
             contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
@@ -565,7 +566,7 @@ export const botSessionService = {
             operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_UNAVAILABILITY_SELECTION",
-            intent: "ASSIGNMENT_CONFIRMATION",
+            intent: "REPORT_UNAVAILABILITY",
             contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
@@ -647,7 +648,7 @@ export const botSessionService = {
             operationId: input.operationId,
             phoneNumber: input.phoneNumber,
             state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
-            intent: "ASSIGNMENT_CONFIRMATION",
+            intent: "ATTENDANCE_CONFIRMATION_RESPONSE",
             contextJson: JSON.stringify({
               attendanceConfirmation: {
                 operationId: input.operationId,
@@ -694,14 +695,38 @@ export const botSessionService = {
     }
   },
 
-  async completeSession(companyId: string, sessionId: string, transaction?: sql.Transaction): Promise<void> {
-    await botSessionRepository.updateSession(companyId, sessionId, { state: "COMPLETED" }, transaction);
+  async completeSession(
+    companyId: string,
+    sessionId: string,
+    transaction?: sql.Transaction,
+    expectedSession?: BotSession,
+  ): Promise<boolean> {
+    const updated = await botSessionRepository.updateSession(
+      companyId,
+      sessionId,
+      {
+        state: "COMPLETED",
+        expectedVersion: expectedSession?.sessionVersion,
+        expectedState: expectedSession?.state,
+      },
+      transaction,
+    );
     console.info("[bot-session] session completed", { sessionId });
+    return updated !== null;
   },
 
-  async cancelSession(companyId: string, sessionId: string): Promise<void> {
-    await botSessionRepository.updateSession(companyId, sessionId, { state: "CANCELLED" });
+  async cancelSession(
+    companyId: string,
+    sessionId: string,
+    expectedSession?: BotSession,
+  ): Promise<boolean> {
+    const updated = await botSessionRepository.updateSession(companyId, sessionId, {
+      state: "CANCELLED",
+      expectedVersion: expectedSession?.sessionVersion,
+      expectedState: expectedSession?.state,
+    });
     console.info("[bot-session] session cancelled", { sessionId });
+    return updated !== null;
   },
 
   async createAbsenceSession(
@@ -773,7 +798,7 @@ export const botSessionService = {
   async updatePayrollReceiptSessionContext(
     companyId: string,
     sessionId: string,
-    payrollReceiptQuery: { year: number; month: number; introSent?: boolean },
+    payrollReceiptQuery: { year: number; month: number },
   ): Promise<BotSession | null> {
     return botSessionRepository.updateSession(companyId, sessionId, {
       state: "WAITING_PAYROLL_RECEIPT_PERIOD",
@@ -844,7 +869,7 @@ export const botSessionService = {
     messageSid: string,
     maxFailedAttempts: number,
   ): Promise<FailedSessionAttemptResult> {
-    const updated = await botSessionRepository.recordFailedAttempt({
+    const persisted = await botSessionRepository.recordFailedAttempt({
       companyId,
       sessionId: session.id,
       expectedVersion: session.sessionVersion,
@@ -852,28 +877,44 @@ export const botSessionService = {
       maxFailedAttempts,
       expiresAt: buildExpiresAt(),
     });
-    if (!updated) {
+    if (persisted.kind === "missing") {
       console.warn("[bot-session] failed-attempt transition conflict", {
         companyId,
         sessionId: session.id,
         messageSid,
         expectedVersion: session.sessionVersion,
       });
-      return { kind: "conflict" };
+      return { kind: "conflict", session: null };
     }
 
-    const maxReached = updated.state === "CANCELLED";
+    const updated = persisted.session;
+    if (updated.state === "COMPLETED") {
+      return { kind: "completed", session: updated };
+    }
+    if (updated.state === "CANCELLED") {
+      return updated.failedAttempts >= maxFailedAttempts
+        ? { kind: "max_attempts", session: updated, attempt: updated.failedAttempts }
+        : { kind: "cancelled", session: updated };
+    }
+    if (
+      updated.state === "EXPIRED" ||
+      new Date(updated.expiresAt).getTime() <= Date.now()
+    ) {
+      return { kind: "expired", session: updated };
+    }
+    if (persisted.kind === "cas_conflict") {
+      return { kind: "conflict", session: updated };
+    }
+
     console.info("[bot-session] invalid contextual input", {
       companyId,
       sessionId: session.id,
       messageSid,
       state: session.state,
       attempt: updated.failedAttempts,
-      maxReached,
+      maxReached: false,
     });
-    return maxReached
-      ? { kind: "max_attempts", session: updated, attempt: updated.failedAttempts }
-      : { kind: "retry", session: updated, attempt: updated.failedAttempts };
+    return { kind: "retry", session: updated, attempt: updated.failedAttempts };
   },
 
   async updateAbsenceSession(

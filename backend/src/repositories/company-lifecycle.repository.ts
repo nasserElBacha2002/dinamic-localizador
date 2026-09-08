@@ -51,7 +51,11 @@ export const companyLifecycleRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .query(`
         UPDATE bot_sessions
-        SET state = N'EXPIRED', updated_at = SYSUTCDATETIME()
+        SET state = N'EXPIRED',
+            intent = NULL,
+            context_json = NULL,
+            session_version = session_version + 1,
+            updated_at = SYSUTCDATETIME()
         WHERE company_id = @companyId
           AND state IN ${ACTIVE_BOT_SESSION_STATES_SQL};
 

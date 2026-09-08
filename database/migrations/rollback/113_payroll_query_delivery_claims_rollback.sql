@@ -1,16 +1,20 @@
-USE dinamic_attendance;
-GO
-
 IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_query_deliveries', N'U') IS NULL
     RETURN;
 GO
 
+IF EXISTS (
+    SELECT 1
+    FROM dbo.whatsapp_payroll_receipt_query_deliveries
+    WHERE status IN (N'SEND_STARTED', N'RECONCILIATION_REQUIRED')
+)
+BEGIN
+    THROW 50113, 'Rollback blocked: resolve ambiguous payroll receipt sends first', 1;
+END;
+GO
+
 UPDATE dbo.whatsapp_payroll_receipt_query_deliveries
-SET status = CASE
-    WHEN status = N'ACCEPTED' THEN N'ACCEPTED'
-    ELSE N'FAILED'
-END
-WHERE status IN (N'PROCESSING', N'SEND_STARTED', N'RECONCILIATION_REQUIRED');
+SET status = N'FAILED'
+WHERE status = N'PROCESSING';
 GO
 
 IF EXISTS (
@@ -76,6 +80,8 @@ GO
 IF EXISTS (
     SELECT 1 FROM sys.default_constraints
     WHERE name = N'DF_wprqd_processing_version'
+      AND parent_object_id =
+        OBJECT_ID(N'dbo.whatsapp_payroll_receipt_query_deliveries')
 )
 BEGIN
     ALTER TABLE dbo.whatsapp_payroll_receipt_query_deliveries

@@ -180,7 +180,7 @@ const prepareRouterUnitTest = async (): Promise<void> => {
       contextJson: JSON.stringify({ menuOptions: input.options }),
     }),
   );
-  mock.method(botSessionService, "cancelSession", async () => undefined);
+  mock.method(botSessionService, "cancelSession", async () => true);
   mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => ({
     kind: "retry" as const,
     session: { ...session, failedAttempts: session.failedAttempts + 1 },
@@ -638,6 +638,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
       mock.method(botSessionService, "cancelSession", async () => {
         cancelled += 1;
+        return true;
       });
 
       const response = await whatsappRouterService.routeTextMessage(
@@ -662,6 +663,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     mock.method(botSessionService, "cancelSession", async () => {
       cancelled += 1;
+      return true;
     });
 
     const response = await whatsappRouterService.routeTextMessage(
@@ -686,6 +688,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     mock.method(botSessionService, "cancelSession", async () => {
       cancelled += 1;
+      return true;
     });
 
     const response = await whatsappRouterService.routeTextMessage(
@@ -740,6 +743,7 @@ describe("whatsappRouterService.routeTextMessage", () => {
 
     mock.method(botSessionService, "cancelSession", async () => {
       cancelled += 1;
+      return true;
     });
 
     const response = await whatsappRouterService.routeTextMessage(
@@ -2052,6 +2056,77 @@ describe("whatsappRouterService numeric menu selection", () => {
     assert.equal(absenceStarted, 1);
     assert.equal(calls.startCheckIn, 0);
     assert.equal(calls.startCheckout, 0);
+  });
+
+  it("replaces the snapshot instead of routing an option disabled after display", async () => {
+    await prepareRouterUnitTest();
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const states = enabledStates();
+    states.set(COMPANY_MODULE_KEYS.PAYROLL_RECEIPTS, false);
+    let replacementOptions: string[] = [];
+    mock.method(botSessionService, "createMenuSelectionSession", async (company, input) => {
+      replacementOptions = input.options;
+      return buildSession("WAITING_MENU_SELECTION", {
+        companyId: company,
+        intent: "MENU",
+        contextJson: JSON.stringify({ menuOptions: input.options }),
+      });
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "8", moduleStates: states, session: buildMenuSession() }),
+      handlers,
+    );
+
+    assert.doesNotMatch(response, /Consultar recibo de sueldo/);
+    assert.equal(replacementOptions.includes("payroll_receipt"), false);
+  });
+
+  it("keeps displayed numbering when modules are enabled after the snapshot", async () => {
+    await prepareRouterUnitTest();
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    const session = buildSession("WAITING_MENU_SELECTION", {
+      intent: "MENU",
+      contextJson: JSON.stringify({ menuOptions: ["check_in", "absence"] }),
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({ body: "9", session }),
+      handlers,
+    );
+
+    assert.match(response, /1\. Marcar llegada/);
+    assert.match(response, /2\. Pedir ausencia/);
+    assert.doesNotMatch(response, /Marcar salida/);
+  });
+
+  it("repairs an invalid snapshot without consuming a failed attempt", async () => {
+    await prepareRouterUnitTest();
+    const { botSessionService } = await import("../bot-session.service");
+    const { whatsappRouterService } = await import("./whatsapp-router.service");
+    const { handlers } = createMockHandlers();
+    let failedAttempts = 0;
+    mock.method(botSessionService, "recordFailedAttempt", async (_company, session) => {
+      failedAttempts += 1;
+      return { kind: "retry" as const, session, attempt: 1 };
+    });
+
+    const response = await whatsappRouterService.routeTextMessage(
+      baseContext({
+        body: "1",
+        session: buildSession("WAITING_MENU_SELECTION", {
+          intent: "MENU",
+          contextJson: JSON.stringify({ menuOptions: ["unknown", "unknown"] }),
+        }),
+      }),
+      handlers,
+    );
+
+    assert.match(response, /¿Qué querés hacer\?/);
+    assert.equal(failedAttempts, 0);
   });
 
   it("keeps confirm attendance selection during WAITING_CONFIRM_ATTENDANCE_SELECTION", async () => {

@@ -64,7 +64,6 @@ describe("payroll receipt WhatsApp success copy", () => {
       message: "SHOULD_NOT_BE_SHOWN",
       deliveredCount: 2,
       totalCount: 2,
-      introSent: false,
     }));
 
     let respondedMessage: string | null = null;
@@ -102,7 +101,6 @@ describe("payroll receipt WhatsApp success copy", () => {
     mock.method(payrollReceiptPeriodQueryService, "deliverForPeriod", async () => ({
       kind: "not_found" as const,
       message: "No encontramos recibos de sueldo para el período 07/26.",
-      introSent: false,
     }));
 
     let respondedMessage: string | null = null;

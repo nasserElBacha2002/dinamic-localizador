@@ -60,22 +60,9 @@ import {
 } from "../../utils/bot-session-states";
 import { botSessionService } from "../bot-session.service";
 import type { BotIntent } from "../bot/bot-intent.parser";
+import { isExplicitIntentCompatibleWithSession } from "../../utils/bot-session-intent";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
-
-const getSessionIntent = (state: import("../../types/twilio.types").BotSessionState): BotIntent | null => {
-  if (state === "WAITING_MENU_SELECTION") return "menu";
-  if (state === "WAITING_LOCATION" || state === "WAITING_OPERATION_SELECTION") return "arrival";
-  if (
-    state === "WAITING_CHECKOUT_LOCATION" ||
-    state === "WAITING_CHECKOUT_OPERATION_SELECTION"
-  ) {
-    return "checkout";
-  }
-  if (state === "WAITING_PAYROLL_RECEIPT_PERIOD") return "payroll_receipt";
-  if (state.startsWith("WAITING_ABSENCE_")) return "absence";
-  return null;
-};
 
 const isExplicitSwitchIntent = (intent: BotIntent): boolean =>
   intent === "arrival" ||
@@ -130,10 +117,9 @@ export const whatsappRouterService = {
 
     if (ctx.session) {
       const explicitIntent = parseBotIntent({ body: ctx.body });
-      const activeIntent = getSessionIntent(ctx.session.state);
       if (
         isExplicitSwitchIntent(explicitIntent) &&
-        activeIntent !== explicitIntent
+        !isExplicitIntentCompatibleWithSession(explicitIntent, ctx.session.intent)
       ) {
         console.info("[whatsapp-bot] explicit conversation intent switch", {
           companyId,
@@ -143,7 +129,7 @@ export const whatsappRouterService = {
           nextIntent: explicitIntent,
           messageSid: ctx.payload.MessageSid,
         });
-        await botSessionService.cancelSession(companyId, ctx.session.id);
+        await botSessionService.cancelSession(companyId, ctx.session.id, ctx.session);
         return this.routeTextMessage(
           { ...ctx, session: null, recentlyExpired: false },
           handlers,

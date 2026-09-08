@@ -8,7 +8,7 @@ import { payrollReceiptMetrics } from "../../utils/payroll-receipts/metrics";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import { isPayrollReceiptSessionState } from "../../utils/bot-session-states";
 import { logModuleBlocked } from "./module-session-gate";
-import type { BotSession, BotSessionContext } from "../../types/twilio.types";
+import type { BotSession } from "../../types/twilio.types";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 
@@ -20,17 +20,6 @@ const INVALID_PERIOD_MESSAGE =
 
 const SAFE_ERROR_MESSAGE =
   "No pudimos consultar tu recibo en este momento. Intentá nuevamente más tarde.";
-
-const parseSessionContext = (session: BotSession): BotSessionContext => {
-  if (!session.contextJson) {
-    return {};
-  }
-  try {
-    return JSON.parse(session.contextJson) as BotSessionContext;
-  } catch {
-    return {};
-  }
-};
 
 export const handlePayrollReceiptIntent = async (
   ctx: WhatsAppRouterContext,
@@ -88,7 +77,7 @@ export const handleActivePayrollReceiptSession = async (
   const blockedMessage = getPayrollReceiptsModuleBlockedMessage(ctx.moduleStates);
   if (blockedMessage) {
     logModuleBlocked(ctx.companyId, "payroll_receipts");
-    await botSessionService.cancelSession(ctx.companyId, session.id);
+    await botSessionService.cancelSession(ctx.companyId, session.id, session);
     return handlers.respond(ctx.companyId, {
       message: blockedMessage,
       employeeId: ctx.employeeId,
@@ -100,7 +89,7 @@ export const handleActivePayrollReceiptSession = async (
   }
 
   if (isGlobalCancelCommand(ctx.body)) {
-    await botSessionService.cancelSession(ctx.companyId, session.id);
+    await botSessionService.cancelSession(ctx.companyId, session.id, session);
     return handlers.respond(ctx.companyId, {
       message: "Cancelé la consulta del recibo.",
       employeeId: ctx.employeeId,
@@ -151,7 +140,7 @@ export const handleActivePayrollReceiptSession = async (
   }
 
   if (!ctx.employeeId) {
-    await botSessionService.cancelSession(ctx.companyId, session.id);
+    await botSessionService.cancelSession(ctx.companyId, session.id, session);
     return handlers.respond(ctx.companyId, {
       message: SAFE_ERROR_MESSAGE,
       employeeId: null,
@@ -162,10 +151,6 @@ export const handleActivePayrollReceiptSession = async (
     });
   }
 
-  const priorContext = parseSessionContext(session).payrollReceiptQuery;
-  const samePeriodRetry =
-    priorContext?.year === parsed.year && priorContext?.month === parsed.month;
-
   const result = await payrollReceiptPeriodQueryService.deliverForPeriod({
     companyId: ctx.companyId,
     employeeId: ctx.employeeId,
@@ -174,27 +159,14 @@ export const handleActivePayrollReceiptSession = async (
     year: parsed.year,
     month: parsed.month,
     inboundMessageSid: ctx.payload.MessageSid ?? null,
-    introAlreadySent: Boolean(samePeriodRetry && priorContext?.introSent),
   });
-
-  if (result.kind === "unauthorized") {
-    await botSessionService.cancelSession(ctx.companyId, session.id);
-    return handlers.respond(ctx.companyId, {
-      message: SAFE_ERROR_MESSAGE,
-      employeeId: ctx.employeeId,
-      phoneFrom: ctx.phoneTo,
-      phoneTo: ctx.phoneFrom,
-      resultCode: WHATSAPP_RESULT_CODES.GENERIC_ERROR,
-      flowType: "PAYROLL_RECEIPT_QUERY",
-    });
-  }
 
   if (result.kind === "not_found") {
     payrollReceiptMetrics.queryNotFound({
       year: parsed.year,
       month: parsed.month,
     });
-    await botSessionService.completeSession(ctx.companyId, session.id);
+    await botSessionService.completeSession(ctx.companyId, session.id, undefined, session);
     return handlers.respond(ctx.companyId, {
       message: result.message,
       employeeId: ctx.employeeId,
@@ -209,7 +181,6 @@ export const handleActivePayrollReceiptSession = async (
     await botSessionService.updatePayrollReceiptSessionContext(ctx.companyId, session.id, {
       year: parsed.year,
       month: parsed.month,
-      introSent: result.introSent,
     });
     payrollReceiptMetrics.queryFailed({ status: result.kind });
     return handlers.respond(ctx.companyId, {
@@ -226,7 +197,6 @@ export const handleActivePayrollReceiptSession = async (
     await botSessionService.updatePayrollReceiptSessionContext(ctx.companyId, session.id, {
       year: parsed.year,
       month: parsed.month,
-      introSent: result.introSent,
     });
     payrollReceiptMetrics.queryFailed({ status: "failed" });
     return handlers.respond(ctx.companyId, {
@@ -239,7 +209,7 @@ export const handleActivePayrollReceiptSession = async (
     });
   }
 
-  await botSessionService.completeSession(ctx.companyId, session.id);
+  await botSessionService.completeSession(ctx.companyId, session.id, undefined, session);
   payrollReceiptMetrics.queryDelivered({ status: "multi_or_single" });
 
   // Documents already sent via Twilio REST. Empty TwiML — no confirmation text.

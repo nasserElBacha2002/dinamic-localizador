@@ -111,7 +111,12 @@ export async function processLocationCheckIn(input: {
           { simulationSessionId: getSimulationSessionId() },
         );
     if (hasActiveRecord) {
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
       return respond(companyId, {
         message: DUPLICATE_ATTENDANCE_MESSAGE,
         employeeId: input.employeeId,
@@ -181,7 +186,12 @@ export async function processLocationCheckIn(input: {
         receivedAt: eventAt.toISOString(),
       });
 
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
 
       return respond(companyId, {
         message: `${responseMessage}\n\n[Simulación] Se habría creado un registro de asistencia.`,
@@ -275,7 +285,12 @@ export async function processLocationCheckIn(input: {
           error.message.includes("UX_attendance_records_inventory_employee_active") ||
           error.message.includes("UX_attendance_records_employee_workday_active")
         ) {
-          await botSessionService.completeSession(companyId, input.session.id);
+          await botSessionService.completeSession(
+            companyId,
+            input.session.id,
+            undefined,
+            input.session,
+          );
           return respond(companyId, {
             message: DUPLICATE_ATTENDANCE_MESSAGE,
             employeeId: input.employeeId,

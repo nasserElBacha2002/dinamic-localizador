@@ -33,9 +33,18 @@ export type PayrollReceiptQueryDelivery = {
   processingExpiresAt?: string | null;
   sendStartedAt?: string | null;
   reconciliationRequiredAt?: string | null;
+  reconciliationCommandId?: string | null;
+  reconciliationResolution?: PayrollReceiptQueryReconciliationResolution | null;
+  reconciliationReason?: string | null;
+  reconciledAt?: string | null;
+  reconciledByUserId?: string | null;
   createdAt: string;
   updatedAt: string;
 };
+
+export type PayrollReceiptQueryReconciliationResolution =
+  | "CONFIRMED_ACCEPTED"
+  | "CONFIRMED_NOT_SENT";
 
 export type PayrollReceiptQueryKey = {
   companyId: string;
@@ -72,6 +81,21 @@ const mapRow = (row: Record<string, unknown>): PayrollReceiptQueryDelivery => ({
   reconciliationRequiredAt: row.reconciliation_required_at
     ? new Date(String(row.reconciliation_required_at)).toISOString()
     : null,
+  reconciliationCommandId: row.reconciliation_command_id
+    ? String(row.reconciliation_command_id)
+    : null,
+  reconciliationResolution: row.reconciliation_resolution
+    ? (String(row.reconciliation_resolution) as PayrollReceiptQueryReconciliationResolution)
+    : null,
+  reconciliationReason: row.reconciliation_reason
+    ? String(row.reconciliation_reason)
+    : null,
+  reconciledAt: row.reconciled_at
+    ? new Date(String(row.reconciled_at)).toISOString()
+    : null,
+  reconciledByUserId: row.reconciled_by_user_id
+    ? String(row.reconciled_by_user_id)
+    : null,
   createdAt: new Date(String(row.created_at)).toISOString(),
   updatedAt: new Date(String(row.updated_at)).toISOString(),
 });
@@ -95,6 +119,139 @@ const isExpectedDeliveryUniqueViolation = (error: unknown): boolean => {
  * New bot session = new consultation = can resend all.
  */
 export const payrollReceiptQueryDeliveryRepository = {
+  async confirmAcceptedByProviderMessageSid(providerMessageSid: string): Promise<number> {
+    const result = await getPool()
+      .request()
+      .input("providerMessageSid", sql.NVarChar(100), providerMessageSid)
+      .query(`
+        UPDATE dbo.whatsapp_payroll_receipt_query_deliveries
+        SET status = N'ACCEPTED',
+            accepted_at = COALESCE(accepted_at, SYSUTCDATETIME()),
+            reconciliation_required_at = NULL,
+            last_error_code = NULL,
+            last_error_message = NULL,
+            processing_token = NULL,
+            processing_expires_at = NULL,
+            processing_version = processing_version + 1,
+            updated_at = SYSUTCDATETIME()
+        WHERE provider_message_sid = @providerMessageSid
+          AND status = N'RECONCILIATION_REQUIRED'
+      `);
+    return Number(result.rowsAffected[0] ?? 0);
+  },
+
+  async listReconciliationRequired(
+    companyId: string,
+  ): Promise<PayrollReceiptQueryDelivery[]> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .query(`
+        SELECT *
+        FROM dbo.whatsapp_payroll_receipt_query_deliveries
+        WHERE company_id = @companyId
+          AND status = N'RECONCILIATION_REQUIRED'
+        ORDER BY reconciliation_required_at ASC, id ASC
+      `);
+    return (result.recordset as Record<string, unknown>[]).map(mapRow);
+  },
+
+  async findForReconciliation(
+    companyId: string,
+    deliveryId: string,
+    transaction?: sql.Transaction,
+  ): Promise<PayrollReceiptQueryDelivery | null> {
+    const request = transaction ? new sql.Request(transaction) : getPool().request();
+    const result = await request
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("deliveryId", sql.UniqueIdentifier, deliveryId)
+      .query(`
+        SELECT TOP (1) *
+        FROM dbo.whatsapp_payroll_receipt_query_deliveries
+        ${transaction ? "WITH (UPDLOCK, HOLDLOCK)" : ""}
+        WHERE id = @deliveryId
+          AND company_id = @companyId
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
+  async findByReconciliationCommandId(
+    commandId: string,
+  ): Promise<PayrollReceiptQueryDelivery | null> {
+    const result = await getPool()
+      .request()
+      .input("commandId", sql.UniqueIdentifier, commandId)
+      .query(`
+        SELECT TOP (1) *
+        FROM dbo.whatsapp_payroll_receipt_query_deliveries
+        WHERE reconciliation_command_id = @commandId
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
+  async applyReconciliation(
+    input: {
+      companyId: string;
+      deliveryId: string;
+      expectedProcessingVersion: number;
+      commandId: string;
+      resolution: PayrollReceiptQueryReconciliationResolution;
+      reason: string;
+      providerMessageSid: string | null;
+      reconciledByUserId: string;
+    },
+    transaction: sql.Transaction,
+  ): Promise<PayrollReceiptQueryDelivery | null> {
+    const nextStatus =
+      input.resolution === "CONFIRMED_ACCEPTED" ? "ACCEPTED" : "PENDING";
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("deliveryId", sql.UniqueIdentifier, input.deliveryId)
+      .input("expectedProcessingVersion", sql.Int, input.expectedProcessingVersion)
+      .input("commandId", sql.UniqueIdentifier, input.commandId)
+      .input("resolution", sql.NVarChar(30), input.resolution)
+      .input("reason", sql.NVarChar(500), input.reason)
+      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid)
+      .input("reconciledByUserId", sql.UniqueIdentifier, input.reconciledByUserId)
+      .input("nextStatus", sql.NVarChar(30), nextStatus)
+      .query(`
+        UPDATE dbo.whatsapp_payroll_receipt_query_deliveries
+        SET status = @nextStatus,
+            provider_message_sid = CASE
+              WHEN @resolution = N'CONFIRMED_ACCEPTED' THEN @providerMessageSid
+              ELSE NULL
+            END,
+            accepted_at = CASE
+              WHEN @resolution = N'CONFIRMED_ACCEPTED' THEN SYSUTCDATETIME()
+              ELSE NULL
+            END,
+            processing_token = NULL,
+            processing_expires_at = NULL,
+            send_started_at = CASE
+              WHEN @resolution = N'CONFIRMED_NOT_SENT' THEN NULL
+              ELSE send_started_at
+            END,
+            reconciliation_command_id = @commandId,
+            reconciliation_resolution = @resolution,
+            reconciliation_reason = @reason,
+            reconciled_at = SYSUTCDATETIME(),
+            reconciled_by_user_id = @reconciledByUserId,
+            last_error_code = NULL,
+            last_error_message = NULL,
+            processing_version = processing_version + 1,
+            updated_at = SYSUTCDATETIME()
+        OUTPUT INSERTED.*
+        WHERE id = @deliveryId
+          AND company_id = @companyId
+          AND status = N'RECONCILIATION_REQUIRED'
+          AND processing_version = @expectedProcessingVersion
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapRow(row) : null;
+  },
+
   async ensurePendingDeliveries(input: {
     companyId: string;
     botSessionId: string;
@@ -346,6 +503,7 @@ export const payrollReceiptQueryDeliveryRepository = {
     payrollReceiptId: string;
     processingToken: string;
     processingVersion: number;
+    providerMessageSid?: string | null;
     errorCode?: string | null;
     errorMessage?: string | null;
   }): Promise<boolean> {
@@ -359,11 +517,13 @@ export const payrollReceiptQueryDeliveryRepository = {
       .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
       .input("processingToken", sql.UniqueIdentifier, input.processingToken)
       .input("processingVersion", sql.Int, input.processingVersion)
+      .input("providerMessageSid", sql.NVarChar(100), input.providerMessageSid ?? null)
       .input("errorCode", sql.NVarChar(80), input.errorCode ?? null)
       .input("errorMessage", sql.NVarChar(1000), input.errorMessage ?? null)
       .query(`
         UPDATE whatsapp_payroll_receipt_query_deliveries
         SET status = N'RECONCILIATION_REQUIRED',
+            provider_message_sid = COALESCE(@providerMessageSid, provider_message_sid),
             last_error_code = @errorCode,
             last_error_message = @errorMessage,
             reconciliation_required_at = SYSUTCDATETIME(),

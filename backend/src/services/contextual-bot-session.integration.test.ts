@@ -105,7 +105,8 @@ describeDatabaseIntegration("persistent contextual bot sessions", () => {
       maxFailedAttempts: 3,
       expiresAt: new Date(Date.now() + 15 * 60_000),
     });
-    assert.equal(first?.failedAttempts, 1);
+    assert.equal(first.kind, "applied");
+    assert.equal(first.kind === "applied" ? first.session.failedAttempts : null, 1);
 
     const replay = await botSessionRepository.recordFailedAttempt({
       companyId,
@@ -115,8 +116,12 @@ describeDatabaseIntegration("persistent contextual bot sessions", () => {
       maxFailedAttempts: 3,
       expiresAt: new Date(Date.now() + 15 * 60_000),
     });
-    assert.equal(replay?.failedAttempts, 1);
-    assert.equal(replay?.sessionVersion, first?.sessionVersion);
+    assert.equal(replay.kind, "idempotent_replay");
+    assert.equal(replay.kind === "idempotent_replay" ? replay.session.failedAttempts : null, 1);
+    assert.equal(
+      replay.kind === "idempotent_replay" ? replay.session.sessionVersion : null,
+      first.kind === "applied" ? first.session.sessionVersion : null,
+    );
 
     const concurrentInputs = ["SM-CONTEXT-2A", "SM-CONTEXT-2B"];
     const concurrent = await Promise.all(
@@ -124,28 +129,31 @@ describeDatabaseIntegration("persistent contextual bot sessions", () => {
         botSessionRepository.recordFailedAttempt({
           companyId,
           sessionId: created.id,
-          expectedVersion: first!.sessionVersion,
+          expectedVersion: first.kind === "applied" ? first.session.sessionVersion : -1,
           messageSid,
           maxFailedAttempts: 3,
           expiresAt: new Date(Date.now() + 15 * 60_000),
         }),
       ),
     );
-    assert.equal(concurrent.filter(Boolean).length, 1);
+    assert.equal(concurrent.filter((result) => result.kind === "applied").length, 1);
+    assert.equal(concurrent.filter((result) => result.kind === "cas_conflict").length, 1);
 
-    const winner = concurrent.find((session) => session !== null)!;
+    const winner = concurrent.find((result) => result.kind === "applied");
+    assert.ok(winner && winner.kind === "applied");
     const cancelled = await botSessionRepository.recordFailedAttempt({
       companyId,
       sessionId: created.id,
-      expectedVersion: winner.sessionVersion,
+      expectedVersion: winner.session.sessionVersion,
       messageSid: "SM-CONTEXT-3",
       maxFailedAttempts: 3,
       expiresAt: new Date(Date.now() + 15 * 60_000),
     });
-    assert.equal(cancelled?.failedAttempts, 3);
-    assert.equal(cancelled?.state, "CANCELLED");
-    assert.equal(cancelled?.contextJson, null);
-    assert.equal(cancelled?.intent, null);
+    assert.equal(cancelled.kind, "applied");
+    assert.equal(cancelled.kind === "applied" ? cancelled.session.failedAttempts : null, 3);
+    assert.equal(cancelled.kind === "applied" ? cancelled.session.state : null, "CANCELLED");
+    assert.equal(cancelled.kind === "applied" ? cancelled.session.contextJson : "missing", null);
+    assert.equal(cancelled.kind === "applied" ? cancelled.session.intent : "missing", null);
   });
 
   it("keeps company scope and lazily expires stale persisted state", async () => {

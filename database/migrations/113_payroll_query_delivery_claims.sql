@@ -7,9 +7,6 @@
   Rollback: rollback/113_payroll_query_delivery_claims_rollback.sql
 */
 
-USE dinamic_attendance;
-GO
-
 IF OBJECT_ID(N'dbo.whatsapp_payroll_receipt_query_deliveries', N'U') IS NULL
 BEGIN
     THROW 50113, 'Precondition failed: whatsapp_payroll_receipt_query_deliveries missing', 1;

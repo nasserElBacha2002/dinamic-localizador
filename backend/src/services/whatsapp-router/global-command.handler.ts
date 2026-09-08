@@ -34,7 +34,7 @@ export const tryHandleGlobalCommand = async (
 
   if (isGlobalCancelCommand(body)) {
     if (session) {
-      await botSessionService.cancelSession(companyId, session.id);
+      await botSessionService.cancelSession(companyId, session.id, session);
       return respond(GLOBAL_CANCEL_MESSAGE);
     }
 
@@ -49,7 +49,7 @@ export const tryHandleGlobalCommand = async (
 
   if (isGlobalBackCommand(body)) {
     if (session) {
-      await botSessionService.cancelSession(companyId, session.id);
+      await botSessionService.cancelSession(companyId, session.id, session);
     }
     setLastDetectedIntent("greeting");
     return handleMenuFallback({ ...ctx, session: null }, handlers);
@@ -69,7 +69,7 @@ export const tryHandleGlobalCommand = async (
 
   if (isGlobalMenuCommand(body)) {
     if (session) {
-      await botSessionService.cancelSession(companyId, session.id);
+      await botSessionService.cancelSession(companyId, session.id, session);
     }
     setLastDetectedIntent("greeting");
     return handleMenuFallback({ ...ctx, session: null }, handlers);

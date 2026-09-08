@@ -432,7 +432,12 @@ async function processLocationCheckoutWithoutArrival(input: {
       checkoutStatus: validation.checkoutStatus,
       extraWorkedMinutes: validation.extraWorkedMinutes,
     });
-    await botSessionService.completeSession(companyId, input.session.id);
+    await botSessionService.completeSession(
+      companyId,
+      input.session.id,
+      undefined,
+      input.session,
+    );
     return respond(companyId, {
       message: `${responseMessage}\n\n[Simulación] Se habría registrado el check-out sin llegada previa.`,
       employeeId: input.employeeId,
@@ -647,7 +652,12 @@ export async function processLocationCheckout(input: {
     }
 
     if (attendance.checkoutAt) {
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
       const checkoutTime = formatLocalTime(attendance.checkoutAt, getBotOperationTimezone());
       return respond(companyId, {
         message: `${DUPLICATE_CHECKOUT_MESSAGE}\nHora registrada: ${checkoutTime}.`,
@@ -706,7 +716,12 @@ export async function processLocationCheckout(input: {
         checkoutAt: eventAt.toISOString(),
       });
 
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
 
       return respond(companyId, {
         message: `${responseMessage}\n\n[Simulación] Se habría registrado el check-out.`,

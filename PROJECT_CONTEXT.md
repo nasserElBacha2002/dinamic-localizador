@@ -117,7 +117,7 @@ Conceptos centrales (producto actual):
 | Asistencia | `attendance_records` (+ reviews, checkout fields) |
 | Equipos | `work_teams`, `work_team_members`, batches de asignación |
 | Ausencias | `absence_requests`, balances, ledger, calendarios, adjuntos GCS |
-| Recibos | `payroll_receipts` / batches + notificaciones WhatsApp |
+| Recibos | `payroll_receipts` / batches + notificaciones, claims y reconciliación WhatsApp |
 | Bot session | `bot_sessions` (TTL configurable) |
 | Observabilidad WA | `whatsapp_*` (messages, flows, provider events, conversations) |
 | Alertas admin | outbox `whatsapp_admin_alert_notifications` + recipients |

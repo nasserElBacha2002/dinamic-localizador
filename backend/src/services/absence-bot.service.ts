@@ -147,7 +147,7 @@ export const absenceBotService = {
     respond: RespondFn;
   }): Promise<string> {
     if (isAbsenceCancelIntent(input.body)) {
-      await botSessionService.cancelSession(companyId, input.session.id);
+      await botSessionService.cancelSession(companyId, input.session.id, input.session);
       return input.respond({
         message: "Solicitud de ausencia cancelada. Si necesitás algo más, escribinos.",
         employeeId: input.employeeId,
@@ -301,7 +301,7 @@ export const absenceBotService = {
 
     if (input.session.state === "WAITING_ABSENCE_CONFIRMATION") {
       if (isNegativeConfirmation(input.body)) {
-        await botSessionService.cancelSession(companyId, input.session.id);
+        await botSessionService.cancelSession(companyId, input.session.id, input.session);
         return input.respond({
           message: "Solicitud de ausencia cancelada.",
           employeeId: input.employeeId,
@@ -320,7 +320,7 @@ export const absenceBotService = {
       }
 
       if (!draft.absenceTypeId || !draft.startDate || !draft.endDate || !draft.reason) {
-        await botSessionService.cancelSession(companyId, input.session.id);
+        await botSessionService.cancelSession(companyId, input.session.id, input.session);
         return input.respond({
           message: "No pudimos completar la solicitud. Iniciá nuevamente escribiendo que querés pedir una ausencia.",
           employeeId: input.employeeId,
@@ -426,7 +426,12 @@ export const absenceBotService = {
           );
         }
 
-        await botSessionService.completeSession(companyId, input.session.id);
+        await botSessionService.completeSession(
+          companyId,
+          input.session.id,
+          undefined,
+          input.session,
+        );
         return input.respond({
           message: isExisting
             ? "Tu solicitud de ausencia ya había sido registrada y quedó pendiente de revisión."
@@ -436,7 +441,7 @@ export const absenceBotService = {
           phoneTo: input.phoneFrom,
         });
       } catch (error) {
-        await botSessionService.cancelSession(companyId, input.session.id);
+        await botSessionService.cancelSession(companyId, input.session.id, input.session);
         const message =
           error instanceof AppError
             ? error.message

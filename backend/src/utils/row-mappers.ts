@@ -10,6 +10,10 @@ import type {
   Service,
 } from "../types/domain";
 import type { AttendanceReview, User } from "../types/auth";
+import {
+  inferHistoricalIntentFromState,
+  isBotSessionIntent,
+} from "./bot-session-intent";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -295,26 +299,35 @@ export const mapAttendanceWithRelationsRow = (
   },
 });
 
-export const mapBotSessionRow = (row: Record<string, unknown>) => ({
-  id: String(row.id),
-  companyId: String(row.company_id),
-  employeeId: String(row.employee_id),
-  operationId: row.operation_id ? String(row.operation_id) : null,
-  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
-  attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
-  phoneNumber: String(row.phone_number),
-  state: String(row.state) as import("../types/twilio.types").BotSessionState,
-  intent: row.intent
-    ? (String(row.intent) as import("../types/twilio.types").BotSessionIntent)
-    : null,
-  contextJson: row.context_json ? String(row.context_json) : null,
-  failedAttempts: Number(row.failed_attempts ?? 0),
-  sessionVersion: Number(row.session_version ?? 0),
-  lastMessageSid: row.last_message_sid ? String(row.last_message_sid) : null,
-  expiresAt: toIsoString(row.expires_at as Date | string),
-  createdAt: toIsoString(row.created_at as Date | string),
-  updatedAt: toIsoString(row.updated_at as Date | string),
-});
+export const mapBotSessionRow = (
+  row: Record<string, unknown>,
+): import("../types/twilio.types").BotSession => {
+  const state = String(row.state) as import("../types/twilio.types").BotSessionState;
+  const persistedIntent = row.intent ? String(row.intent) : null;
+  const intent = persistedIntent
+    ? isBotSessionIntent(persistedIntent)
+      ? persistedIntent
+      : null
+    : inferHistoricalIntentFromState(state);
+  return {
+    id: String(row.id),
+    companyId: String(row.company_id),
+    employeeId: String(row.employee_id),
+    operationId: row.operation_id ? String(row.operation_id) : null,
+    employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
+    attendanceRecordId: row.attendance_record_id ? String(row.attendance_record_id) : null,
+    phoneNumber: String(row.phone_number),
+    state,
+    intent,
+    contextJson: row.context_json ? String(row.context_json) : null,
+    failedAttempts: Number(row.failed_attempts ?? 0),
+    sessionVersion: Number(row.session_version ?? 0),
+    lastMessageSid: row.last_message_sid ? String(row.last_message_sid) : null,
+    expiresAt: toIsoString(row.expires_at as Date | string),
+    createdAt: toIsoString(row.created_at as Date | string),
+    updatedAt: toIsoString(row.updated_at as Date | string),
+  };
+};
 
 export const mapWhatsAppMessageRow = (row: Record<string, unknown>) => ({
   id: String(row.id),

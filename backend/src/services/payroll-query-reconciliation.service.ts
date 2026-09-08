@@ -20,12 +20,15 @@ export type ReconcilePayrollQueryDeliveryInput = {
   userId: string;
 };
 
+const sameIdentifier = (left: string | null, right: string): boolean =>
+  left?.toLowerCase() === right.toLowerCase();
+
 const matchesCommand = (
   row: PayrollReceiptQueryDelivery,
   input: ReconcilePayrollQueryDeliveryInput,
 ): boolean =>
-  row.companyId === input.companyId &&
-  row.id === input.deliveryId &&
+  sameIdentifier(row.companyId, input.companyId) &&
+  sameIdentifier(row.id, input.deliveryId) &&
   row.reconciliationResolution === input.resolution &&
   row.reconciliationReason === input.reason &&
   row.providerMessageSid === input.providerMessageSid;
@@ -75,7 +78,7 @@ export const payrollQueryReconciliationService = {
       if (!current) {
         throw new AppError(404, "PAYROLL_QUERY_DELIVERY_NOT_FOUND", "Entrega no encontrada.");
       }
-      if (current.reconciliationCommandId === input.commandId) {
+      if (sameIdentifier(current.reconciliationCommandId ?? null, input.commandId)) {
         if (!matchesCommand(current, input)) {
           throw new AppError(
             409,

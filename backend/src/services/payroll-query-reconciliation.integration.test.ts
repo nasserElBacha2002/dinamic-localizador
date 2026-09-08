@@ -39,9 +39,11 @@ describeDatabaseIntegration("payroll query reconciliation sql", () => {
       .input("name", sql.NVarChar(200), "Payroll reconciliation test")
       .input("phone", sql.NVarChar(30), `+54911${Date.now().toString().slice(-8)}`)
       .query(`
+        DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
         INSERT INTO dbo.employees (company_id, name, phone_number, employee_type, active)
-        OUTPUT INSERTED.id
-        VALUES (@companyId, @name, @phone, N'fijo', 1)
+        OUTPUT INSERTED.id INTO @inserted (id)
+        VALUES (@companyId, @name, @phone, N'fijo', 1);
+        SELECT id FROM @inserted;
       `);
     employeeId = String(employee.recordset[0].id);
   });
@@ -168,7 +170,7 @@ describeDatabaseIntegration("payroll query reconciliation sql", () => {
     const first = await payrollQueryReconciliationService.reconcile(input);
     const replay = await payrollQueryReconciliationService.reconcile(input);
     assert.equal(first.status, "ACCEPTED");
-    assert.equal(replay.reconciliationCommandId, commandId);
+    assert.equal(replay.reconciliationCommandId?.toLowerCase(), commandId.toLowerCase());
     await assert.rejects(
       payrollQueryReconciliationService.reconcile({
         ...input,

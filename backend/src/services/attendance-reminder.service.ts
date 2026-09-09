@@ -582,10 +582,25 @@ const sendReminderForCandidate = async (
       }
     }
 
+    const flowLabel =
+      notificationType === "ARRIVAL_REMINDER_15_MIN"
+        ? "ARRIVAL_REMINDER"
+        : notificationType === "EXIT_REMINDER_15_MIN"
+          ? "EXIT_REMINDER"
+          : notificationType === "ATTENDANCE_CONFIRMATION_REMINDER"
+            ? "ATTENDANCE_CONFIRMATION"
+            : "NO_CHECKIN";
+
     const result = await twilioOutboundService.sendWhatsAppTemplate({
       toPhoneNumber: candidate.employeePhoneNumber,
       contentSid,
       contentVariables,
+      costContext: {
+        companyId,
+        messageKind: "TEMPLATE",
+        flowLabel,
+        templateName: notificationType,
+      },
     });
 
     const sentAt = new Date();

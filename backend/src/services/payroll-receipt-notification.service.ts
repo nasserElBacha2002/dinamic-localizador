@@ -207,6 +207,12 @@ const processClaimedNotification = async (
       toPhoneNumber: employee.phoneNumber,
       contentSid,
       contentVariables,
+      costContext: {
+        companyId: notification.companyId,
+        messageKind: "TEMPLATE",
+        flowLabel: "PAYROLL_AVAILABLE",
+        templateName: "PAYROLL_RECEIPT_AVAILABLE",
+      },
     });
     messageSid = result.messageSid;
   } catch (sendError) {

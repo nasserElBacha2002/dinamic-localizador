@@ -240,6 +240,11 @@ export function getAdminNavItems({
         path: "/platform/observability/whatsapp",
         section: "settings",
       });
+      items.push({
+        label: "Costos de mensajería",
+        path: "/platform/observability/whatsapp/costs",
+        section: "settings",
+      });
     }
   }
 

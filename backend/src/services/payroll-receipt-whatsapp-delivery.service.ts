@@ -122,6 +122,12 @@ export const payrollReceiptWhatsappDeliveryService = {
         toPhoneNumber: input.toPhoneNumber,
         body: caption,
         mediaUrl,
+        costContext: {
+          companyId: input.companyId ?? receipt.companyId,
+          messageKind: "DOCUMENT",
+          flowLabel: "PAYROLL_DOCUMENT",
+          templateName: "PAYROLL_RECEIPT_PDF",
+        },
       });
 
       const companyId = input.companyId ?? receipt.companyId;

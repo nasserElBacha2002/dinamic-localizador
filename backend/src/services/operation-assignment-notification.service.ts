@@ -367,6 +367,12 @@ const processClaimedNotification = async (
       toPhoneNumber: employee.phoneNumber,
       contentSid,
       contentVariables,
+      costContext: {
+        companyId: notification.companyId,
+        messageKind: "TEMPLATE",
+        flowLabel: "OPERATION_ASSIGNMENT",
+        templateName: notification.notificationType,
+      },
     });
     messageSid = result.messageSid;
     logWhatsAppNotificationEvent({

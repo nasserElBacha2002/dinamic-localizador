@@ -28,6 +28,7 @@
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
     "job:whatsapp-retention": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/run-whatsapp-retention.ts",
+    "backfill:whatsapp-message-costs": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/backfill-whatsapp-message-cost-ledger.ts",
     "audit:statistics-grain": "tsx src/scripts/audit-statistics-grain.ts",
     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
     "diagnose:operation-reassignment": "tsx scripts/diagnose-operation-reassignment.ts",

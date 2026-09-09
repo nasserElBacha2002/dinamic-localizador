@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { whatsappObservabilityController } from "../controllers/whatsapp-observability.controller";
+import { whatsappMessageCostController } from "../controllers/whatsapp-message-cost.controller";
 import { asyncHandler } from "../middleware/async-handler";
 import { requirePlatformAdmin } from "../middleware/require-platform-admin";
 import { validate } from "../middleware/validate";
@@ -13,6 +14,11 @@ import {
   observabilityMessageIdParamSchema,
   observabilityNotificationIdParamSchema,
 } from "../schemas/whatsapp-observability.schema";
+import {
+  messageCostDetailQuerySchema,
+  messageCostMonthQuerySchema,
+  messageCostResyncBodySchema,
+} from "../schemas/whatsapp-message-cost.schema";
 import { employeeLookupQuerySchema } from "../schemas/lookup.schema";
 
 export const whatsappObservabilityRouter = Router();
@@ -74,4 +80,35 @@ whatsappObservabilityRouter.get(
   "/notifications/:notificationId",
   validate(observabilityNotificationIdParamSchema, "params"),
   asyncHandler(whatsappObservabilityController.getNotification),
+);
+
+whatsappObservabilityRouter.get(
+  "/message-costs/summary",
+  validate(messageCostMonthQuerySchema, "query"),
+  asyncHandler(whatsappMessageCostController.getMonthlySummary),
+);
+whatsappObservabilityRouter.get(
+  "/message-costs/by-company",
+  validate(messageCostMonthQuerySchema, "query"),
+  asyncHandler(whatsappMessageCostController.getCompanyBreakdown),
+);
+whatsappObservabilityRouter.get(
+  "/message-costs/by-template",
+  validate(messageCostMonthQuerySchema, "query"),
+  asyncHandler(whatsappMessageCostController.getTemplateBreakdown),
+);
+whatsappObservabilityRouter.get(
+  "/message-costs/detail",
+  validate(messageCostDetailQuerySchema, "query"),
+  asyncHandler(whatsappMessageCostController.listDetail),
+);
+whatsappObservabilityRouter.get(
+  "/message-costs/export.csv",
+  validate(messageCostMonthQuerySchema, "query"),
+  asyncHandler(whatsappMessageCostController.exportCsv),
+);
+whatsappObservabilityRouter.post(
+  "/message-costs/resync",
+  validate(messageCostResyncBodySchema, "body"),
+  asyncHandler(whatsappMessageCostController.requestResync),
 );

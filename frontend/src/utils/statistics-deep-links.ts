@@ -9,7 +9,23 @@ export type StatisticsExceptionLinkKey =
   | "pending_review"
   | "late_arrival"
   | "early_departure"
-  | "incomplete_coverage";
+  | "incomplete_coverage"
+  | "coverage_required"
+  | "operation_modified"
+  | "not_confirmed"
+  | "missing_check_in"
+  | "missing_check_out"
+  | "no_punch";
+
+export type StatisticsIncidentLinkKey =
+  | "any_incident"
+  | "coverage_required"
+  | "operation_modified"
+  | "not_confirmed"
+  | "incomplete_punches"
+  | "missing_check_in"
+  | "missing_check_out"
+  | "no_punch";
 
 export interface StatisticsDeepLinkContext {
   dateFrom?: string;
@@ -17,6 +33,7 @@ export interface StatisticsDeepLinkContext {
   operationIds?: string[];
   serviceIds?: string[];
   employeeIds?: string[];
+  workTeamIds?: string[];
 }
 
 const appendDateRange = (params: URLSearchParams, ctx: StatisticsDeepLinkContext) => {
@@ -40,6 +57,9 @@ const appendSharedFilters = (params: URLSearchParams, ctx: StatisticsDeepLinkCon
   }
   if (ctx.employeeIds?.length) {
     params.set("employeeIds", ctx.employeeIds.join(","));
+  }
+  if (ctx.workTeamIds?.length) {
+    params.set("workTeamIds", ctx.workTeamIds.join(","));
   }
 };
 
@@ -70,12 +90,61 @@ export function buildAttendanceExceptionHref(
       return buildStatisticsAbsenceHref(ctx);
     case "incomplete_coverage":
       return buildIncompleteCoverageHref(ctx);
+    case "coverage_required":
+      return buildOperationalIncidentHref("coverage_required", ctx);
+    case "operation_modified":
+      return buildOperationalIncidentHref("operation_modified", ctx);
+    case "not_confirmed":
+      return buildOperationalIncidentHref("not_confirmed", ctx);
+    case "missing_check_in":
+      return buildOperationalIncidentHref("missing_check_in", ctx);
+    case "missing_check_out":
+      return buildOperationalIncidentHref("missing_check_out", ctx);
+    case "no_punch":
+      return buildOperationalIncidentHref("no_punch", ctx);
     default:
       break;
   }
 
   const query = params.toString();
   return query ? `/attendance?${query}` : "/attendance";
+}
+
+export function buildOperationalIncidentHref(
+  key: StatisticsIncidentLinkKey,
+  ctx: StatisticsDeepLinkContext,
+): string {
+  const params = new URLSearchParams();
+  appendSharedFilters(params, ctx);
+  params.set("tab", "incidents");
+
+  switch (key) {
+    case "coverage_required":
+      params.set("incidentType", "COVERAGE_REQUIRED");
+      break;
+    case "operation_modified":
+      params.set("incidentType", "OPERATION_MODIFIED");
+      break;
+    case "not_confirmed":
+      params.set("incidentType", "NOT_CONFIRMED");
+      break;
+    case "incomplete_punches":
+      break;
+    case "missing_check_in":
+      params.set("incidentType", "MISSING_CHECK_IN");
+      break;
+    case "missing_check_out":
+      params.set("incidentType", "MISSING_CHECK_OUT");
+      break;
+    case "no_punch":
+      params.set("incidentType", "NO_PUNCH");
+      break;
+    case "any_incident":
+    default:
+      break;
+  }
+
+  return `/statistics?${params.toString()}`;
 }
 
 export function buildStatisticsAbsenceHref(ctx: StatisticsDeepLinkContext): string {

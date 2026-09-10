@@ -114,6 +114,18 @@ export const EMPLOYEES_API_EXPORTS = [
   "deactivateEmployee",
 ] as const;
 
+export const STATISTICS_API_EXPORTS = [
+  "getAttendanceStatisticsSummary",
+  "getAttendanceStatisticsTimeline",
+  "getAttendanceActionExceptions",
+  "getAttendanceStatusDistribution",
+  "getAttendanceByEmployee",
+  "getAttendanceByOperation",
+  "getAttendanceByService",
+  "getAttendanceWorkdayDetails",
+  "getAttendanceIncidentDetails",
+] as const;
+
 export const LOCATION_ZONES_API_EXPORTS = [
   "getLocationZones",
   "searchLocationZones",

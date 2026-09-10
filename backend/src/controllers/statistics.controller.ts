@@ -60,4 +60,13 @@ export const statisticsController = {
     );
     res.status(200).json(result);
   },
+
+  async incidentDetails(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const result = await statisticsService.getIncidentDetails(
+      companyId,
+      req.validatedQuery as StatisticsTableQuery,
+    );
+    res.status(200).json(result);
+  },
 };

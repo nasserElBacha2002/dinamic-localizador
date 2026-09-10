@@ -4,6 +4,7 @@ import { ErrorState } from "../../../design-system";
 import { ChartCard } from "../../../components/statistics/ChartCard";
 import { ExportActionButtons } from "../../../components/statistics/ExportActionButtons";
 import { StatisticsKpiCards } from "../../../components/statistics/StatisticsKpiCards";
+import { OperationalIncidentsPanel } from "../../../components/statistics/OperationalIncidentsPanel";
 import {
   buildHorizontalBarOption,
   buildVerticalBarOption,
@@ -116,11 +117,18 @@ export function StatisticsGeneralTab({
       {summaryQuery.isError ? (
         <ErrorState message={getApiErrorMessage(summaryQuery.error)} />
       ) : (
-        <StatisticsKpiCards
-          summary={summary}
-          isLoading={summaryQuery.isPending}
-          linkContext={linkContext}
-        />
+        <>
+          <StatisticsKpiCards
+            summary={summary}
+            isLoading={summaryQuery.isPending}
+            linkContext={linkContext}
+          />
+          <OperationalIncidentsPanel
+            summary={summary}
+            isLoading={summaryQuery.isPending}
+            linkContext={linkContext}
+          />
+        </>
       )}
 
       <Grid gap="md">

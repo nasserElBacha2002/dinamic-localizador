@@ -2,7 +2,11 @@ import { setupDomEnvironment } from "../../test/setup-dom";
 
 setupDomEnvironment();
 
-import { mockApiModule, EMPLOYEES_API_EXPORTS } from "../../test/mock-api-module";
+import {
+  mockApiModule,
+  EMPLOYEES_API_EXPORTS,
+  STATISTICS_API_EXPORTS,
+} from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
 import { mockViewport } from "../../test/mock-match-media";
@@ -52,7 +56,8 @@ mockApiModule("api/statistics.api", {
   getAttendanceByOperation: async () => emptyPage,
   getAttendanceByService: async () => emptyPage,
   getAttendanceWorkdayDetails: async () => emptyPage,
-});
+  getAttendanceIncidentDetails: async () => emptyPage,
+}, STATISTICS_API_EXPORTS);
 
 mockApiModule("api/company-users.api", {
   getCompanyMembership: async () => ({

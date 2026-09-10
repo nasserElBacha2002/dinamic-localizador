@@ -20,7 +20,69 @@ export type StatisticsActionExceptionKey =
   | "outside_geofence"
   | "pending_review"
   | "late_arrival"
-  | "early_departure";
+  | "early_departure"
+  | "coverage_required"
+  | "operation_modified"
+  | "not_confirmed"
+  | "missing_check_in"
+  | "missing_check_out"
+  | "no_punch";
+
+export type OperationalIncidentType =
+  | "COVERAGE_REQUIRED"
+  | "OPERATION_MODIFIED"
+  | "NOT_CONFIRMED"
+  | "NOT_CONFIRMED_AND_ABSENT"
+  | "MISSING_CHECK_IN"
+  | "MISSING_CHECK_OUT"
+  | "NO_PUNCH";
+
+export interface OperationalIncidentSummaryMetrics {
+  availability: "AVAILABLE" | "UNAVAILABLE";
+  operationsWithAnyIncident: number;
+  operationsWithCoverage: number;
+  coverageEvents: number;
+  modifiedOperations: number;
+  operationChangeEvents: number;
+  operationsWithUnconfirmedAssignments: number;
+  notConfirmedBeforeStart: number;
+  notConfirmedAndAbsent: number;
+  operationsWithIncompletePunches: number;
+  incompleteWorkdays: number;
+  missingCheckIn: number;
+  missingCheckOut: number;
+  noPunch: number;
+  evaluableOperations: number;
+  confirmationEligibleAssignments: number;
+  punchEvaluableWorkdays: number;
+  changeTraceableOperations: number;
+  changeEventsReliableFrom: string | null;
+  coverageReliableFrom: string | null;
+  coverageEventsReliableHistorically: boolean;
+}
+
+export interface OperationalIncidentDetailRow {
+  detailId: string;
+  incidentType: OperationalIncidentType;
+  incidentLabel: string;
+  operationId: string;
+  operationalDate: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  workTeamName: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  operationStatus: string;
+  operationKind: string;
+  confirmationStatus: string | null;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  eventAt: string | null;
+  origin: string | null;
+  reason: string | null;
+  actorUserId: string | null;
+  actorName: string | null;
+}
 
 export interface StatisticsActionExceptionItem {
   key: StatisticsActionExceptionKey;
@@ -64,6 +126,12 @@ export interface AttendanceStatisticsSummary {
   validationEvaluableWorkdays: number;
   /** Workdays with a completed checkout (early-departure universe). */
   checkoutEvaluableWorkdays: number;
+  /**
+   * Operational incident metrics (non-exclusive subtotals).
+   * Null when the incident query failed; see operationalIncidentsStatus.
+   */
+  operationalIncidents: OperationalIncidentSummaryMetrics | null;
+  operationalIncidentsStatus: "AVAILABLE" | "UNAVAILABLE";
 }
 
 export interface AttendanceStatisticsPeriodComparison {
@@ -81,6 +149,8 @@ export interface AttendanceStatisticsSummaryPayload extends AttendanceStatistics
   companyTimeZone: string;
   companyLocalDate: string;
   actionExceptions: StatisticsActionExceptionItem[];
+  /** Subtotals overlap; operationsWithAnyIncident is DISTINCT across categories. */
+  operationalIncidentsNonExclusive: true;
 }
 
 export interface AttendanceTimelinePoint {

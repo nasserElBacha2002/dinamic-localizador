@@ -27,6 +27,7 @@ import {
 } from "../utils/employee-workday-statistics-projection";
 import { toDateOnlyString } from "../utils/row-mappers";
 import type { StatisticsRankingMode } from "../schemas/statistics.schema";
+import { emptyOperationalIncidentSummary } from "../utils/operational-incident-statistics";
 
 const toNumber = (value: unknown): number => Number(value ?? 0);
 
@@ -243,6 +244,8 @@ const mapSummaryRow = (row: Record<string, unknown>): AttendanceStatisticsSummar
     locationEvaluableWorkdays: toNumber(row.location_evaluable_workdays),
     validationEvaluableWorkdays: toNumber(row.validation_evaluable_workdays),
     checkoutEvaluableWorkdays: toNumber(row.checkout_evaluable_workdays),
+    operationalIncidents: emptyOperationalIncidentSummary(),
+    operationalIncidentsStatus: "AVAILABLE",
   };
 };
 

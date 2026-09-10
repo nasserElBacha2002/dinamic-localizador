@@ -59,6 +59,7 @@ export const operationAssignmentCore = {
       operationWorkDate: string | null;
       sourceAssignmentBatchId?: string | null;
       sourceWorkTeamId?: string | null;
+      assignmentOrigin?: "MANUAL" | "WORK_TEAM" | "SYSTEM" | "COVERAGE";
     },
   ): Promise<AssignEmployeeInTransactionOutcome> {
     if (!input.employeeActive) {
@@ -122,7 +123,9 @@ export const operationAssignmentCore = {
         validUntil: input.validUntil,
         sourceAssignmentBatchId: input.sourceAssignmentBatchId ?? null,
         sourceWorkTeamId: input.sourceWorkTeamId ?? null,
-        assignmentOrigin: input.sourceAssignmentBatchId ? "WORK_TEAM" : "MANUAL",
+        assignmentOrigin:
+          input.assignmentOrigin ??
+          (input.sourceAssignmentBatchId ? "WORK_TEAM" : "MANUAL"),
       },
     );
 

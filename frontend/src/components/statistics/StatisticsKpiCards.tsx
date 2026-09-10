@@ -122,10 +122,11 @@ export function StatisticsKpiCards({ summary, isLoading, linkContext }: Statisti
     },
     {
       key: "incompleteCoverage",
-      label: "Operaciones con cobertura incompleta",
+      label: "Operaciones con cobertura de plantilla incompleta",
       value: summary?.incompleteCoverageOperations ?? 0,
       onClick: () => go("incomplete_coverage"),
-      ariaLabel: "Ver operaciones con cobertura incompleta",
+      ariaLabel: "Ver operaciones con cobertura de plantilla incompleta",
+      description: "Presentismo consolidado (no es cobertura por reemplazo)",
     },
     {
       key: "open",

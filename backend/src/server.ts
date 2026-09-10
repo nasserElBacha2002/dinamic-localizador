@@ -36,6 +36,10 @@ import {
   startOperationLifecycleJob,
   stopOperationLifecycleJob,
 } from "./jobs/operation-lifecycle.job";
+import {
+  startWhatsappMessageCostSyncJob,
+  stopWhatsappMessageCostSyncJob,
+} from "./jobs/whatsapp-message-cost-sync.job";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
@@ -58,6 +62,7 @@ const startServer = async (): Promise<void> => {
   startOperationAssignmentNotificationJob();
   startOperationLifecycleJob();
   startAdminAlertJob();
+  startWhatsappMessageCostSyncJob();
 
   app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`API listening on 0.0.0.0:${env.PORT}`);
@@ -75,6 +80,7 @@ const shutdown = async (): Promise<void> => {
   stopOperationAssignmentNotificationJob();
   stopOperationLifecycleJob();
   stopAdminAlertJob();
+  stopWhatsappMessageCostSyncJob();
   await closeDatabase();
   process.exit(0);
 };

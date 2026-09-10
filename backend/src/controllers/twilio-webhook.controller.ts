@@ -5,6 +5,7 @@ import { twilioWebhookSchema } from "../schemas/twilio-webhook.schema";
 import { whatsappBotService } from "../services/whatsapp-bot.service";
 import { whatsappCompanyContextService } from "../services/whatsapp-company-context.service";
 import { whatsappFlowTraceService } from "../services/whatsapp-flow-trace.service";
+import { whatsappMessageCostLedgerRepository } from "../repositories/whatsapp-message-cost-ledger.repository";
 import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { tryNormalizeWhatsAppPhone } from "../utils/phone";
 
@@ -94,6 +95,17 @@ export const twilioWebhookController = {
         payload: req.body as Record<string, unknown>,
         providerTimestamp: asString(req.body?.Timestamp),
       });
+      try {
+        await whatsappMessageCostLedgerRepository.updateProviderStatusBySid(
+          messageSid,
+          messageStatus,
+        );
+      } catch (ledgerError) {
+        console.warn("[twilio-status-callback] cost ledger status update failed (non-blocking)", {
+          messageSid,
+          error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
+        });
+      }
       res.status(204).end();
     } catch (error) {
       console.error("[twilio-status-callback] persistence failed", {

@@ -190,6 +190,12 @@ const processClaimedNotification = async (
       toPhoneNumber: notification.recipientPhone,
       contentSid,
       contentVariables,
+      costContext: {
+        companyId: notification.companyId,
+        messageKind: "TEMPLATE",
+        flowLabel: "ADMIN_ALERT",
+        templateName: notification.alertType,
+      },
     });
     messageSid = result.messageSid;
   } catch (sendError) {

@@ -181,6 +181,9 @@ export function WhatsappObservabilityPage() {
         description="Revisá conversaciones, flujos y errores del bot de WhatsApp en producción."
         action={
           <Group gap="sm">
+            <Button component={RouterLink} to={`${LIST_PATH}/costs`} variant="default">
+              Costos de mensajería
+            </Button>
             <Button component={RouterLink} to={`${LIST_PATH}/errors`} variant="default">
               Ver errores
             </Button>

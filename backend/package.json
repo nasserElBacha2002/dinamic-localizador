@@ -28,6 +28,7 @@
     "reminders:run": "tsx src/scripts/send-attendance-reminder.ts run",
     "reminders:test": "tsx src/scripts/send-attendance-reminder.ts test",
     "job:whatsapp-retention": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/run-whatsapp-retention.ts",
+    "backfill:whatsapp-message-costs": "tsx --import ./src/test-helpers/preload-test-env.ts src/scripts/backfill-whatsapp-message-cost-ledger.ts",
     "audit:statistics-grain": "tsx src/scripts/audit-statistics-grain.ts",
     "check:terminology": "tsx src/scripts/check-domain-terminology.ts",
     "diagnose:operation-reassignment": "tsx scripts/diagnose-operation-reassignment.ts",
@@ -52,10 +53,10 @@
     "helmet": "^8.1.0",
     "jsonwebtoken": "^9.0.3",
     "luxon": "^3.7.2",
-    "morgan": "^1.10.0",
+    "morgan": "^1.12.0",
     "mssql": "^12.1.0",
-    "multer": "^2.2.0",
-    "nodemailer": "^9.0.3",
+    "multer": "^2.3.0",
+    "nodemailer": "^9.1.1",
     "otpauth": "^9.5.1",
     "twilio": "^6.0.2",
     "xlsx": "npm:@e965/xlsx@0.20.3",
@@ -82,6 +83,7 @@
   },
   "overrides": {
     "brace-expansion": "5.0.9",
-    "uuid": "^11.1.1"
+    "uuid": "^11.1.1",
+    "qs": "6.16.0"
   }
 }

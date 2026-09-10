@@ -152,6 +152,18 @@ const envSchema = z
     WHATSAPP_OBSERVABILITY_UI_ENABLED: z.stringbool().default(true),
     WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: z.stringbool().default(true),
     TWILIO_STATUS_CALLBACK_URL: z.string().url().optional(),
+    /** Async worker that fetches Twilio Message.price into the cost ledger. */
+    WHATSAPP_MESSAGE_COST_SYNC_WORKER_ENABLED: z.stringbool().default(false),
+    WHATSAPP_MESSAGE_COST_SYNC_WORKER_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60_000),
+    WHATSAPP_MESSAGE_COST_SYNC_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    WHATSAPP_MESSAGE_COST_SYNC_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
+    WHATSAPP_MESSAGE_COST_SYNC_RETRY_BASE_MS: z.coerce.number().int().positive().default(60_000),
+    WHATSAPP_MESSAGE_COST_SYNC_BATCH_SIZE: z.coerce.number().int().positive().max(50).default(10),
+    WHATSAPP_MESSAGE_COST_EXPORT_MAX_ROWS: z.coerce.number().int().positive().max(50_000).default(10_000),
     WHATSAPP_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
     WHATSAPP_RETENTION_DRY_RUN: z.stringbool().default(false),
     WHATSAPP_RETENTION_BATCH_SIZE: z.coerce.number().int().min(1).max(5000).default(500),

@@ -1,4 +1,4 @@
-import { Button, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { Link as RouterLink, useNavigate, useSearchParams } from "react-router";
 import {
@@ -131,9 +131,18 @@ export function WhatsappObservabilityErrorsPage() {
         title="Errores de WhatsApp"
         description="Errores agrupados por código detectados en flujos y mensajes."
         action={
-          <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
-            Volver a conversaciones
-          </Button>
+          <Group gap="sm">
+            <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
+              Volver a conversaciones
+            </Button>
+            <Button
+              component={RouterLink}
+              to="/platform/observability/whatsapp/costs"
+              variant="default"
+            >
+              Costos de mensajería
+            </Button>
+          </Group>
         }
       />
 

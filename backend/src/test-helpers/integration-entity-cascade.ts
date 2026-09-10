@@ -114,6 +114,14 @@ export const deleteOperationCascade = async (
       DELETE FROM operation_workdays
       WHERE company_id = @companyId AND operation_id = @operationId;
 
+      IF OBJECT_ID(N'dbo.operation_coverage_events', N'U') IS NOT NULL
+        DELETE FROM operation_coverage_events
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
+      IF OBJECT_ID(N'dbo.operation_change_events', N'U') IS NOT NULL
+        DELETE FROM operation_change_events
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
       DELETE FROM operation_schedule_days
       WHERE operation_schedule_id IN (
         SELECT id FROM operation_schedules

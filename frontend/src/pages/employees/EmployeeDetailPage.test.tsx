@@ -10,6 +10,7 @@ import {
   ABSENCES_API_EXPORTS,
   EMPLOYEES_API_EXPORTS,
   LOCATION_ZONES_API_EXPORTS,
+  STATISTICS_API_EXPORTS,
 } from "../../test/mock-api-module";
 import { setRuntimeCompanyId } from "../../api/company-path";
 import { installLayoutPolyfills } from "../../test/layout-polyfills";
@@ -216,7 +217,11 @@ mockApiModule("api/statistics.api", {
     data: [],
     meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
   }),
-});
+  getAttendanceIncidentDetails: async () => ({
+    data: [],
+    meta: { page: 1, limit: 10, total: 0, totalPages: 0 },
+  }),
+}, STATISTICS_API_EXPORTS);
 
 mockApiModule(
   "api/absences.api",

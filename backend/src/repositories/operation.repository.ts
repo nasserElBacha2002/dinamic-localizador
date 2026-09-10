@@ -683,8 +683,12 @@ export const operationRepository = {
     return mapOperationRow(result.recordset[0] as Record<string, unknown>);
   },
 
-  async cancel(companyId: string, id: string): Promise<Operation | null> {
-    return this.update(companyId, id, { status: "CANCELLED" });
+  async cancel(
+    companyId: string,
+    id: string,
+    transaction?: sql.Transaction,
+  ): Promise<Operation | null> {
+    return this.update(companyId, id, { status: "CANCELLED" }, transaction);
   },
 
   /**
@@ -692,10 +696,15 @@ export const operationRepository = {
    * Returns null when the row is missing for the company or is no longer CANCELLED
    * (concurrency / idempotency race).
    */
-  async reactivateFromCancelled(companyId: string, id: string): Promise<Operation | null> {
-    const pool = getPool();
-    const result = await pool
-      .request()
+  async reactivateFromCancelled(
+    companyId: string,
+    id: string,
+    transaction?: sql.Transaction,
+  ): Promise<Operation | null> {
+    const request = transaction
+      ? new sql.Request(transaction)
+      : getPool().request();
+    const result = await request
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("id", sql.UniqueIdentifier, id)
       .query(`

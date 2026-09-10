@@ -69,3 +69,11 @@ statisticsRouter.get(
   requireReportsExportWhenRequested,
   asyncHandler(statisticsController.workdayDetails),
 );
+
+statisticsRouter.get(
+  "/attendance/incident-details",
+  requirePermission("reports:read"),
+  validate(statisticsTableQuerySchema, "query"),
+  requireReportsExportWhenRequested,
+  asyncHandler(statisticsController.incidentDetails),
+);

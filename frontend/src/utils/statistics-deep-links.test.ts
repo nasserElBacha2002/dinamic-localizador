@@ -5,6 +5,7 @@ import {
   buildEmployeeAttendanceHref,
   buildOperationAttendanceHref,
   buildOperationDetailHref,
+  buildOperationalIncidentHref,
 } from "./statistics-deep-links";
 
 describe("statistics deep links", () => {
@@ -48,6 +49,17 @@ describe("statistics deep links", () => {
     assert.match(href, /tab=operation/);
     assert.match(href, /incompleteCoverage=true/);
     assert.match(href, /opSortBy=coverageRate/);
+  });
+
+  it("routes operational incidents to statistics incidents tab", () => {
+    const coverage = buildOperationalIncidentHref("coverage_required", ctx);
+    assert.match(coverage, /\/statistics\?/);
+    assert.match(coverage, /tab=incidents/);
+    assert.match(coverage, /incidentType=COVERAGE_REQUIRED/);
+
+    const punches = buildAttendanceExceptionHref("missing_check_out", ctx);
+    assert.match(punches, /tab=incidents/);
+    assert.match(punches, /incidentType=MISSING_CHECK_OUT/);
   });
 
   it("builds employee, operation detail, and operation attendance links", () => {

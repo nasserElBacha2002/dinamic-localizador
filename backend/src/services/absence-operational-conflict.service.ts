@@ -15,6 +15,10 @@ import { rollbackTransactionSafely } from "../utils/sql-transaction";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { auditService } from "./audit.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
+import { operationCoverageEventRepository } from "../repositories/operation-coverage-event.repository";
+import { companySettingsRepository } from "../repositories/company-settings.repository";
+import { resolveOperationOperationalDate } from "../utils/operation-change-events";
+import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { employeeAvailabilityService } from "./employee-availability.service";
 import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { operationAssignmentService } from "./operation-assignment.service";
@@ -314,6 +318,44 @@ export const absenceOperationalConflictService = {
       );
       if (!updated) {
         throw new AppError(409, "ABSENCE_OPERATIONAL_CONFLICT_RACE", "El conflicto ya fue resuelto");
+      }
+
+      if (
+        input.resolutionCode === "ASSIGN_REPLACEMENT" &&
+        existing.operationId &&
+        input.replacementEmployeeId
+      ) {
+        const coveredOperation = await operationRepository.findById(
+          companyId,
+          existing.operationId,
+        );
+        const operationWorkDate = await operationWorkDateService.resolveOperationWorkDate(
+          companyId,
+          existing.operationId,
+        );
+        const settings = await companySettingsRepository.findByCompanyId(companyId);
+        const timezone = resolveOperationTimezone(settings?.operationTimezone);
+        await operationCoverageEventRepository.insert(
+          {
+            companyId,
+            operationId: existing.operationId,
+            operationalDate: resolveOperationOperationalDate(
+              {
+                scheduledStart: coveredOperation?.scheduledStart ?? null,
+                workDate: operationWorkDate,
+              },
+              timezone,
+            ),
+            sourceType: "ABSENCE_ASSIGN_REPLACEMENT",
+            sourceConflictId: conflictId,
+            replacedAssignmentId: existing.assignmentId,
+            replacedEmployeeId: existing.employeeId,
+            replacementEmployeeId: input.replacementEmployeeId,
+            reason: input.resolutionReason ?? null,
+            resolvedByUserId: input.resolvedByUserId ?? null,
+          },
+          transaction,
+        );
       }
 
       maybeInjectResolveFailure("after_resolve_conflict");

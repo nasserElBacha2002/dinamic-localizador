@@ -96,3 +96,12 @@ export async function getAttendanceWorkdayDetails(
   );
   return data;
 }
+
+export async function getAttendanceIncidentDetails(
+  filters: StatisticsFilters,
+): Promise<PaginatedResponse<import("../types/statistics").OperationalIncidentDetailRow>> {
+  const { data } = await scopedApiClient.get<
+    PaginatedResponse<import("../types/statistics").OperationalIncidentDetailRow>
+  >("statistics/attendance/incident-details", { params: toParams(filters) });
+  return data;
+}

@@ -173,19 +173,29 @@ export function useStatisticsPageData() {
       serviceIds: table.state.serviceIds.length > 0 ? table.state.serviceIds : undefined,
       employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
       operationKind: (table.state.operationKind as StatisticsOperationKind) || undefined,
+      operationStatus: (table.state.operationStatus as StatisticsFilters["operationStatus"]) || undefined,
+      confirmationStatus:
+        (table.state.confirmationStatus as StatisticsFilters["confirmationStatus"]) || undefined,
+      punchCompleteness:
+        (table.state.punchCompleteness as StatisticsFilters["punchCompleteness"]) || undefined,
       effectiveState: (table.state.effectiveState as StatisticsEffectiveState) || undefined,
       validationStatus: (table.state.validationStatus as StatisticsValidationStatus) || undefined,
       locationStatus: table.state.locationStatus || undefined,
       punctualityStatus: table.state.punctualityStatus || undefined,
       incompleteCoverage: table.state.incompleteCoverage || undefined,
+      incidentType: (table.state.incidentType as StatisticsFilters["incidentType"]) || undefined,
     }),
     [
       isoDateFrom,
       isoDateTo,
+      table.state.confirmationStatus,
       table.state.employeeIds,
       table.state.incompleteCoverage,
+      table.state.incidentType,
       table.state.operationIds,
       table.state.operationKind,
+      table.state.operationStatus,
+      table.state.punchCompleteness,
       table.state.effectiveState,
       table.state.locationStatus,
       table.state.punctualityStatus,
@@ -232,6 +242,7 @@ export function useStatisticsPageData() {
   const isEmployeeTab = activeTab === "employee";
   const isOperationTab = activeTab === "operation";
   const isLocationTab = activeTab === "location";
+  const isIncidentsTab = activeTab === "incidents";
 
   const attentionEmployeesFilters = useMemo(
     () => buildAttentionEmployeesFilters(baseFilters),
@@ -473,6 +484,7 @@ export function useStatisticsPageData() {
         empPage: 1,
         opPage: 1,
         svcPage: 1,
+        incPage: 1,
       },
       { resetPage: false },
     );
@@ -544,6 +556,15 @@ export function useStatisticsPageData() {
     resetPage: () => table.setField("svcPage", 1, { resetPage: false }),
   };
 
+  const incidentPagination = {
+    page: table.state.incPage,
+    pageSize: table.state.incPageSize,
+    onPageChange: (page: number) => table.setField("incPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ incPageSize: pageSize, incPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("incPage", 1, { resetPage: false }),
+  };
+
   return {
     activeTab,
     setActiveTab: (tab: StatisticsTabKey) => table.setField("tab", tab, { resetPage: false }),
@@ -558,6 +579,12 @@ export function useStatisticsPageData() {
     setEmployeeIds: (value: string[]) => table.setField("employeeIds", value),
     operationKind: table.state.operationKind as StatisticsOperationKind,
     setOperationKind: (value: string) => table.setField("operationKind", value),
+    operationStatus: table.state.operationStatus,
+    setOperationStatus: (value: string) => table.setField("operationStatus", value),
+    confirmationStatus: table.state.confirmationStatus,
+    setConfirmationStatus: (value: string) => table.setField("confirmationStatus", value),
+    punchCompleteness: table.state.punchCompleteness,
+    setPunchCompleteness: (value: string) => table.setField("punchCompleteness", value),
     effectiveState: table.state.effectiveState as StatisticsEffectiveState,
     setEffectiveState: (value: string) => table.setField("effectiveState", value),
     validationStatus: table.state.validationStatus as StatisticsValidationStatus,
@@ -568,6 +595,10 @@ export function useStatisticsPageData() {
     setPunctualityStatus: (value: string) => table.setField("punctualityStatus", value),
     incompleteCoverage: table.state.incompleteCoverage,
     setIncompleteCoverage: (value: boolean) => table.setField("incompleteCoverage", value),
+    incidentType: table.state.incidentType,
+    setIncidentType: (value: string) => table.setField("incidentType", value),
+    baseFilters,
+    isIncidentsTab,
     exportsDisabled,
     isoDateFrom,
     isoDateTo,
@@ -588,6 +619,7 @@ export function useStatisticsPageData() {
     employeePagination,
     operationPagination,
     servicePagination,
+    incidentPagination,
     employeeSortBy: table.state.empSortBy,
     employeeSortDirection: table.state.empSortOrder,
     operationSortBy: table.state.opSortBy,

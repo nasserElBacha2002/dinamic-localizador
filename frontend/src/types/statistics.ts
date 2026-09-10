@@ -69,6 +69,65 @@ export interface AttendanceStatisticsSummary {
   companyTimeZone?: string;
   companyLocalDate?: string;
   actionExceptions?: AttendanceStatusDistributionItem[];
+  operationalIncidents?: OperationalIncidentSummaryMetrics | null;
+  operationalIncidentsStatus?: "AVAILABLE" | "UNAVAILABLE";
+  operationalIncidentsNonExclusive?: boolean;
+}
+
+export type OperationalIncidentType =
+  | "COVERAGE_REQUIRED"
+  | "OPERATION_MODIFIED"
+  | "NOT_CONFIRMED"
+  | "NOT_CONFIRMED_AND_ABSENT"
+  | "MISSING_CHECK_IN"
+  | "MISSING_CHECK_OUT"
+  | "NO_PUNCH";
+
+export interface OperationalIncidentSummaryMetrics {
+  availability?: "AVAILABLE" | "UNAVAILABLE";
+  operationsWithAnyIncident: number;
+  operationsWithCoverage: number;
+  coverageEvents: number;
+  modifiedOperations: number;
+  operationChangeEvents: number;
+  operationsWithUnconfirmedAssignments: number;
+  notConfirmedBeforeStart: number;
+  notConfirmedAndAbsent: number;
+  operationsWithIncompletePunches: number;
+  incompleteWorkdays: number;
+  missingCheckIn: number;
+  missingCheckOut: number;
+  noPunch: number;
+  evaluableOperations: number;
+  confirmationEligibleAssignments?: number;
+  punchEvaluableWorkdays?: number;
+  changeTraceableOperations?: number;
+  changeEventsReliableFrom: string | null;
+  coverageReliableFrom?: string | null;
+  coverageEventsReliableHistorically: boolean;
+}
+
+export interface OperationalIncidentDetailRow {
+  detailId: string;
+  incidentType: OperationalIncidentType;
+  incidentLabel: string;
+  operationId: string;
+  operationalDate: string;
+  serviceName: string;
+  serviceAddress: string | null;
+  workTeamName: string | null;
+  employeeId: string | null;
+  employeeName: string | null;
+  operationStatus: string;
+  operationKind: string;
+  confirmationStatus: string | null;
+  checkInAt: string | null;
+  checkOutAt: string | null;
+  eventAt: string | null;
+  origin: string | null;
+  reason: string | null;
+  actorUserId: string | null;
+  actorName?: string | null;
 }
 
 export interface AttendanceTimelinePoint {
@@ -200,14 +259,20 @@ export interface StatisticsFilters {
   operationId?: string;
   serviceId?: string;
   employeeId?: string;
+  workTeamId?: string;
   operationIds?: string[];
   serviceIds?: string[];
   employeeIds?: string[];
+  workTeamIds?: string[];
   operationKind?: StatisticsOperationKind;
+  operationStatus?: "SCHEDULED" | "IN_PROGRESS" | "COMPLETED" | "CANCELLED" | "";
   effectiveState?: StatisticsEffectiveState;
   validationStatus?: StatisticsValidationStatus;
   locationStatus?: string;
   punctualityStatus?: string;
+  confirmationStatus?: "PENDING" | "CONFIRMED" | "UNAVAILABLE" | "";
+  punchCompleteness?: "COMPLETE" | "MISSING_CHECK_OUT" | "MISSING_CHECK_IN" | "NO_PUNCH" | "";
+  incidentType?: OperationalIncidentType | "";
   openAttendance?: boolean;
   incompleteCoverage?: boolean;
   rankingMode?:

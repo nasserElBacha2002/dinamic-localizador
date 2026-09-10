@@ -1,10 +1,25 @@
 import { z } from "zod";
 
-export const assignEmployeeSchema = z.object({
-  employeeId: z.string().uuid("UUID de empleado inválido"),
-  validFrom: z.string().date("Fecha de inicio inválida").optional(),
-  validUntil: z.string().date("Fecha de fin inválida").nullable().optional(),
-});
+export const assignEmployeeSchema = z
+  .object({
+    employeeId: z.string().uuid("UUID de empleado inválido"),
+    validFrom: z.string().date("Fecha de inicio inválida").optional(),
+    validUntil: z.string().date("Fecha de fin inválida").nullable().optional(),
+    /** Explicit coverage — does not auto-infer from manual reassignment. */
+    asCoverage: z.boolean().optional(),
+    replacedAssignmentId: z.string().uuid().nullable().optional(),
+    replacedEmployeeId: z.string().uuid().nullable().optional(),
+    coverageReason: z.string().trim().max(500).nullable().optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.asCoverage === true && !data.replacedAssignmentId) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "La cobertura manual requiere replacedAssignmentId",
+        path: ["replacedAssignmentId"],
+      });
+    }
+  });
 
 export const assignEmployeesBatchSchema = z.object({
   employeeIds: z

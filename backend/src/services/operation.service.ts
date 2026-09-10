@@ -19,6 +19,11 @@ import type {
 import { auditService } from "./audit.service";
 import { absenceOperationalImpactQueryService } from "./absence-operational-impact-query.service";
 import { companyOperationalDefaultsResolver } from "./company-operational-defaults.resolver";
+import { operationChangeEventRepository } from "../repositories/operation-change-event.repository";
+import {
+  buildOperationChangePayload,
+  resolveOperationOperationalDate,
+} from "../utils/operation-change-events";
 import { companyWorkScheduleRepository } from "../repositories/company-work-schedule.repository";
 import { recurringScheduleService } from "./recurring-schedule.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
@@ -31,6 +36,7 @@ import { operationLifecycleService } from "./operation-lifecycle.service";
 import { buildPaginationMeta } from "../utils/pagination";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { getDateIsoInTimezone } from "../utils/absence-date";
+import { safeRollback } from "../utils/safe-transaction";
 import {
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
@@ -40,6 +46,11 @@ import type { OperationDetail, OperationWithService } from "../types/domain";
 import { assertCompanyWorkScheduleExists } from "../utils/recurring-schedule-consistency";
 import { detectOneTimeScheduleAffectingChanges } from "../utils/one-time-schedule-change";
 import { oneTimeScheduleReconciliationCommand } from "./one-time-operation-schedule-reconciliation.service";
+
+const resolveCompanyOperationTimezone = async (companyId: string): Promise<string> => {
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  return resolveOperationTimezone(settings?.operationTimezone);
+};
 
 const validateOneTimeDates = (
   scheduledStart: string,
@@ -359,7 +370,7 @@ export const operationService = {
     });
   },
 
-  async update(companyId: string, id: string, input: UpdateOperationInput) {
+  async update(companyId: string, id: string, input: UpdateOperationInput, userId?: string | null) {
     const current = await this.getById(companyId, id);
 
     if (input.operationKind !== undefined) {
@@ -386,10 +397,10 @@ export const operationService = {
           "Las operaciones habituales no usan inicio y fin programados",
         );
       }
-      return this.updateRecurring(companyId, id, current, input);
+      return this.updateRecurring(companyId, id, current, input, userId);
     }
 
-    return this.updateOneTime(companyId, id, current, input);
+    return this.updateOneTime(companyId, id, current, input, userId);
   },
 
   async updateOneTime(
@@ -397,6 +408,7 @@ export const operationService = {
     id: string,
     current: OperationRecord,
     input: UpdateOperationInput,
+    userId?: string | null,
   ) {
     const persistenceInput = await resolveUpdateTolerances(companyId, input);
 
@@ -475,6 +487,7 @@ export const operationService = {
             entityType: "operation",
             entityId: id,
             action: "update",
+            userId: userId ?? null,
             previousData: locked as unknown as Record<string, unknown>,
             newData: {
               ...(updated as unknown as Record<string, unknown>),
@@ -494,25 +507,90 @@ export const operationService = {
           transaction,
         );
 
+        const timezone = await resolveCompanyOperationTimezone(companyId);
+        const changePayload = buildOperationChangePayload({
+          previous: locked,
+          next: updated,
+          action: "update",
+          timezone,
+        });
+        if (changePayload) {
+          await operationChangeEventRepository.insert(
+            {
+              companyId,
+              operationId: id,
+              operationalDate: changePayload.operationalDate,
+              changeAction: changePayload.changeAction,
+              changedFields: changePayload.changedFields,
+              actorUserId: userId ?? null,
+              reason: "Actualización vía API",
+            },
+            transaction,
+          );
+        }
+
         await transaction.commit();
       } catch (error) {
-        await transaction.rollback();
+        await safeRollback(transaction);
         throw error;
       }
     } else {
-      updated = await operationRepository.update(companyId, id, persistenceInput);
-      if (!updated) {
-        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
-      }
+      const pool = getPool();
+      const transaction = new sql.Transaction(pool);
+      await transaction.begin();
 
-      await auditService.log(companyId, {
-        entityType: "operation",
-        entityId: id,
-        action: "update",
-        previousData: current as unknown as Record<string, unknown>,
-        newData: updated as unknown as Record<string, unknown>,
-        reason: "Actualización vía API",
-      });
+      try {
+        updated = await operationRepository.update(
+          companyId,
+          id,
+          persistenceInput,
+          transaction,
+        );
+        if (!updated) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+
+        await auditService.log(
+          companyId,
+          {
+            entityType: "operation",
+            entityId: id,
+            action: "update",
+            userId: userId ?? null,
+            previousData: current as unknown as Record<string, unknown>,
+            newData: updated as unknown as Record<string, unknown>,
+            reason: "Actualización vía API",
+          },
+          transaction,
+        );
+
+        const timezone = await resolveCompanyOperationTimezone(companyId);
+        const changePayload = buildOperationChangePayload({
+          previous: current,
+          next: updated,
+          action: "update",
+          timezone,
+        });
+        if (changePayload) {
+          await operationChangeEventRepository.insert(
+            {
+              companyId,
+              operationId: id,
+              operationalDate: changePayload.operationalDate,
+              changeAction: changePayload.changeAction,
+              changedFields: changePayload.changedFields,
+              actorUserId: userId ?? null,
+              reason: "Actualización vía API",
+            },
+            transaction,
+          );
+        }
+
+        await transaction.commit();
+      } catch (error) {
+        await safeRollback(transaction);
+        throw error;
+      }
     }
 
     if (reconcileResult && reconcileResult.confirmationsReset > 0) {
@@ -536,6 +614,7 @@ export const operationService = {
     id: string,
     current: OperationRecord,
     input: UpdateOperationInput,
+    userId?: string | null,
   ) {
     const persistenceInput = await resolveUpdateTolerances(companyId, input);
     const schedule = await operationScheduleRepository.findByOperationId(companyId, id);
@@ -637,6 +716,40 @@ export const operationService = {
         });
       }
 
+      const changeFields: string[] = [];
+      const opChange = buildOperationChangePayload({
+        previous: current,
+        next: updatedOperation,
+        action: "update",
+        timezone: customTimezone,
+      });
+      if (opChange) {
+        changeFields.push(...opChange.changedFields);
+      }
+      if (scheduleChanged) {
+        changeFields.push("schedule");
+      }
+      if (changeFields.length > 0) {
+        await operationChangeEventRepository.insert(
+          {
+            companyId,
+            operationId: id,
+            operationalDate: resolveOperationOperationalDate(
+              {
+                scheduledStart: updatedOperation.scheduledStart,
+                workDate: nextValidFrom,
+              },
+              customTimezone,
+            ),
+            changeAction: scheduleChanged ? "RESCHEDULE" : "UPDATE",
+            changedFields: [...new Set(changeFields)],
+            actorUserId: userId ?? null,
+            reason: "Actualización vía API",
+          },
+          transaction,
+        );
+      }
+
       await transaction.commit();
     } catch (error) {
       await transaction.rollback();
@@ -665,20 +778,59 @@ export const operationService = {
       );
     }
 
-    const cancelled = await operationRepository.cancel(companyId, id);
-    if (!cancelled) {
-      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
-    }
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    await auditService.log(companyId, {
-      entityType: "operation",
-      entityId: id,
-      action: "cancel",
-      userId: userId ?? null,
-      previousData: current as unknown as Record<string, unknown>,
-      newData: cancelled as unknown as Record<string, unknown>,
-      reason: "Cancelación vía API",
-    });
+    let cancelled: OperationRecord;
+    try {
+      const cancelledRow = await operationRepository.cancel(companyId, id, transaction);
+      if (!cancelledRow) {
+        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+      }
+      cancelled = cancelledRow;
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "operation",
+          entityId: id,
+          action: "cancel",
+          userId: userId ?? null,
+          previousData: current as unknown as Record<string, unknown>,
+          newData: cancelled as unknown as Record<string, unknown>,
+          reason: "Cancelación vía API",
+        },
+        transaction,
+      );
+
+      const timezone = await resolveCompanyOperationTimezone(companyId);
+      const cancelChange = buildOperationChangePayload({
+        previous: current,
+        next: cancelled,
+        action: "cancel",
+        timezone,
+      });
+      if (cancelChange) {
+        await operationChangeEventRepository.insert(
+          {
+            companyId,
+            operationId: id,
+            operationalDate: cancelChange.operationalDate,
+            changeAction: cancelChange.changeAction,
+            changedFields: cancelChange.changedFields,
+            actorUserId: userId ?? null,
+            reason: "Cancelación vía API",
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await safeRollback(transaction);
+      throw error;
+    }
 
     if ((cancelled.operationKind ?? "ONE_TIME") === "RECURRING") {
       await recurringWorkdaySyncService.runOperationSync(
@@ -718,33 +870,80 @@ export const operationService = {
       );
     }
 
-    const reactivated = await operationRepository.reactivateFromCancelled(companyId, id);
-    if (!reactivated) {
-      // Concurrent reactivation or status changed between read and update.
-      const raced = await operationRepository.findById(companyId, id);
-      if (!raced) {
-        throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
-      }
-      throw new AppError(
-        409,
-        "OPERATION_NOT_CANCELLED",
-        "La operación ya no se encuentra cancelada y no puede reactivarse.",
-      );
-    }
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
 
-    await auditService.log(companyId, {
-      entityType: "operation",
-      entityId: id,
-      action: "reactivate",
-      userId: userId ?? null,
-      previousData: {
-        ...(current as unknown as Record<string, unknown>),
-        previousStatus: current.status,
-        restoredStatus: OPERATION_REACTIVATION_STATUS,
-      },
-      newData: reactivated as unknown as Record<string, unknown>,
-      reason: "Reactivación vía API",
-    });
+    let reactivated: OperationRecord | null = null;
+    try {
+      reactivated = await operationRepository.reactivateFromCancelled(
+        companyId,
+        id,
+        transaction,
+      );
+      if (!reactivated) {
+        throw new AppError(
+          409,
+          "OPERATION_NOT_CANCELLED",
+          "La operación ya no se encuentra cancelada y no puede reactivarse.",
+        );
+      }
+
+      await auditService.log(
+        companyId,
+        {
+          entityType: "operation",
+          entityId: id,
+          action: "reactivate",
+          userId: userId ?? null,
+          previousData: {
+            ...(current as unknown as Record<string, unknown>),
+            previousStatus: current.status,
+            restoredStatus: OPERATION_REACTIVATION_STATUS,
+          },
+          newData: reactivated as unknown as Record<string, unknown>,
+          reason: "Reactivación vía API",
+        },
+        transaction,
+      );
+
+      const timezone = await resolveCompanyOperationTimezone(companyId);
+      const reactivateChange = buildOperationChangePayload({
+        previous: current,
+        next: reactivated,
+        action: "reactivate",
+        timezone,
+      });
+      if (reactivateChange) {
+        await operationChangeEventRepository.insert(
+          {
+            companyId,
+            operationId: id,
+            operationalDate: reactivateChange.operationalDate,
+            changeAction: reactivateChange.changeAction,
+            changedFields: reactivateChange.changedFields,
+            actorUserId: userId ?? null,
+            reason: "Reactivación vía API",
+          },
+          transaction,
+        );
+      }
+
+      await transaction.commit();
+    } catch (error) {
+      await safeRollback(transaction);
+      if (
+        error instanceof AppError &&
+        error.code === "OPERATION_NOT_CANCELLED" &&
+        !reactivated
+      ) {
+        const raced = await operationRepository.findById(companyId, id);
+        if (!raced) {
+          throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+        }
+      }
+      throw error;
+    }
 
     if ((reactivated.operationKind ?? "ONE_TIME") === "RECURRING") {
       await recurringWorkdaySyncService.runOperationSync(

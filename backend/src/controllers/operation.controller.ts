@@ -23,7 +23,12 @@ export const operationController = {
 
   async update(req: Request, res: Response) {
     const companyId = requireRequestCompanyId(req);
-    const operation = await operationService.update(companyId, String(req.params.id), req.body);
+    const operation = await operationService.update(
+      companyId,
+      String(req.params.id),
+      req.body,
+      req.auth?.userId ?? null,
+    );
     res.status(200).json({ data: operation });
   },
 

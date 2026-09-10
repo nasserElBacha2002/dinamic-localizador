@@ -13,6 +13,7 @@ import type {
 } from "../../types/statistics";
 import {
   locationStatusLabels,
+  operationStatusLabels,
   punctualityStatusLabels,
   validationStatusLabels,
 } from "../../utils/labels";
@@ -26,6 +27,9 @@ interface StatisticsFiltersBarProps {
   serviceIds: string[];
   employeeIds: string[];
   operationKind: StatisticsOperationKind;
+  operationStatus: string;
+  confirmationStatus: string;
+  punchCompleteness: string;
   effectiveState: StatisticsEffectiveState;
   validationStatus: StatisticsValidationStatus;
   locationStatus: string;
@@ -37,6 +41,9 @@ interface StatisticsFiltersBarProps {
   onServiceChange: (value: string[]) => void;
   onEmployeeChange: (value: string[]) => void;
   onOperationKindChange: (value: StatisticsOperationKind) => void;
+  onOperationStatusChange: (value: string) => void;
+  onConfirmationStatusChange: (value: string) => void;
+  onPunchCompletenessChange: (value: string) => void;
   onEffectiveStateChange: (value: StatisticsEffectiveState) => void;
   onValidationStatusChange: (value: StatisticsValidationStatus) => void;
   onLocationStatusChange: (value: string) => void;
@@ -53,6 +60,19 @@ const EFFECTIVE_STATE_LABELS: Record<Exclude<StatisticsEffectiveState, "">, stri
   CANCELLED: "Cancelada",
 };
 
+const CONFIRMATION_STATUS_LABELS: Record<string, string> = {
+  PENDING: "Pendiente",
+  CONFIRMED: "Confirmada",
+  UNAVAILABLE: "No disponible",
+};
+
+const PUNCH_COMPLETENESS_LABELS: Record<string, string> = {
+  COMPLETE: "Completo",
+  MISSING_CHECK_OUT: "Sin salida",
+  MISSING_CHECK_IN: "Sin llegada",
+  NO_PUNCH: "Sin fichaje",
+};
+
 export function StatisticsFiltersBar({
   dateRange,
   defaultDateRange,
@@ -60,6 +80,9 @@ export function StatisticsFiltersBar({
   serviceIds,
   employeeIds,
   operationKind,
+  operationStatus,
+  confirmationStatus,
+  punchCompleteness,
   effectiveState,
   validationStatus,
   locationStatus,
@@ -71,6 +94,9 @@ export function StatisticsFiltersBar({
   onServiceChange,
   onEmployeeChange,
   onOperationKindChange,
+  onOperationStatusChange,
+  onConfirmationStatusChange,
+  onPunchCompletenessChange,
   onEffectiveStateChange,
   onValidationStatusChange,
   onLocationStatusChange,
@@ -110,6 +136,30 @@ export function StatisticsFiltersBar({
     () => [
       { value: "", label: "Todos" },
       ...Object.entries(operationKindLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
+  const operationStatusOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(operationStatusLabels).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
+  const confirmationOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(CONFIRMATION_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+    ],
+    [],
+  );
+
+  const punchOptions = useMemo(
+    () => [
+      { value: "", label: "Todos" },
+      ...Object.entries(PUNCH_COMPLETENESS_LABELS).map(([value, label]) => ({ value, label })),
     ],
     [],
   );
@@ -169,6 +219,30 @@ export function StatisticsFiltersBar({
           value={operationKind}
           onChange={(value) => onOperationKindChange(value as StatisticsOperationKind)}
           data={operationKindOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Estado de operación"
+          value={operationStatus}
+          onChange={onOperationStatusChange}
+          data={operationStatusOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Confirmación"
+          value={confirmationStatus}
+          onChange={onConfirmationStatusChange}
+          data={confirmationOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <FilterSelect
+          label="Completitud de fichaje"
+          value={punchCompleteness}
+          onChange={onPunchCompletenessChange}
+          data={punchOptions}
         />
       </FilterBar.Item>
       <FilterBar.Item>

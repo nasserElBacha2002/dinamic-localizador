@@ -1,9 +1,15 @@
 import type { SortOrder, TableUrlFieldMap } from "../../utils/table-url-state";
 import type { DateRangeUrlFields } from "../../utils/date-range-url";
 
-export type StatisticsTabKey = "general" | "employee" | "operation" | "location";
+export type StatisticsTabKey = "general" | "employee" | "operation" | "location" | "incidents";
 
-export const STATISTICS_TAB_VALUES = ["general", "employee", "operation", "location"] as const;
+export const STATISTICS_TAB_VALUES = [
+  "general",
+  "employee",
+  "operation",
+  "location",
+  "incidents",
+] as const;
 
 export const STATISTICS_VALIDATION_STATUS_VALUES = [
   "",
@@ -29,6 +35,29 @@ export const STATISTICS_PUNCTUALITY_STATUS_VALUES = [
 ] as const;
 
 export const STATISTICS_OPERATION_KIND_VALUES = ["", "ONE_TIME", "RECURRING"] as const;
+
+export const STATISTICS_OPERATION_STATUS_VALUES = [
+  "",
+  "SCHEDULED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "CANCELLED",
+] as const;
+
+export const STATISTICS_CONFIRMATION_STATUS_VALUES = [
+  "",
+  "PENDING",
+  "CONFIRMED",
+  "UNAVAILABLE",
+] as const;
+
+export const STATISTICS_PUNCH_COMPLETENESS_VALUES = [
+  "",
+  "COMPLETE",
+  "MISSING_CHECK_OUT",
+  "MISSING_CHECK_IN",
+  "NO_PUNCH",
+] as const;
 
 export const STATISTICS_EFFECTIVE_STATE_VALUES = [
   "",
@@ -95,6 +124,17 @@ export const STATISTICS_LOCATION_SORT_FIELDS = [
   "incidentRate",
 ] as const;
 
+export const STATISTICS_INCIDENT_TYPE_VALUES = [
+  "",
+  "COVERAGE_REQUIRED",
+  "OPERATION_MODIFIED",
+  "NOT_CONFIRMED",
+  "NOT_CONFIRMED_AND_ABSENT",
+  "MISSING_CHECK_IN",
+  "MISSING_CHECK_OUT",
+  "NO_PUNCH",
+] as const;
+
 export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
   return {
     tab: "general" as StatisticsTabKey,
@@ -102,11 +142,15 @@ export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
     serviceIds: [] as string[],
     employeeIds: [] as string[],
     operationKind: "",
+    operationStatus: "",
+    confirmationStatus: "",
+    punchCompleteness: "",
     effectiveState: "",
     validationStatus: "",
     locationStatus: "",
     punctualityStatus: "",
     incompleteCoverage: false,
+    incidentType: "",
     ...dateFields,
     empPage: 1,
     empPageSize: 10,
@@ -114,6 +158,8 @@ export function buildStatisticsTableDefaults(dateFields: DateRangeUrlFields) {
     opPageSize: 10,
     svcPage: 1,
     svcPageSize: 10,
+    incPage: 1,
+    incPageSize: 10,
     empSortBy: "attendanceRate",
     empSortOrder: "desc" as SortOrder,
     opSortBy: "scheduledStart",
@@ -129,17 +175,23 @@ export const STATISTICS_TABLE_FIELDS = {
   serviceIds: { type: "stringList" as const },
   employeeIds: { type: "stringList" as const },
   operationKind: { type: "enum", values: STATISTICS_OPERATION_KIND_VALUES },
+  operationStatus: { type: "enum", values: STATISTICS_OPERATION_STATUS_VALUES },
+  confirmationStatus: { type: "enum", values: STATISTICS_CONFIRMATION_STATUS_VALUES },
+  punchCompleteness: { type: "enum", values: STATISTICS_PUNCH_COMPLETENESS_VALUES },
   effectiveState: { type: "enum", values: STATISTICS_EFFECTIVE_STATE_VALUES },
   validationStatus: { type: "enum", values: STATISTICS_VALIDATION_STATUS_VALUES },
   locationStatus: { type: "enum", values: STATISTICS_LOCATION_STATUS_VALUES },
   punctualityStatus: { type: "enum", values: STATISTICS_PUNCTUALITY_STATUS_VALUES },
   incompleteCoverage: { type: "boolean" as const },
+  incidentType: { type: "enum", values: STATISTICS_INCIDENT_TYPE_VALUES },
   empPage: { type: "number", min: 1, resetPageOnChange: false },
   empPageSize: { type: "number", min: 1, resetPageOnChange: false },
   opPage: { type: "number", min: 1, resetPageOnChange: false },
   opPageSize: { type: "number", min: 1, resetPageOnChange: false },
   svcPage: { type: "number", min: 1, resetPageOnChange: false },
   svcPageSize: { type: "number", min: 1, resetPageOnChange: false },
+  incPage: { type: "number", min: 1, resetPageOnChange: false },
+  incPageSize: { type: "number", min: 1, resetPageOnChange: false },
   empSortBy: { type: "enum", values: STATISTICS_EMPLOYEE_SORT_FIELDS },
   opSortBy: { type: "enum", values: STATISTICS_OPERATION_SORT_FIELDS },
   svcSortBy: { type: "enum", values: STATISTICS_LOCATION_SORT_FIELDS },

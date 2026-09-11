@@ -40,10 +40,15 @@ export function SettingsDialog({
       closeOnEscape={!saving}
       footer={
         <Group justify="flex-end" gap="sm">
-          <Button variant="default" onClick={onClose} disabled={saving}>
+          <Button variant="default" size="md" onClick={onClose} disabled={saving}>
             Cancelar
           </Button>
-          <Button onClick={() => void onSave()} loading={saving} disabled={saveDisabled || saving}>
+          <Button
+            size="md"
+            onClick={() => void onSave()}
+            loading={saving}
+            disabled={saveDisabled || saving}
+          >
             {saveLabel}
           </Button>
         </Group>

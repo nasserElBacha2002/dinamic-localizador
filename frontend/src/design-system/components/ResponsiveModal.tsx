@@ -147,8 +147,10 @@ export function ResponsiveModal({
         ) : null}
         {footer ? (
           <Box
-            pt="sm"
-            pb={isCompact ? "md" : 0}
+            className="dinamic-dialog-footer"
+            pt="md"
+            pb="md"
+            px={0}
             style={{
               borderTop: "1px solid var(--mantine-color-gray-3)",
               flexShrink: 0,

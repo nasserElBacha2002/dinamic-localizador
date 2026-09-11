@@ -36,10 +36,11 @@ export function ConfirmDialog({
       closeOnEscape={!loading}
       footer={
         <Group justify="flex-end" gap="sm" wrap="wrap">
-          <Button variant="default" onClick={onCancel} disabled={loading}>
+          <Button variant="default" size="md" onClick={onCancel} disabled={loading}>
             {cancelLabel}
           </Button>
           <Button
+            size="md"
             color={destructive ? "danger" : "brand"}
             onClick={onConfirm}
             loading={loading}

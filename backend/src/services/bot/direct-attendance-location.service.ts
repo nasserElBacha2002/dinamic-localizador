@@ -11,6 +11,7 @@ import {
 import {
   buildCheckedInNeedsCheckoutIntentMessage,
   buildExitWithoutArrivalNeedsCheckoutIntentMessage,
+  buildCheckoutWorkdaySelectionPrompt,
   buildMixedAttendanceActionPrompt,
   buildWorkdaySelectionPrompt,
   MODULE_DISABLED_MESSAGE,
@@ -22,6 +23,7 @@ import {
   listExitWithoutArrivalCheckoutWorkdays,
   listOpenCheckoutWorkdays,
   mapCheckInCandidatesToSessionOptions,
+  mapCheckoutCandidatesToSessionOptions,
   mapMixedAttendanceActionToSessionOptions,
 } from "./bot-workday.selector";
 import {
@@ -170,8 +172,30 @@ export const processDirectLocationAttendance = async (
       eventAt,
     );
     if (exitWithoutArrival.length > 0) {
+      if (exitWithoutArrival.length === 1) {
+        const candidate = exitWithoutArrival[0]!;
+        await botSessionService.createWaitingCheckoutLocationSession(companyId, {
+          employeeId: input.employeeId,
+          phoneNumber: input.phoneFrom,
+          operationId: candidate.operationId,
+          employeeWorkdayId: candidate.employeeWorkdayId,
+          attendanceRecordId: null,
+          checkoutWithoutArrival: true,
+          pendingLocation,
+        });
+      } else {
+        await botSessionService.createCheckoutOperationSelectionSession(companyId, {
+          employeeId: input.employeeId,
+          phoneNumber: input.phoneFrom,
+          options: mapCheckoutCandidatesToSessionOptions(exitWithoutArrival),
+          pendingLocation,
+        });
+      }
       return handlers.respond(companyId, {
-        message: buildExitWithoutArrivalNeedsCheckoutIntentMessage(exitWithoutArrival),
+        message:
+          exitWithoutArrival.length === 1
+            ? buildExitWithoutArrivalNeedsCheckoutIntentMessage(exitWithoutArrival)
+            : buildCheckoutWorkdaySelectionPrompt(exitWithoutArrival),
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,

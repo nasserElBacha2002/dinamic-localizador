@@ -1,7 +1,10 @@
 import { toCompanySettingsInput } from "../constants/company-settings";
 import { roleHasPermission } from "../constants/company-permissions";
+import sql from "mssql";
+import { getPool } from "../database/connection";
 import { AppError } from "../errors/app-error";
 import { companyRepository } from "../repositories/company.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import { companyModuleService } from "./company-module.service";
 import { companyAbsenceSettingsService } from "./company-absence-settings.service";
 import { companyLocationTypesService } from "./company-location-types.service";
@@ -9,6 +12,8 @@ import { companyWorkScheduleService } from "./company-work-schedule.service";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { userCompanyMembershipRepository } from "../repositories/user-company-membership.repository";
 import { getAttachmentStorageHealth } from "./attachment-storage";
+import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
+import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import type { UpdateCompanySettingsInput } from "../schemas/company.schema";
 import type { UpdateCompanyAbsenceSettingsInput } from "../schemas/company-absence-settings.schema";
 import type {
@@ -45,6 +50,12 @@ const toCompanySettingsDto = (settings: CompanySettings): CompanySettingsDto => 
   absenceOperationalIntegrationEnabled: settings.absenceOperationalIntegrationEnabled,
   adminAlertsEnabled: settings.adminAlertsEnabled,
   adminAlertsEnabledAt: settings.adminAlertsEnabledAt,
+  adminAttendanceConfirmationMissingEnabled: settings.adminAttendanceConfirmationMissingEnabled,
+  adminMissingCheckinEnabled: settings.adminMissingCheckinEnabled,
+  adminMissingCheckoutEnabled: settings.adminMissingCheckoutEnabled,
+  adminConfirmationEscalationMinutes: settings.adminConfirmationEscalationMinutes,
+  adminMissingCheckoutDelayMinutes: settings.adminMissingCheckoutDelayMinutes,
+  adminAlertMaxLatenessMinutes: settings.adminAlertMaxLatenessMinutes,
   attendanceThresholdAlertsEnabled: settings.attendanceThresholdAlertsEnabled,
   attendanceAlertThresholdPercent: settings.attendanceAlertThresholdPercent,
   attendanceAlertWindowDays: settings.attendanceAlertWindowDays,
@@ -125,9 +136,65 @@ export const companyService = {
       return toCompanySettingsDto(created);
     }
 
-    const updated = await companySettingsRepository.update(companyId, input);
+    const toleranceDefaultsChanged = {
+      early:
+        input.defaultEarlyArrivalToleranceMinutes !== undefined &&
+        input.defaultEarlyArrivalToleranceMinutes !==
+          existing.defaultEarlyArrivalToleranceMinutes,
+      late:
+        input.defaultLateArrivalToleranceMinutes !== undefined &&
+        input.defaultLateArrivalToleranceMinutes !== existing.defaultLateArrivalToleranceMinutes,
+    };
+
+    let updated: CompanySettings | null;
+    if (toleranceDefaultsChanged.early || toleranceDefaultsChanged.late) {
+      const transaction = new sql.Transaction(getPool());
+      await transaction.begin();
+      try {
+        updated = await companySettingsRepository.update(companyId, input, transaction);
+        if (!updated) {
+          throw new AppError(
+            404,
+            "COMPANY_SETTINGS_NOT_FOUND",
+            "Configuración de empresa no encontrada.",
+          );
+        }
+        await operationRepository.applyCompanyToleranceDefaultsInTransaction(
+          companyId,
+          transaction,
+          {
+            ...(toleranceDefaultsChanged.early
+              ? {
+                  earlyToleranceMinutes: input.defaultEarlyArrivalToleranceMinutes,
+                }
+              : {}),
+            ...(toleranceDefaultsChanged.late
+              ? {
+                  lateToleranceMinutes: input.defaultLateArrivalToleranceMinutes,
+                }
+              : {}),
+          },
+        );
+        await transaction.commit();
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    } else {
+      updated = await companySettingsRepository.update(companyId, input);
+    }
+
     if (!updated) {
       throw new AppError(404, "COMPANY_SETTINGS_NOT_FOUND", "Configuración de empresa no encontrada.");
+    }
+
+    if (toleranceDefaultsChanged.early || toleranceDefaultsChanged.late) {
+      const summary =
+        await recurringWorkdayMaterializationService.reconcileCompanyToleranceOperations(
+          companyId,
+          toleranceDefaultsChanged,
+        );
+      recurringWorkdaySyncService.assertCompanySyncSucceeded(summary);
     }
 
     const thresholdSettingsTouched =

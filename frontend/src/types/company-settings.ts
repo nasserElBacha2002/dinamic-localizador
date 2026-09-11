@@ -2,6 +2,7 @@ export interface CompanySettings {
   companyId: string;
   operationTimezone: string;
   defaultRadiusMeters: number;
+  /** @deprecated Compatibility field; arrival uses operation/workday tolerances. */
   lateGraceMinutes: number;
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
@@ -18,6 +19,12 @@ export interface CompanySettings {
   absenceAttachmentsEnabled?: boolean;
   absenceOperationalIntegrationEnabled?: boolean;
   adminAlertsEnabled?: boolean;
+  adminAttendanceConfirmationMissingEnabled?: boolean;
+  adminMissingCheckinEnabled?: boolean;
+  adminMissingCheckoutEnabled?: boolean;
+  adminConfirmationEscalationMinutes?: number;
+  adminMissingCheckoutDelayMinutes?: number;
+  adminAlertMaxLatenessMinutes?: number;
   attendanceThresholdAlertsEnabled?: boolean;
   attendanceAlertThresholdPercent?: number;
   attendanceAlertWindowDays?: number;
@@ -48,6 +55,12 @@ export type UpdateCompanySettingsInput = Partial<
     | "absenceAttachmentsEnabled"
     | "absenceOperationalIntegrationEnabled"
     | "adminAlertsEnabled"
+    | "adminAttendanceConfirmationMissingEnabled"
+    | "adminMissingCheckinEnabled"
+    | "adminMissingCheckoutEnabled"
+    | "adminConfirmationEscalationMinutes"
+    | "adminMissingCheckoutDelayMinutes"
+    | "adminAlertMaxLatenessMinutes"
     | "attendanceThresholdAlertsEnabled"
     | "attendanceAlertThresholdPercent"
     | "attendanceAlertWindowDays"
@@ -64,7 +77,6 @@ export interface CompanySettingsFormValues {
   defaultOperationEndTime: string;
   defaultEarlyArrivalToleranceMinutes: string;
   defaultLateArrivalToleranceMinutes: string;
-  lateGraceMinutes: string;
   earlyLeaveToleranceMinutes: string;
   requireCheckoutLocation: boolean;
   allowManualAttendanceCorrections: boolean;

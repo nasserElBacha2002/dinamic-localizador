@@ -185,6 +185,62 @@ describe("processDirectLocationAttendance checkout guard", () => {
       mock.restoreAll();
     }
   });
+
+  it("stores a direct location while waiting for explicit exit intent", async () => {
+    const { mock } = await import("node:test");
+    const { employeeWorkdayAvailabilityService } = await import(
+      "../employee-workday-availability.service"
+    );
+    const { botSessionService } = await import("../bot-session.service");
+    const { processDirectLocationAttendance } = await import("./direct-attendance-location.service");
+    const exitWithoutArrival = {
+      ...baseCheckIn({ employeeWorkdayId: "ew-exit" }),
+      attendanceRecordId: null,
+      checkInAt: null,
+      checkoutWithoutArrival: true,
+    } as EmployeeWorkdayCheckoutCandidate;
+
+    mock.method(employeeWorkdayAvailabilityService, "listAvailableForCheckIn", async () => ({
+      candidates: [],
+      hasJustifiedWorkdayInWindow: false,
+    }));
+    mock.method(employeeWorkdayAvailabilityService, "listOpenForCheckout", async () => []);
+    mock.method(
+      employeeWorkdayAvailabilityService,
+      "listEligibleForCheckoutWithoutArrival",
+      async () => [exitWithoutArrival],
+    );
+
+    let pendingMessageSid: string | undefined;
+    mock.method(botSessionService, "createWaitingCheckoutLocationSession", async (_company, input) => {
+      pendingMessageSid = input.pendingLocation?.messageSid;
+      return {} as never;
+    });
+
+    try {
+      const response = await processDirectLocationAttendance(
+        {
+          companyId: "company-1",
+          employeeId: "employee-1",
+          latitude: -34.6,
+          longitude: -58.4,
+          messageSid: "SM-DIRECT-EXIT",
+          phoneFrom: "whatsapp:+5491111111111",
+          phoneTo: "whatsapp:+5491100000000",
+          moduleStates: moduleStates({}),
+        },
+        {
+          processLocationCheckIn: async () => "unexpected",
+          respond: async (_companyId, input) => input.message,
+        },
+      );
+
+      assert.equal(pendingMessageSid, "SM-DIRECT-EXIT");
+      assert.match(response, /Me voy/);
+    } finally {
+      mock.restoreAll();
+    }
+  });
 });
 
 describe("buildMixedAttendanceActionPrompt", () => {

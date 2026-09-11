@@ -30,6 +30,43 @@ describe("evaluateCheckoutTime", () => {
     assert.equal(result.earlyDepartureMinutes, 10);
   });
 
+  it("allows checkout exactly at the earliest configured instant", () => {
+    const result = evaluateCheckoutTime(
+      new Date("2026-06-24T20:45:00.000Z"),
+      scheduledEnd,
+      15,
+    );
+    assert.equal(result.checkoutStatus, "CHECKOUT_EARLY_WITHIN_TOLERANCE");
+    assert.equal(result.earlyDepartureMinutes, 15);
+  });
+
+  it("classifies checkout exactly at operation end within tolerance", () => {
+    const result = evaluateCheckoutTime(scheduledEnd, scheduledEnd, 15);
+    assert.equal(result.checkoutStatus, "CHECKOUT_EARLY_WITHIN_TOLERANCE");
+    assert.equal(result.earlyDepartureMinutes, 0);
+  });
+
+  it("flags checkout one minute before the earliest configured instant", () => {
+    const result = evaluateCheckoutTime(
+      new Date("2026-06-24T20:44:00.000Z"),
+      scheduledEnd,
+      15,
+    );
+    assert.equal(result.checkoutStatus, "CHECKOUT_EARLY_REVIEW");
+    assert.equal(result.earlyDepartureMinutes, 16);
+  });
+
+  it("supports zero early-exit tolerance", () => {
+    const atEnd = evaluateCheckoutTime(scheduledEnd, scheduledEnd, 0);
+    const oneMinuteEarly = evaluateCheckoutTime(
+      new Date("2026-06-24T20:59:00.000Z"),
+      scheduledEnd,
+      0,
+    );
+    assert.equal(atEnd.checkoutStatus, "CHECKOUT_EARLY_WITHIN_TOLERANCE");
+    assert.equal(oneMinuteEarly.checkoutStatus, "CHECKOUT_EARLY_REVIEW");
+  });
+
   it("flags checkout too early for review", () => {
     const result = evaluateCheckoutTime(
       new Date("2026-06-24T20:30:00.000Z"),

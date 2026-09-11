@@ -1,11 +1,22 @@
 import twilio from "twilio";
 import { env } from "../config/env";
+import type { MessageCostFlowLabel, MessageCostKind } from "../constants/whatsapp-message-cost";
+import { systemLogger } from "../utils/system-logs/logger";
 import { formatWhatsAppAddress } from "../utils/whatsapp-phone";
+import { whatsappMessageCostRecordService } from "./whatsapp-message-cost-record.service";
+
+export interface WhatsAppCostContext {
+  companyId: string | null;
+  messageKind: MessageCostKind;
+  flowLabel?: MessageCostFlowLabel | string | null;
+  templateName?: string | null;
+}
 
 export interface WhatsAppTemplateSendInput {
   toPhoneNumber: string;
   contentSid: string;
   contentVariables: Record<string, string>;
+  costContext?: WhatsAppCostContext;
 }
 
 export interface WhatsAppTemplateSendResult {
@@ -16,10 +27,17 @@ export interface WhatsAppDocumentSendInput {
   toPhoneNumber: string;
   body: string;
   mediaUrl: string;
+  costContext?: WhatsAppCostContext;
 }
 
 export interface WhatsAppDocumentSendResult {
   messageSid: string;
+}
+
+export interface WhatsAppTextSendInput {
+  toPhoneNumber: string;
+  body: string;
+  costContext?: WhatsAppCostContext;
 }
 
 let twilioClient: ReturnType<typeof twilio> | null = null;
@@ -34,6 +52,26 @@ const getTwilioClient = (): ReturnType<typeof twilio> => {
   }
 
   return twilioClient;
+};
+
+const recordCostAfterAccept = async (input: {
+  messageSid: string;
+  toPhoneNumber: string;
+  messageKind: MessageCostKind;
+  templateSid?: string | null;
+  costContext?: WhatsAppCostContext;
+}): Promise<void> => {
+  const ctx = input.costContext;
+  await whatsappMessageCostRecordService.recordOutboundAccepted({
+    companyId: ctx?.companyId ?? null,
+    providerMessageSid: input.messageSid,
+    toPhoneNumber: input.toPhoneNumber,
+    messageKind: ctx?.messageKind ?? input.messageKind,
+    templateSid: input.templateSid ?? null,
+    templateName: ctx?.templateName ?? null,
+    flowLabel: ctx?.flowLabel ?? null,
+    providerStatus: "SEND_ACCEPTED",
+  });
 };
 
 export const twilioOutboundService = {
@@ -72,11 +110,36 @@ export const twilioOutboundService = {
       createParams.statusCallback = env.TWILIO_STATUS_CALLBACK_URL;
     }
 
-    const message = await client.messages.create(createParams);
+    try {
+      const message = await client.messages.create(createParams);
 
-    return {
-      messageSid: message.sid,
-    };
+      await recordCostAfterAccept({
+        messageSid: message.sid,
+        toPhoneNumber: input.toPhoneNumber,
+        messageKind: "TEMPLATE",
+        templateSid: input.contentSid,
+        costContext: input.costContext,
+      });
+
+      return {
+        messageSid: message.sid,
+      };
+    } catch (error) {
+      systemLogger.error({
+        module: "twilio-outbound",
+        event: "twilio.message.send.failed",
+        message: "Twilio WhatsApp template send failed",
+        errorCode: "TWILIO_SEND_FAILED",
+        companyId: input.costContext?.companyId ?? null,
+        error,
+        metadata: {
+          messageKind: "TEMPLATE",
+          contentSid: input.contentSid,
+          flowLabel: input.costContext?.flowLabel ?? null,
+        },
+      });
+      throw error;
+    }
   },
 
   async sendWhatsAppDocument(
@@ -106,15 +169,19 @@ export const twilioOutboundService = {
 
     const message = await client.messages.create(createParams);
 
+    await recordCostAfterAccept({
+      messageSid: message.sid,
+      toPhoneNumber: input.toPhoneNumber,
+      messageKind: "DOCUMENT",
+      costContext: input.costContext,
+    });
+
     return {
       messageSid: message.sid,
     };
   },
 
-  async sendWhatsAppText(input: {
-    toPhoneNumber: string;
-    body: string;
-  }): Promise<{ messageSid: string }> {
+  async sendWhatsAppText(input: WhatsAppTextSendInput): Promise<{ messageSid: string }> {
     if (!env.TWILIO_WHATSAPP_NUMBER) {
       throw new Error("TWILIO_WHATSAPP_NUMBER_NOT_CONFIGURED");
     }
@@ -136,6 +203,14 @@ export const twilioOutboundService = {
     }
 
     const message = await client.messages.create(createParams);
+
+    await recordCostAfterAccept({
+      messageSid: message.sid,
+      toPhoneNumber: input.toPhoneNumber,
+      messageKind: "TEXT",
+      costContext: input.costContext,
+    });
+
     return { messageSid: message.sid };
   },
 };

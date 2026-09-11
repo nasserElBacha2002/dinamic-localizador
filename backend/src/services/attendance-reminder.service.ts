@@ -514,7 +514,11 @@ const sendReminderForCandidate = async (
       if (finalGate !== "ELIGIBLE") {
         if (preparedSession) {
           try {
-            await botSessionService.cancelSession(companyId, preparedSession.id);
+            await botSessionService.cancelSession(
+              companyId,
+              preparedSession.id,
+              preparedSession,
+            );
           } catch (cleanupError) {
             const cleanupErrorMessage =
               cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";
@@ -578,10 +582,25 @@ const sendReminderForCandidate = async (
       }
     }
 
+    const flowLabel =
+      notificationType === "ARRIVAL_REMINDER_15_MIN"
+        ? "ARRIVAL_REMINDER"
+        : notificationType === "EXIT_REMINDER_15_MIN"
+          ? "EXIT_REMINDER"
+          : notificationType === "ATTENDANCE_CONFIRMATION_REMINDER"
+            ? "ATTENDANCE_CONFIRMATION"
+            : "NO_CHECKIN";
+
     const result = await twilioOutboundService.sendWhatsAppTemplate({
       toPhoneNumber: candidate.employeePhoneNumber,
       contentSid,
       contentVariables,
+      costContext: {
+        companyId,
+        messageKind: "TEMPLATE",
+        flowLabel,
+        templateName: notificationType,
+      },
     });
 
     const sentAt = new Date();
@@ -757,7 +776,11 @@ const sendReminderForCandidate = async (
   } catch (error) {
     if (notificationType === "ATTENDANCE_CONFIRMATION_REMINDER" && preparedSession) {
       try {
-        await botSessionService.cancelSession(companyId, preparedSession.id);
+        await botSessionService.cancelSession(
+          companyId,
+          preparedSession.id,
+          preparedSession,
+        );
       } catch (cleanupError) {
         const cleanupErrorMessage =
           cleanupError instanceof Error ? cleanupError.message : "Unknown session cleanup error";

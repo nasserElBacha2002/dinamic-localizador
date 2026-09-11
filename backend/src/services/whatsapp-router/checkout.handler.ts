@@ -5,12 +5,14 @@ import {
   WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
 } from "../bot/bot-response.builder";
 import { isAbsenceSessionState } from "../../utils/bot-session-states";
+import { isCheckoutIntent } from "../../utils/intent";
 import { setLastDetectedIntent } from "../../utils/bot-runtime-context";
 import { getAttendanceModuleBlockedMessage } from "../whatsapp-module-gate";
 import { botSessionService } from "../bot-session.service";
 import { logModuleBlocked } from "./module-session-gate";
 import type { WhatsAppRouterContext, WhatsAppRouterHandlers } from "./whatsapp-router.types";
 import type { BotSession } from "../../types/twilio.types";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 
 export const handleActiveCheckoutTextSession = async (
   ctx: WhatsAppRouterContext,
@@ -30,8 +32,38 @@ export const handleActiveCheckoutTextSession = async (
   }
 
   if (session.state === "WAITING_CHECKOUT_LOCATION") {
+    const context = botSessionService.parseContext(session.contextJson);
+    if (
+      context.pendingLocation &&
+      isCheckoutIntent(ctx.body) &&
+      session.employeeWorkdayId &&
+      session.operationId
+    ) {
+      return handlers.processLocationCheckout({
+        companyId: ctx.companyId,
+        session,
+        employeeId: ctx.employeeId!,
+        employeeWorkdayId: session.employeeWorkdayId,
+        attendanceRecordId: session.attendanceRecordId,
+        operationId: session.operationId,
+        latitude: context.pendingLocation.latitude,
+        longitude: context.pendingLocation.longitude,
+        messageSid: context.pendingLocation.messageSid,
+        phoneFrom: ctx.phoneFrom,
+        phoneTo: ctx.phoneTo,
+        eventAt: new Date(context.pendingLocation.receivedAt),
+        checkoutWithoutArrival: Boolean(context.checkoutWithoutArrival),
+      });
+    }
+
+    const retry = await recordInvalidContextualInput({
+      companyId: ctx.companyId,
+      session,
+      messageSid: ctx.payload.MessageSid,
+      retryMessage: WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
+    });
     return handlers.respond(ctx.companyId, {
-      message: WAITING_CHECKOUT_LOCATION_TEXT_MESSAGE,
+      message: retry.message,
       employeeId: ctx.employeeId,
       phoneFrom: ctx.phoneTo,
       phoneTo: ctx.phoneFrom,

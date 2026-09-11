@@ -69,6 +69,30 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   adminAlertsEnabledAt: row.admin_alerts_enabled_at
     ? toIsoString(row.admin_alerts_enabled_at as Date | string)
     : null,
+  adminAttendanceConfirmationMissingEnabled:
+    row.admin_attendance_confirmation_missing_enabled == null
+      ? true
+      : Boolean(row.admin_attendance_confirmation_missing_enabled),
+  adminMissingCheckinEnabled:
+    row.admin_missing_checkin_enabled == null
+      ? true
+      : Boolean(row.admin_missing_checkin_enabled),
+  adminMissingCheckoutEnabled:
+    row.admin_missing_checkout_enabled == null
+      ? true
+      : Boolean(row.admin_missing_checkout_enabled),
+  adminConfirmationEscalationMinutes: Number(
+    row.admin_confirmation_escalation_minutes ??
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.adminConfirmationEscalationMinutes,
+  ),
+  adminMissingCheckoutDelayMinutes: Number(
+    row.admin_missing_checkout_delay_minutes ??
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.adminMissingCheckoutDelayMinutes,
+  ),
+  adminAlertMaxLatenessMinutes: Number(
+    row.admin_alert_max_lateness_minutes ??
+      DEFAULT_COMPANY_OPERATIONAL_SETTINGS.adminAlertMaxLatenessMinutes,
+  ),
   attendanceThresholdAlertsEnabled:
     row.attendance_threshold_alerts_enabled == null
       ? false
@@ -222,6 +246,12 @@ export const companySettingsRepository = {
         | "absenceAttachmentsEnabled"
         | "absenceOperationalIntegrationEnabled"
         | "adminAlertsEnabled"
+        | "adminAttendanceConfirmationMissingEnabled"
+        | "adminMissingCheckinEnabled"
+        | "adminMissingCheckoutEnabled"
+        | "adminConfirmationEscalationMinutes"
+        | "adminMissingCheckoutDelayMinutes"
+        | "adminAlertMaxLatenessMinutes"
         | "attendanceThresholdAlertsEnabled"
         | "attendanceAlertThresholdPercent"
         | "attendanceAlertWindowDays"
@@ -229,10 +259,14 @@ export const companySettingsRepository = {
         | "attendanceAlertCooldownDays"
       >
     >,
+    transaction?: sql.Transaction,
   ): Promise<CompanySettings | null> {
-    const pool = getPool();
     const fields: string[] = [];
-    const request = pool.request().input("companyId", sql.UniqueIdentifier, companyId);
+    const request = (transaction ? new sql.Request(transaction) : getPool().request()).input(
+      "companyId",
+      sql.UniqueIdentifier,
+      companyId,
+    );
     let bumpAttendanceConfigVersion = false;
 
     if (input.operationTimezone !== undefined) {
@@ -362,6 +396,60 @@ export const companySettingsRepository = {
           THEN SYSUTCDATETIME()
         ELSE admin_alerts_enabled_at
       END`);
+    }
+    if (input.adminAttendanceConfirmationMissingEnabled !== undefined) {
+      request.input(
+        "adminAttendanceConfirmationMissingEnabled",
+        sql.Bit,
+        input.adminAttendanceConfirmationMissingEnabled ? 1 : 0,
+      );
+      fields.push(
+        "admin_attendance_confirmation_missing_enabled = @adminAttendanceConfirmationMissingEnabled",
+      );
+    }
+    if (input.adminMissingCheckinEnabled !== undefined) {
+      request.input(
+        "adminMissingCheckinEnabled",
+        sql.Bit,
+        input.adminMissingCheckinEnabled ? 1 : 0,
+      );
+      fields.push("admin_missing_checkin_enabled = @adminMissingCheckinEnabled");
+    }
+    if (input.adminMissingCheckoutEnabled !== undefined) {
+      request.input(
+        "adminMissingCheckoutEnabled",
+        sql.Bit,
+        input.adminMissingCheckoutEnabled ? 1 : 0,
+      );
+      fields.push("admin_missing_checkout_enabled = @adminMissingCheckoutEnabled");
+    }
+    if (input.adminConfirmationEscalationMinutes !== undefined) {
+      request.input(
+        "adminConfirmationEscalationMinutes",
+        sql.Int,
+        input.adminConfirmationEscalationMinutes,
+      );
+      fields.push(
+        "admin_confirmation_escalation_minutes = @adminConfirmationEscalationMinutes",
+      );
+    }
+    if (input.adminMissingCheckoutDelayMinutes !== undefined) {
+      request.input(
+        "adminMissingCheckoutDelayMinutes",
+        sql.Int,
+        input.adminMissingCheckoutDelayMinutes,
+      );
+      fields.push(
+        "admin_missing_checkout_delay_minutes = @adminMissingCheckoutDelayMinutes",
+      );
+    }
+    if (input.adminAlertMaxLatenessMinutes !== undefined) {
+      request.input(
+        "adminAlertMaxLatenessMinutes",
+        sql.Int,
+        input.adminAlertMaxLatenessMinutes,
+      );
+      fields.push("admin_alert_max_lateness_minutes = @adminAlertMaxLatenessMinutes");
     }
     if (input.attendanceThresholdAlertsEnabled !== undefined) {
       request.input(

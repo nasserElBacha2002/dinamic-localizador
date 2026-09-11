@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { OPERATION_KINDS } from "../constants/operation-kind";
+import { OPERATIONAL_INCIDENT_TYPES } from "../utils/operational-incident-statistics";
+import { PUNCH_COMPLETENESS_CATEGORIES } from "../utils/operational-incident-statistics";
 import { dateRangeSchema, paginationQuerySchema } from "./common.schema";
 import { assertWithinMultiFilterLimit, mergeLegacySingularId, uuidIdListSchema } from "./uuid-id-list";
 
@@ -55,9 +57,11 @@ const mergeMultiIdFilters = <T extends {
   operationId?: string;
   serviceId?: string;
   employeeId?: string;
+  workTeamId?: string;
   operationIds?: string[];
   serviceIds?: string[];
   employeeIds?: string[];
+  workTeamIds?: string[];
 }>(query: T) => ({
   ...query,
   operationIds: assertWithinMultiFilterLimit(
@@ -69,20 +73,31 @@ const mergeMultiIdFilters = <T extends {
   employeeIds: assertWithinMultiFilterLimit(
     mergeLegacySingularId(query.employeeIds ?? [], query.employeeId),
   ),
+  workTeamIds: assertWithinMultiFilterLimit(
+    mergeLegacySingularId(query.workTeamIds ?? [], query.workTeamId),
+  ),
 });
+
+const confirmationStatusFilterSchema = z.enum(["PENDING", "CONFIRMED", "UNAVAILABLE"]);
 
 const statisticsFiltersObjectSchema = dateRangeSchema.extend({
   operationId: z.string().uuid().optional(),
   serviceId: z.string().uuid().optional(),
   employeeId: z.string().uuid().optional(),
+  workTeamId: z.string().uuid().optional(),
   operationIds: uuidIdListSchema.optional(),
   serviceIds: uuidIdListSchema.optional(),
   employeeIds: uuidIdListSchema.optional(),
+  workTeamIds: uuidIdListSchema.optional(),
   operationKind: z.enum(OPERATION_KINDS).optional(),
+  operationStatus: z.enum(["SCHEDULED", "IN_PROGRESS", "COMPLETED", "CANCELLED"]).optional(),
   effectiveState: effectiveStateFilterSchema.optional(),
   validationStatus: validationStatusFilterSchema.optional(),
   locationStatus: locationStatusFilterSchema.optional(),
   punctualityStatus: punctualityStatusFilterSchema.optional(),
+  confirmationStatus: confirmationStatusFilterSchema.optional(),
+  punchCompleteness: z.enum(PUNCH_COMPLETENESS_CATEGORIES).optional(),
+  incidentType: z.enum(OPERATIONAL_INCIDENT_TYPES).optional(),
   /** When true, only workdays with open (overdue) check-out. */
   openAttendance: boolFlagSchema,
   /** Table/ranking: only consolidated ops with coverage < 100%. */

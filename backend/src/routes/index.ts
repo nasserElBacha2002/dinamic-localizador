@@ -34,6 +34,7 @@ import { lookupRouter } from "./lookup.routes";
 import { platformCompanyRouter } from "./platform-company.routes";
 import { platformServerStatusRouter } from "./platform-server-status.routes";
 import { whatsappObservabilityRouter } from "./whatsapp-observability.routes";
+import { systemLogsRouter } from "./system-logs.routes";
 import { companyInvitationRouter, publicInvitationRouter } from "./user-invitation.routes";
 import { authenticate } from "../middleware/authenticate";
 import { resolveCompanyContext } from "../middleware/company-context";
@@ -58,6 +59,11 @@ apiRouter.use(
   "/platform/observability/whatsapp",
   authenticate,
   whatsappObservabilityRouter,
+);
+apiRouter.use(
+  "/platform/observability/system-logs",
+  authenticate,
+  systemLogsRouter,
 );
 
 const mountOperationsServiceRoutes = (router: Router) => {

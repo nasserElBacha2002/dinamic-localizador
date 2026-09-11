@@ -25,7 +25,7 @@ export function CompanyLocationTypesDialog({
       bodyMode="scroll"
       footer={
         <Group justify="flex-end">
-          <Button variant="default" onClick={onClose}>
+          <Button variant="default" size="md" onClick={onClose}>
             Cerrar
           </Button>
         </Group>

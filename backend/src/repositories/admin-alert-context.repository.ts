@@ -191,8 +191,11 @@ export const adminAlertContextRepository = {
         employeeId: String(record.employee_id),
         operationId: String(record.operation_id),
         absenceRequestId: null,
+        assignmentId: String(record.assignment_id),
+        employeeWorkdayId: null,
         deduplicationKey: String(record.deduplication_key),
         occurredAt,
+        dueAt: occurredAt,
         payload: mapOperationalPayload(record),
       };
     });
@@ -261,8 +264,11 @@ export const adminAlertContextRepository = {
         employeeId: String(record.employee_id),
         operationId: null,
         absenceRequestId: String(record.request_id),
+        assignmentId: null,
+        employeeWorkdayId: null,
         deduplicationKey: String(record.deduplication_key),
         occurredAt: toIso(record.occurred_at as Date | string),
+        dueAt: toIso(record.occurred_at as Date | string),
         payload: {
           employeeName: String(record.employee_name),
           absenceTypeName: String(record.absence_type_name),
@@ -356,8 +362,11 @@ export const adminAlertContextRepository = {
         employeeId: String(record.employee_id),
         operationId: String(record.operation_id),
         absenceRequestId: null,
+        assignmentId: null,
+        employeeWorkdayId: String(record.employee_workday_id),
         deduplicationKey: String(record.deduplication_key),
         occurredAt: toIso(record.occurred_at as Date | string),
+        dueAt: toIso(record.occurred_at as Date | string),
         payload: {
           ...payload,
           operationTimezone: String(

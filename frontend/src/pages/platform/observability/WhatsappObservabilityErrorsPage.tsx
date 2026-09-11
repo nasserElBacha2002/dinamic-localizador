@@ -1,4 +1,4 @@
-import { Button, Stack, Text } from "@mantine/core";
+import { Button, Group, Stack, Text } from "@mantine/core";
 import { useMemo } from "react";
 import { Link as RouterLink, useNavigate, useSearchParams } from "react-router";
 import {
@@ -23,6 +23,7 @@ import { EMPTY_DATE_RANGE_VALUE } from "../../../utils/date-range";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../../utils/date-range-url";
 import { formatDateTime } from "../../../utils/dates";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { isSystemLogsUiEnabled } from "../../../utils/system-logs-config";
 import { isWhatsappObservabilityUiEnabled } from "../../../utils/whatsapp-observability-config";
 import {
   toObservabilityActivityBounds,
@@ -39,6 +40,7 @@ export function WhatsappObservabilityErrorsPage() {
   const { user } = useAuth();
   const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
   const uiEnabled = isWhatsappObservabilityUiEnabled();
+  const systemLogsEnabled = isSystemLogsUiEnabled();
 
   const table = useTableUrlState({
     defaults: {
@@ -131,9 +133,27 @@ export function WhatsappObservabilityErrorsPage() {
         title="Errores de WhatsApp"
         description="Errores agrupados por código detectados en flujos y mensajes."
         action={
-          <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
-            Volver a conversaciones
-          </Button>
+          <Group gap="sm">
+            <Button component={RouterLink} to="/platform/observability/whatsapp" variant="default">
+              Volver a conversaciones
+            </Button>
+            <Button
+              component={RouterLink}
+              to="/platform/observability/whatsapp/costs"
+              variant="default"
+            >
+              Costos de mensajería
+            </Button>
+            {systemLogsEnabled ? (
+              <Button
+                component={RouterLink}
+                to="/platform/observability/system-logs"
+                variant="default"
+              >
+                Logs del sistema
+              </Button>
+            ) : null}
+          </Group>
         }
       />
 

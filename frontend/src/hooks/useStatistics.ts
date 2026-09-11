@@ -8,6 +8,7 @@ import {
   getAttendanceStatisticsTimeline,
   getAttendanceStatusDistribution,
   getAttendanceWorkdayDetails,
+  getAttendanceIncidentDetails,
 } from "../api/statistics.api";
 import type { StatisticsFilters } from "../types/statistics";
 import { statisticsKeys } from "../queryKeys/statistics";
@@ -112,6 +113,20 @@ export function useStatisticsWorkdayDetails(
   return useQuery({
     queryKey: statisticsKeys.workdayDetails(companyId, filters),
     queryFn: () => getAttendanceWorkdayDetails(filters),
+    enabled: enabled && (options?.enabled ?? true),
+    staleTime: 60_000,
+  });
+}
+
+export function useStatisticsIncidentDetails(
+  filters: StatisticsFilters,
+  options?: QueryEnableOptions,
+) {
+  const { companyId, enabled } = useOperationalQueryEnabled();
+
+  return useQuery({
+    queryKey: statisticsKeys.incidentDetails(companyId, filters),
+    queryFn: () => getAttendanceIncidentDetails(filters),
     enabled: enabled && (options?.enabled ?? true),
     staleTime: 60_000,
   });

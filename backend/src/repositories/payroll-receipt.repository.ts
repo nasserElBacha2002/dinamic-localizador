@@ -17,6 +17,11 @@ import { normalizeEmployeeDocument } from "../utils/payroll-receipts/extract-doc
 import { createUuidInFilter } from "../utils/sql-uuid-in-filter";
 import { pendingStorageDeletionRepository } from "./pending-storage-deletion.repository";
 import { payrollReceiptNotificationRepository } from "./payroll-receipt-notification.repository";
+import {
+  applyBotSessionScope,
+  resolveBotSessionScope,
+  type BotSessionScope,
+} from "../utils/bot-session-scope";
 
 const toIso = (value: Date | string | null | undefined): string | null => {
   if (value == null) {
@@ -359,6 +364,62 @@ export const payrollReceiptRepository = {
         ORDER BY r.created_at ASC, r.id ASC
       `);
     return (result.recordset as Record<string, unknown>[]).map(mapPayrollReceiptRow);
+  },
+
+  async findAuthorizedActiveAssociatedForSend(input: {
+    companyId: string;
+    employeeId: string;
+    botSessionId: string;
+    payrollReceiptId: string;
+    phoneNumber: string;
+    year: number;
+    month: number;
+    scope: BotSessionScope;
+  }): Promise<PayrollReceipt | null> {
+    const scope = resolveBotSessionScope(input.scope);
+    const request = getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("botSessionId", sql.UniqueIdentifier, input.botSessionId)
+      .input("payrollReceiptId", sql.UniqueIdentifier, input.payrollReceiptId)
+      .input("phoneNumber", sql.NVarChar(30), input.phoneNumber)
+      .input("year", sql.Int, input.year)
+      .input("month", sql.Int, input.month);
+    const scopeSql = applyBotSessionScope(request, scope, "bs.");
+    const result = await request.query(`
+      SELECT TOP (1) r.*, e.name AS employee_name
+      FROM dbo.payroll_receipts r
+      INNER JOIN dbo.companies c
+        ON c.id = r.company_id
+       AND c.status = N'ACTIVE'
+      INNER JOIN dbo.employees e
+        ON e.id = r.employee_id
+       AND e.company_id = r.company_id
+       AND e.active = 1
+       AND e.phone_number = @phoneNumber
+      INNER JOIN dbo.bot_sessions bs
+        ON bs.id = @botSessionId
+       AND bs.company_id = r.company_id
+       AND bs.employee_id = e.id
+       AND bs.phone_number = @phoneNumber
+       AND bs.state = N'WAITING_PAYROLL_RECEIPT_PERIOD'
+       AND bs.expires_at > SYSUTCDATETIME()
+      INNER JOIN dbo.company_modules cm
+        ON cm.company_id = r.company_id
+       AND cm.module_key = N'payroll_receipts'
+       AND cm.is_enabled = 1
+      WHERE r.id = @payrollReceiptId
+        AND r.company_id = @companyId
+        AND r.employee_id = @employeeId
+        AND r.year = @year
+        AND r.month = @month
+        AND r.status = N'ASSOCIATED'
+        AND r.deleted_at IS NULL
+        ${scopeSql}
+    `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    return row ? mapPayrollReceiptRow(row) : null;
   },
 
   async findActiveAssociatedByChecksum(

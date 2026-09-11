@@ -106,8 +106,8 @@ export function OperationalSettingsForm({
         </SettingsFormField>
 
         <SettingsFormField
-          label="Tolerancia de llegada temprana para operaciones (min)"
-          description="Default para operaciones e importaciones."
+          label="Tolerancia de llegada temprana (min)"
+          description="Cantidad de minutos antes del inicio en los que se permite registrar la llegada."
         >
           <NumberInput
             value={
@@ -127,8 +127,8 @@ export function OperationalSettingsForm({
         </SettingsFormField>
 
         <SettingsFormField
-          label="Tolerancia de llegada tardía para operaciones (min)"
-          description="Default para operaciones e importaciones."
+          label="Tolerancia de llegada tardía (min)"
+          description="Cantidad de minutos después del inicio en los que se permite registrar la llegada."
         >
           <NumberInput
             value={
@@ -148,24 +148,8 @@ export function OperationalSettingsForm({
         </SettingsFormField>
 
         <SettingsFormField
-          label="Tolerancia de puntualidad WhatsApp (min)"
-          description="Validación del mensaje “Llegué”."
-        >
-          <NumberInput
-            value={values.lateGraceMinutes === "" ? "" : Number(values.lateGraceMinutes)}
-            onChange={(value) =>
-              update({
-                lateGraceMinutes: value === "" || value === undefined ? "" : String(value),
-              })
-            }
-            {...numberInputProps}
-            disabled={disabled}
-          />
-        </SettingsFormField>
-
-        <SettingsFormField
-          label="Tolerancia de salida anticipada WhatsApp (min)"
-          description="Validación del mensaje “Terminé”."
+          label="Tolerancia de salida anticipada (min)"
+          description="Cantidad de minutos antes del fin en los que se permite registrar la salida."
         >
           <NumberInput
             value={

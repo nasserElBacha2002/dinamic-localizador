@@ -172,7 +172,7 @@ describe("CreatePlatformCompanyDialog", () => {
     assert.equal(typed.settings?.defaultOperationStartTime, "20:30");
     assert.equal(typed.settings?.defaultOperationEndTime, "03:00");
     assert.equal(typeof typed.settings?.defaultRadiusMeters, "number");
-    assert.equal(typeof typed.settings?.lateGraceMinutes, "number");
+    assert.equal(typed.settings?.lateGraceMinutes, undefined);
   });
 
   it("disables submit while loading and keeps API error visible without closing", async () => {

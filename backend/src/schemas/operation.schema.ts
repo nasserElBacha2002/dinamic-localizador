@@ -15,8 +15,8 @@ const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida"
 
 const operationBaseFields = {
   serviceId: z.string().uuid("UUID de servicio inválido"),
-  earlyToleranceMinutes: z.number().int().min(0).optional(),
-  lateToleranceMinutes: z.number().int().min(0).optional(),
+  earlyToleranceMinutes: z.number().int().min(0).nullable().optional(),
+  lateToleranceMinutes: z.number().int().min(0).nullable().optional(),
 };
 
 export const createOneTimeOperationSchema = z
@@ -84,8 +84,8 @@ export const updateOperationSchema = z
     serviceId: z.string().uuid().optional(),
     scheduledStart: z.string().datetime({ offset: true }).optional(),
     scheduledEnd: z.string().datetime({ offset: true }).nullable().optional(),
-    earlyToleranceMinutes: z.number().int().min(0).optional(),
-    lateToleranceMinutes: z.number().int().min(0).optional(),
+    earlyToleranceMinutes: z.number().int().min(0).nullable().optional(),
+    lateToleranceMinutes: z.number().int().min(0).nullable().optional(),
     status: operationStatusSchema.optional(),
     operationKind: z.never().optional(),
     validFrom: dateOnlySchema.optional(),

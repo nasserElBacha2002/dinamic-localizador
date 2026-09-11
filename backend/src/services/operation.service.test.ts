@@ -35,6 +35,8 @@ const createdOperation = {
   scheduledEnd: FUTURE_END,
   earlyToleranceMinutes: 45,
   lateToleranceMinutes: 75,
+  earlyToleranceSource: "COMPANY_DEFAULT" as const,
+  lateToleranceSource: "COMPANY_DEFAULT" as const,
   status: "SCHEDULED" as const,
   createdAt: new Date().toISOString(),
   updatedAt: new Date().toISOString(),
@@ -67,6 +69,8 @@ describe("operationService.create", () => {
       ...createdOperation,
       earlyToleranceMinutes: input.earlyToleranceMinutes!,
       lateToleranceMinutes: input.lateToleranceMinutes!,
+      earlyToleranceSource: input.earlyToleranceSource,
+      lateToleranceSource: input.lateToleranceSource,
     }));
 
     const result = await operationService.create(COMPANY_ID, {
@@ -79,9 +83,11 @@ describe("operationService.create", () => {
     assert.equal(resolverCompanyId, COMPANY_ID);
     assert.equal(result.earlyToleranceMinutes, 45);
     assert.equal(result.lateToleranceMinutes, 75);
+    assert.equal(result.earlyToleranceSource, "COMPANY_DEFAULT");
+    assert.equal(result.lateToleranceSource, "COMPANY_DEFAULT");
   });
 
-  it("keeps explicit tolerances when provided", async () => {
+  it("keeps explicit zero tolerances over company defaults", async () => {
     setupUnitTestEnv();
     const { companyOperationalDefaultsResolver } = await import(
       "./company-operational-defaults.resolver"
@@ -103,6 +109,8 @@ describe("operationService.create", () => {
       ...createdOperation,
       earlyToleranceMinutes: input.earlyToleranceMinutes!,
       lateToleranceMinutes: input.lateToleranceMinutes!,
+      earlyToleranceSource: input.earlyToleranceSource,
+      lateToleranceSource: input.lateToleranceSource,
     }));
 
     const result = await operationService.create(COMPANY_ID, {
@@ -110,13 +118,50 @@ describe("operationService.create", () => {
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
-      earlyToleranceMinutes: 10,
-      lateToleranceMinutes: 20,
+      earlyToleranceMinutes: 0,
+      lateToleranceMinutes: 0,
     });
 
     assert.equal(resolverCalls, 1);
-    assert.equal(result.earlyToleranceMinutes, 10);
-    assert.equal(result.lateToleranceMinutes, 20);
+    assert.equal(result.earlyToleranceMinutes, 0);
+    assert.equal(result.lateToleranceMinutes, 0);
+    assert.equal(result.earlyToleranceSource, "CUSTOM");
+    assert.equal(result.lateToleranceSource, "CUSTOM");
+  });
+
+  it("keeps an explicit value custom when it equals the company default", async () => {
+    setupUnitTestEnv();
+    const { companyOperationalDefaultsResolver } = await import(
+      "./company-operational-defaults.resolver"
+    );
+    const { operationService } = await import("./operation.service");
+
+    mock.method(companyOperationalDefaultsResolver, "getOperationDefaults", async () => ({
+      companyId: COMPANY_ID,
+      earlyToleranceMinutes: 45,
+      lateToleranceMinutes: 75,
+      source: "company_settings" as const,
+    }));
+    mock.method(serviceRepository, "findById", async () => activeService);
+    mock.method(operationRepository, "create", async (_companyId, input) => ({
+      ...createdOperation,
+      earlyToleranceMinutes: input.earlyToleranceMinutes,
+      lateToleranceMinutes: input.lateToleranceMinutes,
+      earlyToleranceSource: input.earlyToleranceSource,
+      lateToleranceSource: input.lateToleranceSource,
+    }));
+
+    const result = await operationService.create(COMPANY_ID, {
+      operationKind: "ONE_TIME",
+      serviceId: SERVICE_ID,
+      scheduledStart: FUTURE_START,
+      scheduledEnd: FUTURE_END,
+      earlyToleranceMinutes: 45,
+      lateToleranceMinutes: 75,
+    });
+
+    assert.equal(result.earlyToleranceSource, "CUSTOM");
+    assert.equal(result.lateToleranceSource, "CUSTOM");
   });
 
   it("rejects negative tolerances at schema validation layer", async () => {

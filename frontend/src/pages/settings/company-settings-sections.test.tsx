@@ -3,20 +3,18 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, it } from "node:test";
 
-describe("Company settings operation vs WhatsApp labels", () => {
-  it("keeps operation and WhatsApp tolerances in separate labeled fields", () => {
+describe("Company operational tolerance labels", () => {
+  it("shows one channel-neutral field for each timing concept", () => {
     const formFile = readFileSync(
       join(process.cwd(), "src/pages/settings/components/OperationalSettingsForm.tsx"),
       "utf8",
     );
 
-    assert.match(formFile, /Tolerancia de llegada tardía para operaciones \(min\)/);
-    assert.match(formFile, /Tolerancia de puntualidad WhatsApp \(min\)/);
-    assert.match(formFile, /Tolerancia de salida anticipada WhatsApp \(min\)/);
+    assert.match(formFile, /Tolerancia de llegada temprana \(min\)/);
+    assert.match(formFile, /Tolerancia de llegada tardía \(min\)/);
+    assert.match(formFile, /Tolerancia de salida anticipada \(min\)/);
     assert.match(formFile, /Radio permitido por defecto \(m\)/);
-    assert.doesNotMatch(
-      formFile,
-      /Tolerancia de puntualidad WhatsApp[\s\S]*Radio permitido por defecto/,
-    );
+    assert.doesNotMatch(formFile, /puntualidad WhatsApp/i);
+    assert.doesNotMatch(formFile, /salida anticipada WhatsApp/i);
   });
 });

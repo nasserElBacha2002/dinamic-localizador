@@ -25,6 +25,7 @@ import type { WhatsappConversationSummary } from "../../../types/whatsapp-observ
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../../utils/date-range-url";
 import { formatDateTime } from "../../../utils/dates";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { isSystemLogsUiEnabled } from "../../../utils/system-logs-config";
 import { isWhatsappObservabilityUiEnabled } from "../../../utils/whatsapp-observability-config";
 import {
   conversationStatusTone,
@@ -47,6 +48,7 @@ export function WhatsappObservabilityPage() {
   const { user } = useAuth();
   const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
   const uiEnabled = isWhatsappObservabilityUiEnabled();
+  const systemLogsEnabled = isSystemLogsUiEnabled();
 
   const table = useTableUrlState({
     defaults: WHATSAPP_OBSERVABILITY_TABLE_DEFAULTS,
@@ -181,9 +183,21 @@ export function WhatsappObservabilityPage() {
         description="Revisá conversaciones, flujos y errores del bot de WhatsApp en producción."
         action={
           <Group gap="sm">
+            <Button component={RouterLink} to={`${LIST_PATH}/costs`} variant="default">
+              Costos de mensajería
+            </Button>
             <Button component={RouterLink} to={`${LIST_PATH}/errors`} variant="default">
               Ver errores
             </Button>
+            {systemLogsEnabled ? (
+              <Button
+                component={RouterLink}
+                to="/platform/observability/system-logs"
+                variant="default"
+              >
+                Logs del sistema
+              </Button>
+            ) : null}
           </Group>
         }
       />

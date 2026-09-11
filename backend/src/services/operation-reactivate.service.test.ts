@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
+import sql from "mssql";
 import { afterEach, describe, it, mock } from "node:test";
 import { AppError } from "../errors/app-error";
+import { setTestPool } from "../database/connection";
 import { operationRepository } from "../repositories/operation.repository";
 import { setupUnitTestEnv } from "../test-helpers/unit-test-env";
 
@@ -21,14 +23,48 @@ const cancelledOperation = {
 };
 
 describe("operationService.reactivate", () => {
+  const restores: Array<() => void> = [];
+
   afterEach(() => {
     mock.restoreAll();
+    setTestPool(null);
+    for (const restore of restores.splice(0)) {
+      restore();
+    }
   });
+
+  const useFakeTransaction = () => {
+    setTestPool({ connected: true } as sql.ConnectionPool);
+    const OriginalTransaction = sql.Transaction;
+    class FakeTransaction {
+      async begin(): Promise<void> {
+        return undefined;
+      }
+      async commit(): Promise<void> {
+        return undefined;
+      }
+      async rollback(): Promise<void> {
+        return undefined;
+      }
+    }
+    (sql as { Transaction: typeof sql.Transaction }).Transaction =
+      FakeTransaction as unknown as typeof sql.Transaction;
+    restores.push(() => {
+      (sql as { Transaction: typeof sql.Transaction }).Transaction = OriginalTransaction;
+    });
+  };
 
   it("reactivates a cancelled ONE_TIME operation to SCHEDULED", async () => {
     setupUnitTestEnv();
+    useFakeTransaction();
     const { operationService } = await import("./operation.service");
     const { auditService } = await import("./audit.service");
+    const { companySettingsRepository } = await import(
+      "../repositories/company-settings.repository"
+    );
+    const { operationChangeEventRepository } = await import(
+      "../repositories/operation-change-event.repository"
+    );
 
     mock.method(operationRepository, "findById", async () => cancelledOperation);
     mock.method(operationRepository, "reactivateFromCancelled", async () => ({
@@ -39,6 +75,10 @@ describe("operationService.reactivate", () => {
       ...cancelledOperation,
       status: "SCHEDULED" as const,
     }));
+    mock.method(companySettingsRepository, "findByCompanyId", async () => ({
+      operationTimezone: "America/Argentina/Buenos_Aires",
+    }));
+    mock.method(operationChangeEventRepository, "insert", async () => undefined);
     let auditAction = "";
     mock.method(auditService, "log", async (_companyId, input) => {
       auditAction = input.action;
@@ -79,6 +119,7 @@ describe("operationService.reactivate", () => {
 
   it("treats concurrent lose as OPERATION_NOT_CANCELLED", async () => {
     setupUnitTestEnv();
+    useFakeTransaction();
     const { operationService } = await import("./operation.service");
 
     mock.method(operationRepository, "findById", async () => cancelledOperation);

@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { attendanceReminderService } from "../services/attendance-reminder.service";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 const JOB_INTERVAL_MS = 60_000;
 
@@ -13,11 +14,18 @@ const runJobSafely = async (): Promise<void> => {
   }
 
   isRunning = true;
-
   try {
-    await attendanceReminderService.runDueRemindersForAllCompanies();
-  } catch (error) {
-    console.error("[attendance-reminder] unexpected job error", error);
+    await runInstrumentedJobTick({
+      module: "attendance-reminder",
+      jobName: "attendance-reminder",
+      completedEvent: "attendance-reminder.run.completed",
+      failedEvent: "attendance-reminder.run.failed",
+      completedMessage: "Attendance reminder tick completed",
+      failedMessage: "Attendance reminder job failed",
+      run: async () => {
+        await attendanceReminderService.runDueRemindersForAllCompanies();
+      },
+    });
   } finally {
     isRunning = false;
   }

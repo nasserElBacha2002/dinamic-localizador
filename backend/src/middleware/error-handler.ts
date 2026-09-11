@@ -3,6 +3,7 @@ import { ZodError } from "zod";
 import { env } from "../config/env";
 import { AppError } from "../errors/app-error";
 import type { ApiErrorResponse } from "../types/http";
+import { systemLogger } from "../utils/system-logs/logger";
 
 export const notFoundHandler = (_req: Request, res: Response<ApiErrorResponse>): void => {
   res.status(404).json({
@@ -13,17 +14,46 @@ export const notFoundHandler = (_req: Request, res: Response<ApiErrorResponse>):
   });
 };
 
+const normalizeRoute = (req: Request): string => {
+  const base = req.baseUrl || "";
+  const path = req.route?.path ? String(req.route.path) : req.path || "";
+  return `${base}${path}`.slice(0, 200) || req.path.slice(0, 200);
+};
+
 export const errorHandler = (
   error: unknown,
-  _req: Request,
+  req: Request,
   res: Response<ApiErrorResponse>,
   _next: NextFunction,
 ): void => {
-  if (env.NODE_ENV !== "production") {
-    console.error(error);
-  }
-
   if (error instanceof AppError) {
+    if (error.statusCode >= 500) {
+      systemLogger.error({
+        module: "http",
+        event: "http.request.failed",
+        message: error.message,
+        errorCode: error.code,
+        error,
+        metadata: {
+          method: req.method,
+          route: normalizeRoute(req),
+          statusCode: error.statusCode,
+        },
+      });
+    } else if (error.statusCode >= 400 && env.NODE_ENV !== "production") {
+      systemLogger.warn({
+        module: "http",
+        event: "http.request.rejected",
+        message: error.message,
+        errorCode: error.code,
+        metadata: {
+          method: req.method,
+          route: normalizeRoute(req),
+          statusCode: error.statusCode,
+        },
+      });
+    }
+
     res.status(error.statusCode).json({
       error: {
         code: error.code,
@@ -60,6 +90,19 @@ export const errorHandler = (
     });
     return;
   }
+
+  systemLogger.error({
+    module: "http",
+    event: "http.request.failed",
+    message: "Unhandled server error",
+    errorCode: "INTERNAL_SERVER_ERROR",
+    error,
+    metadata: {
+      method: req.method,
+      route: normalizeRoute(req),
+      statusCode: 500,
+    },
+  });
 
   res.status(500).json({
     error: {

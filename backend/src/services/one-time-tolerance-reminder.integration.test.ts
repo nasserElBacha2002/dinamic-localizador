@@ -8,6 +8,7 @@ import {
 } from "../test-helpers/integration-test";
 import { createIntegrationFixtureTracker } from "../test-helpers/integration-cleanup";
 import { getPool } from "../database/connection";
+import { operationRepository } from "../repositories/operation.repository";
 import { operationService } from "./operation.service";
 
 const uniquePhone = (suffix: number): string =>
@@ -199,5 +200,25 @@ describeDatabaseIntegration("ONE_TIME tolerance-only reminder version stability"
 
     // SENT with matching schedule_version must block rediscovery.
     assert.equal(Number(candidates.recordset[0].total), 0);
+
+    await pool
+      .request()
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationId", sql.UniqueIdentifier, operationId)
+      .query(`
+        UPDATE scheduled_operations
+        SET early_tolerance_minutes = 5
+        WHERE company_id = @companyId AND id = @operationId
+      `);
+
+    const compatible = await operationRepository.findCompatibleForEmployee(
+      companyId,
+      employeeId,
+      new Date(start.getTime() - 30 * 60_000),
+    );
+    const preservedSnapshot = compatible.find((operation) => operation.id === operationId);
+    assert.ok(preservedSnapshot);
+    assert.equal(preservedSnapshot.earlyToleranceMinutes, 45);
+    assert.equal(preservedSnapshot.lateToleranceMinutes, 120);
   });
 });

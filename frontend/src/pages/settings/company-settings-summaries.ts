@@ -83,7 +83,10 @@ export function buildOperationalSettingsSummary(settings: CompanySettings) {
         label: "Tolerancia de llegada",
         value: `${settings.defaultEarlyArrivalToleranceMinutes} min antes / ${settings.defaultLateArrivalToleranceMinutes} min después`,
       },
-      { label: "Puntualidad WhatsApp", value: formatMinutes(settings.lateGraceMinutes) },
+      {
+        label: "Tolerancia de salida anticipada",
+        value: formatMinutes(settings.earlyLeaveToleranceMinutes),
+      },
       {
         label: "Recordatorio",
         value: settings.confirmationReminderEnabled
@@ -112,13 +115,6 @@ export function buildOperationOperationSummary(settings: CompanySettings) {
   }
 
   return items;
-}
-
-export function buildWhatsAppSummary(settings: CompanySettings) {
-  return [
-    { label: "Puntualidad", value: formatMinutes(settings.lateGraceMinutes) },
-    { label: "Salida anticipada", value: formatMinutes(settings.earlyLeaveToleranceMinutes) },
-  ];
 }
 
 export function buildCheckoutSummary(settings: CompanySettings) {

@@ -5,6 +5,7 @@ import { botSessionRepository } from "../repositories/bot-session.repository";
 import type {
   BotSession,
   BotSessionContext,
+  BotSessionMenuOptionKey,
   BotSessionState,
   OperationSelectionOption,
   WorkdaySessionSelectionOption,
@@ -33,6 +34,12 @@ export type AttendanceConfirmationSessionCreateResult =
   | { status: "ACTIVE_SESSION_CONFLICT" };
 
 const buildExpiresAt = (): Date => buildSessionExpiresAt(getSessionTtlMinutes());
+
+export type FailedSessionAttemptResult =
+  | { kind: "retry"; session: BotSession; attempt: number }
+  | { kind: "max_attempts"; session: BotSession; attempt: number }
+  | { kind: "completed" | "cancelled" | "expired"; session: BotSession }
+  | { kind: "conflict"; session: BotSession | null };
 
 const parseContext = (contextJson: string | null): BotSessionContext => {
   if (!contextJson) {
@@ -173,6 +180,7 @@ export const botSessionService = {
             attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_LOCATION",
+            intent: "CHECK_IN",
             contextJson: null,
             expiresAt: buildExpiresAt(),
           },
@@ -230,6 +238,7 @@ export const botSessionService = {
             attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_OPERATION_SELECTION",
+            intent: "CHECK_IN",
             contextJson: JSON.stringify(context),
             expiresAt: buildExpiresAt(),
           },
@@ -296,7 +305,9 @@ export const botSessionService = {
           employeeWorkdayId: input.employeeWorkdayId,
           attendanceRecordId: null,
           state: "WAITING_LOCATION",
+          intent: "CHECK_IN",
           contextJson: null,
+          failedAttempts: 0,
           expiresAt: renewedExpiresAt,
         },
         transaction,
@@ -326,6 +337,7 @@ export const botSessionService = {
     employeeWorkdayId: string;
     attendanceRecordId?: string | null;
     checkoutWithoutArrival?: boolean;
+    pendingLocation?: BotSessionContext["pendingLocation"];
   }): Promise<BotSession> {
     try {
       const session = await runInTransaction(async (transaction) => {
@@ -339,9 +351,18 @@ export const botSessionService = {
             attendanceRecordId: input.attendanceRecordId ?? null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_LOCATION",
-            contextJson: input.checkoutWithoutArrival
-              ? JSON.stringify({ checkoutWithoutArrival: true })
-              : null,
+            intent: "CHECK_OUT",
+            contextJson:
+              input.checkoutWithoutArrival || input.pendingLocation
+                ? JSON.stringify({
+                    ...(input.checkoutWithoutArrival
+                      ? { checkoutWithoutArrival: true }
+                      : {}),
+                    ...(input.pendingLocation
+                      ? { pendingLocation: input.pendingLocation }
+                      : {}),
+                  } satisfies BotSessionContext)
+                : null,
             expiresAt: buildExpiresAt(),
           },
           transaction,
@@ -396,6 +417,7 @@ export const botSessionService = {
             attendanceRecordId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CHECKOUT_OPERATION_SELECTION",
+            intent: "CHECK_OUT",
             contextJson: JSON.stringify(context),
             expiresAt: buildExpiresAt(),
           },
@@ -461,9 +483,11 @@ export const botSessionService = {
           employeeWorkdayId: input.employeeWorkdayId,
           attendanceRecordId: input.attendanceRecordId ?? null,
           state: "WAITING_CHECKOUT_LOCATION",
+          intent: "CHECK_OUT",
           contextJson: input.checkoutWithoutArrival
             ? JSON.stringify({ checkoutWithoutArrival: true })
             : null,
+          failedAttempts: 0,
           expiresAt: renewedExpiresAt,
         },
         transaction,
@@ -495,6 +519,7 @@ export const botSessionService = {
             operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_CONFIRM_ATTENDANCE_SELECTION",
+            intent: "CONFIRM_ATTENDANCE",
             contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
@@ -541,6 +566,7 @@ export const botSessionService = {
             operationId: null,
             phoneNumber: input.phoneNumber,
             state: "WAITING_UNAVAILABILITY_SELECTION",
+            intent: "REPORT_UNAVAILABILITY",
             contextJson: JSON.stringify({ operationOptions: input.options }),
             expiresAt: buildExpiresAt(),
           },
@@ -622,6 +648,7 @@ export const botSessionService = {
             operationId: input.operationId,
             phoneNumber: input.phoneNumber,
             state: "WAITING_ATTENDANCE_CONFIRMATION_RESPONSE",
+            intent: "ATTENDANCE_CONFIRMATION_RESPONSE",
             contextJson: JSON.stringify({
               attendanceConfirmation: {
                 operationId: input.operationId,
@@ -668,14 +695,38 @@ export const botSessionService = {
     }
   },
 
-  async completeSession(companyId: string, sessionId: string, transaction?: sql.Transaction): Promise<void> {
-    await botSessionRepository.updateSession(companyId, sessionId, { state: "COMPLETED" }, transaction);
+  async completeSession(
+    companyId: string,
+    sessionId: string,
+    transaction?: sql.Transaction,
+    expectedSession?: BotSession,
+  ): Promise<boolean> {
+    const updated = await botSessionRepository.updateSession(
+      companyId,
+      sessionId,
+      {
+        state: "COMPLETED",
+        expectedVersion: expectedSession?.sessionVersion,
+        expectedState: expectedSession?.state,
+      },
+      transaction,
+    );
     console.info("[bot-session] session completed", { sessionId });
+    return updated !== null;
   },
 
-  async cancelSession(companyId: string, sessionId: string): Promise<void> {
-    await botSessionRepository.updateSession(companyId, sessionId, { state: "CANCELLED" });
+  async cancelSession(
+    companyId: string,
+    sessionId: string,
+    expectedSession?: BotSession,
+  ): Promise<boolean> {
+    const updated = await botSessionRepository.updateSession(companyId, sessionId, {
+      state: "CANCELLED",
+      expectedVersion: expectedSession?.sessionVersion,
+      expectedState: expectedSession?.state,
+    });
     console.info("[bot-session] session cancelled", { sessionId });
+    return updated !== null;
   },
 
   async createAbsenceSession(
@@ -695,6 +746,7 @@ export const botSessionService = {
           operationId: null,
           phoneNumber: input.phoneNumber,
           state: input.state,
+          intent: "ABSENCE",
           contextJson: input.contextJson,
           expiresAt: buildExpiresAt(),
         },
@@ -727,6 +779,7 @@ export const botSessionService = {
           operationId: null,
           phoneNumber: input.phoneNumber,
           state: "WAITING_PAYROLL_RECEIPT_PERIOD",
+          intent: "PAYROLL_RECEIPT",
           contextJson: null,
           expiresAt: buildExpiresAt(),
         },
@@ -745,15 +798,123 @@ export const botSessionService = {
   async updatePayrollReceiptSessionContext(
     companyId: string,
     sessionId: string,
-    payrollReceiptQuery: { year: number; month: number; introSent?: boolean },
+    payrollReceiptQuery: { year: number; month: number },
   ): Promise<BotSession | null> {
     return botSessionRepository.updateSession(companyId, sessionId, {
       state: "WAITING_PAYROLL_RECEIPT_PERIOD",
       contextJson: JSON.stringify({
         payrollReceiptQuery,
       } satisfies BotSessionContext),
+      failedAttempts: 0,
       expiresAt: buildExpiresAt(),
     });
+  },
+
+  async createMenuSelectionSession(
+    companyId: string,
+    input: {
+      employeeId: string;
+      phoneNumber: string;
+      options: BotSessionMenuOptionKey[];
+    },
+  ): Promise<BotSession> {
+    try {
+      const session = await runInTransaction(async (transaction) => {
+        await prepareForNewSession(companyId, input.employeeId, input.phoneNumber, transaction);
+        return botSessionRepository.create(
+          {
+            companyId,
+            employeeId: input.employeeId,
+            operationId: null,
+            employeeWorkdayId: null,
+            attendanceRecordId: null,
+            phoneNumber: input.phoneNumber,
+            state: "WAITING_MENU_SELECTION",
+            intent: "MENU",
+            contextJson: JSON.stringify({
+              menuOptions: input.options,
+            } satisfies BotSessionContext),
+            expiresAt: buildExpiresAt(),
+          },
+          transaction,
+        );
+      });
+      console.info("[bot-session] menu selection session created", {
+        companyId,
+        sessionId: session.id,
+        employeeId: input.employeeId,
+        optionCount: input.options.length,
+        expiresAt: session.expiresAt,
+      });
+      return session;
+    } catch (error) {
+      if (botSessionRepository.isUniqueConstraintError(error)) {
+        const active = await this.getActiveSessionByPhone(companyId, input.phoneNumber);
+        if (active?.state === "WAITING_MENU_SELECTION") {
+          console.info("[bot-session] concurrent menu creation converged", {
+            companyId,
+            sessionId: active.id,
+            employeeId: input.employeeId,
+          });
+          return active;
+        }
+      }
+      throw error;
+    }
+  },
+
+  async recordFailedAttempt(
+    companyId: string,
+    session: BotSession,
+    messageSid: string,
+    maxFailedAttempts: number,
+  ): Promise<FailedSessionAttemptResult> {
+    const persisted = await botSessionRepository.recordFailedAttempt({
+      companyId,
+      sessionId: session.id,
+      expectedVersion: session.sessionVersion,
+      messageSid,
+      maxFailedAttempts,
+      expiresAt: buildExpiresAt(),
+    });
+    if (persisted.kind === "missing") {
+      console.warn("[bot-session] failed-attempt transition conflict", {
+        companyId,
+        sessionId: session.id,
+        messageSid,
+        expectedVersion: session.sessionVersion,
+      });
+      return { kind: "conflict", session: null };
+    }
+
+    const updated = persisted.session;
+    if (updated.state === "COMPLETED") {
+      return { kind: "completed", session: updated };
+    }
+    if (updated.state === "CANCELLED") {
+      return updated.failedAttempts >= maxFailedAttempts
+        ? { kind: "max_attempts", session: updated, attempt: updated.failedAttempts }
+        : { kind: "cancelled", session: updated };
+    }
+    if (
+      updated.state === "EXPIRED" ||
+      new Date(updated.expiresAt).getTime() <= Date.now()
+    ) {
+      return { kind: "expired", session: updated };
+    }
+    if (persisted.kind === "cas_conflict") {
+      return { kind: "conflict", session: updated };
+    }
+
+    console.info("[bot-session] invalid contextual input", {
+      companyId,
+      sessionId: session.id,
+      messageSid,
+      state: session.state,
+      attempt: updated.failedAttempts,
+      maxReached: false,
+    });
+    return { kind: "retry", session: updated, attempt: updated.failedAttempts };
   },
 
   async updateAbsenceSession(

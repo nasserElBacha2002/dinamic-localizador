@@ -1,5 +1,14 @@
 import { zodResolver } from "@hookform/resolvers/zod";
-import { Anchor, Box, Paper, Stack, Text, TextInput, UnstyledButton } from "@mantine/core";
+import {
+  Anchor,
+  Box,
+  Paper,
+  Stack,
+  Switch,
+  Text,
+  TextInput,
+  UnstyledButton,
+} from "@mantine/core";
 import { useEffect, useMemo } from "react";
 import { Link as RouterLink } from "react-router";
 import { Controller, useForm, useWatch } from "react-hook-form";
@@ -133,6 +142,8 @@ export function OperationForm({
 
   const operationKind = useWatch({ control, name: "operationKind" });
   const scheduleSource = useWatch({ control, name: "scheduleSource" });
+  const earlyToleranceSource = useWatch({ control, name: "earlyToleranceSource" });
+  const lateToleranceSource = useWatch({ control, name: "lateToleranceSource" });
   const lockedKind = mode === "edit" ? (currentOperationKind ?? operationKind) : operationKind;
   const serviceFieldDisabled = mode === "edit" && !isOperationEditable(currentStatus);
   const companyScheduleAvailable = Boolean(companyWorkSchedule);
@@ -429,22 +440,54 @@ export function OperationForm({
       )}
 
       <FormGrid>
-        <RHFNumberInput
-          control={control}
-          name="earlyToleranceMinutes"
-          label="Tolerancia temprana (minutos)"
-          required
-          min={0}
-          step={1}
-        />
-        <RHFNumberInput
-          control={control}
-          name="lateToleranceMinutes"
-          label="Tolerancia tardía (minutos)"
-          required
-          min={0}
-          step={1}
-        />
+        <Stack gap="xs">
+          <Switch
+            label="Personalizar tolerancia de llegada temprana"
+            description="Desactivado: hereda el valor actual de la empresa."
+            checked={earlyToleranceSource === "CUSTOM"}
+            onChange={(event) =>
+              setValue(
+                "earlyToleranceSource",
+                event.currentTarget.checked ? "CUSTOM" : "COMPANY_DEFAULT",
+                { shouldDirty: true, shouldValidate: true },
+              )
+            }
+            disabled={serviceFieldDisabled}
+          />
+          <RHFNumberInput
+            control={control}
+            name="earlyToleranceMinutes"
+            label="Tolerancia temprana (minutos)"
+            required={earlyToleranceSource === "CUSTOM"}
+            min={0}
+            step={1}
+            disabled={serviceFieldDisabled || earlyToleranceSource !== "CUSTOM"}
+          />
+        </Stack>
+        <Stack gap="xs">
+          <Switch
+            label="Personalizar tolerancia de llegada tardía"
+            description="Desactivado: hereda el valor actual de la empresa."
+            checked={lateToleranceSource === "CUSTOM"}
+            onChange={(event) =>
+              setValue(
+                "lateToleranceSource",
+                event.currentTarget.checked ? "CUSTOM" : "COMPANY_DEFAULT",
+                { shouldDirty: true, shouldValidate: true },
+              )
+            }
+            disabled={serviceFieldDisabled}
+          />
+          <RHFNumberInput
+            control={control}
+            name="lateToleranceMinutes"
+            label="Tolerancia tardía (minutos)"
+            required={lateToleranceSource === "CUSTOM"}
+            min={0}
+            step={1}
+            disabled={serviceFieldDisabled || lateToleranceSource !== "CUSTOM"}
+          />
+        </Stack>
       </FormGrid>
 
       {mode === "edit" && statusOptions.length > 0 ? (

@@ -25,7 +25,7 @@ import { resolveOperationTimezone } from "../utils/operation-timezone";
 
 export type CheckInCandidateRejectionReason =
   | "BEFORE_CHECK_IN_WINDOW"
-  | "AFTER_EXPECTED_END"
+  | "AFTER_CHECK_IN_WINDOW"
   | "OPERATION_NOT_AVAILABLE"
   | "WORKDAY_NOT_ACTIVE"
   | "EMPLOYEE_NOT_EXPECTED"
@@ -227,7 +227,6 @@ const evaluateNearbyCandidate = (
   const window = evaluateCheckInWindow(
     {
       expectedStartAt: row.expectedStartAt,
-      expectedEndAt: row.expectedEndAt,
       earlyToleranceMinutes: row.earlyToleranceMinutes,
       lateToleranceMinutes: row.lateToleranceMinutes,
     },
@@ -237,8 +236,8 @@ const evaluateNearbyCandidate = (
   if (window.rejectionReason === "BEFORE_CHECK_IN_WINDOW") {
     rejectionReasons.push("BEFORE_CHECK_IN_WINDOW");
   }
-  if (window.rejectionReason === "AFTER_EXPECTED_END") {
-    rejectionReasons.push("AFTER_EXPECTED_END");
+  if (window.rejectionReason === "AFTER_CHECK_IN_WINDOW") {
+    rejectionReasons.push("AFTER_CHECK_IN_WINDOW");
   }
 
   const eligible = rejectionReasons.length === 0;

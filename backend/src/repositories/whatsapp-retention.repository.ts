@@ -295,11 +295,21 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
       SELECT COUNT(*) AS cnt
       FROM whatsapp_payroll_receipt_query_deliveries d
       WHERE d.created_at < @cutoff
+        AND d.status NOT IN (
+          N'PROCESSING',
+          N'SEND_STARTED',
+          N'RECONCILIATION_REQUIRED'
+        )
     `,
       deleteSql: `
       DELETE TOP (@batchSize)
       FROM whatsapp_payroll_receipt_query_deliveries
       WHERE created_at < @cutoff
+        AND status NOT IN (
+          N'PROCESSING',
+          N'SEND_STARTED',
+          N'RECONCILIATION_REQUIRED'
+        )
     `,
     },
     whatsapp_messages: {

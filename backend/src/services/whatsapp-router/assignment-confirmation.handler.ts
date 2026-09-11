@@ -34,7 +34,7 @@ const completeSelectionSession = async (
   companyId: string,
   session: BotSession,
 ): Promise<void> => {
-  await botSessionService.completeSession(companyId, session.id);
+  await botSessionService.completeSession(companyId, session.id, undefined, session);
 };
 
 export const handleActiveAssignmentSelectionSession = async (

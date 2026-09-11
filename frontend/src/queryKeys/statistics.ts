@@ -21,4 +21,6 @@ export const statisticsKeys = {
     [...statisticsKeys.company(companyId), "by-service", filters] as const,
   workdayDetails: (companyId: string | undefined, filters: unknown) =>
     [...statisticsKeys.company(companyId), "workday-details", filters] as const,
+  incidentDetails: (companyId: string | undefined, filters: unknown) =>
+    [...statisticsKeys.company(companyId), "incident-details", filters] as const,
 };

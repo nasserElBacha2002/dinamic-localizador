@@ -47,6 +47,7 @@ export const payrollReceiptWhatsappDeliveryService = {
     employeeId?: string | null;
     inboundMessageSid?: string | null;
     payrollReceiptId?: string;
+    onSendStarted?: () => Promise<void>;
   }): Promise<PayrollReceiptDeliveryResult> {
     const { receipt } = input;
     const periodLabel = formatPayrollReceiptPeriod(receipt.year, receipt.month);
@@ -60,6 +61,7 @@ export const payrollReceiptWhatsappDeliveryService = {
     }
 
     if (isSimulationActive()) {
+      await input.onSendStarted?.();
       recordSimulationArtifact({
         type: "payroll_receipt_document",
         mode: "simulated",
@@ -115,10 +117,17 @@ export const payrollReceiptWhatsappDeliveryService = {
     const caption = buildCaption(receipt.year, receipt.month);
 
     try {
+      await input.onSendStarted?.();
       const result = await twilioOutboundService.sendWhatsAppDocument({
         toPhoneNumber: input.toPhoneNumber,
         body: caption,
         mediaUrl,
+        costContext: {
+          companyId: input.companyId ?? receipt.companyId,
+          messageKind: "DOCUMENT",
+          flowLabel: "PAYROLL_DOCUMENT",
+          templateName: "PAYROLL_RECEIPT_PDF",
+        },
       });
 
       const companyId = input.companyId ?? receipt.companyId;

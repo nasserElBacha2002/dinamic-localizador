@@ -47,6 +47,7 @@ export const updateCompanySettingsSchema = z
         "El radio predeterminado no puede superar 5000 metros.",
       )
       .optional(),
+    // Deprecated compatibility input; runtime arrival policy uses operation/workday tolerances.
     lateGraceMinutes: z.coerce
       .number()
       .int("La tolerancia de llegada debe ser un número entero.")
@@ -141,6 +142,45 @@ export const updateCompanySettingsSchema = z
     absenceAttachmentsEnabled: z.boolean().optional(),
     absenceOperationalIntegrationEnabled: z.boolean().optional(),
     adminAlertsEnabled: z.boolean().optional(),
+    adminAttendanceConfirmationMissingEnabled: z.boolean().optional(),
+    adminMissingCheckinEnabled: z.boolean().optional(),
+    adminMissingCheckoutEnabled: z.boolean().optional(),
+    adminConfirmationEscalationMinutes: z.coerce
+      .number()
+      .int("Los minutos de anticipación de confirmación deben ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.adminConfirmationEscalationMinutes.min,
+        "Los minutos de anticipación de confirmación no pueden ser negativos.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.adminConfirmationEscalationMinutes.max,
+        "Los minutos de anticipación de confirmación no pueden superar 1440.",
+      )
+      .optional(),
+    adminMissingCheckoutDelayMinutes: z.coerce
+      .number()
+      .int("Los minutos de demora de salida deben ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.adminMissingCheckoutDelayMinutes.min,
+        "Los minutos de demora de salida no pueden ser negativos.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.adminMissingCheckoutDelayMinutes.max,
+        "Los minutos de demora de salida no pueden superar 720.",
+      )
+      .optional(),
+    adminAlertMaxLatenessMinutes: z.coerce
+      .number()
+      .int("El atraso máximo de alertas debe ser un número entero.")
+      .min(
+        COMPANY_SETTINGS_LIMITS.adminAlertMaxLatenessMinutes.min,
+        "El atraso máximo de alertas debe ser al menos 1 minuto.",
+      )
+      .max(
+        COMPANY_SETTINGS_LIMITS.adminAlertMaxLatenessMinutes.max,
+        "El atraso máximo de alertas no puede superar 720 minutos.",
+      )
+      .optional(),
     attendanceThresholdAlertsEnabled: z.boolean().optional(),
     attendanceAlertThresholdPercent: z.coerce
       .number()

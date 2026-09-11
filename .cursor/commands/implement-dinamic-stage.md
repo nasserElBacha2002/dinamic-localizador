@@ -165,7 +165,6 @@ Preserve or extend these existing config assumptions:
 ```env
 BOT_DEFAULT_RADIUS_METERS=150
 BOT_GEOFENCE_REVIEW_MARGIN_METERS=30
-BOT_ON_TIME_GRACE_MINUTES=15
 BOT_OPERATION_TIMEZONE=America/Argentina/Buenos_Aires
 BOT_SESSION_TTL_MINUTES=15
 ```

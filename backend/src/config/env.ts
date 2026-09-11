@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import { z } from "zod";
 import { parseCorsOrigins } from "./cors-origins";
 import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
+import { DEFAULT_SYSTEM_LOGS_INFO_EVENT_ALLOWLIST_CSV } from "../constants/system-logs";
 
 config();
 resolveGoogleApplicationCredentialsPath();
@@ -37,11 +38,10 @@ const envSchema = z
     RECURRING_WORKDAY_HORIZON_DAYS: z.coerce.number().int().positive().default(60),
     RECURRING_WORKDAY_MATERIALIZATION_JOB_ENABLED: z.stringbool().default(true),
     BOT_SESSION_TTL_MINUTES: z.coerce.number().int().positive().default(15),
+    CONVERSATION_MAX_FAILED_ATTEMPTS: z.coerce.number().int().positive().max(20).default(3),
     BOT_OPERATION_TIMEZONE: z.string().default("America/Argentina/Buenos_Aires"),
     BOT_DEFAULT_RADIUS_METERS: z.coerce.number().int().positive().default(150),
     BOT_GEOFENCE_REVIEW_MARGIN_METERS: z.coerce.number().int().nonnegative().default(30),
-    BOT_ON_TIME_GRACE_MINUTES: z.coerce.number().int().nonnegative().default(15),
-    BOT_CHECKOUT_EARLY_TOLERANCE_MINUTES: z.coerce.number().int().nonnegative().default(15),
     BOT_DEFAULT_COMPANY_ID: z.string().uuid().optional(),
     BOT_DEFAULT_COMPANY_NAME: z.string().min(1).optional(),
     JWT_SECRET: z.string().min(16),
@@ -99,6 +99,7 @@ const envSchema = z
     PAYROLL_RECEIPT_NOTIFICATION_WORKER_ENABLED: z.stringbool().default(true),
     PAYROLL_RECEIPT_NOTIFICATION_WORKER_INTERVAL_MS: z.coerce.number().int().positive().default(60_000),
     PAYROLL_RECEIPT_NOTIFICATION_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    PAYROLL_RECEIPT_QUERY_DELIVERY_LEASE_MS: z.coerce.number().int().positive().default(120_000),
     PAYROLL_RECEIPT_NOTIFICATION_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     PAYROLL_RECEIPT_NOTIFICATION_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
     /** ONE_TIME assignment WhatsApp outbox worker (default off until Content SID is configured). */
@@ -122,6 +123,15 @@ const envSchema = z
     ADMIN_ALERT_LEASE_MS: z.coerce.number().int().positive().default(120_000),
     ADMIN_ALERT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     ADMIN_ALERT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    /** Outbox delivery batch size per tick (dynamic + legacy admin alerts). */
+    ADMIN_ALERT_DELIVERY_BATCH_SIZE: z.coerce.number().int().positive().max(50).default(24),
+    /** Candidate batch per dynamic attendance alert type. */
+    ADMIN_ALERT_DYNAMIC_CANDIDATE_BATCH_SIZE: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(100)
+      .default(25),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),
@@ -152,6 +162,18 @@ const envSchema = z
     WHATSAPP_OBSERVABILITY_UI_ENABLED: z.stringbool().default(true),
     WHATSAPP_TWILIO_STATUS_CALLBACK_ENABLED: z.stringbool().default(true),
     TWILIO_STATUS_CALLBACK_URL: z.string().url().optional(),
+    /** Async worker that fetches Twilio Message.price into the cost ledger. */
+    WHATSAPP_MESSAGE_COST_SYNC_WORKER_ENABLED: z.stringbool().default(false),
+    WHATSAPP_MESSAGE_COST_SYNC_WORKER_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(60_000),
+    WHATSAPP_MESSAGE_COST_SYNC_LEASE_MS: z.coerce.number().int().positive().default(120_000),
+    WHATSAPP_MESSAGE_COST_SYNC_MAX_ATTEMPTS: z.coerce.number().int().positive().default(8),
+    WHATSAPP_MESSAGE_COST_SYNC_RETRY_BASE_MS: z.coerce.number().int().positive().default(60_000),
+    WHATSAPP_MESSAGE_COST_SYNC_BATCH_SIZE: z.coerce.number().int().positive().max(50).default(10),
+    WHATSAPP_MESSAGE_COST_EXPORT_MAX_ROWS: z.coerce.number().int().positive().max(50_000).default(10_000),
     WHATSAPP_RETENTION_DAYS: z.coerce.number().int().min(1).max(3650).default(30),
     WHATSAPP_RETENTION_DRY_RUN: z.stringbool().default(false),
     WHATSAPP_RETENTION_BATCH_SIZE: z.coerce.number().int().min(1).max(5000).default(500),
@@ -163,6 +185,35 @@ const envSchema = z
       .positive()
       .default(6 * 60 * 60 * 1000),
     WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET: z.string().min(16).optional(),
+    /** Platform Admin technical system logs (stdout JSON + SQL sink). */
+    SYSTEM_LOGS_ENABLED: z.stringbool().default(true),
+    SYSTEM_LOGS_UI_ENABLED: z.stringbool().default(true),
+    SYSTEM_LOGS_PERSIST_LEVELS: z
+      .string()
+      .default("error,warn")
+      .transform((raw) =>
+        raw
+          .split(",")
+          .map((part) => part.trim().toLowerCase())
+          .filter((part): part is "error" | "warn" | "info" =>
+            part === "error" || part === "warn" || part === "info",
+          ),
+      ),
+    SYSTEM_LOGS_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    SYSTEM_LOGS_MAX_METADATA_BYTES: z.coerce.number().int().positive().max(64_000).default(8_000),
+    SYSTEM_LOGS_MAX_STACK_BYTES: z.coerce.number().int().positive().max(64_000).default(8_000),
+    SYSTEM_LOGS_QUERY_MAX_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+    SYSTEM_LOGS_RETENTION_BATCH_SIZE: z.coerce.number().int().min(1).max(5_000).default(500),
+    SYSTEM_LOGS_RETENTION_JOB_ENABLED: z.stringbool().default(true),
+    SYSTEM_LOGS_RETENTION_JOB_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(6 * 60 * 60 * 1000),
+    SYSTEM_LOGS_INFO_EVENT_ALLOWLIST: z
+      .string()
+      .default(DEFAULT_SYSTEM_LOGS_INFO_EVENT_ALLOWLIST_CSV),
+    SYSTEM_LOGS_SERVICE_INSTANCE_ID: z.string().default(""),
   })
   .superRefine((data, ctx) => {
     const validateSignature = data.TWILIO_VALIDATE_SIGNATURE ?? data.NODE_ENV === "production";

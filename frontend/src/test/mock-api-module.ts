@@ -114,6 +114,18 @@ export const EMPLOYEES_API_EXPORTS = [
   "deactivateEmployee",
 ] as const;
 
+export const STATISTICS_API_EXPORTS = [
+  "getAttendanceStatisticsSummary",
+  "getAttendanceStatisticsTimeline",
+  "getAttendanceActionExceptions",
+  "getAttendanceStatusDistribution",
+  "getAttendanceByEmployee",
+  "getAttendanceByOperation",
+  "getAttendanceByService",
+  "getAttendanceWorkdayDetails",
+  "getAttendanceIncidentDetails",
+] as const;
+
 export const LOCATION_ZONES_API_EXPORTS = [
   "getLocationZones",
   "searchLocationZones",
@@ -179,4 +191,11 @@ export const WHATSAPP_OBSERVABILITY_API_EXPORTS = [
   "getWhatsappNotificationById",
   "getWhatsappConversationProviderEvents",
   "revealWhatsappConversationPhone",
+] as const;
+
+export const SYSTEM_LOGS_API_EXPORTS = [
+  "getSystemLogs",
+  "getSystemLogById",
+  "getSystemLogContext",
+  "getSystemLogsOptions",
 ] as const;

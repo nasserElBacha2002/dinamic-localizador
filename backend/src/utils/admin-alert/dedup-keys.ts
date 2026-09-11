@@ -9,6 +9,23 @@ export const buildUnavailableDedupKey = (
 export const buildMissingCheckinDedupKey = (employeeWorkdayId: string): string =>
   `missing-checkin:${normalizeId(employeeWorkdayId)}`;
 
+export const buildConfirmationMissingDedupKey = (
+  assignmentId: string,
+  scheduleVersion: number,
+): string => `confirmation-missing:${normalizeId(assignmentId)}:${scheduleVersion}`;
+
+export const buildMissingCheckinAfterStartDedupKey = (
+  employeeWorkdayId: string,
+  scheduleVersion: number,
+): string =>
+  `missing-checkin-after-start:${normalizeId(employeeWorkdayId)}:${scheduleVersion}`;
+
+export const buildMissingCheckoutAfterEndDedupKey = (
+  employeeWorkdayId: string,
+  scheduleVersion: number,
+): string =>
+  `missing-checkout-after-end:${normalizeId(employeeWorkdayId)}:${scheduleVersion}`;
+
 export const buildAbsencePendingDedupKey = (absenceRequestId: string): string =>
   `absence-pending:${normalizeId(absenceRequestId)}`;
 

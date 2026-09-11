@@ -54,6 +54,11 @@ export const deleteCompanyOperationalDataSetBased = async (
     DELETE FROM operation_assignments WHERE company_id = @companyId;
     DELETE FROM operation_workdays WHERE company_id = @companyId;
 
+    IF OBJECT_ID(N'dbo.operation_coverage_events', N'U') IS NOT NULL
+      DELETE FROM operation_coverage_events WHERE company_id = @companyId;
+    IF OBJECT_ID(N'dbo.operation_change_events', N'U') IS NOT NULL
+      DELETE FROM operation_change_events WHERE company_id = @companyId;
+
     DELETE FROM operation_schedule_days
     WHERE operation_schedule_id IN (
       SELECT id FROM operation_schedules WHERE company_id = @companyId

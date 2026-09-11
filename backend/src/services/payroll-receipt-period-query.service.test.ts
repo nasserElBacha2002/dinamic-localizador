@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { afterEach, describe, it } from "node:test";
+import { afterEach, beforeEach, describe, it } from "node:test";
 import type { PayrollReceipt } from "../types/payroll-receipt";
 import { payrollReceiptRepository } from "../repositories/payroll-receipt.repository";
 import { payrollReceiptQueryDeliveryRepository } from "../repositories/payroll-receipt-query-delivery.repository";
@@ -74,6 +74,35 @@ const simContext = {
 describe("payrollReceiptPeriodQueryService", () => {
   const restores: Array<() => void> = [];
 
+  beforeEach(() => {
+    restores.push(
+      stub(payrollReceiptRepository, "findAuthorizedActiveAssociatedForSend", async (input) =>
+        receipt(input.payrollReceiptId, "2026-07-01T00:00:00.000Z", input.year, input.month),
+      ),
+      stub(payrollReceiptQueryDeliveryRepository, "claimForSend", async (input) => ({
+        id: input.payrollReceiptId,
+        companyId: input.companyId,
+        botSessionId: input.botSessionId,
+        payrollReceiptId: input.payrollReceiptId,
+        employeeId: input.employeeId,
+        year: input.year,
+        month: input.month,
+        status: "PROCESSING",
+        providerMessageSid: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        acceptedAt: null,
+        processingToken: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        processingVersion: 1,
+        createdAt: "2026-07-01T00:00:00.000Z",
+        updatedAt: "2026-07-01T00:00:00.000Z",
+      })),
+      stub(payrollReceiptQueryDeliveryRepository, "markSendStarted", async () => true),
+      stub(payrollReceiptQueryDeliveryRepository, "markFailedBeforeSend", async () => true),
+      stub(payrollReceiptQueryDeliveryRepository, "markReconciliationRequired", async () => true),
+    );
+  });
+
   afterEach(() => {
     while (restores.length > 0) {
       restores.pop()?.();
@@ -119,6 +148,7 @@ describe("payrollReceiptPeriodQueryService", () => {
       ]),
       stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async () => {
         deliveryState.set(a.id, "ACCEPTED" as never);
+        return true;
       }),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async () => ({
         kind: "text_only" as const,
@@ -140,6 +170,153 @@ describe("payrollReceiptPeriodQueryService", () => {
       assert.equal(result.totalCount, 1);
       assert.equal(result.message, "");
     });
+  });
+
+  it("claims a receipt once across concurrent period queries", async () => {
+    const a = receipt("12111111-1111-4111-8111-111111111111", "2026-07-01T10:00:00.000Z");
+    let status:
+      | "PENDING"
+      | "PROCESSING"
+      | "SEND_STARTED"
+      | "ACCEPTED" = "PENDING";
+    let claimGranted = false;
+    let sendCount = 0;
+    let releaseFirstSend!: () => void;
+    let signalSendStarted!: () => void;
+    const firstSendReleased = new Promise<void>((resolve) => {
+      releaseFirstSend = resolve;
+    });
+    const sendStarted = new Promise<void>((resolve) => {
+      signalSendStarted = resolve;
+    });
+
+    restores.push(
+      stub(payrollReceiptRepository, "listActiveAssociated", async () => [a]),
+      stub(payrollReceiptQueryDeliveryRepository, "ensurePendingDeliveries", async () => undefined),
+      stub(payrollReceiptQueryDeliveryRepository, "listForQuery", async () => [
+        {
+          id: a.id,
+          companyId: COMPANY_ID,
+          botSessionId: SESSION_ID,
+          payrollReceiptId: a.id,
+          employeeId: EMPLOYEE_ID,
+          year: 2026,
+          month: 7,
+          status,
+          providerMessageSid: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          acceptedAt: null,
+          createdAt: a.createdAt,
+          updatedAt: a.updatedAt,
+        },
+      ]),
+      stub(payrollReceiptQueryDeliveryRepository, "claimForSend", async (input) => {
+        if (claimGranted) return null;
+        claimGranted = true;
+        status = "PROCESSING";
+        return {
+          id: a.id,
+          companyId: input.companyId,
+          botSessionId: input.botSessionId,
+          payrollReceiptId: a.id,
+          employeeId: input.employeeId,
+          year: input.year,
+          month: input.month,
+          status: "PROCESSING" as const,
+          providerMessageSid: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          acceptedAt: null,
+          processingToken: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+          processingVersion: 1,
+          createdAt: a.createdAt,
+          updatedAt: a.updatedAt,
+        };
+      }),
+      stub(payrollReceiptQueryDeliveryRepository, "markSendStarted", async () => {
+        status = "SEND_STARTED";
+        return true;
+      }),
+      stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async () => {
+        status = "ACCEPTED";
+        return true;
+      }),
+      stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
+        sendCount += 1;
+        await input.onSendStarted?.();
+        signalSendStarted();
+        await firstSendReleased;
+        return { kind: "send_accepted" as const, message: "ok", messageSid: "SM-ONE" };
+      }),
+    );
+
+    const first = payrollReceiptPeriodQueryService.deliverForPeriod({
+      companyId: COMPANY_ID,
+      employeeId: EMPLOYEE_ID,
+      botSessionId: SESSION_ID,
+      toPhoneNumber: "+5491100000000",
+      year: 2026,
+      month: 7,
+    });
+    await sendStarted;
+
+    const second = await payrollReceiptPeriodQueryService.deliverForPeriod({
+      companyId: COMPANY_ID,
+      employeeId: EMPLOYEE_ID,
+      botSessionId: SESSION_ID,
+      toPhoneNumber: "+5491100000000",
+      year: 2026,
+      month: 7,
+    });
+    releaseFirstSend();
+    const firstResult = await first;
+
+    assert.equal(sendCount, 1);
+    assert.equal(firstResult.kind, "completed");
+    assert.equal(second.kind, "failed");
+  });
+
+  it("does not send when per-receipt authorization fails", async () => {
+    const a = receipt("13111111-1111-4111-8111-111111111111", "2026-07-01T10:00:00.000Z");
+    let sends = 0;
+    restores.push(
+      stub(payrollReceiptRepository, "listActiveAssociated", async () => [a]),
+      stub(payrollReceiptRepository, "findAuthorizedActiveAssociatedForSend", async () => null),
+      stub(payrollReceiptQueryDeliveryRepository, "ensurePendingDeliveries", async () => undefined),
+      stub(payrollReceiptQueryDeliveryRepository, "listForQuery", async () => [{
+        id: a.id,
+        companyId: COMPANY_ID,
+        botSessionId: SESSION_ID,
+        payrollReceiptId: a.id,
+        employeeId: EMPLOYEE_ID,
+        year: 2026,
+        month: 7,
+        status: "PENDING",
+        providerMessageSid: null,
+        lastErrorCode: null,
+        lastErrorMessage: null,
+        acceptedAt: null,
+        createdAt: a.createdAt,
+        updatedAt: a.updatedAt,
+      }]),
+      stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async () => {
+        sends += 1;
+        return { kind: "text_only" as const, message: "unexpected" };
+      }),
+    );
+
+    const result = await payrollReceiptPeriodQueryService.deliverForPeriod({
+      companyId: COMPANY_ID,
+      employeeId: EMPLOYEE_ID,
+      botSessionId: SESSION_ID,
+      toPhoneNumber: "+5491100000000",
+      year: 2026,
+      month: 7,
+    });
+
+    assert.equal(result.kind, "failed");
+    assert.equal(sends, 0);
   });
 
   it("delivers N receipts in list order and completes when all accepted", async () => {
@@ -176,6 +353,7 @@ describe("payrollReceiptPeriodQueryService", () => {
       ),
       stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async (input) => {
         deliveryState.set(input.payrollReceiptId, "ACCEPTED");
+        return true;
       }),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
         sendOrder.push(input.receipt.id);
@@ -197,6 +375,69 @@ describe("payrollReceiptPeriodQueryService", () => {
       assert.equal(result.totalCount, 3);
       assert.equal(result.message, "");
       assert.deepEqual(sendOrder, [a.id, b.id, c.id]);
+    });
+  });
+
+  it("stops before a later receipt when authorization is revoked between sends", async () => {
+    const a = receipt("14111111-1111-4111-8111-111111111111", "2026-07-01T10:00:00.000Z");
+    const b = receipt("15111111-1111-4111-8111-111111111111", "2026-07-01T11:00:00.000Z");
+    const deliveryState = new Map<string, "PENDING" | "ACCEPTED" | "FAILED">([
+      [a.id, "PENDING"],
+      [b.id, "PENDING"],
+    ]);
+    const sendOrder: string[] = [];
+    let authorizationChecks = 0;
+
+    restores.push(
+      stub(payrollReceiptRepository, "listActiveAssociated", async () => [a, b]),
+      stub(payrollReceiptRepository, "findAuthorizedActiveAssociatedForSend", async () => {
+        authorizationChecks += 1;
+        return authorizationChecks === 1 ? a : null;
+      }),
+      stub(payrollReceiptQueryDeliveryRepository, "ensurePendingDeliveries", async () => undefined),
+      stub(payrollReceiptQueryDeliveryRepository, "listForQuery", async () =>
+        [a, b].map((item) => ({
+          id: item.id,
+          companyId: COMPANY_ID,
+          botSessionId: SESSION_ID,
+          payrollReceiptId: item.id,
+          employeeId: EMPLOYEE_ID,
+          year: 2026,
+          month: 7,
+          status: deliveryState.get(item.id)!,
+          providerMessageSid: null,
+          lastErrorCode: null,
+          lastErrorMessage: null,
+          acceptedAt: null,
+          createdAt: item.createdAt,
+          updatedAt: item.updatedAt,
+        })),
+      ),
+      stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async (input) => {
+        deliveryState.set(input.payrollReceiptId, "ACCEPTED");
+        return true;
+      }),
+      stub(payrollReceiptQueryDeliveryRepository, "markFailedBeforeSend", async (input) => {
+        deliveryState.set(input.payrollReceiptId, "FAILED");
+        return true;
+      }),
+      stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
+        sendOrder.push(input.receipt.id);
+        return { kind: "text_only" as const, message: "ok" };
+      }),
+    );
+
+    await runWithBotRuntimeContext(simContext, async () => {
+      const result = await payrollReceiptPeriodQueryService.deliverForPeriod({
+        companyId: COMPANY_ID,
+        employeeId: EMPLOYEE_ID,
+        botSessionId: SESSION_ID,
+        toPhoneNumber: "+5491100000000",
+        year: 2026,
+        month: 7,
+      });
+      assert.equal(result.kind, "partial_failed");
+      assert.deepEqual(sendOrder, [a.id]);
     });
   });
 
@@ -242,6 +483,7 @@ describe("payrollReceiptPeriodQueryService", () => {
           `${input.botSessionId}:${input.year}-${input.month}:${input.payrollReceiptId}`,
           "ACCEPTED",
         );
+        return true;
       }),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
         sendOrder.push(input.receipt.id);
@@ -301,10 +543,12 @@ describe("payrollReceiptPeriodQueryService", () => {
       }),
       stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async (input) => {
         deliveryState.set(input.payrollReceiptId, "ACCEPTED");
+        return true;
       }),
-      stub(payrollReceiptQueryDeliveryRepository, "markFailed", async (input) => {
+      stub(payrollReceiptQueryDeliveryRepository, "markFailedBeforeSend", async (input) => {
         deliveryState.set(input.payrollReceiptId, "FAILED");
         failedIds.push(input.payrollReceiptId);
+        return true;
       }),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
         if (input.receipt.id === b.id) {
@@ -385,6 +629,7 @@ describe("payrollReceiptPeriodQueryService", () => {
           `${input.botSessionId}:${input.year}-${input.month}:${input.payrollReceiptId}`,
           "ACCEPTED",
         );
+        return true;
       }),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async () => ({
         kind: "text_only" as const,
@@ -441,9 +686,11 @@ describe("payrollReceiptPeriodQueryService", () => {
       ),
       stub(payrollReceiptQueryDeliveryRepository, "markAccepted", async (input) => {
         deliveryState.set(input.payrollReceiptId, "ACCEPTED");
+        return true;
       }),
-      stub(payrollReceiptQueryDeliveryRepository, "markFailed", async (input) => {
+      stub(payrollReceiptQueryDeliveryRepository, "markFailedBeforeSend", async (input) => {
         deliveryState.set(input.payrollReceiptId, "FAILED");
+        return true;
       }),
       stub(payrollReceiptWhatsappDeliveryService, "deliverReceipt", async (input) => {
         sendOrder.push(input.receipt.id);
@@ -474,7 +721,6 @@ describe("payrollReceiptPeriodQueryService", () => {
         toPhoneNumber: "+5491100000000",
         year: 2026,
         month: 7,
-        introAlreadySent: true,
       });
       assert.equal(retry.kind, "completed");
       assert.equal(retry.deliveredCount, 3);

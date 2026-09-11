@@ -15,6 +15,7 @@ import {
 } from "../whatsapp-module-gate";
 import { buildCheckInValidation } from "./bot-attendance-runtime";
 import { botSessionService } from "../bot-session.service";
+import { recordInvalidContextualInput } from "../contextual-session-retry.service";
 import { employeeWorkdayAttendanceCommand } from "../employee-workday-attendance.command";
 import { employeeWorkdayAvailabilityService } from "../employee-workday-availability.service";
 import {
@@ -110,7 +111,12 @@ export async function processLocationCheckIn(input: {
           { simulationSessionId: getSimulationSessionId() },
         );
     if (hasActiveRecord) {
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
       return respond(companyId, {
         message: DUPLICATE_ATTENDANCE_MESSAGE,
         employeeId: input.employeeId,
@@ -132,7 +138,6 @@ export async function processLocationCheckIn(input: {
       serviceAllowedRadiusMeters: workday.allowedRadiusMeters,
       receivedAt: eventAt,
       scheduledStart: new Date(workday.expectedStartAt),
-      expectedEndAt: workday.expectedEndAt ? new Date(workday.expectedEndAt) : null,
       earlyToleranceMinutes: workday.earlyToleranceMinutes,
       lateToleranceMinutes: workday.lateToleranceMinutes,
       runtimeSettings,
@@ -181,7 +186,12 @@ export async function processLocationCheckIn(input: {
         receivedAt: eventAt.toISOString(),
       });
 
-      await botSessionService.completeSession(companyId, input.session.id);
+      await botSessionService.completeSession(
+        companyId,
+        input.session.id,
+        undefined,
+        input.session,
+      );
 
       return respond(companyId, {
         message: `${responseMessage}\n\n[Simulación] Se habría creado un registro de asistencia.`,
@@ -275,7 +285,12 @@ export async function processLocationCheckIn(input: {
           error.message.includes("UX_attendance_records_inventory_employee_active") ||
           error.message.includes("UX_attendance_records_employee_workday_active")
         ) {
-          await botSessionService.completeSession(companyId, input.session.id);
+          await botSessionService.completeSession(
+            companyId,
+            input.session.id,
+            undefined,
+            input.session,
+          );
           return respond(companyId, {
             message: DUPLICATE_ATTENDANCE_MESSAGE,
             employeeId: input.employeeId,
@@ -470,8 +485,16 @@ export async function handleOperationSelection(input: {
     const options = resolveWorkdayOptionsFromSessionContext(context) ?? [];
 
     if (!isValidWorkdaySelection(selection, options.length)) {
+      const retry = input.messageSid
+        ? await recordInvalidContextualInput({
+            companyId,
+            session: input.session,
+            messageSid: input.messageSid,
+            retryMessage: INVALID_SELECTION_MESSAGE,
+          })
+        : { message: INVALID_SELECTION_MESSAGE };
       return respond(companyId, {
-        message: INVALID_SELECTION_MESSAGE,
+        message: retry.message,
         employeeId: input.employeeId,
         phoneFrom: input.phoneTo,
         phoneTo: input.phoneFrom,

@@ -101,6 +101,56 @@ const alertCopyByType: Record<
     detail: () => "No existe registro de llegada al finalizar la jornada.",
     context: formatMissingCheckinContext,
   },
+  ATTENDANCE_CONFIRMATION_MISSING: {
+    title: "Confirmación pendiente",
+    detail: (payload) => {
+      const minutes = payload.minutesUntilStart;
+      if (minutes == null) {
+        return "Todavía no confirmó su asistencia.";
+      }
+      return `Todavía no confirmó su asistencia. Faltan ${minutes} min para el inicio.`;
+    },
+    context: formatOperationContext,
+  },
+  MISSING_CHECKIN_AFTER_START: {
+    title: "Falta de llegada",
+    detail: (payload) => {
+      const minutes = payload.minutesLate;
+      if (minutes == null) {
+        return "Todavía no registró su llegada.";
+      }
+      return `Todavía no registró su llegada. Demora actual: ${minutes} min.`;
+    },
+    context: formatOperationContext,
+  },
+  MISSING_CHECKOUT_AFTER_END: {
+    title: "Salida pendiente",
+    detail: (payload) => {
+      const minutes = payload.minutesLate;
+      if (minutes == null) {
+        return "Todavía no registró su salida.";
+      }
+      return `Todavía no registró su salida. Tiempo transcurrido: ${minutes} min.`;
+    },
+    context: (payload) => {
+      const timeZone = payload.operationTimezone?.trim() || env.BOT_OPERATION_TIMEZONE;
+      const serviceRef = formatServiceReferenceFromFields({
+        serviceName: payload.serviceName ?? "",
+        serviceAddress: payload.serviceAddress,
+        serviceLocality: payload.serviceLocality,
+      });
+      if (!serviceRef.trim()) {
+        return EMPTY_CONTEXT;
+      }
+      const endIso = payload.scheduledEnd ?? payload.scheduledStart;
+      if (!endIso) {
+        return `Operación: ${serviceRef}`;
+      }
+      const datePart = formatLocalDate(endIso, timeZone);
+      const timePart = formatLocalTime(endIso, timeZone);
+      return `Operación: ${serviceRef} · Fin ${datePart} ${timePart}`;
+    },
+  },
   FORWARDED_LOCATION_REJECTED: {
     title: "Ubicación reenviada",
     detail: (payload) =>

@@ -64,6 +64,25 @@ export function CompanyWhatsAppAlertsDialogContent({
     settings.attendanceAlertCooldownDays ?? 7,
   );
 
+  const [confirmationMissingEnabled, setConfirmationMissingEnabled] = useState(
+    settings.adminAttendanceConfirmationMissingEnabled ?? true,
+  );
+  const [missingCheckinEnabled, setMissingCheckinEnabled] = useState(
+    settings.adminMissingCheckinEnabled ?? true,
+  );
+  const [missingCheckoutEnabled, setMissingCheckoutEnabled] = useState(
+    settings.adminMissingCheckoutEnabled ?? true,
+  );
+  const [confirmationEscalationMinutes, setConfirmationEscalationMinutes] = useState<number>(
+    settings.adminConfirmationEscalationMinutes ?? 60,
+  );
+  const [missingCheckoutDelayMinutes, setMissingCheckoutDelayMinutes] = useState<number>(
+    settings.adminMissingCheckoutDelayMinutes ?? 30,
+  );
+  const [alertMaxLatenessMinutes, setAlertMaxLatenessMinutes] = useState<number>(
+    settings.adminAlertMaxLatenessMinutes ?? 60,
+  );
+
   const busy =
     createMutation.isPending ||
     updateMutation.isPending ||
@@ -125,6 +144,26 @@ export function CompanyWhatsAppAlertsDialogContent({
         attendanceAlertCooldownDays: Number(cooldownDays),
       });
       onSaved("Alertas por asistencia baja actualizadas.");
+    } catch (error) {
+      setSubmitError(getApiErrorMessage(error));
+    }
+  };
+
+  const handleSaveDynamicAttendanceSettings = async () => {
+    if (!canUpdate) {
+      return;
+    }
+    setSubmitError(null);
+    try {
+      await updateSettings.mutateAsync({
+        adminAttendanceConfirmationMissingEnabled: confirmationMissingEnabled,
+        adminMissingCheckinEnabled: missingCheckinEnabled,
+        adminMissingCheckoutEnabled: missingCheckoutEnabled,
+        adminConfirmationEscalationMinutes: Number(confirmationEscalationMinutes),
+        adminMissingCheckoutDelayMinutes: Number(missingCheckoutDelayMinutes),
+        adminAlertMaxLatenessMinutes: Number(alertMaxLatenessMinutes),
+      });
+      onSaved("Alertas dinámicas de asistencia actualizadas.");
     } catch (error) {
       setSubmitError(getApiErrorMessage(error));
     }
@@ -240,6 +279,87 @@ export function CompanyWhatsAppAlertsDialogContent({
         onChange={(event) => void handleToggleCompanyAlerts(event.currentTarget.checked)}
         disabled={!canUpdate || busy}
       />
+
+      <Stack gap="xs">
+        <Text fw={600} size="sm">
+          Alertas dinámicas de asistencia
+        </Text>
+        <Text size="sm" c="dimmed">
+          Avisos accionables según el horario de cada operación. La falta de llegada usa la
+          tolerancia de llegada ya configurada en la operación. No se envían alertas con más atraso
+          que el máximo indicado.
+        </Text>
+        <Switch
+          label="Avisar por confirmación pendiente"
+          description="Antes del inicio, si el colaborador aún no confirmó."
+          checked={confirmationMissingEnabled}
+          onChange={(event) => setConfirmationMissingEnabled(event.currentTarget.checked)}
+          disabled={!canUpdate || busy || !(settings.adminAlertsEnabled ?? false)}
+        />
+        <Switch
+          label="Avisar por falta de llegada"
+          description="Después del inicio más la tolerancia de llegada de la operación."
+          checked={missingCheckinEnabled}
+          onChange={(event) => setMissingCheckinEnabled(event.currentTarget.checked)}
+          disabled={!canUpdate || busy || !(settings.adminAlertsEnabled ?? false)}
+        />
+        <Switch
+          label="Avisar por falta de salida"
+          description="Después del final previsto más la demora configurada."
+          checked={missingCheckoutEnabled}
+          onChange={(event) => setMissingCheckoutEnabled(event.currentTarget.checked)}
+          disabled={!canUpdate || busy || !(settings.adminAlertsEnabled ?? false)}
+        />
+        <Group grow preventGrowOverflow={false} wrap="wrap">
+          <NumberInput
+            label="Anticipación de confirmación (min)"
+            description="Avisar por falta de confirmación N minutos antes del inicio."
+            min={0}
+            max={1440}
+            value={confirmationEscalationMinutes}
+            onChange={(value) =>
+              setConfirmationEscalationMinutes(
+                typeof value === "number" ? value : Number(value) || 60,
+              )
+            }
+            disabled={!canUpdate || busy}
+          />
+          <NumberInput
+            label="Avisar por falta de salida (min)"
+            description="Minutos después del final previsto."
+            min={0}
+            max={720}
+            value={missingCheckoutDelayMinutes}
+            onChange={(value) =>
+              setMissingCheckoutDelayMinutes(
+                typeof value === "number" ? value : Number(value) || 30,
+              )
+            }
+            disabled={!canUpdate || busy}
+          />
+          <NumberInput
+            label="No enviar con más de (min) de atraso"
+            description="Evita ráfagas históricas si el sistema estuvo detenido."
+            min={1}
+            max={720}
+            value={alertMaxLatenessMinutes}
+            onChange={(value) =>
+              setAlertMaxLatenessMinutes(typeof value === "number" ? value : Number(value) || 60)
+            }
+            disabled={!canUpdate || busy}
+          />
+        </Group>
+        {canUpdate ? (
+          <Button
+            variant="light"
+            onClick={() => void handleSaveDynamicAttendanceSettings()}
+            disabled={busy || !(settings.adminAlertsEnabled ?? false)}
+            style={{ alignSelf: "flex-start" }}
+          >
+            Guardar alertas dinámicas
+          </Button>
+        ) : null}
+      </Stack>
 
       <Stack gap="xs">
         <Text fw={600} size="sm">

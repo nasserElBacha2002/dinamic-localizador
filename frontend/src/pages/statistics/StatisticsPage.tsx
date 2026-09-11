@@ -4,6 +4,7 @@ import { StatisticsEmployeeTable } from "../../components/statistics/StatisticsE
 import { StatisticsFiltersBar } from "../../components/statistics/StatisticsFiltersBar";
 import { StatisticsOperationTable } from "../../components/statistics/StatisticsOperationTable";
 import { StatisticsLocationTable } from "../../components/statistics/StatisticsLocationTable";
+import { StatisticsIncidentTable } from "../../components/statistics/StatisticsIncidentTable";
 import { StatisticsGeneralTab } from "./components/StatisticsGeneralTab";
 import { useStatisticsPageData } from "./hooks/useStatisticsPageData";
 import type { StatisticsTabKey } from "./hooks/useStatisticsPageData";
@@ -25,6 +26,9 @@ export function StatisticsPage() {
         serviceIds={data.serviceIds}
         employeeIds={data.employeeIds}
         operationKind={data.operationKind}
+        operationStatus={data.operationStatus}
+        confirmationStatus={data.confirmationStatus}
+        punchCompleteness={data.punchCompleteness}
         effectiveState={data.effectiveState}
         validationStatus={data.validationStatus}
         locationStatus={data.locationStatus}
@@ -50,6 +54,18 @@ export function StatisticsPage() {
         onOperationKindChange={(value) => {
           data.resetAllPages();
           data.setOperationKind(value);
+        }}
+        onOperationStatusChange={(value) => {
+          data.resetAllPages();
+          data.setOperationStatus(value);
+        }}
+        onConfirmationStatusChange={(value) => {
+          data.resetAllPages();
+          data.setConfirmationStatus(value);
+        }}
+        onPunchCompletenessChange={(value) => {
+          data.resetAllPages();
+          data.setPunchCompleteness(value);
         }}
         onEffectiveStateChange={(value) => {
           data.resetAllPages();
@@ -91,10 +107,29 @@ export function StatisticsPage() {
           <Tabs.Tab value="employee">Por empleado</Tabs.Tab>
           <Tabs.Tab value="operation">Por operación</Tabs.Tab>
           <Tabs.Tab value="location">Por servicio / ubicación</Tabs.Tab>
+          <Tabs.Tab value="incidents">Incidencias</Tabs.Tab>
         </Tabs.List>
       </Tabs>
 
       {data.activeTab === "general" ? <StatisticsGeneralTab {...data} /> : null}
+
+      {data.activeTab === "incidents" ? (
+        <StatisticsIncidentTable
+          filters={data.baseFilters}
+          page={data.incidentPagination.page}
+          pageSize={data.incidentPagination.pageSize}
+          onPageChange={data.incidentPagination.onPageChange}
+          onPageSizeChange={data.incidentPagination.onPageSizeChange}
+          incidentType={data.incidentType}
+          onIncidentTypeChange={(value) => {
+            data.resetAllPages();
+            data.setIncidentType(value);
+          }}
+          exportsDisabled={data.exportsDisabled}
+          isoDateFrom={data.isoDateFrom ?? ""}
+          isoDateTo={data.isoDateTo ?? ""}
+        />
+      ) : null}
 
       {data.activeTab === "employee" ? (
         <StatisticsEmployeeTable

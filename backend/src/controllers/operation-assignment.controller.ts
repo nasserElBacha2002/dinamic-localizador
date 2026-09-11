@@ -12,6 +12,10 @@ export const operationAssignmentController = {
       {
         validFrom: req.body.validFrom,
         validUntil: req.body.validUntil,
+        asCoverage: req.body.asCoverage,
+        replacedAssignmentId: req.body.replacedAssignmentId,
+        replacedEmployeeId: req.body.replacedEmployeeId,
+        coverageReason: req.body.coverageReason,
       },
       req.auth?.userId ?? null,
     );

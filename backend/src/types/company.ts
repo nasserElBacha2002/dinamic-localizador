@@ -87,6 +87,7 @@ export interface CompanySettings {
   companyId: string;
   operationTimezone: string;
   defaultRadiusMeters: number;
+  /** @deprecated Legacy compatibility only. Arrival timing uses operation/workday tolerances. */
   lateGraceMinutes: number;
   earlyLeaveToleranceMinutes: number;
   requireCheckoutLocation: boolean;
@@ -106,6 +107,12 @@ export interface CompanySettings {
   adminAlertsEnabled: boolean;
   /** UTC frontier: reconciler only considers domain events at/after this instant. */
   adminAlertsEnabledAt: string | null;
+  adminAttendanceConfirmationMissingEnabled: boolean;
+  adminMissingCheckinEnabled: boolean;
+  adminMissingCheckoutEnabled: boolean;
+  adminConfirmationEscalationMinutes: number;
+  adminMissingCheckoutDelayMinutes: number;
+  adminAlertMaxLatenessMinutes: number;
   attendanceThresholdAlertsEnabled: boolean;
   attendanceAlertThresholdPercent: number;
   attendanceAlertWindowDays: number;

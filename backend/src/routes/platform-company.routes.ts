@@ -8,6 +8,11 @@ import {
   companyIdParamsSchema,
   deactivatePlatformCompanySchema,
 } from "../schemas/platform-company-lifecycle.schema";
+import { payrollQueryReconciliationController } from "../controllers/payroll-query-reconciliation.controller";
+import {
+  payrollQueryDeliveryParamsSchema,
+  reconcilePayrollQueryDeliverySchema,
+} from "../schemas/payroll-query-reconciliation.schema";
 
 export const platformCompanyRouter = Router();
 
@@ -38,4 +43,17 @@ platformCompanyRouter.get(
   "/companies/:companyId/deletion-status",
   validate(companyIdParamsSchema, "params"),
   asyncHandler(platformCompanyController.getDeletionStatus),
+);
+
+platformCompanyRouter.get(
+  "/companies/:companyId/whatsapp/payroll-query-deliveries/reconciliation-required",
+  validate(companyIdParamsSchema, "params"),
+  asyncHandler(payrollQueryReconciliationController.list),
+);
+
+platformCompanyRouter.post(
+  "/companies/:companyId/whatsapp/payroll-query-deliveries/:deliveryId/reconcile",
+  validate(payrollQueryDeliveryParamsSchema, "params"),
+  validate(reconcilePayrollQueryDeliverySchema),
+  asyncHandler(payrollQueryReconciliationController.reconcile),
 );

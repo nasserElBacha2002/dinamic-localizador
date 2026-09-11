@@ -1,0 +1,15 @@
+/**
+ * Dialog footer actions (Cancelar / Guardar / Cerrar).
+ * Class set by ResponsiveModal on the sticky footer container.
+ */
+.dinamic-dialog-footer {
+  padding-top: 1rem !important;
+  padding-bottom: 1rem !important;
+}
+
+.dinamic-dialog-footer button {
+  min-height: 2.75rem !important;
+  height: 2.75rem !important;
+  padding-left: 1.5rem !important;
+  padding-right: 1.5rem !important;
+}

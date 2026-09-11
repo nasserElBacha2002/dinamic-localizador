@@ -691,7 +691,12 @@ describeDatabaseIntegration("individual employee recommendations phase1", () => 
           endTime: "18:00",
         })),
       },
-      { earlyToleranceMinutes: 60, lateToleranceMinutes: 90 },
+      {
+        earlyToleranceMinutes: 60,
+        lateToleranceMinutes: 90,
+        earlyToleranceSource: "CUSTOM",
+        lateToleranceSource: "CUSTOM",
+      },
     );
 
     const insertAsg = async (

@@ -23,7 +23,6 @@ import {
 import {
   NO_ACTIVE_FLOW_CANCEL_PREFIX,
   NO_WHATSAPP_OPTIONS_MESSAGE,
-  VOLVER_ACTIVE_SESSION_MESSAGE,
 } from "./bot/bot-menu.builder";
 
 const companyA = "11111111-1111-1111-1111-111111111111";
@@ -99,7 +98,6 @@ const runtimeSettings = (companyId: string): BotRuntimeSettings => ({
   operationTimezone: "America/Argentina/Buenos_Aires",
   defaultRadiusMeters: 150,
   geofenceReviewMarginMeters: 30,
-  lateGraceMinutes: 15,
   earlyLeaveToleranceMinutes: 15,
   requireCheckoutLocation: true,
   allowManualAttendanceCorrections: true,
@@ -236,6 +234,7 @@ const setupCommonWebhookMocks = async (options: {
   // Mock-driven suite has no DB pool; durable confirmation must not hit SQL.
   mock.method(attendanceNotificationRepository, "findConfirmationReplyTarget", async () => null);
   mock.method(botSessionService, "getLatestSessionByPhone", async () => null);
+  mock.method(botSessionService, "createMenuSelectionSession", async () => ({} as never));
 
   if (options.employee === null) {
     mock.method(employeeRepository, "findById", async () => null);
@@ -497,7 +496,8 @@ describe("whatsapp webhook global commands", () => {
     assert.match(message, /Marcar llegada/);
   });
 
-  it("returns volver fallback with active session", async () => {
+  it("cancels the active flow and returns the menu on volver", async () => {
+    let cancelled = 0;
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "volver" }),
       setup: async () => {
@@ -506,12 +506,16 @@ describe("whatsapp webhook global commands", () => {
           activeSession: buildSession(companyA, "WAITING_LOCATION"),
           recentlyExpired: false,
         }));
+        mock.method(botSessionService, "cancelSession", async () => {
+          cancelled += 1;
+        });
       },
     });
-    assert.match(message, new RegExp(VOLVER_ACTIVE_SESSION_MESSAGE));
+    assert.equal(cancelled, 1);
+    assert.match(message, /Marcar llegada/);
   });
 
-  it("menu during active session does not cancel session", async () => {
+  it("menu during active session cancels the pending flow", async () => {
     let cancelled = 0;
     const message = await runSimulatedWebhook({
       payload: webhookPayload({ Body: "menu" }),
@@ -526,8 +530,8 @@ describe("whatsapp webhook global commands", () => {
         });
       },
     });
-    assert.equal(cancelled, 0);
-    assert.match(message, /Tenés un flujo activo/);
+    assert.equal(cancelled, 1);
+    assert.match(message, /Marcar llegada/);
   });
 });
 

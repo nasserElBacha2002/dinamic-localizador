@@ -37,7 +37,7 @@ describe("employeeWorkdayAvailabilityService", () => {
     mock.restoreAll();
   });
 
-  it("includes mid-shift recurring candidates as LATE-available", async () => {
+  it("excludes mid-shift candidates after the arrival window", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
       "../repositories/employee-workday-availability.repository"
@@ -60,8 +60,7 @@ describe("employeeWorkdayAvailabilityService", () => {
       at,
     );
 
-    assert.equal(result.candidates.length, 1);
-    assert.equal(result.candidates[0]?.employeeWorkdayId, "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee");
+    assert.equal(result.candidates.length, 0);
   });
 
   it("excludes candidates after expected end", async () => {
@@ -116,7 +115,7 @@ describe("employeeWorkdayAvailabilityService", () => {
     const { operationRepository } = await import("../repositories/operation.repository");
     mock.method(operationRepository, "findCompatibleForEmployee", async () => []);
 
-    const at = new Date("2026-07-31T12:20:00.000Z");
+    const at = new Date("2026-07-31T12:15:00.000Z");
     const result = await employeeWorkdayAvailabilityService.listAvailableForCheckIn(
       companyId,
       employeeId,
@@ -151,7 +150,7 @@ describe("employeeWorkdayAvailabilityService", () => {
     assert.equal(result.hasJustifiedWorkdayInWindow, true);
   });
 
-  it("diagnoses AFTER_EXPECTED_END from the real candidate without ONE_TIME pollution", async () => {
+  it("diagnoses AFTER_CHECK_IN_WINDOW from the real candidate without ONE_TIME pollution", async () => {
     setupUnitTestEnv();
     const { employeeWorkdayAvailabilityRepository } = await import(
       "../repositories/employee-workday-availability.repository"
@@ -212,11 +211,11 @@ describe("employeeWorkdayAvailabilityService", () => {
       },
     );
 
-    assert.ok(diagnosis.reasonCodes.includes("AFTER_EXPECTED_END"));
+    assert.ok(diagnosis.reasonCodes.includes("AFTER_CHECK_IN_WINDOW"));
     assert.ok(!diagnosis.reasonCodes.includes("OPERATION_COMPLETED_OR_CANCELLED"));
     const today = diagnosis.candidateEvaluations.find((row) => row.employeeWorkdayId === "ew-today");
     assert.ok(today);
-    assert.deepEqual(today?.rejectionReasons, ["AFTER_EXPECTED_END"]);
+    assert.deepEqual(today?.rejectionReasons, ["AFTER_CHECK_IN_WINDOW"]);
   });
 
   it("diagnoses PRIOR_ATTENDANCE with the matching attendance id", async () => {

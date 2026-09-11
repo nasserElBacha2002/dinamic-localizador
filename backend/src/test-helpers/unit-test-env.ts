@@ -32,6 +32,10 @@ export const UNIT_TEST_ENV_DEFAULTS: Record<string, string> = {
   GCS_PROJECT_ID: "unit-test-gcs-project",
   GCS_BUCKET_NAME: "unit-test-gcs-bucket",
   GCS_REQUIRED: "false",
+  SYSTEM_LOGS_ENABLED: "true",
+  SYSTEM_LOGS_UI_ENABLED: "true",
+  SYSTEM_LOGS_PERSIST_LEVELS: "error,warn,info",
+  SYSTEM_LOGS_INFO_EVENT_ALLOWLIST: "system-log-retention.completed,allowed.info.event",
 };
 
 /** Keys that must override a partial local `.env` so fail-fast gates stay valid in unit tests. */

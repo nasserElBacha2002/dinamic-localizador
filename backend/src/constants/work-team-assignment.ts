@@ -19,7 +19,7 @@ export const WORK_TEAM_ASSIGNMENT_SKIP_REASONS = [
 ] as const;
 export type WorkTeamAssignmentSkipReason = (typeof WORK_TEAM_ASSIGNMENT_SKIP_REASONS)[number];
 
-export const ASSIGNMENT_ORIGINS = ["MANUAL", "WORK_TEAM", "SYSTEM"] as const;
+export const ASSIGNMENT_ORIGINS = ["MANUAL", "WORK_TEAM", "SYSTEM", "COVERAGE"] as const;
 export type AssignmentOrigin = (typeof ASSIGNMENT_ORIGINS)[number];
 
 export const WORK_TEAM_PREVIEW_TTL_MINUTES = 30;

@@ -166,6 +166,7 @@ describe("whatsapp bot module gating", () => {
       activeSession: null,
       recentlyExpired: false,
     }));
+    mock.method(botSessionService, "createMenuSelectionSession", async () => ({} as never));
 
     const response = await runWithBotRuntimeContext(simulationContext(), async () =>
       whatsappBotService.handleTextMessage({
@@ -211,7 +212,6 @@ describe("whatsapp bot module gating", () => {
       operationTimezone: "America/Argentina/Buenos_Aires",
       defaultRadiusMeters: 150,
       geofenceReviewMarginMeters: 30,
-      lateGraceMinutes: 15,
       earlyLeaveToleranceMinutes: 15,
       requireCheckoutLocation: true,
       allowManualAttendanceCorrections: true,
@@ -270,6 +270,7 @@ describe("whatsapp bot module gating", () => {
       activeSession: null,
       recentlyExpired: false,
     }));
+    mock.method(botSessionService, "createMenuSelectionSession", async () => ({} as never));
 
     await whatsappBotService.handleWebhook(inboundContext, {
       MessageSid: "SM-EMPLOYEE-SCOPE",

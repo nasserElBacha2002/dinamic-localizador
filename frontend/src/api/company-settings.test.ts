@@ -60,7 +60,8 @@ describe("company settings frontend module", () => {
     assert.match(dialogFile, /toOperationalSettingsUpdateInput/);
     assert.match(dialogFile, /Guardar configuración/);
     assert.match(formFile, /defaultEarlyArrivalToleranceMinutes/);
-    assert.match(formFile, /lateGraceMinutes/);
+    assert.match(formFile, /earlyLeaveToleranceMinutes/);
+    assert.doesNotMatch(formFile, /lateGraceMinutes/);
   });
 
   it("validates invalid radius and minutes", () => {
@@ -72,7 +73,6 @@ describe("company settings frontend module", () => {
       defaultOperationEndTime: "03:00",
       defaultEarlyArrivalToleranceMinutes: "60",
       defaultLateArrivalToleranceMinutes: "90",
-      lateGraceMinutes: "300",
       earlyLeaveToleranceMinutes: "-1",
       pendingOperationExpirationHours: "12",
       requireCheckoutLocation: true,
@@ -80,7 +80,7 @@ describe("company settings frontend module", () => {
       confirmationReminderEnabled: true,
       confirmationReminderHoursBefore: "24",
     });
-    assert.ok(errors.length >= 3);
+    assert.ok(errors.length >= 2);
   });
 
   it("includes operation default fields in operational save payload", () => {

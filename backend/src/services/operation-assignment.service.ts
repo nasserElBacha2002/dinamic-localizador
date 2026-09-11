@@ -24,6 +24,9 @@ import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { auditService } from "./audit.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
+import { operationCoverageEventRepository } from "../repositories/operation-coverage-event.repository";
+import { operationChangeEventRepository } from "../repositories/operation-change-event.repository";
+import { resolveOperationOperationalDate } from "../utils/operation-change-events";
 
 const withLifecycleState = (
   assignment: OperationEmployeeAssignment,
@@ -160,12 +163,50 @@ const cancelExpectedEmployeeWorkdaysForAssignment = async (
   }
 };
 
+const resolveCompanyOperationTimezone = async (companyId: string): Promise<string> => {
+  const settings = await companySettingsRepository.findByCompanyId(companyId);
+  return resolveOperationTimezone(settings?.operationTimezone);
+};
+
+const insertHumanAssignmentChangeEvent = async (
+  input: {
+    companyId: string;
+    operationId: string;
+    operationalDate: string;
+    changedFields: string[];
+    actorUserId?: string | null;
+    reason: string;
+  },
+  transaction: sql.Transaction,
+): Promise<void> => {
+  await operationChangeEventRepository.insert(
+    {
+      companyId: input.companyId,
+      operationId: input.operationId,
+      operationalDate: input.operationalDate,
+      changeAction: "ASSIGNMENT_CHANGE",
+      changedFields: input.changedFields,
+      actorUserId: input.actorUserId ?? null,
+      source: "HUMAN_API",
+      reason: input.reason,
+    },
+    transaction,
+  );
+};
+
 export const operationAssignmentService = {
   async assignEmployee(
     companyId: string,
     operationId: string,
     employeeId: string,
-    input?: { validFrom?: string; validUntil?: string | null },
+    input?: {
+      validFrom?: string;
+      validUntil?: string | null;
+      asCoverage?: boolean;
+      replacedAssignmentId?: string | null;
+      replacedEmployeeId?: string | null;
+      coverageReason?: string | null;
+    },
     userId?: string | null,
   ) {
     const operation = await operationRepository.findById(companyId, operationId);
@@ -188,6 +229,14 @@ export const operationAssignmentService = {
       throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
     }
 
+    if (input?.asCoverage && !input.replacedAssignmentId) {
+      throw new AppError(
+        400,
+        "COVERAGE_REPLACED_ASSIGNMENT_REQUIRED",
+        "La cobertura manual requiere la asignación a reemplazar",
+      );
+    }
+
     const operationKind = operation.operationKind ?? "ONE_TIME";
     const operationWorkDate =
       operationKind === "ONE_TIME"
@@ -198,6 +247,15 @@ export const operationAssignmentService = {
       operationKind,
       operationWorkDate,
       input,
+    );
+
+    const timezone = await resolveCompanyOperationTimezone(companyId);
+    const operationalDate = resolveOperationOperationalDate(
+      {
+        scheduledStart: operation.scheduledStart,
+        workDate: operationWorkDate,
+      },
+      timezone,
     );
 
     const pool = getPool();
@@ -220,6 +278,76 @@ export const operationAssignmentService = {
         throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
       }
 
+      let replacedEmployeeId: string | null = null;
+      if (input?.asCoverage && input.replacedAssignmentId) {
+        const replaced = await operationEmployeeRepository.findByIdInTransaction(
+          companyId,
+          transaction,
+          input.replacedAssignmentId,
+        );
+        if (!replaced || replaced.operationId !== operationId) {
+          throw new AppError(
+            404,
+            "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
+            "La asignación a cubrir no existe en esta operación",
+          );
+        }
+        if (replaced.cancelledAt) {
+          throw new AppError(
+            409,
+            "COVERAGE_REPLACED_ASSIGNMENT_CANCELLED",
+            "La asignación a cubrir ya está cancelada",
+          );
+        }
+        if (
+          input.replacedEmployeeId &&
+          input.replacedEmployeeId !== replaced.employeeId
+        ) {
+          throw new AppError(
+            400,
+            "COVERAGE_REPLACED_EMPLOYEE_MISMATCH",
+            "El empleado reemplazado no coincide con la asignación indicada",
+          );
+        }
+        if (replaced.employeeId === employeeId) {
+          throw new AppError(
+            409,
+            "COVERAGE_SAME_EMPLOYEE",
+            "El reemplazo debe ser un colaborador distinto al cubierto",
+          );
+        }
+
+        const alreadyCovered = await operationCoverageEventRepository.existsForReplacedAssignment(
+          companyId,
+          replaced.id,
+          transaction,
+        );
+        if (alreadyCovered) {
+          throw new AppError(
+            409,
+            "COVERAGE_ALREADY_RECORDED",
+            "Ya existe una cobertura para esa asignación",
+          );
+        }
+
+        replacedEmployeeId = replaced.employeeId;
+        await this.cancelAssignmentInSharedTransaction(companyId, transaction, {
+          operationId,
+          assignmentId: replaced.id,
+        });
+        await insertHumanAssignmentChangeEvent(
+          {
+            companyId,
+            operationId,
+            operationalDate,
+            changedFields: ["assignment", "cancelledAt", "coverage"],
+            actorUserId: userId,
+            reason: "Cancelación por cobertura manual",
+          },
+          transaction,
+        );
+      }
+
       const result = await operationAssignmentCore.assignEmployeeInTransaction(
         companyId,
         transaction,
@@ -231,16 +359,27 @@ export const operationAssignmentService = {
           employeeActive: lockedEmployee.active,
           operationKind,
           operationWorkDate,
+          assignmentOrigin: input?.asCoverage ? "COVERAGE" : undefined,
         },
       );
 
       if (result.outcome === "skipped") {
+        // Coverage already cancelled the replaced assignment in this TX — never
+        // treat a skip as an idempotent success (would commit a partial coverage).
+        if (input?.asCoverage) {
+          throw new AppError(
+            409,
+            "ASSIGNMENT_PERIOD_OVERLAP",
+            "El colaborador ya tiene una asignación vigente que se superpone con esas fechas",
+          );
+        }
         if (result.reason === "already_assigned" && result.existingAssignmentId) {
           const existing = await operationEmployeeRepository.findById(
             companyId,
             result.existingAssignmentId,
           );
           if (existing && !existing.cancelledAt) {
+            // Idempotent no-op: no ASSIGNMENT_CHANGE / coverage mutation.
             await transaction.commit();
             transactionClosed = true;
             return withLifecycleState(existing, operationWorkDate ?? validFrom);
@@ -258,6 +397,47 @@ export const operationAssignmentService = {
         }
         throw new AppError(409, "EMPLOYEE_INACTIVE", "No se puede asignar un empleado inactivo");
       }
+
+      if (input?.asCoverage && result.outcome === "added") {
+        const coverageInsert = await operationCoverageEventRepository.insert(
+          {
+            companyId,
+            operationId,
+            operationalDate,
+            sourceType: "MANUAL_COVERAGE",
+            replacedAssignmentId: input.replacedAssignmentId!,
+            replacedEmployeeId,
+            replacementAssignmentId: result.assignment.id,
+            replacementEmployeeId: employeeId,
+            reason: input.coverageReason ?? "Cobertura manual explícita",
+            resolvedByUserId: userId ?? null,
+          },
+          transaction,
+        );
+        if (!coverageInsert.inserted) {
+          throw new AppError(
+            409,
+            "COVERAGE_ALREADY_RECORDED",
+            "Ya existe una cobertura para esa asignación",
+          );
+        }
+      }
+
+      await insertHumanAssignmentChangeEvent(
+        {
+          companyId,
+          operationId,
+          operationalDate,
+          changedFields: input?.asCoverage
+            ? ["assignment", "employeeId", "coverage"]
+            : ["assignment", "employeeId"],
+          actorUserId: userId,
+          reason: input?.asCoverage
+            ? "Asignación de cobertura manual vía API"
+            : "Asignación vía API",
+        },
+        transaction,
+      );
 
       await transaction.commit();
       transactionClosed = true;
@@ -297,7 +477,7 @@ export const operationAssignmentService = {
           employeeId,
           validFrom,
           validUntil,
-          assignmentOrigin: "MANUAL",
+          assignmentOrigin: input?.asCoverage ? "COVERAGE" : "MANUAL",
         },
         userId: userId ?? null,
       }),
@@ -451,6 +631,28 @@ export const operationAssignmentService = {
         committedAssignments.push(result.assignment);
       }
 
+      if (committedAssignments.length > 0) {
+        const timezone = await resolveCompanyOperationTimezone(companyId);
+        const operationalDate = resolveOperationOperationalDate(
+          {
+            scheduledStart: operation.scheduledStart,
+            workDate: operationWorkDate,
+          },
+          timezone,
+        );
+        await insertHumanAssignmentChangeEvent(
+          {
+            companyId,
+            operationId,
+            operationalDate,
+            changedFields: ["assignment", "employeeId"],
+            actorUserId: userId,
+            reason: "Asignación por lote vía API",
+          },
+          transaction,
+        );
+      }
+
       await transaction.commit();
       transactionClosed = true;
     } catch (error) {
@@ -582,6 +784,19 @@ export const operationAssignmentService = {
       throw new AppError(409, "ASSIGNMENT_ALREADY_CANCELLED", "La asignación ya está cancelada");
     }
 
+    const timezone = await resolveCompanyOperationTimezone(companyId);
+    const operationWorkDate =
+      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+    const operationalDate = resolveOperationOperationalDate(
+      {
+        scheduledStart: operation.scheduledStart,
+        workDate: operationWorkDate,
+      },
+      timezone,
+    );
+
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
     await transaction.begin();
@@ -594,6 +809,18 @@ export const operationAssignmentService = {
         companyId,
         transaction,
         { operationId, assignmentId },
+      );
+
+      await insertHumanAssignmentChangeEvent(
+        {
+          companyId,
+          operationId,
+          operationalDate,
+          changedFields: ["assignment", "cancelledAt"],
+          actorUserId: userId,
+          reason: "Cancelación de asignación vía API",
+        },
+        transaction,
       );
 
       await transaction.commit();
@@ -653,6 +880,19 @@ export const operationAssignmentService = {
     if (!operation) {
       throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
     }
+
+    const timezone = await resolveCompanyOperationTimezone(companyId);
+    const operationWorkDate =
+      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+        ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
+        : null;
+    const operationalDate = resolveOperationOperationalDate(
+      {
+        scheduledStart: operation.scheduledStart,
+        workDate: operationWorkDate,
+      },
+      timezone,
+    );
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -723,6 +963,18 @@ export const operationAssignmentService = {
       }
 
       await reconcileEmployeeWorkdaysOutsideAssignment(companyId, transaction, ended);
+
+      await insertHumanAssignmentChangeEvent(
+        {
+          companyId,
+          operationId,
+          operationalDate,
+          changedFields: ["assignment", "validUntil"],
+          actorUserId: userId,
+          reason: "Finalización de vigencia de asignación vía API",
+        },
+        transaction,
+      );
 
       await transaction.commit();
       transactionClosed = true;

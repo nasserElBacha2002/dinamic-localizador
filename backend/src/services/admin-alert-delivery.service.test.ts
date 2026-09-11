@@ -48,6 +48,11 @@ describe("adminAlertDeliveryService", () => {
     const { adminAlertDeliveryService } = await import("./admin-alert-delivery.service");
 
     mock.method(adminAlertNotificationRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(adminAlertNotificationRepository, "getDeliveryQueueStats", async () => ({
+      pendingCount: 0,
+      dynamicPendingCount: 0,
+      oldestPendingAgeMinutes: null,
+    }));
     mock.method(adminAlertNotificationRepository, "claimNextBatch", async () => [baseNotification]);
 
     mock.method(companyAlertRecipientRepository, "findById", async () => ({
@@ -99,6 +104,11 @@ describe("adminAlertDeliveryService", () => {
     };
 
     mock.method(adminAlertNotificationRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(adminAlertNotificationRepository, "getDeliveryQueueStats", async () => ({
+      pendingCount: 0,
+      dynamicPendingCount: 0,
+      oldestPendingAgeMinutes: null,
+    }));
     mock.method(adminAlertNotificationRepository, "claimNextBatch", async () => [requestNotification]);
     mock.method(companyAlertRecipientRepository, "findById", async () => ({
       id: "recipient-1",
@@ -151,6 +161,11 @@ describe("adminAlertDeliveryService", () => {
     };
 
     mock.method(adminAlertNotificationRepository, "recoverExpiredLeases", async () => 0);
+    mock.method(adminAlertNotificationRepository, "getDeliveryQueueStats", async () => ({
+      pendingCount: 0,
+      dynamicPendingCount: 0,
+      oldestPendingAgeMinutes: null,
+    }));
     mock.method(adminAlertNotificationRepository, "claimNextBatch", async () => [requestNotification]);
     mock.method(companyAlertRecipientRepository, "findById", async () => ({
       id: "recipient-1",

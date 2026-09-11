@@ -65,9 +65,10 @@ export const adminAlertReconciliationService = {
   },
 
   async reconcileMissingCheckin(batchSize = 50): Promise<{ scanned: number; recovered: number }> {
-    const obligations =
-      await adminAlertContextRepository.listMissingMissingCheckinObligations(batchSize);
-    return materializeObligations(obligations);
+    // Legacy MISSING_CHECKIN_AFTER_OPERATION WhatsApp recovery disabled.
+    // Dynamic MISSING_CHECKIN_AFTER_START is handled by adminDynamicAttendanceAlertService.
+    void batchSize;
+    return { scanned: 0, recovered: 0 };
   },
 
   async reconcilePendingAbsenceRequests(

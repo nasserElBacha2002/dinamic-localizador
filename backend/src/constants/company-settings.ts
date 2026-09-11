@@ -14,6 +14,12 @@ export const DEFAULT_COMPANY_OPERATIONAL_SETTINGS = {
   confirmationReminderEnabled: true,
   confirmationReminderHoursBefore: 24,
   pendingOperationExpirationHours: 12,
+  adminAttendanceConfirmationMissingEnabled: true,
+  adminMissingCheckinEnabled: true,
+  adminMissingCheckoutEnabled: true,
+  adminConfirmationEscalationMinutes: 60,
+  adminMissingCheckoutDelayMinutes: 30,
+  adminAlertMaxLatenessMinutes: 60,
 } as const;
 
 export type CompanyOperationalSettingsDefaults = typeof DEFAULT_COMPANY_OPERATIONAL_SETTINGS;
@@ -75,6 +81,9 @@ export const COMPANY_SETTINGS_LIMITS = {
   attendanceAlertWindowDays: { min: 7, max: 365 },
   attendanceAlertMinimumWorkdays: { min: 1, max: 100 },
   attendanceAlertCooldownDays: { min: 1, max: 90 },
+  adminConfirmationEscalationMinutes: { min: 0, max: 1440 },
+  adminMissingCheckoutDelayMinutes: { min: 0, max: 720 },
+  adminAlertMaxLatenessMinutes: { min: 1, max: 720 },
   operationTimezoneMaxLength: 80,
 } as const;
 

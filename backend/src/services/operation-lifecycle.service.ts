@@ -3,7 +3,7 @@ import { operationRepository } from "../repositories/operation.repository";
 import type { Operation } from "../types/domain";
 import { resolveLifecycleOperationStatus } from "../utils/operation-lifecycle";
 import { canTransitionOperationLifecycleStatus } from "../utils/operation-status";
-import { adminAlertMissingCheckinService } from "./admin-alert-missing-checkin.service";
+import { markMissingCheckinEmployeesDirtyForThreshold } from "./attendance-threshold-completed-operation.service";
 
 export type OperationLifecycleReconcileResult = {
   operationsScanned: number;
@@ -46,7 +46,17 @@ const promoteIfDue = async (
     nextStatus,
   );
   if (updated && nextStatus === "COMPLETED") {
-    await adminAlertMissingCheckinService.emitForCompletedOperation(companyId, updated);
+    try {
+      await markMissingCheckinEmployeesDirtyForThreshold(companyId, updated.id);
+    } catch (error) {
+      // Promotion already committed; dirty-mark is best-effort with structured logs.
+      // Failing the lifecycle item would mis-count a successful COMPLETED transition.
+      console.error("[operation-lifecycle] threshold dirty mark failed", {
+        companyId,
+        operationId: updated.id,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   }
   return updated ? "updated" : "skipped";
 };

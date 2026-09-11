@@ -1,6 +1,7 @@
 import { env } from "../config/env";
 import { adminAlertDeliveryService } from "../services/admin-alert-delivery.service";
 import { adminAlertReconciliationService } from "../services/admin-alert-reconciliation.service";
+import { adminDynamicAttendanceAlertService } from "../services/admin-dynamic-attendance-alert.service";
 import { attendanceThresholdAlertService } from "../services/attendance-threshold-alert.service";
 
 let intervalHandle: NodeJS.Timeout | null = null;
@@ -26,6 +27,18 @@ const runJobSafely = async (): Promise<void> => {
       console.info("[admin-alert-job] reconciliation recovered pending alerts", reconciliation);
     }
 
+    const dynamicAttendance = await adminDynamicAttendanceAlertService.reconcileDue(
+      new Date(),
+      { batchSize: env.ADMIN_ALERT_DYNAMIC_CANDIDATE_BATCH_SIZE },
+    );
+    if (
+      dynamicAttendance.enqueued > 0 ||
+      dynamicAttendance.expired > 0 ||
+      dynamicAttendance.evaluated > 0
+    ) {
+      console.info("[admin-alert-job] dynamic attendance alerts", dynamicAttendance);
+    }
+
     const pendingThreshold =
       await attendanceThresholdAlertService.reconcilePendingCrossingAlerts();
     if (pendingThreshold.recovered > 0) {
@@ -40,7 +53,9 @@ const runJobSafely = async (): Promise<void> => {
       console.info("[admin-alert-job] attendance threshold evaluation", evaluation);
     }
 
-    const result = await adminAlertDeliveryService.processPendingBatch(8);
+    const result = await adminAlertDeliveryService.processPendingBatch(
+      env.ADMIN_ALERT_DELIVERY_BATCH_SIZE,
+    );
     console.info("[admin-alert-job] tick complete", result);
   } catch (error) {
     console.error("[admin-alert-job] unexpected job error", {

@@ -30,6 +30,49 @@ describe("buildAdminOperationalAlertTemplateVariables", () => {
     assert.equal(vars["4"], "—");
   });
 
+  it("builds MISSING_CHECKIN_AFTER_START with lateness", () => {
+    const vars = buildAdminOperationalAlertTemplateVariables("MISSING_CHECKIN_AFTER_START", {
+      employeeName: "Ana López",
+      serviceName: "Coto Palermo",
+      scheduledStart: "2026-09-11T23:30:00.000Z",
+      operationTimezone: "America/Argentina/Buenos_Aires",
+      minutesLate: 35,
+    });
+
+    assert.equal(vars["1"], "Falta de llegada");
+    assert.equal(vars["2"], "Ana López");
+    assert.match(vars["3"], /35 min/);
+    assert.match(vars["4"], /Coto Palermo/);
+  });
+
+  it("builds ATTENDANCE_CONFIRMATION_MISSING with minutes until start", () => {
+    const vars = buildAdminOperationalAlertTemplateVariables("ATTENDANCE_CONFIRMATION_MISSING", {
+      employeeName: "Ana López",
+      serviceName: "Coto Palermo",
+      scheduledStart: "2026-09-11T23:30:00.000Z",
+      operationTimezone: "America/Argentina/Buenos_Aires",
+      minutesUntilStart: 45,
+    });
+
+    assert.equal(vars["1"], "Confirmación pendiente");
+    assert.match(vars["3"], /45 min/);
+  });
+
+  it("builds MISSING_CHECKOUT_AFTER_END with end context", () => {
+    const vars = buildAdminOperationalAlertTemplateVariables("MISSING_CHECKOUT_AFTER_END", {
+      employeeName: "Ana López",
+      serviceName: "Coto Palermo",
+      scheduledStart: "2026-09-11T23:30:00.000Z",
+      scheduledEnd: "2026-09-12T06:00:00.000Z",
+      operationTimezone: "America/Argentina/Buenos_Aires",
+      minutesLate: 30,
+    });
+
+    assert.equal(vars["1"], "Salida pendiente");
+    assert.match(vars["3"], /30 min/);
+    assert.match(vars["4"], /Fin/);
+  });
+
   it("builds FORWARDED_LOCATION_REJECTED security copy", () => {
     const vars = buildAdminOperationalAlertTemplateVariables("FORWARDED_LOCATION_REJECTED", {
       employeeName: "Juan Pérez",

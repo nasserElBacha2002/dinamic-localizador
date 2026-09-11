@@ -4,7 +4,26 @@ export const ADMIN_ALERT_TYPES = [
   "FORWARDED_LOCATION_REJECTED",
   "ABSENCE_REQUEST_PENDING",
   "ATTENDANCE_THRESHOLD_CROSSED",
+  "ATTENDANCE_CONFIRMATION_MISSING",
+  "MISSING_CHECKIN_AFTER_START",
+  "MISSING_CHECKOUT_AFTER_END",
 ] as const;
+
+/** Dynamic due-at alerts (selected by worker windows; not lifecycle COMPLETED). */
+export const DYNAMIC_ADMIN_ATTENDANCE_ALERT_TYPES = [
+  "ATTENDANCE_CONFIRMATION_MISSING",
+  "MISSING_CHECKIN_AFTER_START",
+  "MISSING_CHECKOUT_AFTER_END",
+] as const;
+
+export type DynamicAdminAttendanceAlertType =
+  (typeof DYNAMIC_ADMIN_ATTENDANCE_ALERT_TYPES)[number];
+
+/**
+ * Legacy: fired when ONE_TIME operation becomes COMPLETED without check-in.
+ * Kept for historical outbox rows / audit; no longer materializes WhatsApp.
+ */
+export const LEGACY_MISSING_CHECKIN_AFTER_OPERATION = "MISSING_CHECKIN_AFTER_OPERATION" as const;
 
 export type AdminAlertType = (typeof ADMIN_ALERT_TYPES)[number];
 
@@ -30,6 +49,8 @@ export const ADMIN_ALERT_NOTIFICATION_STATUSES = [
   "SKIPPED",
   "RECONCILIATION_REQUIRED",
   "SENT_RECOVERY_REQUIRED",
+  "EXPIRED",
+  "SKIPPED_DISABLED",
 ] as const;
 
 export type AdminAlertNotificationStatus = (typeof ADMIN_ALERT_NOTIFICATION_STATUSES)[number];
@@ -65,6 +86,9 @@ export const adminAlertTypeDefaultCategory = (
     case "EMPLOYEE_UNAVAILABLE":
     case "MISSING_CHECKIN_AFTER_OPERATION":
     case "ATTENDANCE_THRESHOLD_CROSSED":
+    case "ATTENDANCE_CONFIRMATION_MISSING":
+    case "MISSING_CHECKIN_AFTER_START":
+    case "MISSING_CHECKOUT_AFTER_END":
     default:
       return "OPERATIONAL";
   }

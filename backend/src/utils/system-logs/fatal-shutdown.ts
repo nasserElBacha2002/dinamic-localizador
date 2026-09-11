@@ -1,13 +1,14 @@
+import { runOrderedShutdown } from "../process-lifecycle";
 import { systemLogger } from "./logger";
-import { flushSystemLogPersistSink, shutdownSystemLogPersistSink } from "./persist-sink";
 
 type ExitFn = (code: number) => void;
 
 let fatalInProgress = false;
+let exitInvoked = false;
 
 /**
  * Single coordinator for fatal process failures.
- * Logs once, best-effort drain, then exits. Never recurses into itself.
+ * Logs once, reuses ordered resource shutdown, then exits exactly once.
  */
 export const initiateFatalShutdown = (input: {
   event: "process.uncaughtException" | "process.unhandledRejection";
@@ -24,12 +25,20 @@ export const initiateFatalShutdown = (input: {
   const exit: ExitFn = input.exit ?? ((code) => process.exit(code));
   const forceExitAfterMs = input.forceExitAfterMs ?? 8_000;
 
-  const forceTimer = setTimeout(() => {
+  const exitOnce = (code: number): void => {
+    if (exitInvoked) {
+      return;
+    }
+    exitInvoked = true;
     try {
-      exit(1);
+      exit(code);
     } catch {
       /* ignore */
     }
+  };
+
+  const forceTimer = setTimeout(() => {
+    exitOnce(1);
   }, forceExitAfterMs);
   forceTimer.unref?.();
 
@@ -56,17 +65,17 @@ export const initiateFatalShutdown = (input: {
 
   void (async () => {
     try {
-      await flushSystemLogPersistSink();
-      await shutdownSystemLogPersistSink({ timeoutMs: 3_000 });
+      await runOrderedShutdown();
     } catch {
       /* ignore */
     } finally {
       clearTimeout(forceTimer);
-      exit(1);
+      exitOnce(1);
     }
   })();
 };
 
 export const resetFatalShutdownForTests = (): void => {
   fatalInProgress = false;
+  exitInvoked = false;
 };

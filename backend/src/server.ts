@@ -51,6 +51,7 @@ import {
 } from "./utils/system-logs/persist-sink";
 import { initiateFatalShutdown } from "./utils/system-logs/fatal-shutdown";
 import { systemLogger } from "./utils/system-logs/logger";
+import { registerOrderedShutdown, runOrderedShutdown } from "./utils/process-lifecycle";
 
 let httpServer: Server | null = null;
 let shuttingDown = false;
@@ -82,6 +83,15 @@ const closeHttpServer = async (): Promise<void> => {
   });
 };
 
+const performOrderedShutdown = async (): Promise<void> => {
+  await closeHttpServer();
+  stopAllSchedulers();
+  await shutdownSystemLogPersistSink({ timeoutMs: 5_000 });
+  await closeDatabase();
+};
+
+registerOrderedShutdown(performOrderedShutdown);
+
 const gracefulShutdown = async (exitCode = 0): Promise<void> => {
   if (shuttingDown) {
     return;
@@ -89,10 +99,7 @@ const gracefulShutdown = async (exitCode = 0): Promise<void> => {
   shuttingDown = true;
 
   try {
-    await closeHttpServer();
-    stopAllSchedulers();
-    await shutdownSystemLogPersistSink({ timeoutMs: 5_000 });
-    await closeDatabase();
+    await runOrderedShutdown();
   } catch (error) {
     systemLogger.error({
       module: "http",

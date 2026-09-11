@@ -32,8 +32,7 @@ describe("fatal shutdown coordinator", () => {
     });
 
     await new Promise((r) => setTimeout(r, 200));
-    assert.ok(exits.includes(1));
-    assert.ok(exits.length >= 1);
-    assert.ok(exits.length <= 2);
+    assert.equal(exits.length, 1);
+    assert.equal(exits[0], 1);
   });
 });

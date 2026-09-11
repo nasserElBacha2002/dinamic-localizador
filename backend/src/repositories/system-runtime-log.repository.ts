@@ -131,6 +131,20 @@ const bindListFilters = (
 let tableMissingLogged = false;
 
 export const systemRuntimeLogRepository = {
+  async isTableAvailable(): Promise<boolean> {
+    try {
+      const result = await getPool().request().query(`
+        SELECT CASE
+          WHEN OBJECT_ID(N'dbo.system_runtime_logs', N'U') IS NULL THEN 0
+          ELSE 1
+        END AS available
+      `);
+      return Number(result.recordset[0]?.available ?? 0) === 1;
+    } catch {
+      return false;
+    }
+  },
+
   async insert(record: SystemLogRecord): Promise<void> {
     try {
       await getPool()

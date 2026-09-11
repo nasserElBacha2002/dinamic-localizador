@@ -15,10 +15,20 @@ import {
   toSystemRuntimeLogDetail,
   toSystemRuntimeLogSummary,
 } from "../utils/system-logs/present";
+import { assertSystemLogsStorageAvailable } from "../utils/system-logs/storage-availability";
 import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
 
-const clampPage = (page: number): number => Math.max(page, 1);
-const clampLimit = (limit: number): number => Math.min(Math.max(limit, 1), 50);
+const clampPage = (page: number): number => {
+  const n = Number(page);
+  return Number.isFinite(n) && n >= 1 ? Math.floor(n) : 1;
+};
+const clampLimit = (limit: number): number => {
+  const n = Number(limit);
+  if (!Number.isFinite(n)) {
+    return 20;
+  }
+  return Math.min(Math.max(Math.floor(n), 1), 50);
+};
 
 const resolveRange = (from?: string, to?: string): { from: Date; to: Date } => {
   const now = new Date();
@@ -66,8 +76,13 @@ export const systemLogsService = {
     }
   },
 
-  async list(query: SystemLogsListQuery) {
+  async assertStorageReady(): Promise<void> {
     this.assertUiEnabled();
+    await assertSystemLogsStorageAvailable();
+  },
+
+  async list(query: SystemLogsListQuery) {
+    await this.assertStorageReady();
     const page = clampPage(query.page);
     const limit = clampLimit(query.limit);
     const range = resolveRange(query.from, query.to);
@@ -100,7 +115,7 @@ export const systemLogsService = {
   },
 
   async getById(id: string, userId: string) {
-    this.assertUiEnabled();
+    await this.assertStorageReady();
     const row = await systemRuntimeLogRepository.findByIdRaw(id);
     if (!row) {
       throw new AppError(404, "SYSTEM_LOG_NOT_FOUND", "Log no encontrado.");
@@ -116,7 +131,7 @@ export const systemLogsService = {
   },
 
   async getContext(id: string, userId: string) {
-    this.assertUiEnabled();
+    await this.assertStorageReady();
     const row = await systemRuntimeLogRepository.findByIdRaw(id);
     if (!row) {
       throw new AppError(404, "SYSTEM_LOG_NOT_FOUND", "Log no encontrado.");

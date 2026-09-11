@@ -4,7 +4,9 @@ import type { SystemLogsListQuery } from "../schemas/system-logs.schema";
 
 export const systemLogsController = {
   list: async (req: Request, res: Response): Promise<void> => {
-    const result = await systemLogsService.list(req.query as unknown as SystemLogsListQuery);
+    const result = await systemLogsService.list(
+      req.validatedQuery as SystemLogsListQuery,
+    );
     res.status(200).json(result);
   },
 

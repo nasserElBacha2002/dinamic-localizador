@@ -192,3 +192,10 @@ export const WHATSAPP_OBSERVABILITY_API_EXPORTS = [
   "getWhatsappConversationProviderEvents",
   "revealWhatsappConversationPhone",
 ] as const;
+
+export const SYSTEM_LOGS_API_EXPORTS = [
+  "getSystemLogs",
+  "getSystemLogById",
+  "getSystemLogContext",
+  "getSystemLogsOptions",
+] as const;

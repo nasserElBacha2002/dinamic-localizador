@@ -1,6 +1,7 @@
 import { env } from "../config/env";
 import { whatsappMessageCostReconcileService } from "../services/whatsapp-message-cost-reconcile.service";
 import { whatsappMessageCostSyncService } from "../services/whatsapp-message-cost-sync.service";
+import { systemLogger } from "../utils/system-logs/logger";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
@@ -30,6 +31,12 @@ const runJobSafely = async (): Promise<void> => {
       console.info("[whatsapp-message-cost-sync-job] tick complete", result);
     }
   } catch (error) {
+    systemLogger.error({
+      module: "message-cost-sync",
+      event: "message-cost-sync.run.failed",
+      message: "WhatsApp message cost sync job failed",
+      error,
+    });
     console.error("[whatsapp-message-cost-sync-job] unexpected job error", {
       error: error instanceof Error ? error.message : String(error),
     });

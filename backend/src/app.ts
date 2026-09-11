@@ -4,6 +4,7 @@ import helmet from "helmet";
 import morgan from "morgan";
 import { env } from "./config/env";
 import { errorHandler, notFoundHandler } from "./middleware/error-handler";
+import { requestIdMiddleware } from "./middleware/request-id";
 import { apiRouter } from "./routes";
 
 export const app = express();
@@ -36,6 +37,7 @@ app.use(
   }),
 );
 app.use(morgan("dev"));
+app.use(requestIdMiddleware);
 app.use(express.urlencoded({ extended: false }));
 // Sized for Base64 import payloads (~5MB file → ~6.7MB encoded) plus JSON envelope.
 app.use(

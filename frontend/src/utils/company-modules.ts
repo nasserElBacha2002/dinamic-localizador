@@ -2,6 +2,7 @@ import { terminology } from "../domain/terminology";
 import type { CompanyModule, CompanyModuleKey } from "../types/company-module";
 import type { CompanyPermission } from "../types/permissions";
 import { hasAnyPermission } from "./permissions";
+import { isSystemLogsUiEnabled } from "./system-logs-config";
 import { isWhatsappObservabilityUiEnabled } from "./whatsapp-observability-config";
 
 export const CORE_COMPANY_MODULE_KEYS: CompanyModuleKey[] = [
@@ -243,6 +244,13 @@ export function getAdminNavItems({
       items.push({
         label: "Costos de mensajería",
         path: "/platform/observability/whatsapp/costs",
+        section: "settings",
+      });
+    }
+    if (isSystemLogsUiEnabled()) {
+      items.push({
+        label: "Logs del sistema",
+        path: "/platform/observability/system-logs",
         section: "settings",
       });
     }

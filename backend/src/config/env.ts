@@ -184,6 +184,37 @@ const envSchema = z
       .positive()
       .default(6 * 60 * 60 * 1000),
     WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET: z.string().min(16).optional(),
+    /** Platform Admin technical system logs (stdout JSON + SQL sink). */
+    SYSTEM_LOGS_ENABLED: z.stringbool().default(true),
+    SYSTEM_LOGS_UI_ENABLED: z.stringbool().default(true),
+    SYSTEM_LOGS_PERSIST_LEVELS: z
+      .string()
+      .default("error,warn")
+      .transform((raw) =>
+        raw
+          .split(",")
+          .map((part) => part.trim().toLowerCase())
+          .filter((part): part is "error" | "warn" | "info" =>
+            part === "error" || part === "warn" || part === "info",
+          ),
+      ),
+    SYSTEM_LOGS_RETENTION_DAYS: z.coerce.number().int().min(1).max(365).default(30),
+    SYSTEM_LOGS_MAX_METADATA_BYTES: z.coerce.number().int().positive().max(64_000).default(8_000),
+    SYSTEM_LOGS_MAX_STACK_BYTES: z.coerce.number().int().positive().max(64_000).default(8_000),
+    SYSTEM_LOGS_QUERY_MAX_DAYS: z.coerce.number().int().min(1).max(90).default(7),
+    SYSTEM_LOGS_RETENTION_BATCH_SIZE: z.coerce.number().int().min(1).max(5_000).default(500),
+    SYSTEM_LOGS_RETENTION_JOB_ENABLED: z.stringbool().default(true),
+    SYSTEM_LOGS_RETENTION_JOB_INTERVAL_MS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .default(6 * 60 * 60 * 1000),
+    SYSTEM_LOGS_INFO_EVENT_ALLOWLIST: z
+      .string()
+      .default(
+        "system-log-retention.completed,attendance-reminder.run.completed,operation-lifecycle.run.completed,message-cost-sync.run.completed",
+      ),
+    SYSTEM_LOGS_SERVICE_INSTANCE_ID: z.string().default(""),
   })
   .superRefine((data, ctx) => {
     const validateSignature = data.TWILIO_VALIDATE_SIGNATURE ?? data.NODE_ENV === "production";

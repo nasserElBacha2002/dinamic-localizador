@@ -1,6 +1,7 @@
 import twilio from "twilio";
 import { env } from "../config/env";
 import type { MessageCostFlowLabel, MessageCostKind } from "../constants/whatsapp-message-cost";
+import { systemLogger } from "../utils/system-logs/logger";
 import { formatWhatsAppAddress } from "../utils/whatsapp-phone";
 import { whatsappMessageCostRecordService } from "./whatsapp-message-cost-record.service";
 
@@ -109,19 +110,36 @@ export const twilioOutboundService = {
       createParams.statusCallback = env.TWILIO_STATUS_CALLBACK_URL;
     }
 
-    const message = await client.messages.create(createParams);
+    try {
+      const message = await client.messages.create(createParams);
 
-    await recordCostAfterAccept({
-      messageSid: message.sid,
-      toPhoneNumber: input.toPhoneNumber,
-      messageKind: "TEMPLATE",
-      templateSid: input.contentSid,
-      costContext: input.costContext,
-    });
+      await recordCostAfterAccept({
+        messageSid: message.sid,
+        toPhoneNumber: input.toPhoneNumber,
+        messageKind: "TEMPLATE",
+        templateSid: input.contentSid,
+        costContext: input.costContext,
+      });
 
-    return {
-      messageSid: message.sid,
-    };
+      return {
+        messageSid: message.sid,
+      };
+    } catch (error) {
+      systemLogger.error({
+        module: "twilio-outbound",
+        event: "twilio.message.send.failed",
+        message: "Twilio WhatsApp template send failed",
+        errorCode: "TWILIO_SEND_FAILED",
+        companyId: input.costContext?.companyId ?? null,
+        error,
+        metadata: {
+          messageKind: "TEMPLATE",
+          contentSid: input.contentSid,
+          flowLabel: input.costContext?.flowLabel ?? null,
+        },
+      });
+      throw error;
+    }
   },
 
   async sendWhatsAppDocument(

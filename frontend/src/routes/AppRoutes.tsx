@@ -105,6 +105,10 @@ const WhatsappMessageCostsPage = lazyNamed(
   () => import("../pages/platform/observability/WhatsappMessageCostsPage"),
   "WhatsappMessageCostsPage",
 );
+const SystemLogsPage = lazyNamed(
+  () => import("../pages/platform/observability/SystemLogsPage"),
+  "SystemLogsPage",
+);
 
 function LazyPage({
   component: Component,
@@ -442,6 +446,14 @@ export function AppRoutes() {
                 component={WhatsappConversationDetailPage}
                 message="Cargando conversación..."
               />
+            </FeatureRouteGuard>
+          }
+        />
+        <Route
+          path="/platform/observability/system-logs"
+          element={
+            <FeatureRouteGuard requirePlatformAdmin>
+              <LazyPage component={SystemLogsPage} message="Cargando logs del sistema..." />
             </FeatureRouteGuard>
           }
         />

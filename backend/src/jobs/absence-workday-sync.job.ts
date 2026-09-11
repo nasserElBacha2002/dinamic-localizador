@@ -1,4 +1,5 @@
 import { absenceWorkdaySyncService } from "../services/absence-workday-sync.service";
+import { systemLogger } from "../utils/system-logs/logger";
 
 const JOB_INTERVAL_MS = 60_000;
 
@@ -18,6 +19,12 @@ const runJobSafely = async (): Promise<void> => {
       console.info("[absence-workday-sync-job] tick complete", result);
     }
   } catch (error) {
+    systemLogger.error({
+      module: "absence",
+      event: "absence-sync.run.failed",
+      message: "Absence workday sync job failed",
+      error,
+    });
     console.error("[absence-workday-sync-job] unexpected job error", {
       error: error instanceof Error ? error.message : String(error),
     });

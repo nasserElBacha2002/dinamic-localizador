@@ -23,6 +23,8 @@ import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { companyModuleService } from "./company-module.service";
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
+import { systemLogger } from "../utils/system-logs/logger";
+import { setCorrelationIdOnContext } from "../utils/system-logs/request-log-context";
 import {
   DUPLICATE_MESSAGE_SID_RESPONSE,
   GENERIC_ERROR_MESSAGE,
@@ -255,6 +257,9 @@ export const whatsappBotService = {
           })
         : null;
       activeTrace = trace;
+      if (trace) {
+        setCorrelationIdOnContext(trace.correlationId);
+      }
 
       if (trace && inboundMessageId) {
         await whatsappFlowTraceService.linkMessageObservability({
@@ -373,6 +378,18 @@ export const whatsappBotService = {
       }
       return processInbound();
     } catch (error) {
+      systemLogger.error({
+        module: "whatsapp-webhook",
+        event: "whatsapp.webhook.failed",
+        message: "Unexpected WhatsApp webhook processing error",
+        errorCode: error instanceof AppError ? error.code : "UNKNOWN_ERROR",
+        companyId,
+        correlationId: activeTrace?.correlationId ?? getObservabilityTrace()?.correlationId ?? null,
+        error,
+        metadata: {
+          messageSidPresent: Boolean(payload.MessageSid),
+        },
+      });
       console.error("[whatsapp-bot] unexpected webhook error", {
         messageSid: payload.MessageSid,
         companyId,

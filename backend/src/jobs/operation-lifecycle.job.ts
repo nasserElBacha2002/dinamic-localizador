@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { operationLifecycleService } from "../services/operation-lifecycle.service";
+import { systemLogger } from "../utils/system-logs/logger";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 /** Per-process overlap guard only. Multiple backend instances may run this job
@@ -31,6 +32,13 @@ const runJobSafely = async (): Promise<void> => {
       wall_ms: Date.now() - startedAt,
     });
   } catch (error) {
+    systemLogger.error({
+      module: "operation-lifecycle",
+      event: "operation-lifecycle.run.failed",
+      message: "Operation lifecycle job failed",
+      error,
+      metadata: { duration_ms: Date.now() - startedAt },
+    });
     console.error("[operation-lifecycle-job] unexpected job error", {
       error: error instanceof Error ? error.message : String(error),
       duration_ms: Date.now() - startedAt,

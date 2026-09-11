@@ -40,9 +40,16 @@ import {
   startWhatsappMessageCostSyncJob,
   stopWhatsappMessageCostSyncJob,
 } from "./jobs/whatsapp-message-cost-sync.job";
+import {
+  startSystemLogRetentionJob,
+  stopSystemLogRetentionJob,
+} from "./jobs/system-log-retention.job";
+import { initSystemLogPersistSink } from "./utils/system-logs/persist-sink";
+import { systemLogger } from "./utils/system-logs/logger";
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
+  initSystemLogPersistSink();
   warnOnDuplicateTwilioContentSids({
     ARRIVAL: env.TWILIO_ARRIVAL_REMINDER_CONTENT_SID,
     EXIT: env.TWILIO_EXIT_REMINDER_CONTENT_SID,
@@ -63,6 +70,7 @@ const startServer = async (): Promise<void> => {
   startOperationLifecycleJob();
   startAdminAlertJob();
   startWhatsappMessageCostSyncJob();
+  startSystemLogRetentionJob();
 
   app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`API listening on 0.0.0.0:${env.PORT}`);
@@ -81,12 +89,31 @@ const shutdown = async (): Promise<void> => {
   stopOperationLifecycleJob();
   stopAdminAlertJob();
   stopWhatsappMessageCostSyncJob();
+  stopSystemLogRetentionJob();
   await closeDatabase();
   process.exit(0);
 };
 
 process.on("SIGINT", shutdown);
 process.on("SIGTERM", shutdown);
+
+process.on("unhandledRejection", (reason) => {
+  systemLogger.error({
+    module: "http",
+    event: "process.unhandledRejection",
+    message: "Unhandled promise rejection",
+    error: reason instanceof Error ? reason : new Error(String(reason)),
+  });
+});
+
+process.on("uncaughtException", (error) => {
+  systemLogger.error({
+    module: "http",
+    event: "process.uncaughtException",
+    message: "Uncaught exception",
+    error,
+  });
+});
 
 void startServer().catch((error) => {
   console.error("Failed to start server.", error);

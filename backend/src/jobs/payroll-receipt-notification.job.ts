@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { payrollReceiptNotificationService } from "../services/payroll-receipt-notification.service";
+import { systemLogger } from "../utils/system-logs/logger";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
@@ -22,6 +23,12 @@ const runJobSafely = async (): Promise<void> => {
       console.info("[payroll-receipt-notification-job] tick complete", result);
     }
   } catch (error) {
+    systemLogger.error({
+      module: "payroll-notification",
+      event: "payroll-notification.run.failed",
+      message: "Payroll receipt notification job failed",
+      error,
+    });
     console.error("[payroll-receipt-notification-job] unexpected job error", {
       error: error instanceof Error ? error.message : String(error),
     });

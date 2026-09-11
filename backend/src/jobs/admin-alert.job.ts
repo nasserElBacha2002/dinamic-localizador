@@ -3,7 +3,7 @@ import { adminAlertDeliveryService } from "../services/admin-alert-delivery.serv
 import { adminAlertReconciliationService } from "../services/admin-alert-reconciliation.service";
 import { adminDynamicAttendanceAlertService } from "../services/admin-dynamic-attendance-alert.service";
 import { attendanceThresholdAlertService } from "../services/attendance-threshold-alert.service";
-import { systemLogger } from "../utils/system-logs/logger";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
@@ -19,54 +19,36 @@ const runJobSafely = async (): Promise<void> => {
 
   isRunning = true;
   try {
-    const reconciliation = await adminAlertReconciliationService.reconcileAll();
-    if (
-      reconciliation.unavailableRecovered > 0 ||
-      reconciliation.missingCheckinRecovered > 0 ||
-      reconciliation.pendingAbsenceRecovered > 0
-    ) {
-      console.info("[admin-alert-job] reconciliation recovered pending alerts", reconciliation);
-    }
-
-    const dynamicAttendance = await adminDynamicAttendanceAlertService.reconcileDue(
-      new Date(),
-      { batchSize: env.ADMIN_ALERT_DYNAMIC_CANDIDATE_BATCH_SIZE },
-    );
-    if (
-      dynamicAttendance.enqueued > 0 ||
-      dynamicAttendance.expired > 0 ||
-      dynamicAttendance.evaluated > 0
-    ) {
-      console.info("[admin-alert-job] dynamic attendance alerts", dynamicAttendance);
-    }
-
-    const pendingThreshold =
-      await attendanceThresholdAlertService.reconcilePendingCrossingAlerts();
-    if (pendingThreshold.recovered > 0) {
-      console.info(
-        "[admin-alert-job] attendance threshold pending alerts recovered",
-        pendingThreshold,
-      );
-    }
-
-    const evaluation = await attendanceThresholdAlertService.processEvaluationBatch();
-    if (evaluation.claimed > 0) {
-      console.info("[admin-alert-job] attendance threshold evaluation", evaluation);
-    }
-
-    const result = await adminAlertDeliveryService.processPendingBatch(
-      env.ADMIN_ALERT_DELIVERY_BATCH_SIZE,
-    );
-    console.info("[admin-alert-job] tick complete", result);
-  } catch (error) {
-    systemLogger.error({
+    await runInstrumentedJobTick({
       module: "admin-alert",
-      event: "admin-alert.run.failed",
-      message: "Admin alert worker tick failed",
-      error,
-    });
-    console.error("[admin-alert-job] unexpected job error", {
-      error: error instanceof Error ? error.message : String(error),
+      jobName: "admin-alert",
+      completedEvent: "admin-alert.run.completed",
+      failedEvent: "admin-alert.run.failed",
+      completedMessage: "Admin alert worker tick completed",
+      failedMessage: "Admin alert worker tick failed",
+      run: async () => {
+        const reconciliation = await adminAlertReconciliationService.reconcileAll();
+        const dynamicAttendance = await adminDynamicAttendanceAlertService.reconcileDue(
+          new Date(),
+          { batchSize: env.ADMIN_ALERT_DYNAMIC_CANDIDATE_BATCH_SIZE },
+        );
+        const pendingThreshold =
+          await attendanceThresholdAlertService.reconcilePendingCrossingAlerts();
+        const evaluation = await attendanceThresholdAlertService.processEvaluationBatch();
+        const result = await adminAlertDeliveryService.processPendingBatch(
+          env.ADMIN_ALERT_DELIVERY_BATCH_SIZE,
+        );
+        return {
+          reconciliationRecovered:
+            reconciliation.unavailableRecovered +
+            reconciliation.missingCheckinRecovered +
+            reconciliation.pendingAbsenceRecovered,
+          dynamicEnqueued: dynamicAttendance.enqueued,
+          thresholdRecovered: pendingThreshold.recovered,
+          evaluationClaimed: evaluation.claimed,
+          deliveryProcessed: result.processed,
+        };
+      },
     });
   } finally {
     isRunning = false;

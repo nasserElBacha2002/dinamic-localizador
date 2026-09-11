@@ -1,16 +1,18 @@
 import type { PaginatedResponse, SingleResponse } from "../types/api";
 import type {
   SystemLogContextMeta,
+  SystemLogContextRow,
   SystemLogsListFilters,
   SystemLogsOptions,
-  SystemRuntimeLogRow,
+  SystemRuntimeLogDetail,
+  SystemRuntimeLogSummaryRow,
 } from "../types/system-logs";
 import { apiClient, buildParams } from "./client";
 
 export async function getSystemLogs(
   filters: SystemLogsListFilters = {},
-): Promise<PaginatedResponse<SystemRuntimeLogRow>> {
-  const { data } = await apiClient.get<PaginatedResponse<SystemRuntimeLogRow>>(
+): Promise<PaginatedResponse<SystemRuntimeLogSummaryRow>> {
+  const { data } = await apiClient.get<PaginatedResponse<SystemRuntimeLogSummaryRow>>(
     "platform/observability/system-logs",
     {
       params: buildParams(filters as Record<string, string | number | boolean | string[] | undefined>),
@@ -19,8 +21,8 @@ export async function getSystemLogs(
   return data;
 }
 
-export async function getSystemLogById(id: string): Promise<SystemRuntimeLogRow> {
-  const { data } = await apiClient.get<SingleResponse<SystemRuntimeLogRow>>(
+export async function getSystemLogById(id: string): Promise<SystemRuntimeLogDetail> {
+  const { data } = await apiClient.get<SingleResponse<SystemRuntimeLogDetail>>(
     `platform/observability/system-logs/${id}`,
   );
   return data.data;
@@ -28,9 +30,9 @@ export async function getSystemLogById(id: string): Promise<SystemRuntimeLogRow>
 
 export async function getSystemLogContext(
   id: string,
-): Promise<{ data: SystemRuntimeLogRow[]; meta: SystemLogContextMeta }> {
+): Promise<{ data: SystemLogContextRow[]; meta: SystemLogContextMeta }> {
   const { data } = await apiClient.get<{
-    data: SystemRuntimeLogRow[];
+    data: SystemLogContextRow[];
     meta: SystemLogContextMeta;
   }>(`platform/observability/system-logs/${id}/context`);
   return data;

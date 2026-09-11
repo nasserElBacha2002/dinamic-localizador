@@ -2,7 +2,26 @@ export type SystemLogLevel = "error" | "warn" | "info";
 
 export type SystemLogMetadata = Record<string, unknown>;
 
-export interface SystemRuntimeLogRow {
+/** List/context row — no metadata or stack. */
+export interface SystemRuntimeLogSummaryRow {
+  id: string;
+  occurredAt: string;
+  level: SystemLogLevel;
+  service: string;
+  module: string;
+  event: string;
+  message: string;
+  errorCode: string | null;
+  companyId: string | null;
+  requestId: string | null;
+  correlationId: string | null;
+  jobExecutionId: string | null;
+}
+
+export type SystemLogContextRow = SystemRuntimeLogSummaryRow;
+
+/** Detail row — sanitized for Platform Admin. */
+export interface SystemRuntimeLogDetail {
   id: string;
   schemaVersion: number;
   occurredAt: string;
@@ -27,6 +46,9 @@ export interface SystemRuntimeLogRow {
   errorStack: string | null;
   createdAt: string;
 }
+
+/** @deprecated Use SystemRuntimeLogSummaryRow / SystemRuntimeLogDetail */
+export type SystemRuntimeLogRow = SystemRuntimeLogDetail;
 
 export interface SystemLogsListFilters {
   from?: string;

@@ -1,10 +1,7 @@
 import { env } from "../config/env";
 import { systemLogsService } from "../services/system-logs.service";
 import { systemLogger } from "../utils/system-logs/logger";
-import {
-  beginJobLogContext,
-  runWithRequestLogContextAsync,
-} from "../utils/system-logs/request-log-context";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
@@ -14,25 +11,31 @@ const runJobSafely = async (): Promise<void> => {
     return;
   }
   isRunning = true;
-  const ctx = beginJobLogContext("system-log-retention");
   try {
-    await runWithRequestLogContextAsync(ctx, async () => {
-      const result = await systemLogsService.runRetention();
-      systemLogger.info({
-        module: "system-log-retention",
-        event: "system-log-retention.completed",
-        message: "System runtime log retention completed",
-        jobExecutionId: ctx.jobExecutionId,
-        metadata: { deleted: result.deleted, batches: result.batches },
-      });
-    });
-  } catch (error) {
-    systemLogger.error({
+    await runInstrumentedJobTick({
       module: "system-log-retention",
-      event: "system-log-retention.failed",
-      message: "System runtime log retention failed",
-      jobExecutionId: ctx.jobExecutionId,
-      error,
+      jobName: "system-log-retention",
+      completedEvent: "system-log-retention.completed",
+      failedEvent: "system-log-retention.failed",
+      completedMessage: "System runtime log retention completed",
+      failedMessage: "System runtime log retention failed",
+      run: async () => {
+        const result = await systemLogsService.runRetention();
+        if (result.lockSkipped) {
+          systemLogger.info({
+            module: "system-log-retention",
+            event: "system-log-retention.skipped",
+            message: "System log retention skipped (lease held by another replica)",
+            metadata: { lockSkipped: true },
+          });
+          return { __skipCompleted: true, lockSkipped: true, deleted: 0, batches: 0 };
+        }
+        return {
+          lockSkipped: false,
+          deleted: result.deleted,
+          batches: result.batches,
+        };
+      },
     });
   } finally {
     isRunning = false;

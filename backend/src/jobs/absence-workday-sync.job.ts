@@ -1,5 +1,5 @@
 import { absenceWorkdaySyncService } from "../services/absence-workday-sync.service";
-import { systemLogger } from "../utils/system-logs/logger";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 const JOB_INTERVAL_MS = 60_000;
 
@@ -14,19 +14,17 @@ const runJobSafely = async (): Promise<void> => {
 
   isRunning = true;
   try {
-    const result = await absenceWorkdaySyncService.processPendingJobs(25);
-    if (result.processed > 0 || result.failed > 0) {
-      console.info("[absence-workday-sync-job] tick complete", result);
-    }
-  } catch (error) {
-    systemLogger.error({
+    await runInstrumentedJobTick({
       module: "absence",
-      event: "absence-sync.run.failed",
-      message: "Absence workday sync job failed",
-      error,
-    });
-    console.error("[absence-workday-sync-job] unexpected job error", {
-      error: error instanceof Error ? error.message : String(error),
+      jobName: "absence-workday-sync",
+      completedEvent: "absence-sync.run.completed",
+      failedEvent: "absence-sync.run.failed",
+      completedMessage: "Absence workday sync tick completed",
+      failedMessage: "Absence workday sync job failed",
+      run: async () => {
+        const result = await absenceWorkdaySyncService.processPendingJobs(25);
+        return { processed: result.processed, failed: result.failed };
+      },
     });
   } finally {
     isRunning = false;

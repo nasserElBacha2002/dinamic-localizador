@@ -6,40 +6,37 @@
  *
  * ## Architecture
  * - stdout: one JSON line per event (`schemaVersion: 1`)
- * - SQL sink (fail-open queue): persists ERROR/WARN + allowlisted INFO
+ * - SQL sink (fail-open bounded queue): persists ERROR/WARN + allowlisted INFO
  * - API: `/api/platform/observability/system-logs` (authenticate + requirePlatformAdmin)
- * - UI: `/platform/observability/system-logs` (VITE_SYSTEM_LOGS_UI_ENABLED)
+ * - UI: `/platform/observability/system-logs` (VITE_SYSTEM_LOGS_UI_ENABLED, build-time)
+ * - Retention: session `sp_getapplock` resource `dinamic:system-log-retention`
+ * - Platform audit: `platform_audit_logs` when log has no companyId; else tenant `audit_logs`
+ *
+ * ## Feature flag matrix
+ * | SYSTEM_LOGS_ENABLED | SYSTEM_LOGS_UI_ENABLED | VITE_SYSTEM_LOGS_UI_ENABLED | Effect |
+ * |---|---|---|---|
+ * | true | true | true | Persist + API + nav (if Platform Admin) |
+ * | true | false | * | Persist only; API returns 404; hide nav via VITE |
+ * | false | true | true | No SQL persist; API still readable for existing rows |
+ * | * | * | false | Nav/page hidden in UI; backend auth still required |
+ *
+ * Backend authorization (`requirePlatformAdmin`) is the security barrier regardless of VITE_*.
+ * `VITE_*` is resolved at image build time (see frontend/Dockerfile + compose build args).
+ *
+ * ## List vs detail
+ * List/context return summary DTOs (no metadata/stack). Detail returns sanitized full row.
+ * Free-text `q` matches message/event/module only inside the required time window.
+ * Leading-wildcard LIKE does not use indexes; keep ranges tight.
+ *
+ * ## Process errors
+ * - `uncaughtException` → fatal shutdown coordinator (log, drain sink, exit 1).
+ * - `unhandledRejection` → structured error log; process stays alive to avoid dropping
+ *   in-flight attendance/webhooks (documented acceptance).
  *
  * ## Configuration
- * | Variable | Default | Purpose |
- * |---|---|---|
- * | SYSTEM_LOGS_ENABLED | true | Master switch for SQL persistence |
- * | SYSTEM_LOGS_UI_ENABLED | true | API/UI gate |
- * | SYSTEM_LOGS_PERSIST_LEVELS | error,warn | Levels eligible for SQL |
- * | SYSTEM_LOGS_INFO_EVENT_ALLOWLIST | (see env.example) | INFO events that may persist |
- * | SYSTEM_LOGS_RETENTION_DAYS | 30 | Deletion cutoff |
- * | SYSTEM_LOGS_RETENTION_BATCH_SIZE | 500 | Batch delete size |
- * | SYSTEM_LOGS_QUERY_MAX_DAYS | 7 | Max list/query window |
- * | SYSTEM_LOGS_MAX_METADATA_BYTES | 8000 | Metadata cap |
- * | SYSTEM_LOGS_MAX_STACK_BYTES | 8000 | Stack cap |
- * | VITE_SYSTEM_LOGS_UI_ENABLED | true | Frontend nav/page gate |
+ * See `.env.example` / Compose for SYSTEM_LOGS_* and VITE_SYSTEM_LOGS_UI_ENABLED.
+ * Defaults for INFO allowlist are centralized in `constants/system-logs.ts`.
  *
- * ## Security
- * - Platform Admin only (`users.is_platform_admin`)
- * - Central sanitizer redacts secrets, masks phones/emails, strips coordinates
- * - Free-text `q` matches message/event/module only (bounded LIKE, wildcards stripped)
- * - No Docker socket / Engine API / Loki / mass export
- *
- * ## Local diagnosis without SSH
- * 1. Trigger an error (invalid API call as authenticated user, or run a job that fails).
- * 2. Confirm JSON lines on backend stdout.
- * 3. Open **Logs del sistema** as Platform Admin and filter by request ID / module.
- *
- * ## Tests
- * - Unit: `backend/src/utils/system-logs/*.test.ts`
- * - Integration: `backend/src/routes/system-logs.integration.test.ts`
- * - Frontend: `SystemLogsPage.test.tsx`
- *
- * Seed helper for unit/integration: insert into `system_runtime_logs` directly
- * (see integration test). Do not enable production simulation endpoints.
+ * ## Transition note
+ * Morgan and some legacy `console.info` remain; stdout is mixed JSON + text during migration.
  */

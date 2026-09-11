@@ -3,6 +3,7 @@ import { config } from "dotenv";
 import { z } from "zod";
 import { parseCorsOrigins } from "./cors-origins";
 import { resolveGoogleApplicationCredentialsPath } from "./resolve-gcp-credentials";
+import { DEFAULT_SYSTEM_LOGS_INFO_EVENT_ALLOWLIST_CSV } from "../constants/system-logs";
 
 config();
 resolveGoogleApplicationCredentialsPath();
@@ -211,9 +212,7 @@ const envSchema = z
       .default(6 * 60 * 60 * 1000),
     SYSTEM_LOGS_INFO_EVENT_ALLOWLIST: z
       .string()
-      .default(
-        "system-log-retention.completed,attendance-reminder.run.completed,operation-lifecycle.run.completed,message-cost-sync.run.completed",
-      ),
+      .default(DEFAULT_SYSTEM_LOGS_INFO_EVENT_ALLOWLIST_CSV),
     SYSTEM_LOGS_SERVICE_INSTANCE_ID: z.string().default(""),
   })
   .superRefine((data, ctx) => {

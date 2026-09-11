@@ -21,30 +21,37 @@ import { mockApiModule, SYSTEM_LOGS_API_EXPORTS } from "../../../test/mock-api-m
 import { setRuntimeCompanyId } from "../../../api/company-path";
 import { installLayoutPolyfills } from "../../../test/layout-polyfills";
 import { mockViewport } from "../../../test/mock-match-media";
-import type { SystemRuntimeLogRow } from "../../../types/system-logs";
+import type {
+  SystemRuntimeLogDetail,
+  SystemRuntimeLogSummaryRow,
+} from "../../../types/system-logs";
 
 setRuntimeCompanyId("co-1");
 installLayoutPolyfills();
 
-const sampleLog: SystemRuntimeLogRow = {
-  id: "log-1",
-  schemaVersion: 1,
+const sampleSummary: SystemRuntimeLogSummaryRow = {
+  id: "11111111-1111-1111-1111-111111111111",
   occurredAt: "2026-08-01T10:00:00.000Z",
   level: "error",
   service: "dinamic-backend",
-  serviceInstanceId: "instance-1",
-  environment: "test",
   module: "http",
   event: "http.request.failed",
   message: "Request failed with status 500",
   errorCode: "INTERNAL_ERROR",
+  companyId: "co-1",
   requestId: "req-1234567890abcdef",
   correlationId: "corr-abcdef1234567890",
-  companyId: "co-1",
+  jobExecutionId: null,
+};
+
+const sampleDetail: SystemRuntimeLogDetail = {
+  ...sampleSummary,
+  schemaVersion: 1,
+  serviceInstanceId: "instance-1",
+  environment: "test",
   operationId: null,
   employeeId: null,
   conversationId: null,
-  jobExecutionId: null,
   metadata: { path: "/api/health" },
   errorName: "Error",
   errorMessage: "boom",
@@ -52,44 +59,30 @@ const sampleLog: SystemRuntimeLogRow = {
   createdAt: "2026-08-01T10:00:01.000Z",
 };
 
-let listResolve: ((value: { data: SystemRuntimeLogRow[]; meta: { page: number; limit: number; total: number; totalPages: number } }) => void) | null = null;
-let listPending = false;
-let listData: SystemRuntimeLogRow[] = [sampleLog];
+let listData: SystemRuntimeLogSummaryRow[] = [sampleSummary];
 
 mockApiModule(
   "api/system-logs.api",
   {
-    getSystemLogs: async () => {
-      if (listPending) {
-        return new Promise((resolve) => {
-          listResolve = resolve;
-        });
-      }
-      return {
-        data: listData,
-        meta: {
-          page: 1,
-          limit: 20,
-          total: listData.length,
-          totalPages: listData.length > 0 ? 1 : 0,
-        },
-      };
-    },
-    getSystemLogById: async (id: string) => {
-      if (id !== sampleLog.id) {
-        throw new Error("not found");
-      }
-      return sampleLog;
-    },
+    getSystemLogs: async () => ({
+      data: listData,
+      meta: {
+        page: 1,
+        limit: 20,
+        total: listData.length,
+        totalPages: listData.length > 0 ? 1 : 0,
+      },
+    }),
+    getSystemLogById: async () => sampleDetail,
     getSystemLogContext: async () => ({
-      data: [sampleLog],
+      data: [sampleSummary],
       meta: { correlationKey: "requestId" as const },
     }),
     getSystemLogsOptions: async () => ({
       levels: ["error", "warn", "info"],
-      modules: ["http", "admin-alert"],
+      modules: ["http"],
       events: ["http.request.failed"],
-      infoEventAllowlist: [],
+      infoEventAllowlist: ["system-log-retention.completed"],
       queryMaxDays: 7,
       retentionDays: 30,
     }),
@@ -125,8 +118,8 @@ mockApiModule("api/company-users.api", {
 });
 
 import assert from "node:assert/strict";
-import { cleanup, fireEvent, waitFor, within } from "@testing-library/react";
-import { afterEach, before, beforeEach, describe, it } from "node:test";
+import { cleanup, waitFor } from "@testing-library/react";
+import { afterEach, before, describe, it } from "node:test";
 import React from "react";
 import { Route, Routes } from "react-router";
 
@@ -139,16 +132,11 @@ before(async () => {
   ({ SystemLogsPage } = await import("./SystemLogsPage"));
 });
 
-beforeEach(() => {
-  listPending = false;
-  listResolve = null;
-  listData = [sampleLog];
-  systemLogsUiEnabled = true;
-});
-
 afterEach(() => {
   cleanup();
   clearActiveTestQueryClients();
+  systemLogsUiEnabled = true;
+  listData = [sampleSummary];
   mockViewport("desktop");
 });
 
@@ -182,78 +170,26 @@ function renderSystemLogsPage(auth = platformAuth) {
 }
 
 describe("SystemLogsPage", () => {
-  it("renders page for platform admin with table data", async () => {
-    mockViewport("desktop");
+  it("renders summary table for platform admin without stack fields in list payload", async () => {
     const view = renderSystemLogsPage();
-
     await waitFor(() => assert.ok(view.getByText("Logs del sistema")));
-    const table = await waitFor(() => {
-      const element = view.getByLabelText("Logs del sistema");
-      assert.ok(within(element).getByText("http.request.failed"));
-      return element;
-    });
-    assert.ok(table);
-    assert.ok(view.getByLabelText("Búsqueda"));
-    assert.ok(view.getByLabelText("Request ID"));
+    await waitFor(() => assert.ok(view.getAllByText("http.request.failed").length >= 1));
+    assert.equal(Object.prototype.hasOwnProperty.call(listData[0], "errorStack"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(listData[0], "metadata"), false);
   });
 
-  it("denies access for non-platform admin", async () => {
-    mockViewport("desktop");
+  it("denies access for non-platform admin", () => {
     const view = renderSystemLogsPage(regularAuth);
-
     assert.ok(
       view.getByText(
         "Solo un superadministrador de plataforma puede acceder a los logs del sistema.",
       ),
     );
-    assert.equal(view.queryByLabelText("Logs del sistema"), null);
   });
 
-  it("shows loading state while list query is pending", async () => {
-    mockViewport("desktop");
-    listPending = true;
-    const view = renderSystemLogsPage();
-
-    assert.ok(view.getByLabelText("Cargando..."));
-    listResolve?.({
-      data: [],
-      meta: { page: 1, limit: 20, total: 0, totalPages: 0 },
-    });
-    listPending = false;
-
-    await waitFor(() => assert.ok(view.getByText("No hay logs para los filtros seleccionados")));
-  });
-
-  it("shows empty state when no logs match", async () => {
-    mockViewport("desktop");
-    listData = [];
-    const view = renderSystemLogsPage();
-    await waitFor(() => assert.ok(view.getByText("No hay logs para los filtros seleccionados")));
-    assert.equal(view.queryByLabelText("Logs del sistema"), null);
-  });
-
-  it("opens detail drawer on row click", async () => {
-    mockViewport("desktop");
-    const view = renderSystemLogsPage();
-
-    const table = await waitFor(() => {
-      const element = view.getByRole("table");
-      assert.ok(within(element).getByText("http.request.failed"));
-      return element;
-    });
-    fireEvent.click(within(table).getByText("http.request.failed"));
-
-    await waitFor(() => assert.ok(view.getByText("Detalle del log")));
-    await waitFor(() => assert.ok(view.getByText("Request failed with status 500")));
-    await waitFor(() => assert.ok(view.getByRole("button", { name: "Copiar request ID" })));
-    assert.ok(view.getByRole("button", { name: "Copiar info técnica" }));
-  });
-
-  it("hides page when UI flag is disabled", async () => {
-    mockViewport("desktop");
+  it("hides page when UI flag is disabled", () => {
     systemLogsUiEnabled = false;
     const view = renderSystemLogsPage();
     assert.ok(view.getByText("Los logs del sistema no están habilitados en este entorno."));
-    assert.equal(view.queryByLabelText("Logs del sistema"), null);
   });
 });

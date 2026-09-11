@@ -1,46 +1,57 @@
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import type { SystemLogLevel } from "../constants/system-logs";
-import type { SystemLogMetadata, SystemLogRecord, SystemRuntimeLogRow } from "../types/system-logs";
+import type { SystemLogRecord, SystemRuntimeLogRawRow } from "../types/system-logs";
 
 const toIso = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
 
-const mapRow = (row: Record<string, unknown>): SystemRuntimeLogRow => {
-  let metadata: SystemLogMetadata | null = null;
-  if (row.metadata_json) {
-    try {
-      metadata = JSON.parse(String(row.metadata_json)) as SystemLogMetadata;
-    } catch {
-      metadata = { __parseError: true };
-    }
-  }
-  return {
-    id: String(row.id),
-    schemaVersion: Number(row.schema_version),
-    occurredAt: toIso(row.occurred_at as Date | string),
-    level: String(row.level) as SystemLogLevel,
-    service: String(row.service),
-    serviceInstanceId: row.service_instance_id ? String(row.service_instance_id) : null,
-    environment: String(row.environment),
-    module: String(row.module),
-    event: String(row.event),
-    message: String(row.message),
-    errorCode: row.error_code ? String(row.error_code) : null,
-    requestId: row.request_id ? String(row.request_id) : null,
-    correlationId: row.correlation_id ? String(row.correlation_id) : null,
-    companyId: row.company_id ? String(row.company_id) : null,
-    operationId: row.operation_id ? String(row.operation_id) : null,
-    employeeId: row.employee_id ? String(row.employee_id) : null,
-    conversationId: row.conversation_id ? String(row.conversation_id) : null,
-    jobExecutionId: row.job_execution_id ? String(row.job_execution_id) : null,
-    metadata,
-    errorName: row.error_name ? String(row.error_name) : null,
-    errorMessage: row.error_message ? String(row.error_message) : null,
-    errorStack: row.error_stack ? String(row.error_stack) : null,
-    createdAt: toIso(row.created_at as Date | string),
-  };
-};
+const SUMMARY_COLUMNS = `
+  id, schema_version, occurred_at, level, service, module, event, message, error_code,
+  company_id, request_id, correlation_id, job_execution_id, created_at,
+  CAST(NULL AS NVARCHAR(80)) AS service_instance_id,
+  CAST(NULL AS NVARCHAR(40)) AS environment,
+  CAST(NULL AS UNIQUEIDENTIFIER) AS operation_id,
+  CAST(NULL AS UNIQUEIDENTIFIER) AS employee_id,
+  CAST(NULL AS UNIQUEIDENTIFIER) AS conversation_id,
+  CAST(NULL AS NVARCHAR(MAX)) AS metadata_json,
+  CAST(NULL AS NVARCHAR(200)) AS error_name,
+  CAST(NULL AS NVARCHAR(1000)) AS error_message,
+  CAST(NULL AS NVARCHAR(MAX)) AS error_stack
+`;
+
+const DETAIL_COLUMNS = `
+  id, schema_version, occurred_at, level, service, service_instance_id, environment,
+  module, event, message, error_code, request_id, correlation_id,
+  company_id, operation_id, employee_id, conversation_id, job_execution_id,
+  metadata_json, error_name, error_message, error_stack, created_at
+`;
+
+const mapRawRow = (row: Record<string, unknown>): SystemRuntimeLogRawRow => ({
+  id: String(row.id),
+  schemaVersion: Number(row.schema_version),
+  occurredAt: toIso(row.occurred_at as Date | string),
+  level: String(row.level),
+  service: String(row.service),
+  serviceInstanceId: row.service_instance_id ? String(row.service_instance_id) : null,
+  environment: row.environment ? String(row.environment) : "",
+  module: String(row.module),
+  event: String(row.event),
+  message: String(row.message),
+  errorCode: row.error_code ? String(row.error_code) : null,
+  requestId: row.request_id ? String(row.request_id) : null,
+  correlationId: row.correlation_id ? String(row.correlation_id) : null,
+  companyId: row.company_id ? String(row.company_id) : null,
+  operationId: row.operation_id ? String(row.operation_id) : null,
+  employeeId: row.employee_id ? String(row.employee_id) : null,
+  conversationId: row.conversation_id ? String(row.conversation_id) : null,
+  jobExecutionId: row.job_execution_id ? String(row.job_execution_id) : null,
+  metadataJson: row.metadata_json != null ? String(row.metadata_json) : null,
+  errorName: row.error_name ? String(row.error_name) : null,
+  errorMessage: row.error_message ? String(row.error_message) : null,
+  errorStack: row.error_stack ? String(row.error_stack) : null,
+  createdAt: toIso(row.created_at as Date | string),
+});
 
 export type SystemLogListFilters = {
   from: Date;
@@ -55,10 +66,66 @@ export type SystemLogListFilters = {
   employeeId?: string | null;
   conversationId?: string | null;
   jobExecutionId?: string | null;
-  /** Exact substring match on message (parametrized LIKE). */
   q?: string | null;
   page: number;
   limit: number;
+};
+
+const bindListFilters = (
+  request: sql.Request,
+  filters: SystemLogListFilters,
+): string => {
+  request.input("from", sql.DateTime2, filters.from);
+  request.input("to", sql.DateTime2, filters.to);
+
+  const where: string[] = ["occurred_at >= @from", "occurred_at <= @to"];
+
+  if (filters.level) {
+    request.input("level", sql.NVarChar(10), filters.level);
+    where.push("level = @level");
+  }
+  if (filters.module) {
+    request.input("module", sql.NVarChar(80), filters.module);
+    where.push("module = @module");
+  }
+  if (filters.event) {
+    request.input("event", sql.NVarChar(120), filters.event);
+    where.push("event = @event");
+  }
+  if (filters.companyId) {
+    request.input("companyId", sql.UniqueIdentifier, filters.companyId);
+    where.push("company_id = @companyId");
+  }
+  if (filters.requestId) {
+    request.input("requestId", sql.NVarChar(64), filters.requestId);
+    where.push("request_id = @requestId");
+  }
+  if (filters.correlationId) {
+    request.input("correlationId", sql.NVarChar(64), filters.correlationId);
+    where.push("correlation_id = @correlationId");
+  }
+  if (filters.operationId) {
+    request.input("operationId", sql.UniqueIdentifier, filters.operationId);
+    where.push("operation_id = @operationId");
+  }
+  if (filters.employeeId) {
+    request.input("employeeId", sql.UniqueIdentifier, filters.employeeId);
+    where.push("employee_id = @employeeId");
+  }
+  if (filters.conversationId) {
+    request.input("conversationId", sql.UniqueIdentifier, filters.conversationId);
+    where.push("conversation_id = @conversationId");
+  }
+  if (filters.jobExecutionId) {
+    request.input("jobExecutionId", sql.NVarChar(64), filters.jobExecutionId);
+    where.push("job_execution_id = @jobExecutionId");
+  }
+  if (filters.q) {
+    request.input("q", sql.NVarChar(200), `%${filters.q.replace(/[%_[\]]/g, "")}%`);
+    where.push("(message LIKE @q OR event LIKE @q OR module LIKE @q)");
+  }
+
+  return where.join(" AND ");
 };
 
 let tableMissingLogged = false;
@@ -126,125 +193,60 @@ export const systemRuntimeLogRepository = {
     }
   },
 
-  async findById(id: string): Promise<SystemRuntimeLogRow | null> {
+  async findByIdRaw(id: string): Promise<SystemRuntimeLogRawRow | null> {
     const result = await getPool()
       .request()
       .input("id", sql.UniqueIdentifier, id)
-      .query(`SELECT TOP 1 * FROM system_runtime_logs WHERE id = @id`);
+      .query(`
+        SELECT TOP 1 ${DETAIL_COLUMNS}
+        FROM system_runtime_logs
+        WHERE id = @id
+      `);
     const row = result.recordset[0] as Record<string, unknown> | undefined;
-    return row ? mapRow(row) : null;
+    return row ? mapRawRow(row) : null;
   },
 
-  async list(filters: SystemLogListFilters): Promise<{ data: SystemRuntimeLogRow[]; total: number }> {
+  async listRaw(
+    filters: SystemLogListFilters,
+  ): Promise<{ data: SystemRuntimeLogRawRow[]; total: number }> {
     const offset = (filters.page - 1) * filters.limit;
-    const request = getPool()
-      .request()
-      .input("from", sql.DateTime2, filters.from)
-      .input("to", sql.DateTime2, filters.to)
-      .input("offset", sql.Int, offset)
-      .input("limit", sql.Int, filters.limit);
+    const countRequest = getPool().request();
+    const whereSql = bindListFilters(countRequest, filters);
 
-    const where: string[] = ["occurred_at >= @from", "occurred_at <= @to"];
-
-    if (filters.level) {
-      request.input("level", sql.NVarChar(10), filters.level);
-      where.push("level = @level");
-    }
-    if (filters.module) {
-      request.input("module", sql.NVarChar(80), filters.module);
-      where.push("module = @module");
-    }
-    if (filters.event) {
-      request.input("event", sql.NVarChar(120), filters.event);
-      where.push("event = @event");
-    }
-    if (filters.companyId) {
-      request.input("companyId", sql.UniqueIdentifier, filters.companyId);
-      where.push("company_id = @companyId");
-    }
-    if (filters.requestId) {
-      request.input("requestId", sql.NVarChar(64), filters.requestId);
-      where.push("request_id = @requestId");
-    }
-    if (filters.correlationId) {
-      request.input("correlationId", sql.NVarChar(64), filters.correlationId);
-      where.push("correlation_id = @correlationId");
-    }
-    if (filters.operationId) {
-      request.input("operationId", sql.UniqueIdentifier, filters.operationId);
-      where.push("operation_id = @operationId");
-    }
-    if (filters.employeeId) {
-      request.input("employeeId", sql.UniqueIdentifier, filters.employeeId);
-      where.push("employee_id = @employeeId");
-    }
-    if (filters.conversationId) {
-      request.input("conversationId", sql.UniqueIdentifier, filters.conversationId);
-      where.push("conversation_id = @conversationId");
-    }
-    if (filters.jobExecutionId) {
-      request.input("jobExecutionId", sql.NVarChar(64), filters.jobExecutionId);
-      where.push("job_execution_id = @jobExecutionId");
-    }
-    if (filters.q) {
-      request.input("q", sql.NVarChar(200), `%${filters.q.replace(/[%_[\]]/g, "")}%`);
-      where.push("(message LIKE @q OR event LIKE @q OR module LIKE @q)");
-    }
-
-    const whereSql = where.join(" AND ");
-    const countResult = await request.query(`
+    const countResult = await countRequest.query(`
       SELECT COUNT(1) AS total
       FROM system_runtime_logs
       WHERE ${whereSql}
     `);
     const total = Number(countResult.recordset[0]?.total ?? 0);
 
-    const listRequest = getPool()
-      .request()
-      .input("from", sql.DateTime2, filters.from)
-      .input("to", sql.DateTime2, filters.to)
-      .input("offset", sql.Int, offset)
-      .input("limit", sql.Int, filters.limit);
-    // Re-bind same filters for second request
-    if (filters.level) listRequest.input("level", sql.NVarChar(10), filters.level);
-    if (filters.module) listRequest.input("module", sql.NVarChar(80), filters.module);
-    if (filters.event) listRequest.input("event", sql.NVarChar(120), filters.event);
-    if (filters.companyId) listRequest.input("companyId", sql.UniqueIdentifier, filters.companyId);
-    if (filters.requestId) listRequest.input("requestId", sql.NVarChar(64), filters.requestId);
-    if (filters.correlationId)
-      listRequest.input("correlationId", sql.NVarChar(64), filters.correlationId);
-    if (filters.operationId)
-      listRequest.input("operationId", sql.UniqueIdentifier, filters.operationId);
-    if (filters.employeeId) listRequest.input("employeeId", sql.UniqueIdentifier, filters.employeeId);
-    if (filters.conversationId)
-      listRequest.input("conversationId", sql.UniqueIdentifier, filters.conversationId);
-    if (filters.jobExecutionId)
-      listRequest.input("jobExecutionId", sql.NVarChar(64), filters.jobExecutionId);
-    if (filters.q)
-      listRequest.input("q", sql.NVarChar(200), `%${filters.q.replace(/[%_[\]]/g, "")}%`);
+    const listRequest = getPool().request();
+    bindListFilters(listRequest, filters);
+    listRequest.input("offset", sql.Int, offset);
+    listRequest.input("limit", sql.Int, filters.limit);
 
     const listResult = await listRequest.query(`
-      SELECT *
+      SELECT ${SUMMARY_COLUMNS}
       FROM system_runtime_logs
       WHERE ${whereSql}
-      ORDER BY occurred_at DESC
+      ORDER BY occurred_at DESC, id DESC
       OFFSET @offset ROWS FETCH NEXT @limit ROWS ONLY
     `);
 
     return {
-      data: (listResult.recordset as Record<string, unknown>[]).map(mapRow),
+      data: (listResult.recordset as Record<string, unknown>[]).map(mapRawRow),
       total,
     };
   },
 
-  async listContext(input: {
+  async listContextRaw(input: {
     requestId?: string | null;
     correlationId?: string | null;
     jobExecutionId?: string | null;
     around: Date;
     windowMinutes: number;
     limit: number;
-  }): Promise<SystemRuntimeLogRow[]> {
+  }): Promise<SystemRuntimeLogRawRow[]> {
     const from = new Date(input.around.getTime() - input.windowMinutes * 60_000);
     const to = new Date(input.around.getTime() + input.windowMinutes * 60_000);
     const request = getPool()
@@ -266,14 +268,14 @@ export const systemRuntimeLogRepository = {
     }
 
     const result = await request.query(`
-      SELECT TOP (@limit) *
+      SELECT TOP (@limit) ${SUMMARY_COLUMNS}
       FROM system_runtime_logs
       WHERE occurred_at >= @from
         AND occurred_at <= @to
         AND (${keyClause})
-      ORDER BY occurred_at ASC
+      ORDER BY occurred_at ASC, id ASC
     `);
-    return (result.recordset as Record<string, unknown>[]).map(mapRow);
+    return (result.recordset as Record<string, unknown>[]).map(mapRawRow);
   },
 
   async deleteOlderThan(cutoff: Date, batchSize: number): Promise<number> {
@@ -286,7 +288,7 @@ export const systemRuntimeLogRepository = {
           SELECT TOP (@batchSize) id
           FROM system_runtime_logs
           WHERE occurred_at < @cutoff
-          ORDER BY occurred_at ASC
+          ORDER BY occurred_at ASC, id ASC
         )
         DELETE FROM doomed
         OUTPUT DELETED.id;

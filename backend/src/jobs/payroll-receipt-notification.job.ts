@@ -1,6 +1,6 @@
 import { env } from "../config/env";
 import { payrollReceiptNotificationService } from "../services/payroll-receipt-notification.service";
-import { systemLogger } from "../utils/system-logs/logger";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 let isRunning = false;
@@ -18,19 +18,17 @@ const runJobSafely = async (): Promise<void> => {
 
   isRunning = true;
   try {
-    const result = await payrollReceiptNotificationService.processPendingBatch(5);
-    if (result.processed > 0) {
-      console.info("[payroll-receipt-notification-job] tick complete", result);
-    }
-  } catch (error) {
-    systemLogger.error({
+    await runInstrumentedJobTick({
       module: "payroll-notification",
-      event: "payroll-notification.run.failed",
-      message: "Payroll receipt notification job failed",
-      error,
-    });
-    console.error("[payroll-receipt-notification-job] unexpected job error", {
-      error: error instanceof Error ? error.message : String(error),
+      jobName: "payroll-notification",
+      completedEvent: "payroll-notification.run.completed",
+      failedEvent: "payroll-notification.run.failed",
+      completedMessage: "Payroll receipt notification tick completed",
+      failedMessage: "Payroll receipt notification job failed",
+      run: async () => {
+        const result = await payrollReceiptNotificationService.processPendingBatch(5);
+        return { processed: result.processed };
+      },
     });
   } finally {
     isRunning = false;

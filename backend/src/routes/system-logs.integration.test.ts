@@ -149,7 +149,7 @@ describeDatabaseIntegration("system runtime logs HTTP", () => {
       tokenVersion: platformAdminTokenVersion,
     });
 
-  it("platform admin can list and filter logs", async () => {
+  it("platform admin can list and filter logs with summary DTO only", async () => {
     const response = await apiRequest(
       baseUrl,
       `/api/platform/observability/system-logs?level=error&requestId=${encodeURIComponent(requestId)}&limit=20`,
@@ -157,11 +157,21 @@ describeDatabaseIntegration("system runtime logs HTTP", () => {
     );
     assert.equal(response.status, 200);
     const body = response.body as {
-      data: Array<{ id: string; requestId: string; metadata: Record<string, unknown> }>;
+      data: Array<Record<string, unknown>>;
       meta: { total: number };
     };
-    assert.ok(body.data.some((row) => row.id.toLowerCase() === logId));
+    const row = body.data.find((item) => String(item.id).toLowerCase() === logId);
+    assert.ok(row);
+    assert.equal(row.requestId, requestId);
+    assert.equal(Object.prototype.hasOwnProperty.call(row, "metadata"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(row, "errorStack"), false);
+    assert.equal(Object.prototype.hasOwnProperty.call(row, "errorMessage"), false);
     assert.ok(!JSON.stringify(body).includes("TWILIO_SECRET"));
+  });
+
+  it("unauthenticated request receives 401", async () => {
+    const response = await apiRequest(baseUrl, "/api/platform/observability/system-logs");
+    assert.equal(response.status, 401);
   });
 
   it("company OWNER receives 403", async () => {
@@ -185,6 +195,8 @@ describeDatabaseIntegration("system runtime logs HTTP", () => {
       { token },
     );
     assert.equal(detail.status, 200);
+    const detailBody = detail.body as { data: Record<string, unknown> };
+    assert.ok(Object.prototype.hasOwnProperty.call(detailBody.data, "metadata"));
 
     const context = await apiRequest(
       baseUrl,
@@ -193,12 +205,87 @@ describeDatabaseIntegration("system runtime logs HTTP", () => {
     );
     assert.equal(context.status, 200);
     const body = context.body as {
-      data: unknown[];
+      data: Array<Record<string, unknown>>;
       meta: { correlationKey: string | null };
     };
     assert.equal(body.meta.correlationKey, "requestId");
     assert.ok(Array.isArray(body.data));
     assert.ok(body.data.length >= 1);
+    assert.equal(Object.prototype.hasOwnProperty.call(body.data[0], "errorStack"), false);
+  });
+
+  it("sanitizes contaminated SQL rows on list/detail/context", async () => {
+    const pool = getPool();
+    const dirtyRequestId = `req-dirty-${runId}`;
+    const insert = await pool
+      .request()
+      .input("occurredAt", sql.DateTime2, new Date())
+      .input("requestId", sql.NVarChar(64), dirtyRequestId)
+      .input(
+        "message",
+        sql.NVarChar(1000),
+        "authToken=raw-secret Bearer eyJhbGciOiJIUzI1NiJ9.abc +5491199988877 leak@example.com",
+      )
+      .input(
+        "metadataJson",
+        sql.NVarChar(sql.MAX),
+        JSON.stringify({
+          password: "plain-password",
+          connectionString: "Server=prod;Pwd=x",
+          signedUrl: "https://cdn.example/file?sig=abc",
+          latitude: -34.6037,
+          nested: { apiKey: "nested-key" },
+        }),
+      )
+      .input("errorMessage", sql.NVarChar(1000), "password=stack-secret")
+      .input("errorStack", sql.NVarChar(sql.MAX), "Error: password=stack-secret\n at x")
+      .query(`
+        INSERT INTO system_runtime_logs (
+          schema_version, occurred_at, level, service, environment,
+          module, event, message, request_id, metadata_json, error_name, error_message, error_stack
+        )
+        OUTPUT INSERTED.id
+        VALUES (
+          1, @occurredAt, N'error', N'test-service', N'test',
+          N'http', N'http.request.failed', @message, @requestId, @metadataJson,
+          N'Error', @errorMessage, @errorStack
+        )
+      `);
+    const dirtyId = String(insert.recordset[0].id).toLowerCase();
+
+    try {
+      const token = platformAdminToken();
+      const list = await apiRequest(
+        baseUrl,
+        `/api/platform/observability/system-logs?requestId=${encodeURIComponent(dirtyRequestId)}`,
+        { token },
+      );
+      const detail = await apiRequest(
+        baseUrl,
+        `/api/platform/observability/system-logs/${dirtyId}`,
+        { token },
+      );
+      const context = await apiRequest(
+        baseUrl,
+        `/api/platform/observability/system-logs/${dirtyId}/context`,
+        { token },
+      );
+      const blobs = [JSON.stringify(list.body), JSON.stringify(detail.body), JSON.stringify(context.body)];
+      for (const blob of blobs) {
+        assert.ok(!blob.includes("raw-secret"));
+        assert.ok(!blob.includes("plain-password"));
+        assert.ok(!blob.includes("Server=prod"));
+        assert.ok(!blob.includes("nested-key"));
+        assert.ok(!blob.includes("+5491199988877"));
+        assert.ok(!blob.includes("leak@example.com"));
+        assert.ok(!blob.includes("stack-secret"));
+      }
+    } finally {
+      await pool
+        .request()
+        .input("id", sql.UniqueIdentifier, dirtyId)
+        .query(`DELETE FROM system_runtime_logs WHERE id = @id`);
+    }
   });
 
   it("returns 404 for missing log", async () => {

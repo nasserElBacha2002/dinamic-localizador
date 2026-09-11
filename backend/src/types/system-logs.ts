@@ -48,7 +48,52 @@ export type SystemLogRecord = {
   error: SystemLogSerializedError | null;
 };
 
-export type SystemRuntimeLogRow = {
+/** Raw DB row before presentation sanitization. */
+export type SystemRuntimeLogRawRow = {
+  id: string;
+  schemaVersion: number;
+  occurredAt: string;
+  level: string;
+  service: string;
+  serviceInstanceId: string | null;
+  environment: string;
+  module: string;
+  event: string;
+  message: string;
+  errorCode: string | null;
+  requestId: string | null;
+  correlationId: string | null;
+  companyId: string | null;
+  operationId: string | null;
+  employeeId: string | null;
+  conversationId: string | null;
+  jobExecutionId: string | null;
+  /** Raw JSON text from DB; null when column not selected. */
+  metadataJson: string | null;
+  errorName: string | null;
+  errorMessage: string | null;
+  errorStack: string | null;
+  createdAt: string;
+};
+
+/** List/context DTO — no metadata/stack/MAX columns. */
+export type SystemRuntimeLogSummaryRow = {
+  id: string;
+  occurredAt: string;
+  level: SystemLogLevel;
+  service: string;
+  module: string;
+  event: string;
+  message: string;
+  errorCode: string | null;
+  companyId: string | null;
+  requestId: string | null;
+  correlationId: string | null;
+  jobExecutionId: string | null;
+};
+
+/** Detail DTO — sanitized for Platform Admin. */
+export type SystemRuntimeLogDetail = {
   id: string;
   schemaVersion: number;
   occurredAt: string;
@@ -73,3 +118,8 @@ export type SystemRuntimeLogRow = {
   errorStack: string | null;
   createdAt: string;
 };
+
+/** @deprecated Prefer Summary/Detail types for API responses. */
+export type SystemRuntimeLogRow = SystemRuntimeLogDetail;
+
+export type SystemLogContextRow = SystemRuntimeLogSummaryRow;

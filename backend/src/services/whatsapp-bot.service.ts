@@ -390,11 +390,6 @@ export const whatsappBotService = {
           messageSidPresent: Boolean(payload.MessageSid),
         },
       });
-      console.error("[whatsapp-bot] unexpected webhook error", {
-        messageSid: payload.MessageSid,
-        companyId,
-        error: error instanceof Error ? error.message : "UNKNOWN_ERROR",
-      });
 
       const failedTrace = activeTrace ?? getObservabilityTrace();
       if (failedTrace) {

@@ -5,11 +5,17 @@ import {
   SYSTEM_LOG_EVENTS,
   SYSTEM_LOG_LEVELS,
   SYSTEM_LOG_MODULES,
+  SYSTEM_LOG_RETENTION_LOCK_RESOURCE,
 } from "../constants/system-logs";
 import { systemRuntimeLogRepository } from "../repositories/system-runtime-log.repository";
 import type { SystemLogsListQuery } from "../schemas/system-logs.schema";
-import { auditService } from "./audit.service";
+import { platformAuditService } from "./platform-audit.service";
 import { systemLogger } from "../utils/system-logs/logger";
+import {
+  toSystemRuntimeLogDetail,
+  toSystemRuntimeLogSummary,
+} from "../utils/system-logs/present";
+import { withDedicatedSessionAppLock } from "../utils/whatsapp-retention-lock";
 
 const clampPage = (page: number): number => Math.max(page, 1);
 const clampLimit = (limit: number): number => Math.min(Math.max(limit, 1), 50);
@@ -37,28 +43,19 @@ const auditSystemLogAccess = async (input: {
   action: string;
 }): Promise<void> => {
   try {
-    if (!input.companyId) {
-      systemLogger.info({
-        module: "http",
-        event: "system-logs.audit.skipped",
-        message: "System log access without company scope (console audit only)",
-        metadata: {
-          action: input.action,
-          entityId: input.entityId,
-          userId: input.userId,
-        },
-      });
-      return;
-    }
-    await auditService.log(input.companyId, {
-      entityType: "system_runtime_log",
-      entityId: input.entityId,
-      action: input.action,
-      userId: input.userId,
-      newData: { action: input.action },
+    await platformAuditService.logSystemLogAccess(input);
+  } catch (error) {
+    systemLogger.warn({
+      module: "http",
+      event: "system-logs.audit.failed",
+      message: "Failed to persist system log access audit",
+      error,
+      metadata: {
+        action: input.action,
+        entityId: input.entityId,
+        userId: input.userId,
+      },
     });
-  } catch {
-    /* non-blocking */
   }
 };
 
@@ -74,7 +71,7 @@ export const systemLogsService = {
     const page = clampPage(query.page);
     const limit = clampLimit(query.limit);
     const range = resolveRange(query.from, query.to);
-    const result = await systemRuntimeLogRepository.list({
+    const result = await systemRuntimeLogRepository.listRaw({
       from: range.from,
       to: range.to,
       level: query.level,
@@ -92,7 +89,7 @@ export const systemLogsService = {
       limit,
     });
     return {
-      data: result.data,
+      data: result.data.map(toSystemRuntimeLogSummary),
       meta: {
         page,
         limit,
@@ -104,22 +101,23 @@ export const systemLogsService = {
 
   async getById(id: string, userId: string) {
     this.assertUiEnabled();
-    const row = await systemRuntimeLogRepository.findById(id);
+    const row = await systemRuntimeLogRepository.findByIdRaw(id);
     if (!row) {
       throw new AppError(404, "SYSTEM_LOG_NOT_FOUND", "Log no encontrado.");
     }
+    const detail = toSystemRuntimeLogDetail(row);
     await auditSystemLogAccess({
-      companyId: row.companyId,
+      companyId: detail.companyId,
       userId,
-      entityId: row.id,
+      entityId: detail.id,
       action: "SYSTEM_LOGS_VIEW_DETAIL",
     });
-    return row;
+    return detail;
   },
 
   async getContext(id: string, userId: string) {
     this.assertUiEnabled();
-    const row = await systemRuntimeLogRepository.findById(id);
+    const row = await systemRuntimeLogRepository.findByIdRaw(id);
     if (!row) {
       throw new AppError(404, "SYSTEM_LOG_NOT_FOUND", "Log no encontrado.");
     }
@@ -135,8 +133,7 @@ export const systemLogsService = {
       return { data: [], meta: { correlationKey: null as string | null } };
     }
 
-    // Precedence: requestId → correlationId → jobExecutionId
-    const context = await systemRuntimeLogRepository.listContext({
+    const context = await systemRuntimeLogRepository.listContextRaw({
       requestId: row.requestId,
       correlationId: row.requestId ? null : row.correlationId,
       jobExecutionId: row.requestId || row.correlationId ? null : row.jobExecutionId,
@@ -153,7 +150,7 @@ export const systemLogsService = {
     });
 
     return {
-      data: context,
+      data: context.map(toSystemRuntimeLogSummary),
       meta: {
         correlationKey: row.requestId
           ? "requestId"
@@ -178,24 +175,39 @@ export const systemLogsService = {
     };
   },
 
-  async runRetention(): Promise<{ deleted: number; batches: number }> {
-    const cutoff = new Date(
-      Date.now() - env.SYSTEM_LOGS_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+  async runRetention(): Promise<{
+    deleted: number;
+    batches: number;
+    lockSkipped: boolean;
+  }> {
+    const lockResult = await withDedicatedSessionAppLock(
+      SYSTEM_LOG_RETENTION_LOCK_RESOURCE,
+      async () => {
+        const cutoff = new Date(
+          Date.now() - env.SYSTEM_LOGS_RETENTION_DAYS * 24 * 60 * 60 * 1000,
+        );
+        let deleted = 0;
+        let batches = 0;
+        const maxBatches = 50;
+        while (batches < maxBatches) {
+          const n = await systemRuntimeLogRepository.deleteOlderThan(
+            cutoff,
+            env.SYSTEM_LOGS_RETENTION_BATCH_SIZE,
+          );
+          batches += 1;
+          deleted += n;
+          if (n < env.SYSTEM_LOGS_RETENTION_BATCH_SIZE) {
+            break;
+          }
+        }
+        return { deleted, batches };
+      },
+      { lockTimeoutMs: 0 },
     );
-    let deleted = 0;
-    let batches = 0;
-    const maxBatches = 50;
-    while (batches < maxBatches) {
-      const n = await systemRuntimeLogRepository.deleteOlderThan(
-        cutoff,
-        env.SYSTEM_LOGS_RETENTION_BATCH_SIZE,
-      );
-      batches += 1;
-      deleted += n;
-      if (n < env.SYSTEM_LOGS_RETENTION_BATCH_SIZE) {
-        break;
-      }
+
+    if (lockResult.outcome === "skipped") {
+      return { deleted: 0, batches: 0, lockSkipped: true };
     }
-    return { deleted, batches };
+    return { ...lockResult.value, lockSkipped: false };
   },
 };

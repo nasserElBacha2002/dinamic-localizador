@@ -1,3 +1,4 @@
+import type { Server } from "node:http";
 import { app } from "./app";
 import { env } from "./config/env";
 import { closeDatabase, connectDatabase } from "./database/connection";
@@ -44,8 +45,65 @@ import {
   startSystemLogRetentionJob,
   stopSystemLogRetentionJob,
 } from "./jobs/system-log-retention.job";
-import { initSystemLogPersistSink } from "./utils/system-logs/persist-sink";
+import {
+  initSystemLogPersistSink,
+  shutdownSystemLogPersistSink,
+} from "./utils/system-logs/persist-sink";
+import { initiateFatalShutdown } from "./utils/system-logs/fatal-shutdown";
 import { systemLogger } from "./utils/system-logs/logger";
+
+let httpServer: Server | null = null;
+let shuttingDown = false;
+
+const stopAllSchedulers = (): void => {
+  stopAttendanceReminderJob();
+  stopRecurringWorkdayMaterializationJob();
+  stopAbsenceWorkdaySyncJob();
+  stopAbsenceAttachmentCleanupJob();
+  stopWhatsappRetentionCleanupJob();
+  stopCompanyDeletionJob();
+  stopPayrollReceiptNotificationJob();
+  stopOperationAssignmentNotificationJob();
+  stopOperationLifecycleJob();
+  stopAdminAlertJob();
+  stopWhatsappMessageCostSyncJob();
+  stopSystemLogRetentionJob();
+};
+
+const closeHttpServer = async (): Promise<void> => {
+  if (!httpServer) {
+    return;
+  }
+  const server = httpServer;
+  httpServer = null;
+  await new Promise<void>((resolve) => {
+    server.close(() => resolve());
+    setTimeout(resolve, 5_000).unref?.();
+  });
+};
+
+const gracefulShutdown = async (exitCode = 0): Promise<void> => {
+  if (shuttingDown) {
+    return;
+  }
+  shuttingDown = true;
+
+  try {
+    await closeHttpServer();
+    stopAllSchedulers();
+    await shutdownSystemLogPersistSink({ timeoutMs: 5_000 });
+    await closeDatabase();
+  } catch (error) {
+    systemLogger.error({
+      module: "http",
+      event: "http.request.failed",
+      message: "Graceful shutdown encountered an error",
+      error,
+    });
+  } finally {
+    process.exit(exitCode);
+  }
+};
 
 const startServer = async (): Promise<void> => {
   await connectDatabase();
@@ -72,31 +130,23 @@ const startServer = async (): Promise<void> => {
   startWhatsappMessageCostSyncJob();
   startSystemLogRetentionJob();
 
-  app.listen(env.PORT, "0.0.0.0", () => {
+  httpServer = app.listen(env.PORT, "0.0.0.0", () => {
     console.log(`API listening on 0.0.0.0:${env.PORT}`);
   });
 };
 
-const shutdown = async (): Promise<void> => {
-  stopAttendanceReminderJob();
-  stopRecurringWorkdayMaterializationJob();
-  stopAbsenceWorkdaySyncJob();
-  stopAbsenceAttachmentCleanupJob();
-  stopWhatsappRetentionCleanupJob();
-  stopCompanyDeletionJob();
-  stopPayrollReceiptNotificationJob();
-  stopOperationAssignmentNotificationJob();
-  stopOperationLifecycleJob();
-  stopAdminAlertJob();
-  stopWhatsappMessageCostSyncJob();
-  stopSystemLogRetentionJob();
-  await closeDatabase();
-  process.exit(0);
-};
+process.on("SIGINT", () => {
+  void gracefulShutdown(0);
+});
+process.on("SIGTERM", () => {
+  void gracefulShutdown(0);
+});
 
-process.on("SIGINT", shutdown);
-process.on("SIGTERM", shutdown);
-
+/**
+ * Unhandled rejections: log + keep process alive (Node default historically).
+ * Escalation to fatal would risk dropping in-flight attendance/webhooks.
+ * Track via process.unhandledRejection system logs.
+ */
 process.on("unhandledRejection", (reason) => {
   systemLogger.error({
     module: "http",
@@ -107,8 +157,7 @@ process.on("unhandledRejection", (reason) => {
 });
 
 process.on("uncaughtException", (error) => {
-  systemLogger.error({
-    module: "http",
+  initiateFatalShutdown({
     event: "process.uncaughtException",
     message: "Uncaught exception",
     error,

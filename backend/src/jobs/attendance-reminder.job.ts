@@ -1,10 +1,6 @@
 import { env } from "../config/env";
 import { attendanceReminderService } from "../services/attendance-reminder.service";
-import { systemLogger } from "../utils/system-logs/logger";
-import {
-  beginJobLogContext,
-  runWithRequestLogContextAsync,
-} from "../utils/system-logs/request-log-context";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 const JOB_INTERVAL_MS = 60_000;
 
@@ -18,27 +14,18 @@ const runJobSafely = async (): Promise<void> => {
   }
 
   isRunning = true;
-  const ctx = beginJobLogContext("attendance-reminder");
-
   try {
-    await runWithRequestLogContextAsync(ctx, async () => {
-      await attendanceReminderService.runDueRemindersForAllCompanies();
-      systemLogger.info({
-        module: "attendance-reminder",
-        event: "attendance-reminder.run.completed",
-        message: "Attendance reminder tick completed",
-        jobExecutionId: ctx.jobExecutionId,
-      });
-    });
-  } catch (error) {
-    systemLogger.error({
+    await runInstrumentedJobTick({
       module: "attendance-reminder",
-      event: "attendance-reminder.run.failed",
-      message: "Attendance reminder job failed",
-      jobExecutionId: ctx.jobExecutionId,
-      error,
+      jobName: "attendance-reminder",
+      completedEvent: "attendance-reminder.run.completed",
+      failedEvent: "attendance-reminder.run.failed",
+      completedMessage: "Attendance reminder tick completed",
+      failedMessage: "Attendance reminder job failed",
+      run: async () => {
+        await attendanceReminderService.runDueRemindersForAllCompanies();
+      },
     });
-    console.error("[attendance-reminder] unexpected job error", error);
   } finally {
     isRunning = false;
   }

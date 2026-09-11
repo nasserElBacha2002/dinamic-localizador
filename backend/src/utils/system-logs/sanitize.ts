@@ -31,6 +31,7 @@ export const maskSensitiveFreeText = (value: string): string => {
     /(api[_-]?key|auth[_-]?token|password|connection[_-]?string)\s*[:=]\s*\S+/gi,
     "$1=[REDACTED]",
   );
+  next = next.replace(/https?:\/\/[^\s]*[?&](sig|signature|token|X-Amz-Signature)=[^\s]+/gi, "[REDACTED_URL]");
   return next;
 };
 

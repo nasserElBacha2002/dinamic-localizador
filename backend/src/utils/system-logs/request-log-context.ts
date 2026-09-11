@@ -37,10 +37,11 @@ export const setCorrelationIdOnContext = (correlationId: string | null): void =>
 };
 
 export const beginJobLogContext = (jobName: string): RequestLogContext => {
-  const jobExecutionId = `${jobName}:${randomUUID()}`;
+  // UUID only — fits NVARCHAR(64); job name goes in metadata via runInstrumentedJobTick.
+  void jobName;
   return {
     requestId: createRequestId(),
     correlationId: null,
-    jobExecutionId,
+    jobExecutionId: randomUUID(),
   };
 };

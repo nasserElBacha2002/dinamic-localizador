@@ -26,7 +26,7 @@ import {
   useSystemLogs,
   useSystemLogsOptions,
 } from "../../../hooks/useSystemLogs";
-import type { SystemLogLevel, SystemRuntimeLogRow } from "../../../types/system-logs";
+import type { SystemLogLevel, SystemRuntimeLogDetail, SystemRuntimeLogSummaryRow } from "../../../types/system-logs";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../../utils/date-range-url";
 import { DISPLAY_FALLBACK, safeText } from "../../../utils/display-safe";
 import { formatDateTime } from "../../../utils/dates";
@@ -83,7 +83,7 @@ function truncateId(value: string | null | undefined): string {
   return `${trimmed.slice(0, 8)}…`;
 }
 
-function buildSanitizedTechnicalInfo(row: SystemRuntimeLogRow): string {
+function buildSanitizedTechnicalInfo(row: SystemRuntimeLogDetail): string {
   const payload = {
     id: row.id,
     schemaVersion: row.schemaVersion,
@@ -143,7 +143,7 @@ function SystemLogDetailDrawer({
   const contextQuery = useSystemLogContext(logId, opened);
   const row = detailQuery.data;
 
-  const contextColumns = useMemo<DataTableColumn<SystemRuntimeLogRow>[]>(
+  const contextColumns = useMemo<DataTableColumn<SystemRuntimeLogSummaryRow>[]>(
     () => [
       {
         key: "occurredAt",
@@ -180,14 +180,22 @@ function SystemLogDetailDrawer({
     if (!row?.requestId) {
       return;
     }
-    await navigator.clipboard.writeText(row.requestId);
+    try {
+      await navigator.clipboard.writeText(row.requestId);
+    } catch {
+      /* clipboard may be denied; keep UI usable */
+    }
   };
 
   const copyTechnicalInfo = async () => {
     if (!row) {
       return;
     }
-    await navigator.clipboard.writeText(buildSanitizedTechnicalInfo(row));
+    try {
+      await navigator.clipboard.writeText(buildSanitizedTechnicalInfo(row));
+    } catch {
+      /* clipboard may be denied; keep UI usable */
+    }
   };
 
   return (
@@ -370,7 +378,7 @@ export function SystemLogsPage() {
     [optionsQuery.data?.events],
   );
 
-  const columns = useMemo<DataTableColumn<SystemRuntimeLogRow>[]>(
+  const columns = useMemo<DataTableColumn<SystemRuntimeLogSummaryRow>[]>(
     () => [
       {
         key: "occurredAt",
@@ -413,7 +421,7 @@ export function SystemLogsPage() {
     [],
   );
 
-  const mobileCard = useMemo<DataTableMobileCardConfig<SystemRuntimeLogRow>>(
+  const mobileCard = useMemo<DataTableMobileCardConfig<SystemRuntimeLogSummaryRow>>(
     () => ({
       title: (row) => row.event,
       status: (row) => (

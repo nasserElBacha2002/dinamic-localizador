@@ -32,6 +32,7 @@ import type {
 } from "../../../types/whatsapp-message-cost";
 import { formatDateTime } from "../../../utils/dates";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { isSystemLogsUiEnabled } from "../../../utils/system-logs-config";
 import { isWhatsappObservabilityUiEnabled } from "../../../utils/whatsapp-observability-config";
 
 const COSTS_PATH = "/platform/observability/whatsapp/costs";
@@ -80,6 +81,7 @@ export function WhatsappMessageCostsPage() {
   const { user } = useAuth();
   const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
   const uiEnabled = isWhatsappObservabilityUiEnabled();
+  const systemLogsEnabled = isSystemLogsUiEnabled();
   const now = new Date();
   const [year, setYear] = useState(String(now.getFullYear()));
   const [month, setMonth] = useState(String(now.getMonth() + 1));
@@ -291,6 +293,15 @@ export function WhatsappMessageCostsPage() {
             >
               Errores
             </Button>
+            {systemLogsEnabled ? (
+              <Button
+                component={RouterLink}
+                to="/platform/observability/system-logs"
+                variant="default"
+              >
+                Logs del sistema
+              </Button>
+            ) : null}
           </Group>
         }
       />

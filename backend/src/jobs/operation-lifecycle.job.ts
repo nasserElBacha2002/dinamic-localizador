@@ -1,5 +1,6 @@
 import { env } from "../config/env";
 import { operationLifecycleService } from "../services/operation-lifecycle.service";
+import { runInstrumentedJobTick } from "../utils/system-logs/job-tick";
 
 let intervalHandle: NodeJS.Timeout | null = null;
 /** Per-process overlap guard only. Multiple backend instances may run this job
@@ -16,24 +17,24 @@ const runJobSafely = async (): Promise<void> => {
   }
 
   isRunning = true;
-  const startedAt = Date.now();
   try {
-    console.info("[operation-lifecycle-job] job_started");
-    const result = await operationLifecycleService.reconcileDue();
-    console.info("[operation-lifecycle-job] tick complete", {
-      batch_size: env.OPERATION_LIFECYCLE_JOB_BATCH_SIZE,
-      operations_scanned: result.operationsScanned,
-      operations_updated: result.operationsUpdated,
-      operations_skipped: result.operationsSkipped,
-      operations_failed: result.operationsFailed,
-      duration_ms: result.durationMs,
-      backlog_remaining: result.backlogRemaining,
-      wall_ms: Date.now() - startedAt,
-    });
-  } catch (error) {
-    console.error("[operation-lifecycle-job] unexpected job error", {
-      error: error instanceof Error ? error.message : String(error),
-      duration_ms: Date.now() - startedAt,
+    await runInstrumentedJobTick({
+      module: "operation-lifecycle",
+      jobName: "operation-lifecycle",
+      completedEvent: "operation-lifecycle.run.completed",
+      failedEvent: "operation-lifecycle.run.failed",
+      completedMessage: "Operation lifecycle tick completed",
+      failedMessage: "Operation lifecycle job failed",
+      run: async () => {
+        const result = await operationLifecycleService.reconcileDue();
+        return {
+          operationsScanned: result.operationsScanned,
+          operationsUpdated: result.operationsUpdated,
+          operationsSkipped: result.operationsSkipped,
+          operationsFailed: result.operationsFailed,
+          backlogRemaining: result.backlogRemaining,
+        };
+      },
     });
   } finally {
     isRunning = false;

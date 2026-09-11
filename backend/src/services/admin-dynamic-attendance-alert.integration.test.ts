@@ -12,7 +12,6 @@ import { after, before, afterEach, it, mock } from "node:test";
 import sql from "mssql";
 import { getPool } from "../database/connection";
 import { adminDynamicAttendanceAlertRepository } from "../repositories/admin-dynamic-attendance-alert.repository";
-import { adminAlertNotificationRepository } from "../repositories/admin-alert-notification.repository";
 import { companyAlertRecipientRepository } from "../repositories/company-alert-recipient.repository";
 import { companySettingsRepository } from "../repositories/company-settings.repository";
 import { employeeRepository } from "../repositories/employee.repository";

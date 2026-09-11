@@ -23,6 +23,7 @@ import { EMPTY_DATE_RANGE_VALUE } from "../../../utils/date-range";
 import { dateRangeToUrlFields, urlFieldsToDateRange } from "../../../utils/date-range-url";
 import { formatDateTime } from "../../../utils/dates";
 import { getApiErrorMessage } from "../../../utils/errors";
+import { isSystemLogsUiEnabled } from "../../../utils/system-logs-config";
 import { isWhatsappObservabilityUiEnabled } from "../../../utils/whatsapp-observability-config";
 import {
   toObservabilityActivityBounds,
@@ -39,6 +40,7 @@ export function WhatsappObservabilityErrorsPage() {
   const { user } = useAuth();
   const isPlatformAdmin = Boolean(user?.isPlatformAdmin);
   const uiEnabled = isWhatsappObservabilityUiEnabled();
+  const systemLogsEnabled = isSystemLogsUiEnabled();
 
   const table = useTableUrlState({
     defaults: {
@@ -142,6 +144,15 @@ export function WhatsappObservabilityErrorsPage() {
             >
               Costos de mensajería
             </Button>
+            {systemLogsEnabled ? (
+              <Button
+                component={RouterLink}
+                to="/platform/observability/system-logs"
+                variant="default"
+              >
+                Logs del sistema
+              </Button>
+            ) : null}
           </Group>
         }
       />

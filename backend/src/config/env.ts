@@ -122,6 +122,15 @@ const envSchema = z
     ADMIN_ALERT_LEASE_MS: z.coerce.number().int().positive().default(120_000),
     ADMIN_ALERT_MAX_ATTEMPTS: z.coerce.number().int().positive().default(5),
     ADMIN_ALERT_RETRY_BASE_MS: z.coerce.number().int().positive().default(30_000),
+    /** Outbox delivery batch size per tick (dynamic + legacy admin alerts). */
+    ADMIN_ALERT_DELIVERY_BATCH_SIZE: z.coerce.number().int().positive().max(50).default(24),
+    /** Candidate batch per dynamic attendance alert type. */
+    ADMIN_ALERT_DYNAMIC_CANDIDATE_BATCH_SIZE: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(100)
+      .default(25),
     PAYROLL_RECEIPT_MEDIA_URL_EXPIRATION_SECONDS: z.coerce.number().int().positive().default(900),
     /** Grace days between company deactivation and scheduled hard delete. */
     COMPANY_DELETION_GRACE_PERIOD_DAYS: z.coerce.number().int().positive().default(30),

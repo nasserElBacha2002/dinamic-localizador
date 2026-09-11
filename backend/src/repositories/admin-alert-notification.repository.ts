@@ -28,6 +28,8 @@ const mapRow = (row: Record<string, unknown>): AdminAlertNotification => ({
   employeeId: row.employee_id ? String(row.employee_id) : null,
   operationId: row.operation_id ? String(row.operation_id) : null,
   absenceRequestId: row.absence_request_id ? String(row.absence_request_id) : null,
+  assignmentId: row.assignment_id ? String(row.assignment_id) : null,
+  employeeWorkdayId: row.employee_workday_id ? String(row.employee_workday_id) : null,
   alertType: String(row.alert_type) as AdminAlertType,
   severity: String(row.severity) as AdminAlertSeverity,
   templateCategory: String(row.template_category) as AdminAlertTemplateCategory,
@@ -49,6 +51,12 @@ const mapRow = (row: Record<string, unknown>): AdminAlertNotification => ({
   lastErrorCode: row.last_error_code ? String(row.last_error_code) : null,
   lastErrorMessage: row.last_error_message ? String(row.last_error_message) : null,
   occurredAt: toIso(row.occurred_at as Date | string),
+  dueAt: row.due_at ? toIso(row.due_at as Date | string) : null,
+  evaluatedAt: row.evaluated_at ? toIso(row.evaluated_at as Date | string) : null,
+  latenessMinutes:
+    row.lateness_minutes === null || row.lateness_minutes === undefined
+      ? null
+      : Number(row.lateness_minutes),
   sentAt: row.sent_at ? toIso(row.sent_at as Date | string) : null,
   createdAt: toIso(row.created_at as Date | string),
   updatedAt: toIso(row.updated_at as Date | string),
@@ -75,6 +83,8 @@ export type AdminAlertEnqueueInput = {
   employeeId?: string | null;
   operationId?: string | null;
   absenceRequestId?: string | null;
+  assignmentId?: string | null;
+  employeeWorkdayId?: string | null;
   alertType: AdminAlertType;
   severity: AdminAlertSeverity;
   templateCategory: AdminAlertTemplateCategory;
@@ -82,6 +92,10 @@ export type AdminAlertEnqueueInput = {
   recipientPhone: string;
   contentVariablesJson: string;
   occurredAt?: Date;
+  dueAt?: Date | null;
+  status?: Extract<AdminAlertNotificationStatus, "PENDING" | "EXPIRED">;
+  evaluatedAt?: Date | null;
+  latenessMinutes?: number | null;
 };
 
 export const adminAlertNotificationRepository = {
@@ -96,6 +110,8 @@ export const adminAlertNotificationRepository = {
         .input("employeeId", sql.UniqueIdentifier, input.employeeId ?? null)
         .input("operationId", sql.UniqueIdentifier, input.operationId ?? null)
         .input("absenceRequestId", sql.UniqueIdentifier, input.absenceRequestId ?? null)
+        .input("assignmentId", sql.UniqueIdentifier, input.assignmentId ?? null)
+        .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId ?? null)
         .input("alertType", sql.NVarChar(60), input.alertType)
         .input("severity", sql.NVarChar(20), input.severity)
         .input("templateCategory", sql.NVarChar(20), input.templateCategory)
@@ -103,17 +119,23 @@ export const adminAlertNotificationRepository = {
         .input("recipientPhone", sql.NVarChar(20), input.recipientPhone)
         .input("contentVariablesJson", sql.NVarChar(sql.MAX), input.contentVariablesJson)
         .input("occurredAt", sql.DateTime2, input.occurredAt ?? new Date())
+        .input("dueAt", sql.DateTime2, input.dueAt ?? null)
+        .input("status", sql.NVarChar(30), input.status ?? "PENDING")
+        .input("evaluatedAt", sql.DateTime2, input.evaluatedAt ?? null)
+        .input("latenessMinutes", sql.Int, input.latenessMinutes ?? null)
         .query(`
           INSERT INTO whatsapp_admin_alert_notifications (
             company_id, recipient_id, employee_id, operation_id, absence_request_id,
+            assignment_id, employee_workday_id,
             alert_type, severity, template_category, deduplication_key, recipient_phone,
-            content_variables_json, status, occurred_at
+            content_variables_json, status, occurred_at, due_at, evaluated_at, lateness_minutes
           )
           OUTPUT INSERTED.*
           VALUES (
             @companyId, @recipientId, @employeeId, @operationId, @absenceRequestId,
+            @assignmentId, @employeeWorkdayId,
             @alertType, @severity, @templateCategory, @deduplicationKey, @recipientPhone,
-            @contentVariablesJson, N'PENDING', @occurredAt
+            @contentVariablesJson, @status, @occurredAt, @dueAt, @evaluatedAt, @latenessMinutes
           )
         `);
       return {
@@ -244,8 +266,16 @@ export const adminAlertNotificationRepository = {
                 )
               )
             ORDER BY
+              CASE
+                WHEN alert_type IN (
+                  N'ATTENDANCE_CONFIRMATION_MISSING',
+                  N'MISSING_CHECKIN_AFTER_START',
+                  N'MISSING_CHECKOUT_AFTER_END'
+                ) THEN 0
+                ELSE 1
+              END,
               CASE WHEN status = N'PENDING' THEN 0 ELSE 1 END,
-              COALESCE(next_attempt_at, created_at) ASC,
+              COALESCE(due_at, next_attempt_at, created_at) ASC,
               created_at ASC
           )
           UPDATE n
@@ -497,11 +527,90 @@ export const adminAlertNotificationRepository = {
             lease_owner = NULL,
             lease_expires_at = NULL,
             next_attempt_at = NULL,
+            evaluated_at = SYSUTCDATETIME(),
             updated_at = SYSUTCDATETIME()
         WHERE id = @id
           AND company_id = @companyId
           AND status IN (N'PROCESSING', N'SEND_STARTED')
       `);
+  },
+
+  async markTerminalSkip(input: {
+    companyId: string;
+    notificationId: string;
+    status: "EXPIRED" | "SKIPPED_DISABLED" | "SKIPPED";
+    errorCode: string;
+    errorMessage: string;
+    latenessMinutes?: number | null;
+    evaluatedAt?: Date;
+  }): Promise<void> {
+    await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("id", sql.UniqueIdentifier, input.notificationId)
+      .input("status", sql.NVarChar(30), input.status)
+      .input("errorCode", sql.NVarChar(80), input.errorCode.slice(0, 80))
+      .input("errorMessage", sql.NVarChar(1000), input.errorMessage.slice(0, 1000))
+      .input("latenessMinutes", sql.Int, input.latenessMinutes ?? null)
+      .input("evaluatedAt", sql.DateTime2, input.evaluatedAt ?? new Date())
+      .query(`
+        UPDATE whatsapp_admin_alert_notifications
+        SET status = @status,
+            last_error_code = @errorCode,
+            last_error_message = @errorMessage,
+            lateness_minutes = COALESCE(@latenessMinutes, lateness_minutes),
+            evaluated_at = @evaluatedAt,
+            lease_owner = NULL,
+            lease_expires_at = NULL,
+            next_attempt_at = NULL,
+            updated_at = SYSUTCDATETIME()
+        WHERE id = @id
+          AND company_id = @companyId
+          AND status IN (N'PROCESSING', N'SEND_STARTED', N'PENDING', N'FAILED')
+      `);
+  },
+
+  async getDeliveryQueueStats(): Promise<{
+    pendingCount: number;
+    oldestPendingAgeMinutes: number | null;
+    dynamicPendingCount: number;
+  }> {
+    const result = await getPool().request().query(`
+      SELECT
+        SUM(CASE WHEN status IN (N'PENDING', N'FAILED') THEN 1 ELSE 0 END) AS pending_count,
+        SUM(
+          CASE
+            WHEN status IN (N'PENDING', N'FAILED')
+              AND alert_type IN (
+                N'ATTENDANCE_CONFIRMATION_MISSING',
+                N'MISSING_CHECKIN_AFTER_START',
+                N'MISSING_CHECKOUT_AFTER_END'
+              )
+            THEN 1 ELSE 0
+          END
+        ) AS dynamic_pending_count,
+        MIN(
+          CASE
+            WHEN status IN (N'PENDING', N'FAILED')
+            THEN COALESCE(due_at, next_attempt_at, created_at)
+            ELSE NULL
+          END
+        ) AS oldest_pending_at
+      FROM whatsapp_admin_alert_notifications
+    `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    const oldest = row?.oldest_pending_at
+      ? new Date(row.oldest_pending_at as Date | string)
+      : null;
+    const ageMinutes =
+      oldest && !Number.isNaN(oldest.getTime())
+        ? Math.max(0, Math.floor((Date.now() - oldest.getTime()) / 60_000))
+        : null;
+    return {
+      pendingCount: Number(row?.pending_count ?? 0),
+      dynamicPendingCount: Number(row?.dynamic_pending_count ?? 0),
+      oldestPendingAgeMinutes: ageMinutes,
+    };
   },
 
   async markSentRecoveryRequired(input: {

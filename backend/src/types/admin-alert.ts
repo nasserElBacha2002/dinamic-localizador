@@ -13,6 +13,8 @@ export type AdminAlertNotification = {
   employeeId: string | null;
   operationId: string | null;
   absenceRequestId: string | null;
+  assignmentId: string | null;
+  employeeWorkdayId: string | null;
   alertType: AdminAlertType;
   severity: AdminAlertSeverity;
   templateCategory: AdminAlertTemplateCategory;
@@ -30,6 +32,9 @@ export type AdminAlertNotification = {
   lastErrorCode: string | null;
   lastErrorMessage: string | null;
   occurredAt: string;
+  dueAt: string | null;
+  evaluatedAt: string | null;
+  latenessMinutes: number | null;
   sentAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -66,6 +71,9 @@ export type AdminAlertOperationalTemplatePayload = {
   attendanceEvaluatedWorkdays?: number;
   /** FORWARDED_LOCATION_REJECTED — sanitized detail (no coordinates / raw payload). */
   forwardedLocationDetail?: string | null;
+  /** Dynamic attendance alerts — display helpers (minutes, already computed). */
+  minutesUntilStart?: number;
+  minutesLate?: number;
 };
 
 /** Request admin alerts (admin_request_alert template). Phase C: absence pending review. */
@@ -106,9 +114,12 @@ export type AdminAlertEmitInput = {
   employeeId?: string | null;
   operationId?: string | null;
   absenceRequestId?: string | null;
+  assignmentId?: string | null;
+  employeeWorkdayId?: string | null;
   deduplicationKey: string;
   payload: AdminAlertTemplatePayload;
   occurredAt?: Date;
+  dueAt?: Date | null;
 };
 
 export type AdminAlertEmitResult = {
@@ -130,6 +141,26 @@ export type MissingCheckinCandidate = {
   operationTimezone: string;
 };
 
+export type DynamicAttendanceAlertCandidate = {
+  companyId: string;
+  recipientId: string;
+  recipientPhone: string;
+  employeeId: string;
+  employeeName: string;
+  operationId: string;
+  assignmentId: string | null;
+  employeeWorkdayId: string | null;
+  scheduleVersion: number;
+  serviceName: string;
+  serviceAddress: string | null;
+  serviceLocality: string | null;
+  scheduledStart: string;
+  scheduledEnd: string | null;
+  operationTimezone: string;
+  dueAt: string;
+  lateArrivalToleranceMinutes: number;
+};
+
 /** Missing outbox obligation: one domain event × one eligible recipient. */
 export type AdminAlertOutboxObligation = {
   companyId: string;
@@ -141,9 +172,15 @@ export type AdminAlertOutboxObligation = {
   employeeId: string;
   operationId: string | null;
   absenceRequestId: string | null;
+  assignmentId: string | null;
+  employeeWorkdayId: string | null;
   deduplicationKey: string;
   occurredAt: string;
+  dueAt: string;
   payload: AdminAlertTemplatePayload;
+  /** When true, enqueue directly as EXPIRED (never send WhatsApp). */
+  enqueueAsExpired?: boolean;
+  latenessMinutes?: number;
 };
 
 export type UnavailableAlertCandidate = {

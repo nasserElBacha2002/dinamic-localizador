@@ -28,9 +28,15 @@ const enqueueOneRecipient = async (input: {
   employeeId: string | null;
   operationId: string | null;
   absenceRequestId: string | null;
+  assignmentId: string | null;
+  employeeWorkdayId: string | null;
   deduplicationKey: string;
   contentVariablesJson: string;
   occurredAt: Date;
+  dueAt: Date | null;
+  status?: "PENDING" | "EXPIRED";
+  evaluatedAt?: Date | null;
+  latenessMinutes?: number | null;
 }): Promise<"enqueued" | "dedupSkipped" | "recipientSkipped"> => {
   let normalizedPhone: string;
   try {
@@ -61,6 +67,8 @@ const enqueueOneRecipient = async (input: {
     employeeId: input.employeeId,
     operationId: input.operationId,
     absenceRequestId: input.absenceRequestId,
+    assignmentId: input.assignmentId,
+    employeeWorkdayId: input.employeeWorkdayId,
     alertType: input.alertType,
     severity: input.severity,
     templateCategory: input.category,
@@ -68,6 +76,10 @@ const enqueueOneRecipient = async (input: {
     recipientPhone: normalizedPhone,
     contentVariablesJson: input.contentVariablesJson,
     occurredAt: input.occurredAt,
+    dueAt: input.dueAt,
+    status: input.status,
+    evaluatedAt: input.evaluatedAt,
+    latenessMinutes: input.latenessMinutes,
   });
 
   if (created) {
@@ -175,9 +187,12 @@ export const adminAlertService = {
         employeeId: input.employeeId ?? null,
         operationId: input.operationId ?? null,
         absenceRequestId: input.absenceRequestId ?? null,
+        assignmentId: input.assignmentId ?? null,
+        employeeWorkdayId: input.employeeWorkdayId ?? null,
         deduplicationKey: input.deduplicationKey,
         contentVariablesJson,
         occurredAt,
+        dueAt: input.dueAt ?? null,
       });
 
       if (outcome === "enqueued") {
@@ -227,9 +242,15 @@ export const adminAlertService = {
       employeeId: obligation.employeeId,
       operationId: obligation.operationId,
       absenceRequestId: obligation.absenceRequestId,
+      assignmentId: obligation.assignmentId,
+      employeeWorkdayId: obligation.employeeWorkdayId,
       deduplicationKey: obligation.deduplicationKey,
       contentVariablesJson,
       occurredAt: new Date(obligation.occurredAt),
+      dueAt: new Date(obligation.dueAt),
+      status: obligation.enqueueAsExpired ? "EXPIRED" : "PENDING",
+      evaluatedAt: obligation.enqueueAsExpired ? new Date() : null,
+      latenessMinutes: obligation.latenessMinutes ?? null,
     });
 
     if (outcome === "enqueued") {

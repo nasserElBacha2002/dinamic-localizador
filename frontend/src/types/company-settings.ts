@@ -19,6 +19,12 @@ export interface CompanySettings {
   absenceAttachmentsEnabled?: boolean;
   absenceOperationalIntegrationEnabled?: boolean;
   adminAlertsEnabled?: boolean;
+  adminAttendanceConfirmationMissingEnabled?: boolean;
+  adminMissingCheckinEnabled?: boolean;
+  adminMissingCheckoutEnabled?: boolean;
+  adminConfirmationEscalationMinutes?: number;
+  adminMissingCheckoutDelayMinutes?: number;
+  adminAlertMaxLatenessMinutes?: number;
   attendanceThresholdAlertsEnabled?: boolean;
   attendanceAlertThresholdPercent?: number;
   attendanceAlertWindowDays?: number;
@@ -49,6 +55,12 @@ export type UpdateCompanySettingsInput = Partial<
     | "absenceAttachmentsEnabled"
     | "absenceOperationalIntegrationEnabled"
     | "adminAlertsEnabled"
+    | "adminAttendanceConfirmationMissingEnabled"
+    | "adminMissingCheckinEnabled"
+    | "adminMissingCheckoutEnabled"
+    | "adminConfirmationEscalationMinutes"
+    | "adminMissingCheckoutDelayMinutes"
+    | "adminAlertMaxLatenessMinutes"
     | "attendanceThresholdAlertsEnabled"
     | "attendanceAlertThresholdPercent"
     | "attendanceAlertWindowDays"

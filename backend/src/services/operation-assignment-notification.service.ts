@@ -17,6 +17,8 @@ import {
 } from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
 import { logWhatsAppNotificationEvent } from "../utils/whatsapp-notification-observability";
+import { whatsappSystemInteractionService } from "./whatsapp-system-interaction.service";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
 
 /**
  * At-least-once Twilio send is possible only via manual reconcile after
@@ -361,6 +363,32 @@ const processClaimedNotification = async (
   });
 
   // PHASE A — provider send only. classifyTwilioOutboundError applies exclusively here.
+  // Durable SYSTEM context is prepared BEFORE Twilio; accept/fail/ambiguous AFTER.
+  // SQL ↔ Twilio are not one transaction; accepted SID + SQL failure must not re-send.
+  const interactionSourceKey =
+    whatsappSystemInteractionService.sourceKeyForOperationAssignment(notification.id);
+  const preparedInteraction =
+    await whatsappSystemInteractionService.prepareOperationAssignmentContext({
+      companyId: notification.companyId,
+      employeeId: employee.id,
+      operationId: notification.operationId,
+      notificationId: notification.id,
+      scheduledStart,
+    });
+
+  if (whatsappSystemInteractionService.shouldSkipSend(preparedInteraction)) {
+    if (
+      preparedInteraction?.status === "ACTIVE" &&
+      preparedInteraction.providerMessageSid
+    ) {
+      return "sent";
+    }
+    if (preparedInteraction?.status === "SEND_AMBIGUOUS") {
+      return "reconciliation";
+    }
+    return "cancelled";
+  }
+
   let messageSid: string;
   try {
     const result = await twilioOutboundService.sendWhatsAppTemplate({
@@ -390,6 +418,18 @@ const processClaimedNotification = async (
       providerMessageSid: messageSid,
       sentAt: new Date().toISOString(),
     });
+    await whatsappSystemInteractionService.markSendAcceptedSafe({
+      companyId: notification.companyId,
+      sourceKey: interactionSourceKey,
+      providerMessageSid: messageSid,
+    });
+    await whatsappTurnClassificationShadowService.recordSystemOutboundExempt({
+      companyId: notification.companyId,
+      employeeId: employee.id,
+      providerMessageSid: messageSid,
+      category: "OPERATION_ASSIGNMENT",
+      relatedOperationId: notification.operationId,
+    });
   } catch (sendError) {
     const errorMessage = sendError instanceof Error ? sendError.message : String(sendError);
     const classification = classifyTwilioOutboundError(sendError);
@@ -414,6 +454,10 @@ const processClaimedNotification = async (
     });
 
     if (isAmbiguousTwilioSendFailure(classification)) {
+      await whatsappSystemInteractionService.markSendAmbiguousSafe({
+        companyId: notification.companyId,
+        sourceKey: interactionSourceKey,
+      });
       await operationAssignmentNotificationRepository.markSendAttemptAmbiguous({
         companyId: notification.companyId,
         attemptId: attempt.id,
@@ -431,6 +475,11 @@ const processClaimedNotification = async (
       });
       return "reconciliation";
     }
+
+    await whatsappSystemInteractionService.markSendFailedSafe({
+      companyId: notification.companyId,
+      sourceKey: interactionSourceKey,
+    });
 
     const exhausted = notification.attemptCount >= maxAttempts;
     const retryable = classification.retryable && !exhausted;

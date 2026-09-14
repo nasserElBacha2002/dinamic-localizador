@@ -1,6 +1,7 @@
 import type { CompanyModuleKey } from "../../constants/company-modules";
 import type { TwilioWebhookInput } from "../../schemas/twilio-webhook.schema";
 import type { BotSession } from "../../types/twilio.types";
+import type { WhatsAppTextTurnResolution } from "../whatsapp-turn-routing.resolver";
 
 export type WhatsAppRouterMessageType = "TEXT" | "LOCATION" | "UNKNOWN";
 
@@ -24,6 +25,11 @@ export interface WhatsAppRouterContext {
   session: BotSession | null;
   recentlyExpired: boolean;
   body: string;
+  /**
+   * Authoritative pure resolution from resolveWhatsAppTextTurn.
+   * When set, the router must not re-decide destination precedence.
+   */
+  turnResolution?: WhatsAppTextTurnResolution | null;
 }
 
 export interface WhatsAppRouterHandlers {

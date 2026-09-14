@@ -416,6 +416,146 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
       WHERE created_at < @cutoff
     `,
     },
+    whatsapp_turn_classifications: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM whatsapp_turn_classifications
+      WHERE classified_at < @cutoff
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM whatsapp_turn_classifications
+      WHERE classified_at < @cutoff
+    `,
+    },
+    whatsapp_system_interactions: {
+      // Never purge PREPARED / ACTIVE / SEND_AMBIGUOUS (in-flight or reply window).
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM whatsapp_system_interactions
+      WHERE updated_at < @cutoff
+        AND status IN (
+          N'CONSUMED', N'EXPIRED', N'CANCELLED', N'SEND_FAILED'
+        )
+        AND expires_at < SYSUTCDATETIME()
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM whatsapp_system_interactions
+      WHERE updated_at < @cutoff
+        AND status IN (
+          N'CONSUMED', N'EXPIRED', N'CANCELLED', N'SEND_FAILED'
+        )
+        AND expires_at < SYSUTCDATETIME()
+    `,
+    },
+    whatsapp_quota_limit_notices: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM dbo.whatsapp_quota_limit_notices
+      WHERE updated_at < @cutoff
+        AND status IN (N'SENT', N'SUPPRESSED')
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM dbo.whatsapp_quota_limit_notices
+      WHERE updated_at < @cutoff
+        AND status IN (N'SENT', N'SUPPRESSED')
+    `,
+    },
+    whatsapp_quota_outbound_reservations: {
+      // Keep RESERVED / ATTEMPT_STARTED / AMBIGUOUS / in-flight RESPONSE_BUILT briefly via cutoff only for terminals.
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM dbo.whatsapp_quota_outbound_reservations
+      WHERE updated_at < @cutoff
+        AND status IN (
+          N'ACCEPTED', N'RESPONSE_BUILT', N'RELEASED',
+          N'SHADOW_WOULD_ADMIT', N'SHADOW_WOULD_REJECT'
+        )
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM dbo.whatsapp_quota_outbound_reservations
+      WHERE updated_at < @cutoff
+        AND status IN (
+          N'ACCEPTED', N'RESPONSE_BUILT', N'RELEASED',
+          N'SHADOW_WOULD_ADMIT', N'SHADOW_WOULD_REJECT'
+        )
+    `,
+    },
+    whatsapp_quota_turn_admissions: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM dbo.whatsapp_quota_turn_admissions
+      WHERE created_at < @cutoff
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM dbo.whatsapp_quota_turn_admissions
+      WHERE created_at < @cutoff
+    `,
+    },
+    whatsapp_quota_employee_periods: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM dbo.whatsapp_quota_employee_periods p
+      WHERE p.updated_at < @cutoff
+        AND p.period_end_utc < @cutoff
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.whatsapp_quota_turn_admissions a
+          WHERE a.day_period_id = p.id OR a.week_period_id = p.id
+        )
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.whatsapp_quota_outbound_reservations r
+          WHERE r.day_period_id = p.id OR r.week_period_id = p.id
+        )
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM dbo.whatsapp_quota_employee_periods
+      WHERE id IN (
+        SELECT TOP (@batchSize) p.id
+        FROM dbo.whatsapp_quota_employee_periods p
+        WHERE p.updated_at < @cutoff
+          AND p.period_end_utc < @cutoff
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.whatsapp_quota_turn_admissions a
+            WHERE a.day_period_id = p.id OR a.week_period_id = p.id
+          )
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.whatsapp_quota_outbound_reservations r
+            WHERE r.day_period_id = p.id OR r.week_period_id = p.id
+          )
+      )
+    `,
+    },
+    whatsapp_quota_company_periods: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM dbo.whatsapp_quota_company_periods p
+      WHERE p.updated_at < @cutoff
+        AND p.period_end_utc < @cutoff
+        AND NOT EXISTS (
+          SELECT 1 FROM dbo.whatsapp_quota_outbound_reservations r
+          WHERE r.company_period_id = p.id
+        )
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM dbo.whatsapp_quota_company_periods
+      WHERE id IN (
+        SELECT TOP (@batchSize) p.id
+        FROM dbo.whatsapp_quota_company_periods p
+        WHERE p.updated_at < @cutoff
+          AND p.period_end_utc < @cutoff
+          AND NOT EXISTS (
+            SELECT 1 FROM dbo.whatsapp_quota_outbound_reservations r
+            WHERE r.company_period_id = p.id
+          )
+      )
+    `,
+    },
   };
 
 export const whatsappRetentionRepository = {

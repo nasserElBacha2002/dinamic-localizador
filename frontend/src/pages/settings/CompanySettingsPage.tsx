@@ -24,9 +24,11 @@ import {
   buildWorkScheduleSummary,
 } from "./company-settings-summaries";
 import { CompanyWhatsAppAlertsDialog } from "./components/CompanyWhatsAppAlertsDialog";
+import { CompanyWhatsAppQuotaSettingsDialog } from "./components/CompanyWhatsAppQuotaSettingsDialog";
 import {
   useCompanyAlertRecipients,
 } from "../../hooks/useCompanyAlertRecipients";
+import { useWhatsAppQuotaSettings } from "../../hooks/useWhatsAppQuotaSettings";
 import { CompanyAbsenceCalendarDialog } from "./components/CompanyAbsenceCalendarDialog";
 import { CompanyAbsenceOperationalIntegrationDialog } from "./components/CompanyAbsenceOperationalIntegrationDialog";
 import { CompanyAbsenceSettingsDialog } from "./components/CompanyAbsenceSettingsDialog";
@@ -52,7 +54,8 @@ type DialogKey =
   | "workSchedule"
   | "employeeCategories"
   | "locationZones"
-  | "whatsappAlerts";
+  | "whatsappAlerts"
+  | "whatsappQuotas";
 
 const parseTab = (value: string | null): SettingsTab =>
   value === "absences" ? "absences" : "company";
@@ -76,6 +79,7 @@ export function CompanySettingsPage() {
 
   const settingsQuery = useCompanySettings(companyTabEnabled || absencesTabEnabled);
   const alertRecipientsQuery = useCompanyAlertRecipients(companyTabEnabled && canRead);
+  const whatsappQuotaQuery = useWhatsAppQuotaSettings(companyTabEnabled && canRead);
   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
   const locationTypesQuery = useCompanyLocationTypes(false);
   const employeeCategoriesQuery = useEmployeeCategories(
@@ -207,6 +211,39 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar alertas"
               canEdit={canUpdate && !settingsQuery.isError && !alertRecipientsQuery.isError}
               onAction={() => setOpenDialog("whatsappAlerts")}
+            />
+
+            <SettingsSummaryCard
+              title="Cuotas de WhatsApp"
+              description="Límites de consultas no críticas por empleado y empresa. La asistencia crítica no se bloquea."
+              summaryItems={
+                whatsappQuotaQuery.data
+                  ? [
+                      {
+                        label: "Modo empresa",
+                        value: whatsappQuotaQuery.data.companyMode,
+                      },
+                      {
+                        label: "Modo efectivo",
+                        value: whatsappQuotaQuery.data.effectiveMode,
+                      },
+                      {
+                        label: "Turnos día/semana",
+                        value: `${whatsappQuotaQuery.data.dailyTurns} / ${whatsappQuotaQuery.data.weeklyTurns}`,
+                      },
+                    ]
+                  : []
+              }
+              loading={whatsappQuotaQuery.isLoading}
+              error={
+                whatsappQuotaQuery.isError
+                  ? getApiErrorMessage(whatsappQuotaQuery.error)
+                  : null
+              }
+              onRetry={() => void whatsappQuotaQuery.refetch()}
+              actionLabel="Gestionar cuotas"
+              canEdit={canUpdate && !whatsappQuotaQuery.isError}
+              onAction={() => setOpenDialog("whatsappQuotas")}
             />
 
             <SettingsSummaryCard
@@ -471,6 +508,20 @@ export function CompanySettingsPage() {
           settings={settingsQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "whatsappQuotas" && whatsappQuotaQuery.data ? (
+        <CompanyWhatsAppQuotaSettingsDialog
+          key={`wa-quotas-${whatsappQuotaQuery.data.companyId}-${whatsappQuotaQuery.data.updatedAt}`}
+          opened
+          onClose={() => setOpenDialog(null)}
+          settings={whatsappQuotaQuery.data}
+          canUpdate={canUpdate}
+          onSaved={(message) => {
+            handleSaved(message);
+            void whatsappQuotaQuery.refetch();
+          }}
         />
       ) : null}
 

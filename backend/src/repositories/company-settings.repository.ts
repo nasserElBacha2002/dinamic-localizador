@@ -536,4 +536,88 @@ export const companySettingsRepository = {
 
     return mapSettingsRow(result.recordset[0] as Record<string, unknown>);
   },
+
+  /**
+   * Update only WhatsApp quota columns with optional optimistic concurrency on updated_at.
+   */
+  async updateWhatsAppQuotaSettings(
+    companyId: string,
+    input: {
+      companyMode: "OFF" | "SHADOW" | "ENFORCE";
+      dailyTurns: number;
+      weeklyTurns: number;
+      burstTurns: number;
+      burstWindowSeconds: number;
+      dailyOutbounds: number;
+      weeklyOutbounds: number;
+      companyDailyOutbounds: number;
+      limitNoticeEnabled: boolean;
+      expectedUpdatedAt?: string;
+    },
+  ): Promise<{ settings: CompanySettings } | { conflict: true } | null> {
+    const pool = getPool();
+    const tx = new sql.Transaction(pool);
+    await tx.begin();
+    try {
+      const currentResult = await new sql.Request(tx)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .query(`
+          SELECT * FROM company_settings WITH (UPDLOCK, ROWLOCK)
+          WHERE company_id = @companyId
+        `);
+      const row = currentResult.recordset[0] as Record<string, unknown> | undefined;
+      if (!row) {
+        await tx.rollback();
+        return null;
+      }
+
+      if (input.expectedUpdatedAt) {
+        const currentUpdatedAt = toIsoString(row.updated_at as Date | string);
+        if (new Date(currentUpdatedAt).getTime() !== new Date(input.expectedUpdatedAt).getTime()) {
+          await tx.rollback();
+          return { conflict: true };
+        }
+      }
+
+      const result = await new sql.Request(tx)
+        .input("companyId", sql.UniqueIdentifier, companyId)
+        .input("mode", sql.NVarChar(20), input.companyMode)
+        .input("dailyTurns", sql.Int, input.dailyTurns)
+        .input("weeklyTurns", sql.Int, input.weeklyTurns)
+        .input("burstTurns", sql.Int, input.burstTurns)
+        .input("burstWindowSeconds", sql.Int, input.burstWindowSeconds)
+        .input("dailyOutbounds", sql.Int, input.dailyOutbounds)
+        .input("weeklyOutbounds", sql.Int, input.weeklyOutbounds)
+        .input("companyDailyOutbounds", sql.Int, input.companyDailyOutbounds)
+        .input("limitNoticeEnabled", sql.Bit, input.limitNoticeEnabled ? 1 : 0)
+        .query(`
+          UPDATE company_settings
+          SET whatsapp_quota_mode = @mode,
+              whatsapp_quota_daily_turns = @dailyTurns,
+              whatsapp_quota_weekly_turns = @weeklyTurns,
+              whatsapp_quota_burst_turns = @burstTurns,
+              whatsapp_quota_burst_window_seconds = @burstWindowSeconds,
+              whatsapp_quota_daily_outbounds = @dailyOutbounds,
+              whatsapp_quota_weekly_outbounds = @weeklyOutbounds,
+              whatsapp_quota_company_daily_outbounds = @companyDailyOutbounds,
+              whatsapp_quota_limit_notice_enabled = @limitNoticeEnabled,
+              updated_at = SYSUTCDATETIME()
+          OUTPUT INSERTED.*
+          WHERE company_id = @companyId
+        `);
+
+      await tx.commit();
+      if (!result.recordset[0]) {
+        return null;
+      }
+      return { settings: mapSettingsRow(result.recordset[0] as Record<string, unknown>) };
+    } catch (error) {
+      try {
+        await tx.rollback();
+      } catch {
+        // ignore
+      }
+      throw error;
+    }
+  },
 };

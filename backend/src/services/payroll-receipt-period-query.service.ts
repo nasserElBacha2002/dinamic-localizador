@@ -102,9 +102,13 @@ export const payrollReceiptPeriodQueryService = {
     let sawTemporaryFailure = false;
     let sawPermanentFailure = false;
 
-    // Phase 2: when enforcing, reserve all pending document outbounds before first send.
+    // Phase 2: ENFORCE pre-reserves all docs; SHADOW evaluates without mutating counters.
     const quotaScope = getQuotaTurnScope();
-    if (quotaScope?.enforceOutbounds && input.inboundMessageSid) {
+    if (
+      quotaScope &&
+      (quotaScope.enforceOutbounds || quotaScope.shadowOutbounds) &&
+      input.inboundMessageSid
+    ) {
       const pendingReceipts = receipts.filter((r) => {
         const existing = deliveryByReceiptId.get(r.id);
         return existing?.status !== "ACCEPTED";
@@ -116,8 +120,9 @@ export const payrollReceiptPeriodQueryService = {
           employeeId: input.employeeId,
           turnMessageSid: input.inboundMessageSid,
           logicalOutboundKey: `${input.inboundMessageSid}:doc:${receipt.id}`,
+          policy: quotaScope.policySnapshot,
         });
-        if (!reserved.ok) {
+        if (quotaScope.enforceOutbounds && !reserved.ok) {
           for (const id of preReserved) {
             await whatsappUsageQuotaService.releaseOutboundIfReserved(id);
           }
@@ -130,7 +135,11 @@ export const payrollReceiptPeriodQueryService = {
             totalCount: receipts.length,
           };
         }
-        if (!reserved.reservationId.startsWith("noop:")) {
+        if (
+          quotaScope.enforceOutbounds &&
+          reserved.ok &&
+          !reserved.reservationId.startsWith("noop")
+        ) {
           preReserved.push(reserved.reservationId);
         }
       }

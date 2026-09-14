@@ -11,6 +11,7 @@ import {
   weeklySchedulePayloadSchema,
 } from "../schemas/company.schema";
 import { updateCompanyAbsenceSettingsSchema } from "../schemas/company-absence-settings.schema";
+import { updateWhatsAppQuotaSettingsSchema } from "../schemas/whatsapp-quota-settings.schema";
 import {
   companyLocationTypeIdParamSchema,
   createCompanyLocationTypeSchema,
@@ -93,6 +94,23 @@ companyRouter.patch(
   resolveCompanyContext,
   requirePermission("company:settings:update"),
   asyncHandler(companyController.updateAbsenceSettings),
+);
+
+companyRouter.get(
+  "/:companyId/settings/whatsapp-quotas",
+  validate(companyIdParamSchema, "params"),
+  resolveCompanyContext,
+  requirePermission("company:read"),
+  asyncHandler(companyController.getWhatsAppQuotaSettings),
+);
+
+companyRouter.patch(
+  "/:companyId/settings/whatsapp-quotas",
+  validate(companyIdParamSchema, "params"),
+  validate(updateWhatsAppQuotaSettingsSchema),
+  resolveCompanyContext,
+  requirePermission("company:settings:update"),
+  asyncHandler(companyController.updateWhatsAppQuotaSettings),
 );
 
 companyRouter.get(

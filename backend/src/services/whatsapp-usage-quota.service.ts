@@ -11,7 +11,11 @@ import type {
   QuotaTurnAdmissionResult,
   WhatsAppQuotaPolicy,
 } from "../types/whatsapp-usage-quota";
-import { resolveDayPeriod, resolveWeekPeriod } from "../utils/whatsapp-quota-periods";
+import {
+  preferOpenOrResolvePeriod,
+  resolveDayPeriod,
+  type QuotaPeriodWindow,
+} from "../utils/whatsapp-quota-periods";
 import { systemLogger } from "../utils/system-logs/logger";
 import { DateTime } from "luxon";
 
@@ -32,6 +36,19 @@ const parseMode = (raw: string | null | undefined): WhatsAppQuotaMode => {
   if (raw === "SHADOW" || raw === "ENFORCE" || raw === "OFF") return raw;
   return "OFF";
 };
+
+const defaultPolicy = (timezoneFallback: string): WhatsAppQuotaPolicy => ({
+  mode: "OFF",
+  dailyTurns: WHATSAPP_QUOTA_DEFAULTS.dailyTurns,
+  weeklyTurns: WHATSAPP_QUOTA_DEFAULTS.weeklyTurns,
+  burstTurns: WHATSAPP_QUOTA_DEFAULTS.burstTurns,
+  burstWindowSeconds: WHATSAPP_QUOTA_DEFAULTS.burstWindowSeconds,
+  dailyOutbounds: WHATSAPP_QUOTA_DEFAULTS.dailyOutbounds,
+  weeklyOutbounds: WHATSAPP_QUOTA_DEFAULTS.weeklyOutbounds,
+  companyDailyOutbounds: WHATSAPP_QUOTA_DEFAULTS.companyDailyOutbounds,
+  limitNoticeEnabled: WHATSAPP_QUOTA_DEFAULTS.limitNoticeEnabled,
+  timezoneId: timezoneFallback,
+});
 
 const buildPolicyFromSettings = (
   settings: QuotaSettingsFields | null,
@@ -62,6 +79,29 @@ export const resolveEffectiveQuotaMode = (
   return "SHADOW";
 };
 
+export type EffectiveQuotaModeReason =
+  | "GLOBAL_MODE_OFF"
+  | "COMPANY_MODE_OFF"
+  | "BOTH_ENFORCE"
+  | "SHADOW_COMBINATION";
+
+/** Authoritative explanation for UI/API — keep in sync with resolveEffectiveQuotaMode. */
+export const explainEffectiveQuotaMode = (
+  globalMode: WhatsAppQuotaMode,
+  companyMode: WhatsAppQuotaMode,
+): { effectiveMode: WhatsAppQuotaMode; effectiveModeReason: EffectiveQuotaModeReason } => {
+  if (globalMode === "OFF") {
+    return { effectiveMode: "OFF", effectiveModeReason: "GLOBAL_MODE_OFF" };
+  }
+  if (companyMode === "OFF") {
+    return { effectiveMode: "OFF", effectiveModeReason: "COMPANY_MODE_OFF" };
+  }
+  if (globalMode === "ENFORCE" && companyMode === "ENFORCE") {
+    return { effectiveMode: "ENFORCE", effectiveModeReason: "BOTH_ENFORCE" };
+  }
+  return { effectiveMode: "SHADOW", effectiveModeReason: "SHADOW_COMBINATION" };
+};
+
 const formatRecoverMessage = (
   reasonCode: string,
   recoverAtUtc: string | null,
@@ -87,31 +127,75 @@ const formatRecoverMessage = (
 };
 
 /**
- * Phase 2 usage quotas. Critical attendance paths never call admit/reserve.
- * Fail-closed for EMPLOYEE_LIMITED when quota store is unavailable.
+ * Phase 2 usage quotas. Critical attendance paths never call admit/reserve under ENFORCE gates.
+ * Fail-closed for EMPLOYEE_LIMITED when quota store is unavailable (ENFORCE only).
+ * Effective OFF: zero I/O against whatsapp_quota_* tables.
  */
 export const whatsappUsageQuotaService = {
   async loadPolicy(companyId: string): Promise<WhatsAppQuotaPolicy> {
-    const settings = await companySettingsRepository.findByCompanyId(companyId);
-    return buildPolicyFromSettings(
-      settings as QuotaSettingsFields | null,
-      env.BOT_OPERATION_TIMEZONE,
-    );
+    try {
+      const settings = await companySettingsRepository.findByCompanyId(companyId);
+      return buildPolicyFromSettings(
+        settings as QuotaSettingsFields | null,
+        env.BOT_OPERATION_TIMEZONE,
+      );
+    } catch {
+      // Pre-migration / settings missing columns → treat as safe defaults (mode OFF company).
+      return defaultPolicy(env.BOT_OPERATION_TIMEZONE);
+    }
   },
 
   effectiveMode(policy: WhatsAppQuotaPolicy): WhatsAppQuotaMode {
     return resolveEffectiveQuotaMode(env.WHATSAPP_QUOTA_GLOBAL_MODE, policy.mode);
   },
 
-  /** Read-only would-block for SHADOW — does not mutate enforcement counters. */
+  async resolveTurnWindows(
+    companyId: string,
+    employeeId: string,
+    policy: WhatsAppQuotaPolicy,
+    now: Date,
+  ): Promise<{ day: QuotaPeriodWindow; week: QuotaPeriodWindow }> {
+    const openDay = await whatsappUsageQuotaRepository.findOpenEmployeePeriodContaining({
+      companyId,
+      employeeId,
+      periodKind: "DAY",
+      now,
+    });
+    const openWeek = await whatsappUsageQuotaRepository.findOpenEmployeePeriodContaining({
+      companyId,
+      employeeId,
+      periodKind: "WEEK",
+      now,
+    });
+    return {
+      day: preferOpenOrResolvePeriod({
+        kind: "DAY",
+        nowUtc: now,
+        timezoneId: policy.timezoneId,
+        open: openDay,
+      }),
+      week: preferOpenOrResolvePeriod({
+        kind: "WEEK",
+        nowUtc: now,
+        timezoneId: policy.timezoneId,
+        open: openWeek,
+      }),
+    };
+  },
+
+  /** Shared limit evaluation used by ENFORCE admit and SHADOW would-block. */
   async evaluateWouldBlockTurn(input: {
     companyId: string;
     employeeId: string;
     policy: WhatsAppQuotaPolicy;
     now: Date;
   }): Promise<{ blocked: boolean; reasonCode: string; recoverAtUtc: string | null }> {
-    const day = resolveDayPeriod(input.now, input.policy.timezoneId);
-    const week = resolveWeekPeriod(input.now, input.policy.timezoneId);
+    const { day, week } = await this.resolveTurnWindows(
+      input.companyId,
+      input.employeeId,
+      input.policy,
+      input.now,
+    );
 
     const dayUsage = await whatsappUsageQuotaRepository.getEmployeePeriodUsage({
       companyId: input.companyId,
@@ -151,6 +235,7 @@ export const whatsappUsageQuotaService = {
       companyId: input.companyId,
       employeeId: input.employeeId,
       since: burstSince,
+      enforceOnly: true,
     });
     if (burstCount + 1 > input.policy.burstTurns) {
       return {
@@ -167,14 +252,97 @@ export const whatsappUsageQuotaService = {
     };
   },
 
+  async evaluateWouldBlockOutbound(input: {
+    companyId: string;
+    employeeId: string;
+    policy: WhatsAppQuotaPolicy;
+    now: Date;
+  }): Promise<{ blocked: boolean; reasonCode: string; recoverAtUtc: string | null }> {
+    const { day, week } = await this.resolveTurnWindows(
+      input.companyId,
+      input.employeeId,
+      input.policy,
+      input.now,
+    );
+    const dayUsage = await whatsappUsageQuotaRepository.getEmployeePeriodUsage({
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      periodKind: day.kind,
+      periodKey: day.periodKey,
+    });
+    const weekUsage = await whatsappUsageQuotaRepository.getEmployeePeriodUsage({
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      periodKind: week.kind,
+      periodKey: week.periodKey,
+    });
+    const openCompany = await whatsappUsageQuotaRepository.findOpenCompanyPeriodContaining({
+      companyId: input.companyId,
+      periodKind: "DAY",
+      now: input.now,
+    });
+    const companyWindow = preferOpenOrResolvePeriod({
+      kind: "DAY",
+      nowUtc: input.now,
+      timezoneId: input.policy.timezoneId,
+      open: openCompany,
+    });
+
+    const dayUsed = dayUsage?.outboundsUsed ?? 0;
+    const dayLimit = dayUsage?.outboundLimit ?? input.policy.dailyOutbounds;
+    if (dayUsed + 1 > dayLimit) {
+      return {
+        blocked: true,
+        reasonCode: WHATSAPP_QUOTA_REASON_CODES.BLOCKED_DAILY_OUTBOUNDS,
+        recoverAtUtc: (dayUsage?.periodEndUtc ?? day.periodEndUtc).toISOString(),
+      };
+    }
+    const weekUsed = weekUsage?.outboundsUsed ?? 0;
+    const weekLimit = weekUsage?.outboundLimit ?? input.policy.weeklyOutbounds;
+    if (weekUsed + 1 > weekLimit) {
+      return {
+        blocked: true,
+        reasonCode: WHATSAPP_QUOTA_REASON_CODES.BLOCKED_WEEKLY_OUTBOUNDS,
+        recoverAtUtc: (weekUsage?.periodEndUtc ?? week.periodEndUtc).toISOString(),
+      };
+    }
+    const companyUsed = openCompany?.outboundsUsed ?? 0;
+    const companyLimit = openCompany?.outboundLimit ?? input.policy.companyDailyOutbounds;
+    if (companyUsed + 1 > companyLimit) {
+      return {
+        blocked: true,
+        reasonCode: WHATSAPP_QUOTA_REASON_CODES.BLOCKED_COMPANY_DAILY_OUTBOUNDS,
+        recoverAtUtc: companyWindow.periodEndUtc.toISOString(),
+      };
+    }
+    return {
+      blocked: false,
+      reasonCode: WHATSAPP_QUOTA_REASON_CODES.ADMITTED,
+      recoverAtUtc: null,
+    };
+  },
+
   async admitNonCriticalTurn(input: {
     companyId: string;
     employeeId: string;
     messageSid: string;
     classification: string;
     now?: Date;
-  }): Promise<QuotaTurnAdmissionResult> {
+    policy?: WhatsAppQuotaPolicy;
+  }): Promise<QuotaTurnAdmissionResult & { policy: WhatsAppQuotaPolicy }> {
     const now = input.now ?? new Date();
+    const policy = input.policy ?? (await this.loadPolicy(input.companyId));
+    const mode = this.effectiveMode(policy);
+
+    if (mode === "OFF") {
+      return {
+        decision: "ADMITTED",
+        reasonCode: WHATSAPP_QUOTA_REASON_CODES.MODE_OFF,
+        mode,
+        policy,
+      };
+    }
+
     try {
       const existing = await whatsappUsageQuotaRepository.findTurnAdmission(input.messageSid);
       if (existing) {
@@ -183,28 +351,16 @@ export const whatsappUsageQuotaService = {
           reasonCode: existing.reasonCode,
           mode: existing.mode as WhatsAppQuotaMode,
           duplicate: true,
+          policy,
         };
       }
 
-      const policy = await this.loadPolicy(input.companyId);
-      const mode = this.effectiveMode(policy);
-
-      if (mode === "OFF") {
-        await whatsappUsageQuotaRepository.insertTurnDecision({
-          companyId: input.companyId,
-          employeeId: input.employeeId,
-          messageSid: input.messageSid,
-          decision: "ADMITTED",
-          reasonCode: WHATSAPP_QUOTA_REASON_CODES.MODE_OFF,
-          classification: input.classification,
-          mode,
-          admittedAt: now,
-        });
-        return { decision: "ADMITTED", reasonCode: WHATSAPP_QUOTA_REASON_CODES.MODE_OFF, mode };
-      }
-
-      const day = resolveDayPeriod(now, policy.timezoneId);
-      const week = resolveWeekPeriod(now, policy.timezoneId);
+      const { day, week } = await this.resolveTurnWindows(
+        input.companyId,
+        input.employeeId,
+        policy,
+        now,
+      );
 
       if (mode === "SHADOW") {
         const would = await this.evaluateWouldBlockTurn({
@@ -229,6 +385,7 @@ export const whatsappUsageQuotaService = {
           reasonCode: would.reasonCode,
           mode,
           recoverAtUtc: would.recoverAtUtc,
+          policy,
         };
       }
 
@@ -265,6 +422,7 @@ export const whatsappUsageQuotaService = {
             reasonCode: again?.reasonCode ?? "DUPLICATE",
             mode,
             duplicate: true,
+            policy,
           };
         }
         await whatsappUsageQuotaRepository.insertTurnDecision({
@@ -281,10 +439,11 @@ export const whatsappUsageQuotaService = {
           reasonCode: result.reasonCode,
           mode,
           recoverAtUtc: result.recoverAtUtc?.toISOString() ?? null,
+          policy,
         };
       }
 
-      return { decision: "ADMITTED", reasonCode: result.reasonCode, mode };
+      return { decision: "ADMITTED", reasonCode: result.reasonCode, mode, policy };
     } catch (error) {
       systemLogger.warn({
         module: "whatsapp-quota",
@@ -297,23 +456,11 @@ export const whatsappUsageQuotaService = {
           messageSid: input.messageSid,
         },
       });
-      try {
-        await whatsappUsageQuotaRepository.insertTurnDecision({
-          companyId: input.companyId,
-          employeeId: input.employeeId,
-          messageSid: input.messageSid,
-          decision: "QUOTA_FAILURE",
-          reasonCode: WHATSAPP_QUOTA_REASON_CODES.QUOTA_FAILURE,
-          classification: input.classification,
-          mode: "ENFORCE",
-        });
-      } catch {
-        // ignore duplicate / secondary failure
-      }
       return {
         decision: "QUOTA_FAILURE",
         reasonCode: WHATSAPP_QUOTA_REASON_CODES.QUOTA_FAILURE,
         mode: "ENFORCE",
+        policy,
       };
     }
   },
@@ -323,9 +470,10 @@ export const whatsappUsageQuotaService = {
     employeeId: string;
     messageSid: string;
     classification: string;
+    policy?: WhatsAppQuotaPolicy;
   }): Promise<void> {
     try {
-      const policy = await this.loadPolicy(input.companyId);
+      const policy = input.policy ?? (await this.loadPolicy(input.companyId));
       const mode = this.effectiveMode(policy);
       if (mode === "OFF") return;
       await whatsappUsageQuotaRepository.insertTurnDecision({
@@ -347,9 +495,10 @@ export const whatsappUsageQuotaService = {
     employeeId: string;
     messageSid: string;
     classification: string;
+    policy?: WhatsAppQuotaPolicy;
   }): Promise<void> {
     try {
-      const policy = await this.loadPolicy(input.companyId);
+      const policy = input.policy ?? (await this.loadPolicy(input.companyId));
       const mode = this.effectiveMode(policy);
       if (mode === "OFF") return;
       await whatsappUsageQuotaRepository.insertTurnDecision({
@@ -372,21 +521,76 @@ export const whatsappUsageQuotaService = {
     turnMessageSid: string;
     logicalOutboundKey: string;
     now?: Date;
+    policy?: WhatsAppQuotaPolicy;
   }): Promise<QuotaOutboundReserveResult> {
     const now = input.now ?? new Date();
+    const policy = input.policy ?? (await this.loadPolicy(input.companyId));
+    const mode = this.effectiveMode(policy);
+
+    if (mode === "OFF") {
+      return {
+        ok: true,
+        reservationId: `noop:${input.logicalOutboundKey}`,
+        status: "ACCEPTED",
+        reused: false,
+      };
+    }
+
     try {
-      const policy = await this.loadPolicy(input.companyId);
-      const mode = this.effectiveMode(policy);
-      if (mode === "OFF" || mode === "SHADOW") {
+      if (mode === "SHADOW") {
+        const would = await this.evaluateWouldBlockOutbound({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          policy,
+          now,
+        });
+        const id = await whatsappUsageQuotaRepository.insertShadowOutboundEvaluation({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          turnMessageSid: input.turnMessageSid,
+          logicalOutboundKey: input.logicalOutboundKey,
+          wouldAdmit: !would.blocked,
+          reasonCode: would.reasonCode,
+        });
+        systemLogger.info({
+          module: "whatsapp-quota",
+          event: would.blocked
+            ? "whatsapp.quota.shadow_outbound_would_reject"
+            : "whatsapp.quota.shadow_outbound_would_admit",
+          message: "Shadow outbound evaluation (no counter mutation)",
+          metadata: {
+            logicalOutboundKey: input.logicalOutboundKey,
+            reasonCode: would.reasonCode,
+            reservationId: id,
+          },
+        });
+        // Never block in SHADOW — callers proceed; evaluation is telemetry only.
         return {
           ok: true,
-          reservationId: `noop:${input.logicalOutboundKey}`,
-          status: "ACCEPTED",
+          reservationId: `noop-shadow:${input.logicalOutboundKey}`,
+          status: would.blocked ? "SHADOW_WOULD_REJECT" : "SHADOW_WOULD_ADMIT",
           reused: false,
         };
       }
-      const day = resolveDayPeriod(now, policy.timezoneId);
-      const week = resolveWeekPeriod(now, policy.timezoneId);
+
+      const { day, week } = await this.resolveTurnWindows(
+        input.companyId,
+        input.employeeId,
+        policy,
+        now,
+      );
+      const openCompany = await whatsappUsageQuotaRepository.findOpenCompanyPeriodContaining({
+        companyId: input.companyId,
+        periodKind: "DAY",
+        now,
+      });
+      const companyDay = preferOpenOrResolvePeriod({
+        kind: "DAY",
+        nowUtc: now,
+        timezoneId: policy.timezoneId,
+        open: openCompany,
+      });
+
       const result = await whatsappUsageQuotaRepository.reserveOutboundAtomic({
         companyId: input.companyId,
         employeeId: input.employeeId,
@@ -409,7 +613,7 @@ export const whatsappUsageQuotaService = {
         },
         companyDay: {
           companyId: input.companyId,
-          window: day,
+          window: companyDay,
           outboundLimit: policy.companyDailyOutbounds,
         },
       });
@@ -430,10 +634,19 @@ export const whatsappUsageQuotaService = {
       systemLogger.warn({
         module: "whatsapp-quota",
         event: "whatsapp.quota.outbound_reserve_failed",
-        message: "Outbound reserve failed (fail-closed)",
+        message: "Outbound reserve failed",
         error,
-        metadata: { logicalOutboundKey: input.logicalOutboundKey },
+        metadata: { logicalOutboundKey: input.logicalOutboundKey, mode },
       });
+      if (mode === "SHADOW") {
+        // Never block SHADOW on telemetry failure.
+        return {
+          ok: true,
+          reservationId: `noop-shadow-fail:${input.logicalOutboundKey}`,
+          status: "SHADOW_WOULD_ADMIT",
+          reused: false,
+        };
+      }
       return { ok: false, reasonCode: WHATSAPP_QUOTA_REASON_CODES.QUOTA_FAILURE };
     }
   },
@@ -452,10 +665,12 @@ export const whatsappUsageQuotaService = {
     reasonCode: string;
     recoverAtUtc: string | null;
     periodKey: string;
+    policy?: WhatsAppQuotaPolicy;
   }): Promise<{ claimed: boolean; episodeKey: string; message: string | null }> {
-    const policy = await this.loadPolicy(input.companyId);
+    const policy = input.policy ?? (await this.loadPolicy(input.companyId));
+    const mode = this.effectiveMode(policy);
     const episodeKey = `${input.reasonCode}:${input.periodKey}`;
-    if (!policy.limitNoticeEnabled) {
+    if (mode === "OFF" || !policy.limitNoticeEnabled) {
       return { claimed: false, episodeKey, message: null };
     }
     const claim = await whatsappUsageQuotaRepository.claimLimitNotice({
@@ -481,6 +696,9 @@ export const whatsappUsageQuotaService = {
 
   markOutboundAccepted: (...args: Parameters<typeof whatsappUsageQuotaRepository.markOutboundAccepted>) =>
     whatsappUsageQuotaRepository.markOutboundAccepted(...args),
+  markOutboundResponseBuilt: (
+    ...args: Parameters<typeof whatsappUsageQuotaRepository.markOutboundResponseBuilt>
+  ) => whatsappUsageQuotaRepository.markOutboundResponseBuilt(...args),
   markOutboundAttemptStarted: (
     ...args: Parameters<typeof whatsappUsageQuotaRepository.markOutboundAttemptStarted>
   ) => whatsappUsageQuotaRepository.markOutboundAttemptStarted(...args),
@@ -493,3 +711,6 @@ export const whatsappUsageQuotaService = {
   completeLimitNotice: (...args: Parameters<typeof whatsappUsageQuotaRepository.completeLimitNotice>) =>
     whatsappUsageQuotaRepository.completeLimitNotice(...args),
 };
+
+// Re-export for notice periodKey helpers in bot (day key from open-or-resolve).
+export { resolveDayPeriod };

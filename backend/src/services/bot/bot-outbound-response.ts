@@ -106,7 +106,8 @@ export const respond = async (
   const quotaScope = getQuotaTurnScope();
   let reservationId: string | null = null;
   if (
-    quotaScope?.enforceOutbounds &&
+    quotaScope &&
+    (quotaScope.enforceOutbounds || quotaScope.shadowOutbounds) &&
     input.employeeId &&
     input.message.trim().length > 0
   ) {
@@ -116,15 +117,21 @@ export const respond = async (
       employeeId: input.employeeId,
       turnMessageSid: quotaScope.messageSid,
       logicalOutboundKey: logicalKey,
+      policy: quotaScope.policySnapshot,
     });
     if (!reserved.ok) {
-      // No budget for this non-critical TwiML unit — silent empty ACK.
-      return buildTwiml("");
+      if (quotaScope.shadowOutbounds && !quotaScope.enforceOutbounds) {
+        // SHADOW must never block TwiML.
+      } else {
+        // No budget for this non-critical TwiML unit — silent empty ACK (ENFORCE).
+        return buildTwiml("");
+      }
     }
-    reservationId = reserved.reservationId.startsWith("noop:")
-      ? null
-      : reserved.reservationId;
-    if (reservationId) {
+    reservationId =
+      reserved.ok && !reserved.reservationId.startsWith("noop")
+        ? reserved.reservationId
+        : null;
+    if (reservationId && quotaScope.enforceOutbounds) {
       await whatsappUsageQuotaService.markOutboundAttemptStarted(reservationId);
     }
   }
@@ -136,8 +143,9 @@ export const respond = async (
     body: input.message,
   });
 
-  if (reservationId) {
-    await whatsappUsageQuotaService.markOutboundAccepted({ reservationId });
+  if (reservationId && quotaScope?.enforceOutbounds) {
+    // TwiML XML about to be returned — RESPONSE_BUILT, not provider ACCEPTED.
+    await whatsappUsageQuotaService.markOutboundResponseBuilt(reservationId);
   }
 
   return buildTwiml(input.message);

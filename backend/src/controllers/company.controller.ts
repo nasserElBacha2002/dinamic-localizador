@@ -7,6 +7,7 @@ import { companyModuleService } from "../services/company-module.service";
 import { companyService } from "../services/company.service";
 import { companyUserService } from "../services/company-user.service";
 import { platformAdminService } from "../services/platform-admin.service";
+import { whatsappQuotaSettingsService } from "../services/whatsapp-quota-settings.service";
 import { userRepository } from "../repositories/user.repository";
 import { requireRequestCompanyId } from "../utils/request-company";
 
@@ -68,6 +69,23 @@ export const companyController = {
     const settings = await companyService.updateAbsenceSettings(
       companyId,
       req.companyRole!,
+      req.body,
+    );
+    res.status(200).json({ data: settings });
+  },
+
+  async getWhatsAppQuotaSettings(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const settings = await whatsappQuotaSettingsService.getSettings(companyId);
+    res.status(200).json({ data: settings });
+  },
+
+  async updateWhatsAppQuotaSettings(req: Request, res: Response) {
+    const companyId = requireRequestCompanyId(req);
+    const settings = await whatsappQuotaSettingsService.updateSettings(
+      companyId,
+      req.companyRole!,
+      req.auth!.userId,
       req.body,
     );
     res.status(200).json({ data: settings });

@@ -59,20 +59,77 @@ import {
   isPayrollReceiptSessionState,
 } from "../../utils/bot-session-states";
 import { botSessionService } from "../bot-session.service";
-import type { BotIntent } from "../bot/bot-intent.parser";
-import { isExplicitIntentCompatibleWithSession } from "../../utils/bot-session-intent";
+import {
+  resolveWhatsAppTextTurn,
+  type WhatsAppTextTurnResolution,
+} from "../whatsapp-turn-routing.resolver";
 
 const EXPIRED_SESSION_MESSAGE = EXPIRED_SESSION_USER_MESSAGE;
 
-const isExplicitSwitchIntent = (intent: BotIntent): boolean =>
-  intent === "arrival" ||
-  intent === "checkout" ||
-  intent === "absence" ||
-  intent === "payroll_receipt" ||
-  intent === "workday" ||
-  intent === "upcoming_assignments" ||
-  intent === "confirm_attendance" ||
-  intent === "report_unavailability";
+const dispatchFreeIntent = async (
+  ctx: WhatsAppRouterContext,
+  handlers: WhatsAppRouterHandlers,
+  resolution: WhatsAppTextTurnResolution,
+): Promise<string> => {
+  const intent = resolution.parsedIntent ?? (ctx.body ? parseBotIntent({ body: ctx.body }) : null);
+
+  if (!ctx.body && !intent) {
+    return handlers.respond(ctx.companyId, {
+      message: UNPARSEABLE_MESSAGE,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+    });
+  }
+
+  if (intent === "checkout" || resolution.resolvedHandler === "CHECKOUT") {
+    return handleCheckoutIntent(ctx, handlers, ctx.session);
+  }
+  if (intent === "arrival" || resolution.resolvedHandler === "CHECKIN") {
+    return handleArrivalIntent(ctx, handlers, ctx.session);
+  }
+  if (intent === "absence" || resolution.resolvedHandler === "ABSENCE") {
+    return handleAbsenceIntent(ctx, handlers, ctx.session);
+  }
+  if (intent === "payroll_receipt" || resolution.resolvedHandler === "PAYROLL_RECEIPT_QUERY") {
+    return handlePayrollReceiptIntent(ctx, handlers);
+  }
+  if (intent === "workday" || resolution.resolvedHandler === "WORKDAY_QUERY") {
+    return handleWorkdayIntent(ctx, handlers);
+  }
+  if (intent === "upcoming_assignments" || resolution.resolvedHandler === "UPCOMING_ASSIGNMENTS") {
+    return handleUpcomingAssignmentsIntent(ctx, handlers);
+  }
+  if (intent === "confirm_attendance") {
+    return handleConfirmAttendanceIntent(ctx, handlers);
+  }
+  if (intent === "report_unavailability") {
+    return handleUnavailabilityIntent(ctx, handlers);
+  }
+
+  if (!ctx.session) {
+    const durableConfirmation = await handleDurableAttendanceConfirmationReply(ctx, handlers);
+    if (durableConfirmation) {
+      return durableConfirmation;
+    }
+  }
+
+  if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
+    console.info("[whatsapp-bot] operation selection after expired session", {
+      phone: maskPhoneNumberForLog(ctx.phoneFrom),
+    });
+    return handlers.respond(ctx.companyId, {
+      message: EXPIRED_SESSION_MESSAGE,
+      employeeId: ctx.employeeId,
+      phoneFrom: ctx.phoneTo,
+      phoneTo: ctx.phoneFrom,
+      resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
+      flowType: "SESSION_RESOLUTION",
+    });
+  }
+
+  return handleMenuFallback(ctx, handlers);
+};
 
 export const whatsappRouterService = {
   async routeTextMessage(
@@ -95,19 +152,31 @@ export const whatsappRouterService = {
       });
     }
 
+    const employeeId = ctx.employeeId;
+
+    const resolution =
+      ctx.turnResolution ??
+      resolveWhatsAppTextTurn({
+        body: ctx.body,
+        session: ctx.session,
+        moduleStates: ctx.moduleStates,
+      });
+
     const globalResponse = await tryHandleGlobalCommand(ctx, handlers);
     if (globalResponse) {
       return globalResponse;
     }
 
-    if (ctx.session) {
+    let activeCtx = ctx;
+
+    if (activeCtx.session) {
       const blockedResponse = await respondIfActiveSessionModuleBlocked(
         companyId,
-        ctx.session,
-        ctx.moduleStates,
-        ctx.employeeId,
-        ctx.phoneTo,
-        ctx.phoneFrom,
+        activeCtx.session,
+        activeCtx.moduleStates,
+        employeeId,
+        activeCtx.phoneTo,
+        activeCtx.phoneFrom,
         handlers.respond,
       );
       if (blockedResponse) {
@@ -115,48 +184,64 @@ export const whatsappRouterService = {
       }
     }
 
-    if (ctx.session) {
-      const explicitIntent = parseBotIntent({ body: ctx.body });
-      if (
-        isExplicitSwitchIntent(explicitIntent) &&
-        !isExplicitIntentCompatibleWithSession(explicitIntent, ctx.session.intent)
-      ) {
-        console.info("[whatsapp-bot] explicit conversation intent switch", {
-          companyId,
-          employeeId: ctx.employeeId,
-          sessionId: ctx.session.id,
-          previousState: ctx.session.state,
-          nextIntent: explicitIntent,
-          messageSid: ctx.payload.MessageSid,
-        });
-        await botSessionService.cancelSession(companyId, ctx.session.id, ctx.session);
-        return this.routeTextMessage(
-          { ...ctx, session: null, recentlyExpired: false },
+    if (resolution.cancelSessionBeforeDispatch && activeCtx.session) {
+      console.info("[whatsapp-bot] explicit conversation intent switch", {
+        companyId,
+        employeeId: activeCtx.employeeId,
+        sessionId: activeCtx.session.id,
+        previousState: activeCtx.session.state,
+        nextIntent: resolution.parsedIntent,
+        resolvedHandler: resolution.resolvedHandler,
+        messageSid: activeCtx.payload.MessageSid,
+      });
+      await botSessionService.cancelSession(companyId, activeCtx.session.id, activeCtx.session);
+      activeCtx = {
+        ...activeCtx,
+        session: null,
+        recentlyExpired: false,
+        turnResolution: {
+          ...resolution,
+          cancelSessionBeforeDispatch: false,
+          continueActiveSession: false,
+        },
+      };
+      return dispatchFreeIntent(activeCtx, handlers, resolution);
+    }
+
+    if (resolution.continueActiveSession && activeCtx.session) {
+      if (isMenuSessionState(activeCtx.session.state)) {
+        const menuResponse = await handleActiveMenuSelection(
+          activeCtx,
+          activeCtx.session,
           handlers,
         );
-      }
-
-      if (isMenuSessionState(ctx.session.state)) {
-        const menuResponse = await handleActiveMenuSelection(ctx, ctx.session, handlers);
         if (menuResponse) {
           return menuResponse;
         }
       }
 
-      const checkInResponse = await handleActiveCheckInTextSession(ctx, ctx.session, handlers);
+      const checkInResponse = await handleActiveCheckInTextSession(
+        activeCtx,
+        activeCtx.session,
+        handlers,
+      );
       if (checkInResponse) {
         return checkInResponse;
       }
 
-      const checkoutResponse = await handleActiveCheckoutTextSession(ctx, ctx.session, handlers);
+      const checkoutResponse = await handleActiveCheckoutTextSession(
+        activeCtx,
+        activeCtx.session,
+        handlers,
+      );
       if (checkoutResponse) {
         return checkoutResponse;
       }
 
-      if (isAssignmentSelectionSessionState(ctx.session.state)) {
+      if (isAssignmentSelectionSessionState(activeCtx.session.state)) {
         const assignmentSelectionResponse = await handleActiveAssignmentSelectionSession(
-          ctx,
-          ctx.session,
+          activeCtx,
+          activeCtx.session,
           handlers,
         );
         if (assignmentSelectionResponse) {
@@ -165,18 +250,18 @@ export const whatsappRouterService = {
       }
 
       const confirmationResponse = await handleActiveAttendanceConfirmationResponseSession(
-        ctx,
-        ctx.session,
+        activeCtx,
+        activeCtx.session,
         handlers,
       );
       if (confirmationResponse) {
         return confirmationResponse;
       }
 
-      if (isPayrollReceiptSessionState(ctx.session.state)) {
+      if (isPayrollReceiptSessionState(activeCtx.session.state)) {
         const payrollResponse = await handleActivePayrollReceiptSession(
-          ctx,
-          ctx.session,
+          activeCtx,
+          activeCtx.session,
           handlers,
         );
         if (payrollResponse) {
@@ -184,83 +269,12 @@ export const whatsappRouterService = {
         }
       }
 
-      if (isAbsenceFlowSession(ctx.session)) {
-        return handleActiveAbsenceSession(ctx, ctx.session, handlers);
+      if (isAbsenceFlowSession(activeCtx.session)) {
+        return handleActiveAbsenceSession(activeCtx, activeCtx.session, handlers);
       }
     }
 
-    // Free-text intents before durable "1"/"2" so Llegué / Me voy never get stolen.
-    if (!ctx.body) {
-      return handlers.respond(companyId, {
-        message: UNPARSEABLE_MESSAGE,
-        employeeId: ctx.employeeId,
-        phoneFrom: ctx.phoneTo,
-        phoneTo: ctx.phoneFrom,
-      });
-    }
-
-    const intent = parseBotIntent({ body: ctx.body });
-
-    if (intent === "checkout") {
-      return handleCheckoutIntent(ctx, handlers, ctx.session);
-    }
-
-    if (intent === "arrival") {
-      return handleArrivalIntent(ctx, handlers, ctx.session);
-    }
-
-    if (intent === "absence") {
-      return handleAbsenceIntent(ctx, handlers, ctx.session);
-    }
-
-    if (intent === "payroll_receipt") {
-      return handlePayrollReceiptIntent(ctx, handlers);
-    }
-
-    if (intent === "workday") {
-      return handleWorkdayIntent(ctx, handlers);
-    }
-
-    if (intent === "upcoming_assignments") {
-      return handleUpcomingAssignmentsIntent(ctx, handlers);
-    }
-
-    if (intent === "confirm_attendance") {
-      return handleConfirmAttendanceIntent(ctx, handlers);
-    }
-
-    if (intent === "report_unavailability") {
-      return handleUnavailabilityIntent(ctx, handlers);
-    }
-
-    // Durable confirmation only for bare "1"/"2" after free-text intents.
-    // Open-window targets only; expired needs confirmation-session context.
-    if (!ctx.session) {
-      const durableConfirmation = await handleDurableAttendanceConfirmationReply(ctx, handlers);
-      if (durableConfirmation) {
-        return durableConfirmation;
-      }
-    }
-
-    if (!ctx.session && ctx.recentlyExpired && parseOperationSelection(ctx.body)) {
-      console.info("[whatsapp-bot] operation selection after expired session", {
-        phone: maskPhoneNumberForLog(ctx.phoneFrom),
-      });
-      return handlers.respond(companyId, {
-        message: EXPIRED_SESSION_MESSAGE,
-        employeeId: ctx.employeeId,
-        phoneFrom: ctx.phoneTo,
-        phoneTo: ctx.phoneFrom,
-        resultCode: WHATSAPP_RESULT_CODES.SESSION_EXPIRED,
-        flowType: "SESSION_RESOLUTION",
-      });
-    }
-
-    if (intent === "menu") {
-      return handleMenuFallback(ctx, handlers);
-    }
-
-    return handleMenuFallback(ctx, handlers);
+    return dispatchFreeIntent(activeCtx, handlers, resolution);
   },
 
   async routeLocationMessage(

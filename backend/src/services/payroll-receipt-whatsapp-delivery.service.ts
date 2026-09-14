@@ -121,22 +121,31 @@ export const payrollReceiptWhatsappDeliveryService = {
 
     const quotaScope = getQuotaTurnScope();
     let reservationId: string | null = null;
-    if (quotaScope?.enforceOutbounds && input.employeeId && input.inboundMessageSid) {
+    if (
+      quotaScope &&
+      (quotaScope.enforceOutbounds || quotaScope.shadowOutbounds) &&
+      input.employeeId &&
+      input.inboundMessageSid
+    ) {
       const reserved = await whatsappUsageQuotaService.reserveOutbound({
         companyId: input.companyId ?? receipt.companyId,
         employeeId: input.employeeId,
         turnMessageSid: input.inboundMessageSid,
         logicalOutboundKey: `${input.inboundMessageSid}:doc:${receipt.id}`,
+        policy: quotaScope.policySnapshot,
       });
-      if (!reserved.ok) {
+      if (quotaScope.enforceOutbounds && !reserved.ok) {
         return {
           kind: "unavailable_temporary",
           message: temporaryUnavailableMessage(periodLabel),
         };
       }
-      reservationId = reserved.reservationId.startsWith("noop:")
-        ? null
-        : reserved.reservationId;
+      reservationId =
+        quotaScope.enforceOutbounds &&
+        reserved.ok &&
+        !reserved.reservationId.startsWith("noop")
+          ? reserved.reservationId
+          : null;
       if (reservationId) {
         await whatsappUsageQuotaService.markOutboundAttemptStarted(reservationId);
       }

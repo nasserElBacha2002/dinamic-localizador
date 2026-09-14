@@ -21,6 +21,12 @@ export const WHATSAPP_RETENTION_TABLE_KEYS = [
   "bot_simulation_sessions",
   "whatsapp_turn_classifications",
   "whatsapp_system_interactions",
+  // Quota tables: children before parents (FK-soft refs, but order preserves integrity).
+  "whatsapp_quota_limit_notices",
+  "whatsapp_quota_outbound_reservations",
+  "whatsapp_quota_turn_admissions",
+  "whatsapp_quota_employee_periods",
+  "whatsapp_quota_company_periods",
 ] as const;
 
 export type WhatsappRetentionTableKey = (typeof WHATSAPP_RETENTION_TABLE_KEYS)[number];

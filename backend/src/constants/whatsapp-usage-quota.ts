@@ -21,6 +21,8 @@ export const WHATSAPP_QUOTA_DEFAULTS = {
   maxWeeklyTurns: 50_000,
   maxBurstTurns: 1_000,
   maxBurstWindowSeconds: 3_600,
+  /** Minimum burst window (seconds). */
+  minBurstWindowSeconds: 1,
   maxDailyOutbounds: 20_000,
   maxWeeklyOutbounds: 100_000,
   maxCompanyDailyOutbounds: 500_000,
@@ -41,9 +43,12 @@ export type WhatsAppQuotaTurnDecision = (typeof WHATSAPP_QUOTA_TURN_DECISIONS)[n
 export const WHATSAPP_QUOTA_OUTBOUND_STATUSES = [
   "RESERVED",
   "ATTEMPT_STARTED",
+  "RESPONSE_BUILT",
   "ACCEPTED",
   "RELEASED",
   "AMBIGUOUS",
+  "SHADOW_WOULD_ADMIT",
+  "SHADOW_WOULD_REJECT",
 ] as const;
 export type WhatsAppQuotaOutboundStatus = (typeof WHATSAPP_QUOTA_OUTBOUND_STATUSES)[number];
 

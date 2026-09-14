@@ -14,8 +14,11 @@ export type QuotaPeriodWindow = {
 /**
  * Day/week windows in company timezone; stored bounds in UTC.
  * Week starts Monday 00:00 local (ISO).
- * Changing timezone mid-period still uses the period_key opened for that employee/company
- * — counters are keyed by (period_kind, period_key), not recomputed from a new TZ.
+ *
+ * Period identity for counters is the open UTC interval once created.
+ * Callers must prefer an existing open period whose [start, end) contains `now`
+ * before opening a new window from the current timezone — so changing company
+ * timezone mid-day/week does not reset counters.
  */
 export const resolveDayPeriod = (nowUtc: Date, timezoneId: string): QuotaPeriodWindow => {
   const local = DateTime.fromJSDate(nowUtc, { zone: "utc" }).setZone(timezoneId);
@@ -47,4 +50,34 @@ export const resolveWeekPeriod = (nowUtc: Date, timezoneId: string): QuotaPeriod
     periodEndUtc: endLocal.toUTC().toJSDate(),
     timezoneId,
   };
+};
+
+/** Prefer an open stored period if its UTC interval contains now; else compute from TZ. */
+export const preferOpenOrResolvePeriod = (input: {
+  kind: QuotaPeriodKind;
+  nowUtc: Date;
+  timezoneId: string;
+  open: {
+    periodKey: string;
+    periodStartUtc: Date;
+    periodEndUtc: Date;
+    timezoneId: string;
+  } | null;
+}): QuotaPeriodWindow => {
+  if (
+    input.open &&
+    input.open.periodStartUtc.getTime() <= input.nowUtc.getTime() &&
+    input.nowUtc.getTime() < input.open.periodEndUtc.getTime()
+  ) {
+    return {
+      kind: input.kind,
+      periodKey: input.open.periodKey,
+      periodStartUtc: input.open.periodStartUtc,
+      periodEndUtc: input.open.periodEndUtc,
+      timezoneId: input.open.timezoneId,
+    };
+  }
+  return input.kind === "DAY"
+    ? resolveDayPeriod(input.nowUtc, input.timezoneId)
+    : resolveWeekPeriod(input.nowUtc, input.timezoneId);
 };

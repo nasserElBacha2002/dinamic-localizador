@@ -29,20 +29,14 @@ import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import { systemLogger } from "../utils/system-logs/logger";
 import { setCorrelationIdOnContext } from "../utils/system-logs/request-log-context";
-import {
-  isGlobalBackCommand,
-  isGlobalCancelCommand,
-  isGlobalHelpCommand,
-  isGlobalMenuCommand,
-} from "../utils/intent";
 import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
 import { whatsappSystemInteractionService } from "./whatsapp-system-interaction.service";
 import { raceTimeout } from "../utils/race-timeout";
 import { WHATSAPP_TURN_SHADOW_BUDGET_MS } from "../constants/whatsapp-turn-classification";
 import {
-  planWhatsAppLocationDestination,
-  planWhatsAppTextDestination,
-} from "./whatsapp-turn-destination.planner";
+  resolveWhatsAppLocationTurn,
+  resolveWhatsAppTextTurn,
+} from "./whatsapp-turn-routing.resolver";
 import { whatsappTurnClassificationService } from "./whatsapp-turn-classification.service";
 import { whatsappUsageQuotaService } from "./whatsapp-usage-quota.service";
 import { runWithQuotaTurnScope } from "../utils/whatsapp-quota-turn-scope";
@@ -486,19 +480,10 @@ export const whatsappBotService = {
       await botSessionService.getSessionResolutionByPhone(input.companyId, input.phoneFrom);
     const body = input.payload.Body?.trim() ?? "";
 
-    const globalCommand = isGlobalCancelCommand(body)
-      ? ("cancel" as const)
-      : isGlobalBackCommand(body)
-        ? ("back" as const)
-        : isGlobalHelpCommand(body)
-          ? ("help" as const)
-          : isGlobalMenuCommand(body)
-            ? ("menu" as const)
-            : null;
-
     const nowMs = getBotNow().getTime();
     const now = new Date(nowMs);
-    const plan = planWhatsAppTextDestination({
+    // Single authoritative destination — shared with classifier, admission, and router.
+    const resolution = resolveWhatsAppTextTurn({
       body,
       session,
       moduleStates: input.moduleStates,
@@ -512,11 +497,11 @@ export const whatsappBotService = {
       const correlateWork = whatsappSystemInteractionService.correlateForTurnSafe({
         companyId: input.companyId,
         employeeId: input.employeeId,
-        relatedOperationId: plan.relatedOperationId ?? session?.operationId ?? null,
+        relatedOperationId: resolution.relatedOperationId ?? session?.operationId ?? null,
         turn: {
           messageType: "TEXT",
-          resolvedIntent: plan.resolvedIntent,
-          resolvedHandler: plan.resolvedHandler,
+          resolvedIntent: resolution.resolvedIntent,
+          resolvedHandler: resolution.resolvedHandler,
         },
         now,
       });
@@ -535,10 +520,10 @@ export const whatsappBotService = {
       messageType: "TEXT",
       activeSessionIntent: session?.intent ?? null,
       activeSessionState: session?.state ?? null,
-      resolvedIntent: plan.resolvedIntent,
-      resolvedHandler: plan.resolvedHandler,
-      relatedOperationId: plan.relatedOperationId ?? session?.operationId ?? null,
-      globalCommand: plan.globalCommand ?? globalCommand,
+      resolvedIntent: resolution.resolvedIntent,
+      resolvedHandler: resolution.resolvedHandler,
+      relatedOperationId: resolution.relatedOperationId ?? session?.operationId ?? null,
+      globalCommand: resolution.globalCommand,
       correlatedSystemInteraction,
       nowMs,
     });
@@ -556,6 +541,7 @@ export const whatsappBotService = {
           session,
           recentlyExpired,
           body,
+          turnResolution: resolution,
         },
         createRouterHandlers(),
       );
@@ -571,14 +557,15 @@ export const whatsappBotService = {
         messageType: "TEXT",
         activeSessionIntent: session?.intent ?? null,
         activeSessionState: session?.state ?? null,
-        resolvedIntent: plan.resolvedIntent ?? getBotRuntimeContext()?.lastDetectedIntent ?? null,
-        resolvedHandler: routing?.flowType ?? plan.resolvedHandler,
+        resolvedIntent:
+          resolution.resolvedIntent ?? getBotRuntimeContext()?.lastDetectedIntent ?? null,
+        resolvedHandler: routing?.flowType ?? resolution.resolvedHandler ?? resolution.flowType,
         relatedOperationId:
           routing?.relatedOperationId ??
-          plan.relatedOperationId ??
+          resolution.relatedOperationId ??
           session?.operationId ??
           null,
-        globalCommand: plan.globalCommand ?? globalCommand,
+        globalCommand: resolution.globalCommand,
         correlatedSystemInteraction,
         nowMs,
         resultCode,
@@ -609,6 +596,7 @@ export const whatsappBotService = {
         classification: classified.classification,
       });
       // Fail-closed for costly non-critical: silent ACK; critical recovery still via CRITICAL_EXEMPT paths.
+      // Do not cancel session (resolution.cancelSessionBeforeDispatch is ignored without routing).
       await whatsappTurnClassificationShadowService.classifyAndRecord({
         companyId: input.companyId,
         employeeId: input.employeeId,
@@ -616,17 +604,17 @@ export const whatsappBotService = {
         messageType: "TEXT",
         activeSessionIntent: session?.intent ?? null,
         activeSessionState: session?.state ?? null,
-        resolvedIntent: plan.resolvedIntent,
-        resolvedHandler: plan.resolvedHandler,
-        relatedOperationId: plan.relatedOperationId,
-        globalCommand: plan.globalCommand ?? globalCommand,
+        resolvedIntent: resolution.resolvedIntent,
+        resolvedHandler: resolution.resolvedHandler,
+        relatedOperationId: resolution.relatedOperationId,
+        globalCommand: resolution.globalCommand,
         correlatedSystemInteraction,
         nowMs,
       });
       return buildTwiml("");
     }
 
-    // EMPLOYEE_LIMITED — admit before effects
+    // EMPLOYEE_LIMITED — admit before any session cancel / handler effects
     const admission = await whatsappUsageQuotaService.admitNonCriticalTurn({
       companyId: input.companyId,
       employeeId: input.employeeId,
@@ -635,12 +623,8 @@ export const whatsappBotService = {
       now,
     });
 
-    const blocked =
-      admission.decision === "REJECTED" ||
-      admission.decision === "QUOTA_FAILURE" ||
-      (admission.decision === "SHADOW_WOULD_REJECT" && false); // shadow never blocks
-
     if (admission.decision === "REJECTED" || admission.decision === "QUOTA_FAILURE") {
+      // Session untouched — cancelSessionBeforeDispatch only runs inside router after admit.
       const policy = await whatsappUsageQuotaService.loadPolicy(input.companyId);
       const day = resolveDayPeriod(now, policy.timezoneId);
       const notice = await whatsappUsageQuotaService.tryClaimLimitNotice({
@@ -649,6 +633,7 @@ export const whatsappBotService = {
         reasonCode: admission.reasonCode,
         recoverAtUtc: admission.recoverAtUtc ?? null,
         periodKey: day.periodKey,
+        policy,
       });
 
       await whatsappTurnClassificationShadowService.classifyAndRecord({
@@ -658,10 +643,10 @@ export const whatsappBotService = {
         messageType: "TEXT",
         activeSessionIntent: session?.intent ?? null,
         activeSessionState: session?.state ?? null,
-        resolvedIntent: plan.resolvedIntent,
-        resolvedHandler: plan.resolvedHandler,
-        relatedOperationId: plan.relatedOperationId,
-        globalCommand: plan.globalCommand ?? globalCommand,
+        resolvedIntent: resolution.resolvedIntent,
+        resolvedHandler: resolution.resolvedHandler,
+        relatedOperationId: resolution.relatedOperationId,
+        globalCommand: resolution.globalCommand,
         correlatedSystemInteraction,
         nowMs,
       });
@@ -673,6 +658,7 @@ export const whatsappBotService = {
           turnMessageSid: input.payload.MessageSid,
           logicalOutboundKey: `${input.payload.MessageSid}:limit-notice`,
           now,
+          policy,
         });
         if (!outboundReserve.ok) {
           await whatsappUsageQuotaService.completeLimitNotice({
@@ -685,9 +671,8 @@ export const whatsappBotService = {
         }
         if (!outboundReserve.reservationId.startsWith("noop:")) {
           await whatsappUsageQuotaService.markOutboundAttemptStarted(outboundReserve.reservationId);
-          await whatsappUsageQuotaService.markOutboundAccepted({
-            reservationId: outboundReserve.reservationId,
-          });
+          // TwiML: RESPONSE_BUILT — not provider ACCEPTED.
+          await whatsappUsageQuotaService.markOutboundResponseBuilt(outboundReserve.reservationId);
         }
         await whatsappUsageQuotaService.completeLimitNotice({
           companyId: input.companyId,
@@ -700,10 +685,7 @@ export const whatsappBotService = {
       return buildTwiml("");
     }
 
-    if (blocked) {
-      return buildTwiml("");
-    }
-
+    // SHADOW_WOULD_* never blocks; ADMITTED / SHADOW proceed under quota scope.
     const mode = admission.mode;
     return runWithQuotaTurnScope(
       {
@@ -712,6 +694,7 @@ export const whatsappBotService = {
         messageSid: input.payload.MessageSid,
         enforceOutbounds: mode === "ENFORCE",
         shadowOutbounds: mode === "SHADOW",
+        policySnapshot: admission.policy,
       },
       runRouted,
     );
@@ -749,7 +732,7 @@ export const whatsappBotService = {
       await botSessionService.getSessionResolutionByPhone(input.companyId, input.phoneFrom);
 
     const nowMs = getBotNow().getTime();
-    const plan = planWhatsAppLocationDestination({ session });
+    const plan = resolveWhatsAppLocationTurn({ session });
 
     // Location attendance paths are critical — never consult quotas for admission.
     if (input.employeeId) {

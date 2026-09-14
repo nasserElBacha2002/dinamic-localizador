@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from "node:async_hooks";
+import type { WhatsAppQuotaPolicy } from "../types/whatsapp-usage-quota";
 
 export type WhatsAppQuotaTurnScope = {
   companyId: string;
@@ -6,8 +7,10 @@ export type WhatsAppQuotaTurnScope = {
   messageSid: string;
   /** When true, non-critical outbounds must reserve units. */
   enforceOutbounds: boolean;
-  /** Shadow mode records would-block without reserving. */
+  /** Shadow mode evaluates would-block without mutating counters. */
   shadowOutbounds: boolean;
+  /** Reuse turn policy snapshot — avoid repeated company_settings reads. */
+  policySnapshot?: WhatsAppQuotaPolicy;
 };
 
 const quotaTurnStorage = new AsyncLocalStorage<WhatsAppQuotaTurnScope>();

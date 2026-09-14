@@ -103,7 +103,10 @@ export const whatsappUsageQuotaRepository = {
     companyId: string;
     employeeId: string;
     since: Date;
+    /** Enforcement burst counts only real ENFORCE admissions. */
+    enforceOnly?: boolean;
   }): Promise<number> {
+    const enforceOnly = input.enforceOnly !== false;
     const result = await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, input.companyId)
@@ -116,9 +119,110 @@ export const whatsappUsageQuotaRepository = {
           AND employee_id = @employeeId
           AND admitted_at IS NOT NULL
           AND admitted_at > @since
-          AND decision = N'ADMITTED';
+          AND decision = N'ADMITTED'
+          ${enforceOnly ? "AND mode = N'ENFORCE'" : ""};
       `);
     return Number(result.recordset[0]?.cnt ?? 0);
+  },
+
+  async findOpenEmployeePeriodContaining(input: {
+    companyId: string;
+    employeeId: string;
+    periodKind: string;
+    now: Date;
+  }): Promise<{
+    periodKey: string;
+    periodStartUtc: Date;
+    periodEndUtc: Date;
+    timezoneId: string;
+    turnsUsed: number;
+    turnLimit: number;
+    outboundsUsed: number;
+    outboundLimit: number;
+  } | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+      .input("periodKind", sql.NVarChar(10), input.periodKind)
+      .input("now", sql.DateTime2, input.now)
+      .query(`
+        SELECT TOP 1
+          period_key, period_start_utc, period_end_utc, timezone_id,
+          turns_consumed, turns_reserved, turn_limit,
+          outbounds_consumed, outbounds_reserved, outbound_limit
+        FROM dbo.whatsapp_quota_employee_periods
+        WHERE company_id = @companyId
+          AND employee_id = @employeeId
+          AND period_kind = @periodKind
+          AND period_start_utc <= @now
+          AND period_end_utc > @now
+        ORDER BY created_at DESC;
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      periodKey: String(row.period_key),
+      periodStartUtc:
+        row.period_start_utc instanceof Date
+          ? row.period_start_utc
+          : new Date(String(row.period_start_utc)),
+      periodEndUtc:
+        row.period_end_utc instanceof Date
+          ? row.period_end_utc
+          : new Date(String(row.period_end_utc)),
+      timezoneId: String(row.timezone_id),
+      turnsUsed: Number(row.turns_consumed) + Number(row.turns_reserved),
+      turnLimit: Number(row.turn_limit),
+      outboundsUsed: Number(row.outbounds_consumed) + Number(row.outbounds_reserved),
+      outboundLimit: Number(row.outbound_limit),
+    };
+  },
+
+  async findOpenCompanyPeriodContaining(input: {
+    companyId: string;
+    periodKind: string;
+    now: Date;
+  }): Promise<{
+    periodKey: string;
+    periodStartUtc: Date;
+    periodEndUtc: Date;
+    timezoneId: string;
+    outboundsUsed: number;
+    outboundLimit: number;
+  } | null> {
+    const result = await getPool()
+      .request()
+      .input("companyId", sql.UniqueIdentifier, input.companyId)
+      .input("periodKind", sql.NVarChar(10), input.periodKind)
+      .input("now", sql.DateTime2, input.now)
+      .query(`
+        SELECT TOP 1
+          period_key, period_start_utc, period_end_utc, timezone_id,
+          outbounds_consumed, outbounds_reserved, outbound_limit
+        FROM dbo.whatsapp_quota_company_periods
+        WHERE company_id = @companyId
+          AND period_kind = @periodKind
+          AND period_start_utc <= @now
+          AND period_end_utc > @now
+        ORDER BY created_at DESC;
+      `);
+    const row = result.recordset[0] as Record<string, unknown> | undefined;
+    if (!row) return null;
+    return {
+      periodKey: String(row.period_key),
+      periodStartUtc:
+        row.period_start_utc instanceof Date
+          ? row.period_start_utc
+          : new Date(String(row.period_start_utc)),
+      periodEndUtc:
+        row.period_end_utc instanceof Date
+          ? row.period_end_utc
+          : new Date(String(row.period_end_utc)),
+      timezoneId: String(row.timezone_id),
+      outboundsUsed: Number(row.outbounds_consumed) + Number(row.outbounds_reserved),
+      outboundLimit: Number(row.outbound_limit),
+    };
   },
 
   async findTurnAdmission(messageSid: string): Promise<{
@@ -258,7 +362,8 @@ export const whatsappUsageQuotaRepository = {
             AND employee_id = @employeeId
             AND admitted_at IS NOT NULL
             AND admitted_at > @since
-            AND decision IN (N'ADMITTED', N'SHADOW_WOULD_ADMIT');
+            AND decision = N'ADMITTED'
+            AND mode = N'ENFORCE';
         `);
       if (Number(burst.recordset[0].cnt) + 1 > input.burstTurns) {
         await tx.rollback();
@@ -588,9 +693,33 @@ export const whatsappUsageQuotaRepository = {
     return Number(result.recordset[0]?.affected ?? 0) > 0;
   },
 
+  /**
+   * TwiML committed to HTTP response body — consumes outbound units but is NOT
+   * provider delivery confirmation (use ACCEPTED when Twilio MessageSid is known).
+   */
+  async markOutboundResponseBuilt(reservationId: string): Promise<void> {
+    await this.finalizeOutboundReservation({
+      reservationId,
+      terminalStatus: "RESPONSE_BUILT",
+      providerMessageSid: null,
+    });
+  },
+
   async markOutboundAccepted(input: {
     reservationId: string;
     providerMessageSid?: string | null;
+  }): Promise<void> {
+    await this.finalizeOutboundReservation({
+      reservationId: input.reservationId,
+      terminalStatus: "ACCEPTED",
+      providerMessageSid: input.providerMessageSid ?? null,
+    });
+  },
+
+  async finalizeOutboundReservation(input: {
+    reservationId: string;
+    terminalStatus: "ACCEPTED" | "RESPONSE_BUILT";
+    providerMessageSid: string | null;
   }): Promise<void> {
     const pool = getPool();
     const tx = new sql.Transaction(pool);
@@ -609,7 +738,19 @@ export const whatsappUsageQuotaRepository = {
         return;
       }
       const status = String(row.status);
-      if (status === "ACCEPTED") {
+      if (status === "ACCEPTED" || status === "RESPONSE_BUILT") {
+        if (input.terminalStatus === "ACCEPTED" && status === "RESPONSE_BUILT") {
+          await new sql.Request(tx)
+            .input("id", sql.UniqueIdentifier, input.reservationId)
+            .input("sid", sql.NVarChar(64), input.providerMessageSid)
+            .query(`
+              UPDATE dbo.whatsapp_quota_outbound_reservations
+              SET status = N'ACCEPTED',
+                  provider_message_sid = COALESCE(@sid, provider_message_sid),
+                  updated_at = SYSUTCDATETIME()
+              WHERE id = @id;
+            `);
+        }
         await tx.commit();
         return;
       }
@@ -620,10 +761,11 @@ export const whatsappUsageQuotaRepository = {
 
       await new sql.Request(tx)
         .input("id", sql.UniqueIdentifier, input.reservationId)
-        .input("sid", sql.NVarChar(64), input.providerMessageSid ?? null)
+        .input("sid", sql.NVarChar(64), input.providerMessageSid)
+        .input("status", sql.NVarChar(30), input.terminalStatus)
         .query(`
           UPDATE dbo.whatsapp_quota_outbound_reservations
-          SET status = N'ACCEPTED',
+          SET status = @status,
               provider_message_sid = COALESCE(@sid, provider_message_sid),
               updated_at = SYSUTCDATETIME()
           WHERE id = @id;
@@ -652,12 +794,57 @@ export const whatsappUsageQuotaRepository = {
             WHERE id = @companyId;
           `);
       }
+
       await tx.commit();
     } catch (error) {
       try {
         await tx.rollback();
       } catch {
         // ignore
+      }
+      throw error;
+    }
+  },
+
+  async insertShadowOutboundEvaluation(input: {
+    companyId: string;
+    employeeId: string;
+    turnMessageSid: string;
+    logicalOutboundKey: string;
+    wouldAdmit: boolean;
+    reasonCode: string;
+  }): Promise<string> {
+    const status = input.wouldAdmit ? "SHADOW_WOULD_ADMIT" : "SHADOW_WOULD_REJECT";
+    try {
+      const result = await getPool()
+        .request()
+        .input("companyId", sql.UniqueIdentifier, input.companyId)
+        .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+        .input("turnMessageSid", sql.NVarChar(64), input.turnMessageSid)
+        .input("logicalKey", sql.NVarChar(160), input.logicalOutboundKey)
+        .input("status", sql.NVarChar(30), status)
+        .input("reason", sql.NVarChar(80), input.reasonCode)
+        .query(`
+          INSERT INTO dbo.whatsapp_quota_outbound_reservations (
+            company_id, employee_id, turn_message_sid, logical_outbound_key,
+            status, reason_code
+          )
+          OUTPUT INSERTED.id
+          VALUES (
+            @companyId, @employeeId, @turnMessageSid, @logicalKey,
+            @status, @reason
+          );
+        `);
+      return String(result.recordset[0].id);
+    } catch (error) {
+      if (isDuplicateKeyError(error)) {
+        const again = await getPool()
+          .request()
+          .input("key", sql.NVarChar(160), input.logicalOutboundKey)
+          .query(
+            `SELECT TOP 1 id FROM dbo.whatsapp_quota_outbound_reservations WHERE logical_outbound_key = @key`,
+          );
+        return String(again.recordset[0]?.id ?? `shadow-dup:${input.logicalOutboundKey}`);
       }
       throw error;
     }

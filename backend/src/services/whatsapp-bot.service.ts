@@ -19,12 +19,34 @@ import {
   getObservabilityTrace,
   runWithObservabilityTrace,
 } from "../utils/whatsapp-observability-scope";
+import {
+  getRoutingResult,
+  runWithRoutingResultScope,
+} from "../utils/whatsapp-routing-result";
 import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { companyModuleService } from "./company-module.service";
 import { whatsappFlowTraceService } from "./whatsapp-flow-trace.service";
 import { botRuntimeSettingsService } from "./bot-runtime-settings.service";
 import { systemLogger } from "../utils/system-logs/logger";
 import { setCorrelationIdOnContext } from "../utils/system-logs/request-log-context";
+import {
+  isGlobalBackCommand,
+  isGlobalCancelCommand,
+  isGlobalHelpCommand,
+  isGlobalMenuCommand,
+} from "../utils/intent";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
+import { whatsappSystemInteractionService } from "./whatsapp-system-interaction.service";
+import { raceTimeout } from "../utils/race-timeout";
+import { WHATSAPP_TURN_SHADOW_BUDGET_MS } from "../constants/whatsapp-turn-classification";
+import {
+  planWhatsAppLocationDestination,
+  planWhatsAppTextDestination,
+} from "./whatsapp-turn-destination.planner";
+import { whatsappTurnClassificationService } from "./whatsapp-turn-classification.service";
+import { whatsappUsageQuotaService } from "./whatsapp-usage-quota.service";
+import { runWithQuotaTurnScope } from "../utils/whatsapp-quota-turn-scope";
+import { resolveDayPeriod } from "../utils/whatsapp-quota-periods";
 import {
   DUPLICATE_MESSAGE_SID_RESPONSE,
   GENERIC_ERROR_MESSAGE,
@@ -374,9 +396,11 @@ export const whatsappBotService = {
       };
 
       if (trace) {
-        return runWithObservabilityTrace(trace, processInbound);
+        return runWithRoutingResultScope(() =>
+          runWithObservabilityTrace(trace, processInbound),
+        );
       }
-      return processInbound();
+      return runWithRoutingResultScope(processInbound);
     } catch (error) {
       systemLogger.error({
         module: "whatsapp-webhook",
@@ -460,21 +484,236 @@ export const whatsappBotService = {
   }): Promise<string> {
     const { activeSession: session, recentlyExpired } =
       await botSessionService.getSessionResolutionByPhone(input.companyId, input.phoneFrom);
+    const body = input.payload.Body?.trim() ?? "";
 
-    return whatsappRouterService.routeTextMessage(
+    const globalCommand = isGlobalCancelCommand(body)
+      ? ("cancel" as const)
+      : isGlobalBackCommand(body)
+        ? ("back" as const)
+        : isGlobalHelpCommand(body)
+          ? ("help" as const)
+          : isGlobalMenuCommand(body)
+            ? ("menu" as const)
+            : null;
+
+    const nowMs = getBotNow().getTime();
+    const now = new Date(nowMs);
+    const plan = planWhatsAppTextDestination({
+      body,
+      session,
+      moduleStates: input.moduleStates,
+    });
+
+    let correlatedSystemInteraction = null;
+    if (
+      input.employeeId != null &&
+      whatsappTurnClassificationShadowService.isSystemContextEnabled()
+    ) {
+      const correlateWork = whatsappSystemInteractionService.correlateForTurnSafe({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        relatedOperationId: plan.relatedOperationId ?? session?.operationId ?? null,
+        turn: {
+          messageType: "TEXT",
+          resolvedIntent: plan.resolvedIntent,
+          resolvedHandler: plan.resolvedHandler,
+        },
+        now,
+      });
+      const raced = await raceTimeout(correlateWork, WHATSAPP_TURN_SHADOW_BUDGET_MS);
+      if (!raced.timedOut) {
+        correlatedSystemInteraction = raced.value;
+      } else {
+        void correlateWork.catch(() => undefined);
+      }
+    }
+
+    const classified = whatsappTurnClassificationService.classify({
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      messageSid: input.payload.MessageSid,
+      messageType: "TEXT",
+      activeSessionIntent: session?.intent ?? null,
+      activeSessionState: session?.state ?? null,
+      resolvedIntent: plan.resolvedIntent,
+      resolvedHandler: plan.resolvedHandler,
+      relatedOperationId: plan.relatedOperationId ?? session?.operationId ?? null,
+      globalCommand: plan.globalCommand ?? globalCommand,
+      correlatedSystemInteraction,
+      nowMs,
+    });
+
+    const runRouted = async (): Promise<string> => {
+      const response = await whatsappRouterService.routeTextMessage(
+        {
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          payload: input.payload,
+          messageType: "TEXT",
+          phoneFrom: input.phoneFrom,
+          phoneTo: input.phoneTo,
+          moduleStates: input.moduleStates,
+          session,
+          recentlyExpired,
+          body,
+        },
+        createRouterHandlers(),
+      );
+
+      const routing = getRoutingResult();
+      const flowResult = getObservabilityFlowResult();
+      const resultCode = routing?.resultCode ?? flowResult?.resultCode ?? null;
+
+      await whatsappTurnClassificationShadowService.classifyAndRecord({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        messageSid: input.payload.MessageSid,
+        messageType: "TEXT",
+        activeSessionIntent: session?.intent ?? null,
+        activeSessionState: session?.state ?? null,
+        resolvedIntent: plan.resolvedIntent ?? getBotRuntimeContext()?.lastDetectedIntent ?? null,
+        resolvedHandler: routing?.flowType ?? plan.resolvedHandler,
+        relatedOperationId:
+          routing?.relatedOperationId ??
+          plan.relatedOperationId ??
+          session?.operationId ??
+          null,
+        globalCommand: plan.globalCommand ?? globalCommand,
+        correlatedSystemInteraction,
+        nowMs,
+        resultCode,
+      });
+
+      return response;
+    };
+
+    if (!input.employeeId) {
+      return runRouted();
+    }
+
+    if (classified.classification === "CRITICAL_EXEMPT") {
+      void whatsappUsageQuotaService.recordExemptCritical({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        messageSid: input.payload.MessageSid,
+        classification: classified.classification,
+      });
+      return runRouted();
+    }
+
+    if (classified.classification === "AMBIGUOUS") {
+      void whatsappUsageQuotaService.recordAmbiguousHeld({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        messageSid: input.payload.MessageSid,
+        classification: classified.classification,
+      });
+      // Fail-closed for costly non-critical: silent ACK; critical recovery still via CRITICAL_EXEMPT paths.
+      await whatsappTurnClassificationShadowService.classifyAndRecord({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        messageSid: input.payload.MessageSid,
+        messageType: "TEXT",
+        activeSessionIntent: session?.intent ?? null,
+        activeSessionState: session?.state ?? null,
+        resolvedIntent: plan.resolvedIntent,
+        resolvedHandler: plan.resolvedHandler,
+        relatedOperationId: plan.relatedOperationId,
+        globalCommand: plan.globalCommand ?? globalCommand,
+        correlatedSystemInteraction,
+        nowMs,
+      });
+      return buildTwiml("");
+    }
+
+    // EMPLOYEE_LIMITED — admit before effects
+    const admission = await whatsappUsageQuotaService.admitNonCriticalTurn({
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      messageSid: input.payload.MessageSid,
+      classification: classified.classification,
+      now,
+    });
+
+    const blocked =
+      admission.decision === "REJECTED" ||
+      admission.decision === "QUOTA_FAILURE" ||
+      (admission.decision === "SHADOW_WOULD_REJECT" && false); // shadow never blocks
+
+    if (admission.decision === "REJECTED" || admission.decision === "QUOTA_FAILURE") {
+      const policy = await whatsappUsageQuotaService.loadPolicy(input.companyId);
+      const day = resolveDayPeriod(now, policy.timezoneId);
+      const notice = await whatsappUsageQuotaService.tryClaimLimitNotice({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        reasonCode: admission.reasonCode,
+        recoverAtUtc: admission.recoverAtUtc ?? null,
+        periodKey: day.periodKey,
+      });
+
+      await whatsappTurnClassificationShadowService.classifyAndRecord({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        messageSid: input.payload.MessageSid,
+        messageType: "TEXT",
+        activeSessionIntent: session?.intent ?? null,
+        activeSessionState: session?.state ?? null,
+        resolvedIntent: plan.resolvedIntent,
+        resolvedHandler: plan.resolvedHandler,
+        relatedOperationId: plan.relatedOperationId,
+        globalCommand: plan.globalCommand ?? globalCommand,
+        correlatedSystemInteraction,
+        nowMs,
+      });
+
+      if (notice.claimed && notice.message) {
+        const outboundReserve = await whatsappUsageQuotaService.reserveOutbound({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          turnMessageSid: input.payload.MessageSid,
+          logicalOutboundKey: `${input.payload.MessageSid}:limit-notice`,
+          now,
+        });
+        if (!outboundReserve.ok) {
+          await whatsappUsageQuotaService.completeLimitNotice({
+            companyId: input.companyId,
+            employeeId: input.employeeId,
+            episodeKey: notice.episodeKey,
+            status: "SUPPRESSED",
+          });
+          return buildTwiml("");
+        }
+        if (!outboundReserve.reservationId.startsWith("noop:")) {
+          await whatsappUsageQuotaService.markOutboundAttemptStarted(outboundReserve.reservationId);
+          await whatsappUsageQuotaService.markOutboundAccepted({
+            reservationId: outboundReserve.reservationId,
+          });
+        }
+        await whatsappUsageQuotaService.completeLimitNotice({
+          companyId: input.companyId,
+          employeeId: input.employeeId,
+          episodeKey: notice.episodeKey,
+          status: "SENT",
+        });
+        return buildTwiml(notice.message);
+      }
+      return buildTwiml("");
+    }
+
+    if (blocked) {
+      return buildTwiml("");
+    }
+
+    const mode = admission.mode;
+    return runWithQuotaTurnScope(
       {
         companyId: input.companyId,
         employeeId: input.employeeId,
-        payload: input.payload,
-        messageType: "TEXT",
-        phoneFrom: input.phoneFrom,
-        phoneTo: input.phoneTo,
-        moduleStates: input.moduleStates,
-        session,
-        recentlyExpired,
-        body: input.payload.Body?.trim() ?? "",
+        messageSid: input.payload.MessageSid,
+        enforceOutbounds: mode === "ENFORCE",
+        shadowOutbounds: mode === "SHADOW",
       },
-      createRouterHandlers(),
+      runRouted,
     );
   },
 
@@ -509,7 +748,20 @@ export const whatsappBotService = {
     const { activeSession: session, recentlyExpired } =
       await botSessionService.getSessionResolutionByPhone(input.companyId, input.phoneFrom);
 
-    return whatsappRouterService.routeLocationMessage(
+    const nowMs = getBotNow().getTime();
+    const plan = planWhatsAppLocationDestination({ session });
+
+    // Location attendance paths are critical — never consult quotas for admission.
+    if (input.employeeId) {
+      void whatsappUsageQuotaService.recordExemptCritical({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        messageSid: input.payload.MessageSid,
+        classification: "CRITICAL_EXEMPT",
+      });
+    }
+
+    const response = await whatsappRouterService.routeLocationMessage(
       {
         companyId: input.companyId,
         employeeId: input.employeeId,
@@ -524,8 +776,58 @@ export const whatsappBotService = {
       },
       createRouterHandlers(),
     );
-  },
 
+    const routing = getRoutingResult();
+    const flowResult = getObservabilityFlowResult();
+    const resultCode = routing?.resultCode ?? flowResult?.resultCode ?? null;
+    const relatedOperationId =
+      routing?.relatedOperationId ??
+      plan.relatedOperationId ??
+      session?.operationId ??
+      null;
+
+    let correlatedSystemInteraction = null;
+    if (
+      input.employeeId != null &&
+      whatsappTurnClassificationShadowService.isSystemContextEnabled()
+    ) {
+      const correlateWork = whatsappSystemInteractionService.correlateForTurnSafe({
+        companyId: input.companyId,
+        employeeId: input.employeeId,
+        relatedOperationId,
+        turn: {
+          messageType: "LOCATION",
+          resolvedIntent: plan.resolvedIntent,
+          resolvedHandler: routing?.flowType ?? plan.resolvedHandler,
+        },
+        now: new Date(nowMs),
+      });
+      const raced = await raceTimeout(correlateWork, WHATSAPP_TURN_SHADOW_BUDGET_MS);
+      if (!raced.timedOut) {
+        correlatedSystemInteraction = raced.value;
+      } else {
+        void correlateWork.catch(() => undefined);
+      }
+    }
+
+    await whatsappTurnClassificationShadowService.classifyAndRecord({
+      companyId: input.companyId,
+      employeeId: input.employeeId,
+      messageSid: input.payload.MessageSid,
+      messageType: "LOCATION",
+      activeSessionIntent: session?.intent ?? null,
+      activeSessionState: session?.state ?? null,
+      resolvedIntent: plan.resolvedIntent,
+      resolvedHandler: routing?.flowType ?? plan.resolvedHandler,
+      relatedOperationId,
+      globalCommand: null,
+      correlatedSystemInteraction,
+      nowMs,
+      resultCode,
+    });
+
+    return response;
+  },
 };
 
 export const isOperationCompatibleAt = isWithinOperationWindow;

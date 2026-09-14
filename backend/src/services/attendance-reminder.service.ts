@@ -29,6 +29,12 @@ import { WHATSAPP_RESULT_CODES } from "../constants/whatsapp-observability";
 import { normalizePhoneNumber } from "../utils/phone";
 import { logWhatsAppNotificationEvent } from "../utils/whatsapp-notification-observability";
 import type { BotSession } from "../types/twilio.types";
+import { whatsappSystemInteractionService } from "./whatsapp-system-interaction.service";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
+import {
+  classifyTwilioOutboundError,
+  isAmbiguousTwilioSendFailure,
+} from "../utils/twilio-error-classifier";
 
 export type ReminderSendOutcome =
   | "sent"
@@ -591,19 +597,80 @@ const sendReminderForCandidate = async (
             ? "ATTENDANCE_CONFIRMATION"
             : "NO_CHECKIN";
 
-    const result = await twilioOutboundService.sendWhatsAppTemplate({
-      toPhoneNumber: candidate.employeePhoneNumber,
-      contentSid,
-      contentVariables,
-      costContext: {
+    const interactionSourceKey =
+      whatsappSystemInteractionService.sourceKeyForAttendanceNotification(claimed.id);
+    const preparedInteraction =
+      await whatsappSystemInteractionService.prepareAttendanceReminderContext({
         companyId,
-        messageKind: "TEMPLATE",
-        flowLabel,
-        templateName: notificationType,
-      },
-    });
+        employeeId: candidate.employeeId,
+        operationId: candidate.operationId,
+        notificationId: claimed.id,
+        notificationType,
+        scheduledStart: candidate.scheduledStart,
+      });
+
+    if (whatsappSystemInteractionService.shouldSkipSend(preparedInteraction)) {
+      console.info("[attendance-reminder] skip Twilio send — durable interaction already terminal/accepted", {
+        notificationId: claimed.id,
+        status: preparedInteraction?.status ?? null,
+        sourceKey: interactionSourceKey,
+      });
+      // Repair ACTIVE if Twilio already accepted previously but notification still claimed.
+      if (
+        preparedInteraction?.status === "ACTIVE" &&
+        preparedInteraction.providerMessageSid
+      ) {
+        return "sent";
+      }
+      if (preparedInteraction?.status === "SEND_AMBIGUOUS") {
+        return "sent_persistence_unknown";
+      }
+      return "skipped";
+    }
+
+    let result: { messageSid: string };
+    try {
+      result = await twilioOutboundService.sendWhatsAppTemplate({
+        toPhoneNumber: candidate.employeePhoneNumber,
+        contentSid,
+        contentVariables,
+        costContext: {
+          companyId,
+          messageKind: "TEMPLATE",
+          flowLabel,
+          templateName: notificationType,
+        },
+      });
+    } catch (sendError) {
+      const classification = classifyTwilioOutboundError(sendError);
+      if (isAmbiguousTwilioSendFailure(classification)) {
+        await whatsappSystemInteractionService.markSendAmbiguousSafe({
+          companyId,
+          sourceKey: interactionSourceKey,
+        });
+      } else {
+        await whatsappSystemInteractionService.markSendFailedSafe({
+          companyId,
+          sourceKey: interactionSourceKey,
+        });
+      }
+      throw sendError;
+    }
 
     const sentAt = new Date();
+
+    await whatsappSystemInteractionService.markSendAcceptedSafe({
+      companyId,
+      sourceKey: interactionSourceKey,
+      providerMessageSid: result.messageSid,
+    });
+    await whatsappTurnClassificationShadowService.recordSystemOutboundExempt({
+      companyId,
+      employeeId: candidate.employeeId,
+      providerMessageSid: result.messageSid,
+      category: flowLabel,
+      relatedOperationId: candidate.operationId,
+    });
 
     let outboundMessageId: string | null = null;
     try {

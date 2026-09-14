@@ -185,6 +185,18 @@ const envSchema = z
       .positive()
       .default(6 * 60 * 60 * 1000),
     WHATSAPP_OBSERVABILITY_PHONE_HASH_SECRET: z.string().min(16).optional(),
+    /**
+     * Phase 1 WhatsApp turn classification (shadow only).
+     * Never blocks messages; SHADOW_ONLY must stay true until a later phase.
+     */
+    WHATSAPP_TURN_CLASSIFICATION_ENABLED: z.stringbool().default(true),
+    WHATSAPP_TURN_CLASSIFICATION_SHADOW_ONLY: z.stringbool().default(true),
+    WHATSAPP_SYSTEM_CONTEXT_ENABLED: z.stringbool().default(true),
+    /**
+     * Phase 2 global quota mode. Default OFF — never auto-ENFORCE in production from deploy.
+     * Effective mode = OFF if global or company is OFF; ENFORCE only if both ENFORCE; else SHADOW.
+     */
+    WHATSAPP_QUOTA_GLOBAL_MODE: z.enum(["OFF", "SHADOW", "ENFORCE"]).default("OFF"),
     /** Platform Admin technical system logs (stdout JSON + SQL sink). */
     SYSTEM_LOGS_ENABLED: z.stringbool().default(true),
     SYSTEM_LOGS_UI_ENABLED: z.stringbool().default(true),
@@ -282,6 +294,9 @@ const envSchema = z
         });
       }
     }
+
+    // Phase 2: SHADOW_ONLY=false is allowed (quotas use WHATSAPP_QUOTA_GLOBAL_MODE).
+    // Classification remains available whenever WHATSAPP_TURN_CLASSIFICATION_ENABLED=true.
 
     if (data.TWILIO_WEBHOOK_URL) {
       if (data.TWILIO_WEBHOOK_URL.endsWith("/")) {

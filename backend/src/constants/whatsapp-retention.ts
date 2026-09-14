@@ -19,6 +19,8 @@ export const WHATSAPP_RETENTION_TABLE_KEYS = [
   "whatsapp_conversations",
   "bot_sessions",
   "bot_simulation_sessions",
+  "whatsapp_turn_classifications",
+  "whatsapp_system_interactions",
 ] as const;
 
 export type WhatsappRetentionTableKey = (typeof WHATSAPP_RETENTION_TABLE_KEYS)[number];

@@ -9,6 +9,9 @@ import {
   setLastBotResponse,
 } from "../../utils/bot-runtime-context";
 import { runOutboundPersistAfterCommitHookForTests } from "../../utils/checkout-transaction-hooks";
+import { setRoutingResult } from "../../utils/whatsapp-routing-result";
+import { getQuotaTurnScope } from "../../utils/whatsapp-quota-turn-scope";
+import { whatsappUsageQuotaService } from "../whatsapp-usage-quota.service";
 import { whatsappFlowTraceService } from "../whatsapp-flow-trace.service";
 
 export const buildTwiml = (message: string): string => {
@@ -87,12 +90,43 @@ export const respond = async (
   },
 ): Promise<string> => {
   setLastBotResponse(input.message);
+  // Always record routing outcome (independent of observability ALS).
   if (input.resultCode || input.flowType) {
+    setRoutingResult({
+      resultCode: input.resultCode ?? null,
+      flowType: input.flowType ?? null,
+    });
     setObservabilityFlowResult({
       resultCode: input.resultCode,
       flowType: input.flowType,
       relatedEntities: { employeeId: input.employeeId },
     });
+  }
+
+  const quotaScope = getQuotaTurnScope();
+  let reservationId: string | null = null;
+  if (
+    quotaScope?.enforceOutbounds &&
+    input.employeeId &&
+    input.message.trim().length > 0
+  ) {
+    const logicalKey = `${quotaScope.messageSid}:twiml:0`;
+    const reserved = await whatsappUsageQuotaService.reserveOutbound({
+      companyId,
+      employeeId: input.employeeId,
+      turnMessageSid: quotaScope.messageSid,
+      logicalOutboundKey: logicalKey,
+    });
+    if (!reserved.ok) {
+      // No budget for this non-critical TwiML unit — silent empty ACK.
+      return buildTwiml("");
+    }
+    reservationId = reserved.reservationId.startsWith("noop:")
+      ? null
+      : reserved.reservationId;
+    if (reservationId) {
+      await whatsappUsageQuotaService.markOutboundAttemptStarted(reservationId);
+    }
   }
 
   await saveOutboundMessage(companyId, {
@@ -101,6 +135,10 @@ export const respond = async (
     phoneTo: input.phoneTo,
     body: input.message,
   });
+
+  if (reservationId) {
+    await whatsappUsageQuotaService.markOutboundAccepted({ reservationId });
+  }
 
   return buildTwiml(input.message);
 };

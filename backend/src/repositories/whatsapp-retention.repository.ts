@@ -416,6 +416,39 @@ const TABLE_OPERATIONS: Record<WhatsappRetentionTableKey, { countSql: string; de
       WHERE created_at < @cutoff
     `,
     },
+    whatsapp_turn_classifications: {
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM whatsapp_turn_classifications
+      WHERE classified_at < @cutoff
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM whatsapp_turn_classifications
+      WHERE classified_at < @cutoff
+    `,
+    },
+    whatsapp_system_interactions: {
+      // Never purge PREPARED / ACTIVE / SEND_AMBIGUOUS (in-flight or reply window).
+      countSql: `
+      SELECT COUNT(*) AS cnt
+      FROM whatsapp_system_interactions
+      WHERE updated_at < @cutoff
+        AND status IN (
+          N'CONSUMED', N'EXPIRED', N'CANCELLED', N'SEND_FAILED'
+        )
+        AND expires_at < SYSUTCDATETIME()
+    `,
+      deleteSql: `
+      DELETE TOP (@batchSize)
+      FROM whatsapp_system_interactions
+      WHERE updated_at < @cutoff
+        AND status IN (
+          N'CONSUMED', N'EXPIRED', N'CANCELLED', N'SEND_FAILED'
+        )
+        AND expires_at < SYSUTCDATETIME()
+    `,
+    },
   };
 
 export const whatsappRetentionRepository = {

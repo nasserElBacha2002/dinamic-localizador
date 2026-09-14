@@ -106,6 +106,23 @@ const mapSettingsRow = (row: Record<string, unknown>): CompanySettings => ({
   ),
   attendanceAlertCooldownDays: Number(row.attendance_alert_cooldown_days ?? 7),
   attendanceAlertConfigVersion: Number(row.attendance_alert_config_version ?? 0),
+  whatsappQuotaMode: (() => {
+    const mode = String(row.whatsapp_quota_mode ?? "OFF");
+    return mode === "SHADOW" || mode === "ENFORCE" ? mode : "OFF";
+  })(),
+  whatsappQuotaDailyTurns: Number(row.whatsapp_quota_daily_turns ?? 20),
+  whatsappQuotaWeeklyTurns: Number(row.whatsapp_quota_weekly_turns ?? 60),
+  whatsappQuotaBurstTurns: Number(row.whatsapp_quota_burst_turns ?? 5),
+  whatsappQuotaBurstWindowSeconds: Number(row.whatsapp_quota_burst_window_seconds ?? 60),
+  whatsappQuotaDailyOutbounds: Number(row.whatsapp_quota_daily_outbounds ?? 40),
+  whatsappQuotaWeeklyOutbounds: Number(row.whatsapp_quota_weekly_outbounds ?? 120),
+  whatsappQuotaCompanyDailyOutbounds: Number(
+    row.whatsapp_quota_company_daily_outbounds ?? 500,
+  ),
+  whatsappQuotaLimitNoticeEnabled:
+    row.whatsapp_quota_limit_notice_enabled == null
+      ? true
+      : Boolean(row.whatsapp_quota_limit_notice_enabled),
   createdAt: toIsoString(row.created_at as Date | string),
   updatedAt: toIsoString(row.updated_at as Date | string),
 });

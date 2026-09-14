@@ -120,6 +120,16 @@ export interface CompanySettings {
   attendanceAlertCooldownDays: number;
   /** Bumped on threshold feature/config changes to force rebaseline. */
   attendanceAlertConfigVersion: number;
+  /** Phase 2 WhatsApp usage quotas (default OFF). */
+  whatsappQuotaMode: "OFF" | "SHADOW" | "ENFORCE";
+  whatsappQuotaDailyTurns: number;
+  whatsappQuotaWeeklyTurns: number;
+  whatsappQuotaBurstTurns: number;
+  whatsappQuotaBurstWindowSeconds: number;
+  whatsappQuotaDailyOutbounds: number;
+  whatsappQuotaWeeklyOutbounds: number;
+  whatsappQuotaCompanyDailyOutbounds: number;
+  whatsappQuotaLimitNoticeEnabled: boolean;
   createdAt: string;
   updatedAt: string;
 }

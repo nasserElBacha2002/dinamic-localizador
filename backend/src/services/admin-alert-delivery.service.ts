@@ -23,6 +23,7 @@ import {
   isAmbiguousTwilioSendFailure,
 } from "../utils/twilio-error-classifier";
 import { twilioOutboundService } from "./twilio-outbound.service";
+import { whatsappTurnClassificationShadowService } from "./whatsapp-turn-classification-shadow.service";
 
 const isDynamicAttendanceAlertType = (
   alertType: string,
@@ -433,6 +434,14 @@ const processClaimedNotification = async (
       employeeId: notification.employeeId,
       absenceRequestId: notification.absenceRequestId,
       providerMessageSid: messageSid,
+    });
+    // Informative SYSTEM outbound — subject employee when known; no ACTIVE interaction.
+    await whatsappTurnClassificationShadowService.recordSystemOutboundExempt({
+      companyId: notification.companyId,
+      employeeId: notification.employeeId ?? null,
+      providerMessageSid: messageSid,
+      category: `ADMIN_ALERT_${notification.alertType}`,
+      relatedOperationId: notification.operationId,
     });
     return "sent";
   }

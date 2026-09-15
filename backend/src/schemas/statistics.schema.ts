@@ -102,6 +102,10 @@ const statisticsFiltersObjectSchema = dateRangeSchema.extend({
   openAttendance: boolFlagSchema,
   /** Table/ranking: only consolidated ops with coverage < 100%. */
   incompleteCoverage: boolFlagSchema,
+  /** Filter MULTI_SHIFT workdays by shift identity (ignored when absent). */
+  operationShiftId: z.string().uuid().optional(),
+  /** Case-insensitive contains match on shift_name_snapshot. */
+  shiftName: z.string().trim().min(1).max(200).optional(),
   rankingMode: z.enum(STATISTICS_RANKING_MODES).optional(),
   export: exportFlagSchema,
 });

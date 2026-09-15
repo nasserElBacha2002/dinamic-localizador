@@ -80,7 +80,12 @@ export async function getWorkTeamUsage(
 
 export async function previewWorkTeamAssignment(
   operationId: string,
-  input: { workTeamIds: string[]; validFrom?: string; validUntil?: string | null },
+  input: {
+    workTeamIds: string[];
+    validFrom?: string;
+    validUntil?: string | null;
+    operationShiftId?: string | null;
+  },
 ): Promise<WorkTeamAssignPreviewResult> {
   const { data } = await scopedApiClient.post<SingleResponse<WorkTeamAssignPreviewResult>>(
     `operations/${operationId}/work-teams/assign-preview`,
@@ -91,11 +96,11 @@ export async function previewWorkTeamAssignment(
 
 export async function confirmWorkTeamAssignment(
   operationId: string,
-  previewToken: string,
+  input: { previewToken: string; operationShiftId?: string | null },
 ): Promise<WorkTeamAssignConfirmResult> {
   const { data } = await scopedApiClient.post<SingleResponse<WorkTeamAssignConfirmResult>>(
     `operations/${operationId}/work-teams/assign`,
-    { previewToken },
+    input,
   );
   return data.data;
 }

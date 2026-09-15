@@ -300,11 +300,16 @@ export const operationShiftService = {
       startTime,
       endTime,
       sortOrder: input.sortOrder,
+      isActive: input.isActive,
     });
     if (!updated) {
       throw new AppError(404, "SHIFT_TEMPLATE_NOT_FOUND", "Plantilla de turno no encontrada.");
     }
     return updated;
+  },
+
+  async reactivateTemplate(companyId: string, templateId: string): Promise<CompanyShiftTemplate> {
+    return this.updateTemplate(companyId, templateId, { isActive: true });
   },
 
   async deactivateTemplate(companyId: string, templateId: string): Promise<CompanyShiftTemplate> {

@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import { TextInput } from "@mantine/core";
 import {
   EmployeeMultiSelect,
   OperationMultiSelect,
@@ -35,6 +36,7 @@ interface StatisticsFiltersBarProps {
   locationStatus: string;
   punctualityStatus: string;
   incompleteCoverage: boolean;
+  shiftName: string;
   activeFilterCount: number;
   onDateRangeChange: (value: DateRangeValue) => void;
   onOperationChange: (value: string[]) => void;
@@ -49,6 +51,7 @@ interface StatisticsFiltersBarProps {
   onLocationStatusChange: (value: string) => void;
   onPunctualityStatusChange: (value: string) => void;
   onIncompleteCoverageChange: (value: boolean) => void;
+  onShiftNameChange: (value: string) => void;
   onClearFilters: () => void;
 }
 
@@ -88,6 +91,7 @@ export function StatisticsFiltersBar({
   locationStatus,
   punctualityStatus,
   incompleteCoverage,
+  shiftName,
   activeFilterCount,
   onDateRangeChange,
   onOperationChange,
@@ -102,6 +106,7 @@ export function StatisticsFiltersBar({
   onLocationStatusChange,
   onPunctualityStatusChange,
   onIncompleteCoverageChange,
+  onShiftNameChange,
   onClearFilters,
 }: StatisticsFiltersBarProps) {
   const validationOptions = useMemo(
@@ -219,6 +224,14 @@ export function StatisticsFiltersBar({
           value={operationKind}
           onChange={(value) => onOperationKindChange(value as StatisticsOperationKind)}
           data={operationKindOptions}
+        />
+      </FilterBar.Item>
+      <FilterBar.Item>
+        <TextInput
+          label="Turno"
+          placeholder="Nombre de turno"
+          value={shiftName}
+          onChange={(event) => onShiftNameChange(event.currentTarget.value)}
         />
       </FilterBar.Item>
       <FilterBar.Item>

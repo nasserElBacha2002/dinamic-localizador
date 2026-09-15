@@ -5,6 +5,7 @@ import {
   useStatisticsByService,
   useStatisticsSummary,
   useStatisticsTimeline,
+  useStatisticsWorkdayDetails,
 } from "../../../hooks/useStatistics";
 import { useTableUrlState } from "../../../hooks/useTableUrlState";
 import {
@@ -72,6 +73,7 @@ const WORKDAY_DETAIL_HEADERS = [
   "Tipo de empleado",
   "Servicio",
   "Tipo de operación",
+  "Turno",
   "Hora esperada de ingreso",
   "Hora esperada de salida",
   "Estado de jornada",
@@ -126,6 +128,7 @@ export function useStatisticsPageData() {
       "empPageSize",
       "opPageSize",
       "svcPageSize",
+      "wdPageSize",
       "empSortBy",
       "empSortOrder",
       "opSortBy",
@@ -141,6 +144,10 @@ export function useStatisticsPageData() {
       "opPageSize",
       "svcPage",
       "svcPageSize",
+      "incPage",
+      "incPageSize",
+      "wdPage",
+      "wdPageSize",
       "empSortBy",
       "empSortOrder",
       "opSortBy",
@@ -184,6 +191,7 @@ export function useStatisticsPageData() {
       punctualityStatus: table.state.punctualityStatus || undefined,
       incompleteCoverage: table.state.incompleteCoverage || undefined,
       incidentType: (table.state.incidentType as StatisticsFilters["incidentType"]) || undefined,
+      shiftName: table.state.shiftName.trim() || undefined,
     }),
     [
       isoDateFrom,
@@ -196,6 +204,7 @@ export function useStatisticsPageData() {
       table.state.operationKind,
       table.state.operationStatus,
       table.state.punchCompleteness,
+      table.state.shiftName,
       table.state.effectiveState,
       table.state.locationStatus,
       table.state.punctualityStatus,
@@ -237,6 +246,15 @@ export function useStatisticsPageData() {
     [baseFilters, table.state.svcPage, table.state.svcPageSize, table.state.svcSortBy, table.state.svcSortOrder],
   );
 
+  const workdayDetailFilters = useMemo(
+    () => ({
+      ...baseFilters,
+      page: table.state.wdPage,
+      limit: table.state.wdPageSize,
+    }),
+    [baseFilters, table.state.wdPage, table.state.wdPageSize],
+  );
+
   const activeTab = table.state.tab;
   const isGeneralTab = activeTab === "general";
   const isEmployeeTab = activeTab === "employee";
@@ -263,6 +281,9 @@ export function useStatisticsPageData() {
 
   const summaryQuery = useStatisticsSummary(baseFilters, { enabled: isGeneralTab });
   const timelineQuery = useStatisticsTimeline(baseFilters, { enabled: isGeneralTab });
+  const workdayDetailsQuery = useStatisticsWorkdayDetails(workdayDetailFilters, {
+    enabled: isGeneralTab,
+  });
   const employeeQuery = useStatisticsByEmployee(employeeFilters, { enabled: isEmployeeTab });
   const operationQuery = useStatisticsByOperation(operationFilters, { enabled: isOperationTab });
   const serviceQuery = useStatisticsByService(serviceFilters, { enabled: isLocationTab });
@@ -382,6 +403,7 @@ export function useStatisticsPageData() {
         row.employeeType ? (employeeTypeLabels[row.employeeType] ?? row.employeeType) : "",
         row.serviceName,
         operationKindLabels[row.operationKind as keyof typeof operationKindLabels] ?? row.operationKind,
+        row.shiftNameSnapshot ?? "",
         row.expectedStartAt ? formatDateTime(row.expectedStartAt) : "",
         row.expectedEndAt ? formatDateTime(row.expectedEndAt) : "",
         employeeWorkdayEffectiveStateLabels[row.effectiveState] ?? row.effectiveState,
@@ -485,6 +507,7 @@ export function useStatisticsPageData() {
         opPage: 1,
         svcPage: 1,
         incPage: 1,
+        wdPage: 1,
       },
       { resetPage: false },
     );
@@ -565,6 +588,15 @@ export function useStatisticsPageData() {
     resetPage: () => table.setField("incPage", 1, { resetPage: false }),
   };
 
+  const workdayPagination = {
+    page: table.state.wdPage,
+    pageSize: table.state.wdPageSize,
+    onPageChange: (page: number) => table.setField("wdPage", page, { resetPage: false }),
+    onPageSizeChange: (pageSize: number) =>
+      table.setState({ wdPageSize: pageSize, wdPage: 1 }, { resetPage: false }),
+    resetPage: () => table.setField("wdPage", 1, { resetPage: false }),
+  };
+
   return {
     activeTab,
     setActiveTab: (tab: StatisticsTabKey) => table.setField("tab", tab, { resetPage: false }),
@@ -597,6 +629,8 @@ export function useStatisticsPageData() {
     setIncompleteCoverage: (value: boolean) => table.setField("incompleteCoverage", value),
     incidentType: table.state.incidentType,
     setIncidentType: (value: string) => table.setField("incidentType", value),
+    shiftName: table.state.shiftName,
+    setShiftName: (value: string) => table.setField("shiftName", value),
     baseFilters,
     isIncidentsTab,
     exportsDisabled,
@@ -609,6 +643,7 @@ export function useStatisticsPageData() {
     activeFilterCount: table.activeFilterCount,
     summaryQuery,
     timelineQuery,
+    workdayDetailsQuery,
     employeeQuery,
     operationQuery,
     serviceQuery,
@@ -620,6 +655,7 @@ export function useStatisticsPageData() {
     operationPagination,
     servicePagination,
     incidentPagination,
+    workdayPagination,
     employeeSortBy: table.state.empSortBy,
     employeeSortDirection: table.state.empSortOrder,
     operationSortBy: table.state.opSortBy,

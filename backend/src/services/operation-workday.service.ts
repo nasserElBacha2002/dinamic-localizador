@@ -21,6 +21,9 @@ export interface OperationWorkdaySummary {
   expectedEndAt: string | null;
   status: string;
   scheduledEmployeesCount: number;
+  operationShiftId: string | null;
+  shiftCodeSnapshot: string | null;
+  shiftNameSnapshot: string | null;
 }
 
 export interface OperationWorkdayEmployeeSummary {
@@ -64,6 +67,9 @@ export const operationWorkdayService = {
         expectedEndAt: item.expectedEndAt,
         status: item.status,
         scheduledEmployeesCount: counts.get(item.id) ?? 0,
+        operationShiftId: item.operationShiftId,
+        shiftCodeSnapshot: item.shiftCodeSnapshot,
+        shiftNameSnapshot: item.shiftNameSnapshot,
       })),
       meta: buildPaginationMeta(query.page, query.limit, total),
     };
@@ -185,6 +191,9 @@ export const operationWorkdayService = {
         expectedEndAt: workday.expectedEndAt,
         status: workday.status,
         scheduledEmployeesCount: counts.get(workday.id) ?? 0,
+        operationShiftId: workday.operationShiftId,
+        shiftCodeSnapshot: workday.shiftCodeSnapshot,
+        shiftNameSnapshot: workday.shiftNameSnapshot,
       },
       expectedEmployees,
     };

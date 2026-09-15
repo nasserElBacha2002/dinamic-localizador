@@ -36,11 +36,14 @@ import { CompanyAbsenceTypePolicyDialog } from "./components/CompanyAbsenceTypeP
 import { CompanyLocationTypesDialog } from "./components/CompanyLocationTypesDialog";
 import { CompanyOperationalSettingsDialog } from "./components/CompanyOperationalSettingsDialog";
 import { CompanyWeeklyScheduleDialog } from "./components/CompanyWeeklyScheduleDialog";
+import { CompanyShiftTemplatesDialog } from "./components/CompanyShiftTemplatesDialog";
 import { EmployeeCategoriesDialog } from "./components/EmployeeCategoriesDialog";
 import { LocationZonesDialog } from "./components/LocationZonesDialog";
 import { SettingsSummaryCard } from "./components/SettingsSummaryCard";
 import { useDefaultAbsenceCalendar } from "../../hooks/useAbsenceCalendar";
 import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
+import { useShiftTemplates } from "../../hooks/useShiftTemplates";
+import { isOvernightShift } from "../../utils/operation-shift-payload";
 
 type SettingsTab = "company" | "absences";
 
@@ -52,6 +55,7 @@ type DialogKey =
   | "absenceOperationalIntegration"
   | "locationTypes"
   | "workSchedule"
+  | "shiftTemplates"
   | "employeeCategories"
   | "locationZones"
   | "whatsappAlerts"
@@ -71,6 +75,9 @@ export function CompanySettingsPage() {
   const canRead = permissionsQuery.data?.permissions.includes("company:read") ?? false;
   const canUpdate =
     permissionsQuery.data?.permissions.includes("company:settings:update") ?? false;
+  const canManageOperations =
+    permissionsQuery.data?.permissions.includes("operations:manage") ?? false;
+  const canManageShiftTemplates = canManageOperations || canUpdate;
   const canManageLocationZones =
     canUpdate || hasPermission(permissionsQuery.data?.permissions, "employees:manage");
 
@@ -81,6 +88,7 @@ export function CompanySettingsPage() {
   const alertRecipientsQuery = useCompanyAlertRecipients(companyTabEnabled && canRead);
   const whatsappQuotaQuery = useWhatsAppQuotaSettings(companyTabEnabled && canRead);
   const workScheduleQuery = useCompanyWorkSchedule(companyTabEnabled);
+  const shiftTemplatesQuery = useShiftTemplates({}, companyTabEnabled);
   const locationTypesQuery = useCompanyLocationTypes(false);
   const employeeCategoriesQuery = useEmployeeCategories(
     { includeInactive: true },
@@ -125,6 +133,12 @@ export function CompanySettingsPage() {
 
   if (permissionsQuery.isPending) {
     return <LoadingState />;
+  }
+
+  if (!activeCompanyId) {
+    return (
+      <ErrorState message="Seleccioná una empresa activa para ver y editar su configuración." />
+    );
   }
 
   if (!canRead) {
@@ -262,6 +276,46 @@ export function CompanySettingsPage() {
               actionLabel="Gestionar horario"
               canEdit={canUpdate && !workScheduleQuery.isError}
               onAction={() => setOpenDialog("workSchedule")}
+            />
+
+            <SettingsSummaryCard
+              title="Plantillas de turnos"
+              description="Turnos reutilizables (mañana, tarde, noche) para operaciones multi-turno."
+              summaryItems={
+                shiftTemplatesQuery.data
+                  ? [
+                      {
+                        label: "Activas",
+                        value: String(
+                          shiftTemplatesQuery.data.filter((template) => template.isActive)
+                            .length,
+                        ),
+                      },
+                      {
+                        label: "Total",
+                        value: String(shiftTemplatesQuery.data.length),
+                      },
+                      {
+                        label: "Nocturnas",
+                        value: String(
+                          shiftTemplatesQuery.data.filter((template) =>
+                            isOvernightShift(template.startTime, template.endTime),
+                          ).length,
+                        ),
+                      },
+                    ]
+                  : []
+              }
+              loading={shiftTemplatesQuery.isLoading}
+              error={
+                shiftTemplatesQuery.isError
+                  ? getApiErrorMessage(shiftTemplatesQuery.error)
+                  : null
+              }
+              onRetry={() => void shiftTemplatesQuery.refetch()}
+              actionLabel="Gestionar plantillas"
+              canEdit={canManageShiftTemplates && !shiftTemplatesQuery.isError}
+              onAction={() => setOpenDialog("shiftTemplates")}
             />
 
             <SettingsSummaryCard
@@ -608,6 +662,14 @@ export function CompanySettingsPage() {
           schedule={workScheduleQuery.data}
           canUpdate={canUpdate}
           onSaved={handleSaved}
+        />
+      ) : null}
+
+      {openDialog === "shiftTemplates" ? (
+        <CompanyShiftTemplatesDialog
+          opened
+          onClose={() => setOpenDialog(null)}
+          canUpdate={canManageShiftTemplates}
         />
       ) : null}
     </Stack>

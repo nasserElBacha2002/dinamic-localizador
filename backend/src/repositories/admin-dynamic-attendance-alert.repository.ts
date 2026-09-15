@@ -7,6 +7,7 @@ import {
   buildMissingCheckinAfterStartDedupKey,
   buildMissingCheckoutAfterEndDedupKey,
 } from "../utils/admin-alert/dedup-keys";
+import { toDateOnlyString } from "../utils/row-mappers";
 
 const toIso = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -30,7 +31,10 @@ const mapOperationalPayload = (
     : undefined,
   operationShiftId: record.operation_shift_id ? String(record.operation_shift_id) : null,
   employeeWorkdayId: record.employee_workday_id ? String(record.employee_workday_id) : undefined,
-  workDate: record.work_date ? String(record.work_date).slice(0, 10) : undefined,
+  workDate:
+    record.work_date === null || record.work_date === undefined
+      ? undefined
+      : toDateOnlyString(record.work_date as Date | string),
   shiftNameSnapshot: record.shift_name_snapshot ? String(record.shift_name_snapshot) : null,
   employeeName: String(record.employee_name),
   serviceName: String(record.service_name),
@@ -44,6 +48,9 @@ const mapOperationalPayload = (
   operationTimezone: String(record.operation_timezone ?? "America/Argentina/Buenos_Aires"),
   ...extras,
 });
+
+/** Exported for payload serialization unit tests (observable contract). */
+export const mapAdminAlertOperationalPayloadForTest = mapOperationalPayload;
 
 /**
  * Dynamic admin attendance alert candidate queries.
@@ -1011,9 +1018,11 @@ export const adminDynamicAttendanceAlertRepository = {
     ) {
       return "NO_LONGER_APPLICABLE";
     }
-    const workDate = String(row.work_date).slice(0, 10);
-    const validFrom = String(row.valid_from).slice(0, 10);
-    const validUntil = row.valid_until ? String(row.valid_until).slice(0, 10) : null;
+    const workDate = toDateOnlyString(row.work_date as Date | string);
+    const validFrom = toDateOnlyString(row.valid_from as Date | string);
+    const validUntil = row.valid_until
+      ? toDateOnlyString(row.valid_until as Date | string)
+      : null;
     if (workDate < validFrom || (validUntil && workDate > validUntil)) {
       return "NO_LONGER_APPLICABLE";
     }

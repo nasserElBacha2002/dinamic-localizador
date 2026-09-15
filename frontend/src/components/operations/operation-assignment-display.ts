@@ -112,6 +112,13 @@ const assignmentErrorMessages: Record<string, string> = {
     "Esta asignación ya tiene fecha de fin; no se puede finalizar nuevamente.",
   ASSIGNMENT_ALREADY_CANCELLED: "La asignación ya está cancelada.",
   OPERATION_ASSIGNMENT_NOT_FOUND: "La asignación no existe.",
+  COVERAGE_SHIFT_MISMATCH:
+    "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
+  COVERAGE_SAME_EMPLOYEE: "El reemplazo debe ser un colaborador distinto al cubierto.",
+  COVERAGE_REPLACED_EMPLOYEE_MISMATCH:
+    "El empleado reemplazado no coincide con la asignación indicada.",
+  SHIFT_REQUIRED_FOR_MULTI_SHIFT_MODE:
+    "Una operación multi-turno requiere seleccionar un turno.",
 };
 
 export function mapAssignmentErrorMessage(code: string | undefined, fallback: string): string {

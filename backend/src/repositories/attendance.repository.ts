@@ -506,12 +506,21 @@ export const attendanceRepository = {
         s.name AS service_name,
         s.address AS service_address,
         s.allowed_radius_meters AS service_allowed_radius_meters,
-        reviewer.name AS reviewer_name
+        reviewer.name AS reviewer_name,
+        ow.operation_shift_id AS operation_shift_id,
+        ow.shift_code_snapshot AS shift_code_snapshot,
+        ow.shift_name_snapshot AS shift_name_snapshot
       FROM attendance_records ar
       INNER JOIN employees e ON e.id = ar.employee_id AND e.company_id = ar.company_id
       INNER JOIN scheduled_operations i ON i.id = ar.operation_id AND i.company_id = ar.company_id
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = ar.company_id
       LEFT JOIN users reviewer ON reviewer.id = ar.reviewed_by
+      LEFT JOIN employee_workdays ew
+        ON ew.id = ar.employee_workday_id
+       AND ew.company_id = ar.company_id
+      LEFT JOIN operation_workdays ow
+        ON ow.id = ew.operation_workday_id
+       AND ow.company_id = ew.company_id
       ${whereClause}
       ORDER BY COALESCE(ar.received_at, ar.checkout_at) DESC
     `);

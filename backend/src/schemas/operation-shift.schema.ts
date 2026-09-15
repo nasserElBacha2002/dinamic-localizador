@@ -24,6 +24,8 @@ export const updateShiftTemplateSchema = z
     startTime: hhMmSchema.optional(),
     endTime: hhMmSchema.optional(),
     sortOrder: z.number().int().optional(),
+    /** Soft-reactivate (`true`) or deactivate (`false`) without a separate route. */
+    isActive: z.boolean().optional(),
   })
   .refine((data) => Object.keys(data).length > 0, {
     message: "Debe enviar al menos un campo para actualizar",

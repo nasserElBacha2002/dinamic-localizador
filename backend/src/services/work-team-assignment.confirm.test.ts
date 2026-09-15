@@ -117,6 +117,7 @@ describe("workTeamAssignmentService.confirm rollback", () => {
       id: "batch-1",
       companyId: "company-1",
       operationId: "operation-1",
+      operationShiftId: null,
       status: "PREVIEWED",
       validFrom: "2026-07-13",
       validUntil: null,
@@ -308,5 +309,57 @@ describe("workTeamAssignmentService.confirm rollback", () => {
       String(consoleErrorMock.mock.calls[0]?.arguments[0] ?? ""),
       /failed to mark batch as FAILED after rollback/,
     );
+  });
+
+  it("rejects confirm when body operationShiftId differs from batch (WORK_TEAM_PREVIEW_SHIFT_MISMATCH)", async () => {
+    setupUnitTestEnv();
+
+    useTestPool();
+    patchTransaction();
+
+    const { workTeamAssignmentBatchRepository } = await import(
+      "../repositories/work-team-assignment-batch.repository"
+    );
+    const { operationRepository } = await import("../repositories/operation.repository");
+    const { operationAssignmentCore } = await import("./operation-assignment-core.service");
+    const { workTeamAssignmentService } = await import("./work-team-assignment.service");
+
+    let assignCalls = 0;
+    mock.method(workTeamAssignmentBatchRepository, "expireStalePreviews", async () => undefined);
+    mock.method(operationRepository, "findById", async () => ({
+      id: "operation-1",
+      companyId: "company-1",
+      status: "SCHEDULED",
+      operationKind: "RECURRING",
+      scheduleMode: "MULTI_SHIFT",
+    }));
+    mock.method(workTeamAssignmentBatchRepository, "findByIdForUpdate", async () => ({
+      id: "batch-1",
+      companyId: "company-1",
+      operationId: "operation-1",
+      operationShiftId: "00000000-0000-4000-8000-0000000000aa",
+      status: "PREVIEWED",
+      validFrom: "2026-07-13",
+      validUntil: null,
+      previewExpiresAt: new Date(Date.now() + 60_000).toISOString(),
+      requestedBy: "user-1",
+    }));
+    mock.method(operationAssignmentCore, "assignEmployeeInTransaction", async () => {
+      assignCalls += 1;
+      throw new Error("should not assign on shift mismatch");
+    });
+    mock.method(workTeamAssignmentBatchRepository, "markFailed", async () => true);
+
+    await assert.rejects(
+      () =>
+        workTeamAssignmentService.confirm("company-1", "operation-1", "user-1", {
+          previewToken: "batch-1",
+          operationShiftId: "00000000-0000-4000-8000-0000000000bb",
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "WORK_TEAM_PREVIEW_SHIFT_MISMATCH",
+    );
+
+    assert.equal(assignCalls, 0);
   });
 });

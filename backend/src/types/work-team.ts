@@ -39,6 +39,8 @@ export interface WorkTeamAssignmentBatch {
   id: string;
   companyId: string;
   operationId: string;
+  /** Immutable shift chosen at preview; null for SINGLE. */
+  operationShiftId: string | null;
   requestedBy: string | null;
   requestedAt: string;
   validFrom: string | null;

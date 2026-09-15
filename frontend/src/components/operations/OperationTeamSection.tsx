@@ -2,20 +2,28 @@ import { Button, Collapse, Group, Select, Stack, Text, TextInput } from "@mantin
 import { useDebouncedValue } from "@mantine/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
-import { SectionCard } from "../../design-system";
+import { ResponsiveModal, SectionCard } from "../../design-system";
 import { useReviewAttendance } from "../../hooks/useAttendance";
 import {
+  useAssignOperationEmployee,
   useAssignOperationEmployeesBatch,
   useCancelOperationAssignment,
   useEndOperationAssignment,
   useOperationAttendanceSummary,
   useOperationEmployees,
 } from "../../hooks/useOperations";
+import { useOperationShifts } from "../../hooks/useOperationShifts";
 import { usePaginationState } from "../../hooks/usePaginationState";
 import type { OperationEmployeeAssignment, OperationKind } from "../../types/operation";
+import type { ScheduleMode } from "../../types/operation-shift";
 import type { OperationWorkdaySummary } from "../../types/operation-workday";
 import { terminology } from "../../domain/terminology";
 import { getApiErrorMessage, parseApiError } from "../../utils/errors";
+import { getRelatedName } from "../../utils/display-safe";
+import {
+  buildAssignEmployeePayload,
+  buildAssignEmployeesBatchPayload,
+} from "../../utils/operation-shift-payload";
 import {
   buildTeamWorkdaySelectOptions,
   formatTeamWorkdayLabel,
@@ -25,7 +33,11 @@ import { EndAssignmentDialog } from "./EndAssignmentDialog";
 import { OperationAssignmentList } from "./OperationAssignmentList";
 import { OperationEmployeeTable } from "./OperationEmployeeTable";
 import { OperationTeamManageDialog } from "./OperationTeamManageDialog";
-import type { AssignEmployeesResult } from "./OperationIndividualAssignmentPanel";
+import {
+  OperationIndividualAssignmentPanel,
+  type AssignEmployeesResult,
+  type CoverageAssignmentTarget,
+} from "./OperationIndividualAssignmentPanel";
 import {
   isCurrentOperationalAssignment,
   mapAssignmentErrorMessage,
@@ -36,6 +48,7 @@ import { canReviewOperationalAttendance } from "./operation-workforce-attendance
 interface OperationTeamSectionProps {
   operationId: string;
   operationKind: OperationKind;
+  scheduleMode?: ScheduleMode;
   canAssign: boolean;
   operationWorkDate: string;
   operationalToday: string;
@@ -48,6 +61,7 @@ interface OperationTeamSectionProps {
 export function OperationTeamSection({
   operationId,
   operationKind,
+  scheduleMode = "SINGLE",
   canAssign,
   operationWorkDate,
   operationalToday,
@@ -57,6 +71,7 @@ export function OperationTeamSection({
   onFeedback,
 }: OperationTeamSectionProps) {
   const isRecurring = operationKind === "RECURRING";
+  const isMultiShift = scheduleMode === "MULTI_SHIFT";
   const pagination = usePaginationState(10);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch] = useDebouncedValue(searchQuery, 300);
@@ -74,13 +89,16 @@ export function OperationTeamSection({
   );
 
   const assignmentsQuery = useOperationEmployees(operationId);
+  const shiftsQuery = useOperationShifts(operationId, { activeOnly: true }, isMultiShift);
   const summaryQuery = useOperationAttendanceSummary(operationId, summaryFilters);
   const assignBatchMutation = useAssignOperationEmployeesBatch(operationId);
+  const assignEmployeeMutation = useAssignOperationEmployee(operationId);
   const cancelMutation = useCancelOperationAssignment(operationId);
   const endMutation = useEndOperationAssignment(operationId);
   const reviewMutation = useReviewAttendance();
 
   const [manageDialogOpen, setManageDialogOpen] = useState(false);
+  const [coverageTarget, setCoverageTarget] = useState<CoverageAssignmentTarget | null>(null);
   const [endTarget, setEndTarget] = useState<OperationEmployeeAssignment | null>(null);
   const [historyOpen, setHistoryOpen] = useState(false);
 
@@ -95,13 +113,23 @@ export function OperationTeamSection({
   } | null>(null);
 
   const assignments = assignmentsQuery.data ?? [];
-  const currentAssignments = useMemo(
-    () => assignments.filter(isCurrentOperationalAssignment),
-    [assignments],
+  const shiftOptions = useMemo(
+    () =>
+      (shiftsQuery.data ?? [])
+        .filter((shift) => shift.isActive)
+        .sort(
+          (left, right) =>
+            left.sortOrder - right.sortOrder || left.name.localeCompare(right.name, "es"),
+        )
+        .map((shift) => ({ value: shift.id, label: `${shift.name} (${shift.code})` })),
+    [shiftsQuery.data],
   );
   const currentlyAssignedEmployeeIds = useMemo(
-    () => currentAssignments.map((assignment) => assignment.employeeId),
-    [currentAssignments],
+    () =>
+      assignments
+        .filter(isCurrentOperationalAssignment)
+        .map((assignment) => assignment.employeeId),
+    [assignments],
   );
 
   const assignmentById = useMemo(
@@ -121,19 +149,71 @@ export function OperationTeamSection({
     () => buildTeamWorkdaySelectOptions(workdayOptions, operationalToday),
     [workdayOptions, operationalToday],
   );
+  const selectedWorkdaySummary = selectedWorkday
+    ? workdayOptions.find((workday) => workday.id === selectedWorkday.workdayId)
+    : null;
   const selectedWorkdayLabel = selectedWorkday
-    ? formatTeamWorkdayLabel(selectedWorkday.workDate, operationalToday)
+    ? formatTeamWorkdayLabel(
+        selectedWorkday.workDate,
+        operationalToday,
+        selectedWorkdaySummary?.shiftNameSnapshot ??
+          selectedWorkdaySummary?.shiftCodeSnapshot,
+      )
     : null;
   const noWorkdayForToday = isRecurring && !selectedWorkday;
+  const ambiguousTodayWorkdays =
+    isRecurring &&
+    isMultiShift &&
+    !selectedWorkday &&
+    workdayOptions.filter((workday) => workday.workDate === operationalToday).length > 1;
 
   const handleAssignEmployees = async (input: {
     employeeIds: string[];
     validFrom?: string;
     validUntil?: string | null;
+    operationShiftId?: string | null;
+    asCoverage?: boolean;
+    replacedAssignmentId?: string;
+    replacedEmployeeId?: string;
   }): Promise<AssignEmployeesResult> => {
+    if (input.asCoverage) {
+      const employeeId = input.employeeIds[0];
+      if (!employeeId || !input.replacedAssignmentId) {
+        const message = "Faltan datos para registrar la cobertura.";
+        onFeedback(message, "error");
+        return { status: "error", added: [], skipped: [] };
+      }
+
+      try {
+        const payload = buildAssignEmployeePayload(scheduleMode, {
+          employeeId,
+          asCoverage: true,
+          replacedAssignmentId: input.replacedAssignmentId,
+          replacedEmployeeId: input.replacedEmployeeId,
+          ...(input.validFrom
+            ? {
+                validFrom: input.validFrom,
+                validUntil: input.validUntil,
+              }
+            : {}),
+        });
+        const assignment = await assignEmployeeMutation.mutateAsync(payload);
+        onFeedback("Cobertura asignada correctamente.", "success");
+        return { status: "success", added: [assignment.employeeId], skipped: [] };
+      } catch (error) {
+        const message = mapAssignmentErrorMessage(
+          parseApiError(error).code,
+          getApiErrorMessage(error),
+        );
+        onFeedback(message, "error");
+        throw new Error(message, { cause: error });
+      }
+    }
+
     try {
-      const result = await assignBatchMutation.mutateAsync({
+      const payload = buildAssignEmployeesBatchPayload(scheduleMode, {
         employeeIds: input.employeeIds,
+        operationShiftId: input.operationShiftId,
         ...(input.validFrom
           ? {
               validFrom: input.validFrom,
@@ -141,6 +221,7 @@ export function OperationTeamSection({
             }
           : {}),
       });
+      const result = await assignBatchMutation.mutateAsync(payload);
 
       const added = result.assignedIds;
       const skipped: AssignEmployeesResult["skipped"] = result.skipped.map((item) => ({
@@ -173,6 +254,19 @@ export function OperationTeamSection({
       onFeedback(message, "error");
       throw error;
     }
+  };
+
+  const openCoverageForAssignment = (assignment: OperationEmployeeAssignment) => {
+    const shiftLabel = assignment.operationShiftId
+      ? shiftOptions.find((option) => option.value === assignment.operationShiftId)?.label ?? null
+      : null;
+    setCoverageTarget({
+      replacedAssignmentId: assignment.id,
+      replacedEmployeeId: assignment.employeeId,
+      replacedEmployeeName: assignment.employee ? getRelatedName(assignment.employee) : undefined,
+      operationShiftId: assignment.operationShiftId ?? null,
+      shiftLabel,
+    });
   };
 
   const handleCancelAssignment = async (assignment: OperationEmployeeAssignment) => {
@@ -283,7 +377,11 @@ export function OperationTeamSection({
         </Group>
       ) : null}
 
-      {noWorkdayForToday ? (
+      {ambiguousTodayWorkdays ? (
+        <Text size="sm" c="dimmed" mb="sm">
+          Hay varios turnos para hoy. Seleccioná la jornada con el turno que querés ver.
+        </Text>
+      ) : noWorkdayForToday ? (
         <Text size="sm" c="dimmed" mb="sm">
           No hay una jornada programada para hoy.
         </Text>
@@ -318,8 +416,10 @@ export function OperationTeamSection({
         }
         onCancelAssignment={(assignment) => void handleCancelAssignment(assignment)}
         onEndAssignment={setEndTarget}
+        onCoverAssignment={openCoverageForAssignment}
         cancelPending={cancelMutation.isPending}
         endPending={endMutation.isPending}
+        coverPending={assignEmployeeMutation.isPending}
         pagination={
           meta
             ? {
@@ -386,12 +486,43 @@ export function OperationTeamSection({
           onClose={() => setManageDialogOpen(false)}
           operationId={operationId}
           operationKind={operationKind}
+          scheduleMode={scheduleMode}
           operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
           excludeEmployeeIds={currentlyAssignedEmployeeIds}
+          shiftOptions={shiftOptions}
           assignLoading={assignBatchMutation.isPending}
           onAssignEmployees={handleAssignEmployees}
           onCompleted={onFeedback}
         />
+      ) : null}
+
+      {canAssign ? (
+        <ResponsiveModal
+          opened={Boolean(coverageTarget)}
+          onClose={() => setCoverageTarget(null)}
+          title="Cubrir / reemplazar"
+          size="md"
+          bodyMode="scroll"
+        >
+          {coverageTarget ? (
+            <OperationIndividualAssignmentPanel
+              key={`coverage:${coverageTarget.replacedAssignmentId}`}
+              operationKind={operationKind}
+              scheduleMode={scheduleMode}
+              operationWorkDate={selectedWorkday?.workDate ?? operationWorkDate}
+              excludeEmployeeIds={currentlyAssignedEmployeeIds}
+              shiftOptions={shiftOptions}
+              coverageTarget={coverageTarget}
+              loading={assignEmployeeMutation.isPending}
+              onAssign={handleAssignEmployees}
+              onResult={(result) => {
+                if (result.status === "success") {
+                  setCoverageTarget(null);
+                }
+              }}
+            />
+          ) : null}
+        </ResponsiveModal>
       ) : null}
 
       <ReviewAttendanceDialog

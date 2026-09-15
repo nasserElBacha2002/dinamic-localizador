@@ -13,6 +13,58 @@ const operationStatusSchema = z.enum([
 
 const dateOnlySchema = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Fecha inválida");
 
+const hhMmSchema = z
+  .string()
+  .regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Horario inválido (HH:mm)");
+
+const createOperationShiftSeedSchema = z.object({
+  code: z.string().trim().min(1).max(80),
+  name: z.string().trim().min(1).max(200),
+  templateId: z.string().uuid().nullable().optional(),
+  sortOrder: z.number().int().optional(),
+  startTime: hhMmSchema,
+  endTime: hhMmSchema,
+  days: z
+    .array(
+      z.object({
+        dayOfWeek: z.number().int().min(1).max(7),
+        isEnabled: z.boolean(),
+      }),
+    )
+    .optional(),
+});
+
+const scheduleModeCreateFields = {
+  scheduleMode: z.enum(["SINGLE", "MULTI_SHIFT"]).optional().default("SINGLE"),
+  shifts: z.array(createOperationShiftSeedSchema).optional(),
+};
+
+const refineScheduleModeOnCreate = <
+  T extends { scheduleMode: "SINGLE" | "MULTI_SHIFT"; shifts?: unknown[] },
+>(
+  data: T,
+  ctx: z.RefinementCtx,
+) => {
+  if (data.scheduleMode === "MULTI_SHIFT") {
+    if (!data.shifts || data.shifts.length < 1) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Se requiere al menos un turno para crear en modo multi-turno",
+        path: ["shifts"],
+      });
+    }
+    return;
+  }
+
+  if (data.shifts && data.shifts.length > 0) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "No enviés turnos cuando el modo es horario único",
+      path: ["shifts"],
+    });
+  }
+};
+
 const operationBaseFields = {
   serviceId: z.string().uuid("UUID de servicio inválido"),
   earlyToleranceMinutes: z.number().int().min(0).nullable().optional(),
@@ -23,26 +75,26 @@ export const createOneTimeOperationSchema = z
   .object({
     operationKind: z.literal("ONE_TIME"),
     ...operationBaseFields,
+    ...scheduleModeCreateFields,
     scheduledStart: z.string().datetime({ offset: true }),
     scheduledEnd: z.string().datetime({ offset: true }).optional().nullable(),
   })
-  .refine(
-    (data) => {
-      if (!data.scheduledEnd) {
-        return true;
-      }
-      return new Date(data.scheduledEnd) > new Date(data.scheduledStart);
-    },
-    {
-      message: "scheduledEnd debe ser posterior a scheduledStart",
-      path: ["scheduledEnd"],
-    },
-  );
+  .superRefine((data, ctx) => {
+    if (data.scheduledEnd && !(new Date(data.scheduledEnd) > new Date(data.scheduledStart))) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "scheduledEnd debe ser posterior a scheduledStart",
+        path: ["scheduledEnd"],
+      });
+    }
+    refineScheduleModeOnCreate(data, ctx);
+  });
 
 export const createRecurringOperationSchema = z
   .object({
     operationKind: z.literal("RECURRING"),
     ...operationBaseFields,
+    ...scheduleModeCreateFields,
     validFrom: dateOnlySchema,
     validUntil: dateOnlySchema.nullable().optional(),
     scheduleSource: z.enum(SCHEDULE_SOURCES),
@@ -72,6 +124,8 @@ export const createRecurringOperationSchema = z
         path: ["scheduleDays"],
       });
     }
+
+    refineScheduleModeOnCreate(data, ctx);
   });
 
 export const createOperationSchema = z.discriminatedUnion("operationKind", [

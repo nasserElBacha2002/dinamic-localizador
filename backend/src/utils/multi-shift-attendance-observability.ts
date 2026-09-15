@@ -1,22 +1,16 @@
 /**
- * Structured multi-shift attendance observability (no lat/lng, no WhatsApp body).
+ * Structured multi-shift attendance observability (no lat/lng, no WhatsApp body/phone).
+ * Only actions with real producers are listed.
  */
 
 export type MultiShiftAttendanceLogAction =
-  | "candidate_found"
   | "selection_required"
   | "selection_confirmed"
-  | "session_expired"
   | "session_invalidated"
-  | "check_in_created"
-  | "check_in_idempotent"
-  | "check_out_created"
-  | "check_out_idempotent"
+  | "state_conflict"
+  | "reminder_claimed"
   | "reminder_sent"
   | "reminder_skipped"
-  | "alert_sent"
-  | "alert_skipped"
-  | "state_conflict"
   | "retry_recovered";
 
 export type MultiShiftAttendanceLogFields = {

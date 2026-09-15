@@ -32,7 +32,7 @@ type PersistedOperationTolerances = {
 
 type PersistedOneTimeOperationInput = Omit<
   CreateOneTimeOperationInput,
-  "earlyToleranceMinutes" | "lateToleranceMinutes"
+  "earlyToleranceMinutes" | "lateToleranceMinutes" | "scheduleMode" | "shifts"
 > &
   PersistedOperationTolerances;
 

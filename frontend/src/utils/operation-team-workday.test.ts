@@ -12,6 +12,7 @@ const workday = (
   id: string,
   workDate: string,
   scheduledEmployeesCount = 1,
+  shift?: { operationShiftId?: string; shiftNameSnapshot?: string; shiftCodeSnapshot?: string },
 ): OperationWorkdaySummary => ({
   id,
   workDate,
@@ -19,6 +20,9 @@ const workday = (
   expectedEndAt: null,
   status: "ACTIVE",
   scheduledEmployeesCount,
+  operationShiftId: shift?.operationShiftId ?? null,
+  shiftNameSnapshot: shift?.shiftNameSnapshot ?? null,
+  shiftCodeSnapshot: shift?.shiftCodeSnapshot ?? null,
 });
 
 describe("operation team workday helpers", () => {
@@ -42,19 +46,47 @@ describe("operation team workday helpers", () => {
     assert.equal(selected, null);
   });
 
+  it("returns null when multiple same-date workdays exist (multi-shift)", () => {
+    const today = "2026-07-13";
+    const selected = pickDefaultTeamWorkday(
+      [
+        workday("wd-am", today, 2, {
+          operationShiftId: "s1",
+          shiftNameSnapshot: "Mañana",
+        }),
+        workday("wd-pm", today, 1, {
+          operationShiftId: "s2",
+          shiftNameSnapshot: "Tarde",
+        }),
+      ],
+      today,
+    );
+    assert.equal(selected, null);
+  });
+
   it("labels today's workday explicitly", () => {
     const label = formatTeamWorkdayLabel("2026-07-13", "2026-07-13");
     assert.match(label, /^Hoy,/);
     assert.match(label, /13\/07\/2026/);
   });
 
-  it("builds selector options with employee counts", () => {
+  it("includes shift name in workday labels", () => {
+    const label = formatTeamWorkdayLabel("2026-07-13", "2026-07-13", "Mañana");
+    assert.match(label, /Mañana/);
+    assert.match(label, /^Hoy,/);
+  });
+
+  it("builds selector options with employee counts and shift names", () => {
     const options = buildTeamWorkdaySelectOptions(
-      [workday("wd-13", "2026-07-13", 3), workday("wd-06", "2026-07-06", 1)],
+      [
+        workday("wd-13", "2026-07-13", 3, { shiftNameSnapshot: "Noche" }),
+        workday("wd-06", "2026-07-06", 1),
+      ],
       "2026-07-13",
     );
 
     assert.equal(options[0]?.value, "wd-13");
     assert.match(options[0]?.label ?? "", /3 colaborador/);
+    assert.match(options[0]?.label ?? "", /Noche/);
   });
 });

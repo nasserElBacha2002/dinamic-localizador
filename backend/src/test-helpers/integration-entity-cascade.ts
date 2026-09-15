@@ -122,6 +122,31 @@ export const deleteOperationCascade = async (
         DELETE FROM operation_change_events
         WHERE company_id = @companyId AND operation_id = @operationId;
 
+      IF OBJECT_ID(N'dbo.operation_shift_date_exceptions', N'U') IS NOT NULL
+        DELETE FROM operation_shift_date_exceptions
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
+      IF OBJECT_ID(N'dbo.operation_shift_version_days', N'U') IS NOT NULL
+        DELETE FROM operation_shift_version_days
+        WHERE operation_shift_version_id IN (
+          SELECT v.id
+          FROM operation_shift_versions v
+          INNER JOIN operation_shifts s ON s.id = v.operation_shift_id
+          WHERE s.company_id = @companyId AND s.operation_id = @operationId
+        );
+
+      IF OBJECT_ID(N'dbo.operation_shift_versions', N'U') IS NOT NULL
+        DELETE FROM operation_shift_versions
+        WHERE company_id = @companyId
+          AND operation_shift_id IN (
+            SELECT id FROM operation_shifts
+            WHERE company_id = @companyId AND operation_id = @operationId
+          );
+
+      IF OBJECT_ID(N'dbo.operation_shifts', N'U') IS NOT NULL
+        DELETE FROM operation_shifts
+        WHERE company_id = @companyId AND operation_id = @operationId;
+
       DELETE FROM operation_schedule_days
       WHERE operation_schedule_id IN (
         SELECT id FROM operation_schedules

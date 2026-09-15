@@ -171,6 +171,81 @@ const mapTransitionError = (error: unknown): never => {
   throw error;
 };
 
+type SeedMultiShiftInput = {
+  code: string;
+  name: string;
+  templateId?: string | null;
+  sortOrder?: number;
+  startTime: string;
+  endTime: string;
+  effectiveUntil?: string | null;
+  days?: TransitionToMultiShiftInput["shifts"][number]["days"];
+};
+
+/**
+ * Seeds MULTI_SHIFT catalog + mode for a newly created operation (no assignment redistribution).
+ * Intended for create-time atomic use inside an open transaction.
+ */
+export const seedMultiShiftOnCreateInTransaction = async (
+  companyId: string,
+  operationId: string,
+  effectiveFrom: string,
+  shifts: SeedMultiShiftInput[],
+  transaction: sql.Transaction,
+): Promise<string[]> => {
+  if (!shifts || shifts.length < 1) {
+    throw new AppError(
+      400,
+      "SHIFT_REQUIRED_FOR_MULTI_SHIFT_MODE",
+      "Se requiere al menos un turno para crear en modo multi-turno.",
+    );
+  }
+
+  const createdShiftIds: string[] = [];
+  for (const shiftInput of shifts) {
+    const code = normalizeShiftCode(shiftInput.code || shiftInput.name);
+    const name = shiftInput.name.trim();
+    if (!name) {
+      throw new AppError(400, "SHIFT_NAME_REQUIRED", "El nombre del turno es obligatorio.");
+    }
+    const startTime = normalizeShiftTime(shiftInput.startTime);
+    const endTime = normalizeShiftTime(shiftInput.endTime);
+    assertShiftTimesDistinct(startTime, endTime);
+    assertEffectiveRange(effectiveFrom, shiftInput.effectiveUntil ?? null);
+
+    const shift = await operationShiftRepository.createIdentityInTransaction(
+      companyId,
+      transaction,
+      {
+        operationId,
+        templateId: shiftInput.templateId ?? null,
+        code,
+        name,
+        sortOrder: shiftInput.sortOrder ?? 0,
+        isActive: true,
+      },
+    );
+
+    await operationShiftVersionRepository.createWithOverlapGuard(
+      companyId,
+      shift.id,
+      {
+        effectiveFrom,
+        effectiveUntil: shiftInput.effectiveUntil ?? null,
+        startTime,
+        endTime,
+        days: shiftInput.days,
+      },
+      transaction,
+    );
+
+    createdShiftIds.push(shift.id);
+  }
+
+  await updateScheduleModeInTransaction(companyId, operationId, "MULTI_SHIFT", transaction);
+  return createdShiftIds;
+};
+
 /**
  * Transitions scheduled_operations.schedule_mode between SINGLE and MULTI_SHIFT.
  * Does not auto-assign every employee to every shift.

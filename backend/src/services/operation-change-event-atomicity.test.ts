@@ -218,6 +218,7 @@ describe("operationAssignmentService coverage validation", () => {
         id: employeeId,
         active: true,
       }));
+      mock.method(operationEmployeeRepository, "findById", async () => null);
       mock.method(operationEmployeeRepository, "findByIdInTransaction", async () => null);
 
       await assert.rejects(

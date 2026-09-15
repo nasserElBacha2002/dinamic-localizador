@@ -131,6 +131,11 @@ const WORKDAY_ASSIGNMENT_COVERAGE_SQL = `
   AND ie.cancelled_at IS NULL
   AND ow.work_date >= ie.valid_from
   AND (ie.valid_until IS NULL OR ow.work_date <= ie.valid_until)
+  AND (
+    ie.operation_shift_id IS NULL
+    OR ow.operation_shift_id IS NULL
+    OR ie.operation_shift_id = ow.operation_shift_id
+  )
 `;
 
 const REMINDER_CANDIDATE_SELECT = `

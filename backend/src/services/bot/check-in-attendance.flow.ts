@@ -96,6 +96,15 @@ export async function processLocationCheckIn(input: {
     );
 
     if (!workday || workday.operationId !== input.operationId) {
+      logMultiShiftAttendanceEvent({
+        companyId,
+        operationId: input.operationId,
+        employeeWorkdayId: input.employeeWorkdayId,
+        messageSid: input.messageSid,
+        action: "session_invalidated",
+        outcome: "rejected",
+        reason: "workday_no_longer_eligible",
+      });
       return respond(companyId, {
         message: WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
         employeeId: input.employeeId,
@@ -664,6 +673,15 @@ export async function handleOperationSelection(input: {
     );
 
     if (!workday) {
+      logMultiShiftAttendanceEvent({
+        companyId,
+        operationId: selected.operationId,
+        employeeWorkdayId: selected.employeeWorkdayId,
+        messageSid: input.messageSid ?? null,
+        action: "session_invalidated",
+        outcome: "rejected",
+        reason: "workday_no_longer_eligible_after_selection",
+      });
       return respond(companyId, {
         message: WORKDAY_NO_LONGER_AVAILABLE_MESSAGE,
         employeeId: input.employeeId,
@@ -682,6 +700,14 @@ export async function handleOperationSelection(input: {
     );
 
     if (selectionResult.kind === "expired") {
+      logMultiShiftAttendanceEvent({
+        companyId,
+        operationId: workday.operationId,
+        employeeWorkdayId: workday.employeeWorkdayId,
+        action: "session_invalidated",
+        outcome: "rejected",
+        reason: "session_expired",
+      });
       return respond(companyId, {
         message: EXPIRED_SESSION_MESSAGE,
         employeeId: input.employeeId,
@@ -693,6 +719,14 @@ export async function handleOperationSelection(input: {
     }
 
     if (selectionResult.kind !== "ok") {
+      logMultiShiftAttendanceEvent({
+        companyId,
+        operationId: workday.operationId,
+        employeeWorkdayId: workday.employeeWorkdayId,
+        action: "state_conflict",
+        outcome: "rejected",
+        reason: selectionResult.kind,
+      });
       return respond(companyId, {
         message: INVALID_SELECTION_MESSAGE,
         employeeId: input.employeeId,
@@ -702,6 +736,18 @@ export async function handleOperationSelection(input: {
         flowType: "CHECKIN",
       });
     }
+
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: workday.operationId,
+      operationWorkdayId: workday.operationWorkdayId,
+      operationShiftId: workday.operationShiftId,
+      employeeWorkdayId: workday.employeeWorkdayId,
+      workDate: workday.workDate,
+      messageSid: input.messageSid ?? null,
+      action: "selection_confirmed",
+      outcome: "ok",
+    });
 
     if (pendingLocation) {
       return processLocationCheckIn({

@@ -6,6 +6,7 @@ import { AppError } from "../errors/app-error";
 import { operationRepository } from "../repositories/operation.repository";
 import { operationEmployeeRepository } from "../repositories/operation-employee.repository";
 import { employeeDeactivationRepository } from "../repositories/employee-deactivation.repository";
+import { operationShiftRepository } from "../repositories/operation-shift.repository";
 import { workTeamAssignmentBatchRepository } from "../repositories/work-team-assignment-batch.repository";
 import { workTeamRepository } from "../repositories/work-team.repository";
 import type {
@@ -14,16 +15,30 @@ import type {
 } from "../schemas/work-team.schema";
 import type { Employee, OperationEmployeeAssignment } from "../types/domain";
 import type { WorkTeam, WorkTeamMember } from "../types/work-team";
+import type { OperationScheduleMode } from "../constants/operation-schedule-mode";
 import { assignmentPeriodsOverlap } from "../utils/assignment-period";
 import { logAuditSafe } from "../utils/audit-post-commit";
 import { isOperationAssignable } from "../utils/operation-status";
+import { assertAssignmentShiftMatchesScheduleMode } from "../utils/operation-schedule-mode-guard";
 import { safeRollback } from "../utils/safe-transaction";
-import { hashCombinedWorkTeamSnapshots, hashWorkTeamMembers } from "../utils/work-team-snapshot-hash";
+import {
+  hashWorkTeamMembers,
+  hashWorkTeamPreviewSnapshot,
+} from "../utils/work-team-snapshot-hash";
 import { auditService } from "./audit.service";
 import { operationAssignmentCore } from "./operation-assignment-core.service";
 import { operationWorkDateService } from "./operation-work-date.service";
 import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
+
+const resolveWorkTeamAssignShiftId = (
+  scheduleMode: OperationScheduleMode,
+  operationShiftId: string | null | undefined,
+): string | null => {
+  const resolved = operationShiftId ?? null;
+  assertAssignmentShiftMatchesScheduleMode(scheduleMode, resolved);
+  return resolved;
+};
 
 interface PreviewEmployeeEntry {
   employeeId: string;
@@ -366,6 +381,24 @@ export const workTeamAssignmentService = {
       );
     }
 
+    const scheduleMode = operation.scheduleMode ?? "SINGLE";
+    const operationShiftId = resolveWorkTeamAssignShiftId(scheduleMode, input.operationShiftId);
+
+    if (operationShiftId) {
+      const shift = await operationShiftRepository.findByIdForOperation(
+        companyId,
+        operationId,
+        operationShiftId,
+      );
+      if (!shift || !shift.isActive) {
+        throw new AppError(
+          409,
+          "OPERATION_SHIFT_INACTIVE",
+          "El turno no pertenece a esta operación o no está activo",
+        );
+      }
+    }
+
     const operationKind = operation.operationKind ?? "ONE_TIME";
     const operationWorkDate =
       operationKind === "ONE_TIME"
@@ -420,13 +453,15 @@ export const workTeamAssignmentService = {
         validUntil,
       );
 
-      const membersSnapshotHash = hashCombinedWorkTeamSnapshots(
+      const membersSnapshotHash = hashWorkTeamPreviewSnapshot(
+        operationShiftId,
         teamSnapshots.map((snapshot) => snapshot.membersSnapshotHash),
       );
 
       const batch = await workTeamAssignmentBatchRepository.createPreviewInTransaction(transaction, {
         companyId,
         operationId,
+        operationShiftId,
         requestedBy: userId,
         validFrom,
         validUntil,
@@ -486,6 +521,8 @@ export const workTeamAssignmentService = {
       );
     }
 
+    const scheduleMode = operation.scheduleMode ?? "SINGLE";
+
     const operationKind = operation.operationKind ?? "ONE_TIME";
     const operationWorkDate =
       operationKind === "ONE_TIME"
@@ -512,6 +549,18 @@ export const workTeamAssignmentService = {
 
       assertBatchOwnership(batch, userId);
 
+      const batchShiftId = batch.operationShiftId ?? null;
+      if (
+        input.operationShiftId !== undefined &&
+        (input.operationShiftId ?? null) !== batchShiftId
+      ) {
+        throw new AppError(
+          409,
+          "WORK_TEAM_PREVIEW_SHIFT_MISMATCH",
+          "El turno de confirmación no coincide con el de la previsualización",
+        );
+      }
+
       if (batch.status === "COMPLETED") {
         await transaction.commit();
         transactionClosed = true;
@@ -526,6 +575,23 @@ export const workTeamAssignmentService = {
         transactionClosed = true;
         throw new AppError(409, "WORK_TEAM_PREVIEW_EXPIRED", "La previsualización expiró");
       } else {
+        const operationShiftId = resolveWorkTeamAssignShiftId(scheduleMode, batchShiftId);
+
+        if (operationShiftId) {
+          const shift = await operationShiftRepository.findByIdForOperation(
+            companyId,
+            operationId,
+            operationShiftId,
+          );
+          if (!shift || !shift.isActive) {
+            throw new AppError(
+              409,
+              "OPERATION_SHIFT_INACTIVE",
+              "El turno no pertenece a esta operación o no está activo",
+            );
+          }
+        }
+
         const batchTeams = await workTeamAssignmentBatchRepository.listBatchTeamsInTransaction(
           companyId,
           batch.id,
@@ -608,6 +674,9 @@ export const workTeamAssignmentService = {
               operationWorkDate,
               sourceAssignmentBatchId: batch.id,
               sourceWorkTeamId: entry.primaryWorkTeamId,
+              assignmentOrigin: "WORK_TEAM",
+              scheduleMode,
+              operationShiftId,
             },
           );
 

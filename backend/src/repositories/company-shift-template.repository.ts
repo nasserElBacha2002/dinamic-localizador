@@ -126,6 +126,7 @@ export const companyShiftTemplateRepository = {
       startTime?: string;
       endTime?: string;
       sortOrder?: number;
+      isActive?: boolean;
     },
   ): Promise<CompanyShiftTemplate | null> {
     const existing = await this.findById(companyId, id);
@@ -141,12 +142,14 @@ export const companyShiftTemplateRepository = {
       .input("startTime", sql.NVarChar(8), input.startTime ?? existing.startTime)
       .input("endTime", sql.NVarChar(8), input.endTime ?? existing.endTime)
       .input("sortOrder", sql.Int, input.sortOrder ?? existing.sortOrder)
+      .input("isActive", sql.Bit, (input.isActive ?? existing.isActive) ? 1 : 0)
       .query(`
         UPDATE dbo.company_shift_templates
         SET name = @name,
             start_time = CAST(@startTime AS TIME),
             end_time = CAST(@endTime AS TIME),
             sort_order = @sortOrder,
+            is_active = @isActive,
             updated_at = SYSUTCDATETIME()
         OUTPUT INSERTED.*
         WHERE company_id = @companyId AND id = @id

@@ -3,6 +3,7 @@ import {
   Button,
   Group,
   MultiSelect,
+  Select,
   SimpleGrid,
   Stack,
   Text,
@@ -19,6 +20,7 @@ import {
   useWorkTeams,
 } from "../../hooks/useWorkTeams";
 import type { OperationKind } from "../../types/operation";
+import type { ScheduleMode } from "../../types/operation-shift";
 import type { WorkTeamAssignPreviewResult } from "../../types/work-team";
 import { formatDateInputDisplay } from "../../utils/date-range";
 import { getTodayDateInput } from "../../utils/dates";
@@ -49,7 +51,9 @@ const skipReasonLabels: Record<string, string> = {
 export interface WorkTeamAssignmentPanelProps {
   operationId: string;
   operationKind: OperationKind;
+  scheduleMode?: ScheduleMode;
   operationWorkDate: string;
+  shiftOptions?: Array<{ value: string; label: string }>;
   enabled?: boolean;
   onCompleted: (message: string, severity: "success" | "error") => void;
   onFinished?: () => void;
@@ -59,7 +63,7 @@ export function WorkTeamAssignmentPanel(props: WorkTeamAssignmentPanelProps) {
   const { activeCompany } = useCompany();
   const companyId = activeCompany?.companyId ?? null;
   const panelKey = props.enabled
-    ? `${companyId ?? "no-company"}:${props.operationId}:${props.operationWorkDate}`
+    ? `${companyId ?? "no-company"}:${props.operationId}:${props.operationWorkDate}:${props.scheduleMode ?? "SINGLE"}`
     : "disabled";
 
   if (!props.enabled) {
@@ -72,12 +76,15 @@ export function WorkTeamAssignmentPanel(props: WorkTeamAssignmentPanelProps) {
 function WorkTeamAssignmentPanelContent({
   operationId,
   operationKind,
+  scheduleMode = "SINGLE",
   operationWorkDate,
+  shiftOptions = [],
   companyId,
   onCompleted,
   onFinished,
 }: WorkTeamAssignmentPanelProps & { companyId: string | null }) {
   const isRecurring = operationKind === "RECURRING";
+  const isMultiShift = scheduleMode === "MULTI_SHIFT";
   const queryClient = useQueryClient();
 
   const teamsQuery = useWorkTeams({ page: 1, limit: 100, active: true }, true);
@@ -85,6 +92,9 @@ function WorkTeamAssignmentPanelContent({
   const confirmMutation = useConfirmWorkTeamAssignment(operationId);
 
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(
+    shiftOptions.length === 1 ? shiftOptions[0]!.value : null,
+  );
   const [validFrom, setValidFrom] = useState(operationWorkDate || getTodayDateInput());
   const [validUntil, setValidUntil] = useState("");
   const [preview, setPreview] = useState<WorkTeamAssignPreviewResult | null>(null);
@@ -97,6 +107,7 @@ function WorkTeamAssignmentPanelContent({
 
   const resetState = () => {
     setSelectedTeamIds([]);
+    setSelectedShiftId(shiftOptions.length === 1 ? shiftOptions[0]!.value : null);
     setValidFrom(operationWorkDate || getTodayDateInput());
     setValidUntil("");
     setPreview(null);
@@ -106,6 +117,7 @@ function WorkTeamAssignmentPanelContent({
   const teamsLoading = teamsQuery.isCompanyLoading || teamsQuery.isPending;
   const teamsLoaded = !teamsLoading && !teamsQuery.isError;
   const hasActiveTeams = (teamsQuery.data?.data?.length ?? 0) > 0;
+  const missingShift = isMultiShift && !selectedShiftId;
 
   const previewDisabledReason = getWorkTeamPreviewDisabledReason({
     isCompanyLoading: teamsQuery.isCompanyLoading,
@@ -116,6 +128,8 @@ function WorkTeamAssignmentPanelContent({
     validFrom,
     validUntil,
     isRecurring,
+    requireShift: isMultiShift,
+    selectedShiftId,
   });
 
   const teamSelectionMessage = teamsLoading
@@ -136,6 +150,7 @@ function WorkTeamAssignmentPanelContent({
     try {
       const result = await previewMutation.mutateAsync({
         workTeamIds: selectedTeamIds,
+        ...(isMultiShift ? { operationShiftId: selectedShiftId } : {}),
         ...(isRecurring
           ? {
               validFrom,
@@ -153,9 +168,16 @@ function WorkTeamAssignmentPanelContent({
     if (!preview) {
       return;
     }
+    if (missingShift) {
+      setErrorMessage("Seleccioná el turno de destino antes de confirmar.");
+      return;
+    }
     setErrorMessage(null);
     try {
-      const result = await confirmMutation.mutateAsync(preview.previewToken);
+      const result = await confirmMutation.mutateAsync({
+        previewToken: preview.previewToken,
+        // Turno queda fijado en el preview persistido; no reenviar desde el selector.
+      });
       try {
         await invalidateOperationAssignmentQueries(queryClient, companyId ?? undefined, operationId);
         await queryClient.refetchQueries({
@@ -251,6 +273,22 @@ function WorkTeamAssignmentPanelContent({
         ) : null}
       </Stack>
 
+      {isMultiShift ? (
+        <Select
+          label="Turno de destino"
+          description="Obligatorio. Todos los miembros del grupo se asignan a este turno."
+          data={shiftOptions}
+          value={selectedShiftId}
+          onChange={(value) => setSelectedShiftId(value)}
+          placeholder={
+            shiftOptions.length === 0 ? "No hay turnos activos" : "Seleccioná el turno"
+          }
+          required
+          disabled={Boolean(preview) || shiftOptions.length === 0}
+          error={missingShift ? "Seleccioná un turno" : undefined}
+        />
+      ) : null}
+
       {isRecurring ? (
         <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="md" verticalSpacing="md">
           <TextInput
@@ -306,7 +344,11 @@ function WorkTeamAssignmentPanelContent({
             </Group>
           ))}
           <Group>
-            <Button onClick={() => void handleConfirm()} loading={confirmMutation.isPending}>
+            <Button
+              onClick={() => void handleConfirm()}
+              loading={confirmMutation.isPending}
+              disabled={missingShift}
+            >
               Confirmar asignación
             </Button>
             <Button variant="default" onClick={() => setPreview(null)}>

@@ -80,6 +80,7 @@ export type UpdateCompanyShiftTemplateInput = {
   startTime?: string;
   endTime?: string;
   sortOrder?: number;
+  isActive?: boolean;
 };
 
 export type CreateOperationShiftIdentityInput = {

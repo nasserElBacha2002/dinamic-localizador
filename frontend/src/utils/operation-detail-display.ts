@@ -22,6 +22,8 @@ export function buildOperationEditDefaultValues(operation: OperationDetail): Ope
     lateToleranceSource:
       operation.lateToleranceSource === "COMPANY_DEFAULT" ? "COMPANY_DEFAULT" : "CUSTOM",
     status: operation.status,
+    scheduleMode: operation.scheduleMode ?? "SINGLE",
+    shifts: [],
   };
 }
 

@@ -88,7 +88,16 @@ export async function getOperationEmployees(
 
 export async function assignEmployeeToOperation(
   operationId: string,
-  input: { employeeId: string; validFrom?: string; validUntil?: string | null },
+  input: {
+    employeeId: string;
+    validFrom?: string;
+    validUntil?: string | null;
+    operationShiftId?: string | null;
+    asCoverage?: boolean;
+    replacedAssignmentId?: string;
+    replacedEmployeeId?: string;
+    coverageReason?: string;
+  },
 ): Promise<OperationEmployeeAssignment> {
   const { data } = await scopedApiClient.post<SingleResponse<OperationEmployeeAssignment>>(
     operationAssignmentPath(operationId),
@@ -115,6 +124,7 @@ export async function assignEmployeesBatchToOperation(
     employeeIds: string[];
     validFrom?: string;
     validUntil?: string | null;
+    operationShiftId?: string | null;
   },
 ): Promise<AssignEmployeesBatchResult> {
   const { data } = await scopedApiClient.post<SingleResponse<AssignEmployeesBatchResult>>(

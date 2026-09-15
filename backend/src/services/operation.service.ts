@@ -37,6 +37,7 @@ import { buildPaginationMeta } from "../utils/pagination";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
 import { getDateIsoInTimezone } from "../utils/absence-date";
 import { safeRollback } from "../utils/safe-transaction";
+import { seedMultiShiftOnCreateInTransaction } from "./operation-schedule-mode-transition.service";
 import {
   normalizeWeeklyScheduleDays,
   validateWeeklyScheduleDays,
@@ -212,12 +213,52 @@ export const operationService = {
     validateOneTimeDates(input.scheduledStart, input.scheduledEnd);
     validateOperationStartNotInPast(input.scheduledStart);
 
+    const wantsMulti =
+      (input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" && (input.shifts?.length ?? 0) > 0;
+
+    if (!wantsMulti) {
+      try {
+        return await operationRepository.create(companyId, {
+          ...input,
+          ...tolerances,
+        });
+      } catch (error) {
+        if (isActiveOperationDuplicateError(error)) {
+          throw new AppError(
+            409,
+            "OPERATION_DUPLICATE",
+            "Ya existe una operación para ese servicio y fecha de inicio",
+          );
+        }
+        throw error;
+      }
+    }
+
+    const settings = await companySettingsRepository.findByCompanyId(companyId);
+    const timezone = resolveOperationTimezone(settings?.operationTimezone);
+    const effectiveFrom = getDateIsoInTimezone(new Date(input.scheduledStart), timezone);
+
+    const pool = getPool();
+    const transaction = new sql.Transaction(pool);
+    await transaction.begin();
+
     try {
-      return await operationRepository.create(companyId, {
+      const operation = await operationRepository.createInTransaction(companyId, transaction, {
         ...input,
         ...tolerances,
       });
+      await seedMultiShiftOnCreateInTransaction(
+        companyId,
+        operation.id,
+        effectiveFrom,
+        input.shifts ?? [],
+        transaction,
+      );
+      await transaction.commit();
+      const refreshed = await operationRepository.findById(companyId, operation.id);
+      return refreshed ?? { ...operation, scheduleMode: "MULTI_SHIFT" as const };
     } catch (error) {
+      await safeRollback(transaction);
       if (isActiveOperationDuplicateError(error)) {
         throw new AppError(
           409,
@@ -253,6 +294,8 @@ export const operationService = {
 
     const settings = await companySettingsRepository.findByCompanyId(companyId);
     const customTimezone = resolveOperationTimezone(settings?.operationTimezone);
+    const wantsMulti =
+      (input.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" && (input.shifts?.length ?? 0) > 0;
 
     const pool = getPool();
     const transaction = new sql.Transaction(pool);
@@ -283,6 +326,16 @@ export const operationService = {
             : undefined,
       });
 
+      if (wantsMulti) {
+        await seedMultiShiftOnCreateInTransaction(
+          companyId,
+          operation.id,
+          input.validFrom,
+          input.shifts ?? [],
+          transaction,
+        );
+      }
+
       await transaction.commit();
 
       await recurringWorkdaySyncService.runOperationSync(
@@ -292,7 +345,8 @@ export const operationService = {
         "recurring operation create",
       );
 
-      return operation;
+      const refreshed = await operationRepository.findById(companyId, operation.id);
+      return refreshed ?? operation;
     } catch (error) {
       await transaction.rollback();
       throw error;

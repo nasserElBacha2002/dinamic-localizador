@@ -130,11 +130,15 @@ END;
 GO
 
 /* ---------------------------------------------------------------------------
-   Backfill versions from Phase 1 embedded times (if columns still present)
+   Backfill versions from Phase 1 embedded times (if columns still present).
+   Use dynamic SQL so re-runs after columns were dropped do not fail batch
+   compilation with "Invalid column name 'end_time'" / 'start_time'.
 --------------------------------------------------------------------------- */
 IF COL_LENGTH(N'dbo.operation_shifts', N'start_time') IS NOT NULL
+   AND COL_LENGTH(N'dbo.operation_shifts', N'end_time') IS NOT NULL
    AND COL_LENGTH(N'dbo.operation_shifts', N'effective_from') IS NOT NULL
 BEGIN
+    EXEC(N'
     INSERT INTO dbo.operation_shift_versions (
         company_id, operation_shift_id, effective_from, effective_until, start_time, end_time
     )
@@ -152,7 +156,6 @@ BEGIN
         WHERE v.operation_shift_id = s.id
     );
 
-    /* All weekdays enabled for backfilled versions that have no days yet. */
     INSERT INTO dbo.operation_shift_version_days (
         company_id, operation_shift_version_id, day_of_week, is_enabled
     )
@@ -164,6 +167,7 @@ BEGIN
         FROM dbo.operation_shift_version_days vd
         WHERE vd.operation_shift_version_id = v.id
     );
+    ');
 END;
 GO
 

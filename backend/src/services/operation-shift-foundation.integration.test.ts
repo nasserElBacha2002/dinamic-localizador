@@ -314,13 +314,19 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
       .input("workDate", sql.Date, workDate)
       .input("shiftId", sql.UniqueIdentifier, morning.id)
       .query(`
+        DECLARE @versionId UNIQUEIDENTIFIER = (
+          SELECT TOP 1 id
+          FROM dbo.operation_shift_versions
+          WHERE operation_shift_id = @shiftId
+          ORDER BY effective_from DESC
+        );
         INSERT INTO dbo.operation_workdays (
-          company_id, operation_id, work_date, operation_shift_id,
+          company_id, operation_id, work_date, operation_shift_id, operation_shift_version_id,
           shift_code_snapshot, shift_name_snapshot,
           expected_start_at, expected_end_at,
           early_tolerance_minutes, late_tolerance_minutes, schedule_version, status
         ) VALUES (
-          @companyId, @operationId, @workDate, @shiftId,
+          @companyId, @operationId, @workDate, @shiftId, @versionId,
           N'MANANA', N'Mañana',
           '2026-09-15T09:00:00', '2026-09-15T17:00:00',
           30, 30, 1, N'ACTIVE'
@@ -334,13 +340,19 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
       .input("workDate", sql.Date, workDate)
       .input("shiftId", sql.UniqueIdentifier, afternoon.id)
       .query(`
+        DECLARE @versionId UNIQUEIDENTIFIER = (
+          SELECT TOP 1 id
+          FROM dbo.operation_shift_versions
+          WHERE operation_shift_id = @shiftId
+          ORDER BY effective_from DESC
+        );
         INSERT INTO dbo.operation_workdays (
-          company_id, operation_id, work_date, operation_shift_id,
+          company_id, operation_id, work_date, operation_shift_id, operation_shift_version_id,
           shift_code_snapshot, shift_name_snapshot,
           expected_start_at, expected_end_at,
           early_tolerance_minutes, late_tolerance_minutes, schedule_version, status
         ) VALUES (
-          @companyId, @operationId, @workDate, @shiftId,
+          @companyId, @operationId, @workDate, @shiftId, @versionId,
           N'TARDE', N'Tarde',
           '2026-09-15T17:00:00', '2026-09-15T01:00:00',
           30, 30, 1, N'ACTIVE'
@@ -356,13 +368,19 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
           .input("workDate", sql.Date, workDate)
           .input("shiftId", sql.UniqueIdentifier, morning.id)
           .query(`
+            DECLARE @versionId UNIQUEIDENTIFIER = (
+              SELECT TOP 1 id
+              FROM dbo.operation_shift_versions
+              WHERE operation_shift_id = @shiftId
+              ORDER BY effective_from DESC
+            );
             INSERT INTO dbo.operation_workdays (
-              company_id, operation_id, work_date, operation_shift_id,
+              company_id, operation_id, work_date, operation_shift_id, operation_shift_version_id,
               shift_code_snapshot, shift_name_snapshot,
               expected_start_at, expected_end_at,
               early_tolerance_minutes, late_tolerance_minutes, schedule_version, status
             ) VALUES (
-              @companyId, @operationId, @workDate, @shiftId,
+              @companyId, @operationId, @workDate, @shiftId, @versionId,
               N'MANANA', N'Mañana',
               '2026-09-15T09:30:00', '2026-09-15T17:30:00',
               30, 30, 1, N'ACTIVE'

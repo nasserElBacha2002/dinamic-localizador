@@ -170,10 +170,17 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
     const pool = getPool();
 
     // Ensure Phase 1 uniqueness + Phase 2 versioned core (idempotent).
-    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_127, "utf8"));
-    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_128, "utf8"));
-    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_129, "utf8"));
-    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_130, "utf8"));
+    // Skip re-apply when already on Phase 2 — re-running 127–129 on a post-129
+    // schema is unnecessary and historically tripped batch-binding on dropped columns.
+    if (!(await isPhase2Versioned())) {
+      await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_127, "utf8"));
+      await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_128, "utf8"));
+      await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_129, "utf8"));
+      await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_130, "utf8"));
+    } else {
+      // Still ensure 130 corrections are present when Phase 2 already exists.
+      await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_130, "utf8"));
+    }
     assertPhase1SchemaPresent(await readFingerprint());
     assert.equal(await isPhase2Versioned(), true);
 

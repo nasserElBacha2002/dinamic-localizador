@@ -155,9 +155,11 @@ describeDatabaseIntegration("phase3 multi-shift coverage (SQL)", () => {
         .input("name", sql.NVarChar(200), `Phase3 Coverage Emp ${randomUUID().slice(0, 6)}`)
         .input("phone", sql.NVarChar(30), phone)
         .query(`
+          DECLARE @inserted TABLE (id UNIQUEIDENTIFIER);
           INSERT INTO dbo.employees (company_id, name, phone_number, employee_type, active)
-          OUTPUT INSERTED.id
-          VALUES (@companyId, @name, @phone, N'FIELD', 1);
+          OUTPUT INSERTED.id INTO @inserted (id)
+          VALUES (@companyId, @name, @phone, N'fijo', 1);
+          SELECT id FROM @inserted;
         `);
       const id = String(inserted.recordset[0].id);
       ids.push(id);

@@ -138,7 +138,7 @@ export function OperationTeamManageDialog({
             description="Obligatorio. Aplica a recomendaciones de IA, asignación manual y grupos."
             data={shiftOptions}
             value={effectiveShiftId}
-            onChange={setSelectedShiftId}
+            onChange={(value) => setSelectedShiftId(typeof value === "string" ? value : null)}
             placeholder={
               shiftOptions.length === 0 ? "No hay turnos activos" : "Seleccioná el turno"
             }

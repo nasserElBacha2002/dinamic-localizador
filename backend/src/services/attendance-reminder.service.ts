@@ -14,8 +14,11 @@ import {
 import { AppError } from "../errors/app-error";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
 import { companyRepository } from "../repositories/company.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
+import { assertSingleScheduleModeOrReject } from "../utils/operation-schedule-mode-guard";
+import { logMultiShiftAttendanceEvent } from "../utils/multi-shift-attendance-observability";
 import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
 import { countCandidatesByOperationKind } from "../utils/workday-reminder-eligibility";
 import {
@@ -189,6 +192,7 @@ const sendReminderForCandidate = async (
     notificationType,
     scheduleVersion,
     reminderSource: "AUTOMATIC",
+    employeeWorkdayId: candidate.employeeWorkdayId ?? null,
   });
 
   if (!claimed) {
@@ -200,7 +204,37 @@ const sendReminderForCandidate = async (
       existingReminderId: null,
       ...reminderCandidateLogFields(candidate),
     });
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: candidate.operationId,
+      employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+      operationWorkdayId: candidate.operationWorkdayId ?? null,
+      action: "reminder_skipped",
+      outcome: "skipped",
+      reason: "CLAIM_UNAVAILABLE",
+    });
     return "skipped";
+  }
+
+  logMultiShiftAttendanceEvent({
+    companyId,
+    operationId: candidate.operationId,
+    employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+    operationWorkdayId: candidate.operationWorkdayId ?? null,
+    action: "reminder_claimed",
+    outcome: "ok",
+    reason: notificationType,
+  });
+  if (claimed.attemptCount > 1) {
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: candidate.operationId,
+      employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+      operationWorkdayId: candidate.operationWorkdayId ?? null,
+      action: "retry_recovered",
+      outcome: "ok",
+      reason: `attempt_count=${claimed.attemptCount}`,
+    });
   }
 
   if (!hasValidWhatsAppPhone(candidate.employeePhoneNumber)) {
@@ -811,6 +845,15 @@ const sendReminderForCandidate = async (
           }
         : {}),
     });
+    logMultiShiftAttendanceEvent({
+      companyId,
+      operationId: candidate.operationId,
+      employeeWorkdayId: candidate.employeeWorkdayId ?? null,
+      operationWorkdayId: candidate.operationWorkdayId ?? null,
+      action: "reminder_sent",
+      outcome: "ok",
+      reason: notificationType,
+    });
     logWhatsAppNotificationEvent({
       event: "WHATSAPP_NOTIFICATION_SENT",
       producer: "ATTENDANCE_REMINDER_JOB",
@@ -1095,6 +1138,15 @@ export const attendanceReminderService = {
       scheduleVersion?: number;
     },
   ): Promise<ReminderSendOutcome> {
+    const operation = await operationRepository.findById(companyId, input.operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    assertSingleScheduleModeOrReject(
+      operation.scheduleMode,
+      "MULTI_SHIFT_NOT_SUPPORTED_HERE",
+    );
+
     const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);
     if (!candidate) {
       throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado a la operación");

@@ -42,7 +42,11 @@ const baseDefaults: OperationFormValues = {
   scheduleDays: createDefaultWeeklySchedule("09:00", "18:00"),
   earlyToleranceMinutes: 60,
   lateToleranceMinutes: 15,
+  earlyToleranceSource: "COMPANY_DEFAULT",
+  lateToleranceSource: "COMPANY_DEFAULT",
   status: "SCHEDULED",
+  scheduleMode: "SINGLE",
+  shifts: [],
 };
 
 /**

@@ -84,9 +84,18 @@ describe("attendanceReminderService", () => {
     const { attendanceNotificationRepository } = await import(
       "../repositories/attendance-notification.repository"
     );
+    const { operationRepository } = await import("../repositories/operation.repository");
     mock.method(attendanceNotificationRepository, "reconcileSentRecoveryRequired", async () => 0);
     mock.method(attendanceNotificationRepository, "isArrivalReminderEligible", async () => true);
     mock.method(attendanceNotificationRepository, "isExitReminderEligible", async () => true);
+    // sendTestReminder guards MULTI_SHIFT via operationRepository.findById before mocks below run.
+    mock.method(operationRepository, "findById", async () => ({
+      id: OPERATION_ID,
+      companyId: COMPANY_ID,
+      scheduleMode: "SINGLE" as const,
+      operationKind: "ONE_TIME" as const,
+      status: "SCHEDULED" as const,
+    }));
   });
 
   afterEach(async () => {

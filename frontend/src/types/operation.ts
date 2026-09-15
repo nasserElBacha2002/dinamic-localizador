@@ -1,9 +1,11 @@
 import type { Employee } from "./employee";
 import type { OperationStatus } from "./operation-status";
+import type { OperationShiftVersionDay, ScheduleMode } from "./operation-shift";
 import type { OperationScheduleSummary, OperationScheduleView } from "./schedule";
 import type { Service, ServiceSummary } from "./service";
 
 export type { OperationStatus } from "./operation-status";
+export type { ScheduleMode } from "./operation-shift";
 
 export type OperationKind = "ONE_TIME" | "RECURRING";
 
@@ -11,6 +13,8 @@ export interface Operation {
   id: string;
   serviceId: string;
   operationKind: OperationKind;
+  /** Defaults to SINGLE when omitted (backward compatible). */
+  scheduleMode?: ScheduleMode;
   scheduledStart: string | null;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
@@ -48,7 +52,8 @@ export interface OperationEmployeeAssignment {
   updatedAt: string;
   cancelledAt?: string | null;
   lifecycleState?: AssignmentLifecycleState;
-  assignmentOrigin?: "MANUAL" | "WORK_TEAM" | "SYSTEM";
+  assignmentOrigin?: "MANUAL" | "WORK_TEAM" | "SYSTEM" | "COVERAGE";
+  operationShiftId?: string | null;
   sourceAssignmentBatchId?: string | null;
   sourceWorkTeamId?: string | null;
   sourceWorkTeamName?: string | null;
@@ -77,6 +82,16 @@ export interface OperationFilters {
   sortDirection?: "asc" | "desc";
 }
 
+export type CreateOperationShiftSeedInput = {
+  code: string;
+  name: string;
+  templateId?: string | null;
+  sortOrder?: number;
+  startTime: string;
+  endTime: string;
+  days?: OperationShiftVersionDay[];
+};
+
 export interface CreateOneTimeOperationInput {
   operationKind: "ONE_TIME";
   serviceId: string;
@@ -84,6 +99,8 @@ export interface CreateOneTimeOperationInput {
   scheduledEnd?: string | null;
   earlyToleranceMinutes?: number | null;
   lateToleranceMinutes?: number | null;
+  scheduleMode?: ScheduleMode;
+  shifts?: CreateOperationShiftSeedInput[];
 }
 
 export interface CreateRecurringOperationInput {
@@ -95,6 +112,8 @@ export interface CreateRecurringOperationInput {
   scheduleDays?: import("./schedule").WeeklyScheduleDay[];
   earlyToleranceMinutes?: number | null;
   lateToleranceMinutes?: number | null;
+  scheduleMode?: ScheduleMode;
+  shifts?: CreateOperationShiftSeedInput[];
 }
 
 export type CreateOperationInput = CreateOneTimeOperationInput | CreateRecurringOperationInput;

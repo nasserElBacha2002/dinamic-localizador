@@ -9,6 +9,7 @@ const baseOperation = (overrides: Partial<Operation> = {}): Operation => ({
   id: "operation-1",
   serviceId: "service-1",
   operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-07-06T12:00:00.000Z",
   scheduledEnd: "2026-07-06T21:00:00.000Z",
   earlyToleranceMinutes: 30,

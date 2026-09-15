@@ -74,23 +74,28 @@ describeDatabaseIntegration("dynamic admin attendance alerts SQL", () => {
     createdCompanyIds.push(companyId);
   };
 
+  /**
+   * Fixture dueAts use fixed 2026-09-12 reference times. Wall-clock DATEADD from
+   * SYSUTCDATETIME() drifts past those dueAts (dueAt >= enabled_at / recipient.created_at
+   * gates fail). Anchor enablement + recipient clocks to a fixed past watermark.
+   */
   const backdateWindows = async (
     companyId: string,
     recipientId: string,
-    daysAgo = 3,
   ): Promise<void> => {
+    const watermark = new Date("2020-01-01T00:00:00.000Z");
     await getPool()
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("recipientId", sql.UniqueIdentifier, recipientId)
-      .input("daysAgo", sql.Int, daysAgo)
+      .input("watermark", sql.DateTime2, watermark)
       .query(`
         UPDATE company_settings
-        SET admin_alerts_enabled_at = DATEADD(day, -@daysAgo, SYSUTCDATETIME())
+        SET admin_alerts_enabled_at = @watermark
         WHERE company_id = @companyId;
 
         UPDATE company_alert_recipients
-        SET created_at = DATEADD(day, -@daysAgo, SYSUTCDATETIME())
+        SET created_at = @watermark
         WHERE company_id = @companyId AND id = @recipientId;
       `);
   };

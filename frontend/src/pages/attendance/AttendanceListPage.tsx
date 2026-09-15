@@ -1,6 +1,8 @@
 import { Button, Text } from "@mantine/core";
+import { useQueries } from "@tanstack/react-query";
 import { useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
+import { listOperationShifts } from "../../api/operation-shifts.api";
 import { EntityLink } from "../../components/entity-link";
 import { EmployeeMultiSelect } from "../../components/lookups/EntityMultiSelects";
 import { OperationMultiSelect } from "../../components/lookups/EntityMultiSelects";
@@ -22,7 +24,10 @@ import { useAttendanceRecords, useExportAttendanceCsv } from "../../hooks/useAtt
 import { useAuth } from "../../hooks/useAuth";
 import { useCompanyModules } from "../../hooks/useCompanyModules";
 import { useCompanyPermissions } from "../../hooks/useCompanyUsers";
+import { requireCompanyId } from "../../hooks/require-company-id";
+import { useOperationalQueryEnabled } from "../../hooks/useOperationalQueryEnabled";
 import { useTableUrlState } from "../../hooks/useTableUrlState";
+import { operationShiftKeys } from "../../queryKeys/operation-shifts";
 import type {
   AttendanceRecordWithRelations,
   CheckoutStatus,
@@ -72,6 +77,52 @@ export function AttendanceListPage() {
     shouldOmitFromUrl: shouldOmitAttendanceTableValue,
   });
 
+  const { companyId, enabled: operationalEnabled } = useOperationalQueryEnabled(
+    table.state.operationIds.length > 0,
+  );
+
+  const shiftQueries = useQueries({
+    queries: table.state.operationIds.map((operationId) => ({
+      queryKey: operationShiftKeys.list(companyId, operationId, { activeOnly: true }),
+      queryFn: ({ signal }: { signal?: AbortSignal }) =>
+        listOperationShifts(operationId, {
+          activeOnly: true,
+          signal,
+          scopeCompanyId: requireCompanyId(companyId),
+        }),
+      enabled: operationalEnabled && Boolean(companyId),
+      retry: 1,
+    })),
+  });
+
+  const shiftsReady =
+    table.state.operationIds.length === 0 ||
+    shiftQueries.every((query) => query.isFetched && !query.isFetching);
+
+  const multiOpSelected = table.state.operationIds.length > 1;
+  const shiftFilterOptions = shiftQueries
+    .flatMap((query) => query.data ?? [])
+    .filter((shift) => shift.isActive)
+    .map((shift) => ({
+      value: shift.id,
+      label: multiOpSelected
+        ? `${shift.name} (${shift.code})`
+        : `${shift.name} · ${shift.code}`,
+    }))
+    .sort((left, right) => left.label.localeCompare(right.label, "es"));
+
+  const showShiftFilter = table.state.operationIds.length > 0 && shiftFilterOptions.length > 0;
+  const shiftOptionIds = new Set(shiftFilterOptions.map((option) => option.value));
+  // Keep URL value while loading; once ready, ignore stale/invalid shift ids without an effect.
+  const effectiveOperationShiftId =
+    !table.state.operationShiftId
+      ? ""
+      : !shiftsReady
+        ? table.state.operationShiftId
+        : showShiftFilter && shiftOptionIds.has(table.state.operationShiftId)
+          ? table.state.operationShiftId
+          : "";
+
   const exportMutation = useExportAttendanceCsv();
   const dateRange = useMemo(
     () =>
@@ -90,6 +141,7 @@ export function AttendanceListPage() {
     operationIds: table.state.operationIds.length > 0 ? table.state.operationIds : undefined,
     employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
     serviceIds: table.state.serviceIds.length > 0 ? table.state.serviceIds : undefined,
+    operationShiftId: effectiveOperationShiftId || undefined,
     validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
@@ -351,10 +403,28 @@ export function AttendanceListPage() {
           <OperationMultiSelect
             label={terminology.operation.plural}
             value={table.state.operationIds}
-            onChange={(ids) => table.setField("operationIds", ids)}
+            onChange={(ids) => {
+              table.setState({
+                operationIds: ids,
+                operationShiftId: "",
+              });
+            }}
             maxVisibleChips={2}
           />
         </FilterBar.Item>
+
+        {showShiftFilter ? (
+          <FilterBar.Item>
+            <FilterSelect
+              label="Turno"
+              value={effectiveOperationShiftId}
+              onChange={(nextValue) => {
+                table.setField("operationShiftId", nextValue);
+              }}
+              data={[{ value: "", label: "Todos" }, ...shiftFilterOptions]}
+            />
+          </FilterBar.Item>
+        ) : null}
 
         <FilterBar.Item>
           <EmployeeMultiSelect

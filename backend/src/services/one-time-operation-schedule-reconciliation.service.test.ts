@@ -20,6 +20,7 @@ const baseOperation = {
   id: OPERATION_ID,
   serviceId: "ffffffff-ffff-4fff-8fff-ffffffffffff",
   operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-07-27T23:30:00.000Z",
   scheduledEnd: "2026-07-28T06:00:00.000Z",
   earlyToleranceMinutes: 60,

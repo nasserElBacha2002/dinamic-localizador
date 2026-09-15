@@ -66,8 +66,10 @@ export interface OperationEmployeeTableProps {
   onReviewReject: (attendanceId: string) => void;
   onCancelAssignment: (assignment: OperationEmployeeAssignment) => void;
   onEndAssignment: (assignment: OperationEmployeeAssignment) => void;
+  onCoverAssignment?: (assignment: OperationEmployeeAssignment) => void;
   cancelPending?: boolean;
   endPending?: boolean;
+  coverPending?: boolean;
   pagination?: {
     meta: PaginationMeta;
     pageSize: number;
@@ -91,8 +93,10 @@ export function OperationEmployeeTable({
   onReviewReject,
   onCancelAssignment,
   onEndAssignment,
+  onCoverAssignment,
   cancelPending = false,
   endPending = false,
+  coverPending = false,
   pagination,
   emptyTitle,
   emptyDescription,
@@ -376,6 +380,21 @@ export function OperationEmployeeTable({
             disabled: endPending,
             loading: endPending,
             onClick: () => onEndAssignment(assignment!),
+          });
+        }
+        if (
+          canAssign &&
+          assignment &&
+          !assignment.cancelledAt &&
+          assignment.lifecycleState === "CURRENT" &&
+          onCoverAssignment
+        ) {
+          items.push({
+            key: "cover",
+            label: "Cubrir / reemplazar",
+            disabled: coverPending,
+            loading: coverPending,
+            onClick: () => onCoverAssignment(assignment),
           });
         }
         if (assignmentAction === "cancel-current" || assignmentAction === "cancel-future") {

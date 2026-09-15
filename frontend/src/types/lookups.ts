@@ -18,6 +18,8 @@ export interface OperationLookup {
   startDate: string;
   endDate: string | null;
   serviceName: string;
+  /** Present when API returns schedule_mode (multi-shift filtering). */
+  scheduleMode?: "SINGLE" | "MULTI_SHIFT";
 }
 
 export interface LookupQuery {

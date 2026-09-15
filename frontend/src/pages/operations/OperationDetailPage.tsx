@@ -22,6 +22,7 @@ import {
 } from "../../design-system";
 import { EntityLink } from "../../components/entity-link";
 import { OperationTeamSection } from "../../components/operations/OperationTeamSection";
+import { OperationShiftsPanel } from "../../components/operations/OperationShiftsPanel";
 import { OperationForm, OPERATION_DETAIL_FORM_ID } from "../../components/operations/OperationForm";
 import layoutClasses from "../../components/operations/operation-detail-layout.module.css";
 import {
@@ -321,7 +322,7 @@ export function OperationDetailPage() {
       />
 
       <Stack gap="lg">
-        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 5 }} spacing="md">
+        <SimpleGrid cols={{ base: 1, sm: 2, lg: 3, xl: 6 }} spacing="md">
           <MetricCard
             title="Estado"
             value={
@@ -331,6 +332,22 @@ export function OperationDetailPage() {
               />
             }
             description={operationKindLabel}
+          />
+          <MetricCard
+            title="Modo de horario"
+            value={
+              <StatusBadge
+                label={
+                  (operation.scheduleMode ?? "SINGLE") === "MULTI_SHIFT"
+                    ? "Multi-turno"
+                    : "Horario único"
+                }
+                tone={
+                  (operation.scheduleMode ?? "SINGLE") === "MULTI_SHIFT" ? "info" : "neutral"
+                }
+              />
+            }
+            description="Cómo se organizan los horarios"
           />
           <MetricCard
             title={scheduleMetric.title}
@@ -354,11 +371,19 @@ export function OperationDetailPage() {
           />
         </SimpleGrid>
 
+        <OperationShiftsPanel
+          operationId={operation.id}
+          scheduleMode={operation.scheduleMode ?? "SINGLE"}
+          canManage={canManage}
+          onFeedback={(message, severity) => showFeedback(message, severity)}
+        />
+
         <Box className={layoutClasses.operationDetailLayout}>
           <Box className={layoutClasses.operationalSection}>
             <OperationTeamSection
               operationId={operation.id}
               operationKind={operation.operationKind ?? "ONE_TIME"}
+              scheduleMode={operation.scheduleMode ?? "SINGLE"}
               canAssign={canAssign}
               operationWorkDate={operationWorkDate}
               operationalToday={operationalToday}

@@ -32,7 +32,14 @@ export type OneTimeScheduleReconciliationResult = {
   workdayAction: "updated" | "created" | "unchanged" | "none";
 };
 
-const assertOneTimeWorkdayInvariant = (operationId: string, workdays: OperationWorkday[]): void => {
+const assertOneTimeWorkdayInvariant = (
+  operationId: string,
+  workdays: OperationWorkday[],
+  scheduleMode: string = "SINGLE",
+): void => {
+  if (scheduleMode !== "SINGLE") {
+    return;
+  }
   if (workdays.length > 1) {
     throw new AppError(
       409,
@@ -107,6 +114,14 @@ export const oneTimeScheduleReconciliationCommand = {
       );
     }
 
+    if (operation.scheduleMode === "MULTI_SHIFT") {
+      throw new AppError(
+        409,
+        "MULTI_SHIFT_NOT_SUPPORTED_HERE",
+        "La reconciliación ONE_TIME de horario no admite operaciones multi-turno.",
+      );
+    }
+
     const settings = await companySettingsRepository.findByCompanyId(companyId);
     const timezone = resolveOperationTimezone(settings?.operationTimezone);
     const resolved = operationWorkdayResolver.resolveOneTime(operation, timezone);
@@ -116,7 +131,7 @@ export const oneTimeScheduleReconciliationCommand = {
       transaction,
       operation.id,
     );
-    assertOneTimeWorkdayInvariant(operation.id, workdays);
+    assertOneTimeWorkdayInvariant(operation.id, workdays, operation.scheduleMode);
 
     let workday = workdays[0] ?? null;
     let workdayAction: OneTimeScheduleReconciliationResult["workdayAction"] = "none";

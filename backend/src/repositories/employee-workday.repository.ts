@@ -456,6 +456,84 @@ export const employeeWorkdayRepository = {
     return cancelled;
   },
 
+  async cancelExpectedForWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+    reason: EmployeeWorkdayCancellationReason,
+  ): Promise<number> {
+    const employeeWorkdays = await this.listByOperationWorkdayIdInTransaction(
+      companyId,
+      transaction,
+      operationWorkdayId,
+    );
+    let cancelled = 0;
+
+    for (const employeeWorkday of employeeWorkdays) {
+      if (employeeWorkday.expectationStatus !== "EXPECTED") {
+        continue;
+      }
+      const hasAttendance = await this.hasAttendanceInTransaction(
+        companyId,
+        transaction,
+        employeeWorkday.id,
+      );
+      if (hasAttendance) {
+        continue;
+      }
+
+      await this.cancelExpectationInTransaction(
+        companyId,
+        transaction,
+        employeeWorkday.id,
+        reason,
+      );
+      cancelled += 1;
+    }
+
+    return cancelled;
+  },
+
+  async reactivateCancelledExpectationsForWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+    reasons: readonly EmployeeWorkdayCancellationReason[],
+  ): Promise<number> {
+    if (reasons.length === 0) {
+      return 0;
+    }
+    const request = new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId);
+
+    const reasonParams = reasons.map((reason, index) => {
+      const name = `reason${index}`;
+      request.input(name, sql.NVarChar(20), reason);
+      return `@${name}`;
+    });
+
+    const result = await request.query(`
+      UPDATE employee_workdays
+      SET expectation_status = 'EXPECTED',
+          cancellation_reason = NULL,
+          updated_at = SYSUTCDATETIME()
+      OUTPUT INSERTED.id
+      WHERE company_id = @companyId
+        AND operation_workday_id = @operationWorkdayId
+        AND expectation_status = 'CANCELLED'
+        AND cancellation_reason IN (${reasonParams.join(", ")})
+        AND NOT EXISTS (
+          SELECT 1
+          FROM attendance_records ar
+          WHERE ar.company_id = @companyId
+            AND ar.employee_workday_id = employee_workdays.id
+        )
+    `);
+
+    return result.recordset.length;
+  },
+
   async cancelExpectationWithReason(
     companyId: string,
     employeeWorkdayId: string,
@@ -760,6 +838,24 @@ export const employeeWorkdayRepository = {
       .query(`
         SELECT *
         FROM employee_workdays
+        WHERE company_id = @companyId
+          AND operation_workday_id = @operationWorkdayId
+      `);
+
+    return result.recordset.map((row) => mapEmployeeWorkdayRow(row as Record<string, unknown>));
+  },
+
+  async listByOperationWorkdayIdInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkdayId: string,
+  ): Promise<EmployeeWorkday[]> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("operationWorkdayId", sql.UniqueIdentifier, operationWorkdayId)
+      .query(`
+        SELECT *
+        FROM employee_workdays WITH (UPDLOCK, HOLDLOCK)
         WHERE company_id = @companyId
           AND operation_workday_id = @operationWorkdayId
       `);

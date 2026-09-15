@@ -6,6 +6,7 @@ const operationStatusSchema = z.enum(["SCHEDULED", "IN_PROGRESS", "COMPLETED", "
 const operationKindSchema = z.enum(["ONE_TIME", "RECURRING"]);
 const scheduleSourceSchema = z.enum(["COMPANY", "CUSTOM"]);
 const toleranceSourceSchema = z.enum(["COMPANY_DEFAULT", "CUSTOM"]);
+const scheduleModeSchema = z.enum(["SINGLE", "MULTI_SHIFT"]);
 
 const timePattern = /^([01]\d|2[0-3]):[0-5]\d$/;
 const dateOnlyPattern = /^\d{4}-\d{2}-\d{2}$/;
@@ -17,6 +18,16 @@ const weeklyScheduleDayFormSchema = z.object({
   endTime: z.string().nullable(),
 });
 
+const operationShiftSeedFormSchema = z.object({
+  code: z.string(),
+  name: z.string(),
+  templateId: z.string().uuid().nullable().optional(),
+  startTime: z.string(),
+  endTime: z.string(),
+  /** ISO weekday 1=Mon … 7=Sun; only used for RECURRING MULTI. */
+  enabledDays: z.array(z.number().int().min(1).max(7)).optional(),
+});
+
 const operationSharedFields = {
   serviceId: z.string().uuid("Seleccioná un servicio"),
   earlyToleranceMinutes: z.number().int().min(0, "No puede ser negativa"),
@@ -24,6 +35,8 @@ const operationSharedFields = {
   earlyToleranceSource: toleranceSourceSchema,
   lateToleranceSource: toleranceSourceSchema,
   status: operationStatusSchema.optional(),
+  scheduleMode: scheduleModeSchema,
+  shifts: z.array(operationShiftSeedFormSchema),
 };
 
 export const operationFormSchema = z
@@ -38,6 +51,69 @@ export const operationFormSchema = z
     scheduleDays: z.array(weeklyScheduleDayFormSchema),
   })
   .superRefine((values, ctx) => {
+    if (values.scheduleMode === "MULTI_SHIFT") {
+      if (!values.shifts || values.shifts.length < 1) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: "Agregá al menos un turno",
+          path: ["shifts"],
+        });
+      }
+
+      const codes = new Set<string>();
+      values.shifts.forEach((shift, index) => {
+        const code = shift.code.trim();
+        const name = shift.name.trim();
+        if (!name) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "El nombre del turno es obligatorio",
+            path: ["shifts", index, "name"],
+          });
+        }
+        if (!code) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "El código del turno es obligatorio",
+            path: ["shifts", index, "code"],
+          });
+        } else {
+          const normalized = code.toUpperCase();
+          if (codes.has(normalized)) {
+            ctx.addIssue({
+              code: z.ZodIssueCode.custom,
+              message: "Hay códigos de turno duplicados",
+              path: ["shifts", index, "code"],
+            });
+          }
+          codes.add(normalized);
+        }
+        if (!timePattern.test(shift.startTime) || !timePattern.test(shift.endTime)) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Revisá los horarios del turno",
+            path: ["shifts", index, "startTime"],
+          });
+        } else if (shift.startTime === shift.endTime) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Inicio y fin no pueden ser iguales",
+            path: ["shifts", index, "endTime"],
+          });
+        }
+        if (
+          values.operationKind === "RECURRING" &&
+          (!shift.enabledDays || shift.enabledDays.length === 0)
+        ) {
+          ctx.addIssue({
+            code: z.ZodIssueCode.custom,
+            message: "Seleccioná al menos un día para el turno",
+            path: ["shifts", index, "enabledDays"],
+          });
+        }
+      });
+    }
+
     if (values.operationKind === "ONE_TIME") {
       if (!values.scheduledStart) {
         ctx.addIssue({
@@ -127,3 +203,4 @@ export const createOperationFormSchema = operationFormSchema.superRefine((values
 });
 
 export type OperationFormValues = z.infer<typeof operationFormSchema>;
+export type OperationShiftSeedFormValues = z.infer<typeof operationShiftSeedFormSchema>;

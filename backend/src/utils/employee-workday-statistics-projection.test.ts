@@ -43,6 +43,8 @@ describe("employee-workday-statistics-projection contract", () => {
     assert.match(projectionSource, /FROM employee_workdays ew/);
     assert.match(repositorySource, /employee_workday_statistics/);
     assert.doesNotMatch(repositorySource, /operation_kind = N'ONE_TIME'/);
+    assert.match(projectionSource, /ow\.operation_shift_id/);
+    assert.match(projectionSource, /ow\.shift_name_snapshot/);
   });
 
   it("uses canonical production attendance and does not filter by assignment state", () => {

@@ -4,6 +4,7 @@ import { getPool } from "../database/connection";
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { OperationEmployeeAssignment } from "../types/domain";
 import { mapAssignmentRow } from "../utils/row-mappers";
+import { assertAssignmentWriteAllowed } from "./operation-schedule-mode.repository";
 
 const NOT_CANCELLED_CLAUSE = `cancelled_at IS NULL`;
 
@@ -58,8 +59,17 @@ export const operationEmployeeRepository = {
       sourceAssignmentBatchId?: string | null;
       sourceWorkTeamId?: string | null;
       assignmentOrigin?: string;
+      /** Phase 1 productive path must leave this unset/null (SINGLE mode). */
+      operationShiftId?: string | null;
     },
   ): Promise<OperationEmployeeAssignment> {
+    await assertAssignmentWriteAllowed(
+      companyId,
+      input.operationId,
+      input.operationShiftId ?? null,
+      transaction,
+    );
+
     const assignmentId = randomUUID();
     const result = await new sql.Request(transaction)
       .input("assignmentId", sql.UniqueIdentifier, assignmentId)
@@ -71,15 +81,18 @@ export const operationEmployeeRepository = {
       .input("sourceAssignmentBatchId", sql.UniqueIdentifier, input.sourceAssignmentBatchId ?? null)
       .input("sourceWorkTeamId", sql.UniqueIdentifier, input.sourceWorkTeamId ?? null)
       .input("assignmentOrigin", sql.NVarChar(20), input.assignmentOrigin ?? "MANUAL")
+      .input("operationShiftId", sql.UniqueIdentifier, input.operationShiftId ?? null)
       .query(`
         INSERT INTO operation_assignments (
           id, company_id, operation_id, employee_id, valid_from, valid_until,
-          source_assignment_batch_id, source_work_team_id, assignment_origin
+          source_assignment_batch_id, source_work_team_id, assignment_origin,
+          operation_shift_id
         )
         OUTPUT INSERTED.*
         VALUES (
           @assignmentId, @companyId, @operationId, @employeeId, @validFrom, @validUntil,
-          @sourceAssignmentBatchId, @sourceWorkTeamId, @assignmentOrigin
+          @sourceAssignmentBatchId, @sourceWorkTeamId, @assignmentOrigin,
+          @operationShiftId
         )
       `);
 
@@ -94,6 +107,7 @@ export const operationEmployeeRepository = {
       employeeIds: string[];
       validFrom: string;
       validUntil: string | null;
+      operationShiftId?: string | null;
     },
   ): Promise<OperationEmployeeAssignment[]> {
     if (input.employeeIds.length === 0) {
@@ -104,7 +118,8 @@ export const operationEmployeeRepository = {
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("validFrom", sql.Date, input.validFrom)
-      .input("validUntil", sql.Date, input.validUntil);
+      .input("validUntil", sql.Date, input.validUntil)
+      .input("operationShiftId", sql.UniqueIdentifier, input.operationShiftId ?? null);
 
     const placeholders = input.employeeIds.map((employeeId, index) => {
       const param = `employeeId${index}`;
@@ -118,6 +133,10 @@ export const operationEmployeeRepository = {
       WHERE company_id = @companyId
         AND operation_id = @operationId
         AND employee_id IN (${placeholders.join(", ")})
+        AND (
+          (@operationShiftId IS NULL AND operation_shift_id IS NULL)
+          OR (operation_shift_id = @operationShiftId)
+        )
         AND ${OVERLAP_CLAUSE}
     `);
 
@@ -133,6 +152,8 @@ export const operationEmployeeRepository = {
       validFrom: string;
       validUntil: string | null;
       excludeAssignmentId?: string;
+      /** Same shift (or both NULL for SINGLE) blocks; different shifts do not. */
+      operationShiftId?: string | null;
     },
   ): Promise<OperationEmployeeAssignment | null> {
     const request = new sql.Request(transaction)
@@ -140,7 +161,8 @@ export const operationEmployeeRepository = {
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("validFrom", sql.Date, input.validFrom)
-      .input("validUntil", sql.Date, input.validUntil);
+      .input("validUntil", sql.Date, input.validUntil)
+      .input("operationShiftId", sql.UniqueIdentifier, input.operationShiftId ?? null);
 
     if (input.excludeAssignmentId) {
       request.input("excludeAssignmentId", sql.UniqueIdentifier, input.excludeAssignmentId);
@@ -153,6 +175,10 @@ export const operationEmployeeRepository = {
         AND operation_id = @operationId
         AND employee_id = @employeeId
         ${input.excludeAssignmentId ? "AND id <> @excludeAssignmentId" : ""}
+        AND (
+          (@operationShiftId IS NULL AND operation_shift_id IS NULL)
+          OR (operation_shift_id = @operationShiftId)
+        )
         AND ${OVERLAP_CLAUSE}
     `);
 
@@ -555,6 +581,33 @@ export const operationEmployeeRepository = {
       `);
 
     return Boolean(result.recordset[0]);
+  },
+
+  /**
+   * Active (non-cancelled) assignments for an employee that could overlap a validity window.
+   * Uses UPDLOCK for overlap checks under the assignment transaction.
+   */
+  async listActiveForEmployeeInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    employeeId: string,
+    input: { validFrom: string; validUntil: string | null },
+  ): Promise<OperationEmployeeAssignment[]> {
+    const result = await new sql.Request(transaction)
+      .input("companyId", sql.UniqueIdentifier, companyId)
+      .input("employeeId", sql.UniqueIdentifier, employeeId)
+      .input("validFrom", sql.Date, input.validFrom)
+      .input("validUntil", sql.Date, input.validUntil)
+      .query(`
+        SELECT *
+        FROM operation_assignments WITH (UPDLOCK, HOLDLOCK)
+        WHERE company_id = @companyId
+          AND employee_id = @employeeId
+          AND ${OVERLAP_CLAUSE}
+        ORDER BY valid_from ASC
+      `);
+
+    return result.recordset.map((row) => mapAssignmentRow(row as Record<string, unknown>));
   },
 
   async exists(

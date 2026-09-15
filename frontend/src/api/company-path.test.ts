@@ -107,6 +107,10 @@ describe("scopedApiPath", () => {
       `companies/${ACTIVE_COMPANY_ID}/settings`,
     );
     assert.equal(
+      scopedApiPath("shift-templates"),
+      `companies/${ACTIVE_COMPANY_ID}/shift-templates`,
+    );
+    assert.equal(
       scopedApiPath("modules"),
       `companies/${ACTIVE_COMPANY_ID}/modules`,
     );
@@ -133,6 +137,19 @@ describe("scopedApiPath", () => {
     assert.equal(
       scopedApiPath("payroll-receipt-batches/batch-id/receipts"),
       `companies/${ACTIVE_COMPANY_ID}/payroll-receipt-batches/batch-id/receipts`,
+    );
+    assert.equal(
+      scopedApiPath("shift-templates"),
+      `companies/${ACTIVE_COMPANY_ID}/shift-templates`,
+    );
+  });
+
+  it("uses explicit scopeCompanyId over active company for shift-templates", () => {
+    setRuntimeCompanyId(ACTIVE_COMPANY_ID);
+    const routeCompanyId = "22222222-2222-2222-2222-222222222222";
+    assert.equal(
+      scopedApiPath("shift-templates", routeCompanyId),
+      `companies/${routeCompanyId}/shift-templates`,
     );
   });
 

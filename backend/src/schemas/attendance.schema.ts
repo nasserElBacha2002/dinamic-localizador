@@ -59,6 +59,8 @@ export const listAttendanceQuerySchema = paginationQuerySchema.merge(dateRangeSc
     .enum(["true", "false"])
     .optional()
     .transform((value) => value === "true"),
+  /** Filter by operation_workdays.operation_shift_id via employee_workday. */
+  operationShiftId: z.string().uuid().optional(),
   includeSimulation: z.coerce.boolean().optional(),
   simulationOnly: z.coerce.boolean().optional(),
 }).transform((query) => ({

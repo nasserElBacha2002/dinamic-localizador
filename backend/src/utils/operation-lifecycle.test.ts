@@ -9,6 +9,7 @@ import {
 describe("operation lifecycle", () => {
   const baseOperation = {
     operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
     status: "SCHEDULED" as const,
     scheduledStart: "2026-06-22T14:29:00.000Z",
     scheduledEnd: "2026-06-23T01:29:00.000Z",
@@ -78,6 +79,7 @@ describe("operation lifecycle", () => {
         {
           ...baseOperation,
           operationKind: "RECURRING",
+  scheduleMode: "SINGLE",
           scheduledStart: null,
           scheduledEnd: null,
           status: "SCHEDULED",

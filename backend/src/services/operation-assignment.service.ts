@@ -26,6 +26,7 @@ import { recurringWorkdayMaterializationService } from "./recurring-workday-mate
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationCoverageEventRepository } from "../repositories/operation-coverage-event.repository";
 import { operationChangeEventRepository } from "../repositories/operation-change-event.repository";
+import { operationShiftRepository } from "../repositories/operation-shift.repository";
 import { resolveOperationOperationalDate } from "../utils/operation-change-events";
 
 const withLifecycleState = (
@@ -120,6 +121,43 @@ const reconcileEmployeeWorkdaysOutsideAssignment = async (
   }
 };
 
+/**
+ * Ensures the ONE_TIME MULTI_SHIFT operation_workday for the target shift exists
+ * before the assignment TX starts.
+ *
+ * Runs outside the assignment transaction on purpose: materialization opens its own
+ * short transactions and must not nest a second connection while employee/assignment
+ * locks are held. Materialization is idempotent (upsert by work_date+shift); if the
+ * later assignment TX rolls back, residual operation_workdays are expected base state
+ * for that date — not coverage/assignment side effects. Assignment, employee_workdays,
+ * coverage events and change events remain fully transactional.
+ */
+const prepareOneTimeMultiShiftAssignment = async (
+  companyId: string,
+  operationId: string,
+  operationWorkDate: string,
+  operationShiftId: string,
+): Promise<void> => {
+  const shift = await operationShiftRepository.findByIdForOperation(
+    companyId,
+    operationId,
+    operationShiftId,
+  );
+  if (!shift || !shift.isActive) {
+    throw new AppError(
+      404,
+      "OPERATION_SHIFT_NOT_FOUND",
+      "El turno no pertenece a esta operación o no está activo",
+    );
+  }
+
+  await recurringWorkdayMaterializationService.materializeMultiShiftOperationHorizon(
+    companyId,
+    operationId,
+    { rangeStart: operationWorkDate, rangeEnd: operationWorkDate },
+  );
+};
+
 const cancelExpectedEmployeeWorkdaysForAssignment = async (
   companyId: string,
   transaction: sql.Transaction,
@@ -202,6 +240,7 @@ export const operationAssignmentService = {
     input?: {
       validFrom?: string;
       validUntil?: string | null;
+      operationShiftId?: string | null;
       asCoverage?: boolean;
       replacedAssignmentId?: string | null;
       replacedEmployeeId?: string | null;
@@ -243,6 +282,87 @@ export const operationAssignmentService = {
         ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
         : null;
 
+    /**
+     * Coverage: resolve shift from the replaced assignment only (never from request).
+     * Validate before any prepare/cancel so a rejected coverage leaves no lateral writes.
+     */
+    let coverageShiftId: string | null | undefined;
+    if (input?.asCoverage && input.replacedAssignmentId) {
+      const replacedPreview = await operationEmployeeRepository.findById(
+        companyId,
+        input.replacedAssignmentId,
+      );
+      if (!replacedPreview || replacedPreview.operationId !== operationId) {
+        throw new AppError(
+          404,
+          "COVERAGE_REPLACED_ASSIGNMENT_NOT_FOUND",
+          "La asignación a cubrir no existe en esta operación",
+        );
+      }
+      if (replacedPreview.cancelledAt) {
+        throw new AppError(
+          409,
+          "COVERAGE_REPLACED_ASSIGNMENT_CANCELLED",
+          "La asignación a cubrir ya está cancelada",
+        );
+      }
+      if (
+        input.replacedEmployeeId &&
+        input.replacedEmployeeId !== replacedPreview.employeeId
+      ) {
+        throw new AppError(
+          400,
+          "COVERAGE_REPLACED_EMPLOYEE_MISMATCH",
+          "El empleado reemplazado no coincide con la asignación indicada",
+        );
+      }
+      if (replacedPreview.employeeId === employeeId) {
+        throw new AppError(
+          409,
+          "COVERAGE_SAME_EMPLOYEE",
+          "El reemplazo debe ser un colaborador distinto al cubierto",
+        );
+      }
+      if (
+        input.operationShiftId != null &&
+        input.operationShiftId !== (replacedPreview.operationShiftId ?? null)
+      ) {
+        throw new AppError(
+          400,
+          "COVERAGE_SHIFT_MISMATCH",
+          "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
+        );
+      }
+      coverageShiftId = replacedPreview.operationShiftId ?? null;
+      if (
+        operation.scheduleMode === "MULTI_SHIFT" &&
+        operationKind === "ONE_TIME" &&
+        operationWorkDate &&
+        coverageShiftId
+      ) {
+        // Prepare outside the assignment TX so materialization does not open a
+        // second connection while employee/assignment locks are held.
+        await prepareOneTimeMultiShiftAssignment(
+          companyId,
+          operationId,
+          operationWorkDate,
+          coverageShiftId,
+        );
+      }
+    } else if (
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      operationKind === "ONE_TIME" &&
+      operationWorkDate &&
+      input?.operationShiftId
+    ) {
+      await prepareOneTimeMultiShiftAssignment(
+        companyId,
+        operationId,
+        operationWorkDate,
+        input.operationShiftId,
+      );
+    }
+
     const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
       operationKind,
       operationWorkDate,
@@ -279,6 +399,9 @@ export const operationAssignmentService = {
       }
 
       let replacedEmployeeId: string | null = null;
+      let resolvedShiftId: string | null =
+        input?.asCoverage ? (coverageShiftId ?? null) : (input?.operationShiftId ?? null);
+
       if (input?.asCoverage && input.replacedAssignmentId) {
         const replaced = await operationEmployeeRepository.findByIdInTransaction(
           companyId,
@@ -316,6 +439,16 @@ export const operationAssignmentService = {
             "El reemplazo debe ser un colaborador distinto al cubierto",
           );
         }
+        if (
+          input.operationShiftId != null &&
+          input.operationShiftId !== (replaced.operationShiftId ?? null)
+        ) {
+          throw new AppError(
+            400,
+            "COVERAGE_SHIFT_MISMATCH",
+            "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
+          );
+        }
 
         const alreadyCovered = await operationCoverageEventRepository.existsForReplacedAssignment(
           companyId,
@@ -331,6 +464,17 @@ export const operationAssignmentService = {
         }
 
         replacedEmployeeId = replaced.employeeId;
+        // Always take the locked row's shift — never the request body.
+        resolvedShiftId = replaced.operationShiftId ?? null;
+
+        if ((coverageShiftId ?? null) !== (resolvedShiftId ?? null)) {
+          throw new AppError(
+            409,
+            "COVERAGE_SHIFT_MISMATCH",
+            "La cobertura debe realizarse sobre el mismo turno de la asignación reemplazada.",
+          );
+        }
+
         await this.cancelAssignmentInSharedTransaction(companyId, transaction, {
           operationId,
           assignmentId: replaced.id,
@@ -360,6 +504,8 @@ export const operationAssignmentService = {
           operationKind,
           operationWorkDate,
           assignmentOrigin: input?.asCoverage ? "COVERAGE" : undefined,
+          scheduleMode: operation.scheduleMode,
+          operationShiftId: resolvedShiftId,
         },
       );
 
@@ -442,6 +588,13 @@ export const operationAssignmentService = {
       await transaction.commit();
       transactionClosed = true;
       committedAssignment = result.assignment;
+      if (result.outcome === "added" && result.crossOperationShiftOverlapWarnings?.length) {
+        (
+          committedAssignment as OperationEmployeeAssignment & {
+            crossOperationShiftOverlapWarnings?: typeof result.crossOperationShiftOverlapWarnings;
+          }
+        ).crossOperationShiftOverlapWarnings = result.crossOperationShiftOverlapWarnings;
+      }
     } catch (error) {
       if (!transactionClosed) {
         await safeRollback(transaction);
@@ -490,7 +643,7 @@ export const operationAssignmentService = {
     companyId: string,
     operationId: string,
     employeeIds: string[],
-    input?: { validFrom?: string; validUntil?: string | null },
+    input?: { validFrom?: string; validUntil?: string | null; operationShiftId?: string | null },
     userId?: string | null,
   ) {
     const uniqueIds = [...new Set(employeeIds.map((id) => id.trim()).filter(Boolean))];
@@ -515,6 +668,20 @@ export const operationAssignmentService = {
       operationKind === "ONE_TIME"
         ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
         : null;
+
+    if (
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      operationKind === "ONE_TIME" &&
+      operationWorkDate &&
+      input?.operationShiftId
+    ) {
+      await prepareOneTimeMultiShiftAssignment(
+        companyId,
+        operationId,
+        operationWorkDate,
+        input.operationShiftId,
+      );
+    }
 
     const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
       operationKind,
@@ -605,6 +772,8 @@ export const operationAssignmentService = {
             employeeActive: employee.active,
             operationKind,
             operationWorkDate,
+            scheduleMode: operation.scheduleMode,
+            operationShiftId: input?.operationShiftId ?? null,
           },
         );
 
@@ -938,6 +1107,7 @@ export const operationAssignmentService = {
           validFrom: assignment.validFrom,
           validUntil: effectiveDate,
           excludeAssignmentId: assignment.id,
+          operationShiftId: assignment.operationShiftId,
         },
       );
       if (overlap) {

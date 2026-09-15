@@ -63,4 +63,20 @@ describe("getWorkTeamPreviewDisabledReason shares recurring validity rules", () 
     });
     assert.equal(reason, null);
   });
+
+  it("blocks preview when multi-shift requires a destination shift", () => {
+    const reason = getWorkTeamPreviewDisabledReason({
+      isCompanyLoading: false,
+      teamsLoading: false,
+      teamsError: false,
+      hasActiveTeams: true,
+      selectedTeamIds: ["team-1"],
+      validFrom: "2026-07-13",
+      validUntil: "",
+      isRecurring: false,
+      requireShift: true,
+      selectedShiftId: null,
+    });
+    assert.match(reason ?? "", /turno/);
+  });
 });

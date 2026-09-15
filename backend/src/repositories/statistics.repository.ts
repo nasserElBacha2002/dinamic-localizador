@@ -850,6 +850,8 @@ export const statisticsRepository = {
         worked_minutes,
         overtime_minutes,
         absence_type_name,
+        operation_shift_id,
+        shift_name_snapshot,
         CASE WHEN effective_state = N'JUSTIFIED' THEN 1 ELSE 0 END AS justified
       FROM employee_workday_statistics
       ORDER BY work_date DESC, employee_name ASC
@@ -879,6 +881,8 @@ export const statisticsRepository = {
         workedMinutes: toNumber(record.worked_minutes),
         overtimeMinutes: toNumber(record.overtime_minutes),
         absenceTypeName: record.absence_type_name ? String(record.absence_type_name) : null,
+        operationShiftId: record.operation_shift_id ? String(record.operation_shift_id) : null,
+        shiftNameSnapshot: record.shift_name_snapshot ? String(record.shift_name_snapshot) : null,
         justified: effectiveState === "JUSTIFIED",
       };
     });

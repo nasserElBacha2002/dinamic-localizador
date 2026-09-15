@@ -126,6 +126,8 @@ export const formatBotWorkdaySelectionLines = (
     expectedStartAt: string;
     expectedEndAt: string | null;
     workDate: string;
+    shiftNameSnapshot?: string | null;
+    scheduleTimezone?: string;
   },
   timeZone: string,
   checkInAt?: string,
@@ -133,18 +135,45 @@ export const formatBotWorkdaySelectionLines = (
   const scheduleLine = checkInAt
     ? `Llegada: ${formatLocalTime(checkInAt, timeZone)}`
     : formatWorkdayScheduleLine(fields, timeZone);
-  return [`${index}. ${formatServiceReferenceFromFields(fields)}`, `   ${scheduleLine}`];
+  const shiftPrefix = fields.shiftNameSnapshot?.trim()
+    ? `${fields.shiftNameSnapshot.trim()} — `
+    : "";
+  return [
+    `${index}. ${shiftPrefix}${formatServiceReferenceFromFields(fields)}`,
+    `   ${scheduleLine}`,
+  ];
 };
 
 export const formatWorkdayScheduleLine = (
-  workday: { expectedStartAt: string; expectedEndAt: string | null; workDate: string },
+  workday: {
+    expectedStartAt: string;
+    expectedEndAt: string | null;
+    workDate: string;
+    scheduleTimezone?: string;
+  },
   timeZone: string,
 ): string => {
-  const start = formatLocalTime(workday.expectedStartAt, timeZone);
+  const zone = workday.scheduleTimezone?.trim() || timeZone;
+  const start = formatLocalTime(workday.expectedStartAt, zone);
   if (!workday.expectedEndAt) {
     return `${start}`;
   }
-  const end = formatLocalTime(workday.expectedEndAt, timeZone);
+  const end = formatLocalTime(workday.expectedEndAt, zone);
+  const startLocalDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(workday.expectedStartAt));
+  const endLocalDate = new Intl.DateTimeFormat("en-CA", {
+    timeZone: zone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date(workday.expectedEndAt));
+  if (endLocalDate !== startLocalDate) {
+    return `${start} a ${end} del día siguiente`;
+  }
   return `${start} a ${end}`;
 };
 

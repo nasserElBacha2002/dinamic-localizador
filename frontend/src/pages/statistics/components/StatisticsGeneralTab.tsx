@@ -1,10 +1,11 @@
 import { Grid, Group, Stack, Text } from "@mantine/core";
 import { useNavigate } from "react-router";
-import { ErrorState } from "../../../design-system";
+import { ErrorState, SectionCard } from "../../../design-system";
 import { ChartCard } from "../../../components/statistics/ChartCard";
 import { ExportActionButtons } from "../../../components/statistics/ExportActionButtons";
 import { StatisticsKpiCards } from "../../../components/statistics/StatisticsKpiCards";
 import { OperationalIncidentsPanel } from "../../../components/statistics/OperationalIncidentsPanel";
+import { StatisticsWorkdayDetailsTable } from "../../../components/statistics/StatisticsWorkdayDetailsTable";
 import {
   buildHorizontalBarOption,
   buildVerticalBarOption,
@@ -47,6 +48,8 @@ type StatisticsGeneralTabProps = Pick<
   | "incidentServices"
   | "workdayDetailHeaders"
   | "loadWorkdayDetailExportRows"
+  | "workdayDetailsQuery"
+  | "workdayPagination"
 >;
 
 function formatOperationChartLabel(
@@ -85,6 +88,8 @@ export function StatisticsGeneralTab({
   incidentServices,
   workdayDetailHeaders,
   loadWorkdayDetailExportRows,
+  workdayDetailsQuery,
+  workdayPagination,
 }: StatisticsGeneralTabProps) {
   const navigate = useNavigate();
 
@@ -130,6 +135,23 @@ export function StatisticsGeneralTab({
           />
         </>
       )}
+
+      <SectionCard
+        title="Detalle de jornadas"
+        description="Grano por jornada (incluye Turno en operaciones multi-turno; horario único se muestra vacío)."
+      >
+        <StatisticsWorkdayDetailsTable
+          rows={workdayDetailsQuery.data?.data ?? []}
+          isLoading={workdayDetailsQuery.isPending}
+          isError={workdayDetailsQuery.isError}
+          error={workdayDetailsQuery.error}
+          page={workdayPagination.page}
+          pageSize={workdayPagination.pageSize}
+          total={workdayDetailsQuery.data?.meta.total ?? 0}
+          onPageChange={workdayPagination.onPageChange}
+          onPageSizeChange={workdayPagination.onPageSizeChange}
+        />
+      </SectionCard>
 
       <Grid gap="md">
         <Grid.Col span={{ base: 12, lg: 8 }}>

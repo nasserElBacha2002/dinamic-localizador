@@ -193,6 +193,22 @@ export const buildEmployeeWorkdayStatisticsFilters = (
     });
   }
 
+  if (normalized.operationShiftId) {
+    sqlFilters.push({
+      clause: "ow.operation_shift_id = @operationShiftId",
+      apply: (request) =>
+        request.input("operationShiftId", sql.UniqueIdentifier, normalized.operationShiftId),
+    });
+  }
+
+  if (normalized.shiftName) {
+    sqlFilters.push({
+      clause: "ow.shift_name_snapshot LIKE @shiftName",
+      apply: (request) =>
+        request.input("shiftName", sql.NVarChar(220), `%${normalized.shiftName}%`),
+    });
+  }
+
   return sqlFilters;
 };
 
@@ -213,6 +229,8 @@ export const buildEmployeeWorkdayStatisticsCte = (additionalWhereClause = ""): s
       ow.expected_end_at,
       ow.early_tolerance_minutes,
       ow.late_tolerance_minutes,
+      ow.operation_shift_id,
+      ow.shift_name_snapshot,
       o.id AS operation_id,
       o.operation_kind,
       o.status AS operation_status,

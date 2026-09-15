@@ -21,7 +21,7 @@ import {
 import type { CompanyShiftTemplate } from "../../../types/operation-shift";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { isOvernightShift } from "../../../utils/operation-shift-payload";
-import { OperationTimeInput } from "./OperationTimeInput";
+import { normalizeOperationTimeValue } from "../../../utils/operation-time";
 
 interface CompanyShiftTemplatesDialogProps {
   opened: boolean;
@@ -224,50 +224,63 @@ export function CompanyShiftTemplatesDialog({
             <Text fw={600} size="sm">
               {editingId ? "Editar plantilla" : "Nueva plantilla"}
             </Text>
-            <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-              <TextInput
-                label="Código"
-                placeholder="Ej. MANANA"
-                value={form.code}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, code: event.currentTarget.value }))
-                }
-                disabled={disabled || Boolean(editingId)}
-                description={editingId ? "El código no se puede cambiar." : "Opcional."}
-              />
-              <TextInput
-                label="Nombre"
-                placeholder="Ej. Turno mañana"
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.currentTarget.value }))
-                }
-                disabled={disabled}
-                required
-              />
-              <Stack gap={4}>
-                <Text size="sm" fw={500}>
-                  Inicio
-                </Text>
-                <OperationTimeInput
+            <Stack gap="sm">
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                <TextInput
+                  label="Código"
+                  placeholder="Ej. MANANA"
+                  value={form.code}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, code: event.currentTarget.value }))
+                  }
+                  disabled={disabled || Boolean(editingId)}
+                  description={editingId ? "El código no se puede cambiar." : "Opcional."}
+                  inputWrapperOrder={["label", "input", "description", "error"]}
+                />
+                <TextInput
+                  label="Nombre"
+                  placeholder="Ej. Turno mañana"
+                  value={form.name}
+                  onChange={(event) =>
+                    setForm((current) => ({ ...current, name: event.currentTarget.value }))
+                  }
+                  disabled={disabled}
+                  required
+                  // Keep label→input spacing aligned with Código (description lives below input).
+                  inputWrapperOrder={["label", "input", "description", "error"]}
+                />
+              </SimpleGrid>
+              <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+                <TextInput
+                  label="Inicio"
+                  type="time"
                   value={form.startTime}
-                  onChange={(startTime) => setForm((current) => ({ ...current, startTime }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      startTime: normalizeOperationTimeValue(event.currentTarget.value),
+                    }))
+                  }
                   disabled={disabled}
                   aria-label="Hora de inicio"
+                  inputWrapperOrder={["label", "input", "description", "error"]}
                 />
-              </Stack>
-              <Stack gap={4}>
-                <Text size="sm" fw={500}>
-                  Fin
-                </Text>
-                <OperationTimeInput
+                <TextInput
+                  label="Fin"
+                  type="time"
                   value={form.endTime}
-                  onChange={(endTime) => setForm((current) => ({ ...current, endTime }))}
+                  onChange={(event) =>
+                    setForm((current) => ({
+                      ...current,
+                      endTime: normalizeOperationTimeValue(event.currentTarget.value),
+                    }))
+                  }
                   disabled={disabled}
                   aria-label="Hora de fin"
+                  inputWrapperOrder={["label", "input", "description", "error"]}
                 />
-              </Stack>
-            </SimpleGrid>
+              </SimpleGrid>
+            </Stack>
             {isOvernightShift(form.startTime, form.endTime) ? (
               <Badge color="violet" variant="light" w="fit-content">
                 Turno nocturno (cruza medianoche)

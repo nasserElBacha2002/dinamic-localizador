@@ -31,6 +31,7 @@ const createdOperation = {
   id: "operation-1",
   serviceId: SERVICE_ID,
   operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
   scheduledStart: FUTURE_START,
   scheduledEnd: FUTURE_END,
   earlyToleranceMinutes: 45,
@@ -75,6 +76,7 @@ describe("operationService.create", () => {
 
     const result = await operationService.create(COMPANY_ID, {
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -115,6 +117,7 @@ describe("operationService.create", () => {
 
     const result = await operationService.create(COMPANY_ID, {
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -153,6 +156,7 @@ describe("operationService.create", () => {
 
     const result = await operationService.create(COMPANY_ID, {
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -170,6 +174,7 @@ describe("operationService.create", () => {
 
     const parsed = createOperationSchema.safeParse({
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,
@@ -203,6 +208,7 @@ describe("operationService.create", () => {
       () =>
         operationService.create(COMPANY_ID, {
           operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
           serviceId: SERVICE_ID,
           scheduledStart: FUTURE_START,
           scheduledEnd: FUTURE_END,
@@ -227,6 +233,7 @@ describe("operationService.create", () => {
 
     const result = await operationService.create(COMPANY_ID, {
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       serviceId: SERVICE_ID,
       scheduledStart: FUTURE_START,
       scheduledEnd: FUTURE_END,

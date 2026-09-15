@@ -128,6 +128,7 @@ export const mapOperationRow = (row: Record<string, unknown>): Operation => ({
   id: String(row.id),
   serviceId: String(row.service_id),
   operationKind: (row.operation_kind ? String(row.operation_kind) : "ONE_TIME") as Operation["operationKind"],
+  scheduleMode: (row.schedule_mode ? String(row.schedule_mode) : "SINGLE") as Operation["scheduleMode"],
   scheduledStart: row.scheduled_start
     ? toIsoString(row.scheduled_start as Date | string)
     : null,
@@ -174,6 +175,7 @@ export const mapAssignmentRow = (row: Record<string, unknown>): OperationEmploye
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
   employeeId: String(row.employee_id),
+  operationShiftId: row.operation_shift_id ? String(row.operation_shift_id) : null,
   validFrom: toDateOnlyString(row.valid_from as Date | string),
   validUntil: row.valid_until ? toDateOnlyString(row.valid_until as Date | string) : null,
   assignedAt: toIsoString(row.assigned_at as Date | string),

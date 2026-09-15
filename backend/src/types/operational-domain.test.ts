@@ -52,6 +52,7 @@ const sampleOperation: Operation = {
   id: "operation-1",
   serviceId: sampleService.id,
   operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-01-01T20:30:00.000Z",
   scheduledEnd: "2026-01-02T03:00:00.000Z",
   earlyToleranceMinutes: 60,

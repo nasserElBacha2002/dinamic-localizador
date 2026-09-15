@@ -14,6 +14,7 @@ const operation = (): Operation => ({
   id: operationId,
   serviceId: "00000000-0000-4000-8000-000000000010",
   operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-07-07T01:00:00.000Z",
   scheduledEnd: "2026-07-07T09:00:00.000Z",
   earlyToleranceMinutes: 30,

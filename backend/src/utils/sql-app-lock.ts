@@ -104,3 +104,10 @@ export const acquireTransactionAppLock = async (
 
 export const absenceEmployeeLockResource = (companyId: string, employeeId: string): string =>
   `absence:${companyId}:${employeeId}`.toLowerCase();
+
+/** Serializes create/update of active overlapping ranges for one operation shift code. */
+export const operationShiftCodeLockResource = (
+  companyId: string,
+  operationId: string,
+  code: string,
+): string => `op-shift:${companyId}:${operationId}:${code}`.toLowerCase();

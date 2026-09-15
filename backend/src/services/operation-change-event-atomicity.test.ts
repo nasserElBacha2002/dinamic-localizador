@@ -14,6 +14,7 @@ const baseOperation = {
   id: OPERATION_ID,
   serviceId: SERVICE_ID,
   operationKind: "ONE_TIME" as const,
+  scheduleMode: "SINGLE",
   scheduledStart: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
   scheduledEnd: new Date(Date.now() + 8 * 24 * 60 * 60 * 1000).toISOString(),
   earlyToleranceMinutes: 60,
@@ -135,6 +136,7 @@ describe("operationAssignmentService coverage validation", () => {
       id: operationId,
       status: "SCHEDULED",
       operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
       scheduledStart: "2026-07-10T20:00:00.000Z",
     }));
     mock.method(employeeRepository, "findById", async () => ({
@@ -201,6 +203,7 @@ describe("operationAssignmentService coverage validation", () => {
         id: operationId,
         status: "SCHEDULED",
         operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
         scheduledStart: "2026-07-10T20:00:00.000Z",
       }));
       mock.method(employeeRepository, "findById", async () => ({

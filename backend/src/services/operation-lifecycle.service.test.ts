@@ -11,6 +11,7 @@ const makeOperation = (overrides: Partial<Operation> = {}): Operation => ({
   id: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
   serviceId: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
   operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-08-13T23:50:00.000Z",
   scheduledEnd: "2026-08-14T06:00:00.000Z",
   earlyToleranceMinutes: 60,
@@ -153,6 +154,7 @@ describe("operationLifecycleService", () => {
     const { operationLifecycleService } = await import("./operation-lifecycle.service");
     const recurring = makeOperation({
       operationKind: "RECURRING",
+  scheduleMode: "SINGLE",
       scheduledStart: null,
       scheduledEnd: null,
     });

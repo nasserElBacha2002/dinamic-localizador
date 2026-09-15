@@ -8,6 +8,10 @@ export interface OperationWorkday {
   companyId: string;
   operationId: string;
   workDate: string;
+  /** NULL for SINGLE-mode jornadas (Phase 1). */
+  operationShiftId: string | null;
+  shiftCodeSnapshot: string | null;
+  shiftNameSnapshot: string | null;
   expectedStartAt: string;
   expectedEndAt: string | null;
   earlyToleranceMinutes: number;

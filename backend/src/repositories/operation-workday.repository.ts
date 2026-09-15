@@ -4,6 +4,7 @@ import type { OperationWorkdayCancellationReason } from "../constants/workday-ca
 import type { OperationWorkday } from "../types/workday";
 import { isDuplicateKeyError } from "../utils/sql-server-errors";
 import { toDateOnlyString } from "../utils/row-mappers";
+import { assertWorkdayWriteAllowed } from "./operation-schedule-mode.repository";
 
 const toIsoString = (value: Date | string): string =>
   value instanceof Date ? value.toISOString() : new Date(value).toISOString();
@@ -13,6 +14,9 @@ export const mapOperationWorkdayRow = (row: Record<string, unknown>): OperationW
   companyId: String(row.company_id),
   operationId: String(row.operation_id),
   workDate: toDateOnlyString(row.work_date as Date | string),
+  operationShiftId: row.operation_shift_id ? String(row.operation_shift_id) : null,
+  shiftCodeSnapshot: row.shift_code_snapshot ? String(row.shift_code_snapshot) : null,
+  shiftNameSnapshot: row.shift_name_snapshot ? String(row.shift_name_snapshot) : null,
   expectedStartAt: toIsoString(row.expected_start_at as Date | string),
   expectedEndAt: row.expected_end_at
     ? toIsoString(row.expected_end_at as Date | string)
@@ -52,6 +56,7 @@ export const operationWorkdayRepository = {
         WHERE company_id = @companyId
           AND operation_id = @operationId
           AND work_date = @workDate
+          AND operation_shift_id IS NULL
       `);
 
     if (!result.recordset[0]) {
@@ -93,8 +98,13 @@ export const operationWorkdayRepository = {
       scheduleSourceSnapshot?: OperationWorkday["scheduleSourceSnapshot"];
       scheduleTimezoneSnapshot?: string | null;
       status?: OperationWorkday["status"];
+      /** Phase 1 productive path must leave this unset/null (SINGLE mode). */
+      operationShiftId?: string | null;
     },
   ): Promise<OperationWorkday> {
+    // Phase 1: legacy writers only create shiftless workdays; MULTI_SHIFT is blocked here.
+    await assertWorkdayWriteAllowed(companyId, input.operationId, input.operationShiftId ?? null);
+
     const pool = getPool();
     const result = await pool
       .request()
@@ -140,8 +150,16 @@ export const operationWorkdayRepository = {
       scheduleSourceSnapshot?: OperationWorkday["scheduleSourceSnapshot"];
       scheduleTimezoneSnapshot?: string | null;
       status?: OperationWorkday["status"];
+      operationShiftId?: string | null;
     },
   ): Promise<OperationWorkday> {
+    await assertWorkdayWriteAllowed(
+      companyId,
+      input.operationId,
+      input.operationShiftId ?? null,
+      transaction,
+    );
+
     const result = await new sql.Request(transaction)
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
@@ -187,6 +205,7 @@ export const operationWorkdayRepository = {
         WHERE company_id = @companyId
           AND operation_id = @operationId
           AND work_date = @workDate
+          AND operation_shift_id IS NULL
       `);
 
     if (!result.recordset[0]) {

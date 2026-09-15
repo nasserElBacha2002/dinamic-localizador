@@ -38,6 +38,7 @@ const recurringOperation = {
   id: OPERATION_ID,
   companyId: COMPANY_ID,
   operationKind: "RECURRING",
+  scheduleMode: "SINGLE",
   status: "SCHEDULED",
   earlyToleranceMinutes: 15,
   lateToleranceMinutes: 20,

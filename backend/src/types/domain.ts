@@ -2,6 +2,7 @@ import type { CheckoutStatus } from "../constants/checkout-status";
 import type { EmployeeType } from "../constants/employee-types";
 import type { AssignmentOrigin } from "../constants/work-team-assignment";
 import type { OperationKind } from "../constants/operation-kind";
+import type { OperationScheduleMode } from "../constants/operation-schedule-mode";
 import type { EmployeeCategorySummary } from "./employee-category";
 import type { LocationZoneSummary } from "./location-zone";
 import type { OperationScheduleSummary } from "./schedule";
@@ -67,6 +68,8 @@ export interface Operation {
   id: string;
   serviceId: string;
   operationKind: OperationKind;
+  /** Phase 1: always SINGLE in productive flows. MULTI_SHIFT reserved for Phase 2. */
+  scheduleMode: OperationScheduleMode;
   scheduledStart: string | null;
   scheduledEnd: string | null;
   earlyToleranceMinutes: number;
@@ -106,6 +109,8 @@ export interface OperationEmployeeAssignment {
   companyId: string;
   operationId: string;
   employeeId: string;
+  /** NULL = SINGLE-mode assignment (Phase 1). Phase 2 MULTI_SHIFT requires a shift id. */
+  operationShiftId: string | null;
   validFrom: string;
   validUntil: string | null;
   assignedAt: string;

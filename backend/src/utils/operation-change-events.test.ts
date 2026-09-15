@@ -10,6 +10,7 @@ const op = (overrides: Partial<Operation> = {}): Operation => ({
   id: "11111111-1111-1111-1111-111111111111",
   serviceId: "22222222-2222-2222-2222-222222222222",
   operationKind: "ONE_TIME",
+  scheduleMode: "SINGLE",
   scheduledStart: "2026-06-10T10:00:00.000Z",
   scheduledEnd: "2026-06-10T18:00:00.000Z",
   earlyToleranceMinutes: 15,

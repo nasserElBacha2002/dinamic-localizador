@@ -4,6 +4,7 @@ import { getPool } from "../database/connection";
 import type { AssignmentConfirmationStatus } from "../constants/assignment-confirmation";
 import type { OperationEmployeeAssignment } from "../types/domain";
 import { mapAssignmentRow } from "../utils/row-mappers";
+import { assertAssignmentWriteAllowed } from "./operation-schedule-mode.repository";
 
 const NOT_CANCELLED_CLAUSE = `cancelled_at IS NULL`;
 
@@ -58,8 +59,17 @@ export const operationEmployeeRepository = {
       sourceAssignmentBatchId?: string | null;
       sourceWorkTeamId?: string | null;
       assignmentOrigin?: string;
+      /** Phase 1 productive path must leave this unset/null (SINGLE mode). */
+      operationShiftId?: string | null;
     },
   ): Promise<OperationEmployeeAssignment> {
+    await assertAssignmentWriteAllowed(
+      companyId,
+      input.operationId,
+      input.operationShiftId ?? null,
+      transaction,
+    );
+
     const assignmentId = randomUUID();
     const result = await new sql.Request(transaction)
       .input("assignmentId", sql.UniqueIdentifier, assignmentId)

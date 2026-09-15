@@ -15,4 +15,5 @@ export interface OperationLookup {
   startDate: string;
   endDate: string | null;
   serviceName: string;
+  scheduleMode: "SINGLE" | "MULTI_SHIFT";
 }

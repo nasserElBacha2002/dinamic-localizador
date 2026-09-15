@@ -152,6 +152,7 @@ export const lookupRepository = {
         i.id,
         i.scheduled_start,
         i.scheduled_end,
+        i.schedule_mode,
         s.name AS service_name
       FROM scheduled_operations i
       INNER JOIN operational_locations s ON s.id = i.service_id AND s.company_id = i.company_id
@@ -163,6 +164,8 @@ export const lookupRepository = {
       const serviceName = String(row.service_name);
       const startDate = toIsoString(row.scheduled_start as Date | string) ?? "";
       const endDate = toIsoString(row.scheduled_end as Date | string | null);
+      const scheduleMode =
+        String(row.schedule_mode ?? "SINGLE") === "MULTI_SHIFT" ? "MULTI_SHIFT" : "SINGLE";
 
       return {
         id: String(row.id),
@@ -170,6 +173,7 @@ export const lookupRepository = {
         startDate,
         endDate,
         serviceName,
+        scheduleMode,
       };
     });
   },

@@ -108,6 +108,24 @@ const buildAttendanceFilters = (companyId: string, query: ListAttendanceQuery): 
     });
   }
 
+  if (query.operationShiftId) {
+    const operationShiftId = query.operationShiftId;
+    filters.push({
+      clause: `EXISTS (
+        SELECT 1
+        FROM employee_workdays ew
+        INNER JOIN operation_workdays ow
+          ON ow.id = ew.operation_workday_id
+         AND ow.company_id = ew.company_id
+        WHERE ew.id = ar.employee_workday_id
+          AND ew.company_id = ar.company_id
+          AND ow.operation_shift_id = @operationShiftId
+      )`,
+      apply: (request) =>
+        request.input("operationShiftId", sql.UniqueIdentifier, operationShiftId),
+    });
+  }
+
   if (query.dateFrom) {
     const dateFrom = query.dateFrom;
     filters.push({

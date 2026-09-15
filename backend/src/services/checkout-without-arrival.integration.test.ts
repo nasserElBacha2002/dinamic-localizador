@@ -83,8 +83,13 @@ describeDatabaseIntegration("checkout without arrival SQL", () => {
     const employeeId = String(employeeInsert.recordset[0].id);
     fixtures.trackEmployee(companyId, employeeId);
 
-    // ~3h ago (still inside pending-expiration) with ms jitter for UQ_scheduled_operations_active_service_start.
-    const start = new Date(Date.now() - 3 * 60 * 60 * 1000 - Math.floor(Math.random() * 10_000));
+    // ~3h ago (still inside pending-expiration). Wide ms jitter avoids collisions on
+    // UQ_scheduled_operations_active_service_start against the shared seed company/service.
+    const start = new Date(
+      Date.now() -
+        3 * 60 * 60 * 1000 -
+        (1 + Math.floor(Math.random() * 2_700_000)),
+    );
     const end =
       input?.expectedEndAt === null
         ? null

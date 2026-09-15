@@ -23,6 +23,15 @@ const mapOperationalPayload = (
   record: Record<string, unknown>,
   extras?: { minutesUntilStart?: number; minutesLate?: number },
 ) => ({
+  companyId: record.company_id ? String(record.company_id) : undefined,
+  operationId: record.operation_id ? String(record.operation_id) : undefined,
+  operationWorkdayId: record.operation_workday_id
+    ? String(record.operation_workday_id)
+    : undefined,
+  operationShiftId: record.operation_shift_id ? String(record.operation_shift_id) : null,
+  employeeWorkdayId: record.employee_workday_id ? String(record.employee_workday_id) : undefined,
+  workDate: record.work_date ? String(record.work_date).slice(0, 10) : undefined,
+  shiftNameSnapshot: record.shift_name_snapshot ? String(record.shift_name_snapshot) : null,
   employeeName: String(record.employee_name),
   serviceName: String(record.service_name),
   serviceAddress: record.service_address ? String(record.service_address) : null,
@@ -187,6 +196,10 @@ export const adminDynamicAttendanceAlertRepository = {
           car.id AS recipient_id,
           car.phone_number AS recipient_phone,
           ew.id AS employee_workday_id,
+          ow.id AS operation_workday_id,
+          ow.operation_shift_id,
+          ow.shift_name_snapshot,
+          ow.work_date,
           ew.employee_id,
           e.name AS employee_name,
           i.id AS operation_id,
@@ -309,6 +322,10 @@ export const adminDynamicAttendanceAlertRepository = {
           car.id AS recipient_id,
           car.phone_number AS recipient_phone,
           ew.id AS employee_workday_id,
+          ow.id AS operation_workday_id,
+          ow.operation_shift_id,
+          ow.shift_name_snapshot,
+          ow.work_date,
           ew.employee_id,
           e.name AS employee_name,
           i.id AS operation_id,
@@ -537,6 +554,10 @@ export const adminDynamicAttendanceAlertRepository = {
         ;WITH incidents AS (
           SELECT TOP (@batchSize)
             ew.id AS employee_workday_id,
+          ow.id AS operation_workday_id,
+          ow.operation_shift_id,
+          ow.shift_name_snapshot,
+          ow.work_date,
             ew.employee_id,
             e.name AS employee_name,
             i.company_id,
@@ -667,6 +688,10 @@ export const adminDynamicAttendanceAlertRepository = {
         ;WITH incidents AS (
           SELECT TOP (@batchSize)
             ew.id AS employee_workday_id,
+          ow.id AS operation_workday_id,
+          ow.operation_shift_id,
+          ow.shift_name_snapshot,
+          ow.work_date,
             ew.employee_id,
             e.name AS employee_name,
             i.company_id,

@@ -8,6 +8,7 @@ import { getBotRuntimeSettings, getRequireCheckoutLocation } from "../../utils/b
 import { getObservabilityTrace } from "../../utils/whatsapp-observability-scope";
 import { WHATSAPP_RESULT_CODES } from "../../constants/whatsapp-observability";
 import { logWhatsAppAttendanceEvent } from "../../utils/whatsapp-notification-observability";
+import { logMultiShiftAttendanceEvent } from "../../utils/multi-shift-attendance-observability";
 import { companyModuleService } from "../company-module.service";
 import {
   getAttendanceModuleBlockedMessage,
@@ -460,6 +461,13 @@ export async function startCheckIn(input: {
     console.info("[whatsapp-bot] session created WAITING_OPERATION_SELECTION", {
       employeeId: input.employeeId,
       options: options.length,
+    });
+    logMultiShiftAttendanceEvent({
+      companyId,
+      employeeWorkdayId: null,
+      action: "selection_required",
+      outcome: "ok",
+      reason: `options=${options.length}`,
     });
 
     return respond(companyId, {

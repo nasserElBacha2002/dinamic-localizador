@@ -3,8 +3,11 @@ import { operationRepository } from "../repositories/operation.repository";
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { Operation } from "../types/domain";
 import type { OperationWorkday } from "../types/workday";
-import { resolveLifecycleOperationStatus } from "../utils/operation-lifecycle";
 import { canTransitionOperationLifecycleStatus } from "../utils/operation-status";
+import {
+  hasActiveFutureOrInProgressWorkday,
+  resolveOperationLifecycleStatusForMode,
+} from "../utils/multi-shift-lifecycle";
 import { markMissingCheckinEmployeesDirtyForThreshold } from "./attendance-threshold-completed-operation.service";
 
 export type OperationLifecycleReconcileResult = {
@@ -28,48 +31,33 @@ class OperationLifecycleItemError extends Error {
   }
 }
 
-/** ACTIVE workday still future or in progress at `at`. */
-const hasActiveFutureOrInProgressWorkday = (
-  workdays: OperationWorkday[],
-  at: Date,
-): boolean =>
-  workdays.some((workday) => {
-    if (workday.status !== "ACTIVE") {
-      return false;
-    }
-    const start = new Date(workday.expectedStartAt);
-    if (start > at) {
-      return true;
-    }
-    if (workday.expectedEndAt == null) {
-      return true;
-    }
-    return new Date(workday.expectedEndAt) > at;
-  });
+const loadWorkdaysIfMulti = async (
+  companyId: string,
+  operation: Operation,
+): Promise<OperationWorkday[] | null> => {
+  if (operation.scheduleMode !== "MULTI_SHIFT") {
+    return null;
+  }
+  return operationWorkdayRepository.listByOperationId(companyId, operation.id);
+};
 
 const promoteIfDue = async (
   companyId: string,
   operation: Operation,
   at: Date,
 ): Promise<"updated" | "skipped"> => {
-  let nextStatus = resolveLifecycleOperationStatus(operation, at);
+  const workdays = await loadWorkdaysIfMulti(companyId, operation);
+  let nextStatus = resolveOperationLifecycleStatusForMode(operation, workdays, at);
 
-  // MULTI_SHIFT RECURRING: never auto-complete (resolveLifecycle already keeps non-COMPLETED).
-  // MULTI_SHIFT ONE_TIME: do not COMPLETE while any ACTIVE future/in-progress workday remains.
+  // Defensive: MULTI ONE_TIME must never COMPLETE while an ACTIVE workday is open.
   if (
     nextStatus === "COMPLETED" &&
     operation.scheduleMode === "MULTI_SHIFT" &&
-    (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+    (operation.operationKind ?? "ONE_TIME") === "ONE_TIME" &&
+    workdays &&
+    hasActiveFutureOrInProgressWorkday(workdays, at)
   ) {
-    const workdays = await operationWorkdayRepository.listByOperationId(companyId, operation.id);
-    if (hasActiveFutureOrInProgressWorkday(workdays, at)) {
-      nextStatus = at >= new Date(operation.scheduledStart ?? at.toISOString())
-        ? "IN_PROGRESS"
-        : "SCHEDULED";
-      if (nextStatus === operation.status) {
-        return "skipped";
-      }
-    }
+    nextStatus = "IN_PROGRESS";
   }
 
   if (nextStatus === operation.status) {
@@ -111,20 +99,17 @@ export const operationLifecycleService = {
     operation: Operation,
     at: Date = new Date(),
   ): Promise<Operation> {
-    let nextStatus = resolveLifecycleOperationStatus(operation, at);
+    const workdays = await loadWorkdaysIfMulti(companyId, operation);
+    let nextStatus = resolveOperationLifecycleStatusForMode(operation, workdays, at);
 
     if (
       nextStatus === "COMPLETED" &&
       operation.scheduleMode === "MULTI_SHIFT" &&
-      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME" &&
+      workdays &&
+      hasActiveFutureOrInProgressWorkday(workdays, at)
     ) {
-      const workdays = await operationWorkdayRepository.listByOperationId(companyId, operation.id);
-      if (hasActiveFutureOrInProgressWorkday(workdays, at)) {
-        nextStatus =
-          at >= new Date(operation.scheduledStart ?? at.toISOString())
-            ? "IN_PROGRESS"
-            : "SCHEDULED";
-      }
+      nextStatus = "IN_PROGRESS";
     }
 
     if (nextStatus === operation.status) {
@@ -208,7 +193,7 @@ export const operationLifecycleService = {
           reason instanceof OperationLifecycleItemError ? reason : null;
         const operation = itemError?.operation;
         const expectedStatus = operation
-          ? resolveLifecycleOperationStatus(operation, now)
+          ? resolveOperationLifecycleStatusForMode(operation, null, now)
           : null;
         console.error("[operation-lifecycle] reconcile failed", {
           operationId: operation?.id ?? null,

@@ -177,25 +177,38 @@ export const attendanceNotificationRepository = {
       employeeId: string;
       notificationType: AttendanceNotificationType;
       scheduleVersion?: number;
+      employeeWorkdayId?: string | null;
     },
   ): Promise<AttendanceNotification | null> {
     const pool = getPool();
     const scheduleVersion = input.scheduleVersion ?? 1;
-    const result = await pool
+    const request = pool
       .request()
       .input("companyId", sql.UniqueIdentifier, companyId)
       .input("operationId", sql.UniqueIdentifier, input.operationId)
       .input("employeeId", sql.UniqueIdentifier, input.employeeId)
       .input("notificationType", sql.NVarChar(40), input.notificationType)
       .input("scheduleVersion", sql.Int, scheduleVersion)
-      .query(`
+      .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId ?? null);
+
+    const result = await request.query(`
         SELECT TOP 1 *
         FROM whatsapp_attendance_notifications
-        WHERE operation_id = @operationId
-          AND employee_id = @employeeId
-          AND notification_type = @notificationType
+        WHERE notification_type = @notificationType
           AND schedule_version = @scheduleVersion
           AND company_id = @companyId
+          AND (
+            (
+              @employeeWorkdayId IS NOT NULL
+              AND employee_workday_id = @employeeWorkdayId
+            )
+            OR (
+              @employeeWorkdayId IS NULL
+              AND operation_id = @operationId
+              AND employee_id = @employeeId
+              AND employee_workday_id IS NULL
+            )
+          )
       `);
 
     if (!result.recordset[0]) {
@@ -234,8 +247,7 @@ export const attendanceNotificationRepository = {
           AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         LEFT JOIN whatsapp_attendance_notifications wan
-          ON wan.operation_id = i.id
-          AND wan.employee_id = e.id
+          ON wan.employee_workday_id = ew.id
           AND wan.notification_type = 'ARRIVAL_REMINDER_15_MIN'
           AND wan.company_id = @companyId
           AND wan.schedule_version = (${REMINDER_SCHEDULE_VERSION_SQL})
@@ -328,8 +340,7 @@ export const attendanceNotificationRepository = {
           AND ar.company_id = @companyId
           AND ar.validation_status IN ('VALID', 'PENDING_REVIEW')
         LEFT JOIN whatsapp_attendance_notifications wan
-          ON wan.operation_id = i.id
-          AND wan.employee_id = e.id
+          ON wan.employee_workday_id = ew.id
           AND wan.notification_type = 'NO_CHECKIN_AT_START'
           AND wan.company_id = @companyId
           AND wan.schedule_version = (${REMINDER_SCHEDULE_VERSION_SQL})
@@ -424,8 +435,7 @@ export const attendanceNotificationRepository = {
           AND ar.received_at IS NOT NULL
           AND ar.checkout_at IS NULL
         LEFT JOIN whatsapp_attendance_notifications wan
-          ON wan.operation_id = i.id
-          AND wan.employee_id = e.id
+          ON wan.employee_workday_id = ew.id
           AND wan.notification_type = 'EXIT_REMINDER_15_MIN'
           AND wan.company_id = @companyId
           AND wan.schedule_version = (${REMINDER_SCHEDULE_VERSION_SQL})
@@ -612,10 +622,12 @@ export const attendanceNotificationRepository = {
       scheduleVersion?: number;
       reminderSource?: "AUTOMATIC" | "MANUAL";
       attemptedAt?: Date;
+      employeeWorkdayId?: string | null;
     },
   ): Promise<AttendanceNotification | null> {
     const attemptedAt = input.attemptedAt ?? new Date();
     const scheduleVersion = input.scheduleVersion ?? 1;
+    const employeeWorkdayId = input.employeeWorkdayId ?? null;
     const { staleBefore, maxAttempts } = getRetryThresholds();
 
     const reclaimed = await this.reclaimNotificationForAttempt(companyId, {
@@ -623,6 +635,7 @@ export const attendanceNotificationRepository = {
       employeeId: input.employeeId,
       notificationType: input.notificationType,
       scheduleVersion,
+      employeeWorkdayId,
       attemptedAt,
       staleBefore,
       maxAttempts,
@@ -639,17 +652,18 @@ export const attendanceNotificationRepository = {
         .input("companyId", sql.UniqueIdentifier, companyId)
         .input("operationId", sql.UniqueIdentifier, input.operationId)
         .input("employeeId", sql.UniqueIdentifier, input.employeeId)
+        .input("employeeWorkdayId", sql.UniqueIdentifier, employeeWorkdayId)
         .input("notificationType", sql.NVarChar(40), input.notificationType)
         .input("scheduleVersion", sql.Int, scheduleVersion)
         .input("reminderSource", sql.NVarChar(20), input.reminderSource ?? "AUTOMATIC")
         .query(`
           INSERT INTO whatsapp_attendance_notifications (
-            company_id, operation_id, employee_id, notification_type, status, attempt_count,
+            company_id, operation_id, employee_id, employee_workday_id, notification_type, status, attempt_count,
             schedule_version, reminder_source
           )
           OUTPUT INSERTED.*
           VALUES (
-            @companyId, @operationId, @employeeId, @notificationType, 'PENDING', 0,
+            @companyId, @operationId, @employeeId, @employeeWorkdayId, @notificationType, 'PENDING', 0,
             @scheduleVersion, @reminderSource
           )
         `);
@@ -671,6 +685,7 @@ export const attendanceNotificationRepository = {
         employeeId: input.employeeId,
         notificationType: input.notificationType,
         scheduleVersion,
+        employeeWorkdayId,
         attemptedAt,
         staleBefore,
         maxAttempts,
@@ -679,7 +694,10 @@ export const attendanceNotificationRepository = {
         return reclaimedAfterRace;
       }
 
-      const existing = await this.findByOperationEmployeeType(companyId, input);
+      const existing = await this.findByOperationEmployeeType(companyId, {
+        ...input,
+        employeeWorkdayId,
+      });
       if (!existing) {
         return null;
       }
@@ -701,6 +719,7 @@ export const attendanceNotificationRepository = {
       employeeId?: string;
       notificationType?: AttendanceNotificationType;
       scheduleVersion?: number;
+      employeeWorkdayId?: string | null;
       attemptedAt: Date;
       staleBefore: Date;
       maxAttempts: number;
@@ -717,6 +736,17 @@ export const attendanceNotificationRepository = {
     let whereClause = "id = @notificationId AND company_id = @companyId";
     if (input.notificationId) {
       request.input("notificationId", sql.UniqueIdentifier, input.notificationId);
+    } else if (input.employeeWorkdayId && input.notificationType) {
+      request
+        .input("employeeWorkdayId", sql.UniqueIdentifier, input.employeeWorkdayId)
+        .input("notificationType", sql.NVarChar(40), input.notificationType)
+        .input("scheduleVersion", sql.Int, input.scheduleVersion ?? 1);
+      whereClause = `
+        employee_workday_id = @employeeWorkdayId
+        AND notification_type = @notificationType
+        AND schedule_version = @scheduleVersion
+        AND company_id = @companyId
+      `;
     } else if (input.operationId && input.employeeId && input.notificationType) {
       request
         .input("operationId", sql.UniqueIdentifier, input.operationId)
@@ -729,6 +759,7 @@ export const attendanceNotificationRepository = {
         AND notification_type = @notificationType
         AND schedule_version = @scheduleVersion
         AND company_id = @companyId
+        AND employee_workday_id IS NULL
       `;
     } else {
       throw new Error("RECLAIM_NOTIFICATION_TARGET_REQUIRED");

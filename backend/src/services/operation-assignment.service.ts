@@ -321,6 +321,7 @@ export const operationAssignmentService = {
       }
 
       let replacedEmployeeId: string | null = null;
+      let coverageShiftId: string | null = null;
       if (input?.asCoverage && input.replacedAssignmentId) {
         const replaced = await operationEmployeeRepository.findByIdInTransaction(
           companyId,
@@ -373,6 +374,7 @@ export const operationAssignmentService = {
         }
 
         replacedEmployeeId = replaced.employeeId;
+        coverageShiftId = replaced.operationShiftId ?? null;
         await this.cancelAssignmentInSharedTransaction(companyId, transaction, {
           operationId,
           assignmentId: replaced.id,
@@ -403,7 +405,7 @@ export const operationAssignmentService = {
           operationWorkDate,
           assignmentOrigin: input?.asCoverage ? "COVERAGE" : undefined,
           scheduleMode: operation.scheduleMode,
-          operationShiftId: input?.operationShiftId ?? null,
+          operationShiftId: input?.operationShiftId ?? coverageShiftId,
         },
       );
 

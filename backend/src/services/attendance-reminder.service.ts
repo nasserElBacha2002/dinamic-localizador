@@ -191,6 +191,7 @@ const sendReminderForCandidate = async (
     notificationType,
     scheduleVersion,
     reminderSource: "AUTOMATIC",
+    employeeWorkdayId: candidate.employeeWorkdayId ?? null,
   });
 
   if (!claimed) {

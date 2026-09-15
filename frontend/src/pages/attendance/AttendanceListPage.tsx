@@ -1,6 +1,6 @@
 import { Button, Text } from "@mantine/core";
 import { useQueries } from "@tanstack/react-query";
-import { useEffect, useMemo } from "react";
+import { useMemo } from "react";
 import { Link, useLocation, useNavigate } from "react-router";
 import { listOperationShifts } from "../../api/operation-shifts.api";
 import { EntityLink } from "../../components/entity-link";
@@ -112,28 +112,16 @@ export function AttendanceListPage() {
     .sort((left, right) => left.label.localeCompare(right.label, "es"));
 
   const showShiftFilter = table.state.operationIds.length > 0 && shiftFilterOptions.length > 0;
-  const shiftOptionIdSet = new Set(shiftFilterOptions.map((option) => option.value));
-
-  useEffect(() => {
-    const selectedShiftId = table.state.operationShiftId;
-    if (!selectedShiftId) {
-      return;
-    }
-    // Wait until shift options settle so deep-linked shift ids are not cleared early.
-    if (!shiftsReady) {
-      return;
-    }
-    if (!showShiftFilter || !shiftOptionIdSet.has(selectedShiftId)) {
-      table.setField("operationShiftId", "");
-    }
-  }, [
-    showShiftFilter,
-    shiftsReady,
-    table.setField,
-    table.state.operationShiftId,
-    table.state.operationIds,
-    shiftFilterOptions,
-  ]);
+  const shiftOptionIds = new Set(shiftFilterOptions.map((option) => option.value));
+  // Keep URL value while loading; once ready, ignore stale/invalid shift ids without an effect.
+  const effectiveOperationShiftId =
+    !table.state.operationShiftId
+      ? ""
+      : !shiftsReady
+        ? table.state.operationShiftId
+        : showShiftFilter && shiftOptionIds.has(table.state.operationShiftId)
+          ? table.state.operationShiftId
+          : "";
 
   const exportMutation = useExportAttendanceCsv();
   const dateRange = useMemo(
@@ -153,7 +141,7 @@ export function AttendanceListPage() {
     operationIds: table.state.operationIds.length > 0 ? table.state.operationIds : undefined,
     employeeIds: table.state.employeeIds.length > 0 ? table.state.employeeIds : undefined,
     serviceIds: table.state.serviceIds.length > 0 ? table.state.serviceIds : undefined,
-    operationShiftId: table.state.operationShiftId || undefined,
+    operationShiftId: effectiveOperationShiftId || undefined,
     validationStatus: (table.state.validationStatus as ValidationStatus) || undefined,
     locationStatus: (table.state.locationStatus as LocationStatus) || undefined,
     punctualityStatus: (table.state.punctualityStatus as PunctualityStatus) || undefined,
@@ -429,7 +417,7 @@ export function AttendanceListPage() {
           <FilterBar.Item>
             <FilterSelect
               label="Turno"
-              value={table.state.operationShiftId}
+              value={effectiveOperationShiftId}
               onChange={(nextValue) => {
                 table.setField("operationShiftId", nextValue);
               }}

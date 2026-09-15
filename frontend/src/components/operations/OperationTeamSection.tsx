@@ -1,4 +1,4 @@
-import { Button, Collapse, Group, Select, SimpleGrid, Stack, Text, TextInput } from "@mantine/core";
+import { Button, Collapse, Select, SimpleGrid, Stack, Text, TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
@@ -156,13 +156,9 @@ export function OperationTeamSection({
     () => listTeamWorkdayDates(workdayOptions),
     [workdayOptions],
   );
-  const [draftWorkDate, setDraftWorkDate] = useState<string | null>(
-    selectedWorkday?.workDate ?? null,
-  );
-
-  useEffect(() => {
-    setDraftWorkDate(selectedWorkday?.workDate ?? null);
-  }, [selectedWorkday?.workDate]);
+  // Local date while the user is mid-pick on a multi-shift day (selection cleared until turno).
+  const [pendingWorkDate, setPendingWorkDate] = useState<string | null>(null);
+  const draftWorkDate = selectedWorkday?.workDate ?? pendingWorkDate;
 
   const workdaysForDraftDate = useMemo(
     () => (draftWorkDate ? listTeamWorkdaysForDate(workdayOptions, draftWorkDate) : []),
@@ -182,21 +178,24 @@ export function OperationTeamSection({
   }, [availableWorkDates]);
 
   const handleWorkDateChange = (workDate: string | null) => {
-    setDraftWorkDate(workDate);
     if (!workDate) {
+      setPendingWorkDate(null);
       onWorkdayChange(null);
       return;
     }
     if (!availableWorkDates.includes(workDate)) {
+      setPendingWorkDate(workDate);
       onWorkdayChange(null);
       return;
     }
     const forDate = listTeamWorkdaysForDate(workdayOptions, workDate);
     if (forDate.length === 1) {
+      setPendingWorkDate(null);
       onWorkdayChange({ workdayId: forDate[0]!.id, workDate });
       return;
     }
-    // Multi-shift day: wait for explicit shift choice.
+    // Multi-shift day: keep the day locally until an explicit shift is chosen.
+    setPendingWorkDate(workDate);
     onWorkdayChange(null);
   };
 
@@ -210,6 +209,7 @@ export function OperationTeamSection({
       onWorkdayChange(null);
       return;
     }
+    setPendingWorkDate(null);
     onWorkdayChange({ workdayId: workday.id, workDate: workday.workDate });
   };
 

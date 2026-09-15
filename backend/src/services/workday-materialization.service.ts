@@ -10,13 +10,22 @@ import { isAssignmentActiveOnWorkDate } from "../utils/assignment-period";
 import { isRecoverableCancelledExpectation } from "../utils/employee-workday-recovery";
 import { operationWorkdayResolver } from "./operation-workday-resolver";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
+import { recurringWorkdayMaterializationService } from "./recurring-workday-materialization.service";
 
 const resolveTimezoneForCompany = async (companyId: string): Promise<string> => {
   const settings = await companySettingsRepository.findByCompanyId(companyId);
   return resolveOperationTimezone(settings?.operationTimezone);
 };
 
-const assertOneTimeWorkdayInvariant = (operationId: string, workdays: OperationWorkday[]): void => {
+/** SINGLE-mode only: ONE_TIME ops must have at most one shiftless workday. */
+const assertOneTimeWorkdayInvariant = (
+  operationId: string,
+  workdays: OperationWorkday[],
+  scheduleMode: string,
+): void => {
+  if (scheduleMode !== "SINGLE") {
+    return;
+  }
   if (workdays.length > 1) {
     throw new AppError(
       500,
@@ -45,12 +54,20 @@ const ensureOperationWorkdayRow = async (
     );
   }
 
+  if (operation.scheduleMode === "MULTI_SHIFT") {
+    throw new AppError(
+      409,
+      "MULTI_SHIFT_USE_MULTI_MATERIALIZER",
+      "Las operaciones multi-turno deben materializarse por turno; no usan la jornada única ONE_TIME.",
+    );
+  }
+
   const findOneTimeExisting = transaction
     ? () => operationWorkdayRepository.listByOperationIdInTransaction(companyId, transaction, operationId)
     : () => operationWorkdayRepository.listByOperationId(companyId, operationId);
 
   const oneTimeWorkdays = await findOneTimeExisting();
-  assertOneTimeWorkdayInvariant(operationId, oneTimeWorkdays);
+  assertOneTimeWorkdayInvariant(operationId, oneTimeWorkdays, operation.scheduleMode);
   if (oneTimeWorkdays[0]) {
     return oneTimeWorkdays[0];
   }
@@ -102,7 +119,7 @@ const ensureOperationWorkdayRow = async (
       throw error;
     }
     const racedOneTime = await findOneTimeExisting();
-    assertOneTimeWorkdayInvariant(operationId, racedOneTime);
+    assertOneTimeWorkdayInvariant(operationId, racedOneTime, operation.scheduleMode);
     if (racedOneTime[0]) {
       return racedOneTime[0];
     }
@@ -464,10 +481,60 @@ export const workdayMaterializationService = {
     );
   },
 
+  async ensureEmployeeWorkdayForExistingOperationWorkdayInTransaction(
+    companyId: string,
+    transaction: sql.Transaction,
+    operationWorkday: OperationWorkday,
+    employeeId: string,
+    operationAssignmentId: string,
+  ): Promise<EmployeeWorkday> {
+    return ensureEmployeeWorkdayRow(
+      companyId,
+      operationWorkday,
+      employeeId,
+      operationAssignmentId,
+      transaction,
+    );
+  },
+
   async ensureOneTimeOperationMaterialized(
     companyId: string,
     operationId: string,
   ): Promise<OperationWorkday> {
     return ensureOperationWorkdayRow(companyId, operationId);
+  },
+
+  /**
+   * MULTI_SHIFT ONE_TIME contract: materialize all shift workdays for the operation work date
+   * and return them. Does not use the SINGLE one-workday path.
+   */
+  async ensureMultiShiftOperationWorkdays(
+    companyId: string,
+    operationId: string,
+  ): Promise<OperationWorkday[]> {
+    const operation = await operationRepository.findById(companyId, operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    if (operation.scheduleMode !== "MULTI_SHIFT") {
+      throw new AppError(
+        409,
+        "OPERATION_NOT_MULTI_SHIFT",
+        "Esta acción solo aplica a operaciones multi-turno",
+      );
+    }
+
+    const timezone = await resolveTimezoneForCompany(companyId);
+    const resolved = operationWorkdayResolver.resolveOneTime(operation, timezone);
+    await recurringWorkdayMaterializationService.materializeMultiShiftOperationHorizon(
+      companyId,
+      operationId,
+      { rangeStart: resolved.workDate, rangeEnd: resolved.workDate },
+    );
+    return operationWorkdayRepository.listByOperationAndWorkDate(
+      companyId,
+      operationId,
+      resolved.workDate,
+    );
   },
 };

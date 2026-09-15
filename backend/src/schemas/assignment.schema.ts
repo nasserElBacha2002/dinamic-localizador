@@ -5,6 +5,8 @@ export const assignEmployeeSchema = z
     employeeId: z.string().uuid("UUID de empleado inválido"),
     validFrom: z.string().date("Fecha de inicio inválida").optional(),
     validUntil: z.string().date("Fecha de fin inválida").nullable().optional(),
+    /** Required for MULTI_SHIFT operations. */
+    operationShiftId: z.string().uuid("UUID de turno inválido").nullable().optional(),
     /** Explicit coverage — does not auto-infer from manual reassignment. */
     asCoverage: z.boolean().optional(),
     replacedAssignmentId: z.string().uuid().nullable().optional(),
@@ -28,6 +30,7 @@ export const assignEmployeesBatchSchema = z.object({
     .max(100, "Máximo 100 colaboradores por asignación"),
   validFrom: z.string().date("Fecha de inicio inválida").optional(),
   validUntil: z.string().date("Fecha de fin inválida").nullable().optional(),
+  operationShiftId: z.string().uuid("UUID de turno inválido").nullable().optional(),
 });
 
 export const assignmentParamsSchema = z.object({

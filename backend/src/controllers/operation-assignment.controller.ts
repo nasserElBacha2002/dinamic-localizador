@@ -12,6 +12,7 @@ export const operationAssignmentController = {
       {
         validFrom: req.body.validFrom,
         validUntil: req.body.validUntil,
+        operationShiftId: req.body.operationShiftId,
         asCoverage: req.body.asCoverage,
         replacedAssignmentId: req.body.replacedAssignmentId,
         replacedEmployeeId: req.body.replacedEmployeeId,
@@ -31,6 +32,7 @@ export const operationAssignmentController = {
       {
         validFrom: req.body.validFrom,
         validUntil: req.body.validUntil,
+        operationShiftId: req.body.operationShiftId,
       },
       req.auth?.userId ?? null,
     );

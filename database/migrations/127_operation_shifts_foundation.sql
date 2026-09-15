@@ -192,6 +192,7 @@ IF NOT EXISTS (
     WHERE name = N'IX_operation_shifts_operation_code'
       AND object_id = OBJECT_ID(N'dbo.operation_shifts')
 )
+AND COL_LENGTH(N'dbo.operation_shifts', N'effective_from') IS NOT NULL
 BEGIN
     CREATE INDEX IX_operation_shifts_operation_code
         ON dbo.operation_shifts (company_id, operation_id, code, effective_from);

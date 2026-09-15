@@ -80,13 +80,21 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
         .query(`
           DELETE FROM dbo.operation_workdays WHERE operation_id = @id;
           DELETE FROM dbo.operation_assignments WHERE operation_id = @id;
+          DELETE FROM dbo.operation_shift_date_exceptions WHERE operation_id = @id;
         `);
     }
     for (const id of shiftIds) {
       await pool
         .request()
         .input("id", sql.UniqueIdentifier, id)
-        .query(`DELETE FROM dbo.operation_shifts WHERE id = @id`);
+        .query(`
+          DELETE FROM dbo.operation_shift_version_days
+          WHERE operation_shift_version_id IN (
+            SELECT id FROM dbo.operation_shift_versions WHERE operation_shift_id = @id
+          );
+          DELETE FROM dbo.operation_shift_versions WHERE operation_shift_id = @id;
+          DELETE FROM dbo.operation_shifts WHERE id = @id;
+        `);
     }
     for (const id of templateIds) {
       await pool
@@ -210,15 +218,11 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
 
     await assert.rejects(
       () =>
-        operationShiftRepository.createWithOverlapGuard(companyId, {
+        operationShiftRepository.createIdentity(companyId, {
           operationId,
           templateId: foreign.id,
-          code: "X",
+          code: `X_${randomUUID().slice(0, 6)}`,
           name: "X",
-          startTime: "06:00",
-          endTime: "14:00",
-          effectiveFrom: "2026-09-01",
-          effectiveUntil: null,
           sortOrder: 1,
           isActive: true,
         }),
@@ -379,7 +383,7 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
       `);
   });
 
-  it("rejects invalid effective range and overlapping active codes", async () => {
+  it("rejects invalid effective range and overlapping versions on same shift", async () => {
     await assert.rejects(
       () =>
         operationShiftFoundationService.createOperationShift(companyId, {
@@ -407,6 +411,17 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
 
     await assert.rejects(
       () =>
+        operationShiftFoundationService.addVersion(companyId, first.id, {
+          effectiveFrom: "2026-10-15",
+          effectiveUntil: null,
+          startTime: "06:00",
+          endTime: "14:00",
+        }),
+      (error: unknown) => error instanceof AppError && error.code === "OPERATION_SHIFT_EFFECTIVE_OVERLAP",
+    );
+
+    await assert.rejects(
+      () =>
         operationShiftFoundationService.createOperationShift(companyId, {
           operationId,
           code: "OVERLAP",
@@ -416,7 +431,7 @@ describeDatabaseIntegration("operation shifts foundation (SQL)", () => {
           effectiveFrom: "2026-10-15",
           effectiveUntil: null,
         }),
-      (error: unknown) => error instanceof AppError && error.code === "OPERATION_SHIFT_EFFECTIVE_OVERLAP",
+      (error: unknown) => error instanceof AppError && error.code === "OPERATION_SHIFT_CODE_EXISTS",
     );
   });
 });

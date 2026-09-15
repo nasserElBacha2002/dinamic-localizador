@@ -111,3 +111,18 @@ export const operationShiftCodeLockResource = (
   operationId: string,
   code: string,
 ): string => `op-shift:${companyId}:${operationId}:${code}`.toLowerCase();
+
+/** Serializes version effective-range writes for one operation shift identity. */
+export const operationShiftVersionLockResource = (
+  companyId: string,
+  operationShiftId: string,
+): string => `op-shift-ver:${companyId}:${operationShiftId}`.toLowerCase();
+
+/** Serializes exception upsert + workday reconcile for one shift+date. */
+export const operationShiftExceptionLockResource = (
+  companyId: string,
+  operationId: string,
+  operationShiftId: string,
+  workDate: string,
+): string =>
+  `op-shift-ex:${companyId}:${operationId}:${operationShiftId}:${workDate}`.toLowerCase();

@@ -1,6 +1,8 @@
 import { env } from "../config/env";
 import { operationRepository } from "../repositories/operation.repository";
+import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { Operation } from "../types/domain";
+import type { OperationWorkday } from "../types/workday";
 import { resolveLifecycleOperationStatus } from "../utils/operation-lifecycle";
 import { canTransitionOperationLifecycleStatus } from "../utils/operation-status";
 import { markMissingCheckinEmployeesDirtyForThreshold } from "./attendance-threshold-completed-operation.service";
@@ -26,12 +28,50 @@ class OperationLifecycleItemError extends Error {
   }
 }
 
+/** ACTIVE workday still future or in progress at `at`. */
+const hasActiveFutureOrInProgressWorkday = (
+  workdays: OperationWorkday[],
+  at: Date,
+): boolean =>
+  workdays.some((workday) => {
+    if (workday.status !== "ACTIVE") {
+      return false;
+    }
+    const start = new Date(workday.expectedStartAt);
+    if (start > at) {
+      return true;
+    }
+    if (workday.expectedEndAt == null) {
+      return true;
+    }
+    return new Date(workday.expectedEndAt) > at;
+  });
+
 const promoteIfDue = async (
   companyId: string,
   operation: Operation,
   at: Date,
 ): Promise<"updated" | "skipped"> => {
-  const nextStatus = resolveLifecycleOperationStatus(operation, at);
+  let nextStatus = resolveLifecycleOperationStatus(operation, at);
+
+  // MULTI_SHIFT RECURRING: never auto-complete (resolveLifecycle already keeps non-COMPLETED).
+  // MULTI_SHIFT ONE_TIME: do not COMPLETE while any ACTIVE future/in-progress workday remains.
+  if (
+    nextStatus === "COMPLETED" &&
+    operation.scheduleMode === "MULTI_SHIFT" &&
+    (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+  ) {
+    const workdays = await operationWorkdayRepository.listByOperationId(companyId, operation.id);
+    if (hasActiveFutureOrInProgressWorkday(workdays, at)) {
+      nextStatus = at >= new Date(operation.scheduledStart ?? at.toISOString())
+        ? "IN_PROGRESS"
+        : "SCHEDULED";
+      if (nextStatus === operation.status) {
+        return "skipped";
+      }
+    }
+  }
+
   if (nextStatus === operation.status) {
     return "skipped";
   }
@@ -71,7 +111,22 @@ export const operationLifecycleService = {
     operation: Operation,
     at: Date = new Date(),
   ): Promise<Operation> {
-    const nextStatus = resolveLifecycleOperationStatus(operation, at);
+    let nextStatus = resolveLifecycleOperationStatus(operation, at);
+
+    if (
+      nextStatus === "COMPLETED" &&
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      (operation.operationKind ?? "ONE_TIME") === "ONE_TIME"
+    ) {
+      const workdays = await operationWorkdayRepository.listByOperationId(companyId, operation.id);
+      if (hasActiveFutureOrInProgressWorkday(workdays, at)) {
+        nextStatus =
+          at >= new Date(operation.scheduledStart ?? at.toISOString())
+            ? "IN_PROGRESS"
+            : "SCHEDULED";
+      }
+    }
+
     if (nextStatus === operation.status) {
       return operation;
     }

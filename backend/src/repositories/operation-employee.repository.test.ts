@@ -9,9 +9,11 @@ describe("operationEmployeeRepository.createInTransaction", () => {
     "utf8",
   );
 
-  it("generates assignment id on insert", () => {
+  it("generates assignment id on insert and persists operation_shift_id when provided", () => {
     assert.match(repositorySource, /randomUUID\(\)/);
     assert.match(repositorySource, /INSERT INTO operation_assignments \([\s\S]*\bid,/);
     assert.match(repositorySource, /@assignmentId/);
+    assert.match(repositorySource, /operation_shift_id/);
+    assert.match(repositorySource, /@operationShiftId/);
   });
 });

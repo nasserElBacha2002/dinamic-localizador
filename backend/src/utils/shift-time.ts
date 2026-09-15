@@ -105,8 +105,8 @@ export const assertEffectiveRange = (effectiveFrom: string, effectiveUntil: stri
 
 /**
  * Inclusive date-range overlap (same semantics as assignment periods).
- * Concurrent inserts for the same (company, operation, code) must hold
- * Transaction applock + SERIALIZABLE UPDLOCK (see operationShiftRepository.createWithOverlapGuard).
+ * Concurrent inserts for the same (company, operation_shift) must hold
+ * Transaction applock + SERIALIZABLE UPDLOCK (see operationShiftVersionRepository.createWithOverlapGuard).
  */
 export const dateRangesOverlap = (
   aFrom: string,

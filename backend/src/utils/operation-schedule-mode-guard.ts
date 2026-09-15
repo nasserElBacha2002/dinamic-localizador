@@ -7,6 +7,24 @@ import type { OperationScheduleMode } from "../constants/operation-schedule-mode
  * - MULTI_SHIFT operations: workdays/assignments must set operation_shift_id (Phase 2).
  * Creating catalog rows in operation_shifts without flipping schedule_mode is allowed.
  */
+
+/**
+ * Rejects MULTI_SHIFT operations in consumers that still assume one workday per date.
+ * Use until Phase 3 WhatsApp / multi-aware callers are ready.
+ */
+export const assertSingleScheduleModeOrReject = (
+  scheduleMode: OperationScheduleMode | string | null | undefined,
+  contextCode = "MULTI_SHIFT_NOT_SUPPORTED_HERE",
+): void => {
+  if (scheduleMode === "MULTI_SHIFT") {
+    throw new AppError(
+      409,
+      contextCode,
+      "Esta acción aún no admite operaciones multi-turno. Usá el flujo de turnos o materialización multi-turno.",
+    );
+  }
+};
+
 export const assertWorkdayShiftMatchesScheduleMode = (
   scheduleMode: OperationScheduleMode,
   operationShiftId: string | null | undefined,

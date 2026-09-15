@@ -27,10 +27,23 @@ const MIGRATION_128 = join(
   ROOT,
   "database/migrations/128_operation_shifts_uniqueness_atomic_repair.sql",
 );
+const MIGRATION_129 = join(ROOT, "database/migrations/129_operation_shifts_versioned_core.sql");
+const MIGRATION_130 = join(
+  ROOT,
+  "database/migrations/130_workday_cancellation_reason_exception.sql",
+);
 const ROLLBACK_127 = join(
   ROOT,
   "database/migrations/rollback/127_operation_shifts_foundation_rollback.sql",
 );
+
+const isPhase2Versioned = async (): Promise<boolean> => {
+  const pool = getPool();
+  const result = await pool.request().query(`
+    SELECT CASE WHEN OBJECT_ID(N'dbo.operation_shift_versions', N'U') IS NULL THEN 0 ELSE 1 END AS present
+  `);
+  return Boolean(result.recordset[0]?.present);
+};
 
 type SchemaFingerprint = {
   hasScheduleMode: boolean;
@@ -156,10 +169,13 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
     companyId = await requireDinamicCompanyId();
     const pool = getPool();
 
-    // Ensure 127/128 uniqueness is present (idempotent).
+    // Ensure Phase 1 uniqueness + Phase 2 versioned core (idempotent).
     await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_127, "utf8"));
     await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_128, "utf8"));
+    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_129, "utf8"));
+    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_130, "utf8"));
     assertPhase1SchemaPresent(await readFingerprint());
+    assert.equal(await isPhase2Versioned(), true);
 
     const service = await pool
       .request()
@@ -180,7 +196,15 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
       await pool
         .request()
         .input("id", sql.UniqueIdentifier, id)
-        .query(`DELETE FROM dbo.operation_shifts WHERE id = @id`);
+        .query(`
+          DELETE FROM dbo.operation_shift_version_days
+          WHERE operation_shift_version_id IN (
+            SELECT id FROM dbo.operation_shift_versions WHERE operation_shift_id = @id
+          );
+          DELETE FROM dbo.operation_shift_versions WHERE operation_shift_id = @id;
+          DELETE FROM dbo.operation_shift_date_exceptions WHERE operation_shift_id = @id;
+          DELETE FROM dbo.operation_shifts WHERE id = @id;
+        `);
     }
     for (const id of cleanupTemplates) {
       await pool
@@ -205,6 +229,17 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
           );
           DELETE FROM dbo.operation_workdays WHERE operation_id = @id;
           DELETE FROM dbo.operation_assignments WHERE operation_id = @id;
+          DELETE FROM dbo.operation_shift_date_exceptions WHERE operation_id = @id;
+          DELETE FROM dbo.operation_shift_version_days
+          WHERE operation_shift_version_id IN (
+            SELECT v.id FROM dbo.operation_shift_versions v
+            INNER JOIN dbo.operation_shifts s ON s.id = v.operation_shift_id
+            WHERE s.operation_id = @id
+          );
+          DELETE FROM dbo.operation_shift_versions
+          WHERE operation_shift_id IN (
+            SELECT id FROM dbo.operation_shifts WHERE operation_id = @id
+          );
           DELETE FROM dbo.operation_shifts WHERE operation_id = @id;
           DELETE FROM dbo.scheduled_operations WHERE id = @id;
         `);
@@ -370,7 +405,10 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
 
     await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_127, "utf8"));
     await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_128, "utf8"));
+    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_129, "utf8"));
+    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_130, "utf8"));
     assertPhase1SchemaPresent(await readFingerprint());
+    assert.equal(await isPhase2Versioned(), true);
 
     const after = await pool
       .request()
@@ -419,6 +457,16 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
 
   it("rollback empty restores pre-127 schema when Phase 1 catalog is empty", async () => {
     const pool = getPool();
+    if (await isPhase2Versioned()) {
+      // Phase 2 present: 127 empty rollback must refuse until 129 is rolled back.
+      await assert.rejects(
+        () => executeSqlFileAutocommit(ROLLBACK_127),
+        /Phase 2 operation_shift_versions present|operation_shifts rows exist|company_shift_templates rows exist|Rollback blocked/,
+      );
+      assertPhase1SchemaPresent(await readFingerprint());
+      assert.equal(await isPhase2Versioned(), true);
+      return;
+    }
     if (!(await phase1CatalogEmpty())) {
       // Shared DB may retain templates/shifts from parallel suites; empty rollback cannot run safely.
       const counts = await pool.request().query(`
@@ -441,7 +489,10 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
 
     await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_127, "utf8"));
     await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_128, "utf8"));
+    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_129, "utf8"));
+    await applySqlScriptInTransaction(pool, readFileSync(MIGRATION_130, "utf8"));
     assertPhase1SchemaPresent(await readFingerprint());
+    assert.equal(await isPhase2Versioned(), true);
   });
 
   it("rollback blocked cases leave Phase 1 schema intact", async () => {
@@ -512,7 +563,14 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
         await pool
           .request()
           .input("id", sql.UniqueIdentifier, shift.id)
-          .query(`DELETE FROM dbo.operation_shifts WHERE id = @id`);
+          .query(`
+            DELETE FROM dbo.operation_shift_version_days
+            WHERE operation_shift_version_id IN (
+              SELECT id FROM dbo.operation_shift_versions WHERE operation_shift_id = @id
+            );
+            DELETE FROM dbo.operation_shift_versions WHERE operation_shift_id = @id;
+            DELETE FROM dbo.operation_shifts WHERE id = @id;
+          `);
       };
     }, /operation_shifts rows exist/);
 
@@ -601,7 +659,7 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
     }, /operation_assignments with operation_shift_id exist/);
   });
 
-  it("concurrent overlapping create: one wins, one conflicts; disjoint ranges both succeed", async () => {
+  it("concurrent duplicate code: one wins; version overlap conflicts; disjoint versions succeed", async () => {
     const pool = getPool();
     const op = await pool
       .request()
@@ -650,7 +708,7 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
     assert.equal(rejected.length, 1);
     const rejectedReason = (rejected[0] as PromiseRejectedResult).reason;
     assert.ok(rejectedReason instanceof AppError);
-    assert.equal(rejectedReason.code, "OPERATION_SHIFT_EFFECTIVE_OVERLAP");
+    assert.equal(rejectedReason.code, "OPERATION_SHIFT_CODE_EXISTS");
 
     const winner = (fulfilled[0] as PromiseFulfilledResult<{ id: string }>).value;
     cleanupShifts.push(winner.id);
@@ -666,54 +724,97 @@ describeDatabaseIntegration("operation shifts migration 127 corrections (SQL)", 
     assert.equal(rows.recordset.length, 1);
     assert.equal(String(rows.recordset[0].id), winner.id);
 
-    const a = await operationShiftFoundationService.createOperationShift(companyId, {
+    // Disjoint versions on the same stable identity
+    const base = await operationShiftFoundationService.createOperationShift(companyId, {
       operationId,
       code: `DISJ_${randomUUID().slice(0, 6)}`,
-      name: "Disjoint A",
+      name: "Disjoint base",
       startTime: "06:00",
       endTime: "14:00",
       effectiveFrom: "2026-11-01",
       effectiveUntil: "2026-11-15",
     });
-    const b = await operationShiftFoundationService.createOperationShift(companyId, {
-      operationId,
-      code: a.code,
-      name: "Disjoint B",
-      startTime: "06:00",
-      endTime: "14:00",
+    cleanupShifts.push(base.id);
+    const nextVersion = await operationShiftFoundationService.addVersion(companyId, base.id, {
       effectiveFrom: "2026-11-16",
       effectiveUntil: "2026-11-30",
+      startTime: "06:00",
+      endTime: "14:00",
     });
-    cleanupShifts.push(a.id, b.id);
+    assert.ok(nextVersion.id);
 
-    // Concurrent non-overlapping same code
-    const sharedCode = `NR_${randomUUID().slice(0, 6)}`;
-    const concurrentDisjoint = await Promise.allSettled([
-      operationShiftFoundationService.createOperationShift(companyId, {
-        operationId,
-        code: sharedCode,
-        name: "Non-overlap A",
-        startTime: "06:00",
-        endTime: "14:00",
-        effectiveFrom: "2027-01-01",
-        effectiveUntil: "2027-01-15",
-      }),
-      operationShiftFoundationService.createOperationShift(companyId, {
-        operationId,
-        code: sharedCode,
-        name: "Non-overlap B",
-        startTime: "06:00",
-        endTime: "14:00",
-        effectiveFrom: "2027-01-16",
+    await assert.rejects(
+      () =>
+        operationShiftFoundationService.addVersion(companyId, base.id, {
+          effectiveFrom: "2026-11-20",
+          effectiveUntil: null,
+          startTime: "07:00",
+          endTime: "15:00",
+        }),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "OPERATION_SHIFT_EFFECTIVE_OVERLAP",
+    );
+
+    // Concurrent overlapping version adds: one wins
+    const versionShift = await operationShiftFoundationService.createOperationShift(companyId, {
+      operationId,
+      code: `VER_${randomUUID().slice(0, 6)}`,
+      name: "Version race",
+      startTime: "06:00",
+      endTime: "14:00",
+      effectiveFrom: "2027-01-01",
+      effectiveUntil: "2027-01-09",
+    });
+    cleanupShifts.push(versionShift.id);
+
+    const concurrentVersions = await Promise.allSettled([
+      operationShiftFoundationService.addVersion(companyId, versionShift.id, {
+        effectiveFrom: "2027-01-10",
         effectiveUntil: "2027-01-31",
+        startTime: "06:00",
+        endTime: "14:00",
+      }),
+      operationShiftFoundationService.addVersion(companyId, versionShift.id, {
+        effectiveFrom: "2027-01-12",
+        effectiveUntil: "2027-01-20",
+        startTime: "07:00",
+        endTime: "15:00",
+      }),
+    ]);
+    const versionFulfilled = concurrentVersions.filter((r) => r.status === "fulfilled");
+    const versionRejected = concurrentVersions.filter((r) => r.status === "rejected");
+    assert.equal(versionFulfilled.length, 1, JSON.stringify(concurrentVersions.map((r) => r.status === "rejected" ? String((r as PromiseRejectedResult).reason) : "ok")));
+    assert.equal(versionRejected.length, 1);
+    const versionReject = (versionRejected[0] as PromiseRejectedResult).reason;
+    assert.ok(versionReject instanceof AppError);
+    assert.equal(versionReject.code, "OPERATION_SHIFT_EFFECTIVE_OVERLAP");
+
+    // Concurrent non-overlapping versions
+    const disjointShift = await operationShiftFoundationService.createOperationShift(companyId, {
+      operationId,
+      code: `NR_${randomUUID().slice(0, 6)}`,
+      name: "Non-overlap base",
+      startTime: "06:00",
+      endTime: "14:00",
+      effectiveFrom: "2027-02-01",
+      effectiveUntil: "2027-02-10",
+    });
+    cleanupShifts.push(disjointShift.id);
+    const concurrentDisjoint = await Promise.allSettled([
+      operationShiftFoundationService.addVersion(companyId, disjointShift.id, {
+        effectiveFrom: "2027-02-11",
+        effectiveUntil: "2027-02-20",
+        startTime: "06:00",
+        endTime: "14:00",
+      }),
+      operationShiftFoundationService.addVersion(companyId, disjointShift.id, {
+        effectiveFrom: "2027-02-21",
+        effectiveUntil: "2027-02-28",
+        startTime: "06:00",
+        endTime: "14:00",
       }),
     ]);
     assert.equal(concurrentDisjoint.filter((r) => r.status === "fulfilled").length, 2);
-    for (const r of concurrentDisjoint) {
-      if (r.status === "fulfilled") {
-        cleanupShifts.push(r.value.id);
-      }
-    }
 
     const differentCodes = await Promise.allSettled([
       operationShiftFoundationService.createOperationShift(companyId, {

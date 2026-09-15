@@ -26,6 +26,7 @@ import { recurringWorkdayMaterializationService } from "./recurring-workday-mate
 import { recurringWorkdaySyncService } from "./recurring-workday-sync.service";
 import { operationCoverageEventRepository } from "../repositories/operation-coverage-event.repository";
 import { operationChangeEventRepository } from "../repositories/operation-change-event.repository";
+import { operationShiftRepository } from "../repositories/operation-shift.repository";
 import { resolveOperationOperationalDate } from "../utils/operation-change-events";
 
 const withLifecycleState = (
@@ -120,6 +121,32 @@ const reconcileEmployeeWorkdaysOutsideAssignment = async (
   }
 };
 
+const prepareOneTimeMultiShiftAssignment = async (
+  companyId: string,
+  operationId: string,
+  operationWorkDate: string,
+  operationShiftId: string,
+): Promise<void> => {
+  const shift = await operationShiftRepository.findByIdForOperation(
+    companyId,
+    operationId,
+    operationShiftId,
+  );
+  if (!shift || !shift.isActive) {
+    throw new AppError(
+      404,
+      "OPERATION_SHIFT_NOT_FOUND",
+      "El turno no pertenece a esta operación o no está activo",
+    );
+  }
+
+  await recurringWorkdayMaterializationService.materializeMultiShiftOperationHorizon(
+    companyId,
+    operationId,
+    { rangeStart: operationWorkDate, rangeEnd: operationWorkDate },
+  );
+};
+
 const cancelExpectedEmployeeWorkdaysForAssignment = async (
   companyId: string,
   transaction: sql.Transaction,
@@ -202,6 +229,7 @@ export const operationAssignmentService = {
     input?: {
       validFrom?: string;
       validUntil?: string | null;
+      operationShiftId?: string | null;
       asCoverage?: boolean;
       replacedAssignmentId?: string | null;
       replacedEmployeeId?: string | null;
@@ -242,6 +270,20 @@ export const operationAssignmentService = {
       operationKind === "ONE_TIME"
         ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
         : null;
+
+    if (
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      operationKind === "ONE_TIME" &&
+      operationWorkDate &&
+      input?.operationShiftId
+    ) {
+      await prepareOneTimeMultiShiftAssignment(
+        companyId,
+        operationId,
+        operationWorkDate,
+        input.operationShiftId,
+      );
+    }
 
     const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
       operationKind,
@@ -360,6 +402,8 @@ export const operationAssignmentService = {
           operationKind,
           operationWorkDate,
           assignmentOrigin: input?.asCoverage ? "COVERAGE" : undefined,
+          scheduleMode: operation.scheduleMode,
+          operationShiftId: input?.operationShiftId ?? null,
         },
       );
 
@@ -442,6 +486,13 @@ export const operationAssignmentService = {
       await transaction.commit();
       transactionClosed = true;
       committedAssignment = result.assignment;
+      if (result.outcome === "added" && result.crossOperationShiftOverlapWarnings?.length) {
+        (
+          committedAssignment as OperationEmployeeAssignment & {
+            crossOperationShiftOverlapWarnings?: typeof result.crossOperationShiftOverlapWarnings;
+          }
+        ).crossOperationShiftOverlapWarnings = result.crossOperationShiftOverlapWarnings;
+      }
     } catch (error) {
       if (!transactionClosed) {
         await safeRollback(transaction);
@@ -490,7 +541,7 @@ export const operationAssignmentService = {
     companyId: string,
     operationId: string,
     employeeIds: string[],
-    input?: { validFrom?: string; validUntil?: string | null },
+    input?: { validFrom?: string; validUntil?: string | null; operationShiftId?: string | null },
     userId?: string | null,
   ) {
     const uniqueIds = [...new Set(employeeIds.map((id) => id.trim()).filter(Boolean))];
@@ -515,6 +566,20 @@ export const operationAssignmentService = {
       operationKind === "ONE_TIME"
         ? await operationWorkDateService.resolveOperationWorkDate(companyId, operationId)
         : null;
+
+    if (
+      operation.scheduleMode === "MULTI_SHIFT" &&
+      operationKind === "ONE_TIME" &&
+      operationWorkDate &&
+      input?.operationShiftId
+    ) {
+      await prepareOneTimeMultiShiftAssignment(
+        companyId,
+        operationId,
+        operationWorkDate,
+        input.operationShiftId,
+      );
+    }
 
     const { validFrom, validUntil } = operationAssignmentCore.resolveValidity(
       operationKind,
@@ -605,6 +670,8 @@ export const operationAssignmentService = {
             employeeActive: employee.active,
             operationKind,
             operationWorkDate,
+            scheduleMode: operation.scheduleMode,
+            operationShiftId: input?.operationShiftId ?? null,
           },
         );
 
@@ -938,6 +1005,7 @@ export const operationAssignmentService = {
           validFrom: assignment.validFrom,
           validUntil: effectiveDate,
           excludeAssignmentId: assignment.id,
+          operationShiftId: assignment.operationShiftId,
         },
       );
       if (overlap) {

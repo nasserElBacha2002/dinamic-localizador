@@ -66,6 +66,7 @@ describe("resolveAttendanceSummaryWorkday", () => {
         id: operationId,
         companyId,
         operationKind: "RECURRING",
+        scheduleMode: "SINGLE",
       } as Parameters<typeof resolveAttendanceSummaryWorkday>[2],
       {},
     );
@@ -107,7 +108,7 @@ describe("resolveAttendanceSummaryWorkday", () => {
     const resolved = await resolveAttendanceSummaryWorkday(
       companyId,
       operationId,
-      { id: operationId, companyId, operationKind: "RECURRING" } as Parameters<
+      { id: operationId, companyId, operationKind: "RECURRING", scheduleMode: "SINGLE" } as Parameters<
         typeof resolveAttendanceSummaryWorkday
       >[2],
       { workDate: targetDate },
@@ -117,5 +118,26 @@ describe("resolveAttendanceSummaryWorkday", () => {
       operationWorkdayId: "workday-13",
       workDate: targetDate,
     });
+  });
+
+  it("rejects MULTI_SHIFT attendance summary resolution", async () => {
+    const { AppError } = await import("../errors/app-error");
+
+    await assert.rejects(
+      () =>
+        resolveAttendanceSummaryWorkday(
+          "company-1",
+          "operation-1",
+          {
+            id: "operation-1",
+            companyId: "company-1",
+            operationKind: "ONE_TIME",
+            scheduleMode: "MULTI_SHIFT",
+          } as Parameters<typeof resolveAttendanceSummaryWorkday>[2],
+          {},
+        ),
+      (error: unknown) =>
+        error instanceof AppError && error.code === "MULTI_SHIFT_ATTENDANCE_SUMMARY_UNSUPPORTED",
+    );
   });
 });

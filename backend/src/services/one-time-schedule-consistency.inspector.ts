@@ -5,6 +5,7 @@ import { operationWorkdayRepository } from "../repositories/operation-workday.re
 import { employeeWorkdayRepository } from "../repositories/employee-workday.repository";
 import { getPool } from "../database/connection";
 import sql from "mssql";
+import { AppError } from "../errors/app-error";
 import type { Operation } from "../types/domain";
 import type { OperationWorkday } from "../types/workday";
 import { resolveOperationTimezone } from "../utils/operation-timezone";
@@ -169,6 +170,14 @@ export const oneTimeScheduleConsistencyInspector = {
           employeeIdsMissingWorkday: [],
         },
       };
+    }
+
+    if (operation.scheduleMode === "MULTI_SHIFT") {
+      throw new AppError(
+        409,
+        "MULTI_SHIFT_NOT_SUPPORTED_HERE",
+        "La inspección de consistencia ONE_TIME no admite operaciones multi-turno.",
+      );
     }
 
     const settings = await companySettingsRepository.findByCompanyId(companyId);

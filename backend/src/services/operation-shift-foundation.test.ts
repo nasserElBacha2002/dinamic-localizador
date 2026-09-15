@@ -151,3 +151,49 @@ describe("migration 127 operation shifts foundation (static)", () => {
     assert.match(repair, /Uniqueness repair incomplete/);
   });
 });
+
+describe("migration 129 operation shifts versioned core (static)", () => {
+  const root = join(process.cwd(), "..");
+  const migration = readFileSync(
+    join(root, "database/migrations/129_operation_shifts_versioned_core.sql"),
+    "utf8",
+  );
+
+  it("moves times/vigencia to versions and adds date exceptions", () => {
+    assert.match(migration, /CREATE TABLE dbo\.operation_shift_versions/);
+    assert.match(migration, /CREATE TABLE dbo\.operation_shift_version_days/);
+    assert.match(migration, /CREATE TABLE dbo\.operation_shift_date_exceptions/);
+    assert.match(migration, /operation_shift_version_id/);
+    assert.match(migration, /DROP COLUMN start_time/);
+    assert.match(migration, /UQ_operation_shifts_operation_code/);
+  });
+});
+
+describe("migration 130 cancellation EXCEPTION (static)", () => {
+  const root = join(process.cwd(), "..");
+  const migration = readFileSync(
+    join(root, "database/migrations/130_workday_cancellation_reason_exception.sql"),
+    "utf8",
+  );
+
+  it("extends cancellation reason checks with EXCEPTION", () => {
+    assert.match(migration, /CK_operation_workdays_cancellation_reason/);
+    assert.match(migration, /N'EXCEPTION'/);
+    assert.match(migration, /CK_employee_workdays_cancellation_reason/);
+  });
+});
+
+describe("migration 131 shift version tenant FK (static)", () => {
+  const root = join(process.cwd(), "..");
+  const migration = readFileSync(
+    join(root, "database/migrations/131_operation_workday_shift_version_tenant_fk.sql"),
+    "utf8",
+  );
+
+  it("adds composite shift+version FK and updated_by_user_id", () => {
+    assert.match(migration, /FK_operation_workdays_shift_version_shift_tenant/);
+    assert.match(migration, /UQ_operation_shift_versions_company_shift_id/);
+    assert.match(migration, /updated_by_user_id/);
+    assert.match(migration, /operation_shift_version_id IS NOT NULL/);
+  });
+});

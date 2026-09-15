@@ -408,12 +408,22 @@ export const operationRepository = {
     }
 
     const operationWorkdays = await operationWorkdayRepository.listByOperationId(companyId, id);
-    let workDate = assignmentReferenceDate ?? operationWorkdays[0]?.workDate ?? null;
+    let workDate = assignmentReferenceDate ?? null;
 
-    if (!workDate && operation.operationKind === "ONE_TIME" && operation.scheduledStart) {
-      const settings = await companySettingsRepository.findByCompanyId(companyId);
-      const timezone = resolveOperationTimezone(settings?.operationTimezone);
-      workDate = getDateIsoInTimezone(new Date(operation.scheduledStart), timezone);
+    if (!workDate && operation.scheduleMode === "MULTI_SHIFT") {
+      // Do not use workdays[0] — MULTI can have several rows for the same date/shift.
+      if (operation.operationKind === "ONE_TIME" && operation.scheduledStart) {
+        const settings = await companySettingsRepository.findByCompanyId(companyId);
+        const timezone = resolveOperationTimezone(settings?.operationTimezone);
+        workDate = getDateIsoInTimezone(new Date(operation.scheduledStart), timezone);
+      }
+    } else if (!workDate) {
+      workDate = operationWorkdays[0]?.workDate ?? null;
+      if (!workDate && operation.operationKind === "ONE_TIME" && operation.scheduledStart) {
+        const settings = await companySettingsRepository.findByCompanyId(companyId);
+        const timezone = resolveOperationTimezone(settings?.operationTimezone);
+        workDate = getDateIsoInTimezone(new Date(operation.scheduledStart), timezone);
+      }
     }
 
     const employeesResult = await pool

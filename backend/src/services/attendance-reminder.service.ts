@@ -14,8 +14,10 @@ import {
 import { AppError } from "../errors/app-error";
 import { attendanceNotificationRepository } from "../repositories/attendance-notification.repository";
 import { companyRepository } from "../repositories/company.repository";
+import { operationRepository } from "../repositories/operation.repository";
 import type { AttendanceReminderCandidate } from "../types/attendance-notification";
 import { buildAttendanceReminderTemplateVariables } from "../utils/attendance-reminder-template";
+import { assertSingleScheduleModeOrReject } from "../utils/operation-schedule-mode-guard";
 import { buildOperationStartDueWindow, buildReminderDueWindow } from "../utils/reminder-time-window";
 import { countCandidatesByOperationKind } from "../utils/workday-reminder-eligibility";
 import {
@@ -1095,6 +1097,15 @@ export const attendanceReminderService = {
       scheduleVersion?: number;
     },
   ): Promise<ReminderSendOutcome> {
+    const operation = await operationRepository.findById(companyId, input.operationId);
+    if (!operation) {
+      throw new AppError(404, "OPERATION_NOT_FOUND", "Operación no encontrada");
+    }
+    assertSingleScheduleModeOrReject(
+      operation.scheduleMode,
+      "MULTI_SHIFT_NOT_SUPPORTED_HERE",
+    );
+
     const candidate = await attendanceNotificationRepository.findReminderCandidateByIds(companyId, input);
     if (!candidate) {
       throw new AppError(404, "REMINDER_CANDIDATE_NOT_FOUND", "No se encontró el empleado asignado a la operación");

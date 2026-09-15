@@ -43,6 +43,12 @@ BEGIN
 END;
 GO
 
+IF OBJECT_ID(N'dbo.operation_shift_versions', N'U') IS NOT NULL
+BEGIN
+    THROW 50127, 'Rollback blocked: Phase 2 operation_shift_versions present (roll back 129 first)', 1;
+END;
+GO
+
 IF OBJECT_ID(N'dbo.company_shift_templates', N'U') IS NOT NULL
    AND EXISTS (SELECT 1 FROM dbo.company_shift_templates)
 BEGIN

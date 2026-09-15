@@ -2,6 +2,7 @@ import { companySettingsRepository } from "../repositories/company-settings.repo
 import { operationWorkdayRepository } from "../repositories/operation-workday.repository";
 import type { Operation } from "../types/domain";
 import { getDateIsoInTimezone } from "./absence-date";
+import { assertSingleScheduleModeOrReject } from "./operation-schedule-mode-guard";
 import { resolveOperationTimezone } from "./operation-timezone";
 
 export interface ResolvedAttendanceWorkday {
@@ -14,6 +15,8 @@ export interface ResolvedAttendanceWorkday {
  *
  * RECURRING defaults to today's materialized workday in the company operational
  * timezone — never the first/earliest workday of the operation.
+ *
+ * MULTI_SHIFT is rejected until Phase 3 (pick-by-shift) is implemented.
  */
 export async function resolveAttendanceSummaryWorkday(
   companyId: string,
@@ -21,6 +24,11 @@ export async function resolveAttendanceSummaryWorkday(
   operation: Operation,
   input: { workDate?: string; workdayId?: string },
 ): Promise<ResolvedAttendanceWorkday | null> {
+  assertSingleScheduleModeOrReject(
+    operation.scheduleMode,
+    "MULTI_SHIFT_ATTENDANCE_SUMMARY_UNSUPPORTED",
+  );
+
   if (input.workdayId) {
     const workday = await operationWorkdayRepository.findById(companyId, input.workdayId);
     if (!workday || workday.operationId !== operationId) {

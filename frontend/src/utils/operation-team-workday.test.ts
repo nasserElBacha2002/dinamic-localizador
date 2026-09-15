@@ -2,9 +2,12 @@ import assert from "node:assert/strict";
 import { describe, it } from "node:test";
 import type { OperationWorkdaySummary } from "../types/operation-workday";
 import {
+  buildTeamShiftSelectOptions,
   buildTeamWorkdaySelectOptions,
   formatTeamWorkdayLabel,
   getOperationalTodayDate,
+  listTeamWorkdayDates,
+  listTeamWorkdaysForDate,
   pickDefaultTeamWorkday,
 } from "./operation-team-workday";
 
@@ -88,5 +91,22 @@ describe("operation team workday helpers", () => {
     assert.equal(options[0]?.value, "wd-13");
     assert.match(options[0]?.label ?? "", /3 colaborador/);
     assert.match(options[0]?.label ?? "", /Noche/);
+  });
+
+  it("lists unique dates and shifts for a selected day", () => {
+    const today = "2026-07-13";
+    const rows = [
+      workday("wd-am", today, 2, { shiftNameSnapshot: "Mañana" }),
+      workday("wd-pm", today, 6, { shiftNameSnapshot: "Tarde" }),
+      workday("wd-06", "2026-07-06", 1, { shiftNameSnapshot: "Mañana" }),
+    ];
+
+    assert.deepEqual(listTeamWorkdayDates(rows), [today, "2026-07-06"]);
+    const forToday = listTeamWorkdaysForDate(rows, today);
+    assert.equal(forToday.length, 2);
+    const shiftOptions = buildTeamShiftSelectOptions(forToday);
+    assert.equal(shiftOptions[0]?.value, "wd-am");
+    assert.match(shiftOptions[0]?.label ?? "", /Mañana/);
+    assert.match(shiftOptions[1]?.label ?? "", /Tarde · 6 colaborador/);
   });
 });

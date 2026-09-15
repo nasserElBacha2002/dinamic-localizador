@@ -15,7 +15,7 @@ import {
   teardownDatabaseIntegration,
 } from "../test-helpers/integration-test";
 import { getPool } from "./connection";
-import { applySqlScriptInTransaction, splitBatches, stripLegacyDatabaseUse } from "./run-migrations";
+import { applySqlScriptInTransaction, stripLegacyDatabaseUse } from "./run-migrations";
 
 const ROOT = join(process.cwd(), "..");
 const MIGRATION_133 = join(
@@ -27,32 +27,22 @@ const ROLLBACK_133 = join(
   "database/migrations/rollback/133_work_team_assignment_batch_operation_shift_rollback.sql",
 );
 
-const flattenScriptForRunner = (script: string): string => {
-  const batches = splitBatches(script)
+/** Strip legacy USE; runner already targets env.DB_NAME and owns the TDS transaction. */
+const prepareScriptForRunner = (script: string): string =>
+  script
+    .split(/\r?\nGO\r?\n/gi)
     .map(stripLegacyDatabaseUse)
-    .map((batch) =>
-      batch
-        .replace(/SET\s+XACT_ABORT\s+ON\s*;?/gi, "")
-        .replace(/BEGIN\s+TRY/gi, "")
-        .replace(/END\s+TRY/gi, "")
-        .replace(/BEGIN\s+CATCH[\s\S]*?END\s+CATCH/gi, "")
-        .replace(/BEGIN\s+TRANSACTION\s*;?/gi, "")
-        .replace(/COMMIT\s+TRANSACTION\s*;?/gi, "")
-        .replace(/IF\s+@@TRANCOUNT\s*>\s*0\s*ROLLBACK\s+TRANSACTION\s*;?/gi, "")
-        .trim(),
-    )
-    .filter(Boolean);
-  return batches.join("\nGO\n");
-};
+    .filter(Boolean)
+    .join("\nGO\n");
 
 const apply133Forward = async (): Promise<void> => {
   const pool = getPool();
-  await applySqlScriptInTransaction(pool, flattenScriptForRunner(readFileSync(MIGRATION_133, "utf8")));
+  await applySqlScriptInTransaction(pool, prepareScriptForRunner(readFileSync(MIGRATION_133, "utf8")));
 };
 
 const apply133Rollback = async (): Promise<void> => {
   const pool = getPool();
-  await applySqlScriptInTransaction(pool, flattenScriptForRunner(readFileSync(ROLLBACK_133, "utf8")));
+  await applySqlScriptInTransaction(pool, prepareScriptForRunner(readFileSync(ROLLBACK_133, "utf8")));
 };
 
 describeDatabaseIntegration("migration 133 work_team_assignment_batch operation_shift", () => {

@@ -54,6 +54,9 @@ export interface WorkTeamAssignmentPanelProps {
   scheduleMode?: ScheduleMode;
   operationWorkDate: string;
   shiftOptions?: Array<{ value: string; label: string }>;
+  selectedShiftId?: string | null;
+  onSelectedShiftIdChange?: (shiftId: string | null) => void;
+  hideShiftSelect?: boolean;
   enabled?: boolean;
   onCompleted: (message: string, severity: "success" | "error") => void;
   onFinished?: () => void;
@@ -79,6 +82,9 @@ function WorkTeamAssignmentPanelContent({
   scheduleMode = "SINGLE",
   operationWorkDate,
   shiftOptions = [],
+  selectedShiftId: controlledShiftId,
+  onSelectedShiftIdChange,
+  hideShiftSelect = false,
   companyId,
   onCompleted,
   onFinished,
@@ -92,9 +98,11 @@ function WorkTeamAssignmentPanelContent({
   const confirmMutation = useConfirmWorkTeamAssignment(operationId);
 
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
-  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(
+  const [uncontrolledShiftId, setUncontrolledShiftId] = useState<string | null>(
     shiftOptions.length === 1 ? shiftOptions[0]!.value : null,
   );
+  const selectedShiftId = controlledShiftId !== undefined ? controlledShiftId : uncontrolledShiftId;
+  const setSelectedShiftId = onSelectedShiftIdChange ?? setUncontrolledShiftId;
   const [validFrom, setValidFrom] = useState(operationWorkDate || getTodayDateInput());
   const [validUntil, setValidUntil] = useState("");
   const [preview, setPreview] = useState<WorkTeamAssignPreviewResult | null>(null);
@@ -107,7 +115,9 @@ function WorkTeamAssignmentPanelContent({
 
   const resetState = () => {
     setSelectedTeamIds([]);
-    setSelectedShiftId(shiftOptions.length === 1 ? shiftOptions[0]!.value : null);
+    if (controlledShiftId === undefined) {
+      setUncontrolledShiftId(shiftOptions.length === 1 ? shiftOptions[0]!.value : null);
+    }
     setValidFrom(operationWorkDate || getTodayDateInput());
     setValidUntil("");
     setPreview(null);
@@ -273,7 +283,7 @@ function WorkTeamAssignmentPanelContent({
         ) : null}
       </Stack>
 
-      {isMultiShift ? (
+      {isMultiShift && !hideShiftSelect ? (
         <Select
           label="Turno de destino"
           description="Obligatorio. Todos los miembros del grupo se asignan a este turno."

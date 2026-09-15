@@ -1,5 +1,5 @@
-import { Badge, Divider, ScrollArea, Stack, Tabs, Text } from "@mantine/core";
-import { useState } from "react";
+import { Badge, Divider, ScrollArea, Select, Stack, Tabs, Text } from "@mantine/core";
+import { useEffect, useMemo, useState } from "react";
 import { ResponsiveModal } from "../../design-system";
 import type { OperationKind } from "../../types/operation";
 import type { ScheduleMode } from "../../types/operation-shift";
@@ -47,11 +47,62 @@ export function OperationTeamManageDialog({
   onCompleted,
 }: OperationTeamManageDialogProps) {
   const [activeTab, setActiveTab] = useState<string | null>("individual");
+  const isMultiShift = scheduleMode === "MULTI_SHIFT";
+  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(
+    shiftOptions.length === 1 ? shiftOptions[0]!.value : null,
+  );
   const assignedCount = excludeEmployeeIds.length;
+
+  useEffect(() => {
+    if (!isMultiShift) {
+      return;
+    }
+    if (selectedShiftId && shiftOptions.some((option) => option.value === selectedShiftId)) {
+      return;
+    }
+    setSelectedShiftId(shiftOptions.length === 1 ? shiftOptions[0]!.value : null);
+  }, [isMultiShift, selectedShiftId, shiftOptions]);
+
+  const selectedShiftLabel = useMemo(
+    () => shiftOptions.find((option) => option.value === selectedShiftId)?.label ?? null,
+    [shiftOptions, selectedShiftId],
+  );
 
   const handleClose = () => {
     setActiveTab("individual");
     onClose();
+  };
+
+  const handleAssignEmployees = async (input: {
+    employeeIds: string[];
+    validFrom?: string;
+    validUntil?: string | null;
+    operationShiftId?: string | null;
+    asCoverage?: boolean;
+    replacedAssignmentId?: string;
+    replacedEmployeeId?: string;
+  }): Promise<AssignEmployeesResult> => {
+    const operationShiftId =
+      input.operationShiftId ?? (isMultiShift && !input.asCoverage ? selectedShiftId : null);
+
+    if (isMultiShift && !input.asCoverage && !operationShiftId) {
+      return {
+        status: "error",
+        added: [],
+        skipped: [
+          {
+            employeeId: input.employeeIds[0] ?? "unknown",
+            code: "SHIFT_REQUIRED_FOR_MULTI_SHIFT_MODE",
+            reason: "Seleccioná el turno antes de asignar.",
+          },
+        ],
+      };
+    }
+
+    return onAssignEmployees({
+      ...input,
+      ...(operationShiftId ? { operationShiftId } : {}),
+    });
   };
 
   return (
@@ -74,12 +125,32 @@ export function OperationTeamManageDialog({
               {assignedCount} en el equipo
             </Badge>
           ) : null}
-          {scheduleMode === "MULTI_SHIFT" ? (
+          {isMultiShift ? (
             <Badge color="blue" variant="light" w="fit-content">
               Multi-turno · elegí el turno al asignar
             </Badge>
           ) : null}
         </Stack>
+
+        {isMultiShift ? (
+          <Select
+            label="Turno"
+            description="Obligatorio. Aplica a recomendaciones de IA, asignación manual y grupos."
+            data={shiftOptions}
+            value={selectedShiftId}
+            onChange={setSelectedShiftId}
+            placeholder={
+              shiftOptions.length === 0 ? "No hay turnos activos" : "Seleccioná el turno"
+            }
+            required
+            disabled={shiftOptions.length === 0 || assignLoading}
+            error={
+              !selectedShiftId && shiftOptions.length > 0
+                ? "Seleccioná un turno para continuar"
+                : undefined
+            }
+          />
+        ) : null}
 
         <Tabs value={activeTab} onChange={setActiveTab}>
           <ScrollArea type="scroll" offsetScrollbars scrollbarSize={6}>
@@ -95,10 +166,13 @@ export function OperationTeamManageDialog({
               <OperationInlineAiSuggestion
                 operationId={operationId}
                 operationKind={operationKind}
+                scheduleMode={scheduleMode}
+                selectedShiftId={selectedShiftId}
+                selectedShiftLabel={selectedShiftLabel}
                 excludeEmployeeIds={excludeEmployeeIds}
                 enabled={opened && activeTab === "individual"}
                 assignLoading={assignLoading}
-                onAssign={onAssignEmployees}
+                onAssign={handleAssignEmployees}
                 onSeeMore={() => setActiveTab("ai")}
               />
               <Divider label="O agregá manualmente" labelPosition="center" />
@@ -109,8 +183,11 @@ export function OperationTeamManageDialog({
                 operationWorkDate={operationWorkDate}
                 excludeEmployeeIds={excludeEmployeeIds}
                 shiftOptions={shiftOptions}
+                selectedShiftId={selectedShiftId}
+                onSelectedShiftIdChange={setSelectedShiftId}
+                hideShiftSelect={isMultiShift}
                 loading={assignLoading}
-                onAssign={onAssignEmployees}
+                onAssign={handleAssignEmployees}
                 onResult={(result) => {
                   if (result.status === "success") {
                     handleClose();
@@ -127,6 +204,9 @@ export function OperationTeamManageDialog({
               scheduleMode={scheduleMode}
               operationWorkDate={operationWorkDate}
               shiftOptions={shiftOptions}
+              selectedShiftId={selectedShiftId}
+              onSelectedShiftIdChange={setSelectedShiftId}
+              hideShiftSelect={isMultiShift}
               enabled={opened && activeTab === "groups"}
               onCompleted={onCompleted}
               onFinished={handleClose}
@@ -135,14 +215,17 @@ export function OperationTeamManageDialog({
 
           <Tabs.Panel value="ai">
             <OperationAiRecommendationsPanel
-              key={`ai:${operationKind}:${operationWorkDate}`}
+              key={`ai:${operationKind}:${operationWorkDate}:${selectedShiftId ?? "none"}`}
               operationId={operationId}
               operationKind={operationKind}
+              scheduleMode={scheduleMode}
+              selectedShiftId={selectedShiftId}
+              selectedShiftLabel={selectedShiftLabel}
               operationWorkDate={operationWorkDate}
               excludeEmployeeIds={excludeEmployeeIds}
               enabled={opened && activeTab === "ai"}
               assignLoading={assignLoading}
-              onAssign={onAssignEmployees}
+              onAssign={handleAssignEmployees}
               onResult={(result) => {
                 if (result.status === "success") {
                   handleClose();

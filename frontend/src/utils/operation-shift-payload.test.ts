@@ -4,10 +4,11 @@ import {
   buildAssignEmployeePayload,
   buildAssignEmployeesBatchPayload,
   buildCreateOperationPayload,
+  getCompanyWorkingIsoDays,
   isOvernightShift,
 } from "./operation-shift-payload";
 import type { OperationFormValues } from "../schemas/operation.schema";
-import { createDefaultWeeklySchedule } from "../types/schedule";
+import { createDefaultWeeklySchedule, type CompanyWorkSchedule } from "../types/schedule";
 
 function baseForm(overrides: Partial<OperationFormValues> = {}): OperationFormValues {
   return {
@@ -30,6 +31,25 @@ function baseForm(overrides: Partial<OperationFormValues> = {}): OperationFormVa
 }
 
 describe("operation-shift-payload", () => {
+  it("maps company laborable days to ISO weekdays", () => {
+    const schedule: CompanyWorkSchedule = {
+      id: "sch-1",
+      companyId: "co-1",
+      timezone: "America/Argentina/Buenos_Aires",
+      version: 1,
+      days: createDefaultWeeklySchedule("09:00", "18:00").map((day) =>
+        day.dayOfWeek === "FRIDAY"
+          ? { ...day, isEnabled: false, startTime: null, endTime: null }
+          : day,
+      ),
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z",
+    };
+
+    assert.deepEqual(getCompanyWorkingIsoDays(schedule), [1, 2, 3, 4]);
+    assert.deepEqual(getCompanyWorkingIsoDays(null), [1, 2, 3, 4, 5]);
+  });
+
   it("SINGLE assign omits operationShiftId", () => {
     const payload = buildAssignEmployeePayload("SINGLE", {
       employeeId: "e1",

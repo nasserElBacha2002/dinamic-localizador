@@ -18,9 +18,10 @@ export function CompanyGeneralSettingsFields({
       label="Zona horaria operativa"
       description="Define la zona horaria usada para operaciones, servicios y reportes."
       value={formValues.operationTimezone}
-      onChange={(event) =>
-        setFormValues((current) => ({ ...current, operationTimezone: event.currentTarget.value }))
-      }
+      onChange={(event) => {
+        const operationTimezone = event.currentTarget.value;
+        setFormValues((current) => ({ ...current, operationTimezone }));
+      }}
       disabled={disabled}
     />
   );
@@ -38,24 +39,26 @@ export function CompanyOperationOperationSettingsFields({
         description="Estos valores se usan como predeterminados al crear operaciones o importar planillas."
         placeholder="20:30"
         value={formValues.defaultOperationStartTime}
-        onChange={(event) =>
+        onChange={(event) => {
+          const defaultOperationStartTime = event.currentTarget.value;
           setFormValues((current) => ({
             ...current,
-            defaultOperationStartTime: event.currentTarget.value,
-          }))
-        }
+            defaultOperationStartTime,
+          }));
+        }}
         disabled={disabled}
       />
       <TextInput
         label="Horario de fin por defecto"
         placeholder="03:00"
         value={formValues.defaultOperationEndTime}
-        onChange={(event) =>
+        onChange={(event) => {
+          const defaultOperationEndTime = event.currentTarget.value;
           setFormValues((current) => ({
             ...current,
-            defaultOperationEndTime: event.currentTarget.value,
-          }))
-        }
+            defaultOperationEndTime,
+          }));
+        }}
         disabled={disabled}
       />
       <NumberInput
@@ -140,12 +143,13 @@ export function CompanySettingsCheckoutFields({
       label="Requerir ubicación al finalizar"
       description="Si está activo, el empleado deberá compartir ubicación al enviar “Terminé”."
       checked={formValues.requireCheckoutLocation}
-      onChange={(event) =>
+      onChange={(event) => {
+        const requireCheckoutLocation = event.currentTarget.checked;
         setFormValues((current) => ({
           ...current,
-          requireCheckoutLocation: event.currentTarget.checked,
-        }))
-      }
+          requireCheckoutLocation,
+        }));
+      }}
       disabled={disabled}
     />
   );
@@ -161,12 +165,13 @@ export function CompanySettingsCorrectionsFields({
       label="Permitir correcciones manuales de asistencia"
       description="Permite que usuarios autorizados registren o ajusten asistencias desde el panel."
       checked={formValues.allowManualAttendanceCorrections}
-      onChange={(event) =>
+      onChange={(event) => {
+        const allowManualAttendanceCorrections = event.currentTarget.checked;
         setFormValues((current) => ({
           ...current,
-          allowManualAttendanceCorrections: event.currentTarget.checked,
-        }))
-      }
+          allowManualAttendanceCorrections,
+        }));
+      }}
       disabled={disabled}
     />
   );

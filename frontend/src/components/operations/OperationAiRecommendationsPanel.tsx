@@ -12,6 +12,7 @@ import {
 import { useMemo, useState } from "react";
 import { useOperationEmployeeRecommendations } from "../../hooks/useOperationRecommendations";
 import type { OperationKind } from "../../types/operation";
+import type { ScheduleMode } from "../../types/operation-shift";
 import type { IndividualEmployeeRecommendation } from "../../types/recommendation";
 import { terminology } from "../../domain/terminology";
 import { formatDateInputDisplay } from "../../utils/date-range";
@@ -35,6 +36,9 @@ const FETCH_LIMIT = 10;
 export interface OperationAiRecommendationsPanelProps {
   operationId: string;
   operationKind: OperationKind;
+  scheduleMode?: ScheduleMode;
+  selectedShiftId?: string | null;
+  selectedShiftLabel?: string | null;
   operationWorkDate: string;
   excludeEmployeeIds: string[];
   /** Lazy: only fetch while the AI tab is visible. */
@@ -44,6 +48,7 @@ export interface OperationAiRecommendationsPanelProps {
     employeeIds: string[];
     validFrom?: string;
     validUntil?: string | null;
+    operationShiftId?: string | null;
   }) => Promise<AssignEmployeesResult>;
   onResult?: (result: AssignEmployeesResult) => void;
 }
@@ -51,6 +56,9 @@ export interface OperationAiRecommendationsPanelProps {
 export function OperationAiRecommendationsPanel({
   operationId,
   operationKind,
+  scheduleMode = "SINGLE",
+  selectedShiftId = null,
+  selectedShiftLabel = null,
   operationWorkDate,
   excludeEmployeeIds,
   enabled,
@@ -60,6 +68,8 @@ export function OperationAiRecommendationsPanel({
 }: OperationAiRecommendationsPanelProps) {
   const [aiMode, setAiMode] = useState<"people" | "team">("people");
   const isRecurring = operationKind === "RECURRING";
+  const isMultiShift = scheduleMode === "MULTI_SHIFT";
+  const missingShift = isMultiShift && !selectedShiftId;
   const [validFrom, setValidFrom] = useState(getTodayDateInput());
   const [validUntil, setValidUntil] = useState("");
   const [search, setSearch] = useState("");
@@ -112,6 +122,10 @@ export function OperationAiRecommendationsPanel({
       setErrorMessage("Revisá las fechas de vigencia antes de asignar.");
       return;
     }
+    if (missingShift) {
+      setErrorMessage("Seleccioná el turno arriba antes de agregar la recomendación.");
+      return;
+    }
 
     setErrorMessage(null);
     setAssigningId(item.employee.id);
@@ -124,6 +138,7 @@ export function OperationAiRecommendationsPanel({
               validUntil: validUntil.trim() ? validUntil : null,
             }
           : {}),
+        ...(isMultiShift ? { operationShiftId: selectedShiftId } : {}),
       });
       onResult?.(result);
       if (result.status === "error" || result.skipped.length > 0) {
@@ -174,6 +189,14 @@ export function OperationAiRecommendationsPanel({
               Sugerir equipo completo
             </Button>
           </Group>
+
+          {isMultiShift ? (
+            <Text size="sm" c={missingShift ? "red" : "dimmed"}>
+              {missingShift
+                ? "Seleccioná el turno arriba para poder agregar recomendaciones."
+                : `Las recomendaciones se asignarán al turno: ${selectedShiftLabel ?? "seleccionado"}.`}
+            </Text>
+          ) : null}
 
           {isRecurring ? (
             <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
@@ -306,6 +329,7 @@ export function OperationAiRecommendationsPanel({
                         disabled={
                           Boolean(assigningId) ||
                           assignLoading ||
+                          missingShift ||
                           (isRecurring && hasValidityErrors)
                         }
                         onClick={() => {

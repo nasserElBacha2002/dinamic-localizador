@@ -50,6 +50,41 @@ export function formatTeamWorkdayLabel(
   return base;
 }
 
+/** Unique work dates descending (newest first). */
+export function listTeamWorkdayDates(workdays: OperationWorkdaySummary[]): string[] {
+  return [...new Set(workdays.map((workday) => workday.workDate))].sort((left, right) =>
+    right.localeCompare(left),
+  );
+}
+
+export function listTeamWorkdaysForDate(
+  workdays: OperationWorkdaySummary[],
+  workDate: string,
+): OperationWorkdaySummary[] {
+  return workdays
+    .filter((workday) => workday.workDate === workDate)
+    .sort((left, right) => {
+      const leftShift = left.shiftNameSnapshot ?? left.shiftCodeSnapshot ?? "";
+      const rightShift = right.shiftNameSnapshot ?? right.shiftCodeSnapshot ?? "";
+      return leftShift.localeCompare(rightShift, "es");
+    });
+}
+
+export function buildTeamShiftSelectOptions(
+  workdaysForDate: OperationWorkdaySummary[],
+): Array<{ value: string; label: string }> {
+  return workdaysForDate.map((workday) => {
+    const shiftLabel =
+      workday.shiftNameSnapshot?.trim() || workday.shiftCodeSnapshot?.trim() || "Turno";
+    const count = workday.scheduledEmployeesCount;
+    const countLabel = `${count} colaborador${count === 1 ? "" : "es"}`;
+    return {
+      value: workday.id,
+      label: `${shiftLabel} · ${countLabel}`,
+    };
+  });
+}
+
 export function buildTeamWorkdaySelectOptions(
   workdays: OperationWorkdaySummary[],
   operationalToday: string,

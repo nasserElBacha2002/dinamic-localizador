@@ -1,7 +1,40 @@
 import type { CreateOperationInput, CreateOperationShiftSeedInput } from "../types/operation";
 import type { ScheduleMode } from "../types/operation-shift";
+import type { CompanyWorkSchedule, Weekday } from "../types/schedule";
 import type { OperationFormValues } from "../schemas/operation.schema";
 import { datetimeLocalToIso } from "./dates";
+
+const WEEKDAY_TO_ISO: Record<Weekday, number> = {
+  MONDAY: 1,
+  TUESDAY: 2,
+  WEDNESDAY: 3,
+  THURSDAY: 4,
+  FRIDAY: 5,
+  SATURDAY: 6,
+  SUNDAY: 7,
+};
+
+const FALLBACK_WORKING_ISO_DAYS = [1, 2, 3, 4, 5];
+
+/**
+ * ISO weekdays (1=Mon … 7=Sun) marked laborable on the company weekly schedule.
+ * Falls back to Mon–Fri when the company schedule is missing.
+ */
+export function getCompanyWorkingIsoDays(
+  schedule: CompanyWorkSchedule | null | undefined,
+): number[] {
+  if (!schedule?.days?.length) {
+    return [...FALLBACK_WORKING_ISO_DAYS];
+  }
+
+  const days = schedule.days
+    .filter((day) => day.isEnabled)
+    .map((day) => WEEKDAY_TO_ISO[day.dayOfWeek])
+    .filter((day): day is number => typeof day === "number")
+    .sort((left, right) => left - right);
+
+  return days.length > 0 ? days : [...FALLBACK_WORKING_ISO_DAYS];
+}
 
 export type AssignEmployeePayloadInput = {
   employeeId: string;

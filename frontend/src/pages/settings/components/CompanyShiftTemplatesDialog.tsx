@@ -3,6 +3,7 @@ import {
   Badge,
   Button,
   Group,
+  Input,
   ScrollArea,
   SimpleGrid,
   Stack,
@@ -21,7 +22,7 @@ import {
 import type { CompanyShiftTemplate } from "../../../types/operation-shift";
 import { getApiErrorMessage } from "../../../utils/errors";
 import { isOvernightShift } from "../../../utils/operation-shift-payload";
-import { normalizeOperationTimeValue } from "../../../utils/operation-time";
+import { OperationTimeInput } from "./OperationTimeInput";
 
 interface CompanyShiftTemplatesDialogProps {
   opened: boolean;
@@ -230,9 +231,10 @@ export function CompanyShiftTemplatesDialog({
                   label="Código"
                   placeholder="Ej. MANANA"
                   value={form.code}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, code: event.currentTarget.value }))
-                  }
+                  onChange={(event) => {
+                    const code = event.currentTarget.value;
+                    setForm((current) => ({ ...current, code }));
+                  }}
                   disabled={disabled || Boolean(editingId)}
                   description={editingId ? "El código no se puede cambiar." : "Opcional."}
                   inputWrapperOrder={["label", "input", "description", "error"]}
@@ -241,44 +243,32 @@ export function CompanyShiftTemplatesDialog({
                   label="Nombre"
                   placeholder="Ej. Turno mañana"
                   value={form.name}
-                  onChange={(event) =>
-                    setForm((current) => ({ ...current, name: event.currentTarget.value }))
-                  }
+                  onChange={(event) => {
+                    const name = event.currentTarget.value;
+                    setForm((current) => ({ ...current, name }));
+                  }}
                   disabled={disabled}
                   required
-                  // Keep label→input spacing aligned with Código (description lives below input).
                   inputWrapperOrder={["label", "input", "description", "error"]}
                 />
               </SimpleGrid>
               <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
-                <TextInput
-                  label="Inicio"
-                  type="time"
-                  value={form.startTime}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      startTime: normalizeOperationTimeValue(event.currentTarget.value),
-                    }))
-                  }
-                  disabled={disabled}
-                  aria-label="Hora de inicio"
-                  inputWrapperOrder={["label", "input", "description", "error"]}
-                />
-                <TextInput
-                  label="Fin"
-                  type="time"
-                  value={form.endTime}
-                  onChange={(event) =>
-                    setForm((current) => ({
-                      ...current,
-                      endTime: normalizeOperationTimeValue(event.currentTarget.value),
-                    }))
-                  }
-                  disabled={disabled}
-                  aria-label="Hora de fin"
-                  inputWrapperOrder={["label", "input", "description", "error"]}
-                />
+                <Input.Wrapper label="Inicio" inputWrapperOrder={["label", "input", "description", "error"]}>
+                  <OperationTimeInput
+                    value={form.startTime}
+                    onChange={(startTime) => setForm((current) => ({ ...current, startTime }))}
+                    disabled={disabled}
+                    aria-label="Hora de inicio"
+                  />
+                </Input.Wrapper>
+                <Input.Wrapper label="Fin" inputWrapperOrder={["label", "input", "description", "error"]}>
+                  <OperationTimeInput
+                    value={form.endTime}
+                    onChange={(endTime) => setForm((current) => ({ ...current, endTime }))}
+                    disabled={disabled}
+                    aria-label="Hora de fin"
+                  />
+                </Input.Wrapper>
               </SimpleGrid>
             </Stack>
             {isOvernightShift(form.startTime, form.endTime) ? (

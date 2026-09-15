@@ -45,7 +45,7 @@ import {
   scheduleSourceLabels,
 } from "../../utils/operation-schedule-display";
 import { operationStatusLabels } from "../../utils/labels";
-import { isOvernightShift } from "../../utils/operation-shift-payload";
+import { isOvernightShift, getCompanyWorkingIsoDays } from "../../utils/operation-shift-payload";
 import { ServiceSearchAutocomplete } from "../services/ServiceSearchAutocomplete";
 import { OperationTimeInput } from "../../pages/settings/components/OperationTimeInput";
 
@@ -205,6 +205,12 @@ export function OperationForm({
   const companySourceDisabled =
     serviceFieldDisabled || companyWorkScheduleLoading || !companyScheduleAvailable;
   const isMultiCreate = mode === "create" && scheduleMode === "MULTI_SHIFT";
+  const companyWorkingIsoDays = useMemo(
+    () => getCompanyWorkingIsoDays(companyWorkSchedule),
+    [companyWorkSchedule],
+  );
+  const defaultShiftEnabledDays =
+    lockedKind === "RECURRING" ? companyWorkingIsoDays : undefined;
 
   useEffect(() => {
     if (
@@ -226,18 +232,25 @@ export function OperationForm({
   ]);
 
   const handleFormSubmit = handleSubmit(async (values) => {
+    const effectiveValues =
+      values.scheduleMode === "MULTI_SHIFT" && values.operationKind === "RECURRING"
+        ? { ...values, scheduleSource: "COMPANY" as const }
+        : values;
+
     if (
-      values.operationKind === "RECURRING" &&
-      values.scheduleSource === "COMPANY" &&
-      !companyScheduleAvailable
+      effectiveValues.operationKind === "RECURRING" &&
+      effectiveValues.scheduleSource === "COMPANY" &&
+      !companyScheduleAvailable &&
+      effectiveValues.scheduleMode !== "MULTI_SHIFT"
     ) {
       return;
     }
 
     const payload =
-      values.operationKind === "RECURRING" && values.scheduleSource === "COMPANY"
-        ? { ...values, scheduleDays: defaultValues.scheduleDays }
-        : values;
+      effectiveValues.operationKind === "RECURRING" &&
+      effectiveValues.scheduleSource === "COMPANY"
+        ? { ...effectiveValues, scheduleDays: defaultValues.scheduleDays }
+        : effectiveValues;
 
     await onSubmit(payload);
   });
@@ -363,7 +376,16 @@ export function OperationForm({
                       selected={field.value === "MULTI_SHIFT"}
                       title="Múltiples turnos"
                       description="La operación se crea con varios turnos (mañana, tarde, noche, etc.)."
-                      onClick={() => field.onChange("MULTI_SHIFT")}
+                      onClick={() => {
+                        field.onChange("MULTI_SHIFT");
+                        if (lockedKind === "RECURRING") {
+                          setValue("scheduleSource", "COMPANY", {
+                            shouldDirty: true,
+                            shouldValidate: true,
+                          });
+                          setValue("scheduleDays", defaultValues.scheduleDays);
+                        }
+                      }}
                     />
                   </FormGrid.Full>
                 </>
@@ -398,7 +420,7 @@ export function OperationForm({
                     templateId: template.id,
                     startTime: template.startTime,
                     endTime: template.endTime,
-                    enabledDays: lockedKind === "RECURRING" ? [1, 2, 3, 4, 5] : undefined,
+                    enabledDays: defaultShiftEnabledDays,
                   });
                 }}
                 w={220}
@@ -412,7 +434,7 @@ export function OperationForm({
                     name: "",
                     startTime: "08:00",
                     endTime: "16:00",
-                    enabledDays: lockedKind === "RECURRING" ? [1, 2, 3, 4, 5] : undefined,
+                    enabledDays: defaultShiftEnabledDays,
                   })
                 }
               >
@@ -517,6 +539,10 @@ export function OperationForm({
                             <Text size="sm" fw={500}>
                               Días
                             </Text>
+                            <Text size="xs" c="dimmed">
+                              Inicializados con los días laborables de la empresa. Podés ajustarlos
+                              por turno.
+                            </Text>
                             <Group gap="xs">
                               {ISO_DAY_OPTIONS.map((day) => {
                                 const checked = (daysField.value ?? []).includes(day.value);
@@ -612,6 +638,36 @@ export function OperationForm({
             <Text size="sm" fw={500}>
               Origen del horario
             </Text>
+            {isMultiCreate ? (
+              <Stack gap={6}>
+                <Text size="sm" c="dimmed">
+                  En multi-turno los horarios los definen cada turno. Los días laborables de la
+                  empresa se usan como base al crear turnos; no hace falta configurar un horario
+                  semanal de la operación.
+                </Text>
+                {companyWorkScheduleLoading ? (
+                  <Text size="sm" c="dimmed">
+                    Cargando días laborables de la empresa…
+                  </Text>
+                ) : companyWorkSchedule ? (
+                  <Text size="sm" c="dimmed">
+                    Días laborables de la empresa:{" "}
+                    {buildCompanySchedulePreviewLabel(companyWorkSchedule.days)}
+                  </Text>
+                ) : (
+                  <Stack gap={4}>
+                    <Text size="sm" c="red">
+                      La empresa no tiene un horario laboral semanal configurado. Se usarán lun–vie
+                      por defecto.
+                    </Text>
+                    <Anchor component={RouterLink} to="/settings" size="sm">
+                      Configurar horario de la empresa
+                    </Anchor>
+                  </Stack>
+                )}
+              </Stack>
+            ) : (
+              <>
             <FormGrid>
               <Controller
                 name="scheduleSource"
@@ -656,9 +712,11 @@ export function OperationForm({
                 </Anchor>
               </Stack>
             ) : null}
+              </>
+            )}
           </Stack>
 
-          {scheduleSource === "COMPANY" ? (
+          {isMultiCreate ? null : scheduleSource === "COMPANY" ? (
             <Stack gap={4}>
               <Text size="sm" fw={500}>
                 Horario de la empresa

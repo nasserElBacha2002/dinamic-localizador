@@ -1,4 +1,4 @@
-import { Button, Collapse, Group, Select, Stack, Text, TextInput } from "@mantine/core";
+import { Button, Collapse, Group, Select, SimpleGrid, Stack, Text, TextInput } from "@mantine/core";
 import { useDebouncedValue } from "@mantine/hooks";
 import { useEffect, useMemo, useState } from "react";
 import { ReviewAttendanceDialog } from "../attendance/ReviewAttendanceDialog";
@@ -25,8 +25,10 @@ import {
   buildAssignEmployeesBatchPayload,
 } from "../../utils/operation-shift-payload";
 import {
-  buildTeamWorkdaySelectOptions,
+  buildTeamShiftSelectOptions,
   formatTeamWorkdayLabel,
+  listTeamWorkdayDates,
+  listTeamWorkdaysForDate,
   type OperationTeamWorkdaySelection,
 } from "../../utils/operation-team-workday";
 import { EndAssignmentDialog } from "./EndAssignmentDialog";
@@ -90,7 +92,12 @@ export function OperationTeamSection({
 
   const assignmentsQuery = useOperationEmployees(operationId);
   const shiftsQuery = useOperationShifts(operationId, { activeOnly: true }, isMultiShift);
-  const summaryQuery = useOperationAttendanceSummary(operationId, summaryFilters);
+  const summaryEnabled = !isMultiShift || Boolean(selectedWorkday?.workdayId);
+  const summaryQuery = useOperationAttendanceSummary(
+    operationId,
+    summaryFilters,
+    summaryEnabled,
+  );
   const assignBatchMutation = useAssignOperationEmployeesBatch(operationId);
   const assignEmployeeMutation = useAssignOperationEmployee(operationId);
   const cancelMutation = useCancelOperationAssignment(operationId);
@@ -145,10 +152,67 @@ export function OperationTeamSection({
   const rows = summaryQuery.data?.employees ?? [];
   const meta = summaryQuery.data?.meta;
   const isSearchPending = searchQuery.trim() !== trimmedSearch;
-  const workdaySelectOptions = useMemo(
-    () => buildTeamWorkdaySelectOptions(workdayOptions, operationalToday),
-    [workdayOptions, operationalToday],
+  const availableWorkDates = useMemo(
+    () => listTeamWorkdayDates(workdayOptions),
+    [workdayOptions],
   );
+  const [draftWorkDate, setDraftWorkDate] = useState<string | null>(
+    selectedWorkday?.workDate ?? null,
+  );
+
+  useEffect(() => {
+    setDraftWorkDate(selectedWorkday?.workDate ?? null);
+  }, [selectedWorkday?.workDate]);
+
+  const workdaysForDraftDate = useMemo(
+    () => (draftWorkDate ? listTeamWorkdaysForDate(workdayOptions, draftWorkDate) : []),
+    [draftWorkDate, workdayOptions],
+  );
+  const shiftSelectOptions = useMemo(
+    () => buildTeamShiftSelectOptions(workdaysForDraftDate),
+    [workdaysForDraftDate],
+  );
+  const needsShiftPicker = workdaysForDraftDate.length > 1;
+  const dateBounds = useMemo(() => {
+    if (availableWorkDates.length === 0) {
+      return { min: undefined, max: undefined };
+    }
+    const sortedAsc = [...availableWorkDates].sort((left, right) => left.localeCompare(right));
+    return { min: sortedAsc[0], max: sortedAsc[sortedAsc.length - 1] };
+  }, [availableWorkDates]);
+
+  const handleWorkDateChange = (workDate: string | null) => {
+    setDraftWorkDate(workDate);
+    if (!workDate) {
+      onWorkdayChange(null);
+      return;
+    }
+    if (!availableWorkDates.includes(workDate)) {
+      onWorkdayChange(null);
+      return;
+    }
+    const forDate = listTeamWorkdaysForDate(workdayOptions, workDate);
+    if (forDate.length === 1) {
+      onWorkdayChange({ workdayId: forDate[0]!.id, workDate });
+      return;
+    }
+    // Multi-shift day: wait for explicit shift choice.
+    onWorkdayChange(null);
+  };
+
+  const handleShiftWorkdayChange = (workdayId: string | null) => {
+    if (!workdayId || !draftWorkDate) {
+      onWorkdayChange(null);
+      return;
+    }
+    const workday = workdayOptions.find((item) => item.id === workdayId);
+    if (!workday || workday.workDate !== draftWorkDate) {
+      onWorkdayChange(null);
+      return;
+    }
+    onWorkdayChange({ workdayId: workday.id, workDate: workday.workDate });
+  };
+
   const selectedWorkdaySummary = selectedWorkday
     ? workdayOptions.find((workday) => workday.id === selectedWorkday.workdayId)
     : null;
@@ -159,10 +223,15 @@ export function OperationTeamSection({
         selectedWorkdaySummary?.shiftNameSnapshot ??
           selectedWorkdaySummary?.shiftCodeSnapshot,
       )
-    : null;
-  const noWorkdayForToday = isRecurring && !selectedWorkday;
+    : draftWorkDate
+      ? formatTeamWorkdayLabel(draftWorkDate, operationalToday)
+      : null;
+  const noWorkdayForToday =
+    (isRecurring || isMultiShift) &&
+    !selectedWorkday &&
+    workdayOptions.filter((workday) => workday.workDate === operationalToday).length === 0;
   const ambiguousTodayWorkdays =
-    isRecurring &&
+    (isRecurring || isMultiShift) &&
     isMultiShift &&
     !selectedWorkday &&
     workdayOptions.filter((workday) => workday.workDate === operationalToday).length > 1;
@@ -346,44 +415,67 @@ export function OperationTeamSection({
         )
       }
     >
-      {isRecurring ? (
-        <Group align="flex-end" mb="sm" wrap="wrap">
-          <Select
-            label="Jornada"
-            placeholder="Seleccioná una jornada"
-            data={workdaySelectOptions}
-            value={selectedWorkday?.workdayId ?? null}
-            onChange={(workdayId) => {
-              if (!workdayId) {
-                onWorkdayChange(null);
-                return;
-              }
-              const workday = workdayOptions.find((item) => item.id === workdayId);
-              if (!workday) {
-                onWorkdayChange(null);
-                return;
-              }
-              onWorkdayChange({ workdayId: workday.id, workDate: workday.workDate });
-            }}
-            searchable
-            nothingFoundMessage="No hay jornadas materializadas"
-            style={{ minWidth: 280, flex: 1 }}
-          />
+      {isRecurring || isMultiShift ? (
+        <Stack gap={6} mb="sm">
+          <SimpleGrid cols={{ base: 1, sm: 2 }} spacing="sm">
+            <TextInput
+              type="date"
+              label="Día"
+              value={draftWorkDate ?? ""}
+              min={dateBounds.min}
+              max={dateBounds.max}
+              onChange={(event) => {
+                const next = event.currentTarget.value.trim();
+                handleWorkDateChange(next.length > 0 ? next : null);
+              }}
+            />
+            {needsShiftPicker || (draftWorkDate && workdaysForDraftDate.length === 0) ? (
+              <Select
+                label="Turno"
+                placeholder={
+                  draftWorkDate && workdaysForDraftDate.length === 0
+                    ? "Sin jornadas ese día"
+                    : "Seleccioná el turno"
+                }
+                data={shiftSelectOptions}
+                value={selectedWorkday?.workdayId ?? null}
+                onChange={handleShiftWorkdayChange}
+                disabled={!draftWorkDate || workdaysForDraftDate.length === 0}
+                nothingFoundMessage="No hay turnos para ese día"
+              />
+            ) : (
+              <Select
+                label="Turno"
+                data={shiftSelectOptions}
+                value={selectedWorkday?.workdayId ?? null}
+                disabled
+                placeholder={draftWorkDate ? "Único turno del día" : "Elegí un día"}
+              />
+            )}
+          </SimpleGrid>
           {selectedWorkdayLabel ? (
-            <Text size="sm" c="dimmed" pb={6}>
+            <Text size="sm" c="dimmed">
               Mostrando {selectedWorkdayLabel}
             </Text>
+          ) : draftWorkDate && needsShiftPicker && !selectedWorkday ? (
+            <Text size="sm" c="dimmed">
+              Elegí el turno de ese día
+            </Text>
           ) : null}
-        </Group>
+        </Stack>
       ) : null}
 
-      {ambiguousTodayWorkdays ? (
+      {ambiguousTodayWorkdays && !draftWorkDate ? (
         <Text size="sm" c="dimmed" mb="sm">
-          Hay varios turnos para hoy. Seleccioná la jornada con el turno que querés ver.
+          Hay varios turnos para hoy. Elegí el día y después el turno.
         </Text>
       ) : noWorkdayForToday ? (
         <Text size="sm" c="dimmed" mb="sm">
           No hay una jornada programada para hoy.
+        </Text>
+      ) : isMultiShift && !selectedWorkday ? (
+        <Text size="sm" c="dimmed" mb="sm">
+          Seleccioná la jornada del turno para ver el equipo y la asistencia.
         </Text>
       ) : null}
 
@@ -392,15 +484,15 @@ export function OperationTeamSection({
         value={searchQuery}
         onChange={(event) => setSearchQuery(event.currentTarget.value)}
         mb="sm"
-        disabled={isRecurring && !selectedWorkday}
+        disabled={(isRecurring || isMultiShift) && !selectedWorkday}
       />
 
       <OperationEmployeeTable
         operationId={operationId}
-        rows={rows}
-        loading={summaryQuery.isLoading || isSearchPending}
+        rows={summaryEnabled ? rows : []}
+        loading={summaryEnabled && (summaryQuery.isLoading || isSearchPending)}
         error={
-          summaryQuery.isError
+          summaryEnabled && summaryQuery.isError
             ? getApiErrorMessage(summaryQuery.error, "No se pudo cargar el equipo asignado.")
             : undefined
         }

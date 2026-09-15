@@ -3,6 +3,7 @@ import { useMemo, useState } from "react";
 import { AiSuggestionCard } from "../ai/AiSuggestionCard";
 import { useOperationEmployeeRecommendations } from "../../hooks/useOperationRecommendations";
 import type { OperationKind } from "../../types/operation";
+import type { ScheduleMode } from "../../types/operation-shift";
 import type { IndividualEmployeeRecommendation } from "../../types/recommendation";
 import { getTodayDateInput } from "../../utils/dates";
 import { getApiErrorMessage } from "../../utils/errors";
@@ -16,6 +17,10 @@ import type { AssignEmployeesResult } from "./OperationIndividualAssignmentPanel
 export interface OperationInlineAiSuggestionProps {
   operationId: string;
   operationKind: OperationKind;
+  scheduleMode?: ScheduleMode;
+  /** Required for MULTI_SHIFT assignments from this card. */
+  selectedShiftId?: string | null;
+  selectedShiftLabel?: string | null;
   excludeEmployeeIds: string[];
   enabled: boolean;
   assignLoading?: boolean;
@@ -23,6 +28,7 @@ export interface OperationInlineAiSuggestionProps {
     employeeIds: string[];
     validFrom?: string;
     validUntil?: string | null;
+    operationShiftId?: string | null;
   }) => Promise<AssignEmployeesResult>;
   onResult?: (result: AssignEmployeesResult) => void;
   onSeeMore: () => void;
@@ -34,6 +40,9 @@ export interface OperationInlineAiSuggestionProps {
 export function OperationInlineAiSuggestion({
   operationId,
   operationKind,
+  scheduleMode = "SINGLE",
+  selectedShiftId = null,
+  selectedShiftLabel = null,
   excludeEmployeeIds,
   enabled,
   assignLoading = false,
@@ -42,11 +51,13 @@ export function OperationInlineAiSuggestion({
   onSeeMore,
 }: OperationInlineAiSuggestionProps) {
   const isRecurring = operationKind === "RECURRING";
+  const isMultiShift = scheduleMode === "MULTI_SHIFT";
   const [assigning, setAssigning] = useState(false);
   const [localError, setLocalError] = useState<string | null>(null);
   const [whyOpen, setWhyOpen] = useState(false);
 
   const validFrom = getTodayDateInput();
+  const missingShift = isMultiShift && !selectedShiftId;
 
   const query = useOperationEmployeeRecommendations(
     operationId,
@@ -76,12 +87,17 @@ export function OperationInlineAiSuggestion({
     if (!top) {
       return;
     }
+    if (missingShift) {
+      setLocalError("Seleccioná el turno arriba antes de agregar la recomendación.");
+      return;
+    }
     setLocalError(null);
     setAssigning(true);
     try {
       const result = await onAssign({
         employeeIds: [top.employee.id],
         ...(isRecurring ? { validFrom, validUntil: null } : {}),
+        ...(isMultiShift ? { operationShiftId: selectedShiftId } : {}),
       });
       onResult?.(result);
       if (result.status === "error" || result.skipped.length > 0) {
@@ -127,6 +143,7 @@ export function OperationInlineAiSuggestion({
               size="xs"
               color="ai"
               loading={assigning || assignLoading}
+              disabled={missingShift || assigning || assignLoading}
               onClick={() => void handleAdd()}
               aria-label={`Agregar a ${top.employee.name}`}
             >
@@ -136,7 +153,7 @@ export function OperationInlineAiSuggestion({
               size="xs"
               variant="subtle"
               color="ai"
-              onClick={() => setWhyOpen((v) => !v)}
+              onClick={() => setWhyOpen((value) => !value)}
               aria-expanded={whyOpen}
             >
               Ver por qué
@@ -145,6 +162,15 @@ export function OperationInlineAiSuggestion({
               Ver más recomendaciones
             </Button>
           </>
+        }
+        footer={
+          isMultiShift ? (
+            <Text size="xs" c={missingShift ? "red" : "dimmed"}>
+              {missingShift
+                ? "Seleccioná un turno arriba para poder agregar esta sugerencia."
+                : `Se asignará al turno: ${selectedShiftLabel ?? "turno seleccionado"}.`}
+            </Text>
+          ) : null
         }
       >
         <Stack gap={4}>

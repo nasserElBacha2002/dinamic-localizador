@@ -243,8 +243,11 @@ export function useEndOperationAssignment(operationId: string) {
 export function useOperationAttendanceSummary(
   operationId?: string,
   filters: OperationAttendanceSummaryFilters = {},
+  extraEnabled = true,
 ) {
-  const { companyId, enabled } = useOperationalQueryEnabled(Boolean(operationId));
+  const { companyId, enabled } = useOperationalQueryEnabled(
+    Boolean(operationId) && extraEnabled,
+  );
 
   return useQuery({
     queryKey: operationAttendanceKeys.summary(companyId, operationId, filters),

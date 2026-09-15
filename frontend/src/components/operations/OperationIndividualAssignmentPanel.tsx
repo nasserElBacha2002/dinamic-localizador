@@ -31,6 +31,11 @@ export interface OperationIndividualAssignmentPanelProps {
   operationWorkDate: string;
   excludeEmployeeIds: string[];
   shiftOptions?: Array<{ value: string; label: string }>;
+  /** Shared shift selection (e.g. dialog-level for AI + manual). */
+  selectedShiftId?: string | null;
+  onSelectedShiftIdChange?: (shiftId: string | null) => void;
+  /** When true, parent already renders the shift selector. */
+  hideShiftSelect?: boolean;
   /** When set, panel runs in coverage/replacement mode (fixed shift, single API fields). */
   coverageTarget?: CoverageAssignmentTarget | null;
   loading?: boolean;
@@ -52,6 +57,9 @@ export function OperationIndividualAssignmentPanel({
   operationWorkDate,
   excludeEmployeeIds,
   shiftOptions = [],
+  selectedShiftId: controlledShiftId,
+  onSelectedShiftIdChange,
+  hideShiftSelect = false,
   coverageTarget = null,
   loading = false,
   onAssign,
@@ -61,9 +69,11 @@ export function OperationIndividualAssignmentPanel({
   const isMultiShift = scheduleMode === "MULTI_SHIFT";
   const isCoverage = Boolean(coverageTarget);
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState<string[]>([]);
-  const [selectedShiftId, setSelectedShiftId] = useState<string | null>(
+  const [uncontrolledShiftId, setUncontrolledShiftId] = useState<string | null>(
     shiftOptions.length === 1 ? shiftOptions[0]!.value : null,
   );
+  const selectedShiftId = controlledShiftId !== undefined ? controlledShiftId : uncontrolledShiftId;
+  const setSelectedShiftId = onSelectedShiftIdChange ?? setUncontrolledShiftId;
   const [validFrom, setValidFrom] = useState(getTodayDateInput());
   const [validUntil, setValidUntil] = useState("");
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -204,7 +214,7 @@ export function OperationIndividualAssignmentPanel({
         maxVisibleChips={4}
       />
 
-      {isMultiShift && !isCoverage ? (
+      {isMultiShift && !isCoverage && !hideShiftSelect ? (
         <Select
           label="Turno"
           description="Obligatorio en operaciones multi-turno."

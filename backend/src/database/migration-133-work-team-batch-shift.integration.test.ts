@@ -16,7 +16,7 @@ import {
 } from "../test-helpers/integration-test";
 import { getPool } from "./connection";
 import { applySqlScriptInTransaction, stripLegacyDatabaseUse } from "./run-migrations";
-
+  
 const ROOT = join(process.cwd(), "..");
 const MIGRATION_133 = join(
   ROOT,
